@@ -9942,3 +9942,119 @@ clean runtime build, functional/byte oracles and ordinary paired timing, includi
 single typing and multi-pane fairness. No scheduling fix or production optimization
 is accepted by this diagnostic. All F01–F16/native120 requirements and the unlimited
 goal remain open.
+
+## Bounded ready-event collection: reject the all-pane variant, 2026-11-04
+
+**Reject promotion.** One additional nonblocking event batch improves the ASCII
+TUI, but the qualified four-pane background-load series regresses consistently
+in p95 and maximum latency (only1/6 lower pairs). Memory is not the rejection
+reason. Production source and accepted runtime `1f1849d1` remain unchanged.
+
+The candidate in `out-perf/dlls-ready-event-batch-01` moves the existing event
+dispatch into `Runtime::pollEvents(timeout)`. After a batch containing a readable
+pane event, and only if the runtime is not stopping, it processes one additional
+batch with timeout0 before returning to `publish`. There is no deliberate sleep,
+no additional idle poll, no event-buffer copy and no new heap state. It processes
+at most two128-event batches per turn; existing per-pane read/byte limits remain.
+Client writable events still call `writeClient`, so the source change alone does
+not guarantee elimination of intermediate frames. The previous rejected
+within-read16KiB accumulation experiment is not reinstated.
+
+Builds use an isolated `git archive` of `2fb0ce343`, preserving all four pending
+runtime files. A rebuilt unchanged runtime is
+`b9c87068d67a9f7a79447f8ae6de80fa1e5a6c0146e88c47351456c34cbdbdee`;
+candidate B is
+`37c695cd3fe99b7ceb19adcf0c82c8ded1a4ba84f74688e534485fe9e4173446`.
+Both use LLVM23.1.4, Release/O3, diagnostics off and the prior pinned dependency
+paths. Fresh default discovery selected incompatible OpenSSL4; configuration was
+corrected to the accepted OpenSSL3 prefix before either build. Both use unchanged
+GUI `bc55d0e8` and GUI-command helper `87beebb0`. The rebuilt baseline is not
+byte-identical to the accepted runtime: text-section size matches, but placement
+and embedded source paths differ. Normalized source-path string sets match.
+Therefore a separate direct comparison against the accepted executable is required
+and completed below; equivalent timing is not inferred from the rebuild.
+
+Thirty-three functional runs compare accepted, rebuilt A and B across11 scenarios:
+sparse/full/scrolling output, Unicode, modes, links, colors, mixed terminal state,
+bulk output, long graphemes and a foreground probe alongside continuous bulk work.
+Their exact screen-state/text dumps match, including the probe's resize, reconnect
+and complete-exit checks where applicable. Event-loop and control-queue tests pass.
+The event-loop control also compiles and runs as x86-64 under Rosetta. The actual
+candidate main translation unit compiles for x86-64 baseline and v3. ARM disassembly
+shows the second call guarded by the readable-output result and stopping flag,
+with timeout0; the outlined dispatch helper uses an80-byte stack frame. x86 uses
+the corresponding conditional call. This is lowering/event-loop evidence, not
+executed x86/Linux full-runtime validation. Both main builds retain the same59
+pre-existing warnings.
+
+Native qualification in `/tmp/telar-perf-ready-event-pixels-01` passes all six
+settled full-window PNG checks: TUI, single typing and four splits, for A and B,
+against each other and the accepted reference. Configuration remains optical
+JBM15, native1600×1000, backing scale2; primary PTYs are82×21 for TUI/single and
+39×19 for four splits. All subsequent timings use ordinary uninstrumented native
+input-to-positive-presentation probes,100 measured inputs plus20 warmups, with
+six alternating pairs per case. No own build, test or profiler overlaps them.
+
+The initial TUI series `...ready-event-tui-pairs-01` is discarded in full: load1
+rises from3.047 to7.552 during its first A run. The unchanged retry
+`...ready-event-tui-pairs-02` qualifies all26 host boundaries (maximum4.4668).
+Against rebuilt A, B wins p50/p95/p99 in5/6,6/6,5/6 pairs; p95 medians are
+41.292/36.897 ms. GUI CPU falls5.218→4.852 ms/input (5/6), runtime CPU
+97.763→90.430 ms/run (6/6), and runtime instructions180,688,440.5→177,479,605.5
+(6/6). Maximum latency improves only3/6. GUI peak RSS217.508→219.797 MiB is not a
+reason to reject the candidate.
+
+The direct accepted-runtime comparison in `...ready-event-accepted-pairs-01`
+qualifies all36 runs and74 host boundaries (maximum load1 2.95996). Its results,
+plus the qualified background-load series described next, are:
+
+| Case | p95 A→B ms | B lower pairs | GUI CPU A→B ms/input | B lower pairs | Runtime CPU A→B ms/run | B lower pairs |
+|---|---:|---:|---:|---:|---:|---:|
+| TUI | 38.161→35.908 | 6/6 | 5.217→4.889 | 5/6 | 100.359→96.444 | 6/6 |
+| Single typing | 32.196→33.016 | 2/6 | 3.851→4.004 | 2/6 | 82.410→81.844 | 2/6 |
+| Four splits | 33.056→32.661 | 3/6 | 4.119→4.142 | 3/6 | 97.394→95.778 | 4/6 |
+| Four splits with background output | 37.355→37.551 | **1/6** | 19.702→19.744 | 2/6 | 1163.595→1186.395 | 3/6 |
+
+TUI p50 is28.852→27.743 ms (5/6), p99 48.091→43.930 (5/6), maximum49.354→47.011
+(3/6), and GUI peak RSS216.945→220.930 MiB (3/6 lower). Single typing and idle
+splits do not meet the consistent-latency-regression threshold, but add work:
+runtime instructions rise90,076,812→90,845,144.5 (0/6 lower) and
+130,198,163→131,133,221 (1/6 lower), respectively. The TUI reduction therefore does
+not establish a general instruction-count reduction. Runtime resource intervals
+include GUI setup, warmup, measurement and the final screen query for TUI, exclude
+runtime startup/shutdown and child CPU, and are not summed with GUI interval CPU.
+
+Background output is variable text from three producers at0.125MiB/s each. The
+first series, `...ready-event-load-pairs-01`, is excluded as a whole when one
+producer in round4 A reaches0.1174149MiB/s in a checkpoint interval, outside the
+unchanged5% tolerance; host load remains eligible. Its cause is not established.
+The unchanged repeat `...ready-event-load-pairs-02` qualifies all12 runs, offered
+rates and26 host boundaries (maximum load1 3.84326). Alongside the p95 regression
+above, maximum latency is41.055→41.087 ms with only1/6 lower pairs. p50 improves
+2/6, p99 2/6, GUI CPU2/6 and runtime CPU3/6. This consistent loaded-interaction
+regression rejects the all-pane variant despite the targeted TUI gain.
+
+A separate mechanism diagnostic in `/tmp/telar-perf-ready-event-census-01` compares
+the accepted runtime and rejected B with read/readv and legacy-Metal census/readback
+instrumentation. Both exact continuous byte streams8–120 and final text checks
+pass. Commits/readbacks are110/108 and non-marker epochs6/3. All non-marker epochs
+have an EAGAIN inside that update's byte range. Full/reset inputs contain such
+gaps5/13 on A and6/13 on B, but non-marker samples occur in5 and2 of those epochs;
+partial non-marker counts are1 each. This is consistent with some output being
+collected before publication, but is one perturbed diagnostic pair and does not
+trace publication directly or prove full-frame contents. Its timings cannot
+reverse the ordinary-series rejection.
+
+All five completed native series qualify their host gates; the highest load1 is
+4.57959 in pixel qualification. Both failed series remain excluded. All111 owned
+runtime/child shutdowns and resource cleanups pass, including33 functional runs.
+Accepted binaries, production `runtime.hpp`, and all four pending runtime hashes
+are verified intact. Frozen patches, assembly, commands, raw observations,
+`tables.json`, and `validation.json` remain under the artifact prefix.
+
+The next distinct variant should restrict the extra event batch to a single pane,
+matching the existing single-pane read-burst policy. It may retain the targeted
+TUI benefit while avoiding another ready batch of competing background panes;
+that is a hypothesis requiring new ordinary pairs and regression checks. No
+production optimization is accepted here, and all F01–F16/native120 complete-flow
+requirements and the unlimited goal remain open.
