@@ -108,7 +108,7 @@ def main():
     parser.add_argument('--burst-ms', type=float, default=0, help='Offer individual composed characters at independent fixed deadlines (1..250 ms)')
     parser.add_argument('--burst-main-stall-ms', type=float, default=0, help='Diagnostic main-thread stall after offering a burst (0..500 ms)')
     parser.add_argument('--callback-drain-ms', type=float, default=50, help='Observe the final result for 50..1000 ms before the next trial')
-    parser.add_argument('--minimum-query-interval-ms', type=float, default=0, help='Wait at least 0..1000 ms after input before preparing the next whole-query replacement')
+    parser.add_argument('--minimum-query-interval-ms', type=float, default=0, help='Wait at least 0..1000 ms from the first input before preparing the next query')
     parser.add_argument('--trace-history', action='store_true', help='Trace history requests through an isolated diagnostic relay')
     parser.add_argument('--delay-history', action='append', default=[], metavar='QUERY=MS', help='Delay matching history replies by 0..1000 ms; implies --trace-history')
     options = parser.parse_args()
@@ -124,8 +124,8 @@ def main():
         parser.error('A burst stall requires burst input, which requires replacement observation')
     if not 0 <= options.minimum_query_interval_ms <= 1000:
         parser.error('Minimum query interval must be 0..1000 milliseconds')
-    if options.minimum_query_interval_ms and (options.burst_ms or options.observe_only or options.samples < 2):
-        parser.error('Minimum query interval requires at least two whole-query replacement samples')
+    if options.minimum_query_interval_ms and (options.observe_only or options.samples < 2):
+        parser.error('Minimum query interval requires at least two query samples')
     delays = {}
     try:
         for value in options.delay_history:
@@ -253,11 +253,15 @@ def main():
                 else:
                     assert recorded['passed'] and recorded['pending_submissions'] == 0 and len(recorded['trials']) == options.samples, recorded
                     assert all(row['presented_time'] > row['input_time'] and row['latency_ms'] > 0 for row in recorded['trials'])
+                    assert all(0 < row['query_start_time'] <= row['input_time'] for row in recorded['trials'])
+                    if not options.burst_ms:
+                        assert all(row['query_start_time'] == row['input_time'] for row in recorded['trials'])
                     assert [row['query'] for row in recorded['trials']] == [case['queries'][(i+1) % 2]['text'] for i in range(options.samples)]
                     if options.minimum_query_interval_ms:
-                        intervals = [(right['input_time'] - left['input_time']) * 1000
+                        intervals = [(right['query_start_time'] - left['query_start_time']) * 1000
                                      for left, right in zip(recorded['trials'], recorded['trials'][1:])]
                         mean_interval = sum(intervals) / len(intervals)
+                        recorded['query_interval_anchor'] = 'first input of each query'
                         recorded['query_interval_mean_ms'] = mean_interval
                         recorded['query_interval_minimum_ms'] = min(intervals)
                         recorded['query_offered_rate_qualified'] = (min(intervals) >= options.minimum_query_interval_ms and
@@ -266,6 +270,7 @@ def main():
                         for trial in recorded['trials']:
                             inputs = trial['burst_inputs']
                             assert ''.join(row['text'] for row in inputs) == trial['query']
+                            assert inputs[0]['delivered_time'] == trial['query_start_time']
                             assert inputs[-1]['input_text'] == trial['query'] and inputs[-1]['delivered_time'] == trial['input_time']
                             assert all(row['offered_time'] <= row['enqueued_time'] <= row['delivered_time'] for row in inputs)
                         inputs = [row for trial in recorded['trials'] for row in trial['burst_inputs']]

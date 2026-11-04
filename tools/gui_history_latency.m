@@ -61,7 +61,7 @@ static BOOL timing, finished, started, ready;
 static NSString *settled_path, *last_match, *expected_query, *ready_path, *release_path;
 static NSMutableArray *trials;
 static NSUInteger requested_trials, phase;
-static double phase_started, input_time, earliest_presentation;
+static double phase_started, input_time, query_start_time, earliest_presentation;
 static double latest_presentation;
 static NSString *latest_match;
 static NSUInteger earliest_drawable, ignored_old, ignored_zero, zero_new;
@@ -121,6 +121,7 @@ static void finish_timing(NSString *error) {
                            @"error" : error ?: @"",
                            @"trials" : trials,
                            @"burst_interval_ms" : @(burst_interval * 1000),
+                           @"burst_producer" : burst_interval > 0 ? @"strict-timer-user-interactive" : @"disabled",
                            @"burst_main_stall_ms" : @(burst_stall * 1000),
                            @"minimum_query_interval_ms" : @(minimum_query_interval * 1000),
                            @"negative_control" : negative_control ?: @"",
@@ -190,37 +191,58 @@ static void offer_burst(NSView *view) {
                                 }];
   burst_inputs = [NSMutableArray arrayWithCapacity:characters.count];
   phase = 3;
+  dispatch_queue_attr_t attributes = dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0);
+  dispatch_queue_t producer = dispatch_queue_create("telar.history-burst-producer", attributes);
+  __block dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, DISPATCH_TIMER_STRICT, producer);
+  if (!timer) {
+    finish_timing(@"Burst producer timer is unavailable");
+    return;
+  }
+
   const double began = CACurrentMediaTime();
   const dispatch_time_t origin = dispatch_time(DISPATCH_TIME_NOW, 0);
-  dispatch_queue_t producer = dispatch_queue_create("telar.history-burst-producer", DISPATCH_QUEUE_SERIAL);
-  for (NSUInteger index = 0; index < characters.count; index++) {
+  __block NSUInteger next_character = 0;
+  dispatch_source_set_event_handler(timer, ^{
+    const NSUInteger index = next_character++;
     NSString *character = characters[index];
     const double offset = index * burst_interval;
-    dispatch_after(dispatch_time(origin, (int64_t)(offset * NSEC_PER_SEC)), producer, ^{
-      const double enqueued = CACurrentMediaTime();
-      dispatch_async(dispatch_get_main_queue(), ^{
-        if (finished) {
-          return;
-        }
-        if (terminal_view(NSApp.keyWindow.contentView) != view || !NSApp.isActive || !view.window.isKeyWindow || !NSEqualSizes(view.bounds.size, viewport)) {
-          finish_timing(@"Native focus or geometry changed during burst");
-          return;
-        }
-        const double delivered = CACurrentMediaTime();
-        if (index + 1 == characters.count) {
-          phase = 2;
-          phase_started = delivered;
-          input_time = delivered;
-        }
-        [(id<NSTextInputClient>)view insertText:character replacementRange:NSMakeRange(NSNotFound, 0)];
-        [burst_inputs addObject:@{@"text" : character, @"offered_time" : @(began + offset), @"enqueued_time" : @(enqueued),
-                                 @"delivered_time" : @(delivered), @"input_text" : input_text(view)}];
-        if (index + 1 == characters.count && ![input_text(view) isEqualToString:expected_query]) {
-          finish_timing(@"Native burst did not produce the expected text");
-        }
-      });
+    const double enqueued = CACurrentMediaTime();
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (finished) {
+        return;
+      }
+      if (terminal_view(NSApp.keyWindow.contentView) != view || !NSApp.isActive || !view.window.isKeyWindow || !NSEqualSizes(view.bounds.size, viewport)) {
+        finish_timing(@"Native focus or geometry changed during burst");
+        return;
+      }
+      const double delivered = CACurrentMediaTime();
+      if (index == 0) {
+        query_start_time = delivered;
+      }
+
+      if (index + 1 == characters.count) {
+        phase = 2;
+        phase_started = delivered;
+        input_time = delivered;
+      }
+
+      [(id<NSTextInputClient>)view insertText:character replacementRange:NSMakeRange(NSNotFound, 0)];
+      [burst_inputs addObject:@{@"text" : character, @"offered_time" : @(began + offset), @"enqueued_time" : @(enqueued),
+                               @"delivered_time" : @(delivered), @"input_text" : input_text(view)}];
+      if (index + 1 == characters.count && ![input_text(view) isEqualToString:expected_query]) {
+        finish_timing(@"Native burst did not produce the expected text");
+      }
     });
-  }
+
+    if (next_character == characters.count) {
+      dispatch_source_cancel(timer);
+      timer = nil;
+    } else {
+      dispatch_source_set_timer(timer, dispatch_time(origin, (int64_t)(next_character * burst_interval * NSEC_PER_SEC)), DISPATCH_TIME_FOREVER, 0);
+    }
+  });
+  dispatch_source_set_timer(timer, origin, DISPATCH_TIME_FOREVER, 0);
+  dispatch_resume(timer);
   if (burst_stall > 0) {
     [NSThread sleepForTimeInterval:burst_stall];
   }
@@ -286,6 +308,7 @@ static void timing_tick_impl(void) {
         } else {
           phase = 2;
           input_time = CACurrentMediaTime();
+          query_start_time = input_time;
           [(id<NSTextInputClient>)view insertText:expected_query replacementRange:NSMakeRange(NSNotFound, 0)];
           if (![input_text(view) isEqualToString:expected_query]) {
             finish_timing(@"Native query replacement did not produce the expected text");
@@ -293,7 +316,7 @@ static void timing_tick_impl(void) {
           }
         }
       }
-    } else if (phase == 2 && earliest_presentation > 0 && atomic_load(&pending_submissions) == 0 && now - earliest_presentation >= callback_drain && now - input_time >= minimum_query_interval) {
+    } else if (phase == 2 && earliest_presentation > 0 && atomic_load(&pending_submissions) == 0 && now - earliest_presentation >= callback_drain && now - query_start_time >= minimum_query_interval) {
       if (![latest_match isEqualToString:expected_query]) {
         finish_timing(@"A stale result replaced the completed query");
         return;
@@ -301,6 +324,7 @@ static void timing_tick_impl(void) {
       [trials addObject:@{@"query" : expected_query,
                           @"burst_inputs" : burst_inputs ?: @[],
                           @"input_time" : @(input_time),
+                          @"query_start_time" : @(query_start_time),
                           @"presented_time" : @(earliest_presentation),
                           @"last_presented_time" : @(latest_presentation),
                           @"last_match" : latest_match,
@@ -742,7 +766,6 @@ __attribute__((constructor)) static void install(void) {
         !isfinite(burst_interval) || burst_interval < 0 || burst_interval > .25 ||
         !isfinite(burst_stall) || burst_stall < 0 || burst_stall > .5 ||
         !isfinite(minimum_query_interval) || minimum_query_interval < 0 || minimum_query_interval > 1 ||
-        (minimum_query_interval > 0 && burst_interval > 0) ||
         !isfinite(callback_drain) || callback_drain < CallbackDrainSeconds || callback_drain > 1) {
       abort();
     }

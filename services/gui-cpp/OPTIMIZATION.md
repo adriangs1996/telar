@@ -421,11 +421,20 @@ Hook `elapsed_ns` fields measure wall time, not process CPU, and submission GPU
 time includes rendering as well as readback. Observer perturbation still needs
 qualification before using small timing differences to accept an optimization.
 
-Use `--minimum-query-interval-ms 300` for equal-load whole-query comparisons.
-The observer waits at least that long after input before preparing the next
-replacement, while retaining the callback drain and final-result checks. Native
-selection preparation adds a small delay. The report includes actual minimum and
-mean input intervals and `query_offered_rate_qualified`; reject timing when the
+Use `--minimum-query-interval-ms 300` for equal-load query comparisons, including
+bursts. The observer waits at least that long from the first input of each query
+before preparing the next replacement, retaining the callback drain and
+final-result checks. Native selection preparation adds a small delay. The report includes actual minimum and
+mean query-start intervals and `query_offered_rate_qualified`; reject timing when the
 actual rate differs from the requested rate by more than 5%. A successful
 functional run does not override a failed rate check. This option requires at
-least two samples and cannot be combined with burst input or observe-only mode.
+least two samples and cannot be combined with observe-only mode.
+
+`--burst-ms` uses a separate user-interactive producer queue and a strict timer
+with absolute deadlines and zero requested leeway, preserving offered, enqueued
+and delivered timestamps. It does not spin or stall the GUI thread. The first
+delivered character anchors the query-start interval; the final delivered character still anchors presentation
+latency. Qualify both the burst's character span and the interval between query
+starts before comparing resource costs. A diagnostic GUI-thread stall can pass
+the final-result oracle while failing the offered-rate check; its timing remains
+ineligible. Absolute deadlines do not guarantee qualified delivery under load.

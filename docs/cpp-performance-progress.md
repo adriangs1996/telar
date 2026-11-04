@@ -7144,3 +7144,36 @@ allowing a faster variant to receive more bursts per second. Character-span
 qualification and final-character-to-presentation latency must remain separate
 from that inter-burst workload control. The 5% tolerance, negative controls and
 full persistent objective remain unchanged.
+
+
+## Equal-rate burst observer qualified, 2026-11-04
+
+The reusable history observer now permits a minimum query interval with burst
+input. Its first delivered character anchors inter-query cadence; the final
+delivered character still anchors presentation latency. Whole-query replacement
+keeps the same anchor as before. Both the character span and the interval
+between query starts must satisfy the unchanged 5% offered-rate threshold.
+
+The input producer uses a user-interactive serial queue and a strict dispatch
+timer, with absolute deadlines and zero requested leeway. It does not spin or
+block the GUI thread. The source cancels and releases its timer after the last
+character. Earlier private absolute-deadline `mach_wait_until` variants remain
+recorded: default queue priority produced up to 7.5–10 ms lag, and explicit
+user-interactive priority still produced about 2 ms. Both fail 15 ms cadence;
+their failed rows remain ineligible rather than being retried as successes.
+
+`out-perf/dlls-history-burst-cadence-03` qualifies 12 bursts each at 15 and 45 ms
+character spacing in both independent stacks, with a 300 ms minimum query-start
+interval. At 15 ms, maximum producer lag is 0.136750 ms for C++ and 0.068500 ms
+for Zig; mean query-start intervals are 311.601648 and 309.650576 ms. Whole-query
+replacement and delayed-response controls also pass. The intentional 200 ms
+GUI-thread stall preserves the final result but correctly fails rate qualification.
+Late-stale and missing-callback negative controls fail for their intended reasons.
+All nine native runs qualify host load and owned cleanup. Objective-C syntax
+checking is clean; invalid one-sample and observe-only combinations fail before
+creating output.
+
+This qualifies workload delivery and existing endpoint guards, not observer
+perturbation, cross-renderer optical parity, an optimization speedup or full F12.
+The corrected producer enables the next independent equal-rate burst comparison;
+all wider flow and native120 gates remain open.
