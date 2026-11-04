@@ -9444,3 +9444,72 @@ capture cleanup checks pass. Production source and GUI binary restore exactly to
 `bc55d0e8`; the four pre-existing runtime source hashes remain unchanged. Only
 diagnostic tools and this report are retained. All F01–F16/native120 requirements
 and the unlimited goal remain open.
+
+## Empty glyph reference fast path rejected, 2026-11-04
+
+The work census exposed an independent, concrete cost in the accepted renderer:
+`ChromeScene::appendSpan` constructs a `GlyphPlacement`, copying its shared mask
+reference, before testing whether the mask image is null. A four-line candidate
+moves construction after that check and preserves the glyph advance in both
+paths. It assumes nothing about which characters or fonts produce empty masks.
+This avoids reference/copy work, not a heap allocation per glyph, and does not
+establish the cause of the preceding combined-candidate regression.
+
+`out-perf/dlls-empty-glyph-reference-01` freezes accepted A `bc55d0e8`, candidate
+B `31330f0f`, original/candidate source, build and validation commands, resource
+receipts and the rejected patch. Runtime `1f1849d1` and helper `87beebb0` are
+identical in both stages. Production uses the existing LLVM 23.1.4/Qt 6.12
+Release configuration on the native ARM64 M1 Pro; the probe, fonts, grids and
+presentation endpoint remain unchanged.
+
+Four focused tests pass: row text, optical text, chrome text and scene rendering,
+including retained/fresh rows, font styles, combining sequences, selection and
+cursor behavior. Three settled full-window native PNG comparisons (single,
+four splits and tabs) are byte-exact. `clang-tidy` reports no user-code warning;
+third-party warnings are suppressed. Actual ARM64 disassembly shows that null
+images skip the temporary-reference increment and decrement (`ldaddal`) in B;
+the optical caller still reserves 368 stack bytes. Both standard and optical
+specializations compile for baseline x86-64 and x86-64-v3 and branch around the
+two locked reference operations. These are compilation/lowering checks, not
+linked/executed x86 Qt or Linux validation. No byte-identical placement claim is
+made. An initial objdump invocation emitted whole-binary listings; the corrected
+symbol-specific listings are the reviewed evidence.
+
+The ordinary, uninstrumented probe runs six alternating pairs in each of single
+and four-split typing, 100 measured inputs plus 20 warmups, in
+`/tmp/telar-perf-empty-glyph-reference-pairs-01`. All 24 runs and 50 host boundaries
+qualify; maximum load1 is 3.4814453125. No own build, test, lint or profiler
+runs overlap timing. Native identity/content/grid/presentation checks pass.
+
+| Case / metric | A median | B median | B lower pairs |
+|---|---:|---:|---:|
+| Single p50 ms | 24.936 | 25.250 | 3/6 |
+| Single p95 ms | 32.872 | 33.127 | 3/6 |
+| Single p99 ms | 37.258 | 36.362 | 3/6 |
+| Single maximum ms | 38.259 | 38.733 | 3/6 |
+| Single GUI CPU ms/input | 4.118 | 4.171 | 2/6 |
+| Single GUI peak RSS MiB | 206.117 | 204.313 | 4/6 |
+| Splits p50 ms | 26.045 | 25.434 | 5/6 |
+| Splits p95 ms | 33.117 | 31.873 | **4/6** |
+| Splits p99 ms | 38.099 | 35.193 | 5/6 |
+| Splits maximum ms | 40.732 | 37.334 | 5/6 |
+| Splits GUI CPU ms/input | 4.284 | 4.128 | **4/6** |
+| Splits GUI peak RSS MiB | 200.164 | 205.508 | 4/6 |
+
+Separate runtime CPU, including setup/warmup/measurement and excluding child CPU,
+is 84.790/87.812 ms for single (**1/6** lower pairs) and 99.611/99.985 ms for
+splits (4/6). End-boundary footprint is 13.883/13.860 MiB and 17.438/17.383 MiB,
+respectively (both 4/6). Runtime instruction/cycle wins are 3/6 and 2/6 in each
+case. These accounting intervals differ from GUI measured-input CPU and are not
+summed. The runtime binary is unchanged; the cause of the CPU difference is not
+established.
+
+Reject B: target split p95 and GUI CPU win only 4/6 pairs, single GUI CPU only
+2/6, and single runtime CPU loses consistently. The split median reductions and
+smaller empty-glyph path do not satisfy acceptance. RSS is not the rejection
+reason. No additional independent Zig acceptance series is warranted for this
+rejected variant. All 30 runtime shutdowns (24 timings plus six PNG runs) and
+runtime resource cleanup checks pass. The one production source file is restored;
+the configured GUI matches accepted `bc55d0e8` byte-for-byte. The four
+pre-existing runtime source hashes remain intact. All F01–F16/native120 complete
+flow requirements and the unlimited goal remain open.
