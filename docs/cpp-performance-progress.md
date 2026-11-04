@@ -8713,3 +8713,106 @@ rejected `e4aea930` binary or reuse of old timings. The new baseline is
 pairs, typing controls and independent Zig qualification are required again.
 No candidate source is applied yet. Production remains the accepted flush build;
 complete F01–F16/native120 requirements and the unlimited goal remain open.
+
+## Stable tab presentations on the accepted flush base, 2026-11-04
+
+On `c61a8b181`, `out-perf/dlls-tab-presentation-post-flush-01` applies the
+previously rejected typed-presentation algorithm as a new combination with the
+accepted compile-time OpenPane flush. Baseline GUI is `bc55d0e8`; candidate GUI
+is `345974b5da42cb5ed03b0bfe99112578acbf5f9542755202a29bd2f8e90685be`.
+Both use runtime `1f1849d1` and command helper `87beebb0`. The accepted flush
+source remains unchanged. The earlier unflushed-base rejection remains valid.
+
+A stable QObject owns each tab's semantic content and typed geometry. Geometry
+updates notify only changed geometry properties, leaving QML semantic content
+bindings intact. Legacy map records remain lazily available to existing callers.
+The new integrated test covers 2,048 deterministic reference-model reconciliations,
+persistent indices, stable identity, selective signals, overflow, deferred removal
+and real QML delegates. Its 240 geometry updates cause zero semantic rebindings;
+semantic changes still notify, and model destruction retires readers safely.
+
+Private model/QML oracles pass again with ASan/UBSan (Qt dependencies remain
+uninstrumented and leak detection is disabled). A new lifetime census corrects a
+potentially misleading capacity claim: 64 is the settled-row limit, not a global
+live-object limit. Four disjoint batches of 64 rows reach 128 transient model
+rows. Draining deferred deletions after each batch peaks at 128 live objects;
+without intermediate drains, the same four batches peak at 256. Both create and
+destroy all 256 objects and finish with zero live objects after model destruction
+and a final drain. These are object counts, not byte/RSS bounds; longer undrained
+sequences can retain more retired objects.
+
+Production and integrated-test focused clang-tidy pass. The integrated test's
+initial lint failure is retained; direct includes, named fixtures, internal linkage,
+static slots and const correctness are fixed. The reproducible PRNG seed has one
+explicit diagnostic suppression. Presentation, chrome and activity component tests
+pass, as do all 17 focused Cocoa/Metal cases covering window reopening, tabs,
+drag/drop cancellation, palettes, nested splits, fullscreen and configuration reload.
+Three settled full-window PNGs (single, four splits and tabs) match byte-for-byte
+in `/tmp/telar-perf-tab-presentation-post-flush-pixels-01`.
+
+Fresh ARM64 disassembly has 2,624/2,176 static instructions in A/B tab rebuild;
+B also has 483 in typed reconciliation and 209 in presentation update. Static
+QVariant-named call sites in rebuild fall 56 to 27, and QMap-named sites 39 to 19;
+these overlapping name counts are neither executed instructions nor allocations.
+Source and the QML oracle establish the avoided semantic publication. Actual
+performance acceptance still requires the frozen six-pair CPU/p95 gates.
+
+`/tmp/telar-perf-tab-presentation-post-flush-pairs-01` completes six alternating
+pairs, 100 measured plus 20 warmup actions, four 30 Hz producers, 1600x1000
+viewport and 82x21 grid. All native content/phase/rate, pair geometry and owned
+cleanup checks pass. All 26 host boundaries qualify, maximum load1 2.68798828125;
+no owned build, test or profile overlaps timing. Values below are medians of runs.
+
+| Target metric | A accepted flush | B typed presentations | B lower, /6 |
+|---|---:|---:|---:|
+| p50, ms | 38.043 | 38.561 | 3 |
+| p95, ms | 43.329 | 41.845 | 4 |
+| p99, ms | 44.666 | 43.614 | 4 |
+| Maximum, ms | 45.337 | 46.119 | 3 |
+| GUI CPU/input, ms | 27.580 | 27.153 | 4 |
+| GUI lifetime peak RSS, MiB | 203.852 | 192.703 | 5 |
+
+The separate runtime window includes GUI startup, warmup, measured actions and
+boundary-observer time, excluding runtime startup/shutdown and child CPU. Its
+CPU is 379.554/391.396 ms (B lower 2/6), instructions 817,878,205/823,700,783
+(2/6), and cycles 762,573,143/777,490,826.5 (2/6). End RSS is
+28.547/28.914 MiB (1/6), end footprint 20.165/20.532 MiB (1/6), and lifetime
+maximum footprint 20.180/20.547 MiB (1/6). Memory observations are endpoint
+snapshots and lifetime maximums, not interval peaks; GUI and runtime RSS are not
+summed. The runtime CPU window differs from GUI CPU/input.
+
+Reject the combination: both frozen GUI CPU and p95 gates require at least 5/6
+wins and both achieve only 4/6. The lower median p95 and five RSS wins do not
+supersede that rule. This is not a rejection of a memory/performance tradeoff.
+The exact cause of inconsistent end-to-end gains is not established. Typing
+controls and a new independent Zig comparison are not run for this rejected
+candidate; previous accepted-build comparisons remain authoritative.
+
+All seven candidate files are frozen before restoring the four original files
+with their original timestamps and removing the three candidate-only files.
+Qt resource/AOT outputs and objects depending on changed headers are invalidated
+before rebuilding. The configured GUI is byte-exactly `bc55d0e8` again; restored
+chrome/activity tests pass. The accepted OpenPane implementation and unrelated
+dirty runtime work are preserved. F01–F16 and native120 acceptance remain open,
+and the unlimited persistent goal remains active.
+
+After restoration, a separate eight-second/1 ms `sample` diagnostic of each
+frozen binary completes 240 qualified actions in
+`/tmp/telar-perf-tab-presentation-post-flush-profile-01`. The captures overlap
+98/95 switches. All six host boundaries qualify, maximum load1 3.9619140625,
+and cleanup completes. Main-thread totals are 5,895/5,844 observations. Inclusive
+counts A/B are tab rebuild 218/135, ListModel reconciliation 293/141, new typed
+reconciliation 0/84, typed update 0/82, var-property write 92/32, variant
+association 67/27, QML binding 162/89, and garbage collection 26/7. Pane refresh
+is 117/143 and QML construction 19/34. Categories overlap, contain waits, and
+have different action overlap; they are not additive CPU percentages or allocation
+counts. The intended publication reduction remains observable, but these profiles
+do not establish the cause of the insufficient six-pair gain or reinstate B.
+
+The next diagnostic will separate observed GUI CPU by thread on the accepted
+build before choosing another presentation optimization. Existing sampled render
+and main-thread stacks include substantial waits; interpreting their inclusive
+sample counts as CPU cost would mis-rank the remaining work. Thread observations
+must account explicitly for threads that appear/disappear, clock units and
+unattributed residuals against process CPU, and remain separate from headline
+latency. No new production candidate is applied.
