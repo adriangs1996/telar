@@ -7896,3 +7896,115 @@ reproduces accepted GUI hash `a88e53a8` byte exactly. The restored chrome and ta
 activity scene tests pass. The unlimited goal stays active. Full F01-F16, independent
 complete-stack wins and continuous native120 remain open. This experiment narrows
 the allocation/conversion hypothesis without promoting it to a universal cause.
+
+## Single unframed pane rebinding: target wins, split tails reject, 2026-11-04
+
+The new experiment on `e0981f756` reuses the sole visible, unframed pane delegate
+across pane identity changes, using existing positional `ListModel::replaceRows`.
+All multi-pane and framed transitions retain keyed reconciliation. It avoids
+reconstructing the terminal/header QML tree without retaining hidden pane objects
+or reinstating the earlier pane cache. The visible count and existing global
+image/glyph limits remain unchanged; longer resource lifetimes are not a claim
+of zero memory cost. The original five source files, their timestamps, all failed
+controls and withdrawn candidate are in `out-perf/dlls-single-pane-rebind-01`.
+
+Accepted A GUI is `a88e53a81bbf7d96e8547f9a92e1b2be2d98e9bfddd1c69095422ab330ec37c8`.
+Final B is `288a5a036dc483b90809cb01de0aaa33da3df115fdb2bda2774785b9eed5a6d6`.
+Both use runtime `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`
+and helper `87beebb065f0ea4274492eaadecea2ccef7cdedc28f36049bf61ecc21214924f`.
+The Release toolchain remains LLVM 23.1.4/Qt 6.12 on M1 Pro/macOS 26.6.2.
+No runtime source or unrelated pacing changes were modified.
+
+The original native viewport test fails the added delegate-identity oracle before
+implementation. A direct composition test also fails: `setPaneId` retains the old
+preedit. The candidate clears preedit/pointer state, retires old input ownership
+and resets keyboard focus before rebinding. A byte-exact PTY test verifies that a
+held Kitty key is released to the old pane, its later physical release does not
+leak into the new pane, and the new pane receives its own complete key sequence.
+Its first setup attempted to configure the previous pane; the corrected fixture
+waits for the newly created pane's identity before sending its capture command.
+
+Focus coverage exposed two more lifecycle requirements before timing:
+
+- The runtime's mode-enable focus reply must be captured separately from the
+  departure/return reports. After isolating it, only three of the expected six
+  transition bytes arrive. Source inspection finds that `Application::input`
+  rejects reports while the pane is unattached, while `synchronizeFocus` has
+  already updated its local keyboard state. Requiring attachment before that
+  focus transition makes the exact `ESC[O ESC[I` oracle pass. Earlier binaries
+  and both failing receipts remain archived; this does not establish whether the
+  original accepted GUI also exhibits this focus issue.
+- A retained delegate does not run `Component.onCompleted` again. Opening a tab
+  while another chrome item owns focus therefore fails a new native focus oracle.
+  Invoking the existing focus policy on `paneIdChanged`, after initial completion,
+  restores the behavior and passes the oracle.
+
+Final source passes 28 distinct Cocoa/Metal Quick cases and the rebuilt chrome,
+software graphics-retention scene and machine-window component tests. Coverage
+includes viewport, focus, held input, copy, links, images, close/split/fullscreen,
+configuration, stale frames and window reopening. A requested custom link-host
+case is not compiled into this configuration and is explicitly unexecuted.
+Focused production/test clang-tidy passes after six test-style corrections.
+Complete settled 1600x1000 A/B PNGs match byte exactly for single, four-split and
+four-tab layouts. None of these checks establishes continuous animated/native120
+parity. Final ARM64 disassembly confirms the positional/keyed branches and the
+additional attached-state load/branch in focus synchronization; no cross-target
+GUI execution or code-placement exemption is claimed.
+
+`/tmp/telar-perf-single-pane-rebind-pairs-01` contains six alternating F08 target
+pairs, 100 measured plus 20 warmup inputs, four independent 30 Hz producers,
+matched 82x21 grids, working directory, opaque configuration and qualified initial
+phase. All target/content/rate/phase/cleanup checks pass. All 26 host boundaries
+qualify, maximum one-minute load 3.1181640625; source and binaries remain frozen.
+Median per-run results:
+
+| Metric | Accepted A | Candidate B | B wins |
+|---|---:|---:|---:|
+| p50, ms | 42.905 | 38.187 | 6/6 |
+| p95, ms | 48.488 | 42.562 | 6/6 |
+| p99, ms | 49.228 | 43.582 | 6/6 |
+| maximum, ms | 49.584 | 43.945 | 6/6 |
+| GUI CPU, ms/action | 29.959 | 27.145 | 5/6 |
+| GUI lifetime peak RSS, MiB | 205.969 | 203.500 | 3/6 lower |
+
+The independent typing controls in
+`/tmp/telar-perf-single-pane-rebind-regressions-01` contain six alternating pairs
+per layout and 100 measured inputs per run. All 50 host boundaries qualify,
+maximum load 3.181640625; all 24 owned-runtime cleanups complete. No owned
+builds/tests/profiles overlap either headline series.
+
+| Typing metric | Single A → B (wins) | Four splits A → B (wins) |
+|---|---|---|
+| p50, ms | 25.579 → 25.270 (4/6) | 26.021 → 25.644 (4/6) |
+| p95, ms | 33.139 → 32.809 (3/6) | 32.151 → 33.867 (1/6) |
+| p99, ms | 36.697 → 36.313 (3/6) | 34.937 → 36.710 (1/6) |
+| maximum, ms | 37.286 → 39.352 (2/6) | 41.653 → 40.063 (3/6) |
+| GUI CPU, ms/input | 4.071 → 3.953 (4/6) | 4.220 → 4.233 (4/6) |
+
+**Rejected:** target CPU/p95 pass, but four-split p95 and p99 each win only 1/6.
+The tail cause remains unestablished. No favorable target/median or memory result
+overrides that gate, and no new independent Zig timing is justified for adoption
+of this rejected source. Runtime resource accounting remains open for these runs.
+
+Separate eight-second sampling overlaps 93 A and 94 B switches; both diagnostic
+240-action workloads qualify. Inclusive main-thread observations are QML
+construction 31/1, pane refresh 124/16, tab rebuild 188/393 and QML var writes
+100/155. Categories overlap and exclude nested repeats only within each category;
+these are not allocation counts or CPU percentages. They support avoided pane
+construction, while exposing remaining tab work; they do not explain split tails.
+Instrumented timings are excluded from acceptance.
+
+Before retrying this mechanism, isolate rebind-only deferred focus delivery from
+the new attached-state check in steady focus synchronization. A one-shot callback
+retired on identity change/attachment could preserve the original steady path,
+but is only a proposed experiment: it is not an established regression fix and
+must pass the same ownership and native performance controls. The current candidate
+is withdrawn. The unlimited goal remains active; all complete-flow and native120
+acceptance stays open.
+
+Restoration verifies all five source hashes against the frozen originals.
+Regenerating both the raw QML resource and stale PaneArea AOT cache reproduces
+accepted GUI `a88e53a8` byte exactly; restoring the older source timestamp alone
+did not invalidate the candidate AOT cache. The restored three component tests
+and native viewport/tab-palette cases pass. Both diagnostic runtime cleanups
+complete. The receipt is `out-perf/dlls-single-pane-rebind-01/restoration.json`.
