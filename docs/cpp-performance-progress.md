@@ -8423,3 +8423,87 @@ backpressure, byte ordering and all pacing/visibility rules; the ordinary six-pa
 CPU/p95 and regression gates still apply. No immediate-flush change is implemented
 or accepted here. All F01–F16/native120 requirements and the unlimited goal remain
 open and active.
+
+## Immediate OpenPane flush in the shared writer rejected, 2026-11-04
+
+`out-perf/dlls-open-pane-flush-01` starts from `546d9a2d1`, accepted GUI
+`a88e53a8` and runtime `1f1849d1`. The preceding timeline motivates one
+nonblocking `QLocalSocket::flush()` after queuing an entire OpenPane on an
+accepted connection. The experiment adds a message-tag check to the common
+`RuntimeConnection::write` path. It preserves prefix/payload ordering, the 4 MiB
+queue bound, handshake behavior and existing presentation pacing. The intent is
+to overlap attachment work with synchronous UI refresh; the trace does not yet
+prove which downstream work this avoids.
+
+Before implementation, two new private connection oracles fail specifically
+because the peer cannot receive OpenPane without processing sender events. They
+cover a preceding DetachPane, subsequent input, a stalled receiver, bounded queue
+failure, byte-exact draining and immediate recovery. An initial fixture has an
+overlong Unix socket path; shortening it allows the backpressure oracle to reach
+its intended baseline failure. The peer's bounded wait cannot become a negative
+infinite timeout. Both oracles pass with the candidate, as do all 15 connection
+cases, including audited schema fallback, retry and simulated SSH transport.
+All 15 selected native window cases pass, and settled full-viewport PNGs are
+byte-exact for single, four-split and tab layouts. Focused clang-tidy passes after
+naming the mutable test request's initial value. The rejected oracles and patch
+remain in the ignored experiment prefix.
+
+Candidate GUI SHA-256 is
+`41469a20993454579ec6547359241f8d1cef313bc4db6cd66081c40300d1426c`.
+ARM64 disassembly retains both ordered QIODevice writes and the queue bound,
+then checks accepted/nonempty/OpenPane and calls QLocalSocket::flush once. Import
+table addresses verify the actual callee. The pinned Qt Unix implementation
+delegates to its nonblocking socket drain, stopping when further writing cannot
+progress. No target-specific kernel is introduced; Linux/x86 execution is not
+claimed. Build, lint, functional tests and capture checks finish before timing.
+
+`/tmp/telar-perf-open-pane-flush-pairs-01` contains six alternating pairs of 100
+measured plus 20 warmup switches, four 30 Hz producers, matched 1600x1000 views
+and 82x21 grids. All native content/generation/checksum, producer-rate/phase and
+cleanup checks pass. All 26 host boundaries qualify, maximum load1 3.2001953125.
+
+| F08 median of run summaries | Accepted A | Candidate B | B lower pairs |
+|---|---:|---:|---:|
+| p50, ms | 44.409 | 37.333 | 6/6 |
+| p95, ms | 49.130 | 41.523 | 6/6 |
+| p99, ms | 49.298 | 43.771 | 6/6 |
+| Maximum, ms | 49.557 | 44.446 | 6/6 |
+| GUI CPU, ms/input | 28.752 | 27.436 | 6/6 |
+| GUI lifetime peak RSS, MiB | 201.617 | 192.109 | 5/6 |
+
+Runtime CPU in its separate GUI-startup/warmup/measurement window is
+398.933 -> 376.356 ms (5/6 lower); retired instructions are
+843,272,270 -> 823,545,765 (6/6), cycles 824,381,134 -> 771,969,534 (4/6).
+Runtime final footprint rises 18.305 -> 19.524 MiB (0/6 lower). These are
+runtime-only observations, exclude child CPU and runtime startup/shutdown, and
+do not establish causality. Memory snapshots/lifetime maxima are not interval
+peaks; shared resident memory is not summed. The modest memory increase is
+acceptable in principle and is not the rejection reason.
+
+`/tmp/telar-perf-open-pane-flush-regressions-01` completes six alternating pairs
+each for single-pane and four-split typing. All 50 host boundaries qualify,
+maximum load1 2.72900390625; all cleanup checks pass.
+
+| Typing metric | Single A -> B | B lower pairs | Four splits A -> B | B lower pairs |
+|---|---:|---:|---:|---:|
+| p50, ms | 24.895 -> 25.475 | 1/6 | 25.424 -> 25.694 | 1/6 |
+| p95, ms | 32.056 -> 32.967 | 3/6 | 32.931 -> 32.745 | 3/6 |
+| p99, ms | 36.360 -> 35.228 | 4/6 | 36.860 -> 37.213 | 3/6 |
+| Maximum, ms | 38.950 -> 37.781 | 5/6 | 36.899 -> 39.469 | 1/6 |
+| GUI CPU, ms/input | 3.874 -> 4.044 | 3/6 | 4.265 -> 4.185 | 3/6 |
+| GUI lifetime peak RSS, MiB | 204.602 -> 205.133 | 2/6 | 205.906 -> 206.070 | 3/6 |
+
+Runtime CPU in those broader windows is 82.510 -> 86.921 ms for single and
+98.555 -> 100.211 ms for splits, each 2/6 lower. The candidate is rejected for
+consistent typing p50 losses and four-split maximum latency, despite its strong
+target result. Cause is not established; no placement exemption is proven. No
+fresh independent Zig series is needed for an already rejected candidate.
+
+Both production/test source files are restored to their original hashes. The
+configured GUI rebuilds byte-exactly to `a88e53a8`; the restored connection suite
+and two selected native tab/split cases pass. Unrelated runtime work is preserved.
+The next isolated experiment can place the flush in the compile-time OpenPane
+send specialization, leaving other request specializations and the shared writer
+unchanged. That is a new hypothesis to test, not an explanation established by
+these results. The unlimited goal remains active; complete F01–F16 and native120
+acceptance remain open.
