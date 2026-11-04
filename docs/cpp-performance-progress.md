@@ -8008,3 +8008,81 @@ accepted GUI `a88e53a8` byte exactly; restoring the older source timestamp alone
 did not invalidate the candidate AOT cache. The restored three component tests
 and native viewport/tab-palette cases pass. Both diagnostic runtime cleanups
 complete. The receipt is `out-perf/dlls-single-pane-rebind-01/restoration.json`.
+
+## Transition-only focus eligibility: typing regression rejects, 2026-11-04
+
+On `aaa493981`, a new isolated variant keeps the previous single-unframed-pane
+reuse but moves attachment eligibility inside the keyboard-focus transition.
+It adds no callback, retained hidden delegate or new per-frame state. ARM64
+inspection confirms that the equal-focus path skips the attachment load; this
+removes that specific additional steady-path operation, not all possible causes
+of the previous typing regression. Original A remains GUI `a88e53a8`, runtime
+`1f1849d1`, helper `87beebb0`. New B GUI is
+`3e88033b7b5b4e4d72cbbd40c46532011d3c8706005be41dbdff1e8fa5589523`.
+The source, contract and full hashes are in `out-perf/dlls-pane-transition-focus-01`.
+
+Thirty distinct Cocoa/Metal Quick cases pass. A new focus test explicitly checks
+unattached/attached state, and the byte-exact PTY focus oracle now ends with a
+sentinel so an extra report cannot hide behind a fixed-length read. Three rebuilt
+component cases, focused production/test clang-tidy and settled full-PNG equality
+for single/splits/tabs also pass. One native runner stalls in its AeroSpace query
+after the test has exited successfully: only that owned query is terminated, the
+query gets a five-second timeout, and the remaining cases run to completion. No
+timing overlaps these checks. No x86/Linux GUI run or placement exception is claimed.
+
+Six alternating target pairs in `/tmp/telar-perf-pane-transition-focus-pairs-01`
+pass content, producer rate, initial phase and cleanup checks, with 100 measured
+and 20 warmup actions per run. All 26 host boundaries qualify, maximum load
+3.1865234375. Median per-run results:
+
+| Target metric | A | B | B wins |
+|---|---:|---:|---:|
+| p50, ms | 41.917 | 38.114 | 5/6 |
+| p95, ms | 47.865 | 43.171 | 6/6 |
+| p99, ms | 49.301 | 44.561 | 6/6 |
+| maximum, ms | 49.421 | 44.692 | 5/6 |
+| GUI CPU, ms/action | 28.942 | 27.414 | 5/6 |
+| GUI lifetime peak RSS, MiB | 191.773 | 204.008 | 1/6 lower |
+
+Typing series `...-regressions-01` is discarded in full when load reaches
+5.30322265625 after its ninth run; all nine owned runtimes clean up. None of its
+rows is salvaged. The complete restart in
+`/tmp/telar-perf-pane-transition-focus-regressions-02` qualifies all 50 host
+boundaries, maximum load 3.5966796875, and all 24 cleanups. Its medians are:
+
+| Typing metric | Single A → B (wins) | Four splits A → B (wins) |
+|---|---|---|
+| p50, ms | 24.905 → 25.075 (1/6) | 25.717 → 25.102 (4/6) |
+| p95, ms | 33.138 → 32.905 (3/6) | 32.898 → 33.154 (2/6) |
+| p99, ms | 34.774 → 34.663 (4/6) | 35.029 → 36.407 (2/6) |
+| maximum, ms | 39.972 → 37.230 (4/6) | 37.636 → 39.096 (2/6) |
+| GUI CPU, ms/input | 3.840 → 4.225 (1/6) | 3.996 → 4.169 (2/6) |
+
+Existing native runtime resource capture is reused outside the input/presentation
+interval: its 11 tests pass and a native self-CPU check agrees with getrusage at a
+1.0068 ratio. Runtime CPU brackets GUI startup, warmup and measurement, excluding
+runtime startup/shutdown and child CPU; it is not summed with the narrower GUI
+interval. Target runtime CPU is 394.209 → 400.052 ms/run (3/6); single typing is
+83.091 → 87.870 (2/6), and splits 96.618 → 99.444 (1/6). Target final runtime
+footprint is 19.039 → 19.164 MiB; snapshots and lifetime footprint maxima are
+retained separately from GUI lifetime RSS. Shared memory is not summed. Observer
+source/helper hashes, identities, timebase and raw receipts are preserved.
+
+**Rejected:** single typing CPU and p50 each win only 1/6; split runtime CPU also
+wins only 1/6 over its broader interval. The roughly 12 MiB target GUI memory
+increase is not the rejection reason. Removing the steady attachment read does
+not make this reuse variant acceptable, and the regression cause remains
+unestablished. No independent Zig timing is used to promote this rejected source.
+
+A separate next candidate may reuse bounded caption measurements when label,
+font and display scale are unchanged, starting from accepted source. Existing
+code reshapes the same labels on every tab-layout rebuild. Earlier gesture
+instrumentation attributes only about 8.5–8.9% of rebuild time to caption
+measurement, so it cannot explain most tab work and is not a promised large win.
+No caption cache is implemented here. Full F01–F16 and continuous native120
+acceptance remain open; the unlimited goal stays active.
+
+All five production/test source files are restored to their original hashes.
+Regenerating the raw QML resource and PaneArea AOT cache reproduces accepted GUI
+`a88e53a8` byte exactly. The restored three component tests and two native
+viewport/tab-palette checks pass; `restoration.json` records the final state.
