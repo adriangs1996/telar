@@ -7640,3 +7640,106 @@ is removed. The configured GUI rebuild matches accepted `a88e53a8` byte for byte
 all39 original component cases pass after restoration. The persistent objective
 remains active, with every F01–F16 full-flow
 acceptance, optical parity, observer perturbation and native120 requirement open.
+
+## Bounded history snapshot reuse cost ranking, 2026-11-04
+
+`out-perf/dlls-history-reused-records-01` investigates the previous census without
+changing production. A private variant retains two vectors of at most 100 raw
+rows, reuses their string capacities and exchanges owned rows before the existing
+notifications. Shrinking destroys the suffix; clearing destroys both snapshots'
+contents. It preserves the lazy model's record role and eager-map oracle. The
+previous lazy model is a rejected diagnostic comparator, not the accepted base.
+
+The zero-steady-allocation oracle first fails against that previous model, then
+passes after reuse: 102 allocations on initial publication, 100 on the second,
+zero thereafter. Live injected-allocator bytes increase from 24,800 to 49,600.
+Qt allocations are excluded. The 512-snapshot eager-reference/model-tester check,
+independent allocator ownership, capacity overflow and allocation-failure checks
+pass with ASan/UBSan; dependency archives remain uninstrumented. ARM64 and x86
+baseline/v3 compilation pass. ARM64 lowering retains string copy assignments and
+owned row swaps; it does not eliminate raw copying. This is compile-only evidence
+for x86, with no Linux or x86 GUI execution claim.
+
+An isolated native ARM64 benchmark reproduces accepted eager publication, the
+previous lazy model and the reused model. It publishes 100 fixture-shaped build
+commands, with fixed pages or alternating target 4996/1996 pages and declared
+0/8/100 record reads. Calendar/input storage is prepared before timing. Each run
+warms 100 updates and measures at least 300 ms of thread CPU in 1000-update batches.
+Six triplets per case alternate eager/lazy/reused order with its reverse. Frozen
+source/binary hashes, raw output and the driver are retained under `paired-01`.
+All 146 host boundaries qualify, maximum load1 1.678711. No owned compilation,
+test or profile overlaps. These measurements exclude QML, rendering, IPC and the
+runtime and do not estimate how many records a real view requests.
+
+| Record requests / pages | Eager µs/update | Previous lazy | Reused lazy | Reused wins vs eager / lazy |
+| --- | ---: | ---: | ---: | ---: |
+| 0 / alternating | 140.817 | 3.932 | 2.881 | 6/6 / 6/6 |
+| 8 / unchanged | 161.691 | 17.202 | 16.174 | 6/6 / 6/6 |
+| 8 / alternating | 141.297 | 15.517 | 14.669 | 6/6 / 6/6 |
+| 100 / alternating | 144.877 | 148.500 | 146.979 | 0/6 / 5/6 |
+
+The median paired saving from buffer reuse is 0.848–1.066 µs/update. Avoiding
+unrequested projections accounts for the much larger isolated difference from
+eager publication. Removing 101 raw allocations is real but not evidence that
+allocation dominates native GUI cost. When all records are requested, reuse still
+loses every pair against accepted eager publication. Do not integrate this model;
+the absolute refinement is too small to prioritize another complete GUI series
+after the previous native rejection. No new native performance or memory claim
+follows. All production sources and accepted executables remain unchanged, and
+the four unrelated runtime cadence edits are preserved. The objective remains
+active; all complete flow, optical and native120 gates remain open.
+
+## Current tab-switch qualification and cost investigation, 2026-11-04
+
+After ranking the history allocation refinement, work returns to F08. The native
+tab driver now wraps each execution with `HostLoadGate` and qualifies the entire
+series before publishing its summary. Its manifest also records the owned-window
+floating policy and preserves the load-observer source. No production application
+changes accompany this correction. All 13 tab fixture/packet/report tests and
+12 host-gate tests pass.
+
+The first current qualification stops before input because the window manager
+supplies 1760×2230 rather than the requested 1600×1000 pixels. Its runtime and
+children cleanly exit. Floating only the owned benchmark windows fixes geometry;
+both accepted C++ executables (`a88e53a8` / `1f1849d1`) and independent Zig `6ccf7948`
+then pass 40 measured switches after 20 warmups, matching the 82×21 grid, positive
+native presentation, target identity/generation and four independent 30 Hz PTYs.
+All six host boundaries qualify, maximum load1 3.160156. This is qualification,
+not paired acceptance. Six current negative controls separately reject wrong
+tab, stale generation and corrupt checksum in both stacks, after initial readiness
+and with no accepted responses; all owned runtimes/children exit.
+
+Two attempts at six alternating 100-switch pairs are excluded in their entirety:
+`/tmp/telar-perf-tab-switch-current-pairs-{01,02}`. Both stop at the Zig execution
+of pair 1 on the unchanged 5% offered-rate gate. The first has 16 publications in
+the first 500 ms bucket for producers 1/2. The second has producer 0 counts 16,14,16
+in buckets 0,19,20, despite maximum host load1 only 2.485352. Its event receipts show
+publications crossing bucket boundaries by about 1–2 ms. This is a concrete
+generator/quantization limitation, not permission to relax the gate. Neither
+series publishes an aggregate or contributes selected halves to another series.
+Failed runs, process cleanup and detailed bucket receipts remain archived under
+`out-perf/dlls-tab-switch-current-01`.
+
+A separate diagnostic execution samples the accepted C++ GUI for eight seconds
+at a 1 ms interval. Both stacks complete 240 switches with their content/rate gates;
+all six host boundaries qualify (maximum load1 2.835938), and cleanup passes.
+Every timing/resource value from that instrumented execution is excluded from
+baseline and acceptance. The 5875 main-thread stack observations contain 216 under
+tab-layout rebuild, 26 under tab measurement (18 caption measurement), 296 under
+list reconciliation, 125 under pane refresh, 99 under QML object construction,
+156 under binding update and 69 under variant association conversion. Counts
+exclude nested repeats within each category; categories overlap and include
+waiting/observer effects, so they are neither additive CPU percentages nor
+allocation counts. One 166-observation branch directly connects tab rebuild to
+`ListModel::reconcile`, `dataChanged` and synchronous QML notification/binding work.
+
+Source inspection confirms `TabStripLayout::rebuild` remeasures captions, rebuilds
+positioned records and reconciles the list on animation samples. The earlier
+field-role, scalar-role and pane-retention variants remain rejected; this profile
+does not reverse them. The next candidate should separate animation geometry
+sampling from semantic tab-record publication so unchanged content avoids the
+model/conversion/notification path entirely. Its geometry, drag, selection,
+visibility and accessibility oracles and native regression gates are still needed.
+Producer phase/receipt qualification must also precede another headline F08 series.
+No new F08 performance acceptance, workspace coverage or native120 claim follows.
+The unlimited objective remains active and unrelated runtime edits are preserved.
