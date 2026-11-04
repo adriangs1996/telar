@@ -8250,3 +8250,96 @@ not establish the latency cause or reinstate the rejected typed-object/role
 variants. Raw stacks and qualified receipts are in
 `/tmp/telar-perf-tab-layout-plan-profile-01`, with `profile-census.json` in the
 experiment prefix. All diagnostic timing remains excluded from acceptance.
+
+## Direct QML tab-record reads rejected on tails, 2026-11-04
+
+On `cd498c935`, `out-perf/dlls-tab-direct-record-01` isolates removal of the
+intermediate `readonly property var source: record.tab` in TerminalTabs. Bindings
+and actions read `record.tab` directly. The original model, positioned maps,
+measurements and animation remain unchanged; no rejected cache/role/QObject
+variant is included. Accepted GUI/runtime are `a88e53a8`/`1f1849d1`; B GUI is
+`c76bd97800b075741de255ccbd30219d08aa6244b0e3c1fc28079cc03c4f6cb4`.
+
+The local Qt 6.12 source and ARM64 disassembly verify that `writeVarProperty`
+detaches association values. The detach path allocates a new JavaScript wrapper
+and, for detached input, converts the JS object back into a QVariantMap. Removing
+one assignment avoids that intermediate representation but adds direct nested-map
+lookups; it does not remove all conversions or establish allocation counts.
+No target-specific construct is added; Linux/x86 GUI execution is not claimed.
+
+Before modifying production QML, a live-delegate oracle passes on A. It also
+passes on B through 40 record changes, Unicode captions, selection, bounds,
+complete activity records, prefix numbers, accessibility names/selection, left
+and middle click identities, removal/reinsertion and zero QML warnings. The two
+component suites, fifteen native Cocoa/Metal cases and full settled PNG equality
+for single/splits/tabs pass. Focused clang-tidy passes after adding a missing
+direct accessibility header. Animated pixel/native120 acceptance is not claimed.
+
+A separate eight-second, 1 ms sampling diagnosis covers 90/92 A/B switches; both
+240-action runs qualify content/rate/phase and cleanup. Main-thread observations
+are 5883/5872; QML var-write observations fall 92 -> 45, while association
+observations rise 61 -> 82, tab rebuild 210 -> 268 and reconciliation 287 -> 310.
+Categories overlap, exclude nested repeats and include waits/observer effects.
+They are not CPU percentages or allocation counts, and do not prove the cause of
+the measured regression. All profile timing is excluded from acceptance.
+
+`/tmp/telar-perf-tab-direct-record-pairs-01` contains six alternating pairs,
+100 measured plus 20 warmup switches and four independent 30 Hz producers. All
+26 host boundaries qualify, maximum load1 4.15234375, with no owned builds/tests/
+profiles overlapping. Content, generation, checksum, phase, rate, geometry and
+all twelve owned-runtime cleanup checks pass. Median per-run results:
+
+| Target metric | A | B | B wins |
+|---|---:|---:|---:|
+| p50, ms | 42.791 | 42.574 | 3/6 |
+| p95, ms | 47.843 | 49.074 | 1/6 |
+| p99, ms | 49.189 | 49.331 | 1/6 |
+| maximum, ms | 49.321 | 49.899 | 1/6 |
+| GUI CPU, ms/action | 30.132 | 30.019 | 3/6 |
+| GUI lifetime peak RSS, MiB | 198.406 | 204.633 | 2/6 lower |
+
+The separate runtime startup/warmup/measurement interval, excluding child CPU,
+records CPU 411.155 -> 411.999 ms/run (3/6) and final footprint 18.610 -> 18.422 MiB
+(4/6 lower). These scopes are not summed with GUI measured CPU/lifetime RSS.
+
+**Rejected:** CPU and p95 miss the predeclared 5/6 requirement, and p95/p99/maximum
+each show a consistent 1/6 loss. Memory is not the rejection reason. No further
+typing or independent Zig adoption series is run. Original QML/test hashes are
+restored; regenerating both raw resources and TerminalTabs AOT output with the
+original QML timestamp reproduces accepted GUI `a88e53a8` exactly. Restored two
+component and two native viewport/drag checks pass (`restoration.json`). Unrelated
+runtime pacing work is untouched. All F01–F16/native120 acceptance remains open.
+
+## Offline decomposition of qualified tab-switch observations
+
+`stage_samples()` in [tab_switch_report.py](../tools/tab_switch_report.py) now
+separates existing per-input completion-callback and presentation observations,
+after excluding warmup and cross-checking relative and absolute presentation
+times. Eight report tests pass, including mismatched/missing arrays, invalid
+durations, warmup bounds and late callbacks. Presentation minus callback remains
+signed: a delayed callback does not imply that physical presentation waited for
+it. GPU execution is a separate overlapping interval; stage quantiles must not
+be added. This helper does not replace native/producer/host qualification or
+alter the input/presentation observer or acceptance gates.
+
+`out-perf/dlls-tab-switch-stages-01` rechecks all 24 original rows, their
+content/rate/phase, native timing identities, host eligibility and cleanup, then
+decomposes the independent baseline and the direct-record experiment above.
+This is analysis of existing evidence, not a newly measured baseline. For the
+independent `/tmp/telar-perf-tab-switch-phase-start-pairs-02` series:
+
+| Median of per-run stage p50, ms | Zig | Accepted C++ | C++ lower pairs |
+|---|---:|---:|---:|
+| Input to completion callback | 9.403 | 13.463 | 0/6 |
+| Presentation minus callback | 26.313 | 31.499 | 0/6 |
+| GPU execution, overlapping interval | 1.123 | 0.321 | 5/6 |
+| Input to positive presentation | 37.103 | 44.083 | 0/6 |
+
+The direct-record candidate's input-to-callback p50 improves 5/6, but p99 and
+maximum each improve only 1/6, matching a remaining tail problem before callback
+completion. Its presentation-minus-callback p50 is 31.381 -> 31.425 ms (3/6).
+These observations do not establish IPC, CPU, GPU queueing or display scheduling
+as the cause. They motivate tracing the switch from attachment response through
+frame preparation/submission, rather than another unqualified map-copy change.
+Earlier drawable-pool/render-loop experiments remain rejected/unaccepted and are
+not reinstated. The unlimited objective stays active.
