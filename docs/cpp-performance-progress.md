@@ -6907,3 +6907,21 @@ private fixed-cadence copies predate that stronger check and must not become
 the new observer base. Investigate scheduling only with the existing rapid-input,
 delayed-reply and request-load controls. The persistent all-flow objective remains
 active; no F01–F16 or native120 requirement closes here.
+
+
+## Equal-cadence current history observer, 2026-11-04
+
+The reusable observer now accepts `--minimum-query-interval-ms`. It retains
+latest-result and pending-callback validation, waits before preparing the next
+whole-query replacement, and records actual minimum/mean input intervals and
+the 5% offered-rate qualification. Default zero preserves prior behavior;
+burst/observe-only modes cannot be mixed with the new whole-query cadence.
+Out-of-range and nonfinite values fail before creating output.
+
+`out-perf/dlls-history-cross-stack-cadence-01` qualifies 12 native replacements
+per independent stack at a requested 300 ms minimum: mean intervals are
+308.758788 ms for C++ and 308.663818 ms for Zig, both rate-qualified. Zig's
+late-stale and missing-callback negative controls still fail as required. All
+four runs qualify host load and cleanup; Objective-C syntax checking reports
+no warnings. This enables the next six-pair equal-load comparison without
+dropping the current observer's stronger final-result controls.

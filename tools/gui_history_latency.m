@@ -75,7 +75,7 @@ static _Atomic NSUInteger pending_submissions;
 static _Atomic uint64_t commit_hook_ns, completion_hook_ns, record_hook_ns, encoder_hook_ns, drawable_hook_ns, tick_hook_ns, copy_count;
 static double gpu_work_total, gpu_work_max;
 static NSUInteger measured_frames;
-static double burst_interval, burst_stall, callback_drain = CallbackDrainSeconds;
+static double burst_interval, burst_stall, minimum_query_interval, callback_drain = CallbackDrainSeconds;
 static NSMutableArray *burst_inputs;
 static _Atomic bool display_sync;
 static _Atomic NSUInteger maximum_drawables;
@@ -122,6 +122,7 @@ static void finish_timing(NSString *error) {
                            @"trials" : trials,
                            @"burst_interval_ms" : @(burst_interval * 1000),
                            @"burst_main_stall_ms" : @(burst_stall * 1000),
+                           @"minimum_query_interval_ms" : @(minimum_query_interval * 1000),
                            @"negative_control" : negative_control ?: @"",
                            @"presented_count" : @(presented_count),
                            @"zero_count" : @(zero_count),
@@ -292,7 +293,7 @@ static void timing_tick_impl(void) {
           }
         }
       }
-    } else if (phase == 2 && earliest_presentation > 0 && atomic_load(&pending_submissions) == 0 && now - earliest_presentation >= callback_drain) {
+    } else if (phase == 2 && earliest_presentation > 0 && atomic_load(&pending_submissions) == 0 && now - earliest_presentation >= callback_drain && now - input_time >= minimum_query_interval) {
       if (![latest_match isEqualToString:expected_query]) {
         finish_timing(@"A stale result replaced the completed query");
         return;
@@ -728,6 +729,7 @@ __attribute__((constructor)) static void install(void) {
     overall_timeout = [settings[@"timeout_seconds"] doubleValue];
     burst_interval = [settings[@"burst_interval_ms"] doubleValue] / 1000;
     burst_stall = [settings[@"burst_main_stall_ms"] doubleValue] / 1000;
+    minimum_query_interval = [settings[@"minimum_query_interval_ms"] doubleValue] / 1000;
     if (settings[@"callback_drain_ms"]) {
       callback_drain = [settings[@"callback_drain_ms"] doubleValue] / 1000;
     }
@@ -739,6 +741,8 @@ __attribute__((constructor)) static void install(void) {
         !isfinite(viewport.width) || !isfinite(viewport.height) || viewport.width < 1 || viewport.height < 1 ||
         !isfinite(burst_interval) || burst_interval < 0 || burst_interval > .25 ||
         !isfinite(burst_stall) || burst_stall < 0 || burst_stall > .5 ||
+        !isfinite(minimum_query_interval) || minimum_query_interval < 0 || minimum_query_interval > 1 ||
+        (minimum_query_interval > 0 && burst_interval > 0) ||
         !isfinite(callback_drain) || callback_drain < CallbackDrainSeconds || callback_drain > 1) {
       abort();
     }

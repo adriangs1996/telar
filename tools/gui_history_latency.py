@@ -108,6 +108,7 @@ def main():
     parser.add_argument('--burst-ms', type=float, default=0, help='Offer individual composed characters at independent fixed deadlines (1..250 ms)')
     parser.add_argument('--burst-main-stall-ms', type=float, default=0, help='Diagnostic main-thread stall after offering a burst (0..500 ms)')
     parser.add_argument('--callback-drain-ms', type=float, default=50, help='Observe the final result for 50..1000 ms before the next trial')
+    parser.add_argument('--minimum-query-interval-ms', type=float, default=0, help='Wait at least 0..1000 ms after input before preparing the next whole-query replacement')
     parser.add_argument('--trace-history', action='store_true', help='Trace history requests through an isolated diagnostic relay')
     parser.add_argument('--delay-history', action='append', default=[], metavar='QUERY=MS', help='Delay matching history replies by 0..1000 ms; implies --trace-history')
     options = parser.parse_args()
@@ -121,6 +122,10 @@ def main():
         parser.error('Invalid burst interval, diagnostic stall or callback drain')
     if (options.burst_main_stall_ms and not options.burst_ms) or (options.observe_only and options.burst_ms):
         parser.error('A burst stall requires burst input, which requires replacement observation')
+    if not 0 <= options.minimum_query_interval_ms <= 1000:
+        parser.error('Minimum query interval must be 0..1000 milliseconds')
+    if options.minimum_query_interval_ms and (options.burst_ms or options.observe_only or options.samples < 2):
+        parser.error('Minimum query interval requires at least two whole-query replacement samples')
     delays = {}
     try:
         for value in options.delay_history:
@@ -139,7 +144,7 @@ def main():
     if options.burst_ms and any((len(entry['text']) - 1) * options.burst_ms + options.burst_main_stall_ms > 1000 for entry in case['queries']):
         parser.error('Each burst must fit within one second of the two-second trial deadline')
     case.update(burst_interval_ms=options.burst_ms, burst_main_stall_ms=options.burst_main_stall_ms,
-                callback_drain_ms=options.callback_drain_ms)
+                callback_drain_ms=options.callback_drain_ms, minimum_query_interval_ms=options.minimum_query_interval_ms)
     save(output / 'case.json', case)
     helper = prepare(output)
     shutil.copy2(options.config, output / 'gui.lua')
@@ -249,6 +254,14 @@ def main():
                     assert recorded['passed'] and recorded['pending_submissions'] == 0 and len(recorded['trials']) == options.samples, recorded
                     assert all(row['presented_time'] > row['input_time'] and row['latency_ms'] > 0 for row in recorded['trials'])
                     assert [row['query'] for row in recorded['trials']] == [case['queries'][(i+1) % 2]['text'] for i in range(options.samples)]
+                    if options.minimum_query_interval_ms:
+                        intervals = [(right['input_time'] - left['input_time']) * 1000
+                                     for left, right in zip(recorded['trials'], recorded['trials'][1:])]
+                        mean_interval = sum(intervals) / len(intervals)
+                        recorded['query_interval_mean_ms'] = mean_interval
+                        recorded['query_interval_minimum_ms'] = min(intervals)
+                        recorded['query_offered_rate_qualified'] = (min(intervals) >= options.minimum_query_interval_ms and
+                            abs(options.minimum_query_interval_ms / mean_interval - 1) <= .05)
                     if options.burst_ms:
                         for trial in recorded['trials']:
                             inputs = trial['burst_inputs']
