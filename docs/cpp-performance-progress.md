@@ -9774,6 +9774,96 @@ a labeled diagnostic, not a production optimization or an easier acceptance
 workload. No causal scheduling claim or new optimization is accepted here. All
 F01–F16/native120 complete-flow requirements and the unlimited goal remain open.
 
+## 2026-11-04 — Retained background rectangles rejected despite allocation reduction
+
+`out-perf/dlls-retained-background-nodes-01` tests the heap-site lead against the
+accepted stack at source `87964cefd`. A private row helper reuses existing
+`QSGSimpleRectNode` siblings in order, updates their rectangle only when it differs,
+updates their color through Qt's existing equality guard, appends missing nodes,
+and deletes unused trailing nodes on scope exit. Each original rectangle remains
+separate, including overlapping wide cells and translucent backgrounds. There is
+no extra heap cache; existing scene children hold the reusable nodes. Grid changes
+retain the existing whole-grid reset behavior. This differs from the previously
+rejected rectangle-merging candidate.
+
+The first prototype uses a static downcast and passes the visual checks, but
+clang-tidy rejects that cast. The final B2 uses a checked reference dynamic cast
+and passes production lint. Only B2 is measured. Its GUI hash is
+`43914e7f0a7987bb156a2006ba2b0fe7e4665c7fbc1111f2b6282425817b34e4`;
+accepted A remains `bc55d0e8`, and both use runtime `1f1849d1` and helper `87beebb0`.
+Build/toolchain/dependencies are unchanged LLVM23.1.4, Qt6.12 Release/O3. Candidate
+source, patch, frozen executables and all commands remain in the ignored prefix.
+Production `terminal_scene.cpp` and the configured GUI executable are restored to
+the byte-identical accepted baseline before native measurements.
+
+The new reusable `changedBackgroundsMatchFreshRectangles` test keeps a production
+scene alive while a separate reference builds fresh individual rectangles. It
+checks seven background patterns at cell widths9,9.2 and9.1: uniform, default gaps,
+alternating, selection/inverse, wide overlap, translucent wide overlap and clipped
+wide cells. Each transition checks the new image, an unchanged appearance repaint,
+and return to all-default backgrounds, giving63 image comparisons per backend.
+The reference and candidate pass on software and Metal. Deliberately disabling
+trailing-node removal fails exactly the default-background comparison; the oracle
+does not depend on the candidate's node layout or allocation policy. Both full B2
+scene suites pass46 QtTest cases. Changed test lines pass scoped clang-tidy.
+
+The actual candidate translation unit compiles for x86-64 baseline and v3.
+Accepted/candidate listings are retained. ARM disassembly shows the reused-node
+path calling the dynamic cast, reading the existing rectangle, conditionally
+updating geometry, and setting color, while bypassing `operator new(312)`, the
+rectangle constructor and child insertion. New nodes still use the original
+allocation path; the unused tail has a deletion loop. These lowerings are not
+executed x86/Linux whole-GUI validation or a CPU-gain claim.
+
+`/tmp/telar-perf-retained-background-pixels-01` passes all six full-window PNGs
+for TUI, single typing and four splits, against both A/B and accepted references.
+`...retained-background-tui-pairs-01` then qualifies six alternating ordinary pairs
+of100 measured inputs plus20 warmups. No heap/render census, own compilation,
+tests or profiler overlaps those runs. Configuration is optical JBM15,1600×1000,
+scale2 and82×21 TUI cells. `hypothesis.json` freezes both TUI p95 and GUI CPU as
+co-primary metrics requiring at least5/6 lower pairs before any timing starts.
+
+| TUI metric | Accepted A | Retained B2 | B2 lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.298 | 28.802 | **1/6** |
+| p95 ms | 41.675 | 40.707 | **3/6** |
+| p99 ms | 47.136 | 46.673 | 4/6 |
+| Maximum ms | 52.028 | 50.186 | 4/6 |
+| GUI CPU ms/input | 5.169 | 4.997 | **3/6** |
+| GUI peak RSS MiB | 217.969 | 221.359 | 1/6 |
+| Runtime CPU ms/run | 99.125 | 96.330 | 4/6 |
+
+Both co-primary metrics fail the acceptance threshold and p50 regresses
+consistently. That rejects the candidate; the small RSS increase does not.
+Runtime intervals include GUI setup, warmup, measured inputs and final TUI text
+query, exclude runtime startup/shutdown and child CPU, and are not added to GUI
+interval CPU. Runtime instructions are179,736,739→179,589,592.5 (3/6 lower).
+The cause of the latency regression is not established. Further typing/split/load
+regression series are unnecessary for this decisively rejected target candidate.
+
+A separate same-stack sampled-heap pair in `...retained-background-census-01`
+confirms the intended mechanism without reversing the ordinary decision:
+successful covered allocation calls fall184,695→110,071 and requested bytes
+40,605,430→17,103,920 over100 inputs. Recorded stacks are734/465. Scene-inclusive
+samples fall289→16;312-byte allocations at the background `paintRow` site fall
+275→2. The normalized return PCs match the old constructor path and B2's cold
+new-node branch. Metal-binding samples remain321/356. Counts include framework
+and probe work, categories overlap, and this single perturbed pair neither proves
+a repeatable allocation percentage nor attributes CPU or latency to allocations.
+
+All three native series qualify their host gates:14 pixel boundaries (maximum
+load1 3.87695),26 timing boundaries (2.76758), and6 census boundaries (2.43457).
+All20 owned runtime/child shutdowns and resource cleanups pass. Accepted binaries,
+production scene source and all four pending runtime hashes remain verified intact.
+`validation.json`, `table.json`, `attribution.json` and `decision.json` retain the
+audit. Only the independent transition oracle and this report are committed.
+
+The next investigation should revisit the previously inconclusive Metal-binding
+experiment on the current accepted GUI, with qualified ordinary pairs and the
+new site census. Eliminating one large allocation category has not produced the
+required full-client gain. All F01–F16/native120 requirements and the active goal
+remain open.
+
 ## Byte-equivalent TUI producer control, 2026-11-04
 
 The next diagnostic changes only the producer's write boundaries. New

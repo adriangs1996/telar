@@ -1159,6 +1159,53 @@ private:
       QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));
     }
   }
+
+  Q_SLOT static void changedBackgroundsMatchFreshRectangles() {
+    constexpr qreal cell_height = 21;
+    constexpr float translucent_alpha = 0.5F;
+    SceneFixture retained{CursorShape::block, false};
+    SceneFixture reference{CursorShape::block, false};
+    for (const auto width : {9.0, 9.2, 9.1}) {
+      retained.resizeCell({width, cell_height});
+      reference.resizeCell({width, cell_height});
+      for (const auto pattern : {BackgroundPattern::uniform, BackgroundPattern::default_gaps, BackgroundPattern::alternating, BackgroundPattern::selection_inverse, BackgroundPattern::wide_overlap, BackgroundPattern::translucent_wide_overlap, BackgroundPattern::clipped_wide}) {
+        const auto color = Color::rgb(0xdc3020, pattern == BackgroundPattern::translucent_wide_overlap ? translucent_alpha : 1);
+        auto row = backgroundRow(pattern, color);
+        const auto selection = pattern == BackgroundPattern::selection_inverse ? CellSelection{.anchor = background_selection_start, .head = background_selection_end} : no_selection;
+        const auto columns = pattern == BackgroundPattern::clipped_wide ? background_columns - 1 : background_columns;
+        if (pattern == BackgroundPattern::clipped_wide) {
+          row.rectangles.pop_back();
+        }
+
+        for (auto *fixture : {&retained, &reference}) {
+          fixture->setPaletteColor(0, color);
+          fixture->setPaletteColor(1, background_blue);
+          fixture->setCells(row.cells, {.visible = false});
+          fixture->select(selection);
+          fixture->setVisibleColumns(static_cast<std::uint16_t>(columns));
+        }
+
+        reference.referenceBackgrounds(row.rectangles);
+        const auto expected = reference.capture();
+        QVERIFY2(retained.capture() == expected, "A changed background must match fresh independent rectangles");
+        retained.invalidateAppearance();
+        QVERIFY2(retained.capture() == expected, "An unchanged background repaint must preserve its pixels");
+
+        for (auto &cell : row.cells) {
+          cell.style = {};
+        }
+
+        for (auto *fixture : {&retained, &reference}) {
+          fixture->setCells(row.cells, {.visible = false});
+          fixture->select(no_selection);
+          fixture->setVisibleColumns(static_cast<std::uint16_t>(columns));
+        }
+
+        reference.referenceBackgrounds(std::vector<BackgroundRectangle>{});
+        QVERIFY2(retained.capture() == reference.capture(), "Returning to default backgrounds must remove every old rectangle");
+      }
+    }
+  }
 };
 
 }
