@@ -754,6 +754,85 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(activated.size(), 1);
   }
 
+  Q_SLOT static void queryChangesPreserveRowMeasurements() {
+    SystemAllocator memory;
+    HistoryRow<SystemAllocator> entry{memory};
+    entry.command = "git build";
+    auto record = historyRecord(entry, {});
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto row = createChrome(engine, QStringLiteral("HistoryRow"), {
+        {QStringLiteral("record"), record},
+        {QStringLiteral("colors"), themeColors({})},
+        {QStringLiteral("typography"), historyTypography()},
+        {QStringLiteral("rowHeight"), row_height},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), row_height},
+        {QStringLiteral("query"), QStringLiteral("gb")},
+    });
+    row->setParentItem(window.contentItem());
+    window.resize(wide_width, row_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    followWindowSize(*row, window);
+    const auto regions = [&] { return row->property("regions").toMap(); };
+    const auto geometry = [&] {
+      auto result = regions();
+      result.remove(QStringLiteral("lines"));
+      result.remove(QStringLiteral("needed"));
+
+      return result;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(!regions().value(QStringLiteral("lines")).toList().isEmpty(), wait_ms);
+    constexpr int settle_ms = 50;
+    QTest::qWait(settle_ms);
+    const auto before = regions();
+    const auto before_geometry = geometry();
+    const QSignalSpy measurements_changed{row.get(), SIGNAL(measurementsChanged())};
+    const QSignalSpy layout_changed{row.get(), SIGNAL(layoutChanged())};
+    const QSignalSpy regions_changed{row.get(), SIGNAL(regionsChanged())};
+    const auto geometry_signal = row->metaObject()->indexOfSignal("geometryRegionsChanged()");
+    std::unique_ptr<QSignalSpy> geometry_changed;
+    if (geometry_signal >= 0) {
+      geometry_changed = std::make_unique<QSignalSpy>(row.get(), row->metaObject()->method(geometry_signal));
+    }
+
+    row->setProperty("query", QStringLiteral("gt"));
+    QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("lines")) != before.value(QStringLiteral("lines")), wait_ms);
+    QCOMPARE(geometry(), before_geometry);
+    QTRY_VERIFY_WITH_TIMEOUT(!layout_changed.isEmpty(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!regions_changed.isEmpty(), wait_ms);
+    const auto has_updated_match = [&] {
+      return std::ranges::any_of(visualItems(*row, QStringLiteral("historyMatch")), [](const auto *item) {
+        return item->isVisible() && item->property("text").toString() == QStringLiteral("t");
+      });
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(has_updated_match(), wait_ms);
+    QCOMPARE(measurements_changed.size(), 0);
+    QVERIFY2(geometry_changed != nullptr, "Geometry bindings still depend on the full content layout");
+    QCOMPARE(geometry_changed->size(), 0);
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+
+    record.insert(QStringLiteral("command"), QStringLiteral("git build --all"));
+    row->setProperty("record", record);
+    QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("needed")) != before.value(QStringLiteral("needed")), wait_ms);
+    QCOMPARE(geometry(), before_geometry);
+    QCOMPARE(geometry_changed->size(), 0);
+    window.resize(fact_limited_width, row_height);
+    QTRY_VERIFY_WITH_TIMEOUT(!geometry_changed->isEmpty(), wait_ms);
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+    QVERIFY(geometry() != before_geometry);
+    geometry_changed->clear();
+    row->setProperty("expanded", true);
+    QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("cardHeight")).toDouble() > row_height, wait_ms);
+    QVERIFY(!geometry_changed->isEmpty());
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+    geometry_changed->clear();
+    row->setProperty("expanded", false);
+    QTRY_COMPARE_WITH_TIMEOUT(regions().value(QStringLiteral("cardHeight")).toDouble(), 0.0, wait_ms);
+    QVERIFY(!geometry_changed->isEmpty());
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+  }
+
   Q_SLOT static void matchDelegatesRetainPositionsAcrossQueryChanges() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};

@@ -6685,3 +6685,89 @@ accepted baseline. No geometry dependency change is adopted. The next lead is
 the earlier measurement-map propagation itself: query changes currently rebuild
 and convert the whole measurements map before recomputing unchanged row geometry.
 This is an unmeasured hypothesis, not an accepted optimization.
+
+
+## Query-only measurement bypass candidate, 2026-11-04
+
+`out-perf/dlls-history-query-measurements-01` starts from accepted GUI `9bf92e97`
+and runtime `1f1849d1`, not the rejected geometry variant. It extends the verified
+work-avoidance idea to its upstream dependencies: a typed query property owns
+its UTF-8 representation; query changes no longer construct the measurements
+map, and query-only polish bypasses all measurement conversions and row/card
+geometry derivation. A separate line list drives highlights; geometry bindings
+retain a geometry-only map and conditional notifier. The complete layout map
+remains available, and the QML `regions` compatibility name becomes an alias
+rather than an eagerly evaluated map binding. No delay, matching algorithm,
+gesture revision or delegate-retention policy changes.
+
+The baseline oracle verifies a query-only `measurementsChanged` notification
+and fails the required zero count. Candidate validation verifies zero measurement
+and geometry notifications, updated visible match text, complete settled regions,
+and notifications for resizing/expansion/collapse. Its initial candidate test
+incorrectly assumed that reading the compatibility alias would wait for polish:
+the alias can read fresh content before its deferred notification. The corrected
+test explicitly waits for both notifications and visible highlights; all original
+zero-notification requirements remain. Initial failure logs are retained.
+
+All 39 software component checks, six selected native component cases and
+36 native history QuickTest cases plus setup/cleanup pass. Both full-window
+query captures are RGBA-exact to A. Clang-tidy passes. ARM64 code confirms that
+the query-only branch skips QVariant lookups/conversions and geometry derivation;
+it still pays the common stack prologue. Full updatePolish grows from 634 to
+733 instructions. Exact source compilation for x86-64 baseline/v3 also passes;
+those are not native x86 GUI runs. Frozen/final B is byte-exact at `a88e53a8`.
+The same six-pair, 60-query, 300/220 ms CPU/tail gate is predeclared. Adoption
+remains pending; all global F01–F16/Zig/native120 gates remain open.
+
+Both original timing series pass their predeclared gate, with 26 qualified
+host boundaries each (maximum load1 2.975098 and 1.897461 respectively).
+Each cadence has six alternating pairs and 60 verified queries per execution.
+
+| Metric | 300 ms A→B | B wins / 6 | 220 ms A→B | B wins / 6 |
+| --- | ---: | ---: | ---: | ---: |
+| Combined CPU ms/query | 34.507861→32.735227 | 5 | 32.524957→30.533151 | 5 |
+| GUI CPU ms/query | 31.608825→30.034739 | 5 | 29.684909→27.813305 | 5 |
+| Runtime CPU ms/query | 2.791315→2.714670 | 4 | 2.658768→2.677102 | 2 |
+| Mean latency ms | 105.380112→103.576424 | 6 | 104.676125→104.484155 | 3 |
+| p95 latency ms | 116.458635→116.468459 | 3 | 116.293772→114.394686 | 6 |
+| p99 latency ms | 118.555688→121.410484 | 3 | 119.234575→118.476862 | 4 |
+| GUI instructions/query | 95280427.975000→80690111.016667 | 6 | 92333611.258333→77740088.466667 | 6 |
+| GUI cycles/query | 64541028.600000→60686015.858333 | 6 | 63702143.266667→57467190.733333 | 6 |
+| GUI final footprint bytes | 263832956.000000→289916344.000000 | 1 | 254330284.000000→258876808.000000 | 3 |
+| GUI interrupt wakeups/query | 94.375000→94.475000 | 3 | 71.033333→71.616667 | 0 |
+| Runtime interrupt wakeups/query | 4.491667→4.491667 | 2 | 3.625000→3.658333 | 1 |
+
+CPU and instruction reductions pass, while latency tails are mixed rather than
+uniformly faster. At 220 ms, GUI interrupt wakeups increase in all six pairs
+and runtime interrupt wakeups in five; these small counter increases are
+retained explicitly, and no energy reduction is claimed. The unchanged runtime
+is measured separately. GUI setup CPU wins 4/6 and 2/6; idle wakeups win 5/6
+and 3/6. Footprint values vary substantially between executions, so their median
+difference is not attributed to a proven fixed per-row memory cost.
+
+A separate periodic-resource diagnostic runs 600 queries per variant followed
+by 0.25/1/5-second idle snapshots. Its first attempt is discarded in full when
+load1 reaches 7.239746 after A; B is not started. This does not invalidate the
+already completed, independently qualified timing series. A retry uses identical
+binaries and workload. QML lint for HistoryRow also passes. Adoption is pending
+that memory review; the wider objective remains active.
+
+The memory retry (`/tmp/telar-perf-history-query-measurements-memory-02`)
+qualifies all six host boundaries, maximum load1 2.851074. A and B each complete
+600 verified queries and 134 periodic resource observations over about 138 s;
+both clean up completely. First/last 30-second footprint medians are
+263,619,928 / 263,816,536 bytes for A and 263,964,040 / 254,363,016 for B.
+Peak observed footprints are 325,256,608 and 325,682,616 bytes. After five
+seconds idle, A is 244,057,432 bytes and B 244,516,232 (+458,800 bytes).
+Neither trace shows sustained growth. This finite instrumented diagnostic does
+not prove a global memory bound or supply timing evidence, but does not support
+attributing the earlier 26 MB median gap to fixed retained per-row storage.
+
+The query/measurement candidate is adopted locally: combined CPU improves in
+5/6 pairs at both cadences, with approximately 5.14% and 6.12% lower medians;
+GUI instructions improve in 6/6 at both, by approximately 15.31% and 15.81%.
+The final production sources are identical to the measured ones and the final
+GUI remains byte-exact to B. Removing temporary test logging and naming its
+settle duration leaves all 39 final software checks passing. The separate
+runtime cadence work is preserved unchanged. This acceptance closes only the
+local candidate; F01–F16, independent Zig comparison and native120 remain open.
