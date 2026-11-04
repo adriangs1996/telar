@@ -8166,3 +8166,87 @@ Restoration verifies all three original source hashes and reproduces accepted
 GUI `a88e53a8` byte exactly. Restored chrome/tab-activity scene tests and native
 viewport/tab-drag cases pass. The final receipt is `restoration.json`; unrelated
 runtime pacing work remains untouched.
+
+## Reusing tab layout plans: work avoided, target rejected, 2026-11-04
+
+An isolated experiment on `e9c077cc0` starts from accepted GUI `a88e53a8` and
+runtime `1f1849d1`. It retains the current projected records, measurements and
+packing plan across animation-only rebuilds. Model, font/catalog, display scale,
+geometry, hover, drag and context changes invalidate the plan. The next rebuild
+replaces the snapshot; invalid geometry clears it. Storage holds at most 64
+records and fixed measurement/plan arrays, with no historical generations. The
+record-count bound is not a fixed byte bound on arbitrary source strings/maps.
+Motion sampling, positioned records, drop targets and publication still run on
+every frame. Neither rejected caption-only caching nor pane retention is included.
+Source, contracts and binaries are in `out-perf/dlls-tab-layout-plan-01`; final B
+GUI is `b4be2399aa235e58557bd0239e215fbb26cb04e236585819b8408edd0f42e73a`.
+
+A counting-model oracle first fails on the original repeated reads, then passes
+with reuse. A new read-exception oracle catches a real prototype retry bug;
+refresh now restores dirty state on exceptions. Reentrant invalidation and
+external-input checks pass. A differential oracle compares 450 complete animated
+snapshots against forced fresh plans at synthetic approximately 120 Hz, covering
+rename/Unicode, reorder, font/scale, resizing, hover, drag, context, replacement,
+destruction and the 65-source-row clamp. This proves geometry/model equivalence,
+not native120 cadence. Two rebuilt component tests, fifteen native Cocoa/Metal
+cases, full settled single/splits/tabs PNG equality and focused clang-tidy pass.
+
+ARM64 inspection finds an initial helper allocated a 0x5f0-byte stack frame even
+on hits. Final code tests dirty state/density in rebuild and calls the refresh
+helper only on misses. Rebuild itself still allocates 0x600 bytes; this is not
+zero stack work. No target-specific construct or placement exemption is used,
+and no x86/Linux GUI execution is claimed.
+
+An instrumented final-variant census qualifies 100 actions and runtime cleanup.
+Across GUI lifetime including startup/warmup it counts 1569 rebuilds/requests,
+136 measurement passes and 514 caption calls: 1433 plans reused, about 91%.
+These are work counts, not allocations or performance evidence. All diagnostic
+timing is excluded; removing instrumentation reproduces frozen B byte exactly.
+
+`/tmp/telar-perf-tab-layout-plan-pairs-01` contains six alternating native pairs,
+100 measured plus 20 warmup actions and four independent 30 Hz producers.
+All 26 host boundaries qualify, maximum load 3.21923828125; content, generation,
+checksum, offered-rate, phase, grid and runtime-cleanup checks pass. No owned
+build/test/profile overlaps this series. Median per-run results:
+
+| Target metric | A | B | B wins |
+|---|---:|---:|---:|
+| p50, ms | 44.221 | 41.866 | 5/6 |
+| p95, ms | 49.199 | 48.607 | 4/6 |
+| p99, ms | 49.302 | 49.264 | 4/6 |
+| maximum, ms | 49.641 | 49.284 | 4/6 |
+| GUI CPU, ms/action | 30.527 | 29.895 | 4/6 |
+| GUI lifetime peak RSS, MiB | 202.633 | 205.148 | 2/6 lower |
+
+Separate runtime counters cover GUI startup/warmup/measurement and exclude child
+CPU. Runtime CPU is 411.737 -> 411.752 ms/run (2/6); final footprint is 18.665 ->
+18.774 MiB (3/6 lower). This broader CPU interval and boundary memory snapshots
+are not combined with GUI measured-input CPU or lifetime RSS.
+
+**Rejected:** target CPU and p95 each win 4/6, below the predeclared 5/6 threshold.
+The modest memory increase is not the rejection reason. Avoiding most measurement
+passes does not establish a sufficiently repeatable complete-flow win. No typing
+or independent Zig adoption series is run for this rejected source. A separate
+sampling diagnosis investigates the remaining work without using its timing for
+acceptance. All F01–F16 and continuous native120 acceptance remain open; the
+unlimited goal stays active.
+
+All three production/test files are restored to their original hashes, and the
+configured GUI reproduces accepted `a88e53a8` byte exactly. Restored chrome and
+tab-activity scene tests plus native viewport/tab-drag checks pass. The receipt is
+`restoration.json`; unrelated runtime pacing work remains untouched.
+
+The subsequent eight-second, 1 ms sampling diagnosis covers 95 A and 89 B
+switches; both 240-action workloads qualify content/rate/phase and owned-runtime
+cleanup. Inclusive main-thread observations are 5863/5848 in total, tab rebuild
+209/183, measurements 28/3, caption measurement 22/2, list reconciliation 285/260,
+QML var writes 110/103 and variant associations 72/71. Nested repeats are excluded
+within each category; categories overlap and include waits/observer work, so these
+are not CPU percentages or allocation counts. Direct rebuild children account
+for 161/154 reconciliation observations and 14/18 signal-activation observations.
+This supports looking beyond measurement reuse: publication remains substantial,
+whereas the global layout notification alone has smaller sampled weight. It does
+not establish the latency cause or reinstate the rejected typed-object/role
+variants. Raw stacks and qualified receipts are in
+`/tmp/telar-perf-tab-layout-plan-profile-01`, with `profile-census.json` in the
+experiment prefix. All diagnostic timing remains excluded from acceptance.
