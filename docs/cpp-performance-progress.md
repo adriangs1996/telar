@@ -9177,3 +9177,122 @@ publication and render-mask work reduction together, reusing the typed-tab and
 glyph oracles but requiring fresh full paired controls. Component gains are not
 assumed additive, and neither rejected component is accepted independently.
 All F01–F16/native120 requirements and the unlimited goal remain open.
+
+## Combined typed tabs and glyph residency rejected, 2026-11-04
+
+`out-perf/dlls-tab-model-glyph-residency-01` combines the previously rejected
+typed-tab publication and bounded optical-mask reuse/cold-admission candidates
+on accepted GUI `bc55d0e8`, HEAD `f05fdff8d`. The preceding application census and
+thread diagnostic motivate reducing main-thread and render-thread work together;
+they do not establish additive gains or independently accept either component.
+Fresh source timestamps and explicit CMake reconfiguration produce candidate
+`ab2efd4aee794900b0fe1f82bcfcf22a37b7ca8548644708776e894c8200fb51`.
+The runtime remains `1f1849d1`, command helper `87beebb0`.
+
+All seven focused CTests, 17 native interaction cases and single/splits/tabs
+byte-exact full-window PNGs pass. ASan/UBSan passes for both glyph test translation
+units and the typed-tab test, including their header-only candidate code. Linked
+Qt, MOC and other GUI archive objects are unsanitized; leak detection is disabled.
+The typed oracle exercises 2,048 reconciliations, 240 QML geometry changes without
+semantic rebinding, and retirement. Snapshot-before-notification coverage does
+not claim safety for arbitrary recursive model mutation. The window store has
+independent 128-entry/64 KiB alpha limits; active-cache and rendering references
+have separate ownership. A settled typed model has at most 64 rows, but deferred
+deletion means 128 transient rows is not a global lifetime memory bound.
+
+The first two lint invocations fail tool/config discovery and are not validation.
+The corrected invocation checks four translation units: the three new tests pass,
+while `TabStripLayout::rebuild` exceeds the 100-line limit by one line. A VFS overlay
+of the saved baseline reproduces exactly the same 101-line diagnostic. No global
+clean-lint claim is made. ARM64 assembly retains inline glyph lookup and separate
+non-inlined miss admission; both `appendSpan` caller stack subtractions remain
+368 bytes. Typed publication branches around unchanged property notifications.
+This is changed generated code, not a code-placement exemption.
+
+`/tmp/telar-perf-tab-model-glyph-residency-pairs-01` completes six alternating
+100-action/20-warmup pairs with four 30 Hz producers. Native presentation,
+content, rate, phase and cleanup checks pass. All 26 host observations qualify,
+maximum load1 3.6669921875; no own build/test/profile overlaps headline timing.
+
+| Discrete switch | A median | B median | B wins/6 |
+|---|---:|---:|---:|
+| p50 ms | 39.010 | 31.326 | 6 |
+| p95 ms | 42.894 | 34.921 | 6 |
+| p99 ms | 44.577 | 35.326 | 6 |
+| maximum ms | 45.081 | 39.882 | 6 |
+| GUI CPU ms/input | 28.269 | 24.042 | 6 |
+| GUI lifetime peak RSS MiB | 196.391 | 198.305 | 3 |
+| Runtime CPU ms | 389.425 | 376.245 | 4 |
+| Runtime lifetime maximum footprint MiB | 20.344 | 20.164 | 4 |
+
+Runtime instructions/cycles win 5/6 and 4/6. This passes the target gate; the
+approximately 1.9 MiB difference in median GUI peak RSS is not a rejection reason.
+Runtime counters retain the preceding reports' setup/warmup/measurement scope,
+excluding runtime startup/shutdown and child CPU. Memory snapshots and lifetime
+maxima are not interval allocation volume or a sum of GUI/runtime RSS.
+
+`/tmp/telar-perf-tab-model-glyph-residency-regressions-01` then completes all
+24 typing runs, six alternating pairs per layout. All 50 host bounds qualify,
+maximum load1 1.93603515625. Native/content/cleanup checks pass.
+
+| Typing metric | Single A | Single B | B wins/6 | Four splits A | Four splits B | B wins/6 |
+|---|---:|---:|---:|---:|---:|---:|
+| p50 ms | 25.137 | 24.944 | 4 | 25.598 | 25.640 | 2 |
+| p95 ms | 32.830 | 32.657 | 5 | 32.968 | 33.251 | **0** |
+| p99 ms | 34.936 | 37.183 | 3 | 37.213 | 36.713 | 3 |
+| maximum ms | 36.863 | 40.159 | 3 | 37.855 | 40.106 | **1** |
+| GUI CPU ms/input | 4.028 | 4.009 | 5 | 4.130 | 4.365 | **1** |
+| GUI lifetime peak RSS MiB | 201.133 | 205.758 | 4 | 204.688 | 199.617 | 3 |
+
+Runtime CPU is 85.921/82.661 ms for single (B wins 5/6), and 99.305/100.860 ms
+for splits (2/6); instructions/cycles win 4/6 and 5/6 for single, 2/6 and 2/6
+for splits. Post hoc GUI CPU per measured wall second is 0.053491/0.056206 in
+splits (B wins 1/6), while wall ms/input is 77.224/77.602 (2/6). The CPU loss
+persists after this interval normalization, without identifying its cause.
+
+**Reject:** four-split p95, maximum and GUI CPU consistently regress. The target
+win cannot override those controls. No independent Zig acceptance series follows
+this failure. All 42 owned shutdown receipts across pixels, target and controls
+pass, together with runtime-resource cleanup checks. The seven original GUI files
+and QML generated-resource metadata are restored; six new candidate files are
+withdrawn into the frozen private snapshot. Reconfiguration/dependency rebuild
+restores exactly accepted `bc55d0e8`. All four recorded dirty-runtime source hashes
+are preserved. F01–F16/native120 and the unlimited goal remain open.
+
+A separate follow-up, `out-perf/dlls-combined-splits-thread-cpu-01`, compares
+the frozen binaries using measured-interval thread counters. Its first attempt
+incorrectly reuses the tab-switch-specific probe/fixture for typing: setup fails
+with zero completed samples and owned cleanup succeeds. That entire attempt is
+invalid, not evidence of a GUI failure. A new private ordinary-typing probe adds
+the same begin/end observer hooks; the counter C/header bytes match validated v2.
+The current analyzer includes the already-checked sampler/boundary identity
+guards. An initial overly broad equality assertion also detects those analyzer
+guard differences before any probe compilation; the counter identity check is
+then scoped to the actual counter sources. No repository harness is changed.
+
+`/tmp/telar-perf-combined-splits-thread-cpu-02` completes three alternating
+four-split pairs, 240 measured plus 20 warmup inputs each, with verified native
+presentation, fixtures, equal grids, thread/process accounting and cleanup.
+All 14 host bounds qualify, maximum load1 4.27685546875. CPU boundary differences
+range from -1.732 to 0.311 ms, wall differences from -2.132 to 0.215 ms; signed
+accounting residual bounds stay between -0.272 and 0.889 ms.
+Unlike the acceptance controls, these runs include the observer and use 240
+instead of 100 measured inputs. They cannot override the rejection.
+
+| Diagnostic median over three pairs | A | B | B lower pairs |
+|---|---:|---:|---:|
+| Process CPU ms | 1089.506 | 1055.112 | 2/3 |
+| Main-thread CPU ms | 405.528 | 391.191 | 2/3 |
+| Render-thread CPU ms | 309.683 | 307.068 | 1/3 |
+| Observer CPU ms, included | 76.585 | 75.461 | 1/3 |
+| Measured wall ms | 18597.924 | 18573.170 | 2/3 |
+| Main CPU / wall second | 0.021671 | 0.021067 | 2/3 |
+| Render CPU / wall second | 0.016651 | 0.016537 | 1/3 |
+
+The observer accounts for about 7% of process CPU in these short typing
+workloads; its CPU is not subtracted and its scheduling effect is unknown.
+Results are mixed and do not localize the original consistent regression.
+The next diagnostic must preserve the 100-action workload and bound observer
+perturbation before assigning the loss to main/render work, Qt conversions,
+cache structure or code placement. All six diagnostic runtimes and the failed
+setup runtime exit with complete cleanup. Production remains accepted `bc55d0e8`.
