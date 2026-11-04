@@ -21,7 +21,7 @@ def publication_events(data):
     return events
 
 
-def validate_switch(result, receipts, publications):
+def validate_switch(result, receipts, publications, *, require_phase=False):
     samples = result.get('switch_samples', [])
     if result.get('interaction') != 'previous_tab' or not samples or len(receipts) != TAB_COUNT:
         raise ValueError('missing native tab-switch observations')
@@ -54,6 +54,15 @@ def validate_switch(result, receipts, publications):
         last_seen[tab] = generation
         previous_presented = presented
     start, end = samples[0]['input_at'], samples[-1]['presented_at']
+    phase = result.get('initial_phase')
+    if require_phase or phase is not None:
+        if (not isinstance(phase, dict) or phase.get('policy') != 'widest_producer_gap'
+                or not all(isinstance(phase.get(key), (int, float)) and math.isfinite(phase[key])
+                           for key in ('deadline', 'clearance'))
+                or not 0 < phase['deadline'] <= start
+                or not 0 < phase['clearance'] <= .5 / UPDATES_PER_SECOND
+                or start - phase['deadline'] > phase['clearance'] / 2):
+            raise ValueError('first input missed the declared producer phase')
     checkpoint_seconds = .5
     checkpoints = int((end - start) / checkpoint_seconds)
     if checkpoints < 1:
@@ -74,4 +83,4 @@ def validate_switch(result, receipts, publications):
     return dict(verified_target_generations=True, publication_clock='CACurrentMediaTime',
                 offered_updates_per_second=UPDATES_PER_SECOND, checkpoint_seconds=checkpoint_seconds,
                 complete_checkpoints=checkpoints, publications_by_tab=rate,
-                observation_start=start, observation_end=end)
+                observation_start=start, observation_end=end, initial_phase=phase)

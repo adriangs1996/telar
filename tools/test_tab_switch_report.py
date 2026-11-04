@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from tab_switch_fixture import PUBLICATION
@@ -20,6 +21,21 @@ def example():
 
 
 class SwitchReportTest(unittest.TestCase):
+    def test_phase_delivery_requires_its_receipt_and_bounded_lateness(self):
+        result, receipts, events = example()
+        with self.assertRaisesRegex(ValueError, 'producer phase'):
+            validate_switch(result, receipts, events, require_phase=True)
+        start = result['switch_samples'][0]['input_at']
+        phase = dict(policy='widest_producer_gap', deadline=start - .001, clearance=.008)
+        result['initial_phase'] = phase
+        self.assertEqual(validate_switch(result, receipts, events, require_phase=True)['initial_phase'], phase)
+        for field, value in [('policy', 'unknown'), ('deadline', start + .001),
+                             ('deadline', start - .005), ('deadline', math.nan),
+                             ('clearance', 0), ('clearance', 1), ('clearance', math.inf)]:
+            result['initial_phase'] = dict(phase, **{field: value})
+            with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, 'producer phase'):
+                validate_switch(result, receipts, events, require_phase=True)
+
     def test_verified_targets_have_provenance_and_all_four_producers(self):
         result, receipts, events = example()
         report = validate_switch(result, receipts, events)

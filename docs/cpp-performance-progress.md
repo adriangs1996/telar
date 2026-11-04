@@ -7743,3 +7743,73 @@ visibility and accessibility oracles and native regression gates are still neede
 Producer phase/receipt qualification must also precede another headline F08 series.
 No new F08 performance acceptance, workspace coverage or native120 claim follows.
 The unlimited objective remains active and unrelated runtime edits are preserved.
+
+## Phase-qualified tab-switch baseline, 2026-11-04
+
+The current tab observer now schedules its first warmup input between predicted
+producer publications. A bounded helper takes the median phase origin from the
+last 16 publication records of each of the four unchanged 30 Hz producers (at
+least eight are required), finds the widest circular gap and schedules its
+midpoint with a strict dispatch timer. Planning precedes warmup and measured CPU
+accounting. Later inputs and producer scheduling are unchanged. There is one
+attempt, with no retry or retrospective choice of a favorable bucket phase.
+The receipt records the native-clock deadline and predicted clearance; the driver
+requires delivery at or after the deadline with lateness no greater than half
+that clearance. The original actual-publication count gate remains unchanged:
+5% in every complete 500 ms window across all four streams, including warmup.
+
+All 17 focused tests pass. The native C phase planner matches an independent
+circular-gap reference over 2,050 deterministic cases and rejects malformed
+publication records and invalid clocks. The initial functional qualification
+completes 40 switches in each stack, with first-input lateness of 1.007/0.516 ms
+for Zig/C++. Wrong-tab, stale-generation and bad-checksum controls still reject
+the first incorrect response in both stacks. Source, commands and qualification
+receipts are under `out-perf/dlls-tab-switch-phase-start-01`.
+
+The first complete six-pair attempt passes all 12 native phase/content/rate and
+cleanup checks, but its final host boundary has load1 6.588867 against the frozen
+limit of 5. The entire `/tmp/telar-perf-tab-switch-phase-start-pairs-01` series is
+discarded; no earlier quiet pair is reused. A new complete six-pair series,
+`...-pairs-02`, passes all 26 host boundaries, maximum load1 4.013672. Frozen
+source hashes remain unchanged and all owned runtime/child cleanup succeeds.
+First-input lateness ranges from 0.139 to 1.138 ms, with predicted clearance from
+5.732 to 10.618 ms. All invalid earlier series remain invalid.
+
+The qualified baseline uses accepted GUI `a88e53a8`, runtime `1f1849d1`, command
+helper `87beebb0` and independent Zig `6ccf7948`. Each of the six alternating pairs
+has 100 measured switches after 20 warmups, four 30 Hz producers, matching
+1600×1000 backing pixels and 82×21 cells, opaque appearance, the existing optical
+font policy, and floated owned windows. Medians of the six run summaries:
+
+| Metric | Zig stack | C++ stack | C++ wins |
+| --- | ---: | ---: | ---: |
+| p50 latency, ms | 37.103 | 44.083 | 0/6 |
+| p95 latency, ms | 41.129 | 49.213 | 0/6 |
+| p99 latency, ms | 41.814 | 49.310 | 0/6 |
+| Maximum latency, ms | 41.991 | 49.754 | 0/6 |
+| GUI CPU, ms/action | 18.045 | 30.382 | 0/6 |
+
+This establishes a current discrete-switch deficit, not F08 completion. Runtime
+CPU accounting, workspace switching, complete animated content equivalence,
+observer perturbation and continuous native120 remain open. The initial phase
+policy is explicit and differs from older runs; it is not a Telar optimization.
+
+The next private candidate is `out-perf/dlls-tab-presentation-objects-01`.
+Its presentation model retains at most 64 active QObject records, publishes
+typed geometry independently of tab content, and materializes the complete old
+record map only when requested. The old record role and notifications remain
+available to legacy readers. The oracle fails before the missing implementation
+and then passes 2,048 randomized legacy-map/model-notification snapshots under
+ASan/UBSan, plus persistent-index, content/geometry isolation, retirement and
+capacity rejection checks. A real QML model delegate receives 240 geometry
+updates without rebinding content; a semantic change notifies once. Qt dependency
+libraries are not sanitizer-instrumented. A further live-delegate oracle catches
+null-property reads and a surviving delegate during immediate row/model teardown.
+The private correction removes model rows while readers are still valid, then
+defers detached QObject destruction until Qt can retire its delegates. Both row
+removal and model destruction now pass without QML warnings under ASan/UBSan.
+The active-row bound does not include transient deferred deletions; their peak
+must be measured separately. These are private component results,
+not accepted production or native application performance. The earlier rejected
+role and pane-retention variants remain rejected. The unlimited goal remains
+active with the complete flow, visual and native120 requirements still open.

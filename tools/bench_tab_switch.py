@@ -2,6 +2,8 @@
 """Pair native previous-tab actions against verified target generations.
 
 Runs isolated complete Zig/C++ stacks with four independently updating PTYs.
+The first warmup input starts between predicted producer publications; actual
+500 ms publication counts retain the 5% gate, including the warmup interval.
 This measures discrete switches; it does not qualify workspaces, continuous
 120 Hz presentation, separate runtime resources or probe overhead.
 """
@@ -139,7 +141,7 @@ def main():
                 row = harness.measure(mode, directory, (zig / 'telar', None, library, output / 'config.lua', options))
                 receipts = [json.loads(path.read_text()) for path in sorted((directory / 'switching').glob('*.json'))]
                 publications = {tab: (directory / 'switching' / f'{tab}.events').read_bytes() for tab in range(4)}
-                row['switch_validation'] = validate_switch(row, receipts, publications)
+                row['switch_validation'] = validate_switch(row, receipts, publications, require_phase=True)
                 row['switch_fixtures'] = receipts
             row.update(round=round_index, case='tab-switch')
             cpu = row['measurement_user_cpu_seconds'] + row['measurement_system_cpu_seconds']
