@@ -6607,3 +6607,81 @@ qualified history interaction still costs roughly 30–33 ms GUI CPU per query.
 A fresh profile after bounded highlight retention is required before choosing
 its next work-reduction candidate. All F01–F16/independent Zig/native120 gates
 remain open; the persistent objective remains active.
+
+
+## Geometry dependency investigation after highlight retention, 2026-11-04
+
+The fresh accepted-GUI diagnostic in
+`out-perf/dlls-history-after-retention-profile-01` completes 120 verified queries,
+with no pending submissions and complete owned-process cleanup. The six-second
+sample requested 1 ms intervals. Host qualification passes with maximum load1
+1.481934. Of 4,442 main-thread stack observations, the overlapping inclusive
+categories contain 252 QML binding, 205 scene synchronization, 181 polish,
+131 row layout, 91 history refresh, 52 row snapshot, 27 allocation and one QML
+creation observation. These are diagnostic observations, not CPU percentages
+or paired performance. Zero matches for the narrowly defined conversion and
+text-layout patterns do not establish absence of that work. Allocation, copy
+and Qt conversion costs remain hypotheses to test, not a global proven cause.
+
+Inspection found that query-only changes publish the full row layout map,
+invalidating geometry bindings even when all geometry fields remain equal.
+`out-perf/dlls-history-geometry-signals-01` freezes accepted GUI `9bf92e97` and
+runtime `1f1849d1`. Before implementation, its new component oracle observes
+one layout and one regions notification for a query-only change, verifies that
+lines change and geometry does not, and fails at the missing independent
+geometry dependency. The candidate preserves the full layout/regions API and
+adds a geometry-only map and notifier. Geometry bindings use that dependency;
+line/highlight bindings retain the original content notification. A typed
+snapshot comparison controls the new notifier without allocating a map to
+compare it. This adds one QML geometry map per live row, with no unbounded cache.
+
+The candidate oracle checks unchanged geometry for query/short-command changes
+and real notifications for resizing, expansion and collapse. Software component
+tests pass 39 checks including setup/cleanup; native selected component checks
+pass six cases, and native QuickTest passes 36 history cases plus setup/cleanup.
+Both full-window query captures (`gb`, `GST`) are RGBA-exact between A and B.
+Clang-tidy passes after designated initialization/default-member cleanup; the
+final GUI is byte-exact to frozen B `d0825666`. ARM64 updatePolish grows from
+634 to 705 instructions and its local stack reservation from 688 to 784 bytes.
+The extra equality test is inlined with floating-point comparisons and branches
+over the geometry notifier; full layout notification remains. The final C++
+translation unit also compiles for x86-64 baseline and v3, with disassemblies
+retained. Those are compile checks, not x86 GUI execution or timing.
+
+The predeclared native gate is six alternating pairs of 60 queries at each of
+300 and 220 ms minimum cadence, combined CPU wins at least 5/6 at both cadences,
+and no consistent mean/p95/p99 latency regression. Uptime and HostLoadGate
+qualify every series. The candidate remains unadopted while that gate runs;
+F01–F16, independent Zig comparison and native120 acceptance remain open.
+
+The first 300 ms series is wholly discarded: load1 reached 5.532227 after
+execution 4-B, exceeding the predeclared maximum of 5. Both the inner and outer
+host gates reject it. Owned GUI/runtime/children cleanup completed. Its partial
+pairs are not used for acceptance; any retry starts all six pairs afresh with
+the same frozen binaries and thresholds. This follows the shared-laptop load
+constraint without changing or stopping other agents.
+
+The complete retry (`/tmp/telar-perf-history-geometry-signals-fixed-pairs-02`)
+has 26 qualified host boundaries, maximum load1 3.331543, and twelve valid
+executions of 60 queries. It rejects the candidate:
+
+| 300 ms cadence metric | A median | B median | B wins / 6 |
+| --- | ---: | ---: | ---: |
+| Combined CPU ms/query | 34.753402 | 34.468378 | 2 |
+| GUI CPU ms/query | 31.954456 | 31.686433 | 3 |
+| Runtime CPU ms/query | 2.700962 | 2.742773 | 3 |
+| Mean presentation latency ms | 104.556230 | 104.555835 | 3 |
+| p95 presentation latency ms | 116.543377 | 116.582956 | 1 |
+| p99 presentation latency ms | 120.220737 | 120.130055 | 4 |
+| GUI instructions/query | 95,201,583 | 90,209,704 | 6 |
+| GUI end footprint bytes | 253,830,524 | 255,624,584 | 2 |
+
+Instruction reduction is repeatable, but combined CPU misses the declared
+5/6 requirement, and p95 loses five pairs despite the small median difference.
+No placement exception is claimed. The 220 ms cadence is not run after this
+failure. The candidate source/patch, tests, code generation and raw evidence
+are retained privately; all four production/test files are restored to the
+accepted baseline. No geometry dependency change is adopted. The next lead is
+the earlier measurement-map propagation itself: query changes currently rebuild
+and convert the whole measurements map before recomputing unchanged row geometry.
+This is an unmeasured hypothesis, not an accepted optimization.
