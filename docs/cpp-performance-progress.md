@@ -7309,3 +7309,32 @@ signature had initially differed. Source hashes match the frozen pre-experiment
 files. The next diagnostic will separate wire response, drawable submission and
 presentation stages; it is not a continuation of acceptance testing for this
 rejected candidate.
+
+`out-perf/dlls-history-line-role-phases-01` subsequently ran 60 diagnostic bursts
+per archived binary through the existing byte-preserving history relay, retaining
+each drawable's native pixel/timestamp record. Both rates, endpoints, callbacks,
+cleanup and all six host boundaries pass (maximum load1 1.713867). Bracketing
+`CACurrentMediaTime` with Python's monotonic clock before and after each run gives
+intersecting alignment intervals narrower than 84 ns. Each of the 60 timed final
+queries maps uniquely to one request, reply and verified drawable; both runs have
+62 total requests including setup. No intermediate-character backend queries were
+observed in this workload.
+
+| Diagnostic mean stage (ms) | Accepted A | Rejected B |
+| --- | ---: | ---: |
+| Final input to query at relay | 63.871247 | 63.569576 |
+| Query to reply at relay | 2.527483 | 2.458741 |
+| Reply forwarding | 0.024931 | 0.024558 |
+| Forwarded reply to frame commit | 9.199385 | 9.221360 |
+| Frame commit to positive presentation | 27.682686 | 29.024544 |
+| Frame commit to readback completion callback | 6.656369 | 7.771872 |
+
+These are single diagnostic runs with extra relay/copying work, not paired timing
+or causal attribution. The callback interval includes scheduling and is not GPU
+execution time; phase percentiles must not be added. The presentation-stage lead
+is consistent with earlier native drawable diagnostics, which already found a
+long completion-to-presentation interval. Reducing the drawable pool to two and
+changing Qt render-loop/update-idle settings previously supplied no accepted
+large gain; those experiments must not be silently repeated as new findings.
+The rejected line-role candidate remains rejected, the accepted production GUI
+remains `a88e53a8`, and native presentation scheduling remains an unresolved lead.
