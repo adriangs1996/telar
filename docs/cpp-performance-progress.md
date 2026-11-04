@@ -6335,3 +6335,107 @@ heap array. It retains natural runs for nonheap inputs and the trivial guard.
 This seeks less repeated ordering work on the failing path; comparison counts,
 record movement, exact results and paired performance must be checked afresh.
 Production acceptance and all F01–F16/independent Zig/native120 gates remain open.
+
+## Existing-heap extraction: large distinct control rejects, 2026-11-04
+
+`out-perf/dlls-history-natural-merge-04` consumes an already constructed heap
+with `std::sort_heap` and a local typed comparator. It retains natural merging
+for nonheap ranges and skips that helper for zero/one candidates. Original
+heap selection, hashing, scoring, compact ranking and response policy remain.
+The independent query oracle passes 936 evaluations; scoped metadata, all
+allocation failures and ASan/UBSan pass at 13,312 and 6,912 entries. The large
+heap query keeps A allocation calls/bytes/peak; nonheap scratch storage remains
+bounded as in variant02. x86 baseline/v3 checks pass. The identical natural-
+merge helper reuses its recorded direct oracle; the new heap extraction is
+exercised by fresh query-level oracles, including ties, reverse, shuffled,
+old snapshots, scopes and the top-10,000 boundary. History, HistoryQueue and
+HistoryCapacity pass with committed ordering/page tests `9e0a3ff2c`.
+
+Instrumented comparator counts fall from 245,570 to 206,466 on the shuffled
+15,000-entry heap and from 1,551,857 to 1,513,930 on 100,000 monotonic entries.
+ARM64 inlines heap extraction in the 881-instruction query function without
+indirect comparator calls there. The natural helper remains 175 instructions.
+Counts and assembly describe work, not a replacement for end-to-end timings.
+
+Nineteen complete seven-pair component series have 570 valid host boundaries,
+maximum load1 2.020996. Runs use 300 queries through 15,000 entries and
+32 for 100,000-entry heap controls. Responses are exact and no owned builds
+or tests overlap timing.
+
+| Component | A CPU ms | B CPU ms | CPU / mean / p95 wins |
+| --- | ---: | ---: | --- |
+| shuffled-heap-GST | 2.570957 | 2.500863 | 7 / 7 / 7 |
+| shuffled-heap-all | 2.181317 | 2.111013 | 7 / 7 / 7 |
+| shuffled-heap-distinct | 2.525037 | 2.447290 | 7 / 7 / 7 |
+| shuffled | 1.395810 | 1.070827 | 7 / 7 / 7 |
+| shuffled-distinct | 1.704113 | 1.359727 | 7 / 7 / 7 |
+| small-distinct | 0.008797 | 0.008850 | 3 / 3 / 4 |
+| empty-distinct | 0.013390 | 0.013320 | 4 / 4 / 3 |
+| ordinary-gb | 1.236727 | 1.223210 | 7 / 6 / 5 |
+| ordinary-GST | 1.280110 | 1.262827 | 6 / 6 / 3 |
+| ordinary-all | 0.960980 | 0.941770 | 7 / 7 / 5 |
+| duplicates | 0.940140 | 0.921343 | 6 / 6 / 6 |
+| no-match | 1.189570 | 1.171720 | 6 / 5 / 4 |
+| reverse | 0.942743 | 0.931407 | 6 / 6 / 5 |
+| tied | 0.964870 | 0.948377 | 7 / 7 / 6 |
+| heap | 12.411750 | 12.389500 | 6 / 6 / 5 |
+| late-disorder | 0.959527 | 0.948743 | 6 / 6 / 6 |
+| middle-disorder | 0.960607 | 0.949867 | 7 / 7 / 7 |
+| end-disorder | 0.961990 | 0.946803 | 7 / 6 / 5 |
+| heap-distinct | 13.168938 | 13.333031 | 1 / 1 / 1 |
+
+The 100,000-entry distinct heap control rises from 13.168938 to 13.333031 ms
+CPU, winning only 1/7; mean and p95 also win 1/7. The predeclared rule rejects
+the candidate. Long/old are unmeasured, and no full-runtime build/timing or
+native promotion is performed. Other completed controls do not lose
+consistently, but their gains do not excuse this regression.
+
+A separate diagnostic inserts seven process-CPU boundaries per query: setup,
+scan/selection/score/hash, recency ordering, dedup/rank collection, partial
+page ranking, detail/encoding and destruction. It runs four seven-pair series
+of 64 queries/execution, with 120 valid host boundaries and maximum load1
+1.490234. It preserves exact replies. Clocks change code generation and
+cache state; these timings cannot overturn the uninstrumented rejection or
+independently establish its cause.
+
+| Diagnostic case / phase | A CPU µs | B CPU µs | Wins |
+| --- | ---: | ---: | ---: |
+| heap-distinct / setup | 5.0625 | 4.8906 | 4 |
+| heap-distinct / scan_select_score_hash | 12178.4844 | 12223.8281 | 4 |
+| heap-distinct / recency_order | 417.4688 | 411.6406 | 6 |
+| heap-distinct / dedup_collect | 374.8750 | 368.6719 | 6 |
+| heap-distinct / rank_page | 4.2344 | 4.3281 | 2 |
+| heap-distinct / detail_encode | 107.3125 | 107.7344 | 4 |
+| heap-distinct / destroy | 167.2656 | 167.3906 | 3 |
+| heap-all / setup | 5.0625 | 4.7656 | 6 |
+| heap-all / scan_select_score_hash | 12038.3750 | 12002.7969 | 5 |
+| heap-all / recency_order | 419.7031 | 405.9844 | 7 |
+| heap-all / dedup_collect | 10.6719 | 10.3594 | 6 |
+| heap-all / rank_page | 3.9062 | 3.8906 | 3 |
+| heap-all / detail_encode | 109.6250 | 105.9219 | 5 |
+| heap-all / destroy | 2.4375 | 2.4531 | 2 |
+| shuffled-heap-distinct / setup | 3.4844 | 3.7344 | 4 |
+| shuffled-heap-distinct / scan_select_score_hash | 1638.1875 | 1653.1406 | 3 |
+| shuffled-heap-distinct / recency_order | 486.8906 | 427.5781 | 7 |
+| shuffled-heap-distinct / dedup_collect | 252.5469 | 237.6719 | 6 |
+| shuffled-heap-distinct / rank_page | 2.5469 | 2.6094 | 2 |
+| shuffled-heap-distinct / detail_encode | 76.2812 | 75.8281 | 2 |
+| shuffled-heap-distinct / destroy | 95.6094 | 96.8594 | 2 |
+| ordinary-distinct / setup | 3.1719 | 3.2344 | 3 |
+| ordinary-distinct / scan_select_score_hash | 868.5000 | 872.3125 | 2 |
+| ordinary-distinct / recency_order | 31.4062 | 13.9531 | 7 |
+| ordinary-distinct / dedup_collect | 202.4219 | 201.8438 | 4 |
+| ordinary-distinct / rank_page | 2.2812 | 2.3750 | 3 |
+| ordinary-distinct / detail_encode | 70.4531 | 70.1562 | 3 |
+| ordinary-distinct / destroy | 84.6875 | 84.5469 | 5 |
+
+The diagnostic does not clearly reproduce the rejected total regression:
+large distinct scan/selection is mixed at 4/7, while final ordering and dedup
+each win 6/7. Cause remains unisolated. It does locate roughly 92% of large
+distinct CPU in scan/selection/score/hash, where the accepted code performs
+`pop_heap`, overwrites the last candidate, then `push_heap` for every retained
+replacement. The next isolated experiment starts from accepted A and tests
+one root replacement/heap repair, without inheriting natural merging or heap
+extraction. This targets earlier repeated selection work, and requires new
+heap-property, top-k, failure and paired checks. Accepted production code and
+F01–F16/independent Zig/native120 status remain unchanged.
