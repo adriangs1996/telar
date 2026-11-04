@@ -48,3 +48,28 @@ def analyze(census, measured_samples, require_source=False):
                 measured_inputs=measured_samples, source_required=require_source,
                 interval_ms=(census["end_ns"] - census["begin_ns"]) / 1e6,
                 counts=counts, per_input={key: value / measured_samples for key, value in counts.items()})
+
+
+SEQUENCE_CAPACITY = 513
+
+
+def analyze_sequences(census, warmup, measured_samples):
+    report = analyze(census, measured_samples)
+    require(unsigned(warmup), "Invalid warmup count")
+    sequences = census.get("commits_by_sequence")
+    require(isinstance(sequences, list) and len(sequences) == SEQUENCE_CAPACITY,
+            "Missing or invalid sequence table")
+    require(all(unsigned(value) for value in sequences), "Invalid sequence count")
+    total_samples = warmup + measured_samples
+    require(total_samples < len(sequences), "Sequence range exceeds capacity")
+    require(sum(sequences) == report["counts"]["commits"], "Sequence partition mismatch")
+    require(not any(sequences[total_samples + 1:]), "Commit attributed after final input")
+    measured = sequences[warmup + 1:total_samples + 1]
+    require(all(value > 0 for value in measured), "Measured input has no commit")
+    return dict(scope="Input epoch observed at commit entry, including inter-input work. "
+                "This is not proof of which update caused the frame or what it displayed.",
+                warmup=warmup, measured_inputs=measured_samples,
+                before_first_measured_commits=sum(sequences[:warmup + 1]),
+                samples=[dict(sequence=warmup + index + 1, commits=value)
+                         for index, value in enumerate(measured)],
+                extra_commits=sum(value - 1 for value in measured))

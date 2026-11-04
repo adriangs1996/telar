@@ -46,8 +46,11 @@ enum RenderWorkCounter {
   render_work_count
 };
 
+enum { render_work_sequence_capacity = 513 };
+
 typedef struct {
   uint64_t counts[render_work_count];
+  uint64_t commits_by_sequence[render_work_sequence_capacity];
   uint64_t begin_ns;
   uint64_t end_ns;
   uint64_t errors;
@@ -57,6 +60,7 @@ typedef struct {
 int telar_render_work_begin(void);
 void telar_render_work_record(enum RenderWorkCounter counter, uint64_t amount);
 void telar_render_work_pair(enum RenderWorkCounter first, enum RenderWorkCounter second);
+void telar_render_work_commit(unsigned sequence);
 RenderWorkSnapshot telar_render_work_end(void);
 
 #ifdef __cplusplus

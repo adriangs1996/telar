@@ -9692,3 +9692,84 @@ pass again on software and Metal, and changed-line clang-tidy is clean. Whole-fi
 clang-tidy retains two pre-existing diagnostics in the older text test: Qt
 `_data` naming and a non-const `QFETCH(bool)`. All F01–F16/native120 complete-flow
 requirements and the unlimited goal remain open.
+
+## TUI tail partition and input-epoch render census, 2026-11-04
+
+The row-background experiment remains rejected. A post-hoc partition of its
+already qualified six-pair series separates each run's87 partial updates,10 full
+updates and3 alternate-screen resets. The script and raw derivation are in
+`out-perf/dlls-tui-tail-work-01/partition.py` and `partition.json`; the source
+series remains `/tmp/telar-perf-row-background-tui-pairs-02`. Classification uses
+input sequence after the declared20 warmups, not observed latency. These small
+subgroups are descriptive, not replacement acceptance metrics.
+
+Partial-update presentation p50 medians are28.133/26.141 ms (B lower6/6), and p95
+35.535/33.622 ms (5/6). Full-update p50 is30.362/35.196 ms (**1/6** lower), while
+its p95 is46.275/46.468 ms (3/6). Reset p50 is37.930/37.590 ms (4/6). In each
+variant's30 slowest-five observations across runs,16 are full updates,6 resets
+and8 partial updates. Full-update GPU-work p50 is0.270/0.281 ms (0/6 lower), but
+neither those command-buffer durations nor the signed presentation-minus-GPU
+callback residual establish the cause of the presentation difference. No accepted
+result is inferred from selecting a favorable subgroup.
+
+First reuse the existing aggregate legacy-Metal census with the TUI harness and
+unmodified frozen GUIs A `bc55d0e8` and rejected B2 `30d12a5a`, both with runtime
+`1f1849d1`. Two instrumented PNGs match their ordinary-probe full-window PNGs
+byte-for-byte in `/tmp/telar-perf-tui-tail-census-pixels-01`. Three alternating
+100-measured/20-warmup pairs in `/tmp/telar-perf-tui-tail-census-pairs-01` count
+A commits115/109/110 and B115/113/113. Aggregate counts cannot assign that work to
+a specific input, so they do not explain the tail regression.
+
+`tools/render_work_census.h/.c` and `build_render_work_probe.py` now additionally
+record the input epoch observed at each qualified queue's commit entry. A bounded
+513-entry table accommodates the native probe's512 inputs plus epoch0, with a
+compile-time capacity check. The total and sequence counter increment together
+under the existing census lock; end-boundary snapshots cannot split the partition.
+Overflow/out-of-range observations fail closed. The table adds4,104 bytes to each
+diagnostic snapshot; production application code is unchanged. The attribution
+includes work between inputs and does **not** identify the content or cause of a
+frame. It is not a display-cadence measurement.
+
+`render_work_report.analyze_sequences` requires the exact sequence table, integral
+counts, matching total, valid warmup/range, no attribution after the final input,
+and at least one commit per measured input. Boundary work before the first
+measured input is preserved separately. Six report tests pass, including13 new
+sequence/range negative controls alongside the existing15 aggregate controls.
+The original concurrent aggregate control still passes. New
+`tools/render_sequence_control.c` covers concurrent partitioning, stop, restart,
+inactive boundaries, invalid indexes and overflow; it passes ordinary ARM64,
+ASan/UBSan with leak detection disabled, and x86-64 under Rosetta. This validates
+the counter, not x86 Qt rendering or comparative performance.
+
+The extended probe passes another byte-exact PNG pair in
+`/tmp/telar-perf-tui-sequence-census-pixels-01`. Three alternating diagnostic pairs
+in `/tmp/telar-perf-tui-sequence-census-pairs-01` preserve all final text/native
+qualification checks. Results are:
+
+| Variant | Commits across three runs | Extra partial commits | Extra full commits | Extra reset commits |
+|---|---|---:|---:|---:|
+| A | 108 / 111 / 114 | 7 | 19 | 7 |
+| B2 | 113 / 116 / 113 | 14 | 21 | 7 |
+
+Each variant has261 measured partial inputs,30 full inputs and9 resets. Neither
+has any pre-measurement-context commits in the measured census. In both variants,
+26 of39 full/reset input epochs have multiple commits; therefore an increased
+frequency of multi-commit full updates is **not** established as the explanation
+for B's slower full-update median. Some epochs contain three commits. Across all
+four diagnostic series, commits equal surface passes, drawables and positive
+presentation callbacks per run; offscreen passes, zero callbacks and source hooks
+are zero. This does not prove that every frame contains a complete TUI update.
+
+All four series qualify their host gates; maximum load1 is2.541015625. All16 owned
+runtime/child shutdowns and resource cleanups pass. No build, test or profiler
+overlaps the native series. Diagnostic timings do not count toward acceptance.
+Accepted GUI `bc55d0e8` and the four pre-existing runtime source hashes remain intact.
+
+A concrete next control is producer fragmentation. `TuiFixture::draw_marker`
+writes the body, native marker and final cursor separately. The body is2,602 bytes
+for an ordinary full82×21 update and2,626 bytes for a reset. Emitting exactly the
+same bytes in one write, after a byte-stream oracle, can test whether intermediate
+work depends on those boundaries. That changes producer behavior and must remain
+a labeled diagnostic, not a production optimization or an easier acceptance
+workload. No causal scheduling claim or new optimization is accepted here. All
+F01–F16/native120 complete-flow requirements and the unlimited goal remain open.

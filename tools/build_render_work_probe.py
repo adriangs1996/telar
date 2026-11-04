@@ -35,6 +35,7 @@ def build(output):
 static atomic_uintptr_t census_layer_identity;
 static RenderWorkSnapshot census_result;
 static BOOL census_started;
+_Static_assert(render_work_sequence_capacity == ProbeSampleCapacity + 1, "Sequence capacity differs from native probe");
 
 static BOOL census_queue(id<MTLCommandQueue> queue) {
     uintptr_t identity = atomic_load_explicit(&target_queue_identity, memory_order_acquire);
@@ -42,7 +43,13 @@ static BOOL census_queue(id<MTLCommandQueue> queue) {
 }
 
 static NSDictionary *census_json(void) {
+    NSMutableArray *sequences = [NSMutableArray arrayWithCapacity:render_work_sequence_capacity];
+    for (unsigned sequence = 0; sequence < render_work_sequence_capacity; ++sequence) {
+        [sequences addObject:@(census_result.commits_by_sequence[sequence])];
+    }
     return @{
+        @"commits_by_sequence": sequences,
+        @"sequence_attribution": @"Input epoch observed at commit entry; includes inter-input work and does not establish frame content or causality.",
         @"version": @1, @"complete": @(census_result.complete), @"errors": @(census_result.errors),
         @"clock": @"CLOCK_UPTIME_RAW", @"begin_ns": @(census_result.begin_ns), @"end_ns": @(census_result.end_ns),
         @"queue_identity": @(atomic_load(&target_queue_identity)), @"layer_identity": @(atomic_load(&census_layer_identity)),
@@ -82,7 +89,7 @@ COUNTERS
     return ((id(*)(id,SEL,id))original_encoder)(self,selector,pass);''')
     replace("static void commit(id self, SEL selector) {", '''static void commit(id self, SEL selector) {
     if (census_queue([(id<MTLCommandBuffer>)self commandQueue])) {
-        telar_render_work_record(render_work_commits, 1);
+        telar_render_work_commit(atomic_load_explicit(&epoch, memory_order_acquire));
     }''')
     replace("static void commit4(id self, SEL selector, const id<MTL4CommandBuffer> *buffers, NSUInteger count, MTL4CommitOptions *options) {", '''static void commit4(id self, SEL selector, const id<MTL4CommandBuffer> *buffers, NSUInteger count, MTL4CommitOptions *options) {
     telar_render_work_record(render_work_unsupported_metal4, 1);''')

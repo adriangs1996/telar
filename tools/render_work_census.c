@@ -46,6 +46,20 @@ void telar_render_work_pair(enum RenderWorkCounter first, enum RenderWorkCounter
   os_unfair_lock_unlock(&lock);
 }
 
+void telar_render_work_commit(unsigned sequence) {
+  os_unfair_lock_lock(&lock);
+  if (active) {
+    if (sequence >= render_work_sequence_capacity || counters.counts[render_work_commits] == UINT64_MAX || counters.commits_by_sequence[sequence] == UINT64_MAX) {
+      ++counters.errors;
+    } else {
+      ++counters.counts[render_work_commits];
+      ++counters.commits_by_sequence[sequence];
+    }
+  }
+
+  os_unfair_lock_unlock(&lock);
+}
+
 RenderWorkSnapshot telar_render_work_end(void) {
   os_unfair_lock_lock(&lock);
   if (active) {

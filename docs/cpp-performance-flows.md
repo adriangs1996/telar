@@ -175,6 +175,15 @@ resource adapter's stop-boundary snapshot; report that wider runtime scope.
 Current visual differences and diagnostic qualification are in the progress
 report. They must not be hidden by treating the marker alone as full F05 parity.
 
+The private render-work census (`tools/build_render_work_probe.py OUT`) also
+exports commit counts by input epoch. Use
+`render_work_report.analyze_sequences(census, warmup, measured_samples)` to
+validate the partition and retain boundary work separately. This attributes the
+epoch observed at commit entry, including inter-input work; it does not prove
+frame content, causality or display cadence. Compile and run
+`tools/render_sequence_control.c` with `tools/render_work_census.c` before using
+the extended counter on a new host. Keep all instrumented timings diagnostic.
+
 ## Deliverables and later optimization
 
 Fresh setup, coverage gaps and current experiments are tracked in
