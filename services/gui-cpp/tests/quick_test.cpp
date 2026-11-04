@@ -2611,8 +2611,10 @@ return {api_version=2, client={keybindings={
     const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved_clipboard)] mutable {
       clipboard->setMimeData(saved.release());
     });
-    const auto copy_position = copy->mapToScene(QPointF{copy->width() / 2, copy->height() / 2}).toPoint();
-    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, copy_position);
+    QTRY_VERIFY_WITH_TIMEOUT(test::HistoryPresentation::actionCenter(*client_, HistoryCardAction::copy).has_value(), runtime_wait_ms);
+    const auto copy_position = test::HistoryPresentation::actionCenter(*client_, HistoryCardAction::copy);
+    QVERIFY(copy_position.has_value());
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, copy_position->toPoint());
     QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_POINTER_FIRST"));
     QCOMPARE(client_->dialog(), QStringLiteral("history"));
   }

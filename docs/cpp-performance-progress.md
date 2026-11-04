@@ -6803,3 +6803,27 @@ propagate. Filters already narrow their input, and the empty state already
 uses a conditional Loader; those are not missing optimizations. No new
 candidate is implemented or accepted from this profile yet. The persistent
 objective remains active.
+
+
+## Presented history copy target qualification, 2026-11-04
+
+The stable footer/metadata label experiment's first native history run passed
+35 of 36 cases but left the clipboard empty in
+`historyPointerSelectionNeverSubmits`. Three isolated fresh reproductions with
+the same candidate passed. The original failure is retained; its specific cause
+is not established. No timing was started with that qualification unresolved.
+
+Source inspection identified a readiness weakness in that test: it clicked the
+live QML copy geometry after a 100 ms settle, while selection motion lasts
+140 ms and native dispatch resolves actions against the presented frame. The
+fixture now waits for a delivered current revision/generation and an enabled
+copy target for the current selection, then clicks its presented bounds. It
+retains selection, double-click, no-submit, visible-copy and exact clipboard
+assertions. Production dispatch and its stale-gesture protections are unchanged.
+
+The accepted baseline and candidate each pass all 36 native history cases
+(38 checks including setup/cleanup) with this qualification. Receipts are in
+`out-perf/dlls-history-stable-labels-01/qualified-result-{A,B}.json`; the original
+failure and isolated repetitions remain alongside them. Rebuilt candidate GUI
+`1a20e898` is byte-identical to its frozen executable. This test correction
+is independent of the pending optimization decision.
