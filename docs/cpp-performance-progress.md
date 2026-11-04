@@ -6543,3 +6543,35 @@ formation before reaching a leaf. This is another code-generation hypothesis,
 not a proven causal attribution. It needs fresh pointer-safety/equivalence and
 paired evidence. Production remains unchanged; F01–F16 and independent Zig/
 native120 acceptance remain open.
+
+## Pointer-walk heap replacement: primary threshold missed, 2026-11-04
+
+`out-perf/dlls-history-heap-replace-03` retains hole and child pointers during
+descent, selecting a precomputed child address before copying. Index bounds
+are checked before forming child pointers past a leaf; singleton replacement
+has a direct path. The same bottom-up repair and accepted final sort remain.
+ARM64 emits a 735-instruction query; descent uses pointer selection at
+`0x100004d1c`, followed by paired 128-bit copy. No per-level base reload remains.
+Ascent still reconstructs its index from a pointer difference and emits signed
+division correction at `0x100004d84`.
+
+Fresh Release and ASan/UBSan direct tests each pass 139,083 replacements and
+the 100,000-candidate stream, with zero repair allocations. Fresh expanded
+reference/exact checks pass 612 evaluations; scoped metadata, all 32 allocation
+failures, zero-live-storage, sanitized B, x86 baseline/v3 and History/HistoryQueue/
+HistoryCapacity pass. Calls/bytes/peak remain 30 / 485,472 / 485,120, and the
+comparison census is identical to the two prior replacement variants.
+
+The first primary series has seven alternating pairs, 32 queries/execution,
+30 qualified host boundaries and maximum load1 1.757812. Distinct heap CPU
+is 13.223250→13.100625 ms (-0.927%), with 5/7 wins. Mean is
+13.229102→13.104228 ms and p95 14.060659→13.597537 ms,
+both 5/7. Replies match exactly. The result misses the predeclared 6/7 primary
+threshold, so it is not adopted or repeated. The remaining twenty controls,
+full runtime and native checks remain unmeasured.
+
+A successor retains the already available unsigned child index for ascent,
+avoiding pointer-distance scaling and signed-division correction. This is a
+concrete redundant-work reduction, not a claimed performance result. Its
+oracles and measurements are fresh. Production and F01–F16/independent Zig/
+native120 acceptance remain unchanged.
