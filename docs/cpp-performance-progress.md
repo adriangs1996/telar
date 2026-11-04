@@ -6827,3 +6827,59 @@ The accepted baseline and candidate each pass all 36 native history cases
 failure and isolated repetitions remain alongside them. Rebuilt candidate GUI
 `1a20e898` is byte-identical to its frozen executable. This test correction
 is independent of the pending optimization decision.
+
+
+## Stable history labels rejected, 2026-11-04
+
+`out-perf/dlls-history-stable-labels-01` tests retaining bounded typed label
+inputs in the footer and metadata item. Unchanged inputs skip repeated UTF-8
+conversion, label/map generation and label notifications; unchanged typed geometry
+skips layout notifications. Every input and choice revision still updates, and
+old captured gestures retire. The baseline fails the redundant-notification
+oracles; the candidate passes all 40 software component checks, ten native
+component cases and the 36 native history cases after the independent presented-
+copy test qualification above. Complete `gb` and `GST` window captures are exact.
+Both implementation units pass clang-tidy and compile for x86-64 baseline/v3;
+ARM64 and x86 disassemblies are retained. Instruction counts alone are not timing.
+
+Frozen A GUI is `a88e53a8`, B is `1a20e898`; both use runtime `1f1849d1` and
+helper `87beebb0`. Six alternating pairs of 60 queries at a 300 ms minimum
+cadence complete under `/tmp/telar-perf-history-stable-labels-fixed-pairs-01`.
+All 26 outer host boundaries qualify, maximum load1 4.483887; native result,
+offered-rate and owned-cleanup checks pass. No owned build/test/profile runs
+alongside timing. Values below are medians of the six per-run summaries.
+
+| Metric | A | B | B lower |
+| --- | ---: | ---: | ---: |
+| Combined CPU/query (ms) | 32.852747 | 31.807033 | 5/6 |
+| GUI CPU/query (ms) | 30.133651 | 28.821730 | 6/6 |
+| Runtime CPU/query (ms) | 2.722464 | 2.954096 | 1/6 |
+| GUI instructions/query (millions) | 80.859057 | 74.130762 | 6/6 |
+| GUI cycles/query (millions) | 59.405511 | 56.900765 | 6/6 |
+| Mean latency (ms) | 104.114248 | 103.637358 | 4/6 |
+| p95 latency (ms) | 116.361469 | 117.360960 | 2/6 |
+| p99 latency (ms) | 120.941637 | 120.967491 | 1/6 |
+| GUI end footprint (bytes) | 258778516.000000 | 255313276.000000 | 3/6 |
+
+The candidate is rejected: p99 latency improves in only 1/6 pairs, failing the
+predeclared no-consistent-latency-regression rule despite combined CPU winning
+5/6 and GUI CPU/instructions/cycles winning 6/6. The small difference between
+p99 medians does not override the paired direction rule. The cause is not
+established, and no code-placement explanation is claimed. The unchanged runtime
+also has higher CPU in 5/6 and cycles in 6/6; these observations are retained
+without attributing them to a demonstrated runtime-code effect. GUI setup CPU
+wins 2/6 and setup cycles 1/6; GUI/runtime interrupt wakeups both win 2/6.
+Every resource counter remains in the raw receipt.
+
+The 220 ms series is not started after this primary rejection. All nine candidate
+source/test files are restored exactly to the accepted baseline; the independent
+presented-copy test correction remains. Rebuilding the accepted source is required
+to replace candidate objects before further qualification. F01–F16, independent
+Zig comparison and native120 remain open. The next step checks the current
+independent C++ and Zig history endpoints, including the timing difference
+between C++'s 60 ms debounce and Zig's immediate bounded request submission.
+
+Restoration completes with a byte-exact `a88e53a8` GUI and all 39 accepted
+software component checks passing. The source and executable both match A.
+Only the independent test correction and this rejection report are retained.
+The pre-existing runtime cadence edits remain untouched.
