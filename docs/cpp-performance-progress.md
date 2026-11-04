@@ -8343,3 +8343,83 @@ as the cause. They motivate tracing the switch from attachment response through
 frame preparation/submission, rather than another unqualified map-copy change.
 Earlier drawable-pool/render-loop experiments remain rejected/unaccepted and are
 not reinstated. The unlimited objective stays active.
+
+## Tab-switch attachment and drawable timeline, 2026-11-04
+
+`out-perf/dlls-tab-switch-timeline-01` starts from `03ddf5620` and accepted GUI
+`a88e53a8`/runtime `1f1849d1`. Private instrumentation adds a bounded 65,536-event
+buffer to three GUI translation units: navigation/model refresh, socket delivery,
+frame preparation and terminal painting. Slots publish atomically and dump only
+at process exit. The first build catches integer narrowing in the diagnostic
+scope arguments; explicit conversions correct it. A refinement records actual
+pane/frame identities, avoiding attribution of a previous pane's pending message
+to the new target. The header parser matches real Codec-encoded PaneOpened and
+PaneFrame messages under ASan/UBSan, including truncated-prefix controls.
+
+The native observer additionally records commit, GPU start/end and completion
+callback times on the same drawable whose tab/generation/checksum and positive
+presentation are accepted. A commit counter rejects ambiguous multiple
+submissions. The diagnostic builder is now reusable as
+`python3 tools/build_tab_switch_timeline.py NEW_DIRECTORY`; its
+`timeline-probe.dylib` is explicitly diagnostic. The ordinary probe remains
+unchanged. Canonical generated native source matches the tested private source
+exactly; both probes compile, and four incompatible-source controls fail closed.
+No existing headline observer or endpoint is changed.
+
+Final instrumented GUI is
+`fb038d41af1349c4132c312d0087bade0e9787fa51dd3443f625f316ee24014c`.
+Before running it, all three working production files are restored to their
+original hashes and the configured GUI is rebuilt byte-exactly to `a88e53a8`.
+Independent Zig remains `6ccf7948`; its source inputs are rechecked unchanged
+against build HEAD `5c619b85c`. Unrelated runtime work is untouched.
+
+`/tmp/telar-perf-tab-switch-timeline-01` runs 100 measured plus 20 warmup switches
+per stack, four independent 30 Hz producers, matched 1600x1000 viewports/82x21
+grids. Both content/rate/phase and cleanup gates pass. All six host boundaries
+qualify, maximum load1 2.33984375. C++ records 16,901 events without overflow or
+unpublished slots. Clock brackets before/after each run contain zero offset
+between CLOCK_UPTIME_RAW and CACurrentMediaTime and are narrower than 210 ns.
+Every accepted drawable has one commit and ordered native timestamps. All 120
+C++ samples correlate selection, OpenPane queueing, PaneOpened, the exact received
+frame ID, scene painting/preparation and that drawable's commit. Per-input stage
+sums reproduce the full presentation interval; warmup is excluded below.
+
+| C++ diagnostic stage | Mean, ms | p50, ms | p95, ms |
+|---|---:|---:|---:|
+| Input to OpenPane queued | 0.815 | 0.449 | 2.153 |
+| OpenPane queued to PaneOpened delivery | 3.277 | 2.364 | 6.463 |
+| PaneOpened to matching frame received | 0.121 | 0.063 | 0.274 |
+| Frame dispatch including synchronous subscribers | 0.033 | 0.031 | 0.042 |
+| Dispatch complete to paint start | 4.255 | 4.047 | 7.542 |
+| Terminal scene paint | 0.584 | 0.723 | 0.906 |
+| Paint end to drawable commit | 0.788 | 0.831 | 1.265 |
+| Commit to GPU start | 0.270 | 0.188 | 0.716 |
+| GPU execution | 3.443 | 4.533 | 6.007 |
+| GPU end to positive presentation | 26.411 | 24.914 | 31.823 |
+
+These instrumented single-run observations are not an A/B performance result,
+CPU attribution or native120 acceptance. Stage quantiles cannot be added. Zig's
+separate mean input-to-commit/GPU-execution/GPU-end-to-presentation intervals are
+8.692/1.052/28.475 ms; C++ is 9.874/3.443/26.411 ms. This does not establish a
+universal Qt presentation penalty or supersede the six-pair independent baseline.
+
+Within C++'s queue-to-opened interval, the first post-queue `bytesWritten`
+notification occurs after mean 2.701 ms (median 2.234); the remaining mean time to
+PaneOpened delivery is 0.577 ms (median 0.091). That notification covers a batch,
+not an OpenPane-specific syscall; pending queue size at enqueue is 0 or 13 bytes.
+Inclusive pane-refresh scopes before PaneOpened total mean 1.999 ms. Thirty-three
+of 100 measured switches prepare a frame before the attachment reply arrives.
+After target-frame dispatch, 43 switches encounter an explicit frame-pacer hold.
+These observations identify two scheduling leads without proving their causes.
+
+The strict correlation analyzer passes the original trace and rejects ten
+mutations: duplicate/missing commit, reversed GPU ordering, stale target,
+incompatible clock, buffer overflow, missing frame, wrong pane, rejected host
+and incomplete cleanup. Raw events, clocks, identities and controls remain in the
+ignored prefix. The next isolated candidate will flush a fully queued OpenPane
+request before synchronous UI refresh, potentially overlapping runtime work and
+avoiding an intermediate empty frame. It must preserve nonblocking output,
+backpressure, byte ordering and all pacing/visibility rules; the ordinary six-pair
+CPU/p95 and regression gates still apply. No immediate-flush change is implemented
+or accepted here. All F01–F16/native120 requirements and the unlimited goal remain
+open and active.
