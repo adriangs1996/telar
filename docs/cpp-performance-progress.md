@@ -9374,3 +9374,73 @@ The next investigation will count actual render work in the same 100-action
 scenario before changing another cache/call structure. Accepted GUI `bc55d0e8`
 and the four preserved runtime source hashes remain unchanged. B stays rejected;
 all F01–F16/native120 requirements and the unlimited goal remain open.
+
+## Render-work census of the split typing regression, 2026-11-04
+
+`tools/build_render_work_probe.py`, `render_work_census.c/.h` and
+`render_work_report.py` add a private legacy-Metal operation census around the
+ordinary typing probe. Counters run only between its existing measured
+boundaries. A lock makes category pairs and the final snapshot coherent; there
+is no observer thread or per-event log. The analyzer rejects incomplete/schema
+errors, unclassified requests, missing native work and unsupported Metal4.
+Private GUI source hooks must also demonstrate terminal synchronization and row
+work. Callback counts are not display cadence and pass counts are not draw calls.
+Neither this probe nor the source hooks establish neutral timing overhead.
+
+`out-perf/dlls-splits-render-work-01` retains the builds, hook sources, manifests,
+original/generated source restoration and summary. Native ARM64, ASan/UBSan
+(leak detection off), and translated-x86 integer/concurrency controls pass:
+eight workers, exact paired counts, concurrent stop, inactive boundaries,
+restart, overflow and invalid enum rejection. These controls do not depend on
+the translated thread clock that failed the previous CPU experiment. Three
+report tests with 15 corrupted-input controls pass. A separate injected-symbol
+control passes and its uninjected negative control fails as intended.
+
+The unmodified accepted A `bc55d0e8` and rejected B `ab2efd4a` run three
+alternating pairs of exactly 100 inputs plus 20 warmups in four splits.
+`/tmp/telar-perf-splits-render-work-metal-01` passes all 14 host boundaries,
+maximum load1 1.86083984375. Commits, render passes, IOSurface passes, drawable
+returns and positive presentation callbacks coincide within each run:
+A `[103, 105, 103]`, B `[104, 104, 105]`. Offscreen passes, nil returns,
+zero-time callbacks and Metal4 counters are zero. No software hooks are present.
+This does not show a substantially larger frame volume in B or explain its CPU
+regression.
+
+Private source-instrumented A `aa358d5c` and B `f72aaa26` additionally count
+terminal synchronization, repainted rows, text chunks, spans, mesh operations,
+classified glyph requests and tab layout/model updates. Each matches its own
+uninstrumented reference byte-for-byte in a settled full-window four-split PNG;
+all four images have SHA256 `ea6c64606637ad762dc86a5fac1e1558b3d61d5027a59c9fd75209bd71f2afdb`.
+The source witnesses pass. These images do not establish animated equivalence.
+
+`/tmp/telar-perf-splits-render-work-source-01` completes another three alternating
+pairs, 14 host boundaries, maximum load1 3.697265625. No own builds/tests overlap
+either census series. Counts below are per 100 measured inputs, in pair order:
+
+| Operation | A | B |
+|---|---|---|
+| Commits / IOSurface passes / positive callbacks | 103, 103, 103 | 104, 104, 104 |
+| Terminal sync / repainted rows / text chunks | 100 each run | 100 each run |
+| Optical paint / rebuild | 100 each run | 100 each run |
+| Optical spans / requests / hits | 3900 each run | 3900 each run |
+| Optical rasterizations / residency reuse / mesh create or reuse | 0 | 0 |
+| Standard text requests | 8, 8, 6 | 24, 29, 22 |
+| Standard text mesh creations | 3, 4, 3 | 6, 7, 6 |
+| Tab layout / typed reconciliation / typed updates | 0 | 0 |
+
+The fixture changes the background of one space. The terminal path still visits
+39 spans per repainted row, but all optical requests hit and emit no text meshes.
+Thus cold optical mask reuse and typed tab reconciliation do no useful work in
+this measured interval. B has extra standard interface text work in these runs;
+its identity and contribution to the original CPU regression remain unproved.
+Counts alone cannot assign the loss to allocation, Qt conversion or code
+placement. B remains rejected. A separate source/assembly lead is that empty
+masks acquire a temporary shared reference before the null-image check; this
+avoidable work can be tested independently without assuming spaces are always
+empty in every font.
+
+All 16 owned runtime shutdowns (12 census runs plus four image runs) and resource
+capture cleanup checks pass. Production source and GUI binary restore exactly to
+`bc55d0e8`; the four pre-existing runtime source hashes remain unchanged. Only
+diagnostic tools and this report are retained. All F01–F16/native120 requirements
+and the unlimited goal remain open.
