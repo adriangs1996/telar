@@ -7236,3 +7236,76 @@ an oracle preserving text, geometry, highlights, delivered identities and full
 native output before implementation or acceptance. This remains a candidate
 lead, not a demonstrated global allocation cause. All F01–F16 remain open and
 the persistent objective stays active.
+
+## Retained history-line roles rejected, 2026-11-04
+
+`out-perf/dlls-history-line-roles-01` tested bounded line retention against accepted
+GUI `a88e53a8`, with unchanged runtime `1f1849d1` and helper `87beebb0`.
+Candidate GUI `c863fa6b` retained at most ten owned UTF-8/UTF-16 lines per row,
+published independent text/geometry/match model roles, and suppressed unchanged
+match notifications. This avoided rebuilding aggregate line maps and invalidating
+static QML bindings for query-only changes. It did not cache search results.
+
+The oracle preceded implementation: two new tests failed against the old model
+while its existing query-measurement test passed. The candidate passed all 41
+software component cases, eleven selected native component cases and all 36
+native history cases. Typed fields matched the unchanged legacy snapshots across
+Unicode, wrapping, expansion and viewport clipping; query-only notifications
+contained only changed match roles. Full native `gb` and `GST` captures matched
+accepted A byte-for-byte in RGBA. Focused clang-tidy passed after enum/include
+fixes that left the GUI binary identical. The actual final layout source also
+compiled for x86-64 baseline and v3; no x86 or Linux GUI execution is claimed.
+
+ARM64 disassembly separates the query-only match loop from static line projection.
+The new loop still constructs match records, compares variants and emits model
+notifications; it is not allocation-free. The lifetime-preserving QByteArray copy
+uses reference-count atomics. This is a work-avoidance experiment, not evidence
+that RAII or allocations globally explain the C++/Zig gap.
+
+Two six-pair alternating series used the same strict native observer, fixture,
+templates and 300 ms minimum query-start interval. The second also delivered
+characters at 45 ms intervals. Both qualified all 26 outer host boundaries
+(maximum load1 4.221191 whole-query, 2.167969 burst), offered-rate, final-result,
+callback, focus, geometry and cleanup checks. No owned build, test or profile
+overlapped timing. Raw series are
+`/tmp/telar-perf-history-line-roles-whole-pairs-01` and
+`/tmp/telar-perf-history-line-roles-burst-pairs-01`.
+
+Medians of six run summaries; CPU is per completed query/burst and burst latency
+begins at the final delivered character.
+
+| Workload / metric | Accepted A | Candidate B | B lower |
+| --- | ---: | ---: | ---: |
+| Whole mean latency (ms) | 103.970483 | 103.496949 | 4/6 |
+| Whole p95 latency (ms) | 114.768322 | 115.688980 | 2/6 |
+| Whole p99 latency (ms) | 119.031233 | 121.062710 | 2/6 |
+| Whole GUI CPU (ms) | 30.059567 | 28.430919 | 6/6 |
+| Whole combined CPU (ms) | 32.814684 | 31.231382 | 6/6 |
+| Whole GUI instructions (M) | 80.392130 | 72.557096 | 6/6 |
+| Burst mean latency (ms) | 104.070558 | 104.111353 | 1/6 |
+| Burst p95 latency (ms) | 113.454134 | 116.609447 | 0/6 |
+| Burst p99 latency (ms) | 115.507380 | 119.351879 | 0/6 |
+| Burst GUI CPU (ms) | 39.345905 | 37.368823 | 6/6 |
+| Burst combined CPU (ms) | 42.052715 | 40.160812 | 6/6 |
+| Burst GUI instructions (M) | 100.636539 | 85.594249 | 6/6 |
+
+**Rejected under the frozen contract:** burst mean/p95/p99 meet its consistent
+loss threshold despite CPU wins in both workloads. The nearly equal median mean
+does not negate the p95/p99 losses. Their cause is not established; no identical
+disassembly placement exception was demonstrated. The GUI end-footprint medians
+were 254076308/258459028 bytes for whole queries and 254215536/255370608 for
+bursts. Memory concessions remain permitted; memory is not this rejection's
+reason. A longer retention/churn diagnostic was therefore not run.
+
+The candidate, new oracles, patch, binaries and logs remain in ignored private
+scratch. Only this experiment's production/test edits were restored; preexisting
+runtime cadence work was preserved. No independent-stack, complete F12 or
+native120 acceptance follows. All F01–F16 and the persistent objective remain open.
+
+Restoration passes the original 39 software component cases. Recompiling produces
+accepted GUI `a88e53a8` byte-exactly after restoring the original QML resource
+timestamp through RCC; only resource metadata, the derived Mach-O UUID and code
+signature had initially differed. Source hashes match the frozen pre-experiment
+files. The next diagnostic will separate wire response, drawable submission and
+presentation stages; it is not a continuation of acceptance testing for this
+rejected candidate.
