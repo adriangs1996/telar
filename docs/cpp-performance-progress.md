@@ -7813,3 +7813,86 @@ must be measured separately. These are private component results,
 not accepted production or native application performance. The earlier rejected
 role and pane-retention variants remain rejected. The unlimited goal remains
 active with the complete flow, visual and native120 requirements still open.
+
+## 2026-11-04: stable tab QObject presentations rejected on native latency
+
+The `dlls-tab-presentation-objects-01` candidate was integrated temporarily on
+`f9082686e`, preserving the unrelated dirty runtime pacing work. It separates
+semantic tab content from typed geometry on stable QObjects. Animated geometry
+updates avoid rebuilding the positioned nine-field QVariantMap and rebinding
+unchanged content. The complete legacy `record` role remains available lazily.
+It does not cache hidden pane surfaces or remove caption measurement, and does
+not reinstate the previously rejected field/scalar-role candidates.
+
+The configured Release GUI, Qt 6.12 and LLVM 23.1.4 on this M1 Pro/macOS 26.6.2
+produced candidate GUI `e4aea9301639238e9a24f1531aea5f4c687304b6a060a1cdeea4c06c39576804`.
+Accepted A remains `a88e53a81bbf7d96e8547f9a92e1b2be2d98e9bfddd1c69095422ab330ec37c8`;
+both use runtime `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`
+and helper `87beebb065f0ea4274492eaadecea2ccef7cdedc28f36049bf61ecc21214924f`.
+Source copies, hashes, original QML timestamps, commands and rejected binaries
+remain in the ignored experiment prefix. No runtime source was changed.
+
+Validation before timing:
+
+- The private ASan/UBSan randomized map/model and live QML retirement oracles
+  passed; dependency libraries remain uninstrumented. The integrated Qt test,
+  chrome test and tab activity scene test passed. Focused changed-source
+  clang-tidy passed after correcting four diagnostics.
+- Seventeen Cocoa/Metal functional cases passed: switching, viewport, workspace
+  visibility, close/split, drag cancellation/reordering, palettes, nested splits,
+  fullscreen strip, configuration ownership/reload and native window reopen.
+  The first reopen run failed because the private controller acknowledged only
+  the initial native window ID. Cocoa recreated it on show. A controller that
+  continues acknowledging newly observed windows owned by the same test PID
+  passes with unchanged product/test code; both receipts remain archived.
+- Settled complete 1600x1000 captures are byte-exact A/B for a single pane,
+  four splits and four tabs. This is not animated equivalence or native120
+  acceptance. Instrumented QML checks verify 240 geometry changes do not rebind
+  content; one semantic change notifies once.
+- ARM64 disassembly of both rebuild functions and candidate reconcile/update
+  was inspected. The candidate publishes typed geometry and individual signals;
+  semantic map comparison, key lookup and allocation on insertion remain.
+  This is not an instruction-count or cross-platform performance claim.
+
+`/tmp/telar-perf-tab-presentation-pairs-01` contains six alternating native
+A/B pairs, 100 measured plus 20 warmup inputs each, four independent 30 Hz
+producers, the qualified first-input phase policy, opaque matched font/config,
+1600x1000 backing pixels and an 82x21 terminal grid. All twelve target/content,
+publication-rate, initial phase and owned-runtime cleanup checks passed.
+All 26 host boundaries qualified; maximum one-minute load was 4.03125, below
+5. No owned builds, functional tests or profiles ran during this series.
+Frozen binaries and source hashes were rechecked unchanged afterward.
+
+| Metric | Accepted A median | Candidate B median | B wins |
+|---|---:|---:|---:|
+| p50, ms | 43.225 | 45.315 | 2/6 |
+| p95, ms | 49.198 | 49.166 | 2/6 |
+| p99, ms | 49.357 | 49.522 | 3/6 |
+| maximum, ms | 52.457 | 49.891 | 6/6 |
+| GUI CPU, ms/action | 30.290 | 28.637 | 5/6 |
+| GUI lifetime peak RSS, MiB | 192.086 | 204.297 | 3/6 lower |
+
+**Rejected:** the predeclared target requires at least 5/6 wins in both GUI CPU
+and p95. CPU passes, p95 does not. The near-equal median p95 cannot substitute
+for paired consistency. The latency outcome's cause is not established.
+The observed memory increase is not the reason for rejection. RSS is process
+peak memory, not summed GUI/runtime memory; runtime CPU accounting remains open.
+No extra typing-regression or independent Zig timing was run after this failed
+target. Linux/x86 GUI checks and a separate peak census of deferred retired
+QObjects also remain unperformed; no acceptance depends on them.
+
+A separate eight-second, 1 ms interval A/B `sample` diagnosis covers 91/88
+switches; both 240-action diagnostic workloads pass content/rate/phase checks.
+Those timings are excluded from acceptance. Inclusive main-thread observations,
+with nested repeats removed within each category, are: tab rebuild 198/98,
+QML var writes 79/30, variant associations 60/29 and QML binding update 137/77.
+Caption measurement remains 20/25. Categories overlap and include observer/wait
+samples; these are neither allocation counts nor CPU percentages. The profile
+is consistent with less tab/QML work but does not explain the p95 outcome.
+
+The rejected implementation and its tests are preserved privately; production
+source is restored, and rebuilding after regenerating the stale raw QML resource
+reproduces accepted GUI hash `a88e53a8` byte exactly. The restored chrome and tab
+activity scene tests pass. The unlimited goal stays active. Full F01-F16, independent
+complete-stack wins and continuous native120 remain open. This experiment narrows
+the allocation/conversion hypothesis without promoting it to a universal cause.
