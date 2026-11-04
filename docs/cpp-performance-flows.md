@@ -220,6 +220,35 @@ whole-frame parity or native120 acceptance.
 
 ## Deliverables and later optimization
 
+For the discrete scrollback baseline, build
+`python3 tools/build_scroll_probe.py out-perf/scroll/probe`. Run the copied
+`gui_tui_latency.py` with independent `--mode telar` executables, explicit
+`--cpp-gui`, `--cpp-runtime`, matching `--config`, `--source`,
+`--endpoint presented` and `--cases single`. The last option selects the one-pane
+layout; results and aggregates are named `scroll`, with
+`input_method=native_discrete_wheel`. Other layouts, images, throughput and text
+input are rejected. Keep ordinary host-load, process identity, geometry, focus,
+VSync and cleanup checks, plus separate runtime resources and loaded Qt receipts.
+
+`scroll_bench_fixture.py` writes 4,096 deterministic ASCII rows once, with a
+CRC-protected identity packet in every row. It requires stable geometry and an
+idle primary pane. After initial presentation, the native probe dispatches one
+non-precise AppKit wheel event per input, advancing three rows upward. Each
+positive drawable presentation must contain the exact expected top-row packet;
+`scroll_bench_report.validate_scroll` also verifies the corpus receipt, origin,
+ordered timestamps and every warmup/measured observation. This uses native view
+dispatch, not a physical trackpad or a runtime scroll command. Run
+`test_scroll_bench.py` and `test_tab_switch_packet.py`; qualification also includes
+native controls that suppress wheel dispatch or request the wrong row identity.
+
+This is partial F06 support: it does not certify every intermediate body pixel,
+continuous cadence, precise/momentum scrolling, selection, reverse scrolling or
+return to live output. Optional `--capture` captures the initial viewport only;
+its gray witness modifies the top live row, which upward-only inputs never revisit.
+Keep the static full-terminal comparison separate from per-input packet checks.
+The corpus population is outside measured GUI input CPU but inside the wider
+runtime resource interval. No timing from profiling or capture runs is accepted.
+
 Fresh setup, coverage gaps and current experiments are tracked in
 [cpp-performance-progress.md](cpp-performance-progress.md).
 

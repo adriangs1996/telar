@@ -5334,7 +5334,7 @@ and the existing seven-pair component contracts remain mandatory.
 | F03 | Native keyDown to verified presented marker | Full-stack pairs; Unicode/combining/cursor/paste variants |
 | F04 | Fixed-rate fixture, ASCII/ANSI DSR and runtime probes | Unicode, final-content oracle, concurrent input and resource evidence |
 | F05 | TUI/terminal fixtures | Deterministic full TUI trace and presentation cadence |
-| F06 | Native wheel injection, terminal scroll probes | Continuous scrollback/selection/live-return content and cadence |
+| F06 | Native discrete wheel to exact top-row packet; stationary 4,096-row corpus and six independent-stack pairs | Continuous scrollback/selection/live-return content and cadence; complete intermediate body parity |
 | F07 | Four splits and fixed-rate background load | All producers active, fairness and cadence |
 | F08 | Native previous-tab to verified target generation, four 30 Hz producers | Baseline latency/CPU regression; workspaces, complete content, cadence and separate resources |
 | F09 | Native resize and blur controls | Continuous window/divider motion, clipping, matched backgrounds |
@@ -11480,3 +11480,92 @@ runtime files verify unchanged, and all 34 owned shutdown receipts pass, includi
 the discarded pixel attempts. Only findings are committed; the rejected candidate
 and component oracles stay archived privately. All F01–F16/native120 acceptance
 remains open and the persistent goal stays active.
+
+## 2026-11-05: discrete native scrollback baseline and row-work lead
+
+`out-perf/dlls-scroll-qualification-01`, based on `0456cdc93`, adds reusable partial
+F06 support without changing either application. Accepted C++ GUI remains
+`bc55d0e8`, runtime `1f1849d1`, helper `87beebb0`, pinned QtGui `abd4bdf7`;
+independent Zig remains `6ccf7948`. All four pending runtime files verify unchanged.
+The setup is optical JBM15, 1600×1000, scale2 and an 82×21 terminal on the same
+M1 Pro host. The persistent all-flow/native120 goal remains active.
+
+The new fixture populates 4,096 stationary ASCII rows with unique identity/CRC
+packets, then acknowledges terminal parsing with DSR. Its 894,730-byte payload has
+SHA256 `022fb8f538cfc698f2a7d8874edcf219432add59acc905ebc07c6f7b9cb7908a`.
+The first visible row is 4,076. Each direct native AppKit discrete-wheel dispatch
+moves three rows upward; the native Metal readback requires the exact new top-row
+packet on a drawable with a positive presentation timestamp. It retains the
+ordinary focus, geometry, VSync and timeout checks. This is not physical-device
+input, precise/momentum scrolling, selection, return-to-live or continuous cadence.
+The parser validates the corpus receipt, owner, grid, origin, every expected and
+observed row, and monotonically ordered input/presentation timestamps.
+
+Five new fixture/validator tests and six existing packet tests pass, including
+stale/wrong/repeated rows, malformed geometry/identity, timestamps and checksums.
+Native negative controls in `/tmp/telar-perf-scroll-negative-01` suppress wheel
+dispatch or offset the expected row by one. Both fail at the intended two-second
+input watchdog with no accepted GPU/presentation samples; both owned shutdowns
+pass. Six host boundaries qualify, maximum load1 1.96436. The final generated CLI
+also completes both stacks, verifies matching grids, emits `scroll` aggregates and
+records the native wheel input method. Its two shutdowns pass and seven host
+boundaries qualify, maximum load1 1.29639. Unsupported workloads fail before launch.
+
+`/tmp/telar-perf-scroll-baseline-01` completes six alternating 100-input/20-warmup
+pairs with the v2 native probe. The inherited result case label was still `single`;
+`interaction=scroll_up`, `input_method=native_discrete_wheel` and the external exact
+row validator establish the distinct workload. Later builder changes correct CLI
+labels, aggregation and source receipts, integrate validation, and reject other
+workloads; they do not change the native event/readback path. Validator type
+hardening and builder edits during the series did not modify the already loaded
+validator or frozen native probe. No own builds, tests or profiles overlap timing.
+
+| Discrete upward scroll, independent stacks | Zig median | C++ median | C++ lower |
+|---|---:|---:|---:|
+| p50 ms | 37.175 | 30.874 | 6/6 |
+| p95 ms | 45.920 | 40.529 | 6/6 |
+| p99 ms | 48.659 | 44.841 | 6/6 |
+| Maximum ms | 49.697 | 46.102 | 5/6 |
+| GUI CPU ms/input | 5.032 | 5.008 | 5/6 |
+| GUI peak RSS MiB | 132.078 | 205.172 | 0/6 |
+| Runtime CPU ms/run | 77.999 | 84.337 | 0/6 |
+
+All 12 native row sequences, grid/resource/Qt identity checks and shutdowns pass.
+All 26 host boundaries qualify, maximum load1 2.74902. Runtime CPU includes GUI
+launch, corpus population, warmup, measured input and GUI exit; it excludes runtime
+startup/shutdown and child CPU. It cannot be attributed to scroll input alone or
+summed with the GUI's narrower interval. The memory difference is reported, not an
+automatic rejection of a faster algorithm. These observations are a bounded
+baseline, not complete F06 acceptance or a new optimization win.
+
+Separate 240-input/20-warmup diagnostics in
+`/tmp/telar-perf-scroll-profile-01` collect ten-second GUI/runtime `sample` profiles
+for both stacks after corpus readiness. All four sample commands succeed. Both
+native sequences/resources/Qt identities/shutdowns pass; six host boundaries
+qualify, maximum load1 2.44580. C++ profiles contain `TerminalScene::paintRow`, Qt
+scene rendering/upload, and runtime terminal projection. Runtime application
+samples are sparse; their inclusive counts do not establish CPU shares or explain
+the wider runtime CPU difference. Profiling does not contribute acceptance timing.
+
+`/tmp/telar-perf-scroll-pixels-01` captures the initial viewport before upward input.
+All 21 row packets match their expected identities, including the explicit gray
+capture witness on the initial top row. The complete terminal rectangle
+(120,84)–(1596,924) is pixel-exact across stacks. The full windows differ at 4,732
+pixels with maximum channel difference141, outside that terminal rectangle; no
+full-window parity claim is made. Both subsequent native sequences and shutdowns
+pass; six host boundaries qualify, maximum load1 2.22412. This static capture does
+not certify intermediate scrolling body pixels. Raw PNG hashes and all final
+checks are in the private `final-validation.json`.
+
+The next algorithmic lead is reusing displaced terminal rows. A three-row movement
+in this 21-row viewport leaves 18 rows with the same content at different positions.
+The current scene uses position-based revisions and rebuilds changed rows;
+scrolling forces runtime projection and supplies changed positional contents.
+A bounded previous-cell snapshot could prove exact overlap and permit row-node
+reuse, trading memory and comparisons for less text/background reconstruction.
+This differs from the rejected same-position snapshot revision and whole-pane
+retention candidates. Before implementation, it needs an independent fresh-scene
+pixel oracle covering translations, clipping, styles, Unicode, selection, cursor,
+appearance, resize and unrelated pane snapshots. Transform/shader behavior and
+actual saved work remain to be demonstrated. No production change is accepted by
+this baseline, and all complete-flow/native120 requirements remain open.
