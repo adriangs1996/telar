@@ -169,6 +169,43 @@ LinkTarget requireLinkTarget(std::string_view text) {
   return *target;
 }
 
+constexpr std::uint16_t scroll_columns = 8;
+constexpr std::uint16_t scroll_rows = 7;
+
+std::array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> scrollCells(std::uint32_t offset) {
+  constexpr std::size_t palette_size = 16;
+  constexpr std::array<std::string_view, 10> symbols{"M", "g", "A", "f", "j", "e\xcc\x81", "\xe2\x94\x80", "\xe2\x96\x88", "\xce\xa9", " "};
+  static constexpr std::array<Byte, 3> wide_text{0xe7, 0x95, 0x8c};
+  constexpr std::array<std::uint16_t, 5> attributes{
+      0,
+      static_cast<std::uint16_t>(CellAttribute::bold),
+      static_cast<std::uint16_t>(CellAttribute::italic),
+      static_cast<std::uint16_t>(CellAttribute::inverse),
+      static_cast<std::uint16_t>(CellAttribute::strikethrough),
+  };
+  std::array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> cells;
+  for (std::size_t row = 0; row < scroll_rows; ++row) {
+    const auto identity = offset + row;
+    for (std::size_t column = 0; column < scroll_columns; ++column) {
+      auto &cell = cells[(row * scroll_columns) + column];
+      const auto text = symbols[(identity + column) % symbols.size()];
+      cell = Cell{};
+      cell.text = byteView(text);
+      cell.style.flags = attributes[(identity + column) % attributes.size()];
+      cell.style.background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(identity % palette_size)}};
+    }
+
+    auto &wide = cells[(row * scroll_columns) + 2];
+    wide.text = wide_text;
+    wide.width = CellWidth::wide;
+    auto &continuation = cells[(row * scroll_columns) + 3];
+    continuation.text = {};
+    continuation.width = CellWidth::continuation;
+  }
+
+  return cells;
+}
+
 class SceneItem final : public QQuickItem {
 public:
   SceneItem(const TerminalPresentation &frame, QQuickItem *parent)
@@ -199,6 +236,17 @@ public:
   void setColumns(std::uint16_t columns) {
     frame_.bounds.setWidth(frame_.font.cell.width() * columns);
     setWidth(frame_.bounds.width());
+    update();
+  }
+
+  void setGrid(std::uint16_t columns, std::uint16_t rows) {
+    frame_.bounds.setSize({frame_.font.cell.width() * columns, frame_.font.cell.height() * rows});
+    setSize(frame_.bounds.size());
+    update();
+  }
+
+  void useFreshScene() {
+    fresh_scene_ = true;
     update();
   }
 
@@ -243,6 +291,11 @@ public:
 
 protected:
   QSGNode *updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *update_data) override {
+    if (fresh_scene_) {
+      const std::unique_ptr<QSGNode> discarded{previous};
+      previous = nullptr;
+    }
+
     frame_.scale = window()->devicePixelRatio();
     frame_.owner = this;
 
@@ -265,6 +318,7 @@ protected:
 private:
   TerminalPresentation frame_;
   std::optional<std::vector<BackgroundRectangle>> reference_backgrounds_;
+  bool fresh_scene_ = false;
 };
 
 class SceneFixture {
@@ -313,31 +367,44 @@ public:
   }
 
   void setCells(std::span<const Cell> cells, Cursor cursor) {
-    constexpr std::size_t encoded_capacity = 1024;
+    setGrid(cells, static_cast<std::uint16_t>(cells.size()), cursor, {.total_rows = 1});
+  }
+
+  void setGrid(std::span<const Cell> cells, std::uint16_t columns, Cursor cursor, Scroll scroll) {
+    constexpr std::size_t encoded_capacity = 8192;
+    if (columns == 0 || cells.empty() || cells.size() % columns != 0) {
+      throw std::invalid_argument{"Scene fixture requires a complete grid"};
+    }
+
     std::array<Byte, encoded_capacity> encoded{};
     const auto run = CellRunCodec::encode(cells, encoded);
     const std::array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
-    const std::array<Byte, 1> flags{};
+    const std::vector<Byte> flags(cells.size() / columns);
     PaneFrame frame;
     frame.pane_id = 1;
     frame.frame_id = ++frame_id_;
-    frame.cols = static_cast<std::uint16_t>(cells.size());
-    frame.rows = 1;
-    frame.scroll.total_rows = 1;
+    frame.cols = columns;
+    frame.rows = static_cast<std::uint16_t>(flags.size());
+    frame.scroll = scroll;
     frame.cursor = cursor;
     frame.text_metadata = TextMetadata{.row_flags = flags};
     frame.spans = spans;
     const auto previous_columns = screen_.columns();
+    const auto previous_rows = screen_.rows();
     if (screen_.apply(frame) != FrameApplication::applied) {
       throw std::runtime_error{"Scene fixture rejected its snapshot"};
     }
 
-    if (previous_columns != frame.cols) {
-      item_.setColumns(frame.cols);
+    if (previous_columns != frame.cols || previous_rows != frame.rows) {
+      item_.setGrid(frame.cols, frame.rows);
       resizeWindow();
     }
 
     item_.update();
+  }
+
+  void useFreshScene() {
+    item_.useFreshScene();
   }
 
   void moveCursor(std::uint16_t column) {
@@ -559,6 +626,58 @@ class SceneTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void scrolledStandardRowsMatchFreshScene() {
+    checkScrolledRows(false);
+  }
+
+  Q_SLOT static void scrolledOpticalRowsMatchFreshScene() {
+    checkScrolledRows(true);
+  }
+
+  static void checkScrolledRows(bool optical) {
+    constexpr std::uint16_t oversized_pixel_height = 80;
+    constexpr std::uint32_t history_rows = 100;
+    constexpr std::uint8_t full_strength = 255;
+    constexpr auto replacement_palette_color = Color::rgb(0x4860a2);
+    enum class Step : std::uint8_t { palette = 8, narrow = 10, restore_width = 11, oversized = 12 };
+    constexpr std::array<std::uint32_t, 14> offsets{80, 77, 74, 77, 80, 0, 3, 6, 93, 90, 87, 86, 85, 88};
+    SceneFixture retained{CursorShape::block, false};
+    SceneFixture reference{CursorShape::block, false};
+    reference.useFreshScene();
+    for (auto *fixture : {&retained, &reference}) {
+      fixture->setFontRendering(optical, optical ? full_strength : 0);
+    }
+
+    for (std::size_t step = 0; step < offsets.size(); ++step) {
+      const auto offset = offsets[step];
+      const auto cells = scrollCells(offset);
+
+      const CellSelection selection = step % 3 == 0 ? CellSelection{.anchor = 5, .head = 30} : CellSelection{};
+      const Cursor cursor = step % 4 == 0 ? Cursor{.visible = true, .x = 2, .y = static_cast<std::uint16_t>(step % scroll_rows), .shape = CursorShape::block} : Cursor{};
+      for (auto *fixture : {&retained, &reference}) {
+        fixture->select(selection);
+        fixture->setGrid(cells, scroll_columns, cursor, {.total_rows = history_rows, .offset = offset});
+        if (step == static_cast<std::size_t>(Step::palette)) {
+          fixture->setPaletteColor(2, replacement_palette_color);
+        }
+
+        if (step == static_cast<std::size_t>(Step::narrow)) {
+          fixture->setVisibleColumns(scroll_columns - 1);
+        }
+
+        if (step == static_cast<std::size_t>(Step::restore_width)) {
+          fixture->setVisibleColumns(scroll_columns);
+        }
+
+        if (step == static_cast<std::size_t>(Step::oversized)) {
+          fixture->setRasterPixelHeight(oversized_pixel_height);
+        }
+      }
+
+      QVERIFY2(retained.capture() == reference.capture(), qPrintable(QStringLiteral("Scroll step %1 must match a newly constructed scene").arg(step)));
+    }
+  }
+
   Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows_data() {
     QTest::addColumn<bool>("optical");
     QTest::newRow("standard") << false;

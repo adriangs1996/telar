@@ -11569,3 +11569,32 @@ pixel oracle covering translations, clipping, styles, Unicode, selection, cursor
 appearance, resize and unrelated pane snapshots. Transform/shader behavior and
 actual saved work remain to be demonstrated. No production change is accepted by
 this baseline, and all complete-flow/native120 requirements remain open.
+
+The follow-on `out-perf/dlls-scroll-row-reuse-01` prepares the oracle before the
+production candidate. `scene_test.cpp` now compares a persistent scene against a
+scene destroyed and freshly constructed for each update. Both standard and optical
+text cover 14 viewport positions: upward/downward movement, large jumps and live
+bottom, combining and wide characters, box glyphs, styles, selection/cursor,
+palette changes, clipped columns and oversized raster height. The fixture now
+supports multiple rows. The initial test incorrectly gave a hidden cursor nonzero
+coordinates; the protocol correctly rejects it. Correcting that fixture produces
+pixel-exact results. Both complete scene suites pass 53 cases on software and Metal.
+After the final enum-storage lint fix, both new cases are rerun on both backends.
+
+Full actual-TU clang-tidy reports three existing diagnostics, independently
+reproduced on the frozen pre-change test with its own generated MOC: uninitialized
+BackgroundRectangle scalar members, the earlier Qt `_data` method's required
+suffix, and its non-const QFETCH variable. The final additions introduce no further
+diagnostics; the profile and thresholds are unchanged. This is not a clean whole-TU
+lint claim. Raw attempts, builds and baseline/final lint outputs remain private.
+
+Source inspection confirms a constraint on the proposed optimization:
+`TextProjection::quad` intersects glyph ink with the terminal clip before writing
+geometry. Moving an already clipped mesh cannot recover discarded ink. Row reuse
+therefore needs proof of unclipped original/destination ink and exact pixel
+translation, or a different representation that preserves it. A private contract
+records bounds, exact cell comparison, pane/appearance/grid invalidation, row order,
+selection/cursor and cache lifetime controls still required. No row-reuse candidate
+is implemented or accepted yet. The production GUI remains byte-exact `bc55d0e8`,
+and the four pending runtime files remain untouched. Work continues from this oracle
+with all complete F01–F16/native120 acceptance open.
