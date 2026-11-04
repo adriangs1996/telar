@@ -8941,3 +8941,108 @@ eviction with active readers, close/reopen and exact-image oracles must precede
 fresh target pairs and typing controls. The accepted flush remains unchanged;
 no production residency candidate is applied yet. Unrelated runtime work is
 preserved, F01–F16/native120 remain open, and the unlimited goal stays active.
+
+## Bounded optical-mask residency rejected by typing, 2026-11-04
+
+`out-perf/dlls-optical-glyph-residency-01` tests the preceding lifetime finding
+against accepted GUI `bc55d0e8`, with unchanged runtime `1f1849d1` and helper
+`87beebb0`. Before implementation, the whole-cache retention plan was replaced:
+keeping an active cache across unrelated pane lifetimes could accumulate glyphs
+toward its existing 4096-entry/4 MiB limit. The candidate instead keeps a separate
+window-owned store of at most 128 masks and 64 KiB of alpha, for the latest
+font-set/rasterization identity. Each active cache keeps its original independent
+limits and admits only requested glyphs. Eviction drops window ownership while
+active readers retain their references; scene-graph invalidation clears retained
+ownership directly on the render thread. GPU textures, fonts, hash storage and
+references held by active scenes are additional memory, not covered by the alpha
+limit. Standard glyphs do not use the store.
+
+The ownership/bounds oracle passes before integration, while the consumer-gap
+oracle fails with `consumer gap rasterized a new mask`. After integration, it
+proves reuse after the active cache expires, separation across windows, font and
+strength changes, reader survival after eviction, entry/byte limits, oversized
+bypass and invalidation. A 72-case matrix covers three strengths, two heights,
+three glyphs including a space, and four styles; masks/geometry match a fresh
+cache in a separate window without residency. A separate native oracle draws a
+real texture into the framebuffer, closes/reopens twice and verifies destruction
+on its creation/render thread after actual scene-graph invalidation. ASan/UBSan
+passes both test translation units, including the new header implementations;
+linked Qt/other GUI libraries are not sanitizer builds and leak detection is off.
+
+Four focused CTest entries pass, including the existing 432-case optical oracle,
+chrome text and scene tests. All 17 native window/tab/split/drag/palette/configuration
+cases pass. Three settled full-window PNGs match A byte-for-byte in
+`/tmp/telar-perf-optical-glyph-residency-pixels-02`. New test/header lint passes;
+application/terminal translation units retain only the unchanged
+`config/callback.hpp:13` redundant-alias diagnostic. This is not a clean global
+lint claim. Native validation is macOS/arm64; no cross-platform acceptance follows.
+
+An initial untimed draft `197c65ba` passed the oracles but its by-value insertion
+helper introduced a temporary: standard/optical stack frames grew from 288 bytes
+to 352/432. Passing the existing glyph by rvalue reference restores both to 288.
+The measured candidate is `64a75208b3150ca7662ac43ed968cce4af59ebded9c324d955a388babcc09f34`;
+both drafts and source snapshots remain private. Final ARM64 code returns on an
+active-cache hit before consulting window residency. A residency hit bypasses
+optical rasterization, alpha allocation/copy/conversion and texture creation.
+Standard glyph code retains 328 decoded instruction lines but changes register
+scheduling around insertion; optical lookup also saves/restores an extra register
+pair. The binaries are not instruction-identical, and no placement exemption is
+established. These observations do not prove the cause of the later regression.
+
+`/tmp/telar-perf-optical-glyph-residency-pairs-01` completes six alternating native
+switch pairs, 100 measured plus 20 warmup actions per run, four 30 Hz producers,
+1600x1000 viewport and 82x21 grid. Content, phase, offered rate and presentation
+checks pass. All 26 host boundaries qualify; maximum load1 is 3.25048828125.
+No own builds/tests/profiles overlap timing.
+
+| Discrete tab switch | A median | B median | B wins/6 |
+|---|---:|---:|---:|
+| p50 ms | 38.906 | 31.396 | 6 |
+| p95 ms | 42.799 | 35.004 | 5 |
+| p99 ms | 43.844 | 36.752 | 6 |
+| maximum ms | 45.023 | 39.564 | 6 |
+| GUI CPU ms/input | 28.236 | 24.697 | 6 |
+| GUI lifetime peak RSS MiB | 206.109 | 191.797 | 5 |
+| Runtime CPU ms | 381.872 | 362.435 | 5 |
+| Runtime lifetime maximum footprint MiB | 20.297 | 19.922 | 4 |
+
+Runtime instructions/cycles improve 6/6. Runtime counters bracket GUI startup,
+warmup and measured work, excluding runtime startup/shutdown and child CPU;
+footprint is a lifetime maximum, not an interval peak. These resource scopes
+must not be summed with GUI RSS.
+
+The mandatory typing controls in
+`/tmp/telar-perf-optical-glyph-residency-regressions-01` complete six alternating
+pairs for each layout. All 50 host boundaries qualify; maximum load1 is
+4.81640625, below the fixed limit of 5. No series was excluded for load.
+
+| Typing control | A median | B median | B wins/6 |
+|---|---:|---:|---:|
+| Single p50 ms | 24.905 | 25.559 | **0** |
+| Single p95 ms | 32.523 | 31.753 | 4 |
+| Single p99 ms | 34.490 | 34.532 | 3 |
+| Single maximum ms | 36.841 | 35.766 | 4 |
+| Single GUI CPU ms/input | 3.994 | 4.206 | **1** |
+| Four-split p50 ms | 25.239 | 25.440 | 3 |
+| Four-split p95 ms | 33.046 | 33.105 | 4 |
+| Four-split p99 ms | 37.077 | 36.948 | 5 |
+| Four-split maximum ms | 38.279 | 41.611 | **1** |
+| Four-split GUI CPU ms/input | 4.400 | 4.358 | 3 |
+
+Single/split runtime CPU wins 3/6 and 4/6; instructions win 2/6 and 1/6,
+cycles 2/6 in both. GUI RSS wins 3/6 in each layout. The variant is rejected by
+single-pane median/CPU and split maximum losses despite its target gain. Memory
+is not the rejection reason. Cause is not established, and the result is not
+reclassified as noisy or placement-only. No candidate lifetime census or
+independent Zig timing follows this rejection, so production rasterization counts
+and a Zig-stack win are not claimed.
+
+All 48 owned shutdown receipts across the two pixel series, target pairs and
+typing controls pass, as do the separate resource-capture cleanup checks. Four
+modified GUI files are restored with original timestamps, and the three new
+candidate files are withdrawn into the frozen private source snapshot. Reconfigure
+and dependency rebuild produce exactly accepted `bc55d0e8` again. Unrelated dirty
+runtime sources remain untouched. The next experiment will test separating cold
+glyph admission from the hot lookup while retaining bounded mask reuse; it must
+pass fresh oracles and all paired controls. F01–F16/native120 remain open and the
+unlimited goal remains active.
