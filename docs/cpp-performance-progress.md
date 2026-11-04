@@ -7181,6 +7181,12 @@ all wider flow and native120 gates remain open.
 
 ## Independent short-burst comparison and GUI profile, 2026-11-04
 
+Later endpoint-order controls below narrow the latency interpretation: Zig can
+prepare the matching `gb`/`GST` region from prefix-query results before receiving
+the final reply. These latencies describe first matching visible pixels, not
+final-query round-trip completion. The resource census and original functional
+gates remain observations of this offered workload; they do not close full F12.
+
 `/tmp/telar-perf-history-burst-cross-stack-pairs-01` completes six alternating
 independent-stack pairs using the qualified strict-timer observer. Each run
 offers 60 alternating `GST`/`gb` bursts, 45 ms between characters and at least
@@ -7338,3 +7344,84 @@ changing Qt render-loop/update-idle settings previously supplied no accepted
 large gain; those experiments must not be silently repeated as new findings.
 The rejected line-role candidate remains rejected, the accepted production GUI
 remains `a88e53a8`, and native presentation scheduling remains an unresolved lead.
+
+## Burst endpoint ordering corrected, 2026-11-04
+
+The previous goal turn made progress by rejecting line-role retention and
+restoring accepted production. This continuation rechecked HEAD `5b2f3465f`,
+the active unlimited objective, the unchanged accepted binaries and Zig build
+inputs. It found a qualification gap while investigating presentation stages,
+before changing any production scheduling policy.
+
+Qt's installed-source Metal backend presents from a scheduled handler under its
+display lock; Zig's Metal4 path submits, signals the drawable and calls present.
+These differences alone do not explain native latency. The earlier private
+inline-bindings Qt source differs from the installed source only in that unrelated
+experiment; its presentation section is unchanged. Earlier drawable-pool and
+standalone scheduled/command controls already supplied no accepted large gain.
+Reanalysis of the old standalone control retains all five zero timestamps per
+policy; its37 positive frames show completion-to-presentation medians around
+20–21 ms in both policies. It remains a different, historical diagnostic workload.
+
+The first independent60-query phase trace aborts inside the Zig observer. A
+private message-only reproduction identifies the exact bound:512 retained
+diagnostic frames after52 trials. Cleanup succeeds. That incomplete series is
+not aggregated. A fresh24-query trace for each stack keeps the same512-frame
+limit and all native/cadence guards, with maximum host load1 2.272949.
+
+`out-perf/dlls-history-cross-stack-phases-02` shows22/24 Zig matching drawables
+committed before the final query reply was forwarded; C++ has0/24. None in this
+undelayed diagnostic presents before the reply. Zig rows compute highlights from
+the current prompt, and preceding `g`/`gb`/`GS` results can already contain the
+command selected by the final `gb`/`GST` query. Thus the old region can match
+without rendering the final reply. A linear input/query/reply/commit breakdown
+correctly rejects the resulting negative reply-to-commit intervals.
+
+The control in `out-perf/dlls-history-final-reply-control-01` delays only final
+`gb`/`GST` replies by500 ms, leaves prefixes immediate, and spaces query starts by
+900 ms. Both stacks pass all12 trials, cadence, focus, drawable, callback and
+cleanup checks; all host boundaries qualify, maximum load1 1.989746. Every Zig
+endpoint now commits **and presents before** its final reply; every C++ endpoint
+follows its reply. Diagnostic median visible-region latencies are27.555771 and
+608.707042 ms respectively. These are a negative endpoint-order control, not
+performance measurements. Early correct rendering is not a product bug, nor
+does this disprove the prior CPU census. It narrows the old burst latency claim
+to first matching visible pixels, excluding final-query completion and full F12.
+Whole-query replacement and the C++-only rejection remain separately scoped.
+
+`out-perf/dlls-history-final-command-endpoint-01` captures independent full native
+templates for fuzzy queries `gb1` and `gs0`. Their final characters change command
+content in the same bounded region; the existing fixture's displayed selected
+build command changes from target4996 to1996, for example. These captures do not
+prove cross-renderer optical/ranking parity. With final replies delayed500 ms,
+all12 endpoints per stack commit after their uniquely identified final reply.
+Both offered rates and all host boundaries pass, maximum load1 2.613770. Bracketed
+clock alignment uncertainty is below125 ns.
+
+In that diagnostic, mean input-to-query intervals are64.084222 ms for C++ and
+0.214087 ms for Zig; query-to-reply intervals are2.369049/13.126142 ms. After the
+intentional relay delay, reply-to-commit means are9.559958/1.834365 ms and
+commit-to-presentation means27.200698/29.747076 ms. These instrumented single
+runs identify stages, not speedups or causal attribution. They redirect the next
+latency investigation toward query admission and delivered GUI work; they do not
+justify replacing Metal presentation policy or restoring a rejected admission
+prototype. No fresh six-pair baseline for the new case is claimed yet.
+
+The reusable [endpoint verifier](../tools/check_history_endpoint.py) checks
+request identity, successful response kind, relay ordering, matching drawable,
+bounded before/after clock alignment, final-reply ordering, offered rates,
+presentation guards, host qualification and cleanup. It always reports
+`performance_eligible=false`; ordering alone cannot prove causation. The native
+driver now records clock brackets only for trace/frame diagnostics and explains
+diagnostic-capacity aborts. The observer guide distinguishes reply-dependent
+completion from legitimate cached/anticipatory updates.
+
+`out-perf/dlls-history-endpoint-verifier-01` exercises the final reusable tools on
+eight delayed queries each: new C++ and Zig cases qualify, and old Zig `gb`/`GST`
+correctly fails the reply-dependent check. All eight host boundaries qualify,
+maximum load1 1.867188. Seventeen mutations also reject missing/duplicate/failed
+replies, wrong drawable pixels, invalid clocks/order, rate failure, dropped/zero
+frames, disabled synchronization, pending callbacks, host failure, relay errors
+and incomplete cleanup. CLI help and diff checks pass. Production GUI/runtime
+remain accepted A; unrelated runtime cadence edits are preserved. All F01–F16,
+observer perturbation, optical parity and native120 requirements remain open.

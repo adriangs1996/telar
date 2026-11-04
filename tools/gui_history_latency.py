@@ -6,9 +6,13 @@ Metal/Metal4 readback. Supply a standalone SQLite fixture, shared configuration,
 and a case JSON containing viewport, drawable, region and two {text, template}
 entries. Templates must come from independently checked result captures; this
 observer does not establish ranking correctness or cross-renderer visual parity.
+During bursts, prefix results can already contain the final command. Matching
+pixels alone do not prove receipt of the final query reply; qualify a distinct
+final-command case with delayed final replies before making that claim.
 """
 
 import argparse
+import ctypes
 import hashlib
 import json
 from pathlib import Path
@@ -26,6 +30,20 @@ from bench_stack import executable_identity, process_identity, runtime_identity,
 from native_runtime_resources import interval, snapshot
 from perf_e2e import isolated_environment, stop_runtime
 from history_query_trace import HistoryQueryTrace
+
+DIAGNOSTIC_CLOCK_READINGS = 10
+
+
+def clock_brackets():
+    native_clock = ctypes.CDLL('/System/Library/Frameworks/QuartzCore.framework/QuartzCore').CACurrentMediaTime
+    native_clock.restype = ctypes.c_double
+    readings = []
+    for _ in range(DIAGNOSTIC_CLOCK_READINGS):
+        before = time.monotonic_ns()
+        native = native_clock()
+        after = time.monotonic_ns()
+        readings.append(dict(monotonic_before_ns=before, ca_seconds=native, monotonic_after_ns=after))
+    return readings
 
 
 def save(path, value):
@@ -183,6 +201,10 @@ def main():
                     observer_sha256=capture.sha(output / 'observer.dylib'),
                     config_sha256=capture.sha(output / 'gui.lua'), fixture_sha256=capture.sha(Path(env['TELAR_HISTORY'])))
     save(output / 'manifest.json', manifest)
+    clock_alignment = None
+    if options.diagnostic and (options.trace_history or delays):
+        clock_alignment = dict(before=clock_brackets())
+        save(output / 'clock-calibration.json', clock_alignment)
     host = HostLoadGate(output / 'host-load.json', options.max_load)
     with host.run('native-history'):
         process = None
@@ -311,6 +333,9 @@ def main():
                 save(directory / 'cleanup.json', cleanup)
                 assert all(cleanup[key] for key in ('cleanup_complete', 'children_exited', 'exited'))
     host.finish()
+    if clock_alignment is not None:
+        clock_alignment['after'] = clock_brackets()
+        save(output / 'clock-calibration.json', clock_alignment)
 
 
 if __name__ == '__main__':

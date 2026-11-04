@@ -387,8 +387,8 @@ are native points. Template paths are relative to the case file unless absolute.
   "drawable": [3200, 2000],
   "region": [320, 1592, 512, 48],
   "queries": [
-    {"text": "gb", "template": "selected-build.bgra"},
-    {"text": "GST", "template": "selected-status.bgra"}
+    {"text": "gb1", "template": "selected-build-with-one.bgra"},
+    {"text": "gs0", "template": "selected-status-with-zero.bgra"}
   ]
 }
 ```
@@ -402,6 +402,27 @@ The `callback` control withholds one drawable completion while allowing a later
 verified result, and checks that the driver still refuses to advance. Positive
 trials require all submitted drawables to finish both pixel and presentation
 callbacks. ROI rows are aligned for Metal transfer and compared without padding.
+
+For bursts, also establish that the last character changes returned command
+content. A prefix reply can already contain the selected command, whose highlights
+then follow the current input before the final reply arrives. The `gb`/`GST`
+pair exhibits this in Zig: it measures the first matching visible region,
+not final-query reply completion. Excluding the query field is insufficient.
+Use `--trace-history --diagnostic --delay-history QUERY=500` to delay each final
+query while leaving prefixes immediate, and verify that the first matching
+drawable is submitted only after the corresponding final reply is forwarded.
+Keep enough query-start spacing for delayed replies and retain all existing
+endpoint/cadence guards. Relay/frame-capture runs are diagnostic only. Diagnostic
+frame retention is capped at512; use a short bounded qualification workload,
+and never treat a capacity-aborted run as a performance result.
+The `gb1`/`gs0` example needs independent qualification with your fixture too.
+Trace diagnostics write `clock-calibration.json`, bracketing the native and Python
+clocks before and after the run. Run `python3 tools/check_history_endpoint.py RUN`
+to check request identity, matching drawable, final-reply order, clocks, cadence,
+host load and cleanup. It rejects the old prefix-derived endpoint and does not
+classify legitimately cached or anticipatory rendering as a product bug. Its
+contract is specifically final-reply-dependent completion, not all useful visible
+updates. This diagnostic verifier never supplies performance acceptance.
 
 ```sh
 python3 tools/gui_history_latency.py out-history-query \

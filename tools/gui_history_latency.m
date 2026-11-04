@@ -374,6 +374,7 @@ static void record_frame_impl(HistoryFrame *frame) {
   }
   if (diagnostic && started && !finished) {
     if (diagnostic_frames.count >= MaximumDiagnosticFrames) {
+      fprintf(stderr, "history observer: diagnostic frame capacity reached (%lu/%u) after %lu trials\n", (unsigned long)diagnostic_frames.count, MaximumDiagnosticFrames, (unsigned long)trials.count);
       abort();
     }
     [diagnostic_frames addObject:frame];
