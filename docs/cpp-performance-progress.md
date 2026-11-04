@@ -10487,3 +10487,66 @@ report are retained. The next investigation should identify work that can be
 skipped before pursuing another storage substitution; no unverified caching
 proposal is accepted here. All F01–F16/native120 requirements and the goal remain
 open.
+
+## 2026-11-04 — Vertex-input reconstruction has no observed whole-state reuse
+
+The next source audit at `2effb4b73` finds `QRhiMetal::setVertexInput` constructing
+contiguous generic buffer/offset batches before comparing them to its cached
+state. Host buffer writes and in-use tracking must still occur on any cache hit;
+`executeBufferHostWritesForSlot` copies pending content and clears updates without
+replacing buffer handles. A preconstruction comparison is therefore a plausible
+lead, but its usefulness depends on actual repeated state.
+
+`out-perf/dlls-metal-vertex-reuse-01` tests that premise without implementing an
+optimization. It extracts the accepted Qt compile/link arguments, recompiles only
+`qrhimetal.mm` into private output and links all other original objects unchanged.
+Relinking the unmodified object reproduces both the build QtGui and, after the
+original rpath installation edit, the accepted installed QtGui byte-for-byte.
+Neither original source, objects nor installed libraries are overwritten. Both
+stages retain GUI `bc55d0e8`, runtime `1f1849d1` and helper `87beebb0`.
+
+The private diagnostic extends the existing measured-interval render observer.
+It records complete calls, changed/unchanged cached state, binding totals and
+empty/single-binding shapes. The final D2 also records cached buffer-batch,
+offset-batch and firstVertexBinding comparisons, plus offset-only changes.
+Comparisons inspect complete batches, including their start/count, not solely
+resource pointer identity. Final diagnostic QtGui SHA256 is
+`def5afd224b4d547f7214854ffe85e786568c98c7c200f6344517c4e4d58ad5a`.
+Its counters add locking and comparisons; no diagnostic timing qualifies a win.
+The sampled heap results from the previous experiment identify the call site,
+not its share of CPU or this proposed cache's hit rate.
+
+The initial visual series is discarded in full when load1 reaches5.14307 at its
+last boundary. Its logs remain at `/tmp/telar-perf-metal-vertex-pixels-01`.
+The expanded observer passes all six TUI/single/split PNGs against both A/B and
+accepted references in `...-pixels-02`. `...-counts-01` then runs100 measured
+inputs after20 warmups in each condition, optical JBM15,1600×1000/scale2. All
+four cases use the accepted independent runtime; the three background producers
+in split-load each satisfy the unchanged0.125MiB/s±5% contract.
+
+| Case | Vertex-input calls | Total bindings | Changed buffer batches | Changed offset batches | Changed first binding | Unchanged / offset-only calls |
+|---|---:|---:|---:|---:|---:|---:|
+| TUI | 4,815 | 9,630 | 4,815 | 2,743 | 660 | 0 / 0 |
+| Single typing | 1,664 | 3,328 | 1,664 | 1,248 | 624 | 0 / 0 |
+| Four splits | 4,120 | 8,240 | 4,120 | 3,708 | 1,339 | 0 / 0 |
+| Split-load | 36,880 | 73,760 | 36,880 | 33,192 | 11,986 | 0 / 0 |
+
+Every observed call has at least two bindings, and the totals equal two per call.
+There are no complete cache hits or offset-only updates in these runs. That
+removes the evidence for adding the proposed early cache check to these flows;
+it does not prove such hits impossible in every application or reject an
+unimplemented optimization on timing. The next distinct investigation is
+upstream scene grouping with per-vertex background colors, preserving original
+rectangle geometry/order and using exact-representation/software fallbacks.
+It must pass the independent background oracle before ordinary paired timing.
+
+`tools/metal_vertex_report.py` validates the observer extension alongside the
+existing render-census contract. It rejects disconnected hooks, malformed schemas,
+invalid call/shape partitions and impossible change unions/offset-only counts.
+Two tests include13 negative evidence controls. Actual rows pass the same report;
+A's intentionally absent source hook fails its connected-observer requirement.
+The qualified pixel/count series pass14/18 host boundaries, maximum load1
+2.72559/2.49414. All20 owned runtime/child shutdowns across qualified and discarded
+series pass. Framework receipts, original Qt source/library, accepted binaries and
+all four pending runtime hashes are rechecked. No production optimization is
+promoted. All F01–F16/native120 requirements and the unlimited goal remain open.
