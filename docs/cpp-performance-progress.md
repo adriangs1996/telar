@@ -6223,3 +6223,71 @@ to component controls and prospectively checks full-snapshot means and runtime
 tails. It must pass its own oracles and paired measurements. This is not a
 reclassification of the adverse first experiment. F01–F16, independent Zig
 comparison and native120 acceptance remain open.
+
+## Conditional natural merging: singleton control rejects, 2026-11-04
+
+`out-perf/dlls-history-natural-merge-02` restores the accepted static comparator
+and `std::sort` whenever top-k selection has used a heap. Natural-run merging
+applies only before heap selection, with a local typed comparator wrapper.
+The new 15,000-entry shuffled control is a SQLite backup of the previous owned
+runtime fixture after verified cleanup. The accepted A source and binaries
+remain byte-exact. No first-variant timings are reused as acceptance evidence.
+
+Fresh independent reference/exact checks pass 936 evaluations (324 large and
+612 expanded; repeated small snapshots remain evaluations). Release and
+ASan/UBSan helper oracles each pass 46,490 cases. Scoped metadata, allocation
+failure and zero-live-storage checks pass on both 13,312- and 6,912-entry
+fixtures, including x86 baseline/v3 under Rosetta. On the heap fixture A/B
+both use 30 allocations, 485,472 bytes and 485,120 incremental peak bytes;
+all 32 injected failures recover. On the nonheap fixture B uses 31 calls,
+706,656 bytes and 701,248 peak bytes versus A 30 / 485,472 / 485,120;
+all 34 B failures recover. x86 metadata has the expected extra eight bytes.
+History, HistoryQueue and HistoryCapacity, with the new ordering/page cases,
+pass on both A and B. Dependency archives/system SQLite remain uninstrumented.
+
+Comparator census is unchanged on both heap fixtures: 1,551,857 calls for
+100,000 monotonic entries and 245,570 for 15,000 shuffled entries. Nonheap
+counts retain the first variant reductions. ARM64 has a 175-instruction merge
+helper with inline comparisons and paired 128-bit record copies. Its 10,144-
+byte stack frame is established before the internal less-than-two guard.
+The heap introsort retains 690 instructions and 47 indirect comparator call
+sites. This does not establish identical whole-query code or a placement
+exemption. The full runtime builds as
+`8a7b00e9cd99809734b24a37500bd9adc170b6f931520309178934164b4d30a0`,
+but is not timed after the component rejection.
+
+The first 16 complete seven-pair component series have 480 qualified host
+boundaries, maximum load1 1.967773, and exact responses. Each run has
+300 queries for at most 15,000 entries, or 32 for the 100,000-entry heap case.
+
+| Component | A CPU ms | B CPU ms | CPU / mean / p95 wins |
+| --- | ---: | ---: | --- |
+| shuffled-heap-all | 2.183163 | 2.177543 | 6 / 5 / 4 |
+| shuffled-heap-distinct | 2.536950 | 2.527003 | 5 / 4 / 4 |
+| shuffled-heap-GST | 2.563227 | 2.566200 | 3 / 3 / 2 |
+| ordinary-gb | 1.245100 | 1.217003 | 7 / 7 / 6 |
+| ordinary-GST | 1.281570 | 1.260447 | 7 / 7 / 7 |
+| ordinary-all | 0.962497 | 0.939857 | 7 / 7 / 6 |
+| duplicates | 0.939163 | 0.920557 | 6 / 6 / 6 |
+| no-match | 1.191620 | 1.171460 | 7 / 7 / 7 |
+| shuffled | 1.393177 | 1.066403 | 7 / 7 / 7 |
+| reverse | 0.945740 | 0.930123 | 7 / 7 / 7 |
+| tied | 0.964463 | 0.948050 | 5 / 5 / 5 |
+| heap | 12.427750 | 12.401781 | 5 / 5 / 3 |
+| late-disorder | 0.959033 | 0.946837 | 7 / 7 / 7 |
+| middle-disorder | 0.962073 | 0.953627 | 6 / 6 / 6 |
+| end-disorder | 0.959113 | 0.946773 | 7 / 7 / 5 |
+| small-distinct | 0.008773 | 0.008900 | 1 / 1 / 1 |
+
+Singleton CPU rises by about 127 ns and wins only 1/7; mean and p95 also win
+1/7. The predeclared early-stop rule rejects this candidate after that complete
+series. Empty, shuffled-distinct, heap-distinct, long and old controls are
+unmeasured, not passes. Full-runtime and native promotion do not run. The prior
+heap regression is therefore not declared resolved by these component results.
+
+The successor adds a caller-side zero/one-candidate guard to avoid entering the
+merge helper at all. Assembly establishes that this avoids work; it does not
+establish how much of the preceding timing loss it caused. New measurements
+put singleton and empty controls first and retain every other control and the
+prospective larger-runtime per-case/tail criteria. Accepted production code
+remains unchanged; F01–F16 and independent Zig/native120 gates remain open.
