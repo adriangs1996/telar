@@ -175,6 +175,15 @@ resource adapter's stop-boundary snapshot; report that wider runtime scope.
 Current visual differences and diagnostic qualification are in the progress
 report. They must not be hidden by treating the marker alone as full F05 parity.
 
+For a producer-boundary control, build a separate harness with
+`python3 tools/build_tui_bench_probe.py out-perf/tui/coalesced --write-mode coalesced`.
+It combines the same body, marker and cursor bytes into one `write_all` call per
+draw. Short writes and separate PTY reads remain possible. Receipts explicitly
+label this diagnostic; the shared timing report rejects it for ordinary workload
+acceptance. The default `split` mode preserves the original producer behavior.
+Run `tools/test_tui_coalesced_fixture.py` to check byte-stream equivalence across
+input, capture, resize and short-write cases before using the control.
+
 The private render-work census (`tools/build_render_work_probe.py OUT`) also
 exports commit counts by input epoch. Use
 `render_work_report.analyze_sequences(census, warmup, measured_samples)` to

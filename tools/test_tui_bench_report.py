@@ -15,6 +15,14 @@ def receipt():
 
 
 class TuiReportTest(unittest.TestCase):
+    def test_diagnostic_write_mode_is_preserved(self):
+        trace = receipt()
+        trace['write_mode'] = 'coalesced'
+        self.assertEqual(validate_screen(trace, trace['expected_text'], 43)['write_mode'], 'coalesced')
+        trace['write_mode'] = 'unknown'
+        with self.assertRaisesRegex(ValueError, 'write mode'):
+            validate_screen(trace, trace['expected_text'], 43)
+
     def test_exact_text_after_partial_updates(self):
         trace = receipt()
         for suffix in ("", "\n"):

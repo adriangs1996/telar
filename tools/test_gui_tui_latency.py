@@ -30,6 +30,11 @@ class GuiComparisonTest(unittest.TestCase):
             path = Path(directory) / 'comparison.json'
             path.write_text(json.dumps(dict(runs=[run])))
             self.assertEqual(len(load_runs([path])[0]), 1)
+            diagnostic = copy.deepcopy(run)
+            diagnostic['tui_validation']['write_mode'] = 'coalesced'
+            path.write_text(json.dumps(dict(runs=[diagnostic])))
+            with self.assertRaisesRegex(ValueError, 'Diagnostic TUI write mode'):
+                load_runs([path])
             for field, value in [('tui_validation', None), ('foreground_workload', 'marker'),
                                  ('tui_validation', dict(passed=False, workload='ascii-tui-v1', sequence=2)),
                                  ('tui_validation', dict(passed=True, workload='ascii-tui-v1', sequence=1))]:

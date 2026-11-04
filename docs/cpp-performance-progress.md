@@ -9773,3 +9773,69 @@ work depends on those boundaries. That changes producer behavior and must remain
 a labeled diagnostic, not a production optimization or an easier acceptance
 workload. No causal scheduling claim or new optimization is accepted here. All
 F01–F16/native120 complete-flow requirements and the unlimited goal remain open.
+
+## Byte-equivalent TUI producer control, 2026-11-04
+
+The next diagnostic changes only the producer's write boundaries. New
+`tools/tui_coalesced_fixture.py` combines the ordinary body, marker and final
+cursor buffers into one `write_all` call. This is not an atomic-output guarantee:
+short writes may require several system calls, and the consumer may read separate
+pieces. Capture still writes its separate witness first. The original TUI fixture
+and production application code are unchanged.
+
+The byte-stream oracle compares 510 draws across five geometries, repeated input,
+full/reset transitions and capture. Bytes and trace models match exactly; ordinary
+draw calls decrease from three to one and capture calls from four to two. Forced
+short writes of one, seven and257 bytes preserve the complete stream. All12 TUI
+and20 shared-harness tests pass. The builder exposes `--write-mode coalesced` and
+records that mode in its manifest and validated receipt. The shared timing loader
+rejects this diagnostic workload; older ordinary receipts retain their original
+meaning through the default `split` mode.
+
+Artifacts and the frozen controller are in `out-perf/dlls-tui-write-control-01`.
+Both modes use accepted GUI `bc55d0e8`, runtime `1f1849d1`, helper `87beebb0`, the
+same optical JBM15 configuration, native1600×1000 viewport/backing scale2 and
+82×21 PTY. In `/tmp/telar-perf-tui-write-control-pixels-01`, both full-window PNGs
+match the previous ordinary TUI baseline byte-for-byte. Final text checks pass.
+Three alternating diagnostic pairs,100 measured inputs plus20 warmups per run,
+in `/tmp/telar-perf-tui-write-control-pairs-01` produce:
+
+| Producer | Commits across three runs | Extra partial commits | Extra full commits | Extra reset commits |
+|---|---|---:|---:|---:|
+| Original split writes | 113 / 114 / 109 | 10 | 21 | 5 |
+| Coalesced draw buffer | 112 / 109 / 110 | 10 | 15 | 6 |
+
+Full/reset epochs with multiple commits are23/39 and20/39 respectively. Extra
+commits persist in both modes; this small diagnostic does not establish producer
+write boundaries as their cause or constitute a performance acceptance result.
+Commit attribution records the observed input epoch, including inter-input work,
+not the causal origin or contents of each frame.
+
+A separate pair in `/tmp/telar-perf-tui-write-readback-01` enables the existing
+native readback log. All100 measured epochs are represented, geometry matches,
+and readback counts equal census commits:110 split and109 coalesced. The split
+run contains five non-marker pixel samples, all in full/reset epochs, plus one
+opposite-color sample in a partial epoch. The coalesced run contains six non-marker
+samples, again in full/reset epochs. Both also contain repeated matching-marker
+samples. Thus one contiguous producer draw buffer does not eliminate intermediate
+non-marker pixels. This observes one marker point, not complete body frames, and
+does not demonstrate where bytes or terminal updates split. Logging perturbs the
+run; its timings remain diagnostic. The parser and exact samples are retained in
+`readback.py` and `readback-summary.json` under the artifact prefix.
+
+The final public builder and generated CLI also pass a native23-input capture run
+in `/tmp/telar-perf-tui-coalesced-public-01`, including exact final text and explicit
+coalesced labeling. Replaying its result through the ordinary report is rejected
+as intended. Across the four series, all host gates qualify; maximum load1 is
+3.70166015625. All11 owned runtime/child shutdowns and resource cleanups pass.
+No own build, tests or profiling overlaps the native series. The accepted GUI and
+all four pre-existing dirty runtime source hashes remain intact.
+
+A useful next observation is the actual PTY read boundary. The accepted runtime
+uses a16KiB buffer and, for one pane, a burst capped at eight reads/64KiB; each
+positive read feeds the terminal before another read. A roughly2.6KiB full TUI
+body does not itself exceed that buffer. Whether kernel readiness/read boundaries
+expose intermediate updates still requires evidence. The allocation/copy/Qt
+conversion hypothesis remains open, and bounded memory tradeoffs remain eligible
+when they demonstrably avoid work. No production optimization is promoted here;
+all F01–F16/native120 complete-flow requirements and the unlimited goal stay open.

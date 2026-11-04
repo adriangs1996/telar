@@ -9,6 +9,9 @@ from tui_bench_trace import FULL_INTERVAL, WORKLOAD, changed_rows, row_text
 
 
 def validate_screen(trace, actual, sequence):
+    write_mode = trace.get("write_mode", "split")
+    if write_mode not in ("split", "coalesced"):
+        raise ValueError("Unknown TUI write mode")
     for key in ("sequence", "columns", "rows", "pid", "pane_id", "pane_generation", "body_bytes"):
         if type(trace.get(key)) is not int or trace[key] <= 0:
             raise ValueError("Invalid TUI identity, dimensions or counters")
@@ -31,7 +34,7 @@ def validate_screen(trace, actual, sequence):
     text = "\n".join("".join(row) for row in expected)
     if trace.get("expected_text") != text or actual not in (text, text + "\n"):
         raise ValueError("Final runtime text differs from the TUI model")
-    return dict(passed=True, workload=WORKLOAD, sequence=sequence, columns=columns, rows=rows,
+    return dict(passed=True, workload=WORKLOAD, write_mode=write_mode, sequence=sequence, columns=columns, rows=rows,
                 text_sha256=hashlib.sha256(text.encode()).hexdigest(),
                 scope="Exact final runtime text only. Does not verify cell styles, all intermediate drawable pixels, cadence or native120.")
 
