@@ -10550,3 +10550,113 @@ The qualified pixel/count series pass14/18 host boundaries, maximum load1
 series pass. Framework receipts, original Qt source/library, accepted binaries and
 all four pending runtime hashes are rechecked. No production optimization is
 promoted. All F01–F16/native120 requirements and the unlimited goal remain open.
+
+## 2026-11-04 — Per-vertex background grouping saves CPU but fails the TUI p95 target
+
+`out-perf/dlls-colored-background-mesh-01` tests a distinct upstream algorithm at
+source `c8a2e6ffb`. Consecutive background rectangles with exactly representable
+opaque8-bit colors become one `QSGGeometryNode` with per-vertex color. Each cell
+keeps its original rectangle bounds and contributes six triangle vertices;
+no borders are merged. Qt's vertex-color material compares equal across colors,
+allowing grouping that flat-color materials cannot share. Software, translucent,
+extended and non-byte-representable colors retain individual rectangles. Encountering
+such a rectangle flushes the accumulated mesh first, preserving scene order.
+The temporary row vector reserves only when first used and reuses its capacity
+across fallback groups, avoiding quadratic storage when groups alternate.
+
+Accepted A is GUI `bc55d0e8`; B is
+`2bd9c7dca9f3f5dbd1a60720d731d865faf03f7e91c3f14c9eeded29b323e287`.
+Both use runtime `1f1849d1`, helper `87beebb0`, original QtGui `abd4bdf7`, and the
+unchanged LLVM23.1.4 Release/O3 build. All private source, patch, build receipts
+and frozen identities remain in the ignored prefix. Production scene code and
+the configured GUI are restored byte-for-byte to accepted A before native timing.
+
+Both full candidate scene suites pass46 cases on software and Metal. A new
+`mixedBackgroundColorsMatchIndependentRectangles` oracle then compares a row of
+wide/continuation cells against fresh independent rectangles, mixing opaque8-bit,
+higher-precision opaque and translucent colors. It covers widths9,9.2,9.1 and
+parent opacities1,.5: six additional comparisons per backend on both A and B.
+Forcing valid nonrepresentable/translucent colors into the mesh fails that exact
+oracle. The initial test nesting exceeds clang-tidy's threshold; moving constant
+palette preparation outside the capture loops fixes it without changing cases.
+The final oracle and negative control are rerun, and scoped test lint passes.
+Candidate production lint passes separately.
+
+The actual translation unit compiles for x86-64 baseline and v3; this is not a
+whole-GUI x86/Linux runtime result. ARM listings show the eligible path constructing
+six colored vertices per rectangle, with a separate group flush allocating one
+288-byte mesh node, creating its geometry/material, copying vertices and appending
+the node. Individual312-byte rectangle construction remains in the fallback.
+Mach-O indirect-symbol tables resolve the allocation/Qt/memmove call sites;
+unresolved disassembler stub labels are not treated as function names. These
+listings establish code paths, not executed allocation totals or CPU attribution.
+
+The first native pixel series is discarded at load1=5.10547 after three runs.
+`/tmp/telar-perf-colored-background-pixels-02` repeats all six TUI/single/split
+captures and matches A/B and accepted full-window PNGs exactly. Every run verifies
+loaded framework paths and hashes after measurement. `...-tui-01` then qualifies
+six alternating ordinary pairs,100 inputs after20 warmups, optical JBM15,
+1600×1000/scale2 and82×21 cells. No own build, test, profiler or census overlaps
+these timings. The frozen contract requires both TUI p95 and GUI CPU to improve
+in at least5/6 pairs, with later single/split/tab/load regression controls only
+if the primary gate passes.
+
+| TUI metric | Accepted A | Mesh B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 25.498 | 24.947 | 4/6 |
+| p95 ms | 33.005 | 35.923 | 2/6 |
+| p99 ms | 37.528 | 37.786 | 2/6 |
+| Maximum ms | 40.972 | 39.936 | 4/6 |
+| GUI CPU ms/input | 4.095 | 3.521 | 6/6 |
+| GUI peak RSS MiB | 226.008 | 218.234 | 3/6 |
+| Runtime CPU ms/run | 77.849 | 79.874 | 3/6 |
+| Runtime instructions/run | 181968779.500 | 181661414.500 | 4/6 |
+| Runtime cycles/run | 158925348.000 | 158797408.000 | 4/6 |
+
+CPU improves in all six pairs, about14% by these medians, but p95 improves in only
+two. That fails the co-primary gate, so B is rejected and further ordinary
+regression series are not run. The p95 change is not a0–1-win consistent loss
+under the separate regression rule; failure to meet the declared primary target
+is sufficient here. Its cause is not established. RSS is not the rejection reason.
+Runtime intervals include setup, warmup, measured inputs and final TUI query,
+exclude runtime startup/shutdown and child CPU, and are not added to GUI CPU.
+The TUI harness/fixture/trace/report sources match the preceding inline-binding
+experiment; comparisons across different host intervals are not substituted for
+these paired results.
+
+A separate mechanism check uses the same diagnostic QtGui `def5afd2` and render
+probe for both GUI variants, with strict loaded-library receipts. Its first
+controller enables a PNG capture while leaving the initial capture wait at zero;
+the probe rejects it with failure19 before any responses. This invalid run is
+retained at `...-census-01` and excluded. Restoring the established200ms initial
+capture wait fixes the controller without changing ordinary timing. The fresh
+`...-census-02` qualifies one100-input pair for TUI and four splits, including
+byte-exact A/B capture comparisons:
+
+| Case | Metal commits A→B | Vertex-input calls A→B | Total vertex bindings A→B |
+|---|---:|---:|---:|
+| TUI | 116→116 | 5,068→4,157 | 10,136→8,314 |
+| Four splits | 103→104 | 4,120→4,264 | 8,240→8,528 |
+
+The TUI saves observed vertex-input calls with equal commit counts. Four splits
+instead move40→41 calls per commit, so the change does not uniformly reduce this
+work across cases. These are instrumented calls, including inter-input work, not
+GPU draw counts, CPU shares or continuous-content cadence. Equal commit totals
+and settled pixels do not prove every intermediate frame equivalent. The census
+cannot override the ordinary p95 rejection.
+
+One next hypothesis is explicit in Qt's source: `QSGVertexColorMaterial` enables
+blending by default, although this fast path emits only opaque vertices. Changing
+that classification may affect opaque-pass ordering, especially differently
+colored overlapping wide cells, and must first receive an independent overlap
+oracle plus parent-opacity checks. The small-background split case also needs
+attention because its per-commit binding calls increase. Neither observation is
+a proven cause or an accepted follow-up optimization.
+
+Qualified series pass14 pixel boundaries (maximum load1=3.58154),26 ordinary
+boundaries (3.42188) and10 census boundaries (3.51514). All26 owned runtime/child
+shutdowns across qualified, discarded and failed series pass; resource observers
+report no errors. `validation.json` checks accepted production source/executables,
+frozen stages, framework receipts and all four untouched pending runtime hashes.
+Only the independent mixed-color oracle and report are retained. All F01–F16 and
+native120 acceptance requirements remain open and the goal stays active.

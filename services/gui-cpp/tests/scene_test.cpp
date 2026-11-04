@@ -415,6 +415,10 @@ public:
     item_.invalidateAppearance();
   }
 
+  void setOpacity(qreal opacity) {
+    item_.setOpacity(opacity);
+  }
+
   void referenceBackgrounds(std::optional<std::vector<BackgroundRectangle>> rectangles) {
     item_.referenceBackgrounds(std::move(rectangles));
   }
@@ -1157,6 +1161,44 @@ private:
       QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));
       fixture.invalidateAppearance();
       QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));
+    }
+  }
+
+  Q_SLOT static void mixedBackgroundColorsMatchIndependentRectangles() {
+    constexpr qreal cell_height = 21;
+    constexpr std::array colors{
+        Color::rgb(0xdc3020),
+        Color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F},
+        Color::rgb(0x2040dc, 0.5F),
+        Color::rgb(0x20dc40),
+    };
+    SceneFixture actual{CursorShape::block, false};
+    SceneFixture reference{CursorShape::block, false};
+    auto row = backgroundRow(BackgroundPattern::wide_overlap, colors.front());
+    for (std::size_t column = 0; column < row.cells.size(); ++column) {
+      const auto index = column % colors.size();
+      row.cells[column].style.background.channels.front() = static_cast<Byte>(index);
+      row.rectangles[column].color = colors[index];
+    }
+
+    for (auto *fixture : {&actual, &reference}) {
+      for (std::size_t index = 0; index < colors.size(); ++index) {
+        fixture->setPaletteColor(index, colors[index]);
+      }
+    }
+
+    for (const auto width : {9.0, 9.2, 9.1}) {
+      for (const auto opacity : {1.0, 0.5}) {
+        for (auto *fixture : {&actual, &reference}) {
+          fixture->resizeCell({width, cell_height});
+          fixture->setOpacity(opacity);
+          fixture->setCells(row.cells, {.visible = false});
+          fixture->setVisibleColumns(background_columns);
+        }
+
+        reference.referenceBackgrounds(row.rectangles);
+        QVERIFY2(actual.capture() == reference.capture(), "Mixed background colors must preserve independent rectangle geometry, precision, opacity and order");
+      }
     }
   }
 
