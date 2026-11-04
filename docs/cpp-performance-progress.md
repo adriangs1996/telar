@@ -7549,3 +7549,94 @@ changed production source is restored to its frozen accepted hash; new private
 headers are removed. The four unrelated runtime cadence edits remain intact.
 The unlimited objective remains active. F01–F16, independent all-flow acceptance,
 optical parity, observer perturbation and native120 remain open.
+
+
+## Lazy history record projection not accepted, 2026-11-04
+
+The previous turn completes a qualified independent final-command baseline and
+rejects ordered admission. This turn starts from `042578b54`, verifies the
+unlimited objective remains active, and tests the next source-backed work lead.
+Accepted runtime `1f1849d1` and GUI `a88e53a8` are frozen again; unrelated runtime
+cadence work remains untouched. No prior rejected renderer/admission is restored.
+
+`out-perf/dlls-history-lazy-records-01` replaces only the GUI history list with a
+bounded owned snapshot model. Each returned UTF8 row and its calendar sample are
+copied before notifications; its Qt record is materialized on first data access.
+Previously materialized positions are compared before emitting updates, while
+unrequested positions may receive conservative change notifications without
+being projected. This retains the existing record role, position-based identity,
+suffix insertion/removal, grouping and retired-row lifetime. It does not retain
+borrowed browser storage or add an unbounded cross-query cache. The existing
+60 ms GUI search wait and runtime executable remain unchanged.
+
+Two new component oracles precede implementation. They compare complete maps
+with the existing eager projection, exercise Unicode, grouping, source lifetime,
+calendar changes, invalid indexes and reentrant removal reads, and prove zero
+projections on publication followed by eight projections for eight requested rows
+of a hundred. All41 component cases and36 native history cases pass. A separate
+512-snapshot reference run with `QAbstractItemModelTester` passes ASan/UBSan;
+independent input/model allocators confirm ownership and complete deallocation.
+Capacity overflow and injected allocation failure preserve the previous page.
+Dependency Qt/Ghostty libraries are not sanitizer-instrumented.
+
+Focused strict clang-tidy on the new model passes. The final implementation uses
+nonassignable snapshot rows with explicit field transfer and suffix destruction;
+its allocator-aware string transfer is not falsely declared noexcept. Initial
+fixture namespace/link and static-analysis development failures are retained.
+Final sources rebuild as GUI `dffb8d0c`, distinct from the first private `83f38287`
+binary, so the full component/native suites and complete native captures are
+repeated. Final `gb1`/`gs0` RGBA captures are byte-exact against A. ARM64 and x86
+baseline/v3 compilation and generated assembly pass; x86 GUI and Linux execution
+remain unqualified. Actual A/B disassembly replaces eager per-row projection in
+`refreshHistory` with snapshot publication; the new model branches around
+projection for unmaterialized rows. This is a work census, not a timing proof.
+
+Two complete six-pair native series use the unchanged10k fixture, qualified
+final-command templates,60 samples per run and at least300 ms query starts.
+The second adds45 ms character bursts. Sources, tools, binaries, helper and
+inputs remain frozen. All rate, focus, content, callback, drawable and cleanup
+gates pass. Each series has26 qualified host boundaries: maximum load1 1.880371
+for whole queries and2.228516 for bursts. No owned build/test/profile overlaps.
+Raw series are `/tmp/telar-perf-history-lazy-records-{whole,burst}-pairs-01`.
+
+| Mode / metric | Accepted A | Lazy B | B wins |
+| --- | ---: | ---: | ---: |
+| Whole: mean latency, ms | 104.438947 | 103.334716 | 4/6 |
+| Whole: p95, ms | 114.860025 | 115.808421 | 3/6 |
+| Whole: p99, ms | 120.393206 | 117.712507 | 5/6 |
+| Whole: GUI CPU, ms/query | 30.808743 | 29.789936 | 5/6 |
+| Whole: combined CPU, ms/query | 33.761352 | 32.558709 | 5/6 |
+| Whole: GUI instructions, million/query | 83.898691 | 81.456411 | 6/6 |
+| Burst: mean latency, ms | 104.738102 | 104.869739 | 3/6 |
+| Burst: p95, ms | 115.111762 | 114.544204 | 4/6 |
+| Burst: p99, ms | 118.018641 | 118.273610 | 4/6 |
+| Burst: GUI CPU, ms/burst | 43.858043 | 42.814283 | 4/6 |
+| Burst: combined CPU, ms/burst | 46.757096 | 45.756361 | 4/6 |
+| Burst: GUI instructions, million/burst | 109.453358 | 107.881106 | 6/6 |
+
+**Do not accept:** the predeclared combined-CPU criterion requires at least5/6
+wins in both workloads; bursts supply only4/6. This is insufficient consistency,
+not evidence of an overall slowdown. Lower instruction counts do not override
+the timing rule. Runtime CPU is3.016734/2.832284 ms per whole query (6/6 B wins)
+and2.914753/2.961681 ms per burst (1/6). Both variants use the same runtime binary;
+there is no runtime code change or isolated causal attribution for these shifts.
+Closed-history single/four-split typing controls are prepared but not started
+after the primary failure. No independent Zig/all-flow/native120 claim follows.
+
+A post-series allocator census uses100 actual build-command strings from the
+owned fixture and requests eight projected rows per update. It records102 owned
+allocations initially, then101 per subsequent replacement, with24,800 live owned
+bytes and eight projections each time. This counts only the model's injected
+allocator, excluding Qt allocations; it neither measures their time nor proves
+a global allocation bottleneck. It identifies a concrete possible refinement:
+retain bounded snapshot buffers rather than reconstructing their UTF8 storage.
+Its benefit still needs an oracle and separate timing. The same census does not
+prove how many records the actual native view requests.
+
+The complete candidate, source/build identities, oracles, captures, three-target
+assembly and both paired series are archived privately. Changed production
+sources are restored to their frozen accepted hashes and the new model header
+is removed. The configured GUI rebuild matches accepted `a88e53a8` byte for byte;
+all39 original component cases pass after restoration. The persistent objective
+remains active, with every F01–F16 full-flow
+acceptance, optical parity, observer perturbation and native120 requirement open.
