@@ -11364,3 +11364,119 @@ include QV4 (2089/1968), QVariant-map operations (1850/1714) and Metal binding b
 The next investigation targets repeated QML value/map conversion work and must
 remain distinct from previously rejected scalar roles and stable QObject tab
 presentations. All F01–F16/native120 requirements remain open; the goal is active.
+
+## 2026-11-05: positioned-tab value representation rejected
+
+`out-perf/dlls-tab-layout-value-01`, based on `15676f658`, tests a Q_GADGET value
+containing the four positioned rectangles, three flags and the original semantic
+tab map. A new `visual` model role supplies this value to TerminalTabs.qml; the
+legacy `record` role constructs its map lazily. Keyed reconciliation, layout
+calculations, ordering and semantic tab consumers remain equivalent. This differs
+from the rejected scalar roles and stable QObject presentations: it has one owned
+value per row, no row QObject, and no per-property notification policy.
+
+Pinned Qt source supports the hypothesis, without establishing its CPU cost.
+`qqmlvmemetaobject.cpp` converts a var property's previous value back to QVariant
+when comparing updates. Detached VariantAssociationObject instances reconstruct
+their native map through `ExecutionEngine::variantMapFromJS`, which enumerates
+properties. The candidate avoids the outer map construction and association
+conversion; it does not remove the inner semantic map or all QML value work.
+
+The private component oracle compares 2,048 seeded reconciliations against
+ListModel, including moves, removal, unchanged rows, notification counts,
+persistent indexes and the 64-row bound. Another runs 240 QML updates with Unicode,
+custom progress values, independent copies, nested mutations and garbage
+collection. An initial destructor assertion fails: both accepted ListModel and
+the candidate retain an Instantiator delegate after model destruction, even after
+event processing. The corrected comparative lifecycle oracle verifies explicit
+row retirement, safe retained values after model destruction, delegate retirement
+when its owner dies, and surviving independent snapshots. All component tests pass,
+including ASan/UBSan over the model, value, generated MOC and test; Qt remains
+unsanitized and leak detection is disabled.
+
+A separate counts-only component diagnostic uses four rows, 100 warmup updates,
+1,000 measured geometry updates and matching QML property bindings. Two alternating
+executions of each representation produce identical counts: 218,067→101,016
+successful allocation calls and 18,717,688→5,588,432 cumulative requested bytes.
+These six-API observations include framework work and omit uncovered allocation
+APIs; they are not live memory, CPU attribution or native performance acceptance.
+`sizeof(TabLayoutValue)` is 144 bytes versus 8 for the map handle, whose external
+tree nodes and QVariant storage are excluded from that size. No memory tradeoff
+is rejected merely for using more inline storage.
+
+Candidate GUI is
+`2971081aaf4a2ccb283b603bd04f5c7ace31fdd680e84bf92815ad786fdc5f3c`;
+accepted GUI remains `bc55d0e8`, runtime `1f1849d1`, helper and Qt unchanged.
+Final clang-tidy passes after adding a direct include and removing a redundant
+local. Actual-TU ARM64 and x86-64 baseline/v3 compilation passes. ARM64 rebuild
+removes nine per-tab map insert call sites and associated QVariant construction;
+counter and semantic-map work remains. Its total fixed stack frame falls
+6,416→6,128 bytes. Linked B confirms the new lowering. No timing conclusion is
+drawn from instruction or stack size alone.
+
+B passes the 16 chrome, 51 scene, 18 chrome-text and 11 tab-activity-scene cases
+on both software and Metal. Native quick tests cover switching, split/close,
+drag reorder, Escape, source closure, viewport/modal interruption and hidden
+counter reveal/drop. The focus-loss case initially fails while another graphical
+suite runs; it passes in isolation. Both results are retained; interference is
+a hypothesis, not a demonstrated cause of that initial failure.
+
+Two complete pixel series are discarded by the unchanged host gate at load1
+5.56152 and 5.86377. All ten owned shutdowns pass. After cooldown,
+`/tmp/telar-perf-tab-layout-value-pixels-03` qualifies: eight single/splits/tabs/TUI
+PNGs match A/B and the accepted references byte-exactly, with 18 host boundaries
+and maximum load1 2.92139. `/tmp/telar-perf-tab-layout-value-tabs-01` then completes
+six alternating 100-input/20-warmup native pairs, four 30 Hz producers,
+1600×1000/scale2, 82×21, optical JBM15 and identical accepted runtime.
+
+| Ordinary native tab switching | A median | B median | B lower |
+|---|---:|---:|---:|
+| p50 ms | 37.814 | 37.670 | 3/6 |
+| p95 ms | 42.665 | 42.878 | 3/6 |
+| p99 ms | 43.687 | 43.935 | 2/6 |
+| Maximum ms | 44.232 | 45.206 | 1/6 |
+| GUI CPU ms/input | 27.732 | 27.519 | 4/6 |
+| GUI peak RSS MiB | 205.922 | 205.422 | 3/6 |
+| Runtime CPU ms/run | 394.445 | 394.169 | 4/6 |
+
+Both frozen co-primary requirements, p95 and GUI CPU winning at least 5/6,
+fail. Maximum latency also loses consistently. Reject B; cause is not established
+and no placement exemption is claimed. Additional regression controls are not
+run after primary failure. All 26 timing host boundaries qualify, maximum load1
+3.04541; content, producer rate/phase, resources, Qt identity and all 12 shutdowns
+pass. No own builds, tests or profiles overlap ordinary timing. Runtime CPU spans
+setup/warmup/measurement and is not summed with the GUI's different interval.
+
+A subsequent diagnostic, `/tmp/telar-perf-tab-layout-value-heap-01`, checks the
+actual application's allocations; it cannot reverse rejection. The unchanged
+counts-only and 1/512 sampled observers both complete 100 native switches per
+variant, with no sample overflow. All four content/rate/phase/Qt/resource and
+shutdown checks pass; ten host boundaries qualify, maximum load1 3.30859.
+
+| Application allocation diagnostic | A | B |
+|---|---:|---:|
+| Counts-only successful calls | 2,625,292 | 2,556,624 |
+| Counts-only cumulative requested bytes | 887,536,396 | 869,941,712 |
+| Sampled successful calls | 2,582,548 | 2,569,991 |
+| Sampled cumulative requested bytes | 880,712,286 | 871,890,284 |
+| Recorded stacks | 4,980 | 4,961 |
+| Depth-limited stacks | 3,032 | 2,982 |
+| Inclusive map-operation samples | 1,783 | 1,351 |
+| Inclusive association-wrapper samples | 1,269 | 899 |
+| Inclusive value-type-wrapper samples | 123 | 494 |
+| Inclusive QV4 samples | 2,102 | 2,116 |
+
+The observed counts-only reduction is about 2.6% across the application diagnostic,
+much smaller than the isolated component's reduction. Overlapping sampled groups
+show less map/association work and more value-wrapper allocation; their counts
+are not CPU percentages or exact population estimates. This supports examining
+how much presentation work can be avoided, rather than treating allocation count
+alone as a proxy for speed. It does not revive earlier rejected cache/retention
+variants or establish the cause of B's latency result. Production source is
+restored. Initial restoration retained stale CMake autogen/raw-QML resources;
+explicit reconfiguration and regeneration of the owned resource reproduce the
+accepted GUI byte-exactly. The restored chrome suite passes, all four pending
+runtime files verify unchanged, and all 34 owned shutdown receipts pass, including
+the discarded pixel attempts. Only findings are committed; the rejected candidate
+and component oracles stay archived privately. All F01–F16/native120 acceptance
+remains open and the persistent goal stays active.
