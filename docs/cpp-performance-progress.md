@@ -10211,3 +10211,78 @@ promoted or declared performance-rejected without ordinary timing. The next heap
 diagnostic should reuse the existing six-API observer and add allocation-site
 attribution plus a probe-overhead control, rather than repeating aggregate counts.
 All complete-flow and native120 requirements remain open and the goal stays active.
+
+## 2026-11-04 — Heap-site samples identify repeated background-node construction
+
+The follow-up in `out-perf/dlls-heap-stack-sites-01` adds reusable Darwin heap
+site tools: `heap_stack_census.c/.h`, `heap_stack_control.c`,
+`build_heap_stack_probe.py`, `heap_stack_report.py` and its tests. The observer
+reuses the previous six-API interposition approach but brackets the measured
+interval explicitly, serializes its counters and samples successful allocations
+by hashed ordinal. The nominal sampling frequency is1/256, with8192 fixed records
+and at most24 return addresses per record. It records requested bytes, API, thread
+identity and monotonic timestamp; it does not track allocation lifetimes or CPU.
+Fork children and observer-recursive allocations are excluded. Overflow or missing
+sample ordinals invalidates the report. Dynamic zone/other uncovered APIs remain
+outside scope. Serialization, stack unwinding and observer locks perturb execution.
+
+Exact five-allocation controls verify344 requested bytes, four non-null frees,
+each covered allocation API once, errno on overflowing calloc/invalid alignment,
+symbolized allocation sites, disabled sampling, child exclusion, concurrent
+callers and overflowing the fixed record capacity. They pass with actual DYLD
+interposition on ARM and x86-64 under Rosetta, and with both combined native-probe
+libraries. The absent-library control returns2. ASan's allocator interposer changes
+the observed totals, so that combined attempt is not accepted; direct wrapper
+calls instead pass ASan/UBSan with intentional allocation failure enabled and leak
+detection disabled. Three Python tests include24 malformed-evidence controls.
+Commands, failed attempts and final receipts remain under the artifact prefix.
+
+The application binaries remain accepted GUI `bc55d0e8` and runtime `1f1849d1`,
+from source base `98f5f1438`; neither application is rebuilt in this pass.
+Final probes are `sampled-v3/probe.dylib` and `counts-v3/probe.dylib`, with source
+hashes and build commands in their manifests. Both run optical JBM15 at1600×1000,
+scale2,82×21 cells. `/tmp/telar-perf-heap-sites-pixels-01` validates all four
+settled full-window PNGs, TUI and typing under both observers, against the accepted
+references exactly. `/tmp/telar-perf-heap-sites-01` then collects100 measured
+inputs after20 warmups in each condition:
+
+| Case | Counts-only successful calls | Sampled-observer successful calls | Counts-only requested bytes | Sampled-observer requested bytes | Recorded stacks |
+|---|---:|---:|---:|---:|---:|
+| TUI | 176,563 | 181,161 | 39,899,988 | 41,682,945 | 722 |
+| Single typing | 48,413 | 42,381 | 9,925,689 | 9,184,093 | 179 |
+
+The different signs of these count changes are not an overhead estimate or an
+optimization result. This is one diagnostic control pair per case, not six-pair
+timing acceptance; native-probe allocations remain included. The sampled TUI has
+300 stacks through `TerminalScene` and308 through `QRhiBatchedBindings`; typing
+has1 and114 respectively. Categories are inclusive and may overlap. TUI has58
+depth-limited records and typing36, so ancestor attribution is incomplete for
+those samples. `dladdr` records image/load addresses and symbols; batched
+`llvm-cxxfilt` demangles them after execution in `attribute.py`/`attribution.json`.
+
+Of the300 TUI scene samples,282 request312 bytes.281 of those carry the exact
+`paintRow` return PC which, normalized to the accepted executable's load address,
+is `0x10002c1b8`. The existing accepted disassembly at that site loads312 into
+the allocation argument, calls `operator new`, constructs `QSGSimpleRectNode`
+and appends it to the background node. The remaining312-byte scene sample is not
+attributed to that call. This connects actual repeated allocations to the source
+path: `paintRow` clears the row's background children, and `paintRun` creates a
+rectangle for each non-default cell background. It establishes the allocation
+site, not its share of CPU or a proven tail-latency cause.
+
+The separate Metal-binding samples are32/48-byte allocations inside Qt's transient
+binding batches. A prior inline-binding experiment already reduced allocation
+counts but lacked a qualified ordinary CPU result; those counts must not be
+re-presented as an accepted optimization. The next distinct application candidate
+will retain and update background rectangle nodes across changed rows, preserving
+individual geometry and ordering, unlike the previously rejected merging variant.
+It must handle shrinking/default backgrounds, geometry changes, transparency and
+software rendering, prove pixels against the independent oracle, then pass ordinary
+TUI pairs and typing/split/load regression controls. No production optimization is
+accepted on the present census.
+
+Both native series qualify all10 host boundaries, maximum load1 2.70850 and
+2.49121 respectively. No build/test/profile overlaps their native observations.
+All eight owned runtime/child shutdowns pass; PID identities, accepted binaries,
+and the four pending runtime hashes are verified in `validation.json`. All
+F01–F16/native120 complete-flow requirements and the unlimited goal remain open.

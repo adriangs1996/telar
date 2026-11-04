@@ -228,6 +228,36 @@ build identities/display mode, current baseline and accepted/rejected optimizati
 Reusable measurement support belongs in source; raw results and captures stay in
 ignored outputs. Keep a concise table of valid cases, failures and unsupported cases.
 
+For Darwin allocation-site diagnostics, `tools/build_heap_stack_probe.py OUTPUT`
+builds the ordinary native typing probe with a bounded six-API heap observer.
+`--counts-only` disables stack capture; `--sample-shift 8` selects successful calls
+by a deterministic hash of their ordinal at nominal1/256 frequency. Use distinct
+output prefixes and the same accepted stack for both controls. The builder does
+not modify or rebuild the application. Pass its `probe.dylib` to the native harness,
+retain ordinary focus/geometry/host-load checks, and qualify full-window pixels
+against the uninstrumented reference. `tools/heap_stack_report.py RESULT_JSON`
+rejects missing/reordered samples, overflow, invalid time bounds and inconsistent
+API/byte totals. It reports sampled call frequencies, not timing or live memory.
+
+The observer covers dynamic malloc/calloc/realloc/free/aligned_alloc/posix_memalign,
+excludes fork children and its own recursive calls, and stores at most8192 stacks
+of24 addresses in fixed memory. It serializes observations and can change both
+scheduling and the amount of application work. Result construction/symbolization
+follow the observation interval. Native probe work remains included; a probe frame
+on a stack does not itself prove that the allocation was caused by the probe.
+Do not use these latencies or scale a few large sampled allocations into exact
+population bytes. Compare with ordinary uninstrumented pairs before acceptance.
+
+`tools/heap_stack_control.c` verifies exact known calls/bytes, errno, allocation
+sites, counts-only mode, child exclusion, concurrent callers and overflow. Compile
+it with `-fno-builtin -fno-omit-frame-pointer` and preload a dylib built from
+`tools/heap_stack_census.c`; absence of that library returns2. For ASan/UBSan,
+compile the control with `-DTELAR_HEAP_STACK_DIRECT_CONTROL` instead of preloading:
+the direct mode checks observer memory/logic without competing allocator
+interposers. Set `ASAN_OPTIONS=detect_leaks=0:allocator_may_return_null=1` for the
+intentional allocation-failure checks. Python validation tests are
+`python3 -m unittest discover -s tools -p test_heap_stack_report.py`.
+
 For native cadence receipts, [native_cadence_report.py](../tools/native_cadence_report.py)
 validates content/producer coverage before applying the fixed-clock checks in
 [native_display_reference.py](../tools/native_display_reference.py). Run it with
