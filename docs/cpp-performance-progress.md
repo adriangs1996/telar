@@ -9839,3 +9839,106 @@ expose intermediate updates still requires evidence. The allocation/copy/Qt
 conversion hypothesis remains open, and bounded memory tradeoffs remain eligible
 when they demonstrably avoid work. No production optimization is promoted here;
 all F01–F16/native120 complete-flow requirements and the unlimited goal stay open.
+
+## PTY read boundaries and intermediate marker pixels, 2026-11-04
+
+New Darwin diagnostic `tools/pty_read_probe.c` observes `read` and `readv` only
+for an exact configured executable and terminal descriptors. The owned runtime
+launcher and daemon get separate bounded shared mappings; fork children are
+excluded by PID. Each record retains syscall entry/return timestamps, requested
+capacity, result, errno and complete returned bytes. Capacity is16,384 records
+plus4MiB of bytes (5,505,088 bytes total mapping). There is no per-read file write,
+but filtering, clocks, locking, copying and page faults perturb execution. This
+is diagnostic instrumentation, not a production memory/performance change.
+
+`pty_read_control.c` verifies6,000 exact bytes across scalar/vectored reads,
+errno preservation, non-terminal pipe exclusion, fork exclusion and invalid-iovec
+EFAULT handling. Plain, observed, deliberately overflowing and wrong-executable
+controls pass on ARM64 and x86-64 under Rosetta; ARM ASan/UBSan also passes with
+leak detection disabled. The initial scalar-only control used3,000 bytes. A
+single blocking producer write cannot be completed synchronously before reading
+on this PTY: the first control attempt timed out before instrumentation. Its
+replacement uses a writer thread and bounded poll waits; no process survived the
+failed attempt. Three Python decoder tests pass, including18 malformed/truncated
+trace controls and five invalid expected identities. Empty, unsealed and overflowed
+traces are rejected. Failed vectored calls intentionally record capacity0 without
+dereferencing potentially invalid iovecs. The wire record does not distinguish
+scalar from vectored calls.
+
+Artifacts, frozen sources/binaries, controllers, byte reconstruction and readback
+parsers are in `out-perf/dlls-pty-read-boundaries-01`. No runtime is rebuilt.
+Accepted GUI `bc55d0e8`, runtime `1f1849d1`, helper `87beebb0` and independent Zig
+`6ccf7948` remain unchanged. All runs use the same optical JBM15 configuration,
+1600×1000 native viewport/backing scale2 and82×21 PTY. Only the owned runtime's
+startup receives the extra library; the native GUI probe is injected separately.
+
+First, scalar-read instrumentation passes two exact settled full-window PNG
+comparisons in `/tmp/telar-perf-pty-read-pixels-01`, using split and coalesced
+producers on the accepted C++ application. A100-measured/20-warmup diagnostic
+pair in `/tmp/telar-perf-pty-read-boundaries-01` reconstructs the entire continuous
+expected byte stream from input8 through120 in both modes. The parser also
+requires the expected runtime PID, a single terminal descriptor, complete byte
+partition and no overflow. Startup bytes outside that verified interval are not
+claimed equivalent. Every request is16KiB; the largest positive return is1KiB.
+
+| C++ producer | Partial inputs in multiple reads | Full/reset inputs in multiple reads | Incomplete inputs interrupted by EAGAIN | Non-marker pixel epochs |
+|---|---:|---:|---:|---:|
+| Split | 38/87 | 13/13 | 9 | 8 |
+| Coalesced | 0/87 | 13/13 | 6 | 6 |
+
+All eight split non-marker epochs and all six coalesced non-marker epochs coincide
+with an EAGAIN between the first and last bytes of that update. The ninth split
+gap is a partial update with an opposite-marker sample. Each run has110 qualified
+commits/readbacks. Multiple reads alone are insufficient: some full updates are
+read completely in the same burst and have no non-marker sample. The coalesced
+control demonstrates that the phenomenon does not require separate body/marker
+producer calls. One sampled pixel is not a full-frame oracle, and instrumentation
+can affect the frequency. This correlation does not yet trace the runtime frame
+publication or prove every extra commit's cause.
+
+Two attempted independent-stack qualifications are excluded, with clean owned
+shutdowns. `/tmp/telar-perf-pty-read-stacks-pixels-01` uses the legacy-Metal census,
+whose queue-identity guard exits75 on Zig after warmup; it cannot supply this
+cross-renderer census. The ordinary native probe supports both renderers and is
+used thereafter. In `...stacks-pixels-02`, native presentation/final text succeed,
+but Zig's scalar-only read trace is empty. This is missing observation, not zero
+PTY work. Adding vectored-read observation and passing its controls resolves that
+coverage gap. `...stacks-pixels-03` qualifies both final probes and produces exact
+PNGs against each application's own prior ordinary-probe reference. Existing
+C++/Zig cross-application visual differences remain open; references are not
+substituted for cross-application parity.
+
+A final independent-stack diagnostic pair in `/tmp/telar-perf-pty-read-stacks-01`
+uses ordinary split writes,100 measured inputs and20 warmups, with the qualified
+read/readv observer and ordinary native readback probe. Both final text/native
+checks and complete expected byte streams8–120 pass. Both runtimes again return
+at most1KiB per observed read. C++ has54 inputs spanning multiple reads (41 partial
+plus13 full/reset), with six EAGAIN-interrupted full/reset inputs. Exactly those
+six epochs have a non-marker sample; its110 readbacks include four additional
+matching samples in partial epochs. Zig has66 inputs spanning multiple reads
+(53 partial plus13 full/reset), no EAGAIN inside those input byte ranges, and120
+readbacks:104 matching, seven opposite-marker and nine non-marker samples. Its
+blocking read interval can include waiting for the next input, so it is not
+comparable to the C++ nonblocking syscall duration. Entry-to-return durations are
+retained separately from first-to-last return spans. Neither application's
+instrumented latency or CPU is eligible for acceptance.
+
+All four completed series qualify their host gates; maximum load1 is2.87939453125.
+Both excluded series also have clean observed load boundaries but remain ineligible.
+All12 owned runtime/child shutdowns, socket removals and resource cleanups pass.
+No own build/test/profile overlaps a native series. A whitespace-only final source
+cleanup has identical disassembly to the measured read/readv dylib; its different
+output filename changes the Mach-O install name. Accepted GUI/runtime identities
+and all four pre-existing dirty runtime hashes are verified intact.
+
+The next candidate is bounded collection of already-ready PTY events before
+another frame snapshot, avoiding deliberate sleeps. `Runtime::run` currently
+publishes before its next poll, and a burst ends at EAGAIN. This may construct an
+intermediate snapshot even when the remaining output has become ready by then.
+The prior rejected experiment that accumulated immediately available reads inside
+a16KiB turn is recorded in `services/runtime-cpp/performance.md`; it must not be
+reintroduced unchanged. A distinct event-delivery candidate needs its own isolated
+clean runtime build, functional/byte oracles and ordinary paired timing, including
+single typing and multi-pane fairness. No scheduling fix or production optimization
+is accepted by this diagnostic. All F01–F16/native120 requirements and the unlimited
+goal remain open.

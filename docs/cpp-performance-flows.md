@@ -193,6 +193,31 @@ frame content, causality or display cadence. Compile and run
 `tools/render_sequence_control.c` with `tools/render_work_census.c` before using
 the extended counter on a new host. Keep all instrumented timings diagnostic.
 
+To observe Darwin PTY read boundaries without rebuilding an application, compile
+`tools/pty_read_probe.c` with `clang -std=c11 -O2 -dynamiclib` into a private dylib.
+Inject it only into an owned runtime startup through `DYLD_INSERT_LIBRARIES`,
+setting `PTY_READ_EXECUTABLE` to its exact resolved executable and `PTY_READ_PREFIX`
+to an unused path inside the owned run directory. Each matching executable writes
+`PREFIX.PID.bin`; the daemon and launcher have separate mappings. Forked children
+are excluded. It observes `read` and `readv` on terminal descriptors, preserving
+return values, bytes and errno; other descriptors are excluded. The fixed mapping
+is5,505,088 bytes, with16,384 records and4MiB of payload. No per-read file writes
+are issued, but tty checks, clocks, locking, copying and page faults perturb work.
+Failed `readv` calls record requested capacity as zero to avoid dereferencing
+possibly invalid iovecs. Records do not distinguish the two syscall types.
+
+Compile `tools/pty_read_control.c` separately with `clang -std=c11 -O2`, then run
+it plain and with injection before application diagnostics. It exercises scalar
+and vectored reads, byte/errno preservation, pipes, fork exclusion and EFAULT;
+the `overflow` argument deliberately exhausts the record table. After verified
+process shutdown, decode with `pty_read_report.read_trace(path, expected_pid)`.
+Empty, incomplete, overflowed or malformed traces fail closed. Require the exact
+expected workload byte stream in addition to valid records. The parser's negative
+controls are in `tools/test_pty_read_report.py`. Blocking-read duration can include
+the wait for the next input; do not interpret it as processing latency or compare
+it directly with nonblocking read duration. These runs never establish timing,
+whole-frame parity or native120 acceptance.
+
 ## Deliverables and later optimization
 
 Fresh setup, coverage gaps and current experiments are tracked in
