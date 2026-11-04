@@ -6115,3 +6115,111 @@ merging: fewer comparisons on partially ordered ranges in exchange for bounded
 temporary storage and extra copying on random ranges. Its primary shuffled
 target and all controls are declared before measurement. Production remains
 unchanged, and F01–F16/independent Zig/native120 acceptance remain open.
+
+## Natural-run merging: withheld after heap-path regression, 2026-11-04
+
+`out-perf/dlls-history-natural-merge-01` detects monotonic candidate runs,
+reverses strictly backward runs and merges adjacent runs with a temporary vector.
+An already ordered range returns after one scan without auxiliary allocation.
+The experiment also uses a stateless typed comparator; original hash-set
+deduplication, score policy, top-10,000 selection and compact ranking remain.
+It reduces comparisons but adds copying and up to 320,000 temporary heap bytes
+plus 10,000 bytes of run ends on the stack. ARM64 emits a 10,144-byte frame
+for the helper; its merge loop inlines comparisons and copies 32-byte records
+with paired 128-bit loads/stores. Extra storage is released before deduplication.
+
+Independent reference and byte-exact A/B checks pass 900 evaluations, including
+repeated empty/old inputs. The helper passes 46,490 ordering cases in each of
+Release and ASan/UBSan, including all permutations through length eight, large
+random/tied/alternating inputs, zero allocations on a second ordered call and
+scratch-allocation recovery. The 192 scoped metadata cases, allocation failures,
+zero-live-storage checks and x86 baseline/v3 Rosetta checks pass. System SQLite
+is not sanitizer-instrumented. History, HistoryQueue and HistoryCapacity pass
+on A/B with new public-API ordering/page tests for eight shapes. Three existing
+missing-designated-initializer warnings remain; no lint-green claim is made.
+
+The 13,312-entry allocator fixture changes from 30 to 31 calls, 485,472 to
+805,472 allocated bytes and 485,120 to 800,064 incremental peak bytes. All 32 A
+and 33 B injected failures recover. The ARM64 comparator census changes from
+30,021 to 9,999 on ordinary/tied, 20,006 to 9,999 on reverse, 149,272 to 126,468
+on shuffled, and 1,551,857 to 1,512,557 on the monotonic heap control. These
+instrumented counts are separate from timing.
+
+All 26 complete seven-pair series have 976 qualified host boundaries;
+maximum observed load1 is 3.300293. No owned build/test overlaps timing.
+Each component execution has 300 queries, or 32 on 100,000-entry heap/long
+fixtures. Every response is compared exactly.
+
+| Component | A CPU ms | B CPU ms | CPU / mean / p95 wins |
+| --- | ---: | ---: | --- |
+| ordinary-gb | 1.242000 | 1.220743 | 6 / 6 / 6 |
+| ordinary-GST | 1.279297 | 1.261470 | 6 / 6 / 7 |
+| ordinary-all | 0.956323 | 0.940353 | 5 / 5 / 5 |
+| duplicates | 0.934847 | 0.921263 | 7 / 7 / 6 |
+| no-match | 1.188047 | 1.170667 | 7 / 7 / 7 |
+| shuffled | 1.393500 | 1.068103 | 7 / 7 / 7 |
+| reverse | 0.945403 | 0.932990 | 7 / 7 / 3 |
+| tied | 0.967617 | 0.946903 | 7 / 7 / 7 |
+| heap | 12.439375 | 12.215938 | 7 / 7 / 5 |
+| late-disorder | 0.957887 | 0.951627 | 6 / 6 / 5 |
+| middle-disorder | 0.956440 | 0.949003 | 7 / 7 / 6 |
+| end-disorder | 0.960537 | 0.945207 | 6 / 6 / 5 |
+| small-distinct | 0.008873 | 0.008917 | 3 / 3 / 3 |
+| empty-distinct | 0.013237 | 0.013370 | 2 / 2 / 2 |
+| shuffled-distinct | 1.700290 | 1.355523 | 7 / 7 / 7 |
+| heap-distinct | 13.198469 | 13.019844 | 7 / 7 / 2 |
+| long-distinct | 189.110250 | 188.976937 | 3 / 3 / 3 |
+| old-distinct | 0.075530 | 0.072787 | 5 / 5 / 4 |
+
+The complete runtime uses accepted corrected-listener linking. Rebuilt A is
+byte-exact to accepted `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`;
+B is `96d71930113cac78eb716eb20b1193feb1255478e4e0ab484d6fcc848ee86809`.
+An actual-source rebuild also reproduces B object/executable exactly. GUI/helper
+and pending attachment pacing are unchanged. The source was staged locally as
+an experiment, not adopted. Warm runtime series use 2,400 requests/execution,
+or 4,800 for small/empty, after 60 reference cases. All owned runtimes exit.
+
+| Runtime | A CPU µs | B CPU µs | CPU / mean / p95 / p99 wins | A→B mean µs | A→B p95 µs |
+| --- | ---: | ---: | --- | --- | --- |
+| shuffled | 907.0908 | 737.2679 | 7 / 7 / 7 / 7 | 914.0645→745.1756 | 1891.6291→1544.8809 |
+| monotonic | 677.7181 | 665.4579 | 7 / 5 / 7 / 4 | 683.7573→670.7364 | 1415.8610→1393.4622 |
+| larger | 1318.1528 | 1244.2507 | 7 / 7 / 0 / 3 | 1323.2472→1250.3875 | 2720.5125→2731.3750 |
+| small | 50.9427 | 50.7597 | 6 / 6 / 4 / 3 | 55.0112→54.7556 | 90.2080→90.3372 |
+| empty | 30.7963 | 30.8277 | 3 / 3 / 4 / 4 | 34.3324→34.4745 | 40.2521→40.2941 |
+
+| Runtime memory | A→B end footprint bytes | Wins | A→B lifetime peak bytes | Wins |
+| --- | --- | ---: | --- | ---: |
+| shuffled | 7881136→8339888 | 0 | 11043248→11485616 | 0 |
+| monotonic | 7668144→7569840 | 5 | 11944368→11633072 | 4 |
+| larger | 8176048→8241584 | 1 | 12599728→12648880 | 1 |
+| small | 6111640→5931392 | 6 | 6242712→6062464 | 6 |
+| empty | 5587328→5603712 | 2 | 5702016→5718400 | 2 |
+
+Memory increases are permitted tradeoffs, not an automatic rejection. Peak is
+process-lifetime peak, not the query interval peak. Controls preserve their
+mixed results: first query uses 112 fresh runtimes; FTS has 600 requests per
+execution; write has 600 completed import/query/delete/query cycles per execution.
+
+| Control | A CPU ms | B CPU ms | CPU / mean / p95 / p99 wins |
+| --- | ---: | ---: | --- |
+| first-query | 1.975307 | 1.977370 | 3 / 3 / — / — |
+| fts | 1.106273 | 1.101404 | 5 / 5 / 2 / 6 |
+| write | 5.498582 | 5.493294 | 4 / 3 / 4 / 5 |
+
+Despite passing the declared aggregate CPU/mean gates, larger-history p95 loses
+all seven pairs. Post-hoc decomposition of its existing samples (40 samples per
+case per run; no new timing) finds 18 of 20 full-snapshot case means at 0–1/7
+wins. These 15,000-entry shuffled snapshots exercise top-10,000 heap selection;
+the 7,500-entry snapshots do not, and improve enough to conceal the loss in
+the aggregate mean. For example, non-distinct gb/full snapshot rises from
+2.352767 to 2.396464 ms, 0/7, while gb/half snapshot falls from 1.205538 to
+0.958649 ms, 7/7. The regression concentrates in heap-selected cases; copying,
+cache, allocator state and code generation have not been individually isolated.
+
+`decision.json` records no adoption and no native promotion. A fresh successor
+keeps accepted sorting/comparator behavior after heap selection and uses natural
+merging only before that point. It adds the actual shuffled 15,000-entry shape
+to component controls and prospectively checks full-snapshot means and runtime
+tails. It must pass its own oracles and paired measurements. This is not a
+reclassification of the adverse first experiment. F01–F16, independent Zig
+comparison and native120 acceptance remain open.
