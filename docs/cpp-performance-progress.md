@@ -7053,3 +7053,54 @@ per request. The wire payload ceiling implies a conservative 256 MiB payload
 bound across a full queue, not measured ordinary consumption; cancelled vector
 capacity can remain until that queue entry drains. Memory and unrelated-flow
 effects remain open, as do the complete F01–F16 and native120 requirements.
+
+
+## Observation admission: primary six-pair result, 2026-11-04
+
+`/tmp/telar-perf-history-observation-admission-pairs-01` completes six
+alternating accepted-A/candidate-B pairs, 60 native whole-query replacements
+per run at a 300 ms minimum interval. The unchanged current observer validates
+the last presented match, callbacks, focus, geometry, actual cadence and owned
+cleanup. All 26 outer host boundaries qualify; maximum load1 is 3.553711.
+No owned compilation, tests or profiling overlap the series. Executables,
+fixtures, cases, templates and observer sources remain hash-frozen.
+
+Medians of the six per-run summaries:
+
+| Metric | Accepted A | Candidate B | B lower |
+| --- | ---: | ---: | ---: |
+| Mean latency (ms) | 103.218674 | 47.888118 | 6/6 |
+| p95 latency (ms) | 115.911576 | 59.635262 | 6/6 |
+| p99 latency (ms) | 120.513861 | 63.208280 | 6/6 |
+| GUI CPU/query (ms) | 31.059770 | 25.352960 | 6/6 |
+| Runtime CPU/query (ms) | 2.831395 | 3.176421 | 0/6 |
+| Combined CPU/query (ms) | 33.938989 | 28.550481 | 6/6 |
+| GUI instructions/query (M) | 80.484232 | 72.230176 | 6/6 |
+| GUI end footprint (bytes) | 257942920 | 259695972 | 2/6 |
+| Runtime end footprint (bytes) | 11600328 | 11534792 | 4/6 |
+
+This passes the primary paced-replacement contract. Runtime CPU consistently
+increases even though runtime cycles decrease in all six pairs and instructions
+are nearly equal. The cause is not established; attributing it to the pane scan
+requires the runtime-only control with the accepted GUI timer. Separate end
+footprints do not establish retained-memory growth or a peak-memory bound.
+
+The preceding diagnostic controls pass final-result/callback/cleanup checks for
+both variants. At qualified 45 ms character spacing, four bursts issue four
+measured queries in A and ten in B, excluding the two setup queries. The
+90 ms delayed-response cases also qualify cadence and retain the final result
+with up to three pending responses. Both 15 ms runs fail the 5% offered-rate
+tolerance despite driver exit zero: their timings are excluded. The intentional
+200 ms main-thread stalls preserve the final result and same-event-loop
+coalescence, but are also outside offered-rate acceptance. These short controls
+are not paired speed comparisons; `burst-assessment.json` records that distinction.
+
+Focused clang-tidy finishes without diagnostics in the new observation/admission
+lines. Full `main.cpp` analysis was stopped after more than five minutes without
+output and remains open; a successful focused check does not replace it.
+
+The composite remains unadopted. Next are paired burst CPU/request-load checks,
+runtime-only overhead and busy-observation/input controls, then the secondary
+220 ms comparison if those modes survive. Cross-target execution, final checks,
+independent current Zig comparison and all wider flow/optical/native120 gates
+remain open. The persistent goal stays active.
