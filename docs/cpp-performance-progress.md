@@ -11067,3 +11067,157 @@ observers pass. Frozen binaries, accepted production source/build and all four
 pending runtime files are unchanged. Only the colored-background probe/comparator
 and this report are retained. No complete flow or native120 requirement is closed;
 the persistent objective remains active.
+
+## 2026-11-04: exact text-projection reuse has limited tab-switch coverage
+
+On `68ee64e1a`, `out-perf/dlls-text-projection-census-01` investigates skipping
+geometry work when ChromeScene's text revision and complete raw projection are
+unchanged. Private instrumentation in chrome_text_scene.cpp records standard and
+optical scene calls, exact numeric projection matches, equal foreground, mesh
+calls and glyph visits. It compares all origin/anchor/area/fade/scale fields without
+Qt's fuzzy point equality. No rendering, geometry update or dirty notification is
+omitted. Atomic counters and a diagnostic previous-projection value add overhead;
+all timings are excluded from acceptance. Counts span startup,20 warmups,100
+measured inputs and the rest of the GUI lifetime, not just measured inputs.
+
+The instrumented build passes all51 Metal scene cases. After staging it, source
+and configured GUI restore byte-exactly to accepted `bc55d0e8`; runtime `1f1849d1`,
+helper `87beebb0`, original Qt and the four pending runtime files stay unchanged.
+The first pixel qualification uses the wrong working-directory basename: both A/B
+render the same shorter workspace/tab labels, but differ from accepted references.
+It is incomplete and excluded. The corrected entire six-capture series in
+`/tmp/telar-perf-text-projection-pixels-02` passes single/splits/tabs byte-exactly.
+All14 host boundaries qualify, maximum load1=3.54492.
+
+The first activity census reuses an archived tab observer lacking the newer
+loaded-image receipt. Its native content/rate/phase checks pass but framework
+verification fails closed; the complete series remains invalid. A fresh observer
+built by tools/build_tab_switch_probe.py repeats all three cases in
+`/tmp/telar-perf-text-projection-census-02`. All native, tab phase/rate/content,
+Qt-framework and resource checks pass. All eight host boundaries qualify,
+maximum load1=1.76416. The analyzer passes a positive accounting control and rejects
+ten missing/duplicate/impossible counter mutations. All14 owned runtime/child
+shutdowns across valid and invalid attempts complete.
+
+| Qualified diagnostic lifetime | Standard mesh calls | Exact-state reusable mesh calls | Standard glyph visits | Reusable glyph visits | Optical glyph visits | Reusable optical visits |
+|---|---:|---:|---:|---:|---:|---:|
+| Single typing | 139 | 66 | 1150 | 272 | 1 | 0 |
+| Four-split typing | 320 | 143 | 3535 | 349 | 1397 | 0 |
+| 100 tab switches | 10560 | 1504 | 145207 | 2256 | 55800 | 0 |
+
+In the switch workload,1504 of10570 standard scene paints have both an unchanged
+revision and equal raw projection;1484 also have equal ink. Most eligible meshes
+are small: they account for only2256 of201007 total standard/optical glyph visits,
+about1.12%. No optical scene has an unchanged revision. This is not a CPU fraction
+or proof that every matching projection permits reuse across arbitrary texture
+implementations. A broad projection cache is deprioritized before implementation,
+not rejected by native timing. No projection-cache change is retained.
+
+A separate source-backed lead is material invalidation. GlyphMesh::paint always
+assigns foreground and marks DirtyMaterial along with DirtyGeometry. Pinned Qt's
+nodeChanged checks material compatibility even when the color remains equal;
+that can call AlphaMaskMaterial::compare, including texture queries. Geometry
+changes do not imply color changes. The following private census distinguishes
+same-color newly created meshes from previously painted meshes before selecting
+a production variant. All F01–F16/native120 requirements and the goal remain open.
+
+## 2026-11-04: text material invalidation census
+
+`out-perf/dlls-text-material-census-01` extends the preceding private observation
+with same-foreground counts and a per-mesh already-painted flag. Counts distinguish
+constructor-initialized materials from previously rendered meshes. No assignment,
+geometry computation, draw or dirty notification is skipped. The accepted GUI,
+runtime/helper/Qt and pending runtime source remain the same. This diagnostic also
+passes all51 Metal scene cases and six single/splits/tabs PNGs byte-exact against
+accepted references in `/tmp/telar-perf-text-material-pixels-01`.
+
+`/tmp/telar-perf-text-material-census-01` qualifies100 measured plus20 warmup inputs
+for single typing, four splits and previous-tab switching with four30Hz producers.
+The current tab observer includes loaded-image receipts. All content/phase/rate,
+framework, resource and cleanup checks pass; no own builds/tests overlap these
+runs. Pixel/activity host boundaries are14/8, maximum load1=2.79395/2.27539. All
+nine owned runtime/child shutdowns complete. Fourteen negative counter mutations
+are rejected. As before, instrumentation covers the whole GUI lifetime and its
+timings are not acceptance evidence.
+
+| Tab-switch diagnostic lifetime | Mesh paints | Foreground already equal | Equal on previously painted meshes |
+|---|---:|---:|---:|
+| Standard interface text | 10595 | 10557 | 5757 |
+| Optical terminal text | 1146 | 1146 | 886 |
+| Combined | 11741 | 11703 | 6643 |
+
+These counts support testing conditional DirtyMaterial notification separately
+from geometry caching. Newly created materials require their own first-render
+correctness checks; equality is not by itself proof that notification is dispensable.
+No material optimization is accepted by this census. The next isolated experiment,
+`out-perf/dlls-unchanged-text-material-01`, keeps every geometry computation,
+DirtyGeometry flag and foreground assignment, while adding DirtyMaterial only
+when foreground differs. It adds no persistent storage. The unchanged five-of-six
+CPU/p95 target and native regression controls will decide adoption, after color
+transition/first-render oracles and codegen review. The goal remains active.
+
+
+## 2026-11-04: conditional text material notification rejected
+
+On source `68ee64e1a`, `out-perf/dlls-unchanged-text-material-01` freezes accepted
+GUI `bc55d0e8` and candidate `52bbd1f1`, with the same accepted runtime/helper/Qt.
+GlyphMesh::paint retains all geometry calculations, DirtyGeometry and unconditional
+foreground assignment. It adds DirtyMaterial only when the four foreground
+components compare unequal. There is no new persistent storage or allocation.
+
+The first missing-assignment negative unexpectedly passes the cell-color oracle:
+that comparison does not expose this retained material transition. The attempt
+is archived under initial-insufficient-oracle and no timing uses it as proof.
+The existing independent face-raster oracle is suitable: both regular and
+emphasized NativeChromeText labels change white→red→white without changing text.
+Accepted A passes; the missing-assignment negative fails both at the red transition
+(chrome_text_test.cpp:588). B passes all51 scene tests on both software and Metal
+and the full chrome-text Metal suite. Production clang-tidy and actual translation
+unit compilation for x86-64 baseline/v3 pass. Production source and configured GUI
+are restored byte-exactly before any native runs.
+
+ARM64 adds an out-of-line foreground getter and four float comparisons, selecting
+DirtyGeometry alone or both flags; the unconditional setter and176-byte stack
+frame remain. x86 baseline uses cmpeqps/movmskps, v3 uses vcmpeqps/vtestps. Pinned
+Qt's material branch checks blending and batch material compatibility; geometry
+invalidation is still performed and can already invalidate the batch. These are
+code paths, not a measured CPU saving or a placement exemption.
+
+All six TUI/single/splits application PNGs in
+`/tmp/telar-perf-unchanged-material-pixels-01` match each other and accepted
+references byte-for-byte. Their short timings are not acceptance evidence.
+The first native tab series (`...-tabs-01`) is discarded in full after run1-B:
+load1=5.60205 exceeds the unchanged5.0 limit. All three owned runtime/child
+shutdowns complete. No result from this interrupted series is used. A complete
+six-pair repeat starts in `...-tabs-02` after load returns below the limit; no own
+builds, tests or profiles overlap native timing.
+
+The repeated series completes six alternating pairs,100 measured plus20 warmup
+native previous-tab inputs per run, four30Hz producers,1600×1000/scale2 and82×21
+cells. Same accepted optical JBM15 configuration and current tab observer are used.
+
+| Qualified native tab switching | Accepted A median | Candidate B median | B lower |
+|---|---:|---:|---:|
+| p50 ms | 37.956 | 37.423 | 3/6 |
+| p95 ms | 42.129 | 41.842 | 4/6 |
+| p99 ms | 43.507 | 42.447 | 4/6 |
+| Maximum ms | 44.666 | 43.385 | 4/6 |
+| GUI CPU ms/input | 28.090 | 27.656 | 3/6 |
+| GUI peak RSS MiB | 207.211 | 204.883 | 5/6 |
+| Runtime CPU ms/run | 391.190 | 394.296 | 3/6 |
+
+Both co-primary targets fail the frozen five-of-six rule. B is rejected, cause
+not established; no placement exemption is claimed. Favorable medians and lower
+RSS do not override the ordinary paired result. Additional regression controls
+are not run after primary failure. Runtime resources cover setup/warmup/measurement
+and differ from the GUI measured interval; CPU is not summed across them.
+
+Pixel/repeated timing series pass14/26 host boundaries, maximum load1=2.52441/
+4.07129. All18 qualified runtime/child shutdowns and all three from the invalid
+attempt complete; content/producer rate/phase, loaded Qt images and resource
+receipts pass. Frozen stages, production GUI/source and all four pending runtime
+files verify unchanged. Tables, validation, assembly review and decision are in
+the experiment prefix. Only this report is retained. No complete flow or native120
+requirement is closed, and the goal remains active. Next investigation: measured
+allocation sites during tab switching, distinguishing framework/model conversion
+and text rebuild work before selecting another reuse algorithm.
