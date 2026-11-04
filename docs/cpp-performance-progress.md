@@ -7104,3 +7104,43 @@ runtime-only overhead and busy-observation/input controls, then the secondary
 220 ms comparison if those modes survive. Cross-target execution, final checks,
 independent current Zig comparison and all wider flow/optical/native120 gates
 remain open. The persistent goal stays active.
+
+
+## Admission runtime-only control rejects the prototype, 2026-11-04
+
+`/tmp/telar-perf-history-admission-runtime-only-pairs-01` holds GUI `a88e53a8`
+and its helper fixed, comparing accepted runtime `1f1849d1` with admission
+runtime `537764da`. Six alternating pairs of 60 replacements at 300 ms pass
+all native endpoint, cadence, cleanup and host-load checks. The exact binaries
+and the rejection rule were frozen before the series.
+
+| Metric | Accepted runtime | Admission runtime | Admission lower |
+| --- | ---: | ---: | ---: |
+| Mean latency (ms) | 103.643620 | 104.823693 | 1/6 |
+| p95 latency (ms) | 115.803218 | 116.399137 | 3/6 |
+| p99 latency (ms) | 120.282842 | 118.892503 | 3/6 |
+| Runtime CPU/query (ms) | 2.746578 | 2.724365 | 4/6 |
+| Combined CPU/query (ms) | 32.751404 | 32.267561 | 5/6 |
+
+The composite's consistent runtime CPU increase does not reproduce with the
+accepted GUI timing. This control does not establish its cause. Mean presentation
+latency nevertheless loses five of six pairs, failing the predeclared runtime-only
+control. No placement explanation is proven. The composite primary speedup is
+retained as evidence, but this particular prototype is rejected; no secondary
+220 ms or adoption series follows it. These are instrumented results, not proof
+of a universal 1.18 ms product regression.
+
+Only the owned prototype source changes are restored. The rejected source,
+patch, binary stages and decision remain under
+`out-perf/dlls-history-observation-admission-01`. Rebuilt GUI `a88e53a8` is
+byte-exact to accepted A, and the unchanged isolated live-capture test passes
+again. Pre-existing client/attachment pacing work is preserved. The proven
+capture/query ordering problem and its deterministic oracle remain useful for
+the next scheduling design.
+
+Before another burst CPU comparison, the reusable observer needs equal query-start
+cadence in burst mode: previously the next burst followed final presentation,
+allowing a faster variant to receive more bursts per second. Character-span
+qualification and final-character-to-presentation latency must remain separate
+from that inter-burst workload control. The 5% tolerance, negative controls and
+full persistent objective remain unchanged.
