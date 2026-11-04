@@ -6883,3 +6883,27 @@ Restoration completes with a byte-exact `a88e53a8` GUI and all 39 accepted
 software component checks passing. The source and executable both match A.
 Only the independent test correction and this rejection report are retained.
 The pre-existing runtime cadence edits remain untouched.
+
+
+## Current independent history endpoint qualification, 2026-11-04
+
+`out-perf/dlls-history-cross-stack-current-01` verifies frozen Zig `6ccf7948`
+against its successful ReleaseFast build receipt. Its `src`, `lib`, `build`,
+build manifests, `run_widget.zig`, vendor and diagram-renderer inputs have no
+committed or working-tree changes since build HEAD `5c619b85`. The executable
+hash matches that receipt; the current toolchain hash and source paths are saved.
+No new Zig build or performance equivalence is inferred from this identity check.
+
+Fresh runs using the current reusable history observer qualify 12 replacements
+each on accepted C++ `a88e53a8`/runtime `1f1849d1` and the independent Zig stack.
+Zig also correctly fails injected late-stale and missing-callback controls. All
+four runs qualify host load (maximum load1 3.323730) and owned cleanup. These
+are endpoint controls, not a paired speed comparison or cross-renderer optical
+parity. Raw directories are `/tmp/telar-perf-history-cross-stack-current-*-01`.
+
+The next equal-cadence comparison must use the current observer's final
+latest-presentation check, preserving its burst and late-stale controls. Older
+private fixed-cadence copies predate that stronger check and must not become
+the new observer base. Investigate scheduling only with the existing rapid-input,
+delayed-reply and request-load controls. The persistent all-flow objective remains
+active; no F01–F16 or native120 requirement closes here.
