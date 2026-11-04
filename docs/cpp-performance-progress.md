@@ -8625,3 +8625,91 @@ continuous native120 and complete F01–F16 coverage remain open. The next pass
 will profile the newly accepted GUI and correlate attachment/frame preparation
 to quantify avoided work and locate the remaining CPU cost. Unrelated runtime
 changes remain untouched, and the persistent unlimited goal remains active.
+
+## Accepted-flush CPU profile and preparation timeline, 2026-11-04
+
+On `3ed35ad46`, `out-perf/dlls-post-flush-profile-01` freezes accepted GUI
+`bc55d0e8`, runtime `1f1849d1` and independent Zig `6ccf7948`. An eight-second,
+1 ms `sample` capture runs inside each owned 240-switch workload. The first
+attempt completes both workloads but its controller incorrectly uses only
+HostLoadGate checkpoints: `finish()` rejects it because no `run()` scope was
+registered. `/tmp/telar-perf-post-flush-profile-01` is not promoted to validated
+evidence. The corrected controller repeats both stacks in `...-profile-02`.
+All content/rate/phase and cleanup checks pass; six host boundaries qualify,
+maximum load1 2.1767578125. Captures overlap 95 C++ and 89 Zig switches.
+
+The accepted C++ main-thread profile has 5,873 sample observations. Inclusive
+category counts, excluding nested repeats within each category, are: tab rebuild
+199, caption measurement 19, list reconciliation 281, pane refresh 118, QML
+binding update 152, var-property write 85, variant association 78 and garbage
+collection 18. Categories overlap and include observer/wait samples; they are
+neither allocation counts nor CPU percentages. The render thread also has long
+drawable and event waits; its inclusive renderer count is not CPU attribution.
+An additional exact tree-to-leaf accounting verifies count conservation but
+explicitly does not treat every unclassified syscall as runnable CPU work.
+
+Source inspection reconfirms that `TabStripLayout` reconciles positioned records
+during geometry animation. `ListModel::reconcile` publishes its complete record
+role when a row differs, and TerminalTabs binds `source` from `record.tab`.
+Pinned Qt's `QQmlVMEMetaObject::writeVarProperty` detaches an association wrapper
+on that path. This supports a specific conversion/publication hypothesis, not a
+claim that every notification deeply copies the full map. The earlier typed
+presentation experiment cut this sampled work and passed its CPU gate, but
+failed p95 on the pre-flush baseline; that rejection remains valid.
+
+`out-perf/dlls-post-flush-timeline-01` reuses the bounded private trace and native
+commit/GPU observer. Before GUI is the prior instrumented `fb038d41`; after GUI
+is `7f52bbc2045240d46103750b96a8c45a0001c47ea12a33e1336a66e37219c698`,
+containing the accepted typed flush. Only three otherwise unchanged translation
+units are temporarily instrumented. They are restored to their original hashes,
+and the configured GUI rebuilds byte-exactly to `bc55d0e8` before running the
+diagnostic copies. The accepted header and unrelated runtime changes are preserved.
+
+`/tmp/telar-perf-post-flush-timeline-01` runs before/after C++ and independent Zig,
+100 measured plus 20 warmup actions each. Every action has qualified native
+content/rate/phase and clock ordering. All 120 actions in each C++ run correlate
+the actual selected pane, OpenPane, PaneOpened, matching frame ID, painting,
+preparation and one accepted drawable commit. Counts are 16,460/16,645 trace
+events without overflow or unpublished slots. Clock brackets contain zero and
+are narrower than 210 ns. All eight host boundaries pass, maximum load1
+3.60888671875, and all owned cleanup completes.
+
+| Diagnostic C++ observation | Before flush | Accepted flush |
+|---|---:|---:|
+| Mean queued to first bytesWritten notification, ms | 2.732 | 0.017 |
+| Mean first bytesWritten to PaneOpened delivery, ms | 0.697 | 2.548 |
+| Mean inclusive pane refresh before reply delivery, ms | 1.950 | 2.068 |
+| Actions preparing before PaneOpened, of 100 | 44 | 0 |
+| Preparations through target drawable commit per action | 1.44 | 1.00 |
+| Paint events through target drawable commit per action | 1.44 | 1.00 |
+| Mean OpenPane queued to PaneOpened delivery, ms | 3.429 | 2.566 |
+| Mean target-frame dispatch complete to paint start, ms | 4.211 | 2.466 |
+| Mean input to target drawable commit, ms | 10.729 | 7.756 |
+
+This records fewer intermediate preparations in the critical interval, not a
+total-process frame-count or CPU saving. A preparation before the reply does not
+prove an empty or presented frame. `bytesWritten` is a batch notification rather
+than a syscall timestamp. Pane refresh remains approximately 2 ms; the new
+post-write delivery interval is consistent with synchronous UI work delaying
+reply dispatch, without assigning that whole interval to runtime service time.
+Explicit pacer holds after target-frame dispatch occur in 43/55 actions.
+
+These are instrumented single-run diagnostics, not another acceptance series.
+GPU execution means vary 1.658 -> 4.695 ms while GPU-end-to-presentation varies
+30.326 -> 24.698 ms; neither observation identifies a universal Qt/GPU penalty.
+Zig's separate input-to-commit mean is 7.837 ms. The existing six-pair independent
+comparison remains authoritative for performance acceptance. Stage quantiles
+cannot be added. The analyzer accepts the positive trace and rejects ten fresh
+controls against the after run: duplicate/missing commit, reversed GPU times,
+stale target, incompatible clock, missing frame, wrong pane, overflow, rejected
+host and incomplete cleanup. Rejections are checked at their intended assertions.
+
+The next frozen contract is `out-perf/dlls-tab-presentation-post-flush-01`:
+re-evaluate stable semantic tab presentations as a new combination with the
+accepted OpenPane schedule. Current profiling still finds that work, and the
+critical path has materially changed. It is not automatic reinstatement of the
+rejected `e4aea930` binary or reuse of old timings. The new baseline is
+`bc55d0e8`; oracles, deferred-retirement peak/lifetime observations, fresh target
+pairs, typing controls and independent Zig qualification are required again.
+No candidate source is applied yet. Production remains the accepted flush build;
+complete F01–F16/native120 requirements and the unlimited goal remain open.
