@@ -24,7 +24,7 @@ from benchmark_host import HostLoadGate
 from perf_e2e import short_socket_path, stop_runtime
 
 
-SCENARIOS = ('return', 'held', 'history', 'clamp', 'reflow')
+SCENARIOS = ('return', 'held', 'history', 'clamp', 'reflow', 'reflow-continuation', 'clear')
 
 
 def save(path, value):

@@ -22,7 +22,9 @@ enum class Scenario {
   hold_ack,
   retain_history,
   clamp_live,
-  reflow
+  reflow,
+  reflow_continuation,
+  cleared_history
 };
 
 constexpr std::uint32_t initial_lines = 100;
@@ -93,6 +95,11 @@ static int child(const char *receipt_path, bool reflow) {
       return 0;
     }
 
+    if (command == 'c') {
+      writeAll("\x1b[3J");
+      continue;
+    }
+
     check(command == 'a');
     emit(initial_lines, additional_lines, reflow);
   }
@@ -131,7 +138,7 @@ public:
     for (std::uint32_t row = 0; row < screen.rows(); ++row) {
       const auto absolute = screen.scroll().offset + row;
       const auto rows_per_line = reflow && expected_columns == narrow_columns ? 2U : 1U;
-      const auto expected = absolute == total - 1 ? std::string{} : rowText(absolute / rows_per_line, reflow).substr((absolute % rows_per_line) * expected_columns, expected_columns);
+      const auto expected = absolute == total - 1 ? std::string{} : rowText(row_origin + absolute / rows_per_line, reflow).substr((absolute % rows_per_line) * expected_columns, expected_columns);
 
       for (std::uint32_t column = 0; column < screen.columns(); ++column) {
         const auto &cell = screen.cells()[row * screen.columns() + column];
@@ -224,6 +231,7 @@ public:
   std::uint16_t expected_columns = size.cols;
   std::uint64_t latest_frame = 0;
   std::uint32_t frames_while_held = 0;
+  std::uint32_t row_origin = 0;
 };
 
 static void record(const char *name, const Observation &value, bool comma) {
@@ -253,13 +261,17 @@ int main(int argc, char **argv) {
     scenario = Scenario::clamp_live;
   } else if (mode == "reflow") {
     scenario = Scenario::reflow;
+  } else if (mode == "reflow-continuation") {
+    scenario = Scenario::reflow_continuation;
+  } else if (mode == "clear") {
+    scenario = Scenario::cleared_history;
   } else {
     return 2;
   }
 
   try {
     View view{argv[1]};
-    view.reflow = scenario == Scenario::reflow;
+    view.reflow = scenario == Scenario::reflow || scenario == Scenario::reflow_continuation;
     view.peer.send(RequestRuntimeState{.client_identity = 103, .interactive = true});
     const std::array<std::string_view, 3> arguments{argv[0], view.reflow ? "--reflow-child" : "--child", argv[2]};
     const auto opened = view.peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
@@ -271,10 +283,51 @@ int main(int argc, char **argv) {
     view.peer.send(SetPaneViewport{view.pane, historical_offset});
     const auto historical = view.until(initial_lines + 1, historical_offset);
 
-    if (scenario == Scenario::reflow) {
+    if (scenario == Scenario::cleared_history) {
+      const std::array<Byte, 1> clear{'c'};
+      view.peer.send(PaneInput{view.pane, clear});
+      view.row_origin = initial.bottom;
+      const auto cleared = view.until(size.rows);
+      const std::array<Byte, 1> append{'a'};
+      view.peer.send(PaneInput{view.pane, append});
+      const auto grown = view.until(size.rows + additional_lines);
+      view.finish();
+      std::printf("{\"mode\":\"clear\",\"matches_expected\":%s,", grown.offset == 0 ? "true" : "false");
+      record("initial", initial, false);
+      record("historical", historical, true);
+      record("cleared", cleared, true);
+      record("grown", grown, true);
+      std::printf(",\"cells_verified\":true,\"child_exited\":true}\n");
+      return 0;
+    }
+
+    if (view.reflow) {
       view.expected_columns = narrow_columns;
       view.peer.send(PaneResize{view.pane, {.cols = narrow_columns, .rows = size.rows}});
       const auto narrow = view.until(initial_lines * 2 + 1);
+      if (scenario == Scenario::reflow_continuation) {
+        const auto requested = historical.offset * 2 + 1;
+        view.peer.send(SetPaneViewport{view.pane, requested});
+        const auto continuation = view.until(initial_lines * 2 + 1, requested);
+        view.expected_columns = size.cols;
+        view.peer.send(PaneResize{view.pane, size});
+        const auto wide = view.until(initial_lines + 1);
+        view.expected_columns = narrow_columns;
+        view.peer.send(PaneResize{view.pane, {.cols = narrow_columns, .rows = size.rows}});
+        const auto renarrowed = view.until(initial_lines * 2 + 1);
+        const bool anchored = narrow.offset == historical.offset * 2 && wide.offset == historical.offset && renarrowed.offset == requested;
+        view.finish();
+        std::printf("{\"mode\":\"reflow-continuation\",\"matches_expected\":%s,", anchored ? "true" : "false");
+        record("initial", initial, false);
+        record("historical", historical, true);
+        record("narrow", narrow, true);
+        record("continuation", continuation, true);
+        record("wide", wide, true);
+        record("renarrowed", renarrowed, true);
+        std::printf(",\"cells_verified\":true,\"child_exited\":true}\n");
+        return 0;
+      }
+
       view.expected_columns = size.cols;
       view.peer.send(PaneResize{view.pane, size});
       const auto restored = view.until(initial_lines + 1);

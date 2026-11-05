@@ -32,9 +32,11 @@ def read_capture(path):
     return payloads
 
 
-def check_capture(library, payloads, reflow=False):
+def check_capture(library, payloads, reflow=False, columns=82, row_origin=0):
     wire = Wire(library)
     wire.reflow = reflow
+    wire.expected_columns = columns
+    wire.row_origin = row_origin
     kinds, bases = [], []
     for payload in payloads:
         kinds.append(wire.apply(payload))
@@ -90,13 +92,18 @@ def main():
     parser.add_argument('--wire', type=Path, required=True)
     parser.add_argument('--capture', type=Path, required=True)
     parser.add_argument('--reflow', action='store_true', help='Validate the long-row reflow fixture')
+    parser.add_argument('--columns', type=int, choices=(82, 41), default=82, help='Expected final viewport width')
+    parser.add_argument('--row-origin', type=int, default=0, help='First logical row retained after clearing history')
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled for this oracle')
+    if args.row_origin < 0:
+        parser.error('--row-origin must be nonnegative')
     library = args.wire.resolve(strict=True)
-    report = check_capture(library, read_capture(args.capture), args.reflow)
+    report = check_capture(library, read_capture(args.capture), args.reflow, args.columns, args.row_origin)
     report.update(scope='Offline decoder/cell oracle only.', reflow=args.reflow,
+                  columns=args.columns, row_origin=args.row_origin,
                   bridge_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                   capture_sha256=hashlib.sha256(args.capture.read_bytes()).hexdigest())
     with args.output.open('x') as output:

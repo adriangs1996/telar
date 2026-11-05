@@ -12714,3 +12714,136 @@ remain open and the persistent objective remains active. The next viewport chang
 must address logical anchoring and return-to-live together, while further latency
 work must establish its effect on the native input-to-presentation path rather
 than infer it from lower component work alone.
+
+## 2026-11-05: tracked viewport parity candidate rejected; continuation and history-clear coverage
+
+This pass started at `3e1c4411243454dd3058bcb6fdc2f595d4f5c546` on
+`cpp-stack-perf-dlls-20261103`. It extends the preceding reflow finding with
+an actual per-attachment tracked-reference implementation. No production
+candidate is adopted. The four pre-existing pending runtime files remain
+byte-identical; candidate headers, VFS overlays, builds and receipts are under
+ignored `out-perf/dlls-viewport-pin-01/`.
+
+The accepted runtime remains `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`.
+Private B is `d18ee65388596daaa01a86cd4c09d8890bd226465804e2354eec18722a75035f`;
+corrected C is `3e70bf7db5b6f5d5452f76d71f03b829ad23b93862c4df64181fea1c10601f53`.
+Both use the accepted GUI `bc55d0e84d76c5eb6d7518a7c83acf8de2aca8ff6894ea71645a626f41a9ccb3`,
+helper `87beebb065f0ea4274492eaadecea2ccef7cdedc28f36049bf61ecc21214924f`
+and previously frozen Qt frameworks. The reference is the independent Zig
+runtime `6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`,
+source `5c619b85c07d86e2a9ec19163c68c9287df23cde`, using its real-codec
+adapter `4248bdbd05afc365332bd6179c01acd756e7f36fd3d4bda99972ee80cddc2dc9`.
+Main-TU VFS builds reuse the accepted libraries and listener object; they
+exclude the pending pacing work. Build commands and identities are retained.
+
+### Implementation and expanded independent oracle
+
+The candidate replaces the optional absolute row with an owned Ghostty tracked
+grid reference and its screen identity. Historical requests track column zero
+of the requested physical row; subsequent projections resolve the reference's
+current row after reflow or pruning. Explicit requests at/beyond the current
+bottom release the reference immediately, including while a frame ACK is held.
+A screen change clears the reference. Allocation errors propagate through the
+existing Ghostty error path. The terminal is still restored to its live viewport
+after delivery; this does not include the rejected repeated-projection cache.
+
+The original five wire/PTY scenarios passed for B, but two additional reusable
+scenarios exposed an incomplete recovery rule. `reflow-continuation` selects
+physical row 119 at 41 columns, widens to 82 columns, then narrows again: the
+same text must map to row 59 and back to row 119. `clear` sends CSI 3 J while
+reading history, then appends 25 lines. Clearing history does not request live
+follow: the first retained line, `row000080`, must remain visible. Every visible
+ASCII cell and width is checked against the independent numbered-row model,
+including the changed row origin after clearing history.
+
+B incorrectly released a discarded reference when the remaining history had
+zero scrollback rows. Its later output followed the bottom, showing
+`row000105`. C instead retargets the existing reference to the first retained
+cell without interpreting that recovery as a request to follow live output.
+This matches the independently executed Zig behavior.
+
+The extended runs used seven fresh owned runtimes for each variant, in
+`/tmp/telar-perf-viewport-pin-extended-{A,B,C,zig}-01`. All 28 observations,
+cell checks, child exits and owned cleanup are valid. Each series has 16
+qualified host boundaries; the maximum one-minute load across them is 1.85645.
+
+| Scenario | Accepted A | Initial pin B | Corrected pin C | Independent Zig |
+| --- | --- | --- | --- | --- |
+| Return to live, then output | fail | pass | pass | pass |
+| Return while ACK held | fail | pass | pass | pass |
+| Preserve historical row during output | pass | pass | pass | pass |
+| Clamp beyond bottom | pass | pass | pass | pass |
+| Reflow first physical row | fail | pass | pass | pass |
+| Reflow continuation and restore its column anchor | fail | pass | pass | pass |
+| Clear history, then output | fail | fail | pass | pass |
+
+`check_viewport_follow_wire.py` accepts explicit final columns and row origin
+for offline validation of these captures. The continuation capture passes 24
+negative controls over seven frames/one delta; the clear capture passes 20 over
+five frames/three deltas. Controls reject wrong schema, truncated/duplicate/
+wrong-pane frames, wrong delta bases and a corrupted decoded cell. These are
+protocol/cell checks, not native GUI resize or visual acceptance.
+
+### Scoped memory, lifetime and code-generation checks
+
+A component probe checks two independent references through resize, live-return
+and alternate-screen transitions; pruning; history clearing; initial allocation
+failure; and destruction of a tracked handle after its terminal. Tracked-handle
+creation adds 328 live allocator bytes in this fixture across three allocations;
+100 subsequent movements add no allocations. All owned memory is released.
+This is a scoped allocation observation, not total process-memory accounting.
+The private adaptation of the existing two-client delivery probe validates 71
+frames, including 70 snapshots, cells, held ACKs and explicit snapshot recovery.
+ASan/UBSan pass on the probe TU, Viewport and instantiated Terminal paths;
+pre-existing linked runtime and Ghostty libraries are not instrumented.
+
+The wrapper kernels compile for arm64, x86-64 baseline and x86-64-v3; the new
+viewport object is 16 bytes in all three. These are code-generation checks,
+not executed x86/Linux tests. Actual native disassembly confirms the screen
+check and tracked-reference lookup in `Viewport::resolve`, and its call into
+`PageList.pointFromPin`. The inspected implementation traverses pages from the
+screen origin to recover an absolute row, before delivery scrolls by that row.
+Avoiding this extra traversal is a concrete algorithmic lead, not an established
+cause of the measured latency/CPU difference. Formatting, Python compilation,
+source/binary identity checks and `git diff --check` pass.
+
+### Native result and discarded series
+
+The initial B series, `/tmp/telar-perf-viewport-pin-native-pairs-01`, is entirely
+excluded. Its final recorded boundary detected a compiler at 96.1% CPU while
+this pass's follow-oracle compilation overlapped the series. The incomplete
+summary rejected it, and no quiet subset or aggregate is used. Subsequent phase
+transitions explicitly require both process completion and the terminal
+`HostLoadGate` result before launching build/test work.
+
+The corrected C series `/tmp/telar-perf-viewport-pin-native-C-pairs-01` completed
+all six alternating pairs with 100 measured inputs and 20 warmups per run.
+All 26 host boundaries qualify, maximum load1 2.38233, with no compiler
+interference. The unchanged discrete native scroll fixture uses the same
+1600x1000 drawable, scale 2, 82x21 grid, font/configuration and scroll corpus as
+the preceding pass. Content, positive presentation, Qt images, paired grids,
+runtime resource identities and owned cleanup pass. No own builds, tests or
+profiles overlap this corrected series.
+
+| Median of paired runs | Accepted A | Corrected C | C wins / 6 |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50 ms | 30.60146 | 31.11641 | 2 |
+| Input-to-present p95 ms | 38.71651 | 38.34884 | 4 |
+| Input-to-present p99 ms | 42.54671 | 41.93706 | 3 |
+| Maximum input-to-present ms | 45.88890 | 43.85598 | 5 |
+| GUI CPU ms/input | 4.83503 | 5.15939 | 2 |
+| GUI lifetime peak RSS MiB | 204.04688 | 205.19531 | 3 |
+| Runtime CPU ms/run | 80.22392 | 84.76769 | 1 |
+| Runtime instructions/run | 411,754,692.5 | 409,199,733.5 | 5 |
+| Runtime cycles/run | 176,473,970 | 175,523,856.5 | 3 |
+
+The runtime resource interval includes GUI setup, warmup, measured input and
+GUI exit, excluding runtime startup/shutdown and child CPU. It differs from the
+GUI measured-input interval. C fails the predeclared p95/CPU target and has a
+consistent runtime-CPU loss. It is rejected despite the functional improvement;
+no placement exception or causal explanation is established. The rejected
+variant does not justify broad native controls or a complete-stack speed claim.
+All F01-F16 complete-flow and native120 gates remain open. The next viewport
+candidate must retain these seven behaviors while reducing the extra history
+traversal and rechecking full native latency, rather than relying on component
+allocation or instruction-count improvements alone.

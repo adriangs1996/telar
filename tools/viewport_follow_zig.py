@@ -67,6 +67,7 @@ class Wire:
         self.view = View()
         self.expected_columns = COLUMNS
         self.reflow = False
+        self.row_origin = 0
         self.cells = ctypes.create_string_buffer(COLUMNS * ROWS)
         self.output = ctypes.create_string_buffer(MAX_PAYLOAD)
 
@@ -92,7 +93,7 @@ class Wire:
         def line(row):
             if row == view.total - 1:
                 return b''
-            text = f'row{row // rows_per_line:06d}'.encode() + (b'x' * 60 if self.reflow else b'')
+            text = f'row{self.row_origin + row // rows_per_line:06d}'.encode() + (b'x' * 60 if self.reflow else b'')
             start = (row % rows_per_line) * view.columns
             return text[start:start + view.columns]
         expected = b''.join(line(row).ljust(view.columns, b' ') for row in range(view.offset, view.offset + ROWS))
@@ -164,7 +165,7 @@ class Driver:
         self.send(Operation.HELLO)
         assert self.receive() == Event.ACCEPTED
         self.send(Operation.SUBSCRIBE, 103)
-        self.wire.reflow = mode == 'reflow'
+        self.wire.reflow = mode in ('reflow', 'reflow-continuation')
         self.send(Operation.OPEN_REFLOW if self.wire.reflow else Operation.OPEN, 1, str(fixture).encode(), str(receipt).encode())
         while self.receive() != Event.OPENED:
             pass
@@ -173,10 +174,35 @@ class Driver:
         self.acknowledge = mode != 'held'
         self.send(Operation.VIEWPORT, initial['bottom'] - ROWS)
         historical = self.until(INITIAL_LINES + 1, initial['bottom'] - ROWS)
-        if mode == 'reflow':
+        if mode == 'clear':
+            self.send(Operation.INPUT, text=b'c')
+            self.wire.row_origin = initial['bottom']
+            cleared = self.until(ROWS)
+            self.send(Operation.INPUT, text=b'a')
+            grown = self.until(ROWS + ADDITIONAL_LINES)
+            self.finish()
+            return dict(mode=mode, initial=initial, historical=historical, cleared=cleared, grown=grown,
+                        matches_expected=grown['offset'] == 0, cells_verified=True, child_exited=True)
+        if self.wire.reflow:
             self.wire.expected_columns = COLUMNS // 2
             self.send(Operation.RESIZE, COLUMNS // 2)
             narrow = self.until(INITIAL_LINES * 2 + 1)
+            if mode == 'reflow-continuation':
+                requested = historical['offset'] * 2 + 1
+                self.send(Operation.VIEWPORT, requested)
+                continuation = self.until(INITIAL_LINES * 2 + 1, requested)
+                self.wire.expected_columns = COLUMNS
+                self.send(Operation.RESIZE, COLUMNS)
+                wide = self.until(INITIAL_LINES + 1)
+                self.wire.expected_columns = COLUMNS // 2
+                self.send(Operation.RESIZE, COLUMNS // 2)
+                renarrowed = self.until(INITIAL_LINES * 2 + 1)
+                self.finish()
+                return dict(mode=mode, initial=initial, historical=historical, narrow=narrow,
+                            continuation=continuation, wide=wide, renarrowed=renarrowed,
+                            matches_expected=narrow['offset'] == historical['offset'] * 2
+                            and wide['offset'] == historical['offset'] and renarrowed['offset'] == requested,
+                            cells_verified=True, child_exited=True)
             self.wire.expected_columns = COLUMNS
             self.send(Operation.RESIZE, COLUMNS)
             restored = self.until(INITIAL_LINES + 1)
@@ -215,7 +241,7 @@ def main():
     parser.add_argument('--fixture', type=Path, required=True)
     parser.add_argument('socket')
     parser.add_argument('receipt', type=Path)
-    parser.add_argument('mode', choices=('return', 'held', 'history', 'clamp', 'reflow'))
+    parser.add_argument('mode', choices=('return', 'held', 'history', 'clamp', 'reflow', 'reflow-continuation', 'clear'))
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled for this oracle')
