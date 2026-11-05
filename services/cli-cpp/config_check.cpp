@@ -198,7 +198,7 @@ int checkConfiguration(const window::ConfigCheckOptions &options) {
     SystemAllocator system;
     constexpr std::size_t memory_budget = 64 * 1024 * 1024;
     BudgetAllocator memory{system, memory_budget};
-    String path{AllocatorRef<char, decltype(memory)>{memory}};
+    String<decltype(memory)> path{AllocatorRef<char, decltype(memory)>{memory}};
     const ProcessEnvironment environment;
     if (options.path != nullptr) {
       path = options.path;

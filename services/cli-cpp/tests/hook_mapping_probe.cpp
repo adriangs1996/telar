@@ -13,7 +13,7 @@ struct EmptyEnvironment {
 int main() {
   SystemAllocator system;
   BudgetAllocator memory{system, 64 * 1024 * 1024};
-  String input{AllocatorRef<char, decltype(memory)>{memory}};
+  String<decltype(memory)> input{AllocatorRef<char, decltype(memory)>{memory}};
   input = R"({"hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"fixture.txt","content":")";
   input.append(512 * 1024, 'x');
   input += "\"}}";
