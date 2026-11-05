@@ -13,7 +13,7 @@ const PaneExited = @import("schema/messages/PaneExited.zig");
 const GenericDerived = @import("schema/GenericDerived.zig");
 const id = @import("schema/id.zig");
 
-const Operation = enum(u32) { hello, subscribe, open, viewport, input, acknowledge, close, read_pane };
+const Operation = enum(u32) { hello, subscribe, open, viewport, input, acknowledge, close, read_pane, resize, open_reflow };
 const Request = extern struct {
     operation: u32,
     pane_id: u64,
@@ -43,7 +43,7 @@ fn encode(request: *const Request, output: []u8) ![]const u8 {
             .client_identity = @enumFromInt(request.value),
             .interactive = true,
         }),
-        .open => pane.encodeOpenPane(output, .{
+        .open, .open_reflow => pane.encodeOpenPane(output, .{
             .request_id = @enumFromInt(request.value),
             .size = .{
                 .cols = columns,
@@ -53,7 +53,7 @@ fn encode(request: *const Request, output: []u8) ![]const u8 {
                 .cwd = "/tmp",
                 .arguments = &.{
                     std.mem.span(request.text),
-                    "--child",
+                    if (operation == .open_reflow) "--reflow-child" else "--child",
                     std.mem.span(request.extra),
                 },
             },
@@ -76,6 +76,13 @@ fn encode(request: *const Request, output: []u8) ![]const u8 {
             .pane_generation = request.value,
             .rows = rows,
             .source = .screen,
+        }),
+        .resize => pane.encodePaneResize(output, .{
+            .pane_id = @enumFromInt(request.pane_id),
+            .size = .{
+                .cols = std.math.cast(u16, request.value) orelse return error.Overflow,
+                .rows = rows,
+            },
         }),
         .close => pane.encodeClosePane(output, .{
             .pane_id = @enumFromInt(request.pane_id),
@@ -146,7 +153,7 @@ fn apply(payload: []const u8, view: *View, cells: []u8) !Event {
     const next = try frame.decodeBody(&decoder);
     try decoder.ensureEnd();
 
-    if (id.raw(next.pane_id) != view.pane_id or next.frame_id <= view.frame_id or next.cols != columns or next.rows != rows or cells.len != columns * rows or (next.base_frame_id != 0 and next.base_frame_id != view.frame_id)) {
+    if (id.raw(next.pane_id) != view.pane_id or next.frame_id <= view.frame_id or (next.cols != columns and next.cols != columns / 2) or next.rows != rows or cells.len != columns * rows or (next.base_frame_id != 0 and next.base_frame_id != view.frame_id)) {
         return error.WrongFrame;
     }
 
@@ -159,7 +166,7 @@ fn apply(payload: []const u8, view: *View, cells: []u8) !Event {
         var reader = span.cells();
         var index: usize = span.start;
         while (try reader.next()) |cell| {
-            if (index >= cells.len or cell.width != 1 or cell.len != 1 or cell.bytes[0] < ' ' or cell.bytes[0] > '~') {
+            if (index >= @as(usize, next.cols) * next.rows or cell.width != 1 or cell.len != 1 or cell.bytes[0] < ' ' or cell.bytes[0] > '~') {
                 return error.NonAsciiFixtureCell;
             }
             cells[index] = cell.bytes[0];

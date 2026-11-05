@@ -21,11 +21,14 @@ enum class Scenario {
   return_live,
   hold_ack,
   retain_history,
-  clamp_live
+  clamp_live,
+  reflow
 };
 
 constexpr std::uint32_t initial_lines = 100;
 constexpr std::uint32_t additional_lines = 25;
+constexpr std::size_t reflow_fill = 60;
+constexpr std::uint16_t narrow_columns = 41;
 constexpr TerminalSize size{.cols = 82, .rows = 21, .cell_width_px = 0, .cell_height_px = 0};
 
 static std::string rowLabel(std::uint32_t index) {
@@ -33,6 +36,15 @@ static std::string rowLabel(std::uint32_t index) {
   const auto length = std::snprintf(buffer.data(), buffer.size(), "row%06u", index);
   check(length == 9);
   return {buffer.data(), static_cast<std::size_t>(length)};
+}
+
+static std::string rowText(std::uint32_t index, bool reflow) {
+  auto text = rowLabel(index);
+  if (reflow) {
+    text.append(reflow_fill, 'x');
+  }
+
+  return text;
 }
 
 static void writeAll(std::string_view bytes) {
@@ -47,16 +59,16 @@ static void writeAll(std::string_view bytes) {
   }
 }
 
-static void emit(std::uint32_t first, std::uint32_t count) {
+static void emit(std::uint32_t first, std::uint32_t count, bool reflow) {
   std::string output;
   for (std::uint32_t index = first; index < first + count; ++index) {
-    output += rowLabel(index) + "\r\n";
+    output += rowText(index, reflow) + "\r\n";
   }
 
   writeAll(output);
 }
 
-static int child(const char *receipt_path) {
+static int child(const char *receipt_path, bool reflow) {
   termios settings{};
   check(::tcgetattr(STDIN_FILENO, &settings) == 0);
   ::cfmakeraw(&settings);
@@ -67,7 +79,7 @@ static int child(const char *receipt_path) {
     check(receipt.good());
   }
 
-  emit(0, initial_lines);
+  emit(0, initial_lines, reflow);
 
   for (;;) {
     char command{};
@@ -82,7 +94,7 @@ static int child(const char *receipt_path) {
     }
 
     check(command == 'a');
-    emit(initial_lines, additional_lines);
+    emit(initial_lines, additional_lines, reflow);
   }
 }
 
@@ -111,14 +123,15 @@ public:
   }
 
   Observation observation() const {
-    check(screen.columns() == size.cols && screen.rows() == size.rows);
+    check(screen.columns() == expected_columns && screen.rows() == size.rows);
     const auto total = screen.scroll().total_rows;
     check(total >= screen.rows());
     check(screen.scroll().offset <= total - screen.rows());
 
     for (std::uint32_t row = 0; row < screen.rows(); ++row) {
       const auto absolute = screen.scroll().offset + row;
-      const auto expected = absolute == total - 1 ? std::string{} : rowLabel(absolute);
+      const auto rows_per_line = reflow && expected_columns == narrow_columns ? 2U : 1U;
+      const auto expected = absolute == total - 1 ? std::string{} : rowText(absolute / rows_per_line, reflow).substr((absolute % rows_per_line) * expected_columns, expected_columns);
 
       for (std::uint32_t column = 0; column < screen.columns(); ++column) {
         const auto &cell = screen.cells()[row * screen.columns() + column];
@@ -127,7 +140,12 @@ public:
       }
     }
 
-    return {total, screen.scroll().offset, total - screen.rows(), latest_frame, rowLabel(screen.scroll().offset)};
+    std::string top;
+    for (std::uint32_t column = 0; column < rowLabel(0).size(); ++column) {
+      top += screen.cells()[column].utf8();
+    }
+
+    return {total, screen.scroll().offset, total - screen.rows(), latest_frame, top};
   }
 
   Observation until(std::uint32_t total, std::optional<std::uint32_t> wanted = std::nullopt) {
@@ -178,11 +196,32 @@ public:
     }
   }
 
+  void finish() {
+    const std::array<Byte, 1> quit{'q'};
+    peer.send(PaneInput{pane, quit});
+    for (;;) {
+      const auto reply = peer.receiveAny<PaneExited, PaneFrame>();
+
+      if (const auto *frame = std::get_if<PaneFrame>(&reply)) {
+        apply(*frame);
+        continue;
+      }
+
+      const auto &exited = std::get<PaneExited>(reply);
+      check(exited.pane_id == pane && exited.value == 0);
+      break;
+    }
+
+    peer.send(ClosePane{.request_id = 2, .pane_id = pane});
+  }
+
   ProtocolPeer peer;
   SystemAllocator memory;
   telar::gui::Screen<SystemAllocator> screen;
   std::uint64_t pane = 0;
   bool acknowledge = true;
+  bool reflow = false;
+  std::uint16_t expected_columns = size.cols;
   std::uint64_t latest_frame = 0;
   std::uint32_t frames_while_held = 0;
 };
@@ -194,8 +233,8 @@ static void record(const char *name, const Observation &value, bool comma) {
 } // namespace
 
 int main(int argc, char **argv) {
-  if (argc == 3 && std::string_view{argv[1]} == "--child") {
-    return child(argv[2]);
+  if (argc == 3 && (std::string_view{argv[1]} == "--child" || std::string_view{argv[1]} == "--reflow-child")) {
+    return child(argv[2], std::string_view{argv[1]} == "--reflow-child");
   }
   if (argc != 4) {
     return 2;
@@ -212,14 +251,17 @@ int main(int argc, char **argv) {
     scenario = Scenario::retain_history;
   } else if (mode == "clamp") {
     scenario = Scenario::clamp_live;
+  } else if (mode == "reflow") {
+    scenario = Scenario::reflow;
   } else {
     return 2;
   }
 
   try {
     View view{argv[1]};
+    view.reflow = scenario == Scenario::reflow;
     view.peer.send(RequestRuntimeState{.client_identity = 103, .interactive = true});
-    const std::array<std::string_view, 3> arguments{argv[0], "--child", argv[2]};
+    const std::array<std::string_view, 3> arguments{argv[0], view.reflow ? "--reflow-child" : "--child", argv[2]};
     const auto opened = view.peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     view.pane = opened.pane_id;
     const auto initial = view.until(initial_lines + 1);
@@ -228,6 +270,24 @@ int main(int argc, char **argv) {
     view.acknowledge = scenario != Scenario::hold_ack;
     view.peer.send(SetPaneViewport{view.pane, historical_offset});
     const auto historical = view.until(initial_lines + 1, historical_offset);
+
+    if (scenario == Scenario::reflow) {
+      view.expected_columns = narrow_columns;
+      view.peer.send(PaneResize{view.pane, {.cols = narrow_columns, .rows = size.rows}});
+      const auto narrow = view.until(initial_lines * 2 + 1);
+      view.expected_columns = size.cols;
+      view.peer.send(PaneResize{view.pane, size});
+      const auto restored = view.until(initial_lines + 1);
+      const bool anchored = narrow.offset == historical.offset * 2 && restored.offset == historical.offset;
+      view.finish();
+      std::printf("{\"mode\":\"reflow\",\"matches_expected\":%s,", anchored ? "true" : "false");
+      record("initial", initial, false);
+      record("historical", historical, true);
+      record("narrow", narrow, true);
+      record("restored", restored, true);
+      std::printf(",\"cells_verified\":true,\"child_exited\":true}\n");
+      return 0;
+    }
 
     if (scenario != Scenario::retain_history) {
       const auto target = scenario == Scenario::clamp_live ? std::numeric_limits<std::uint32_t>::max() : initial.bottom;
@@ -246,22 +306,7 @@ int main(int argc, char **argv) {
 
     const auto grown = view.screen.scroll().total_rows == initial_lines + additional_lines + 1 ? view.observation() : view.until(initial_lines + additional_lines + 1);
     const bool matches_expected = scenario == Scenario::retain_history ? grown.offset == historical.offset : grown.offset == grown.bottom;
-    const std::array<Byte, 1> quit{'q'};
-    view.peer.send(PaneInput{view.pane, quit});
-    for (;;) {
-      const auto reply = view.peer.receiveAny<PaneExited, PaneFrame>();
-
-      if (const auto *frame = std::get_if<PaneFrame>(&reply)) {
-        view.apply(*frame);
-        continue;
-      }
-
-      const auto &exited = std::get<PaneExited>(reply);
-      check(exited.pane_id == view.pane && exited.value == 0);
-      break;
-    }
-
-    view.peer.send(ClosePane{.request_id = 2, .pane_id = view.pane});
+    view.finish();
     std::printf("{\"mode\":\"%s\",\"matches_expected\":%s,\"frames_while_held\":%u,", argv[3], matches_expected ? "true" : "false", view.frames_while_held);
     record("initial", initial, false);
     record("historical", historical, true);

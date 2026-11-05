@@ -1,19 +1,19 @@
-#include "terminal/terminal.hpp"
-#include "terminal/frame_sync.hpp"
-#include "tests/check.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "terminal/frame_sync.hpp"
 #include "terminal/screen.hpp"
-#include <ghostty/vt.h>
+#include "terminal/terminal.hpp"
+#include "tests/check.hpp"
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <span>
-#include <chrono>
 #include <cstdio>
+#include <exception>
+#include <ghostty/vt.h>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -62,8 +62,10 @@ struct Fixture {
   std::uint64_t observed = 0;
   std::uint64_t full_frame_id = 0;
   std::uint64_t delta_frame_id = 0;
+  bool internal_revisions;
 
-  explicit Fixture(bool rich) {
+  explicit Fixture(bool rich, bool record_internal_revisions = true)
+      : internal_revisions(record_internal_revisions) {
     std::string text;
     for (std::uint32_t row = 0; row < history_rows; ++row) {
       if (row != 0) {
@@ -114,7 +116,9 @@ struct Fixture {
       full.requestSnapshot();
       frame(full, true);
       record(std::span<const ScreenCell>{terminal.screen.cells});
-      record(std::span<const std::uint64_t>{terminal.screen.row_revisions});
+      if (internal_revisions) {
+        record(std::span<const std::uint64_t>{terminal.screen.row_revisions});
+      }
     }
 
     frame(delta, emit);
@@ -130,12 +134,16 @@ struct Fixture {
     }
 
     publish(emit);
+    if (emit) {
+      terminal.scrollTo(offset);
+      publish(true);
+    }
   }
 };
 
-void verify() {
+void verify(bool internal_revisions) {
   for (const bool rich : {false, true}) {
-    Fixture fixture{rich};
+    Fixture fixture{rich, internal_revisions};
     fixture.publish(true);
     for (const auto offset : {4000U, 3997U, 3994U, 3994U, 3997U, 4000U, 0U, 3U, 2000U, 4075U, 4096U}) {
       fixture.scroll(offset, true);
@@ -186,8 +194,9 @@ void verify() {
 }
 
 void benchmark(std::string_view name, std::size_t iterations) {
-  const bool rich = name == "links";
-  check(rich || name == "ascii" || name == "output" || name == "resize" || name == "exposed" || name == "live");
+  const bool repeated = name == "repeat-ascii" || name == "repeat-links";
+  const bool rich = name == "links" || name == "repeat-links";
+  check(repeated || rich || name == "ascii" || name == "output" || name == "resize" || name == "exposed" || name == "live");
   Fixture fixture{rich};
   if (name == "exposed") {
     (void)fixture.terminal.handle();
@@ -207,7 +216,11 @@ void benchmark(std::string_view name, std::size_t iterations) {
     }
 
     const auto phase = static_cast<std::uint32_t>(index % (benchmark_half_cycle * 2));
-    fixture.scroll(scroll_start + (scroll_step * (phase < benchmark_half_cycle ? phase : (benchmark_half_cycle * 2) - 1 - phase)), false);
+    const auto offset = scroll_start + (scroll_step * (phase < benchmark_half_cycle ? phase : (benchmark_half_cycle * 2) - 1 - phase));
+    fixture.scroll(offset, false);
+    if (repeated) {
+      fixture.scroll(offset, false);
+    }
   };
 
   for (std::size_t index = 0; index < warmup; ++index) {
@@ -235,13 +248,13 @@ void benchmark(std::string_view name, std::size_t iterations) {
 int main(int argc, char **argv) {
   const std::span<char *const> arguments{argv, static_cast<std::size_t>(argc)};
   try {
-    if (arguments.size() == 2 && std::string_view{arguments[1]} == "verify") {
-      verify();
+    if (arguments.size() == 2 && (std::string_view{arguments[1]} == "verify" || std::string_view{arguments[1]} == "verify-observable")) {
+      verify(std::string_view{arguments[1]} == "verify");
       return 0;
     }
 
     if (arguments.size() != 3) {
-      std::fputs("Usage: probe verify | probe <ascii|links|output|resize|exposed|live> <iterations>\n", stderr);
+      std::fputs("Usage: probe <verify|verify-observable> | probe <ascii|links|repeat-ascii|repeat-links|output|resize|exposed|live> <iterations>\n", stderr);
       return 2;
     }
 

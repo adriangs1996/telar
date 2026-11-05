@@ -12562,3 +12562,155 @@ not be retained across terminal mutations. A subsequent candidate can use these
 oracles before attempting to reduce repeated projection/scroll work. The accepted
 C++ runtime/GUI/helper/Qt baseline remains unchanged; all complete F01–F16 and
 native120 gates remain open, with the persistent objective active.
+
+## 2026-11-05: repeated projection elimination rejected; reflow anchoring gap verified
+
+A fresh census of the accepted runtime confirms redundant work after historical
+scroll requests. Instrumented runtime `422c84f09e38…`, otherwise accepted source,
+records actual Terminal refreshes in
+`/tmp/telar-perf-viewport-repeat-census-01`. Its 100 measured input-to-presentation
+windows each contain one movement and one same-position refresh: 200 full
+projections and 4,200 converted rows. Content revision stays constant within those
+windows. Records are joined by actual runtime PID, monotonic mach time and the
+verified row packet; each movement has the expected offset and each repeat has
+only the preceding or current offset in the correct temporal order. The ordinary
+accepted binary produces no trace as a negative control. All census timings are
+excluded. Six host boundaries qualify, maximum load1 2.66357, and owned cleanup
+and resource-window containment pass.
+
+Candidate B in `out-perf/dlls-viewport-repeat-01` distinguishes clean, content and
+viewport dirtiness. A viewport-only refresh queries fresh scrollbar bounds and
+reuses the whole previous projection only if total rows, offset and visible row
+count match. Content mutations invalidate before mutation; exposing the raw
+Ghostty handle permanently disables reuse. It reuses neither moved rows nor
+partially overlapping projections. This does not adopt the previous return-to-live
+classifier or change retained absolute-offset semantics. The fast path avoids
+render-state update, row conversion, metadata reconstruction and the later empty
+diff, retaining the internal revision of an unchanged projection.
+
+The expanded `scroll_projection_probe.cpp` now exercises a second publication of
+each requested viewport. Its original `verify` mode still records internal row
+revisions; `verify-observable` omits only those implementation stamps, whose
+increment counts intentionally change when identical work is skipped. Both modes
+retain all cells and full/incremental wire frames, including styles, links,
+metadata and headers. Content arriving across viewport changes, partial control
+input, color changes, resize, alternate screens, clears and external handle use
+remain covered. The observable streams from A/B are byte-exact: 1,746 records,
+34,693,710 bytes, SHA-256
+`b747dc7a3b4d21921567c3d676ec48c821ef35a68b7a8bae2e4e866c1f80cb8b`.
+This is not a claim that internal generation stamps remain byte-identical.
+
+Scoped ASan/UBSan produces the same observable stream; the probe TU and instantiated
+Terminal/FrameSync are instrumented, reused libraries are not. Existing Terminal
+unit tests pass. Actual refresh kernels compile for ARM64, baseline x86-64 and
+x86-64-v3; `Terminal<SystemAllocator>` remains 49,144 bytes on all three. The linked
+native ARM64 runtime disassembly confirms the scrollbar comparisons and branch
+around Ghostty render-state update on a cache hit. The initial symbol-filtered
+disassembly produced no instructions; an address-bounded extraction from the
+actual native symbol supplies the verified assembly. No x86/Linux execution or
+full-suite result is claimed.
+
+Seven alternating component pairs per case complete 112 runs in
+`/tmp/telar-perf-viewport-repeat-component-pairs-01`, with 226 qualified host
+boundaries and maximum load1 2.39746. Each repeat iteration performs a movement
+and its repeated publication; other cases retain their original work. There are
+100 warmups, 100,000 measured iterations per case except resize (2,000), no counters
+or sanitizers in timing, and equal observed-output checksums within every pair.
+Both repeat targets pass 7/7; no control has a consistent 0–1/7 loss.
+
+| Component ns/iteration | A | B | B lower |
+| --- | ---: | ---: | ---: |
+| repeat-ascii | 14329.125 | 7703.814 | 7/7 |
+| repeat-links | 26015.213 | 14279.680 | 7/7 |
+| ascii | 7768.879 | 7690.889 | 6/7 |
+| links | 14358.309 | 14202.355 | 5/7 |
+| output | 7246.139 | 7230.366 | 5/7 |
+| resize | 246983.979 | 247333.104 | 2/7 |
+| exposed | 7734.773 | 7761.328 | 3/7 |
+| live | 7113.905 | 7048.249 | 6/7 |
+
+Native B SHA-256 is
+`3c5db45e4bcda3d81ae4bdd1f47c5f3def855a4b5a5e0e2dc7b4a74cf8bd7cc1`;
+A remains `1f1849d1881f…`. GUI `bc55d0e84d76…`, helper `87beebb065f0…` and Qt remain
+unchanged. Private main-TU overlays preserve accepted history/client/delivery code
+and exclude the four pending pacing files. Source identities, compile/link
+commands, codegen and sanitizer receipts are under the ignored experiment prefix.
+
+Six alternating native pairs in `/tmp/telar-perf-viewport-repeat-native-pairs-01`
+use 100 measured scroll inputs and 20 warmups, native 1600×1000 scale-two drawable,
+82×21 grid and the existing packet-verified scroll corpus. All content/presentation,
+Qt identity, resource, matched-grid and owned-cleanup checks pass. The 26 host
+boundaries qualify with maximum load1 4.71484; own builds/tests/profiles are separate
+from timing. Boundary qualification does not exclude every transient disturbance.
+
+| Native scroll metric | A | B | B lower |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50 ms | 30.58422 | 31.56886 | 1/6 |
+| Input-to-present p95 ms | 38.37604 | 39.99898 | 3/6 |
+| Input-to-present p99 ms | 45.19056 | 44.05197 | 3/6 |
+| Input-to-present maximum ms | 45.92765 | 47.72996 | 3/6 |
+| GUI CPU ms/input | 4.82551 | 5.06307 | 2/6 |
+| GUI peak RSS MiB | 206.03125 | 206.75781 | 2/6 |
+| Runtime CPU ms/run | 84.94721 | 79.77681 | 5/6 |
+| Runtime instructions/run | 414279962.00000 | 389046023.50000 | 6/6 |
+| Runtime cycles/run | 179671909.50000 | 166524250.00000 | 6/6 |
+
+Runtime counters include GUI setup, warmup, measured inputs and GUI exit, excluding
+runtime startup/shutdown and child CPU. Runtime CPU meets 5/6 and hardware counters
+improve 6/6, but p95 improves only 3/6 and p50 loses consistently (1/6). **Reject B
+for adoption.** The predefined gate requires both runtime CPU and p95 at least
+5/6 with no consistent latency regression. The cause of the latency loss is not
+established; no code-placement exception is proved. This is not a memory rejection.
+No broad control series or independent-Zig speed promotion is justified for B.
+
+A separate instrumented B census verifies that the optimization actually runs in
+the GUI workload. In `/tmp/telar-perf-viewport-repeat-census-B-01`, each of the
+100 measured input windows has one moving projection and one whole-projection
+cache hit: 2,100 rows converted instead of the accepted census's 4,200. Content
+revision is constant within this trace too; its numeric value is not compared
+across runtime instances. Counter binary `5d42efa67842…` uses the same source logic
+as ordinary B; ordinary B writes no trace as its negative control. Six host
+boundaries qualify, maximum load1 2.45605. PID/time/packet, resource-window and
+cleanup validation pass; all instrumented timing is excluded. Work elimination is
+real, but these measurements do not establish better whole-application latency.
+
+The reusable live-follow oracle additionally tests reflow anchoring. Its raw PTY
+child emits 100 lines containing a nine-character row label and 60 `x` characters.
+After scrolling to logical row 59, the client narrows 82→41 columns and restores
+82 columns. The independent Zig schema adapter adds the actual PaneResize encoder;
+all visible cells and widths are checked against the independently computed
+wrapped-line corpus at each milestone.
+
+| Runtime | Narrowed offset | Narrowed top | Restored offset | Anchor retained |
+| --- | ---: | --- | ---: | --- |
+| Accepted A | 59 | `xxxxxxxxx` | 59 | no |
+| Repeated-projection B | 59 | `xxxxxxxxx` | 59 | no |
+| Previously rejected return classifier C | 59 | `xxxxxxxxx` | 59 | no |
+| Independent Zig | 118 | `row000059` | 59 | yes |
+
+The total becomes 201 rows when narrow and returns to 101 when wide. C++'s raw
+absolute offset selects the continuation of logical row 29 while Zig's tracked
+anchor keeps logical row 59. This is a reproduced runtime/PTY/wire parity gap,
+not merely an inference from source or a native resize-latency measurement.
+
+All five oracle cases run in four variant series in
+`/tmp/telar-perf-viewport-repeat-reflow-{A,B,follow-C,zig}-01`: 20 valid
+cell/protocol observations, controller exits 1/1/1/0 as expected, twelve qualified
+host boundaries per series, maximum load1 1.87842, all owned cleanup complete.
+Here each case starts its own runtime; these are four variant series of five cases.
+A and B retain the same three known failures (return, held return, reflow), the old
+C fixes only the two returns, and Zig passes all five. The reference adapter is
+built from frozen revision `5c619b85c07d86e2a9ec19163c68c9287df23cde`; its SHA-256 is
+`4248bdbd05afc365332bd6179c01acd756e7f36fd3d4bda99972ee80cddc2dc9`.
+The held-return trace passes 19 decoder/cell negative controls, and the reflow
+trace passes 18 (five frames, one delta). The offline checker now accepts
+`--reflow` to select the long-row corpus explicitly. Source formatting and Python
+compilation checks pass.
+
+Only expanded oracles and findings are retained in Git. The four pre-existing
+pacing files remain byte-identical; no production optimization is adopted. The
+accepted runtime/GUI/helper/Qt base is unchanged. Full F01–F16 and native120 gates
+remain open and the persistent objective remains active. The next viewport change
+must address logical anchoring and return-to-live together, while further latency
+work must establish its effect on the native input-to-presentation path rather
+than infer it from lower component work alone.

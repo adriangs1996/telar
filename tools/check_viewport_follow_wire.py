@@ -32,8 +32,9 @@ def read_capture(path):
     return payloads
 
 
-def check_capture(library, payloads):
+def check_capture(library, payloads, reflow=False):
     wire = Wire(library)
+    wire.reflow = reflow
     kinds, bases = [], []
     for payload in payloads:
         kinds.append(wire.apply(payload))
@@ -88,13 +89,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--wire', type=Path, required=True)
     parser.add_argument('--capture', type=Path, required=True)
+    parser.add_argument('--reflow', action='store_true', help='Validate the long-row reflow fixture')
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled for this oracle')
     library = args.wire.resolve(strict=True)
-    report = check_capture(library, read_capture(args.capture))
-    report.update(scope='Offline decoder/cell oracle only.',
+    report = check_capture(library, read_capture(args.capture), args.reflow)
+    report.update(scope='Offline decoder/cell oracle only.', reflow=args.reflow,
                   bridge_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                   capture_sha256=hashlib.sha256(args.capture.read_bytes()).hexdigest())
     with args.output.open('x') as output:

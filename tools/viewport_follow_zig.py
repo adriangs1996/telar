@@ -29,6 +29,8 @@ class Operation(enum.IntEnum):
     ACK = 5
     CLOSE = 6
     READ = 7
+    RESIZE = 8
+    OPEN_REFLOW = 9
 
 
 class Event(enum.IntEnum):
@@ -63,6 +65,8 @@ class Wire:
                                                ctypes.c_void_p, ctypes.c_size_t]
         self.library.viewport_apply.restype = ctypes.c_int
         self.view = View()
+        self.expected_columns = COLUMNS
+        self.reflow = False
         self.cells = ctypes.create_string_buffer(COLUMNS * ROWS)
         self.output = ctypes.create_string_buffer(MAX_PAYLOAD)
 
@@ -82,14 +86,20 @@ class Wire:
 
     def observation(self):
         view = self.view
-        assert (view.columns, view.rows) == (COLUMNS, ROWS)
+        assert (view.columns, view.rows) == (self.expected_columns, ROWS)
         assert view.total >= ROWS and view.offset <= view.total - ROWS
-        expected = b''.join(
-            (b'' if row == view.total - 1 else f'row{row:06d}'.encode()).ljust(COLUMNS, b' ')
-            for row in range(view.offset, view.offset + ROWS))
-        assert self.cells.raw == expected, 'Visible cells differ from the numbered corpus'
+        rows_per_line = 2 if self.reflow and view.columns == COLUMNS // 2 else 1
+        def line(row):
+            if row == view.total - 1:
+                return b''
+            text = f'row{row // rows_per_line:06d}'.encode() + (b'x' * 60 if self.reflow else b'')
+            start = (row % rows_per_line) * view.columns
+            return text[start:start + view.columns]
+        expected = b''.join(line(row).ljust(view.columns, b' ') for row in range(view.offset, view.offset + ROWS))
+        assert self.cells.raw[:view.columns * ROWS] == expected, 'Visible cells differ from the numbered corpus'
         return dict(total=view.total, offset=view.offset, bottom=view.total - view.rows,
-                    frame=view.frame_id, top=f'row{view.offset:06d}')
+                    frame=view.frame_id, top=self.cells.raw[:9].decode())
+
 
 
 class Driver:
@@ -154,7 +164,8 @@ class Driver:
         self.send(Operation.HELLO)
         assert self.receive() == Event.ACCEPTED
         self.send(Operation.SUBSCRIBE, 103)
-        self.send(Operation.OPEN, 1, str(fixture).encode(), str(receipt).encode())
+        self.wire.reflow = mode == 'reflow'
+        self.send(Operation.OPEN_REFLOW if self.wire.reflow else Operation.OPEN, 1, str(fixture).encode(), str(receipt).encode())
         while self.receive() != Event.OPENED:
             pass
         initial = self.until(INITIAL_LINES + 1)
@@ -162,6 +173,17 @@ class Driver:
         self.acknowledge = mode != 'held'
         self.send(Operation.VIEWPORT, initial['bottom'] - ROWS)
         historical = self.until(INITIAL_LINES + 1, initial['bottom'] - ROWS)
+        if mode == 'reflow':
+            self.wire.expected_columns = COLUMNS // 2
+            self.send(Operation.RESIZE, COLUMNS // 2)
+            narrow = self.until(INITIAL_LINES * 2 + 1)
+            self.wire.expected_columns = COLUMNS
+            self.send(Operation.RESIZE, COLUMNS)
+            restored = self.until(INITIAL_LINES + 1)
+            self.finish()
+            return dict(mode=mode, initial=initial, historical=historical, narrow=narrow, restored=restored,
+                        matches_expected=narrow['offset'] == historical['offset'] * 2 and restored['offset'] == historical['offset'],
+                        cells_verified=True, child_exited=True)
         before_output = historical
         if mode != 'history':
             self.send(Operation.VIEWPORT, (1 << 32) - 1 if mode == 'clamp' else initial['bottom'])
@@ -174,14 +196,17 @@ class Driver:
             self.send(Operation.ACK, self.wire.view.frame_id)
         total = INITIAL_LINES + ADDITIONAL_LINES + 1
         grown = self.wire.observation() if self.wire.view.total == total else self.until(total)
-        self.send(Operation.INPUT, text=b'q')
-        while self.receive() != Event.EXITED:
-            pass
-        self.send(Operation.CLOSE, 2)
+        self.finish()
         expected = historical['offset'] if mode == 'history' else grown['bottom']
         return dict(mode=mode, initial=initial, historical=historical, before_output=before_output,
                     grown=grown, held_frames=self.held_frames, follows_live=grown['offset'] == grown['bottom'],
                     matches_expected=grown['offset'] == expected, cells_verified=True, child_exited=True)
+
+    def finish(self):
+        self.send(Operation.INPUT, text=b'q')
+        while self.receive() != Event.EXITED:
+            pass
+        self.send(Operation.CLOSE, 2)
 
 
 def main():
@@ -190,7 +215,7 @@ def main():
     parser.add_argument('--fixture', type=Path, required=True)
     parser.add_argument('socket')
     parser.add_argument('receipt', type=Path)
-    parser.add_argument('mode', choices=('return', 'held', 'history', 'clamp'))
+    parser.add_argument('mode', choices=('return', 'held', 'history', 'clamp', 'reflow'))
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled for this oracle')
