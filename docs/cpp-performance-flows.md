@@ -249,6 +249,25 @@ Keep the static full-terminal comparison separate from per-input packet checks.
 The corpus population is outside measured GUI input CPU but inside the wider
 runtime resource interval. No timing from profiling or capture runs is accepted.
 
+For the runtime projection component, build
+`python3 tools/build_runtime_scroll_probe.py --runtime-build <existing-ninja-runtime-build> <new-output-directory>`.
+This reuses existing libraries without rebuilding the runtime. The manifest records
+commands, source/header hashes and linked libraries; `--overlay` supports private
+Clang VFS candidates with absolute external-content paths. Existing output directories
+are rejected. Run each executable with `verify`, require a successful exit, and
+compare its complete binary stdout. The records contain full frames, raw cells,
+row revisions and incremental frames, covering bidirectional history movement,
+repeated offsets, Unicode/styles/links, colors, resize, live/alternate screens,
+and a later reset through a retained mutable handle.
+
+The same executable accepts `<case> <iterations>`, where case is `ascii`, `links`,
+`output`, `resize`, `exposed` or `live`. These timings cover terminal refresh and
+incremental frame preparation/acknowledgment after 100 warmups. Corpus construction,
+verification decoding and binary output are excluded. Use seven alternating pairs
+and host qualification; the active-output, resize and exposed-handle controls must
+not regress consistently. Component timings neither measure native presentation
+nor replace the independent-stack F06 and cadence requirements above.
+
 Fresh setup, coverage gaps and current experiments are tracked in
 [cpp-performance-progress.md](cpp-performance-progress.md).
 

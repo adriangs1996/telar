@@ -11690,3 +11690,100 @@ files remain byte-identical. The displaced-row implementation and all raw eviden
 remain private for future investigation. All complete F01-F16 and native120
 acceptance stays open; saving row reconstruction did not meet this experiment's
 whole-application criterion.
+
+
+### Runtime scroll projection overlap: four rejected component variants
+
+At `7490b13d2`, `out-perf/dlls-runtime-scroll-projection-01` investigates work
+before GUI rendering: `Terminal::refresh` reprojects every row for a forced
+attachment viewport. Delivery subsequently returns Ghostty to the live bottom
+without refreshing, so `dirty_` alone does not identify the last projected viewport.
+The candidate moves overlapping ScreenCell rows and converts only newly exposed
+rows. Row revisions, flags, metadata capture, cursor/modes and wire preparation
+retain their original behavior. All production changes stay in private Clang VFS
+overlays; the checked-out Terminal implementation is unchanged.
+
+The initial proof uses content revision plus color invalidation. Exposing a mutable
+Ghostty handle permanently disables reuse, including mutation through a retained
+handle after later refreshes. Reuse is also refused for changed total row counts
+or displacements beyond the grid. Failed refreshes invalidate the proof before
+partially mutating cached cells. V1 checks the reusable interval in the ordinary
+row loop; v2 separates specialized loops; v3 branches to a separate scroll-only
+refresh while preserving the original ordinary loop; v4 replaces the saved
+revision with an explicitly invalidated flag beside existing flags. V4 invalidates
+before feed, pending-control resume, resize and color configuration. None is adopted.
+
+The reusable `scroll_projection_probe.cpp` populates 4,096 rows in an 82x21 grid.
+Its verifier emits full wire snapshots, raw cells, row revisions and incremental
+frames, validating decoded frames before acknowledgment. Reference and all four
+variants match all 1,144 records and 17,243,839 bytes exactly, SHA256
+`1c97691c376ef90c89d74d3d53024bebccd5444c76ada5982640292267106ed1`.
+Coverage includes bidirectional/repeated/large-jump scroll, styles, combining/wide
+text, links, configured and OSC colors, resize, new output, alternate screen,
+scrollback clearing and reset through a retained handle. The public builder's
+reference and overlay builds reproduce the same complete stream.
+
+Separate v1/v4 source counters report 21,000 row conversions for 1,000 reference
+inputs versus 2,991 for stationary ASCII or links. New output, resize, exposed handle
+and live-output controls retain 21,000 conversions. Counts exclude 100 warmups; their
+instrumented elapsed values are not used for acceptance. The algorithm adds an
+in-place memmove of the overlapping cells rather than a separate cell cache.
+For a three-row movement, 18x82x32=47,232 bytes are moved. V4 and the reference both
+have `sizeof(Terminal<SystemAllocator>)=49,144` on ARM64.
+
+Four independent series, `/tmp/telar-perf-runtime-scroll-projection-pairs-01` through
+`-04`, each complete seven alternating pairs across six cases, 84 runs and 170 host
+boundaries. All host checks qualify, with maximum load1 per series listed below.
+No builds, sanitizers or profiles overlap timing. Each run uses 100 warmups and
+100,000 measured operations, except resize with 2,000. The interval includes refresh
+and incremental frame preparation/ack; corpus construction, verification decoding
+and binary output are excluded. Returned observed frame totals match in every pair.
+
+| Variant | ASCII wins | Links wins | Output wins | Resize wins | Exposed wins | Live wins | Maximum load1 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| v1 | 7/7 | 7/7 | 0/7 | 5/7 | 1/7 | 0/7 | 2.66846 |
+| v2 | 7/7 | 7/7 | 0/7 | 1/7 | 0/7 | 0/7 | 2.11084 |
+| v3 | 7/7 | 7/7 | 0/7 | 5/7 | 5/7 | 0/7 | 2.29883 |
+| v4 | 7/7 | 7/7 | 3/7 | 3/7 | 2/7 | 1/7 | 1.85156 |
+
+The last variant's medians are:
+
+| Component ns/operation | Reference | v4 | v4 lower |
+| --- | ---: | ---: | ---: |
+| ascii | 7724.118 | 5000.516 | 7/7 |
+| links | 14187.165 | 11065.344 | 7/7 |
+| output | 7194.493 | 7205.331 | 3/7 |
+| resize | 246500.729 | 246383.166 | 3/7 |
+| exposed | 7734.775 | 7741.500 | 2/7 |
+| live | 7012.748 | 7066.754 | 1/7 |
+
+Each variant wins both targets 7/7, but at least one control loses consistently
+(0-1 wins). V4's smaller live-output difference still fails the unchanged rule.
+These component gains cannot justify a production change, a native latency claim
+or skipping controls. There is no native accepted-runtime or independent-Zig timing
+for these rejected variants. The cause of the remaining control losses is not
+established; source changes, extra state maintenance and code placement have not
+been separately attributed.
+
+V2, v3 and v4 pass the complete stream under ASan/UBSan with the probe TU and its
+Terminal/frame templates instrumented. Runtime-core, Ghostty and system libraries
+remain uninstrumented; this is scoped coverage. Container checks stay enabled,
+leak detection is disabled and UBSan halts on error. Existing `testTerminal` cases
+pass against v2 and v4. Actual refresh kernels for v2-v4 compile at the configured
+Release flags for ARM64, x86-64 baseline and x86-64-v3. The assembly confirms
+separate reusable/ordinary loops in v2, an early fast-path call in v3/v4 and memmove
+for overlap. These are codegen checks, not x86/Linux native execution.
+
+`tools/build_runtime_scroll_probe.py` compiles the reusable fixture from an existing
+Ninja compile database and links its existing libraries without rebuilding the
+runtime. It records commands, source/header/overlay inputs and library hashes,
+rejects existing destinations and supports private overlays. The four pre-existing
+pending runtime files remain byte-identical; no candidate header is installed.
+The final public reference/overlay helpers reproduce the complete stream and all
+six observed frame totals; timing continues to refer to the frozen private builds,
+not these subsequently cleaned-up CLI builds. An optional broad clang-tidy audit
+reports diagnostics in unchanged runtime headers and the test fixture; the normal
+runtime lint target excludes tests. No whole-TU lint-clean claim is made.
+All complete F01-F16/native120 requirements remain open. A next distinct lead is
+encoding content-versus-viewport dirtiness in the existing dirty state, avoiding
+separate validity updates; it needs its own oracle and measurements before use.
