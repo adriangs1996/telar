@@ -3,7 +3,7 @@ project(telar_native LANGUAGES C)
 
 include(ExternalProject)
 include(manifest.cmake)
-include("${TELAR_MANAGED_BUILD}")
+include("${TELAR_MANAGED_TOOLCHAIN}")
 set(TELAR_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/downloads" CACHE PATH "Verified source archive cache")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Private installation" FORCE)
 

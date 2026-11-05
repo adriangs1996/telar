@@ -3,8 +3,9 @@ include_guard(GLOBAL)
 # Builds a pinned third-party dependency once from its recipe directory, a
 # CMake project whose TARGET downloads, verifies, builds and installs it into
 # <build>/install. Builds are keyed by the compiler, the flags that reach the
-# dependency and the recipe's FILES, so a changed pin or toolchain gets a new
-# directory instead of reusing an old installation.
+# dependency, managed_toolchain.cmake and the recipe's FILES, so a changed pin
+# or toolchain gets a new directory instead of reusing an old installation. A
+# completed key is reused as it is, from any checkout sharing the cache.
 #
 # telar_managed_build(NAME label RECIPE dir ROOT cache TARGET target JOBS n
 #                     FILES file... RESULT variable)
@@ -42,8 +43,9 @@ function(telar_managed_build)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${managed_RECIPE}/${file}")
   endforeach()
 
-  file(SHA256 "${CMAKE_CURRENT_FUNCTION_LIST_FILE}" digest)
-  string(APPEND identity ";managed_build.cmake=${digest}")
+  set(toolchain "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/managed_toolchain.cmake")
+  file(SHA256 "${toolchain}" digest)
+  string(APPEND identity ";managed_toolchain.cmake=${digest}")
 
   if(CMAKE_TOOLCHAIN_FILE)
     file(SHA256 "${CMAKE_TOOLCHAIN_FILE}" digest)
@@ -64,32 +66,29 @@ function(telar_managed_build)
   endif()
 
   message(STATUS "Preparing managed ${managed_NAME}: ${build}/install")
-  execute_process(COMMAND "${CMAKE_COMMAND}" -S "${managed_RECIPE}" -B "${build}" -G Ninja
-      "-DTELAR_DOWNLOAD_DIR:PATH=${root}/downloads" "-DTELAR_MANAGED_JOBS:STRING=${managed_JOBS}"
-      "-DTELAR_MANAGED_BUILD:FILEPATH=${CMAKE_CURRENT_FUNCTION_LIST_FILE}" ${arguments}
-    COMMAND_ERROR_IS_FATAL ANY)
-  execute_process(COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_BUILD_PARALLEL_LEVEL=${managed_JOBS}"
-      "${CMAKE_COMMAND}" --build "${build}" --target "${managed_TARGET}" --parallel 1
-    COMMAND_ERROR_IS_FATAL ANY)
-  set(${managed_RESULT} "${build}/install" PARENT_SCOPE)
-endfunction()
-
-# For a recipe: the toolchain settings telar_managed_build handed it, as
-# ExternalProject CMAKE_ARGS whose lists use "|" (pass LIST_SEPARATOR "|").
-function(telar_forwarded_toolchain result)
-  set(arguments)
-  foreach(variable IN ITEMS
-      CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_MAKE_PROGRAM
-      CMAKE_OBJC_COMPILER CMAKE_OBJCXX_COMPILER CMAKE_OBJC_FLAGS CMAKE_OBJCXX_FLAGS
-      CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
-      CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT
-      CMAKE_TOOLCHAIN_FILE CMAKE_SYSROOT CMAKE_C_FLAGS CMAKE_CXX_FLAGS
-      CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE)
-    if(DEFINED ${variable} AND NOT "${${variable}}" STREQUAL "")
-      string(REPLACE ";" "|" value "${${variable}}")
-      list(APPEND arguments "-D${variable}:STRING=${value}")
+  set(complete "${build}/complete")
+  if(NOT EXISTS "${complete}")
+    # An unfinished build started from another checkout names that checkout's
+    # recipe; regenerate its tree here and let ExternalProject resume.
+    if(EXISTS "${build}/CMakeCache.txt")
+      file(STRINGS "${build}/CMakeCache.txt" home REGEX "^CMAKE_HOME_DIRECTORY:INTERNAL=")
+      string(REPLACE "CMAKE_HOME_DIRECTORY:INTERNAL=" "" home "${home}")
+      file(REAL_PATH "${home}" home)
+      file(REAL_PATH "${managed_RECIPE}" recipe)
+      if(NOT home STREQUAL recipe)
+        file(REMOVE_RECURSE "${build}/CMakeCache.txt" "${build}/CMakeFiles")
+      endif()
     endif()
-  endforeach()
 
-  set(${result} "${arguments}" PARENT_SCOPE)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -S "${managed_RECIPE}" -B "${build}" -G Ninja
+        "-DTELAR_DOWNLOAD_DIR:PATH=${root}/downloads" "-DTELAR_MANAGED_JOBS:STRING=${managed_JOBS}"
+        "-DTELAR_MANAGED_TOOLCHAIN:FILEPATH=${toolchain}" ${arguments}
+      COMMAND_ERROR_IS_FATAL ANY)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_BUILD_PARALLEL_LEVEL=${managed_JOBS}"
+        "${CMAKE_COMMAND}" --build "${build}" --target "${managed_TARGET}" --parallel 1
+      COMMAND_ERROR_IS_FATAL ANY)
+    file(TOUCH "${complete}")
+  endif()
+
+  set(${managed_RESULT} "${build}/install" PARENT_SCOPE)
 endfunction()

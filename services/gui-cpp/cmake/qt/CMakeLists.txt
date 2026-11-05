@@ -3,7 +3,7 @@ project(telar_qt LANGUAGES C CXX)
 
 include(ExternalProject)
 include(manifest.cmake)
-include("${TELAR_MANAGED_BUILD}")
+include("${TELAR_MANAGED_TOOLCHAIN}")
 find_program(TELAR_QT_PATCH patch REQUIRED)
 set(TELAR_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/downloads" CACHE PATH "Verified Qt source archive cache")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Private Qt installation" FORCE)

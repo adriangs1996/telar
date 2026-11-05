@@ -14,8 +14,8 @@ from qt_deploy import qt_installation
 
 BASE = Path(__file__).resolve().parents[1]
 RECIPE = BASE / "cmake/qt"
-# telar_managed_build hands every recipe its shared helpers.
-MANAGED_BUILD = BASE.parents[1] / "cmake/managed_build.cmake"
+# telar_managed_build hands every recipe the toolchain forwarding helper.
+MANAGED_TOOLCHAIN = BASE.parents[1] / "cmake/managed_toolchain.cmake"
 
 
 def run(*arguments, **kwargs):
@@ -44,7 +44,7 @@ class QtDependencyTest(unittest.TestCase):
     def test_external_projects_pin_sources_and_build_order_without_downloading(self):
         with tempfile.TemporaryDirectory() as directory:
             build = Path(directory).resolve() / "build"
-            result = run("cmake", "-S", str(RECIPE), "-B", str(build), "-G", "Ninja", f"-DTELAR_MANAGED_BUILD={MANAGED_BUILD}")
+            result = run("cmake", "-S", str(RECIPE), "-B", str(build), "-G", "Ninja", f"-DTELAR_MANAGED_TOOLCHAIN={MANAGED_TOOLCHAIN}")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             manifest = (RECIPE / "manifest.cmake").read_text()
             version = re.search(r"set\(TELAR_QT_VERSION ([0-9.]+)\)", manifest).group(1)
