@@ -11883,3 +11883,128 @@ bottom after preparing a historical frame. Avoiding redundant projection/prepara
 or using an acknowledged delta could save more work. This is unproven and requires
 multi-client, outstanding-ack, viewport-return and output-during-scroll equivalence
 before any timing or adoption; it is not a reason to accept the rejected overlap path.
+
+### Viewport requests with acknowledged deltas — 2026-11-05
+
+At `2be534899`, a separate experiment targets complete snapshots requested by every
+`SetPaneViewport`. It does not include the rejected Terminal overlap path or pending
+pacing edits. A private FrameSync viewport-pending flag triggers immediate delivery
+without invalidating the acknowledged cell baseline. Explicit recovery requests,
+initial frames, changed dimensions and oversized-delta fallback still send snapshots.
+Pending viewport requests survive blocked/wrong ACKs; an unchanged viewport still
+receives a frame. Attachment delivery preserves the former snapshot request's pacing
+priority. ARM64 FrameSync size stays 408 bytes, with no new buffers.
+
+`out-perf/dlls-viewport-delta-01` holds the overlays, source receipts and frozen builds.
+The new viewport oracle applies actual wire frames through the GUI's Screen type and
+compares canonical reconstructed cells, row flags, headers, link runs and URIs after
+each publish. Raw delta wire bytes are intentionally not required to equal a full
+snapshot; full reference snapshots and runtime cells/revisions are also emitted.
+The expanded 35,313,351-byte stream is identical between A3 and B3, SHA-256
+`26ea0604a61e0b6cba1d9651cc024e34ee395f061ae53883d2448e03d6ac28db`.
+It covers ASCII, styled Unicode/links, opposite and repeated scroll, output while
+awaiting ACK, multiple pending viewport requests, wrong/stale ACKs, explicit recovery,
+resize with an outstanding frame, colors, partial controls and retained raw handles.
+
+Within that verification workload, ASCII wire payload falls from 541,956 to 108,780
+bytes and encoded cells from 262,402 to 23,910; rich text falls from 706,958 to 221,248
+bytes and cells from 262,402 to 17,544. Snapshots fall from 153 to 6 in each case.
+These totals describe the verification fixture, not native input windows. A separate
+real AttachmentDelivery/socket-pair oracle serves two clients at different historical
+positions, including pending credit, new output, explicit recovery, a live return and
+pacing priority. Both variants deliver 71 frames; snapshots fall from 70 to 3. The
+candidate also passes existing FrameSync and client-delivery tests.
+
+Scoped ASan/UBSan reproduces the complete canonical stream. Probe/template code and
+the GUI Screen are instrumented; reused runtime-core, Ghostty and system libraries
+are not. Leak detection is disabled and UBSan halts. Actual prepare kernels compile
+for ARM64, x86-64 and x86-64-v3. ARM64 assembly and the linked runtime show the
+separate pending-viewport byte, preserved outstanding-ACK early return and ordinary
+acknowledged-damage path. Cross codegen is not execution on x86/Linux.
+
+Seven alternating pairs per component case complete 84 runs and 170 qualified host
+boundaries in `/tmp/telar-perf-viewport-delta-pairs-01`, maximum load1 3.41455. No
+builds/tests/profiles overlap timing. Each operation includes refresh, viewport-request
+preparation and acknowledgment; construction and GUI frame application are outside the
+measured loop. Repeated byte totals are deterministic; smaller encoded payloads are
+expected and independently qualified by the decoded-state oracle.
+
+| Component ns/operation | Full-snapshot reference | Viewport delta | Delta lower |
+| --- | ---: | ---: | ---: |
+| ASCII | 13812.165 | 7797.665 | 7/7 |
+| Links | 20810.988 | 14399.568 | 7/7 |
+| Output during scroll | 14058.677 | 7276.007 | 7/7 |
+| Resize | 247357.792 | 245885.750 | 5/7 |
+| Exposed handle | 13799.828 | 7817.490 | 7/7 |
+| Live output | 7183.162 | 7163.018 | 5/7 |
+
+Native A is the frozen accepted runtime `1f1849d1881f…`; B is `e9b83f9b08f1…`.
+Both use GUI `bc55d0e84d76…`, the same helper and Qt frameworks. Only the main TU
+requires recompilation: saved runtime-core dependencies include none of the three
+candidate headers. Final drawable readback in `/tmp/telar-perf-viewport-delta-body-01`
+is byte-exact between A/B and the prior packet-validated PNG, SHA-256
+`ec87ced6f6c97b8de5057ed62eefa1b98970cc34c066c40db8381bd85e1f164d`.
+This is a final-image check, not a continuous-cadence claim; its timings are excluded.
+
+Six alternating native pairs in `/tmp/telar-perf-viewport-delta-native-pairs-01`
+complete 100 measured inputs plus 20 warmups per run. All packet/presentation,
+geometry, Qt, runtime-resource and cleanup checks pass; 26 host boundaries qualify,
+maximum load1 4.03760. Builds, tests and profiles do not overlap this series.
+
+| Native metric | Accepted C++ | Viewport delta | Delta lower |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50 ms | 30.90023 | 32.25276 | 2/6 |
+| Input-to-present p95 ms | 41.43966 | 39.14854 | 6/6 |
+| Input-to-present p99 ms | 45.60351 | 43.58869 | 4/6 |
+| Input-to-present maximum ms | 48.27817 | 46.97731 | 3/6 |
+| GUI CPU ms/input | 4.86735 | 5.02749 | 3/6 |
+| GUI peak RSS MiB | 191.55469 | 198.18750 | 2/6 |
+| Runtime CPU ms/run | 82.28087 | 79.79671 | 5/6 |
+| Runtime instructions/run | 412289394.00000 | 398210176.50000 | 6/6 |
+
+The predeclared p95 and runtime-CPU gates pass (6/6 and 5/6). P50 and GUI CPU
+have worse medians with mixed wins, so they are not claimed as improvements. GUI
+peak RSS also rises by median. Runtime CPU/instructions bracket GUI startup,
+warmup, measurement and GUI exit; they are not per-input CPU counters. This first
+native gate permits further qualification, not adoption or complete F06 acceptance.
+The public oracles in `74a672281` rebuild through the reusable builder and reproduce
+the frozen canonical stream and both delivery counts; component timings refer to
+the earlier frozen A3/B3 probes. Final TUI/single/splits/tabs diagnostic captures in
+`/tmp/telar-perf-viewport-delta-control-pixels-02` match A/B and prior reference PNGs
+byte-for-byte, with eight runs and qualified host boundaries. Attempt `-01` failed
+before launching a workload due to a stale controller filename in its input receipt;
+no measurement from it is used.
+
+The broader accepted-runtime regression series
+`/tmp/telar-perf-viewport-delta-controls-01` completes six alternating pairs for each
+of TUI, single, splits and tabs: 48 runs, 98 qualified host boundaries, maximum load1
+4.60938. All workload/native/Qt/resource and owned-cleanup checks pass. Each run has
+100 measured inputs and 20 warmups. No builds, tests or profiles overlap timing.
+
+| Control | p95 ms, A → B | B lower | GUI CPU ms/input, A → B | B lower | Runtime CPU ms/run, A → B | B lower |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| tui | 37.32038 → 39.20412 | 1/6 | 5.18507 → 5.14295 | 4/6 | 101.38283 → 103.28871 | 2/6 |
+| single | 32.98042 → 31.14206 | 6/6 | 3.90169 → 3.82429 | 3/6 | 86.58279 → 85.21794 | 2/6 |
+| splits | 32.92222 → 33.20230 | 1/6 | 4.19602 → 4.20122 | 3/6 | 102.46627 → 107.02273 | 2/6 |
+| tabs | 33.00271 → 33.02919 | 2/6 | 3.96407 → 3.81998 | 4/6 | 100.77935 → 98.92423 | 5/6 |
+
+TUI p99 rises from 41.60674 to 46.82503 ms and maximum from 45.97817 to
+50.03500 ms, each only 1/6 lower. Splits p50 rises from 25.06810 to 25.78181 ms
+and p99 from 35.65148 to 38.56552 ms, each 1/6 lower. TUI and splits therefore
+regress consistently under the unchanged rule. **The candidate is rejected**, despite
+passing its target scroll gate. The cause of these control losses is not established;
+the extra state checks, code placement and scheduling effects have not been separately
+attributed. There is no promotion to live-tab or independent-Zig timing and no claim
+that the candidate improves the complete F06 flow or native120 cadence.
+
+Source inspection also confirms that the Zig client's viewport commit preserves its
+applied frame ID and its admission path accepts matching-base deltas, with explicit
+snapshot recovery for mismatches. This is not a mixed-stack execution qualification.
+A portable FrameSync test was prepared for Rosetta but not built/run after the native
+control rejection; no x86 execution claim is made. All candidate production changes
+remain in ignored overlays. The four pending runtime files remain byte-identical.
+The reusable decoded-state/delivery oracles and builder extension are committed in
+`74a672281`; they remain useful despite rejection. A possible follow-up is encoding
+pending snapshot/viewport state in one discriminator, to avoid a second flag check
+in ordinary frame preparation. That is a new hypothesis, not an established cause
+or permission to overlook the observed regressions.
