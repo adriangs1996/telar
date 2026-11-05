@@ -11598,3 +11598,95 @@ selection/cursor and cache lifetime controls still required. No row-reuse candid
 is implemented or accepted yet. The production GUI remains byte-exact `bc55d0e8`,
 and the four pending runtime files remain untouched. Work continues from this oracle
 with all complete F01–F16/native120 acceptance open.
+
+
+### Displaced scroll-row reuse: rejected after complete native target pairs
+
+On `cpp-stack-perf-dlls-20261103` at `1b950e3a8`, the private experiment
+`out-perf/dlls-scroll-row-reuse-01` implements the preceding proposal. It rotates
+retained row nodes with scroll displacement, compares exact style/width/text cells,
+and translates only rows whose original and destination glyph ink remain unclipped
+and whose physical translation is exact. Pane/grid/appearance changes, selection,
+cursor and unproven fallback ink force repaint. Original painted coordinates avoid
+accumulated transform drift. Snapshots are taken only while viewing history.
+The candidate is **rejected**, and all six production renderer files are restored.
+
+The fresh-scene oracle now covers 20 positions, adding same-offset cell mutation,
+shifted changed cells, unrelated-pane replacement and grid shrink/restore. Candidate
+B passes all 53 scene and 18 chrome-text cases on software and Metal. B2 changes
+only cell comparison iteration to const; its complete 53-case scene suites pass
+with coherent project ASan/UBSan on both backends. Production-TU clang-tidy is
+clean; the three previously reproduced test-TU diagnostics remain. Following
+restoration, both expanded scroll cases pass on software and Metal. The expanded
+oracle is retained as reusable source.
+
+Sanitizer qualification required correcting the diagnostic build, not suppressing
+checks. Mixing three sanitized renderer objects with normal project libraries first
+reported a vector container overflow; that partial build was not accepted as a
+coherent check. A fresh configuration accidentally triggered a different managed
+Qt bootstrap and its owned process tree was stopped. The complete project build
+then exposed AppleClang21 C objects linked to LLVM23 C++ ASan. The successful private
+build preserves the frozen Qt bootstrap and explicitly overrides the generated
+C compile/link rules to LLVM23; its executed commands and override are recorded.
+ASan container checks remain enabled, UBSan halts on errors and leak detection is
+disabled. Qt, prebuilt Ghostty and system frameworks are not fully instrumented.
+The earlier failures are retained privately; the mixed-build report is not assigned
+a proven root cause.
+
+A separate source-counter run, `/tmp/telar-perf-scroll-row-reuse-census-01`, confirms
+exactly 3 painted and 18 reused rows for each of 100 measured inputs: 300 and 1,800
+in total. Warmup and out-of-range epochs contribute zero. The uninstrumented B2
+negative control reports zero source events. Peak cached cell-element capacity is
+85,344 bytes; each CellValue is32 bytes and each cached Row is120 bytes. Those bytes
+exclude allocator/container headers and GPU resources. Bounded extra memory was
+permitted; fewer paint calls alone are not performance acceptance.
+
+The private full-drawable observer captures the final positively presented frame
+only after its exact top-row packet is accepted. In
+`/tmp/telar-perf-scroll-row-reuse-body-02`, A and B2 have zero differing pixels over
+the whole window and match the prior fully validated capture: all21 row packets,
+first row4007, cell18x40, origin120,84 and drawable86. The full PNG hash is
+`ec87ced6f6c97b8de5057ed62eefa1b98970cc34c066c40db8381bd85e1f164d`.
+Readback/capture and source-counter runs are diagnostic, excluded from timing.
+This final-frame check does not certify intermediate native scrolling pixels.
+
+`/tmp/telar-perf-scroll-row-reuse-pairs-01` completes six alternating pairs with
+100 measured inputs and20 warmups, the ordinary scroll probe, Metal/VSync and the
+same82x21 terminal in a1600x1000 drawable. A GUI is `bc55d0e8`, B2 is `db0d82f8`;
+both use runtime `1f1849d1`, helper `87beebb0` and the same loaded Qt receipt
+(QtGui `abd4bdf7`). All26 host boundaries qualify, maximum load1 4.09814, and all12
+native/resource/owned-shutdown checks pass. No builds or profiles overlap timing.
+
+| Discrete upward scroll | Accepted A median | Candidate B2 median | B2 lower |
+| --- | ---: | ---: | ---: |
+| p50 ms | 29.98598 | 30.19647 | 3/6 |
+| p95 ms | 37.69570 | 38.11767 | 2/6 |
+| p99 ms | 42.79601 | 41.80585 | 3/6 |
+| maximum ms | 44.18100 | 44.99523 | 4/6 |
+| GUI CPU ms/input | 4.699145 | 4.607935 | 3/6 |
+| GUI peak RSS MiB | 191.6875 | 198.1016 | 2/6 |
+| Runtime CPU ms/run | 81.48163 | 83.18367 | 1/6 |
+
+Both target primaries fail the predeclared minimum5/6. No regression-control or
+independent-Zig timing is used to rescue this variant. Runtime CPU brackets setup,
+warmup, measured input and GUI exit; it is not per-input CPU and must not be summed
+with the differently scoped GUI interval. Increased process RSS cannot be assigned
+entirely to the measured cell capacity.
+
+Actual TUs compile for ARM64, x86-64 baseline and x86-64-v3. Const cell iteration
+removes copy-on-write growth call sites from the comparison on all three targets;
+mutable iteration need not have allocated when uniquely owned. Mach-O disassembly
+of the linked B2 reuse/comparison confirms style comparison, memcmp and matrix
+updates, with no cell-list growth call. Cross codegen is not x86/Linux execution.
+Four separate ten-second GUI/runtime profiles in
+`/tmp/telar-perf-scroll-row-reuse-profile-01` complete with qualified host boundaries
+and cleanup. They show less row synchronization work while Qt rendering remains
+visible; sparse inclusive samples do not establish CPU proportions or explain the
+failed paired target. The cause of the inconsistent whole-application gain remains
+unestablished.
+
+The restored GUI hashes exactly to accepted `bc55d0e8`; the four pending runtime
+files remain byte-identical. The displaced-row implementation and all raw evidence
+remain private for future investigation. All complete F01-F16 and native120
+acceptance stays open; saving row reconstruction did not meet this experiment's
+whole-application criterion.

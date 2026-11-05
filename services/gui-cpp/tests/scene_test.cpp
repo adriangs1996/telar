@@ -381,7 +381,7 @@ public:
     const std::array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
     const std::vector<Byte> flags(cells.size() / columns);
     PaneFrame frame;
-    frame.pane_id = 1;
+    frame.pane_id = pane_id_;
     frame.frame_id = ++frame_id_;
     frame.cols = columns;
     frame.rows = static_cast<std::uint16_t>(flags.size());
@@ -407,9 +407,13 @@ public:
     item_.useFreshScene();
   }
 
+  void replacePane() {
+    ++pane_id_;
+  }
+
   void moveCursor(std::uint16_t column) {
     PaneFrame frame;
-    frame.pane_id = 1;
+    frame.pane_id = pane_id_;
     frame.base_frame_id = screen_.frameId();
     frame.frame_id = ++frame_id_;
     frame.cols = screen_.columns();
@@ -620,12 +624,15 @@ private:
   TerminalFont font_;
   SceneItem item_;
   std::uint64_t frame_id_ = 0;
+  std::uint64_t pane_id_ = 1;
 };
 
 class SceneTest final : public QObject {
   Q_OBJECT
 
 private:
+  enum class ScrollStep : std::uint8_t { palette = 8, narrow = 10, restore_width = 11, oversized = 12, patch = 14, patch_shifted = 15, replace_pane = 16, shrink = 17, restore_grid = 18 };
+
   Q_SLOT static void scrolledStandardRowsMatchFreshScene() {
     checkScrolledRows(false);
   }
@@ -635,12 +642,9 @@ private:
   }
 
   static void checkScrolledRows(bool optical) {
-    constexpr std::uint16_t oversized_pixel_height = 80;
-    constexpr std::uint32_t history_rows = 100;
     constexpr std::uint8_t full_strength = 255;
-    constexpr auto replacement_palette_color = Color::rgb(0x4860a2);
-    enum class Step : std::uint8_t { palette = 8, narrow = 10, restore_width = 11, oversized = 12 };
-    constexpr std::array<std::uint32_t, 14> offsets{80, 77, 74, 77, 80, 0, 3, 6, 93, 90, 87, 86, 85, 88};
+    constexpr std::size_t middle_cell = static_cast<std::size_t>(scroll_columns) * (scroll_rows / 2);
+    constexpr std::array<std::uint32_t, 20> offsets{80, 77, 74, 77, 80, 0, 3, 6, 93, 90, 87, 86, 85, 88, 88, 85, 82, 79, 76, 73};
     SceneFixture retained{CursorShape::block, false};
     SceneFixture reference{CursorShape::block, false};
     reference.useFreshScene();
@@ -650,31 +654,50 @@ private:
 
     for (std::size_t step = 0; step < offsets.size(); ++step) {
       const auto offset = offsets[step];
-      const auto cells = scrollCells(offset);
-
-      const CellSelection selection = step % 3 == 0 ? CellSelection{.anchor = 5, .head = 30} : CellSelection{};
-      const Cursor cursor = step % 4 == 0 ? Cursor{.visible = true, .x = 2, .y = static_cast<std::uint16_t>(step % scroll_rows), .shape = CursorShape::block} : Cursor{};
-      for (auto *fixture : {&retained, &reference}) {
-        fixture->select(selection);
-        fixture->setGrid(cells, scroll_columns, cursor, {.total_rows = history_rows, .offset = offset});
-        if (step == static_cast<std::size_t>(Step::palette)) {
-          fixture->setPaletteColor(2, replacement_palette_color);
-        }
-
-        if (step == static_cast<std::size_t>(Step::narrow)) {
-          fixture->setVisibleColumns(scroll_columns - 1);
-        }
-
-        if (step == static_cast<std::size_t>(Step::restore_width)) {
-          fixture->setVisibleColumns(scroll_columns);
-        }
-
-        if (step == static_cast<std::size_t>(Step::oversized)) {
-          fixture->setRasterPixelHeight(oversized_pixel_height);
-        }
+      auto cells = scrollCells(offset);
+      if (step == static_cast<std::size_t>(ScrollStep::patch) || step == static_cast<std::size_t>(ScrollStep::patch_shifted)) {
+        cells[middle_cell].text = byteView("!");
+        cells[middle_cell].style.background.channels.front() = 1;
       }
 
+      applyScrollStep(retained, cells, static_cast<ScrollStep>(step), offset);
+      applyScrollStep(reference, cells, static_cast<ScrollStep>(step), offset);
       QVERIFY2(retained.capture() == reference.capture(), qPrintable(QStringLiteral("Scroll step %1 must match a newly constructed scene").arg(step)));
+    }
+  }
+
+  static void applyScrollStep(SceneFixture &fixture, std::span<const Cell> cells, ScrollStep action, std::uint32_t offset) {
+    constexpr std::uint16_t oversized_pixel_height = 80;
+    constexpr std::uint32_t history_rows = 100;
+    constexpr auto replacement_palette_color = Color::rgb(0x4860a2);
+    const auto step = static_cast<std::size_t>(action);
+    const CellSelection selection = step % 3 == 0 ? CellSelection{.anchor = 5, .head = 30} : CellSelection{};
+    const Cursor cursor = step % 4 == 0 ? Cursor{.visible = true, .x = 2, .y = static_cast<std::uint16_t>(step % scroll_rows), .shape = CursorShape::block} : Cursor{};
+    if (action == ScrollStep::replace_pane) {
+      fixture.replacePane();
+    }
+
+    if (action == ScrollStep::shrink) {
+      cells = cells.first(static_cast<std::size_t>(scroll_columns) * (scroll_rows - 1));
+    }
+
+    fixture.select(selection);
+    fixture.setGrid(cells, scroll_columns, cursor, {.total_rows = history_rows, .offset = offset});
+    switch (action) {
+    case ScrollStep::palette:
+      fixture.setPaletteColor(2, replacement_palette_color);
+      break;
+    case ScrollStep::narrow:
+      fixture.setVisibleColumns(scroll_columns - 1);
+      break;
+    case ScrollStep::restore_width:
+      fixture.setVisibleColumns(scroll_columns);
+      break;
+    case ScrollStep::oversized:
+      fixture.setRasterPixelHeight(oversized_pixel_height);
+      break;
+    default:
+      break;
     }
   }
 
