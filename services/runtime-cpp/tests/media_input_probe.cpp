@@ -14,6 +14,8 @@ constexpr TerminalSize size{82, 21, 18, 40};
 constexpr std::size_t warmup = 100;
 constexpr std::size_t benchmark_rows = 64;
 constexpr std::size_t output_capacity = 4096;
+constexpr std::size_t large_image_width = 96;
+constexpr std::size_t large_image_bytes = large_image_width * large_image_width * 4;
 
 void record(std::span<const Byte> bytes) {
   const auto length = static_cast<std::uint64_t>(bytes.size());
@@ -57,6 +59,14 @@ std::string snapshot(MediaTerminal<SystemAllocator> &terminal) {
 
 std::string corpus(std::string_view name) {
   std::string result;
+  if (name == "graphics-large") {
+    const std::array<Byte, large_image_bytes> pixels{};
+    std::string encoded((large_image_bytes + 2) / 3 * 4, '\0');
+    check(base64::encode(pixels, encoded) == encoded.size());
+    check(encoded.size() < GraphicsLimits::payload_bytes);
+    return "\x1b_Ga=T,f=32,s=" + std::to_string(large_image_width) + ",v=" + std::to_string(large_image_width) + ",i=7,C=1,q=2;" + encoded + "\x1b\\";
+  }
+
   for (std::size_t row = 0; row < benchmark_rows; ++row) {
     if (name == "ascii") {
       result += "ordinary terminal output with enough text to wrap a row\r\n";
@@ -139,6 +149,15 @@ void benchmark(std::string_view name, std::size_t iterations) {
 
   const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
   terminal.refresh();
+  const bool graphics = name == "graphics" || name == "graphics-large";
+  check(terminal.graphics.images().size() == (graphics ? 1 : 0));
+  check(terminal.graphics.placements().size() == (graphics ? 1 : 0));
+  if (name == "graphics-large") {
+    const auto &image = terminal.graphics.images().front();
+    check(image.description.width == large_image_width && image.description.height == large_image_width);
+    check(image.pixels.size() == large_image_bytes);
+    check(std::ranges::all_of(image.pixels, [](Byte value) { return value == 0; }));
+  }
   std::printf("{\"case\":\"%.*s\",\"iterations\":%zu,\"bytes_per_iteration\":%zu,\"elapsed_ns\":%lld,\"images\":%zu,\"placements\":%zu}\n",
               static_cast<int>(name.size()), name.data(), iterations, input.size(), static_cast<long long>(elapsed),
               terminal.graphics.images().size(), terminal.graphics.placements().size());

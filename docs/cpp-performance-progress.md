@@ -1,8 +1,9 @@
 # Complete-stack performance progress
 
 This is the current work log for [F01–F16](cpp-performance-flows.md), starting
-from `6152393b18f8b3e7ae1a1322eca6c8f1eb718bbd` on 2026-11-02. The persistent
-objective is active and unbounded. No flow has complete-stack performance
+from `6152393b18f8b3e7ae1a1322eca6c8f1eb718bbd` on 2026-11-02. The optimization session was closed at Adrian's request on 2026-11-05; see
+[the final handoff](#final-session-handoff-2026-11-05). The original performance
+objective is paused, not achieved. No flow has complete-stack performance
 acceptance yet. Conditional cursor invalidation is accepted for the measured
 warm-typing layouts against the frozen C++ baseline; complete-flow and Zig-stack
 acceptance remain open.
@@ -13332,3 +13333,238 @@ D remains private pending native image timing, fixed-rate output, additional
 interaction/regression controls and broader safety/input coverage. No F01-F16
 or native120 gate is closed. The accepted production baseline and four original
 pending runtime files remain unchanged.
+
+
+### Bounded copied runs rejected by native image tails
+
+`/tmp/telar-perf-media-buffered-image-pairs-01` completes six alternating A/D
+pairs for each of 1K and 4K images: 24 runs, 100 measured inputs and 20 warmups.
+The controller exits successfully and all 50 host boundaries qualify; maximum
+load1 is 4.04444, maximum load5 2.36036. No builds, tests or profiles overlap.
+Payload, geometry, content/presentation, framework identity, runtime resources
+and owned cleanup checks pass. Binaries are the frozen A/D identities above.
+
+| Native image control | A median | D median | D lower / 6 |
+| --- | ---: | ---: | ---: |
+| 1K presented p50 ms | 29.07058 | 29.11050 | 2 |
+| 1K presented p95 ms | 37.37240 | 38.33732 | 2 |
+| 1K presented p99 ms | 41.46634 | 41.69353 | 1 |
+| 1K presented maximum ms | 43.73400 | 48.03169 | 0 |
+| 1K GUI CPU ms/input | 5.78873 | 5.89813 | 3 |
+| 1K GUI peak RSS MiB | 223.20313 | 219.04688 | 3 |
+| 1K runtime CPU ms/outer window | 287.98708 | 289.11165 | 3 |
+| 1K runtime instructions/outer window | 691,632,754.5 | 692,147,914.5 | 1 |
+| 1K runtime cycles/outer window | 640,726,823 | 629,688,449 | 4 |
+| 4K presented p50 ms | 42.55750 | 42.00566 | 3 |
+| 4K presented p95 ms | 50.17421 | 50.68616 | 2 |
+| 4K presented p99 ms | 54.58148 | 55.67615 | 1 |
+| 4K presented maximum ms | 58.17246 | 58.54598 | 2 |
+| 4K GUI CPU ms/input | 14.11765 | 14.05485 | 3 |
+| 4K GUI peak RSS MiB | 398.95313 | 398.93750 | 2 |
+| 4K runtime CPU ms/outer window | 956.35867 | 941.84623 | 4 |
+| 4K runtime instructions/outer window | 4,412,323,736.5 | 4,398,325,182 | 5 |
+| 4K runtime cycles/outer window | 2,468,092,235 | 2,484,397,811 | 4 |
+
+D is rejected: both image p99 controls lose five of six pairs, and the 1K
+maximum loses all six. The cause is not established; no code-placement exception
+is claimed. Its component/output gains and exact image pixels do not override
+these native regressions. The 264-byte storage trade is not the rejection reason.
+Further D fixed-rate, interaction and safety expansion is unnecessary for adoption
+because D will not be adopted. All raw evidence is retained in private scratch;
+the accepted production baseline and original pending runtime work are unchanged.
+
+
+## 2026-11-05: file-medium filtering before payload validation
+
+Private candidate E in `out-perf/dlls-media-file-filter-01` changes only
+`GraphicsFileInput::frame`: parse the bounded control header first, and scan
+all body bytes with `KittyFraming::content` only if the command can forward a
+file. The existing content check still precedes every file access. Direct and
+shared-memory commands cannot use this forwarding path, so validating their
+entire payload here repeats work without changing its destination. The generic
+`feed` path, actual terminal decoding, upload quotas, file authorization,
+temporary-file handling and responses remain unchanged. No new retained memory
+or allocation is introduced. Earlier rejected B/C/D media variants are absent.
+
+The new standalone `graphics_file_filter_probe.cpp` checks 526 frames and records
+1,051 sink events. It covers actual owned file forwarding, rejected/duplicate
+control fields, all 256 byte values in direct payloads, and every disallowed
+content byte at both ends of an encoded file path. Independent assertions require
+exact unforwarded input/terminator bytes or the expected forwarded image bytes.
+A/E outputs match all 141,677 bytes, SHA
+`f85f57a618847c40655c935cc51a181c32da75813a2da794dee0087cd3d4afea`;
+this digest includes the private fixture's absolute path. Existing stable and
+volatile-poisoned transient media oracles retain their 15,396-byte SHA
+`b51c15945f5b309c2f6fafb367f9a47fa8f90cb4f707c2016d27f0e44776b15a`.
+Media and graphics-limit suites pass. The scoped ASan/UBSan/LSan transient probe
+passes; previously built linked runtime/Ghostty libraries are uninstrumented.
+
+The first proposed large component corpus used a single 128x128 RGBA command.
+Its base64 exceeds the configured 64 KiB command limit: both A/E ended with zero
+images and placements. Host checks for
+`/tmp/telar-perf-media-file-filter-component-pairs-01` passed, but its target
+is explicitly marked invalid in `acceptance.json`. Its apparent 7.4% reduction
+is withdrawn as evidence of successful image processing. This was caught before
+native qualification or adoption; raw negative evidence is preserved.
+
+The corrected probe uses 96x96, verifies the encoded size before timing, and
+independently requires one image and placement, exact dimensions and all decoded
+pixel bytes after timing. All five cases now assert their expected final image
+and placement counts, rather than accepting two matching empty results.
+`out-perf/dlls-media-file-filter-02` freezes this source and new A/E component
+binaries. `/tmp/telar-perf-media-file-filter-component-pairs-02` completes all
+70 runs, seven alternating pairs per case, 5,000 iterations and 100 warmups.
+All 142 host boundaries qualify, maximum load1 2.04981, with no overlapping
+builds/tests/profiles. Both verification modes remain byte-exact.
+
+| Component feed, median ns/iteration | A | E | E lower / 7 |
+| --- | ---: | ---: | ---: |
+| ASCII, 3,648 bytes | 4,294.7584 | 4,296.0418 | 5 |
+| ANSI, 8,320 bytes | 121,571.2250 | 121,139.1334 | 5 |
+| OSC links, 2,880 bytes | 164,070.7750 | 163,510.2582 | 3 |
+| 64 one-pixel commands, 2,816 bytes | 61,954.6084 | 60,768.5584 | 7 |
+| One 96x96 command, 49,188 bytes | 316,848.2334 | 293,417.9916 | 7 |
+
+The arm64 object disassembly places the range parse and rejected-range branch
+before the payload loop in E; A's loop precedes parsing. Both listings have 92
+lines, demonstrating why instruction-list length is not the work metric. This
+is ordinary portable condition reordering, without a new architecture-specific
+primitive. Native runtime E is
+`986ba08947535ca09382d2268bdeef1d8a0e1067af3aae9d3e8a35491d38f099`,
+with unchanged accepted GUI/helper and clean baseline overlay.
+
+The native image harness now also accepts `--image-transport inline` (default
+remains `shared-memory`). It precomputes three bounded frame streams before
+interaction, sends base64 in protocol-sized 4,096-byte fragments, and retains
+the same actual image-pixel endpoint. The extra prepared wire storage belongs
+to the workload producer; runtime/GUI resource counters do not include it.
+Receipts identify the requested transport, and paired geometry validation refuses
+mixed transports. Six fixture tests cover exact reconstructed pixels across the
+base64 fragment boundary, unchanged shared-memory/alpha behavior, mismatched
+transport rejection and cleanup; 20 existing native-harness unit tests pass.
+The first new test run failed only because it compared a Python list with a tuple;
+the corrected value comparison passes. Native pixel and timing qualification
+are still required; component wins do not complete F10 or native120.
+
+
+The final in-flight capture series completed during the requested wrap-up:
+`/tmp/telar-perf-media-file-filter-inline-pixels-03`, eight A/E runs, 18 qualified
+host boundaries, maximum load1 2.40137. All 1K, 4K, alpha-edge and alpha-gradient
+PNGs are byte-exact and match the previously accepted shared-memory captures.
+Every owned runtime/child/socket cleanup passes. Capture timings are excluded.
+Attempt 01 lost foreground before the first input; attempt 02 exhausted the
+inherited 0.2-second capture-only wait on 4K inline input. Both incomplete series
+are terminally discarded with cleanup receipts. The final capture uses the
+existing two-second idle option; the native two-second input watchdog and pixel
+predicate were not changed. No new native timing series was started after closure.
+E remains unadopted: component and visual checks do not replace six native pairs.
+
+## Final session handoff, 2026-11-05
+
+Adrian ended this optimization effort via `astra-wrapup-20261105.md`. There will
+be no autonomous continuation. **All F01–F16 and native120 acceptance remain open.**
+The original goal is paused; calling its performance objective achieved would be
+incorrect. The following is an integration summary, not an all-flow success claim.
+
+**Retained production changes.** Values are previous C++ → changed C++, unless
+explicitly marked Zig. They are scoped to the measurements above, not additive
+speedups; native history observations include the documented observer overhead.
+
+| Commit | Retained change | Measured evidence / scope |
+| --- | --- | --- |
+| `af0240603` | Conditional cursor invalidation | Single p50 31.15→29.55 ms, 5/6; p99 45.97→39.79, 6/6. Split/tab p50 each 5/6. |
+| `ffcb56ca5` (import of `62a45e240`) | Optical glyph cache and terminal mesh reuse | Scene synchronization 108.965→6.975 ms, 7/7; split p50 33.141→30.474 ms, 6/6; tab p50 32.241→30.309, 5/6. Single latency mixed. |
+| `46ada476e` | Retain history snapshot rows | Native mean 141.695→109.558 ms; combined CPU 82.966→46.974 ms/query, both 6/6. |
+| `32c801a67` | Fused fuzzy history ranking | Runtime CPU 6.887→2.389 ms/query, 6/6; native mean 110.093→105.635 ms, 6/6. Bounded 320,000-byte candidate vector. |
+| `6778544a5` | Reuse history match delegates | Combined CPU 42.132→37.925 and 39.571→35.206 ms/query at two cadences, each 6/6; mixed tails. |
+| `50f72f1a6` | Retain at most eight inactive highlights per line | Combined CPU 37.928→35.494 and 35.420→32.811 ms/query, each 6/6; measured memory trade accepted. |
+| `b02e499b8` | Bypass query-only geometry/measurement work | Combined CPU 34.508→32.735 and 32.525→30.533 ms/query, each 5/6; GUI instructions lower 6/6 at both cadences. |
+| `3ed35ad46` | Flush only the OpenPane specialization immediately | Tab p50 42.643→37.984 ms and p95 49.204→41.846, each 6/6; typing latency/CPU controls pass. |
+
+Keep the functional prerequisites with these changes: `3da9ec736` adds the C++
+action worker (122/122 exact cases; sidebar launch p50 Zig 11.099→C++ 9.374 ms,
+7/7, component only); `7c5c26984` handles disconnect during socket signal setup
+(correctness, no speedup claim); `1b0f81fd1` plus `f2b203cda` preserve held history
+action identity (36 native history checks, correctness rather than timing).
+
+The supplied DLL branch already contains `f6b0f1453`, the earlier shared-image,
+conversion and pacing working snapshot. It is preserved as the handed-off base,
+not newly promoted by this closing pass. Its recorded image-stage evidence is
+1K p50 37.225→35.531 ms / CPU 9.689→6.510 and 4K p50 48.035→47.327 / CPU
+31.473→15.615, each 6/6 for these metrics; it also carries the documented text
+placement exception and unresolved alpha parity. Do not read its integration
+commit or the old favorable latency table as full F10 acceptance.
+
+**Latest independent Zig evidence by flow.** Dates refer to this session's
+recorded measurement cohorts; historical pre-DLL binaries are explicitly marked.
+A/B-only experiments are not substituted for missing independent comparisons.
+
+| Flow | Last independent comparison / date | Remaining limit |
+| --- | --- | --- |
+| F01 | No qualified startup/restore pairs | Full flow open. |
+| F02 | 2026-11-02/03 idle/display diagnostics only | No accepted separate-process idle/hidden/disconnected comparison. |
+| F03 | 2026-11-03 pre-DLL fused-image text control: single p50 4/6 wins; GUI CPU Zig 3.640 vs C++ 4.242 ms/input, C++ 0/6 | Historical binaries; Unicode/paste and current full flow open. |
+| F04 | No qualified independent complete-flow pairs; fixed-rate/DSR A/B controls only | Unicode, full transcript, throughput plus interaction open. |
+| F05 | 2026-11-04 two-stack TUI qualification/profile, no six-pair performance result | Exact final text passes; 435 terminal-interior pixels differ by at most one channel level in bold rows; cadence open. |
+| F06 | 2026-11-05 discrete scroll: Zig/C++ p50 37.175/30.874, p95 45.920/40.529, p99 48.659/44.841 ms, each C++ 6/6 | Runtime outer-window CPU 77.999/84.337 ms, C++ 0/6; continuous scroll, selection and live-return open. |
+| F07 | 2026-11-03 pre-DLL text with four splits: p50 6/6; GUI CPU Zig 3.673 vs C++ 4.527 ms/input, C++ 0/6 | This is foreground typing, not all-active fairness/cadence acceptance. |
+| F08 | 2026-11-04 accepted-flush six pairs: Zig/C++ p50 37.184/37.534 ms, C++ 1/6; GUI CPU 17.020/27.783 ms/action, C++ 0/6 | Runtime CPU lower 6/6 in its separate wider interval; workspaces and continuous cadence open. |
+| F09 | No qualified independent continuous resize/divider pairs | Full flow open. |
+| F10 | 2026-11-03 pre-DLL opaque replacements: Zig/C++ p50 1K 41.405/35.427, 4K 52.573/47.178 ms; all latency quantiles 6/6 | 4K GUI CPU 10.497/15.960 ms, C++ 0/6; varying-alpha mismatch 3,860 pixels, max channel delta40; current full flow open. |
+| F11 | No qualified independent complete-stack paste/shelf/preview pairs | Full flow open. |
+| F12 | 2026-11-04 final-command bursts: Zig/C++ mean 44.383/103.527 ms, C++ 0/6; combined CPU 56.576/43.319 ms, C++ 6/6 | Warm replacement also loses latency 0/6; cold/inspection/scroll, optical/ranking parity and cadence open. |
+| F13 | No qualified independent report-to-presentation pairs | Full flow open. |
+| F14 | 2026-11-03 isolated worker: four cases p50 and CPU C++ 7/7, 122 exact cases | Component only; configured GUI interactions and full flow open. |
+| F15 | No qualified independent real-SSH/backpressure pairs | Local reconnect checks are not full flow acceptance. |
+| F16 | No qualified independent proxy-plus-GUI pairs in this session | Protocol/component oracles are not full flow acceptance. |
+
+**Do not repeat unchanged rejected directions.** Ordinary media scan removal B,
+borrowed-run C and copied-run D failed their controls; D's ANSI/runtime gains
+(CPU −5.1%, +264 bytes/object) are overridden by 1K/4K p99 losses in 5/6 pairs
+and 1K maximum losses in 6/6. None is in production. Whole/repeated viewport
+projection caches, tracked scroll intent and displaced row reuse saved work but
+failed native/component controls. General shaping/coverage caches, retained
+pane/tab objects, caption/layout caches, ancestor reconnection retention,
+background-node/mesh batching and Metal inline bindings also failed their stated
+controls. The many history sort/heap/dedup successors never displaced the accepted
+fused-ranking implementation. Straight-alpha leases reduced CPU but failed native
+image tails; they are not an accepted parity fix. Basic render loop, zero update
+idle time and a two-drawable policy did not demonstrate the required gain.
+A new experiment would need new evidence or a materially different mechanism.
+
+The old four-file attachment-deadline working change was **not accepted**: native
+series failed qualification and no six-pair acceptance existed. Its exact sources,
+hashes and tracked patch are preserved in
+`out-perf/session-wrapup-20261105/unaccepted-pacing/`; production headers and CMake
+are restored to HEAD and its candidate-only test is removed from the working tree.
+Candidate E's two-line file-header filter remains private and unadopted after
+successful component and visual checks; closure stops further timing. The valid
+oracles and inline transport tooling are committed, not E's production change.
+
+**Remaining gap: evidence versus hypotheses.** Measured: tab switching and history
+spend substantially more GUI CPU than Zig, while C++ runtime history CPU is lower;
+scroll latency wins but its wider runtime CPU interval loses. Qt/QML delegate,
+variant-conversion, row/background reconstruction and optical-cache churn appear
+in work/heap censuses. Profiles and call counts do not establish CPU percentages.
+Image conversion/read/copy work and the varying-alpha filtering mismatch are
+observed. The history 60 ms debounce is present, but removing it failed other
+controls. Hypotheses: reducing invalidation and conversion propagation, better
+presentation scheduling, and avoiding redundant projection could close parts of
+the gap. Allocation, copies, cache locality and Qt conversions are not a proven
+single cause; fewer instructions/allocations repeatedly failed native latency.
+A 120 Hz maximum or fast isolated input does not certify sustained native120.
+
+**Integration and shutdown.** Use `cpp-stack-perf-dlls-20261103`; do not reapply the
+obsolete pre-rewrite commits or the already integrated DLL handoff. Frozen accepted
+binaries are GUI `bc55d0e8…`, runtime `1f1849d1…`, helper `87beebb0…`; the mutable
+old build directory may still contain rejected `66675b10…`, so rebuild from the
+clean source rather than installing a leftover executable. No merge/rebase/push,
+installed-app replacement or user configuration change was performed. Generated
+artifacts remain ignored under `out-perf/` and private `/tmp/telar-perf-*`; none is
+versioned. All eight final capture shutdown receipts confirm exited children and
+removed sockets; the final process audit finds no remaining worktree/benchmark
+process. Existing audit subagents are completed. Other agents and installed Telar
+remain untouched. Final targeted validation: six image-fixture and twenty native
+harness tests pass, C++ file/media byte oracles and media/limit tests pass, and
+`git diff --check` passes. This closing pass does not claim a fresh full-suite,
+Linux, Rosetta-GUI or exhaustive all-flow validation.
