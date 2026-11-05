@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Build the scroll projection oracle using an existing Ninja runtime build.
 
-Does not rebuild runtime libraries or the runtime executable. Verification emits
-length-prefixed binary records; compare complete stdout from reference/candidate
-builds. Timings cover refresh and incremental frame preparation, not native input.
+Does not rebuild runtime libraries or the runtime executable. The default probe
+emits length-prefixed binary verification records and times component work.
+--source and --include-dir support related component or delivery oracles.
+No probe built here establishes native input latency.
 """
 
 import argparse
@@ -39,9 +40,11 @@ def overlay_inputs(overlay):
     return result
 
 
-def build_probe(build, output, overlay=None):
+def build_probe(build, output, overlay=None, source=SOURCE, include_dirs=()):
     build = build.resolve(strict=True)
     output = output.resolve()
+    source = source.resolve(strict=True)
+    include_dirs = [path.resolve(strict=True) for path in include_dirs]
     database = json.loads((build / 'compile_commands.json').read_text())
     reference = ROOT / 'services/runtime-cpp/tests/terminal_test.cpp'
     entry = next(row for row in database if Path(row['file']).resolve() == reference)
@@ -49,7 +52,8 @@ def build_probe(build, output, overlay=None):
     compile_command = list(compile_command)
     compile_command[compile_command.index('-o') + 1] = str(output / 'probe.o')
     source_index = compile_command.index(entry['file'])
-    compile_command[source_index] = str(SOURCE)
+    compile_command[source_index] = str(source)
+    compile_command += ['-I' + str(path) for path in include_dirs]
     if overlay is not None:
         compile_command[1:1] = ['-ivfsoverlay', str(overlay.resolve(strict=True))]
 
@@ -78,7 +82,8 @@ def build_probe(build, output, overlay=None):
     output.mkdir(parents=True, exist_ok=False)
     manifest = {
         'scope': 'Component only; existing runtime libraries are reused unchanged.',
-        'source': {'path': str(SOURCE), 'sha256': digest(SOURCE)},
+        'source': {'path': str(source), 'sha256': digest(source)},
+        'include_dirs': [str(path) for path in include_dirs],
         'overlay': None if overlay is None else {
             'path': str(overlay.resolve()), 'sha256': digest(overlay),
         },
@@ -116,9 +121,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime-build', type=Path, required=True)
     parser.add_argument('--overlay', type=Path)
+    parser.add_argument('--source', type=Path, default=SOURCE)
+    parser.add_argument('--include-dir', type=Path, action='append', default=[])
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
-    print(build_probe(args.runtime_build, args.output, args.overlay))
+    print(build_probe(args.runtime_build, args.output, args.overlay,
+                      args.source, args.include_dir))
 
 
 if __name__ == '__main__':

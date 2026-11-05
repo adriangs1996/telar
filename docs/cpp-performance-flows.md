@@ -260,6 +260,18 @@ row revisions and incremental frames, covering bidirectional history movement,
 repeated offsets, Unicode/styles/links, colors, resize, live/alternate screens,
 and a later reset through a retained mutable handle.
 
+The same builder accepts `--source services/runtime-cpp/tests/viewport_delta_probe.cpp
+--include-dir services/gui-cpp` for the viewport-update oracle. Its `verify` mode
+applies wire frames through the actual GUI Screen and emits canonical reconstructed
+state, allowing full snapshots and acknowledged deltas to differ on the wire while
+requiring identical cells, headers and links. It also covers pending/wrong ACKs,
+coalesced viewport requests, explicit recovery and resize with an outstanding frame.
+Use `--source services/runtime-cpp/tests/viewport_delivery_probe.cpp` with the same
+include directory for a standalone two-client AttachmentDelivery/socket-pair check;
+run that executable without arguments. Its frame/snapshot counts are diagnostics,
+not latency measurements. Both oracles can test the snapshot reference and a private
+candidate exposing `FrameSync::requestViewport()`.
+
 The same executable accepts `<case> <iterations>`, where case is `ascii`, `links`,
 `output`, `resize`, `exposed` or `live`. These timings cover terminal refresh and
 incremental frame preparation/acknowledgment after 100 warmups. Corpus construction,
