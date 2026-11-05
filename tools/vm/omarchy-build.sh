@@ -7,8 +7,7 @@ shift
 
 if [[ $command == build ]]; then
   sudo env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --needed --noconfirm \
-    base-devel cmake ninja clang llvm lld pkgconf git python rsync \
-    openssl libnghttp2 brotli zstd sqlite libpng libpcap \
+    base-devel cmake ninja clang llvm lld pkgconf git python rsync perl flex bison \
     fontconfig wayland wayland-protocols libxkbcommon libxkbcommon-x11 libxcb \
     libx11 libxext libxfixes libxi libxrender \
     xcb-util-cursor xcb-util-image xcb-util-keysyms xcb-util-renderutil \
@@ -43,7 +42,7 @@ if [[ $command == build ]]; then
   cmake -S services/runtime-cpp -B services/runtime-cpp/out-vm -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
     -DGHOSTTY_VT_ROOT="$PWD/services/runtime-cpp/dependencies/install"
-  cmake --build services/runtime-cpp/out-vm --target telar-runtime --parallel 2
+  cmake --build services/runtime-cpp/out-vm --target telar-runtime telar telar-config-check --parallel 2
 
   cmake -S services/gui-cpp -B services/gui-cpp/out-vm -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
@@ -51,7 +50,8 @@ if [[ $command == build ]]; then
   cmake --build services/gui-cpp/out-vm --target telar-gui --parallel 2
 
   mkdir -p .dev/vm/bin
-  ln -sfn "$PWD/services/runtime-cpp/out-vm/telar-runtime" .dev/vm/bin/telar
+  # The CLI starts the telar-runtime built beside it.
+  ln -sfn "$PWD/services/runtime-cpp/out-vm/telar" .dev/vm/bin/telar
   printf 'Telar C++ is built. Run tools/vm/omarchy.py run from the host.\n'
 elif [[ $command == run ]]; then
   export PATH="$PWD/.dev/vm/bin:$PATH"

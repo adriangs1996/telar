@@ -1,5 +1,10 @@
 # Complete-stack performance progress
 
+A later, scoped [renderer-delay investigation](renderer-delay-isolation.md) uses
+fresh builds at `699476926` to separate delivery, scene synchronization, native
+submission, GPU execution and presentation. It recommends retaining Qt for now;
+it does not reopen or complete the all-flow objective recorded below.
+
 This is the current work log for [F01–F16](cpp-performance-flows.md), starting
 from `6152393b18f8b3e7ae1a1322eca6c8f1eb718bbd` on 2026-11-02. The optimization session was closed at Adrian's request on 2026-11-05; see
 [the final handoff](#final-session-handoff-2026-11-05). The original performance

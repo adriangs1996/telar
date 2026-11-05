@@ -7,9 +7,9 @@
 #include "window_options.hpp"
 #include <array>
 #include <cstdio>
+#include <print>
 
-namespace telar::runtime::cli {
-namespace window {
+namespace telar::runtime::cli::window {
 
 using Memory = BudgetAllocator<SystemAllocator>;
 using Text = String<Memory>;
@@ -17,7 +17,6 @@ using Session = ControlSession<Memory>;
 constexpr std::size_t memory_budget = 32 * 1024 * 1024;
 constexpr unsigned receive_timeout = 30;
 constexpr std::size_t maximum_command_text = 4096;
-
 
 constexpr const char *statusName(ClientCommandStatus status) {
   switch (status) {
@@ -187,7 +186,7 @@ void plugins(Session &session, ClientCommand command, ClientCommandResult reply,
     command.target_id = static_cast<std::uint64_t>(*generation);
     reply = exchangeCommand(session, command);
     if (reply.status == ClientCommandStatus::failed) {
-      std::fprintf(stderr, "telar: %.*s\n", static_cast<int>(reply.text.size()), reply.text.data());
+      std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
       throw Failure{"PluginQueryFailed"};
     }
   }
@@ -252,7 +251,7 @@ int routed(Session &session, const RoutedOptions &options, Text &output) {
   };
   const auto reply = exchangeCommand(session, command);
   if (reply.status == ClientCommandStatus::failed) {
-    std::fprintf(stderr, "telar: %.*s\n", static_cast<int>(reply.text.size()), reply.text.data());
+    std::println(__stderrp, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
     return 1;
   }
 
@@ -263,7 +262,7 @@ int routed(Session &session, const RoutedOptions &options, Text &output) {
     output += '\n';
   } else if (reply.action == ClientAction::layout_get) {
     if (options.json) {
-      output += "{\"encoding\":\"telar-layout-hex\",\"data\":";
+      output += R"({"encoding":"telar-layout-hex","data":)";
       appendJsonText(output, reply.text, JsonEscapes::standard);
       output += '}';
     } else {
@@ -273,7 +272,7 @@ int routed(Session &session, const RoutedOptions &options, Text &output) {
     output += '\n';
   } else if (reply.action == ClientAction::sidebar_get) {
     if (options.json) {
-      output += reply.text == "visible" ? "{\"visible\":true,\"width\":" : "{\"visible\":false,\"width\":";
+      output += reply.text == "visible" ? R"({"visible":true,"width":)" : R"({"visible":false,"width":)";
       signedNumber(output, reply.value);
       output += "}\n";
     } else {
@@ -319,7 +318,7 @@ int suggest(Session &session, const SuggestionOptions &options, Text &output) {
       .text = options.text,
   });
   constexpr std::array statuses{"ready", "unavailable", "timeout", "failed"};
-  const auto status = statuses.at(static_cast<std::size_t>(reply.status));
+  const auto *const status = statuses.at(static_cast<std::size_t>(reply.status));
   if (options.json) {
     output += "{\"status\":";
     appendJsonText(output, status, JsonEscapes::standard);
@@ -330,7 +329,7 @@ int suggest(Session &session, const SuggestionOptions &options, Text &output) {
     output += reply.text;
     output += '\n';
   } else {
-    std::fprintf(stderr, "telar command suggest: %s\n", status);
+    std::println(stderr, "telar command suggest: {}", status);
   }
 
   return reply.status == SuggestionStatus::ready ? 0 : reply.status == SuggestionStatus::timeout ? 3
@@ -406,7 +405,7 @@ int notify(Session &session, NotificationBody notification) {
     } catch (...) {
     }
 
-    std::fprintf(stderr, "telar: Limit reached: %.*s: %llu bytes; limit %llu\nerror: NotificationTextTooLong\n", static_cast<int>(reach->name.size()), reach->name.data(), static_cast<unsigned long long>(*reach->requested), static_cast<unsigned long long>(reach->value));
+    std::println(stderr, "telar: Limit reached: {:.{}}: {} bytes; limit {}\nerror: NotificationTextTooLong", reach->name.data(), static_cast<int>(reach->name.size()), static_cast<unsigned long long>(*reach->requested), static_cast<unsigned long long>(reach->value));
     return 1;
   }
 
@@ -451,15 +450,15 @@ int connected(const Options &options, const char *prefix, Execute execute) {
     return result;
   } catch (const Failure &error) {
     if constexpr (std::is_same_v<Options, NotificationOptions>) {
-      const auto message = std::string_view{error.what()} == "NoNotificationClients" ? "no UI client is connected" : error.what();
-      std::fprintf(stderr, "%s%s\nerror: %s\n", prefix, message, error.what());
+      const auto *const message = std::string_view{error.what()} == "NoNotificationClients" ? "no UI client is connected" : error.what();
+      std::println(stderr, "{}{}\nerror: {}", prefix, message, error.what());
     } else {
-      std::fprintf(stderr, "%s%s\n", prefix, error.what());
+      std::println(stderr, "{}{}", prefix, error.what());
     }
 
     return error.status();
   } catch (const ControlFailure &error) {
-    std::fprintf(stderr, "%s%s\n", prefix, error.what());
+    std::println(stderr, "{}{}", prefix, error.what());
   } catch (const SystemError &error) {
     const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
     const char *description = timeout ? "RuntimeTimeout" : error.code() == ENOENT     ? "FileNotFound"
@@ -467,32 +466,31 @@ int connected(const Options &options, const char *prefix, Execute execute) {
                                                                                       : error.what();
     if constexpr (std::is_same_v<Options, NotificationOptions>) {
       if (error.code() == ENOENT || error.code() == ECONNREFUSED) {
-        std::fprintf(stderr, "%sruntime is not running\nerror: RuntimeNotRunning\n", prefix);
+        std::println(stderr, "{}runtime is not running\nerror: RuntimeNotRunning", prefix);
       } else {
-        std::fprintf(stderr, "%s%s\nerror: %s\n", prefix, description, description);
+        std::println(stderr, "{}{}\nerror: {}", prefix, description, description);
       }
       return 1;
     }
 
-    std::fprintf(stderr, "%s%s\n", prefix, description);
+    std::println(stderr, "{}{}", prefix, description);
     return timeout ? 3 : 1;
   } catch (const SocketError &error) {
     const std::string_view message = error.what();
     const bool timeout = message == "Runtime receive timed out";
-    const auto description = timeout ? "RuntimeTimeout" : message == "Runtime closed the connection" ? "ConnectionClosed"
-                                                                                                     : error.what();
-    std::fprintf(stderr, "%s%s\n", prefix, description);
+    const auto *const description = timeout ? "RuntimeTimeout" : message == "Runtime closed the connection" ? "ConnectionClosed"
+                                                                                                            : error.what();
+    std::println(stderr, "{}{}", prefix, description);
     return timeout ? 3 : 1;
   } catch (const EncodingError &) {
-    std::fprintf(stderr, "%sunexpected reply from the runtime\n", prefix);
+    std::println(stderr, "{}unexpected reply from the runtime", prefix);
   } catch (const std::exception &error) {
-    std::fprintf(stderr, "%s%s\n", prefix, error.what());
+    std::println(stderr, "{}{}", prefix, error.what());
   }
 
   return 1;
 }
 
-}
 }
 
 namespace telar::runtime::cli {
@@ -506,7 +504,11 @@ int runWindow(Family family, std::span<char *const> words) {
   using namespace window;
   if (family == Family::client) {
     const auto options = ClientOptions::parse(words);
-    return connected(options, "telar client: ", [&](Session &session, Text &output) { clients(session, options, output); return 0; });
+
+    return connected(options, "telar client: ", [&](Session &session, Text &output) {
+      clients(session, options, output);
+      return 0;
+    });
   }
 
   if (family == Family::command) {
@@ -514,23 +516,29 @@ int runWindow(Family family, std::span<char *const> words) {
     if (options.current) {
       try {
         const auto current = ProcessEnvironment{}.lookup("TELAR_PANE_ID");
+
         if (current.empty()) {
           throw Failure{"MissingCurrentIdentity"};
         }
 
         options.pane = positive(current, "InvalidIdentity");
       } catch (const std::exception &error) {
-        std::fprintf(stderr, "telar command suggest: %s\n", error.what());
+        std::println(stderr, "telar command suggest: {}", error.what());
         return 1;
       }
     }
 
-    return connected(options, "telar command suggest: ", [&](Session &session, Text &output) { return suggest(session, options, output); });
+    return connected(options, "telar command suggest: ", [&](Session &session, Text &output) {
+      return suggest(session, options, output);
+    });
   }
 
   if (family == Family::notification) {
     const auto options = NotificationOptions::parse(words);
-    return connected(options, "telar notification: ", [&](Session &session, Text &) { return notify(session, options.notification); });
+
+    return connected(options, "telar notification: ", [&](Session &session, Text &) {
+      return notify(session, options.notification);
+    });
   }
 
   if (family == Family::config) {
