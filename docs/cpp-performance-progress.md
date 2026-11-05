@@ -12403,3 +12403,162 @@ hashes. No GUI production change is adopted. Accepted GUI `bc55d0e84d76…`, run
 stay open and the persistent objective stays active. The next work is a narrower
 correction with retained input ownership, targeted cost attribution, and explicit
 live-output/anchoring oracles, not acceptance of D or blanket removal of RAII.
+
+## 2026-11-05: return-to-live oracle and rejected request-time classifier
+
+The retained-offset gap is now reproduced through actual runtime processes,
+PTY output, schema handshakes, frame decoding and the GUI cell application path.
+This is a correctness diagnostic without a GUI/window/presentation endpoint.
+The independent frozen Zig runtime uses its own schema encoder/decoder, built
+from the exact reference revision `5c619b85c07d86e2a9ec19163c68c9287df23cde`;
+its differing wire schema is not bypassed or interpreted using C++ layouts.
+
+A deterministic raw PTY child emits 100 numbered lines in an 82×21 terminal.
+The driver validates every visible ASCII cell and width at the milestones,
+scrolls from bottom 80 to historical offset 59, requests bottom 80 again, then
+adds 25 lines. Accepted C++ remains at 80 instead of new bottom 105. Independent
+Zig follows to 105. An extra case holds the historical frame ACK, sends the
+return request followed by input on the same connection, and uses ReadPane to
+verify that the final added row is processed before releasing the ACK.
+
+Two private runtime candidates isolate the decision:
+
+- B clears the retained offset during frame delivery when the effective viewport
+  reaches bottom. It passes the simple case but **fails the held-ACK case**:
+  by publication time the bottom has moved and the old request is historical.
+- C queries fresh Ghostty scrollbar bounds when processing SetPaneViewport and
+  clears the optional offset immediately when the request reaches live output.
+  It preserves historical requests. This adds no attachment fields or allocation;
+  it adds a pane lookup and scrollbar query at request handling. Clearing the
+  offset can avoid later scroll/restore calls, but their cost remains unmeasured.
+
+Frozen runtime SHA-256s are A `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`,
+B `6903213d29dfb9cdd8a500648752b2c613662457494020f9ac716bde7ee6502a`,
+C `ef96590923e91e1d5b31efd85ebf9df6bbd4990cc79596957a5e501cd62c3b6a` and
+Zig `6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+GUI `bc55d0e84d76…`, helper `87beebb065f0…` and Qt remain unchanged. The VFS source
+identities and compile/link manifests are in ignored
+`out-perf/dlls-viewport-follow-01/`; the accepted clean client/delivery headers
+exclude the four unrelated pending runtime-pacing files.
+
+`services/runtime-cpp/tests/viewport_follow_probe.cpp` and
+`tools/check_viewport_follow.py` make the C++ diagnostic reusable. Build it using
+`tools/build_runtime_scroll_probe.py --runtime-build <existing-ninja-build>
+--source services/runtime-cpp/tests/viewport_follow_probe.cpp
+--include-dir services/gui-cpp <new-ignored-build-directory>`; then run
+`python3 tools/check_viewport_follow.py --runtime <frozen-runtime>
+--probe <build-directory>/probe <new-private-output-directory>`.
+The controller checks executable/process identity, captures host load at every
+boundary, isolates sockets/config/history, preserves failures, verifies owned
+cleanup and exits nonzero on a semantic failure. This is a manual source oracle,
+not a new default test-suite target and not a native-latency measurement.
+
+| Runtime | Return to exact bottom | ACK held across new output | Stay in history | Request UINT32_MAX |
+| --- | --- | --- | --- | --- |
+| Accepted A | fail, stays at 80 | fail, stays at 80 | pass, stays at 59 | pass, follows to 105 |
+| Late classifier B | pass | fail, stays at 80 | pass | pass |
+| Request classifier C | pass | pass | pass | pass |
+| Independent Zig | pass | pass | pass | pass |
+
+The final reusable-tool runs are
+`/tmp/telar-perf-viewport-follow-reusable-{A,B,C,zig}-02`: 16 valid cell/protocol
+observations, controller exits 1/1/0/0 as expected, all owned cleanup verified.
+Each series has ten qualified host boundaries; maximum load1 is 1.84570 across
+them. Earlier three-runtime reusable runs (`…-{A,B,C}-01`) retain the same C++
+outcomes, with ten boundaries each and maximum load1 1.88867. Initial cross-runtime runs are
+`/tmp/telar-perf-viewport-follow-basic-variants-01` and
+`/tmp/telar-perf-viewport-follow-late-variants-02`, with four variants each, ten
+qualified host boundaries each, and maximum load1 1.47119/1.81006 respectively.
+
+Two harness failures are retained. The first direct C++-codec connection to Zig
+was rejected by the schema handshake, requiring the exact-version Zig adapter.
+The first held-ACK Zig driver incorrectly prohibited all replacement frames;
+Zig legitimately prioritizes an independent snapshot over its outstanding ACK.
+The corrected driver applies and verifies replacement snapshots, withholds their
+ACKs too, and finally acknowledges the newest applied frame. This run observes
+one replacement snapshot at offset 80 before the output delta reaches 105.
+The corrected result does not claim identical C++ and Zig frame scheduling.
+Offline replay of that trace rejects 19 negative controls: wrong accepted schema,
+truncation/duplication/wrong pane for each of five frames, wrong baseline for each
+of two deltas, and a corrupted decoded cell. Failed runs and raw traces remain
+private/ignored, not versioned measurement archives.
+
+The reference tooling is also retained in source: `tools/viewport_follow_wire.zig`,
+`tools/build_viewport_follow_wire.py`, `tools/viewport_follow_zig.py` and
+`tools/check_viewport_follow_wire.py`. The builder archives only the required
+schema/libraries from the explicitly selected Git revision and records archive,
+adapter, compiler, libc and resulting-library hashes. Build with the frozen Zig
+compiler and explicit `--revision`, `--target`, `--cpu`, `--libc` and fresh ignored
+output directory; pass the resulting library to the same controller using
+`--zig-wire <output>/wire.dylib`. The C++ executable supplies the identical raw
+PTY child for both schemas. Final adapter SHA-256 is
+`6efb54679e3c14d966e3299b21b66035ba4ca31ed4a9ef586cbcf5801ffce15f`.
+The final held-ACK reference trace independently passes all 19 negative controls
+again with the committed-source adapter/client. Formatting, Python compilation,
+the C++ probe build and ReleaseSafe Zig adapter build pass. These are scoped
+native macOS tests; no Linux/x86 or full-suite validation is claimed.
+
+Six alternating native pairs in
+`/tmp/telar-perf-viewport-follow-C-scroll-pairs-01` compare accepted A to C on
+static historical scrolling, where both have equivalent required output. Each
+run has 100 measured inputs and 20 warmups. Native content/presentation, Qt,
+grid, resource and owned-cleanup checks pass; 26 host boundaries qualify with
+maximum load1 2.30566. No own builds/tests/profiles overlap timing. This is a
+regression control for the correction, not the live-follow target or full F06.
+
+| Native scroll metric | A | C | C lower |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50 ms | 31.42806 | 31.14880 | 3/6 |
+| Input-to-present p95 ms | 41.05273 | 38.74694 | 4/6 |
+| Input-to-present p99 ms | 45.16057 | 45.01919 | 4/6 |
+| Input-to-present maximum ms | 45.85260 | 48.24915 | 3/6 |
+| GUI CPU ms/input | 5.11672 | 5.25741 | 3/6 |
+| GUI peak RSS MiB | 206.18750 | 204.42969 | 4/6 |
+| Runtime CPU ms/run | 84.64365 | 84.37719 | 2/6 |
+| Runtime instructions/run | 413239818.50000 | 410775058.00000 | 3/6 |
+| Runtime cycles/run | 179299592.50000 | 177442010.00000 | 4/6 |
+
+No consistent regression appears in that scroll control, but p95 improves only
+4/6 and runtime CPU only 2/6: this is not a performance win. The wider control
+in `/tmp/telar-perf-viewport-follow-C-controls-timing-01` completes 48 runs:
+six alternating pairs each of single input, ASCII TUI, splits and tabs, with
+100 inputs plus 20 warmups. All content/presentation, matched-grid, Qt identity,
+resource and owned-cleanup checks pass. Its 98 host boundaries qualify; maximum
+load1 is 4.24316. The controller's label B denotes frozen candidate C in this
+series, not the rejected late classifier B.
+
+The following entries are median A → C, followed by C-lower pair count. Runtime
+counters include GUI setup, warmup, measured inputs and final TUI readback where
+applicable; they exclude runtime startup/shutdown and child CPU.
+
+| Control | p50 ms | p95 ms | p99 ms | Maximum ms |
+| --- | ---: | ---: | ---: | ---: |
+| single | 24.88797 → 24.88782 (2/6) | 30.66918 → 32.76902 (1/6) | 36.79782 → 33.27320 (4/6) | 37.33313 → 36.12673 (4/6) |
+| tui | 28.80326 → 28.75508 (3/6) | 37.34187 → 37.29912 (4/6) | 44.11625 → 41.67148 (3/6) | 47.73440 → 50.13696 (1/6) |
+| splits | 25.13672 → 24.90862 (3/6) | 33.13708 → 32.98929 (5/6) | 37.46086 → 35.25219 (4/6) | 39.08071 → 37.29185 (5/6) |
+| tabs | 24.90745 → 24.89396 (2/6) | 33.07005 → 32.82612 (6/6) | 36.94237 → 35.41607 (5/6) | 39.15465 → 36.81469 (4/6) |
+
+| Control | GUI CPU ms/input | Runtime CPU ms/run | GUI peak RSS MiB |
+| --- | ---: | ---: | ---: |
+| single | 3.76269 → 3.75198 (3/6) | 85.36719 → 82.73850 (3/6) | 205.15625 → 203.43750 (5/6) |
+| tui | 5.13709 → 4.97872 (4/6) | 99.55473 → 98.59129 (4/6) | 225.81250 → 222.06250 (2/6) |
+| splits | 4.17237 → 3.98717 (5/6) | 105.73046 → 102.76087 (5/6) | 204.03125 → 206.29688 (1/6) |
+| tabs | 3.88425 → 4.03901 (3/6) | 103.18621 → 104.83369 (2/6) | 205.52344 → 205.25781 (4/6) |
+
+**Reject this C binary for adoption:** single-input p95 and TUI maximum each lose
+5/6 pairs. The cause is not established. Lower medians or wins in other controls
+do not cancel these regressions; this series is not selectively rerun. The RSS
+tradeoff is reported separately and is not the rejection reason. No claim is made
+that the scrollbar lookup causes the losses, or that removing RAII/Qt conversions
+would fix them.
+
+The new oracles and findings are retained; neither runtime candidate is adopted.
+The four pre-existing pacing files remain byte-identical. Full historical anchoring
+across pruning/reflow/resize, alternate screens, multiple clients, live-output
+native presentation and continuous scroll correctness remain open. Ghostty exposes
+owned tracked grid references for long-lived anchors; those have allocation and
+mutation bookkeeping costs that must be measured, and untracked references must
+not be retained across terminal mutations. A subsequent candidate can use these
+oracles before attempting to reduce repeated projection/scroll work. The accepted
+C++ runtime/GUI/helper/Qt baseline remains unchanged; all complete F01–F16 and
+native120 gates remain open, with the persistent objective active.
