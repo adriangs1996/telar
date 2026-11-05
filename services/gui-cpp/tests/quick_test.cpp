@@ -2707,7 +2707,7 @@ return {api_version=2, client={keybindings={
     release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
     held = true;
     QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
-    window_->hide();
+    test::hideWindow(*window_);
     QTRY_VERIFY_WITH_TIMEOUT(!window_->isActive(), runtime_wait_ms);
     window_->show();
     test::activateWindow(*window_);
@@ -3995,11 +3995,22 @@ return {api_version=2, client={keybindings={
       client_->execute(Application::Action::cancel);
     });
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto stale_query = QStringLiteral("> stale query before routed goto");
     client_->execute(Application::Action::palette);
-    client_->searchPalette(QStringLiteral("> stale query before routed goto"));
+    client_->searchPalette(stale_query);
     CommandPeer peer{memory_};
     peer.open(socket_);
     QTRY_VERIFY2_WITH_TIMEOUT(peer.ready(), qPrintable(peer.error()), runtime_wait_ms);
+
+    // As in Zig, Goto does not open over another prompt and leaves it as it was.
+    peer.request(telar::ClientAction::client_open_goto, 1);
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
+    QCOMPARE(client_->dialog(), QStringLiteral("palette"));
+    QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), stale_query);
+    client_->execute(Application::Action::cancel);
+
     peer.request(telar::ClientAction::client_open_goto, 2);
     QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
     QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
@@ -6327,7 +6338,7 @@ return {api_version=2, client={keybindings={
       client_->execute(Application::Action::palette);
       break;
     case TabDragInterruption::focus:
-      window_->hide();
+      test::hideWindow(*window_);
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isActive(), runtime_wait_ms);
       window_->show();
       test::activateWindow(*window_);
