@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QVariantMap>
+#include <algorithm>
 
 namespace telar::gui::qt {
 
@@ -26,6 +27,38 @@ public:
 
   [[nodiscard]] QHash<int, QByteArray> roleNames() const override {
     return {{record_role, "record"}};
+  }
+
+  // Snapshot consumers identify rows by position and validate actions with record keys or revisions.
+  void replaceRows(QList<QVariantMap> incoming) {
+    const auto shared = std::min(rows_.size(), incoming.size());
+    auto first_changed = shared;
+    qsizetype last_changed = 0;
+    for (qsizetype index = 0; index < shared; ++index) {
+      if (rows_[index] != incoming[index]) {
+        rows_[index] = std::move(incoming[index]);
+        first_changed = std::min(first_changed, index);
+        last_changed = index;
+      }
+    }
+
+    if (first_changed != shared) {
+      emit dataChanged(index(static_cast<int>(first_changed)), index(static_cast<int>(last_changed)), {record_role});
+    }
+
+    if (rows_.size() > incoming.size()) {
+      beginRemoveRows({}, static_cast<int>(incoming.size()), static_cast<int>(rows_.size() - 1));
+      rows_.erase(rows_.begin() + incoming.size(), rows_.end());
+      endRemoveRows();
+    } else if (rows_.size() < incoming.size()) {
+      beginInsertRows({}, static_cast<int>(rows_.size()), static_cast<int>(incoming.size() - 1));
+      rows_.reserve(incoming.size());
+      for (auto index = shared; index < incoming.size(); ++index) {
+        rows_.append(std::move(incoming[index]));
+      }
+
+      endInsertRows();
+    }
   }
 
   void reconcile(QList<QVariantMap> incoming) {

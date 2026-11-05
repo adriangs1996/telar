@@ -217,6 +217,64 @@ static void testSocketOwnership() {
   check(::rmdir(directory.data()) == 0);
 }
 
+static void testDisconnectedSocketClients() {
+  std::array<char, 64> directory{};
+  std::strcpy(directory.data(), "/tmp/telar-disconnected-socket-XXXXXX");
+  check(::mkdtemp(directory.data()) != nullptr);
+  const auto path = std::string{directory.data()} + "/runtime.sock";
+  bool setup_failed = false;
+
+  {
+    LocalListener listener{path};
+    sockaddr_un address{};
+    address.sun_family = AF_UNIX;
+    std::strcpy(address.sun_path, path.c_str());
+
+    constexpr unsigned attempts = 100;
+    for (unsigned index = 0; index < attempts; ++index) {
+      FileDescriptor abandoned{::socket(AF_UNIX, SOCK_STREAM, 0)};
+      check(static_cast<bool>(abandoned));
+      check(::connect(abandoned.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+      abandoned.reset();
+
+      try {
+        auto closed = listener.accept();
+        if (closed) {
+          char byte = 0;
+          check(::recv(closed.get(), &byte, sizeof(byte), 0) == 0);
+        }
+      } catch (const SystemError &) {
+        setup_failed = true;
+      }
+
+      FileDescriptor client{::socket(AF_UNIX, SOCK_STREAM, 0)};
+      check(static_cast<bool>(client));
+      check(::connect(client.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+      auto connected = listener.accept();
+      check(static_cast<bool>(connected));
+      check((::fcntl(connected.get(), F_GETFD) & FD_CLOEXEC) != 0);
+      check((::fcntl(connected.get(), F_GETFL) & O_NONBLOCK) != 0);
+#if defined(SO_NOSIGPIPE)
+      int suppressed = 0;
+      socklen_t length = sizeof(suppressed);
+      check(::getsockopt(connected.get(), SOL_SOCKET, SO_NOSIGPIPE, &suppressed, &length) == 0);
+      check(length == sizeof(suppressed) && suppressed == 1);
+#endif
+      constexpr char request = 'Q';
+      constexpr char response = 'R';
+      check(::write(client.get(), &request, sizeof(request)) == sizeof(request));
+      char received = 0;
+      check(::read(connected.get(), &received, sizeof(received)) == sizeof(received) && received == request);
+      check(::write(connected.get(), &response, sizeof(response)) == sizeof(response));
+      check(::read(client.get(), &received, sizeof(received)) == sizeof(received) && received == response);
+    }
+  }
+
+  check(::unlink((path + ".lock").c_str()) == 0);
+  check(::rmdir(directory.data()) == 0);
+  check(!setup_failed);
+}
+
 static void testChildExitNotification() {
   SystemAllocator memory;
   struct sigaction previous{};
@@ -247,6 +305,7 @@ static void testChildExitNotification() {
 }
 
 void testPlatform() {
+  testDisconnectedSocketClients();
   SystemAllocator memory;
   testSpawn(memory);
   testForegroundProcessGroup(memory);

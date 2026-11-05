@@ -122,7 +122,7 @@ void Application::refreshHistory() {
       rows.append(std::move(record));
     }
 
-    history_.reconcile(std::move(rows));
+    history_.replaceRows(std::move(rows));
     history_rows_version_ = browser.rowsVersion();
   }
 

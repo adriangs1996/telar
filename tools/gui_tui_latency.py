@@ -68,6 +68,8 @@ def validate_telar_grids(reference, candidate):
 
     if reference.get('image_size') != candidate.get('image_size'):
         raise ValueError('Telar image workloads differ')
+    if reference.get('image_transport', 'shared-memory') != candidate.get('image_transport', 'shared-memory'):
+        raise ValueError('Telar image transports differ')
     if reference.get('image_size') and reference['fixtures'][0]['image']['payload_sha256'] != candidate['fixtures'][0]['image']['payload_sha256']:
         raise ValueError('Telar image payloads differ')
 
@@ -77,6 +79,9 @@ def validate_image_receipt(result, size):
     if len(fixtures) != 1 or fixtures[0]['role'] != 'primary':
         raise ValueError('image measurement requires exactly one primary fixture')
     image = fixtures[0].get('image', {})
+    transport = result.get('image_transport', 'shared-memory')
+    if transport not in ('shared-memory', 'inline'):
+        raise ValueError('unknown image transport')
     pattern = result.get('image_pattern', 'opaque')
     from image_patterns import placement
     expected_cells = placement(size, pattern)
@@ -86,7 +91,7 @@ def validate_image_receipt(result, size):
     if ([image.get('width'), image.get('height')] != list(size)
             or image.get('bytes_per_image') != size[0] * size[1] * 4
             or image.get('format') != 'RGBA8888'
-            or image.get('transport') != 'kitty-shared-memory'):
+            or image.get('transport') != 'kitty-' + transport):
         raise ValueError('image receipt does not match the requested dimensions and format')
     publications = image.get('publications', [])
     count = len(latency_samples(result))
@@ -226,6 +231,7 @@ def measure(mode, directory, setup):
             fixture[1] = str(Path(__file__).with_name('image_bench_fixture.py').resolve())
             fixture += ['--width', str(options.image_size[0]), '--height', str(options.image_size[1])]
             fixture += ['--pattern', getattr(options, 'image_pattern', 'opaque')]
+            fixture += ['--transport', getattr(options, 'image_transport', 'shared-memory')]
     else:
         fixture = [shutil.which('python3'),
                    str(Path(__file__).with_name('gui_tui_marker.py').resolve()), str(directory / 'size.json')]
@@ -356,6 +362,7 @@ def measure(mode, directory, setup):
         if getattr(options, 'image_size', None):
             result['image_size'] = list(options.image_size)
             result['image_pattern'] = getattr(options, 'image_pattern', 'opaque')
+            result['image_transport'] = getattr(options, 'image_transport', 'shared-memory')
             validate_image_receipt(result, options.image_size)
     (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     if mode in TELAR_MODES:
@@ -391,6 +398,8 @@ def main():
                         help='replace a Kitty RGBA image on each input; requires single-pane Telar modes')
     parser.add_argument('--image-pattern', choices=['opaque', 'alpha-edge', 'alpha-gradient'], default='opaque',
                         help='alpha patterns require --image-size 16 16 and use an opaque border with a center marker')
+    parser.add_argument('--image-transport', choices=['shared-memory', 'inline'], default='shared-memory',
+                        help='Kitty image input transport; inline base64 commands are prepared before timing')
     parser.add_argument('--text-pattern', choices=['repeat', 'variable'], default='repeat',
                         help='repeat the original 64-byte line or vary every line deterministically')
     parser.add_argument('--background-mib-per-second', type=background_rate,
@@ -415,6 +424,8 @@ def main():
     modes = MODE_GROUPS.get(options.mode, [options.mode])
     if options.image_pattern != 'opaque' and not options.image_size:
         parser.error('--image-pattern requires --image-size')
+    if options.image_transport != 'shared-memory' and not options.image_size:
+        parser.error('--image-transport requires --image-size')
     if options.image_size:
         from image_bench_fixture import image_extent
         from image_patterns import placement
@@ -497,6 +508,7 @@ def main():
                     input_method=options.input_method, cases=options.cases, panes=options.panes,
                     image_size=options.image_size,
                     image_pattern=options.image_pattern,
+                    image_transport=options.image_transport,
                     text_pattern=options.text_pattern, background_mib_per_second=options.background_mib_per_second,
                     background_rate_tolerance=BACKGROUND_RATE_TOLERANCE,
                     viewport=options.viewport, command_line=os.sys.argv,

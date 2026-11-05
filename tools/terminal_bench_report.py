@@ -110,6 +110,14 @@ def load_runs(paths):
                 raise ValueError(f'duplicate case/mode/round: {identity}')
             seen.add(identity)
             warmup, samples = run['warmup'], latency_samples(run)
+            if case == 'tui':
+                control = run.get('tui_validation')
+                if (run.get('foreground_workload') != 'ascii-tui-v1' or not isinstance(control, dict)
+                        or control.get('passed') is not True or control.get('workload') != 'ascii-tui-v1'
+                        or type(control.get('sequence')) is not int or control['sequence'] != len(samples)):
+                    raise ValueError(f'TUI workload has no qualified final screen: {identity}')
+                if control.get('write_mode', 'split') != 'split':
+                    raise ValueError(f'Diagnostic TUI write mode is ineligible for ordinary timing: {identity}')
             if (not isinstance(warmup, int) or isinstance(warmup, bool) or
                     not isinstance(samples, list) or not 0 <= warmup < len(samples)):
                 raise ValueError(f'invalid warmup or empty samples: {identity}')

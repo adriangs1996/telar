@@ -6,8 +6,12 @@
 #include "telar_platform/temporary_directory.hpp"
 #include <fstream>
 #include <latch>
+#include <numeric>
 #include <poll.h>
+#include <set>
 #include <sys/stat.h>
+#include <tuple>
+#include <vector>
 
 using namespace telar;
 using namespace telar::runtime;
@@ -16,6 +20,94 @@ template <typename Message, Allocator Memory>
 static Message decodeReply(const EncodedReply<Memory> &reply, std::span<Byte> storage_bytes) {
   DecodeStorage storage{storage_bytes};
   return Codec::decode<Message>(reply.payload(), storage);
+}
+
+template <ConcurrentAllocator Memory>
+static void testFuzzyOrderingShapes(Memory &memory) {
+  enum class Shape { empty, singleton, chronological, reversed, tied, alternating, shuffled, middle_disorder };
+  constexpr std::size_t ordinary_count = 257;
+  constexpr std::size_t page_size = 17;
+  constexpr std::size_t shuffle_multiplier = 37;
+  constexpr std::size_t duplicate_period = 5;
+  constexpr std::size_t unmatched_period = 7;
+
+  for (const auto shape : {Shape::empty, Shape::singleton, Shape::chronological, Shape::reversed, Shape::tied, Shape::alternating, Shape::shuffled, Shape::middle_disorder}) {
+    const auto count = shape == Shape::empty ? std::size_t{0} : shape == Shape::singleton ? std::size_t{1} : ordinary_count;
+    std::vector<std::string> commands(count);
+    std::vector<ImportHistoryEntry> entries(count);
+    for (std::size_t index = 0; index < count; ++index) {
+      commands[index] = index % unmatched_period == 0 ? "echo quiet " + std::to_string(index) : index % duplicate_period == 0 ? "gb duplicate" : "gb " + std::to_string(index);
+      auto timestamp = static_cast<std::int64_t>(index);
+      switch (shape) {
+      case Shape::reversed:
+        timestamp = -timestamp;
+        break;
+      case Shape::tied:
+        timestamp = 0;
+        break;
+      case Shape::alternating:
+        timestamp = static_cast<std::int64_t>(index % 2 == 0 ? index : count - index);
+        break;
+      case Shape::shuffled:
+        timestamp = static_cast<std::int64_t>(index * shuffle_multiplier % count);
+        break;
+      case Shape::empty:
+      case Shape::singleton:
+      case Shape::chronological:
+      case Shape::middle_disorder:
+        break;
+      }
+
+      entries[index] = {.started_at_ms = timestamp, .command = commands[index]};
+    }
+
+    if (shape == Shape::middle_disorder) {
+      std::swap(entries[count / 2].started_at_ms, entries[count / 2 + 1].started_at_ms);
+    }
+
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    if (!entries.empty()) {
+      store.importEntries(ImportHistory{.request_id = 1, .source = "fuzzy-ordering-shapes", .entries = entries}, reply);
+    }
+
+    // Every match starts with gb, so recency alone determines the reference pages.
+    std::vector<std::size_t> order(count);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](const auto left, const auto right) {
+      return std::tuple{entries[left].started_at_ms, left} > std::tuple{entries[right].started_at_ms, right};
+    });
+
+    std::array<Byte, 128 * 1024> storage;
+    for (const bool distinct : {false, true}) {
+      std::set<std::string_view> seen;
+      std::vector<std::size_t> expected;
+      for (const auto index : order) {
+        if (distinct && !seen.insert(commands[index]).second) {
+          continue;
+        }
+
+        if (commands[index].starts_with("gb")) {
+          expected.push_back(index);
+        }
+      }
+
+      for (std::size_t offset = 0; offset <= expected.size() + page_size; offset += page_size) {
+        store.query(QueryHistory{.request_id = 2, .query = "gb", .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = page_size, .offset = static_cast<std::uint32_t>(offset)}, reply);
+        const auto result = decodeReply<HistoryResults>(reply, storage);
+        const auto start = std::min(offset, expected.size());
+        const auto size = std::min(page_size, expected.size() - start);
+        check(result.snapshot_id == count && result.entries.size() == size);
+        check(result.has_more == (start + size < expected.size()));
+        for (std::size_t index = 0; index < size; ++index) {
+          const auto wanted = expected[start + index];
+          check(result.entries[index].id == wanted + 1);
+          check(result.entries[index].started_at_ms == entries[wanted].started_at_ms);
+          check(result.entries[index].command == commands[wanted]);
+        }
+      }
+    }
+  }
 }
 
 template <ConcurrentAllocator Memory>
@@ -104,6 +196,62 @@ static void testHistoryQueries(Memory &memory) {
   check(decodeReply<HistoryPruned>(reply, storage).removed == 3);
   store.stats(HistoryStatsQuery{.request_id = 9}, reply);
   check(decodeReply<HistoryStatsResult>(reply, storage).total == 3);
+}
+
+template <ConcurrentAllocator Memory>
+static void testFuzzyRecencyBoundary(Memory &memory) {
+  constexpr std::size_t candidate_limit = 10000;
+  constexpr std::size_t entry_count = candidate_limit + 1;
+  constexpr std::size_t timestamp_period = 61;
+
+  for (const bool shuffled : {false, true}) {
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<ImportHistoryEntry> entries(entry_count);
+
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+      entries[index] = {shuffled ? static_cast<std::int64_t>(index % timestamp_period) : 100, "echo unrelated"};
+    }
+
+    constexpr std::size_t zero_score_padding = 1024;
+    const auto zero_score_command = std::string(zero_score_padding, 'x') + "gb";
+    entries[2].command = zero_score_command;
+    entries.front().command = "gb";
+    entries[1].command = entries.back().command = "git build";
+    store.importEntries(ImportHistory{.request_id = 1, .source = "fuzzy-recency-boundary", .entries = entries}, reply);
+    std::array<Byte, 4096> storage;
+    QueryHistory query{.request_id = 2, .query = "gb", .match = HistoryMatch::fuzzy, .limit = 10};
+    store.query(query, reply);
+    auto result = decodeReply<HistoryResults>(reply, storage);
+    check(result.snapshot_id == entry_count && !result.has_more && result.entries.size() == 3);
+    check(result.entries[0].id == entry_count && result.entries[1].id == 2 && result.entries[2].id == 3);
+
+    query.distinct = true;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 2 && result.entries[0].id == entry_count && result.entries[1].id == 3 && !result.has_more);
+
+    query.snapshot_id = candidate_limit;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.snapshot_id == candidate_limit && result.entries.size() == 3 && !result.has_more);
+    check(result.entries[0].id == 1 && result.entries[1].id == 2 && result.entries[2].id == 3);
+
+    query.limit = 1;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 1 && result.entries[0].id == 1 && result.has_more);
+
+    query.offset = 1;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 1 && result.entries[0].id == 2 && result.has_more);
+
+    query.offset = 2;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 1 && result.entries[0].id == 3 && !result.has_more);
+  }
 }
 
 template <ConcurrentAllocator Memory>
@@ -486,6 +634,8 @@ void testHistory() {
   {
     SqliteAllocator sqlite_memory{memory};
     testHistoryQueries(memory);
+    testFuzzyRecencyBoundary(memory);
+    testFuzzyOrderingShapes(memory);
     testAgentCommands(memory);
     testHistoryPersistence(memory);
     check(sqlite3_malloc64(128 * 1024 * 1024) == nullptr);

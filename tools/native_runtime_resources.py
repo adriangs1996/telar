@@ -3,6 +3,8 @@
 Compile macos_process_resources.c separately and pass its executable to capture.
 The harness adapter is serial: it temporarily wraps its runtime identity/cleanup
 functions. CPU covers GUI startup, warmup and measurement, not only input samples.
+New helpers also expose raw process instruction/cycle counters. Older receipts
+remain readable; zero lifetime counters do not establish hardware availability.
 """
 
 from contextlib import contextmanager
@@ -19,6 +21,9 @@ def validate_snapshot(result):
                 'start_abstime', 'exit_abstime', 'user_ticks', 'system_ticks',
                 'idle_wakeups', 'interrupt_wakeups', 'pageins', 'resident_bytes',
                 'footprint_bytes', 'lifetime_max_footprint_bytes')
+    hardware = ('instructions', 'cycles')
+    if any(key in result for key in hardware):
+        counters += hardware
     if any(type(result.get(key)) is not int or not 0 <= result[key] <= 2**64 - 1 for key in counters):
         raise ValueError('Invalid resource counter representation')
     if not isinstance(result.get('uuid'), str) or not re.fullmatch('[0-9a-f]{32}', result['uuid']):
@@ -46,16 +51,25 @@ def interval(start, end):
     if not start['before_ns'] <= start['after_ns'] <= end['before_ns'] <= end['after_ns']:
         raise ValueError('Resource clock is not monotonic')
     counts = ('user_ticks', 'system_ticks', 'idle_wakeups', 'interrupt_wakeups', 'pageins')
+    hardware = ('instructions', 'cycles')
+    if ('instructions' in start) != ('instructions' in end):
+        raise ValueError('Hardware counter availability changed between snapshots')
+    if 'instructions' in start:
+        counts += hardware
     if any(start[k] < 0 or end[k] < start[k] for k in counts):
         raise ValueError('Resource counter regressed')
     scale = start['timebase_numer'] / start['timebase_denom'] / 1e9
-    return dict(valid=True, user_cpu_seconds=(end['user_ticks'] - start['user_ticks']) * scale,
+    result = dict(valid=True, user_cpu_seconds=(end['user_ticks'] - start['user_ticks']) * scale,
                 system_cpu_seconds=(end['system_ticks'] - start['system_ticks']) * scale,
                 minimum_wall_seconds=(end['before_ns'] - start['after_ns']) / 1e9,
                 maximum_wall_seconds=(end['after_ns'] - start['before_ns']) / 1e9,
                 idle_wakeups=end['idle_wakeups'] - start['idle_wakeups'],
                 interrupt_wakeups=end['interrupt_wakeups'] - start['interrupt_wakeups'],
                 pageins=end['pageins'] - start['pageins'])
+    if 'instructions' in start:
+        result.update({key: end[key] - start[key] for key in hardware})
+        result['hardware_counters_available'] = all(end[key] > 0 for key in hardware)
+    return result
 
 
 @contextmanager

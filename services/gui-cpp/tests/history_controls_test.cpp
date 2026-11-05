@@ -24,6 +24,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QPointF>
+#include <QPointer>
 #include <QPointingDevice>
 #include <QInputDevice>
 #include <QWheelEvent>
@@ -751,6 +752,190 @@ class HistoryControlsTest final : public QObject {
     row->setProperty("interactive", false);
     QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, center);
     QCOMPARE(activated.size(), 1);
+  }
+
+  Q_SLOT static void queryChangesPreserveRowMeasurements() {
+    SystemAllocator memory;
+    HistoryRow<SystemAllocator> entry{memory};
+    entry.command = "git build";
+    auto record = historyRecord(entry, {});
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto row = createChrome(engine, QStringLiteral("HistoryRow"), {
+        {QStringLiteral("record"), record},
+        {QStringLiteral("colors"), themeColors({})},
+        {QStringLiteral("typography"), historyTypography()},
+        {QStringLiteral("rowHeight"), row_height},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), row_height},
+        {QStringLiteral("query"), QStringLiteral("gb")},
+    });
+    row->setParentItem(window.contentItem());
+    window.resize(wide_width, row_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    followWindowSize(*row, window);
+    const auto regions = [&] { return row->property("regions").toMap(); };
+    const auto geometry = [&] {
+      auto result = regions();
+      result.remove(QStringLiteral("lines"));
+      result.remove(QStringLiteral("needed"));
+
+      return result;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(!regions().value(QStringLiteral("lines")).toList().isEmpty(), wait_ms);
+    constexpr int settle_ms = 50;
+    QTest::qWait(settle_ms);
+    const auto before = regions();
+    const auto before_geometry = geometry();
+    const QSignalSpy measurements_changed{row.get(), SIGNAL(measurementsChanged())};
+    const QSignalSpy layout_changed{row.get(), SIGNAL(layoutChanged())};
+    const QSignalSpy regions_changed{row.get(), SIGNAL(regionsChanged())};
+    const auto geometry_signal = row->metaObject()->indexOfSignal("geometryRegionsChanged()");
+    std::unique_ptr<QSignalSpy> geometry_changed;
+    if (geometry_signal >= 0) {
+      geometry_changed = std::make_unique<QSignalSpy>(row.get(), row->metaObject()->method(geometry_signal));
+    }
+
+    row->setProperty("query", QStringLiteral("gt"));
+    QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("lines")) != before.value(QStringLiteral("lines")), wait_ms);
+    QCOMPARE(geometry(), before_geometry);
+    QTRY_VERIFY_WITH_TIMEOUT(!layout_changed.isEmpty(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!regions_changed.isEmpty(), wait_ms);
+    const auto has_updated_match = [&] {
+      return std::ranges::any_of(visualItems(*row, QStringLiteral("historyMatch")), [](const auto *item) {
+        return item->isVisible() && item->property("text").toString() == QStringLiteral("t");
+      });
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(has_updated_match(), wait_ms);
+    QCOMPARE(measurements_changed.size(), 0);
+    QVERIFY2(geometry_changed != nullptr, "Geometry bindings still depend on the full content layout");
+    QCOMPARE(geometry_changed->size(), 0);
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+
+    record.insert(QStringLiteral("command"), QStringLiteral("git build --all"));
+    row->setProperty("record", record);
+    QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("needed")) != before.value(QStringLiteral("needed")), wait_ms);
+    QCOMPARE(geometry(), before_geometry);
+    QCOMPARE(geometry_changed->size(), 0);
+    window.resize(fact_limited_width, row_height);
+    QTRY_VERIFY_WITH_TIMEOUT(!geometry_changed->isEmpty(), wait_ms);
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+    QVERIFY(geometry() != before_geometry);
+    geometry_changed->clear();
+    row->setProperty("expanded", true);
+    QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("cardHeight")).toDouble() > row_height, wait_ms);
+    QVERIFY(!geometry_changed->isEmpty());
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+    geometry_changed->clear();
+    row->setProperty("expanded", false);
+    QTRY_COMPARE_WITH_TIMEOUT(regions().value(QStringLiteral("cardHeight")).toDouble(), 0.0, wait_ms);
+    QVERIFY(!geometry_changed->isEmpty());
+    QCOMPARE(row->property("geometryRegions").toMap(), geometry());
+  }
+
+  Q_SLOT static void matchDelegatesRetainPositionsAcrossQueryChanges() {
+    SystemAllocator memory;
+    HistoryRow<SystemAllocator> entry{memory};
+    entry.command = "abc";
+    auto record = historyRecord(entry, {});
+    const auto colors = themeColors({});
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto row = createChrome(engine, QStringLiteral("HistoryRow"), {
+        {QStringLiteral("record"), record},
+        {QStringLiteral("colors"), colors},
+        {QStringLiteral("typography"), historyTypography()},
+        {QStringLiteral("rowHeight"), row_height},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), row_height},
+        {QStringLiteral("query"), QStringLiteral("ab")},
+    });
+    row->setParentItem(window.contentItem());
+    window.resize(wide_width, row_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    const auto matches = [&] {
+      auto items = visualItems(*row, QStringLiteral("historyMatch"));
+      items.removeIf([](const auto *item) { return !item->isVisible(); });
+      std::ranges::sort(items, [](const auto *left, const auto *right) { return left->x() < right->x(); });
+
+      return items;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
+    QPointer<QQuickItem> first = matches()[0];
+    QPointer<QQuickItem> second = matches()[1];
+    QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
+    QCOMPARE(second->property("text").toString(), QStringLiteral("b"));
+    row->setProperty("query", QStringLiteral("bc"));
+    QTRY_VERIFY_WITH_TIMEOUT(first && first->property("text").toString() == QStringLiteral("b"), wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QCOMPARE(matches()[1], second.data());
+    QCOMPARE(second->property("text").toString(), QStringLiteral("c"));
+    QCOMPARE(first->property("color").value<QColor>(), colors.value(QStringLiteral("accent")).value<QColor>());
+    QVERIFY(first->property("bold").toBool());
+
+    row->setProperty("query", QStringLiteral("abc"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{3}, wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QCOMPARE(matches()[1], second.data());
+    QPointer<QQuickItem> third = matches()[2];
+    row->setProperty("query", QStringLiteral("a"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QVERIFY(second && third);
+    QVERIFY(!second->isVisible() && !third->isVisible());
+    QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
+    row->setProperty("query", QStringLiteral("z"));
+    QTRY_VERIFY_WITH_TIMEOUT(matches().isEmpty(), wait_ms);
+    QVERIFY(first && !first->isVisible());
+    row->setProperty("query", QStringLiteral("abc"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{3}, wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QCOMPARE(matches()[1], second.data());
+    QCOMPARE(matches()[2], third.data());
+
+    record.insert(QStringLiteral("command"), QStringLiteral("a界e\u0301"));
+    row->setProperty("record", record);
+    row->setProperty("query", QStringLiteral("界e\u0301"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
+    const auto wide = matches()[0];
+    const auto combining = matches()[1];
+    QCOMPARE(wide->property("text").toString(), QStringLiteral("界"));
+    QCOMPARE(combining->property("text").toString(), QStringLiteral("e\u0301"));
+    QCOMPARE(wide->width(), qreal{2 * cell_width});
+    QCOMPARE(combining->width(), qreal{cell_width});
+    QCOMPARE(combining->x(), wide->x() + wide->width());
+
+    constexpr qsizetype retention_bound = 8;
+    constexpr qsizetype overflow = 2;
+    const QString many_matches(retention_bound + overflow, QChar{u'a'});
+    record.insert(QStringLiteral("command"), many_matches);
+    row->setProperty("record", record);
+    row->setProperty("query", many_matches);
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), retention_bound + overflow, wait_ms);
+    QList<QPointer<QQuickItem>> retained;
+    for (auto *item : matches()) {
+      retained.append(item);
+    }
+
+    row->setProperty("query", QStringLiteral("a"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*row, QStringLiteral("historyMatch")).size(), retention_bound, wait_ms);
+    for (qsizetype index = 0; index < retained.size(); ++index) {
+      if (index < retention_bound) {
+        QVERIFY(retained[index]);
+        QCOMPARE(retained[index]->isVisible(), index == 0);
+      } else {
+        QVERIFY(retained[index].isNull());
+      }
+    }
+
+    row->setProperty("query", QStringLiteral("z"));
+    QTRY_VERIFY_WITH_TIMEOUT(matches().isEmpty(), wait_ms);
+    QCOMPARE(visualItems(*row, QStringLiteral("historyMatch")).size(), retention_bound);
+    row.reset();
+    for (const auto &item : retained) {
+      QVERIFY(item.isNull());
+    }
   }
 
   Q_SLOT static void selectedCardsShowEveryExplicitCommandLine() {

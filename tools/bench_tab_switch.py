@@ -2,6 +2,8 @@
 """Pair native previous-tab actions against verified target generations.
 
 Runs isolated complete Zig/C++ stacks with four independently updating PTYs.
+The first warmup input starts between predicted producer publications; actual
+500 ms publication counts retain the 5% gate, including the warmup interval.
 This measures discrete switches; it does not qualify workspaces, continuous
 120 Hz presentation, separate runtime resources or probe overhead.
 """
@@ -16,6 +18,7 @@ import subprocess
 import sys
 
 from build_tab_switch_probe import build
+from benchmark_host import HostLoadGate
 from tab_switch_report import validate_switch
 
 
@@ -96,12 +99,14 @@ def main():
                            (args.cpp_command, cpp / 'telar-gui-command'), (args.zig, zig / 'telar'),
                            (args.config, output / 'config.lua')):
         shutil.copy2(source, target)
-    source_files = [Path(__file__), Path(__file__).with_name('tab_switch_report.py')]
+    source_files = [Path(__file__), Path(__file__).with_name('tab_switch_report.py'),
+                    Path(__file__).with_name('benchmark_host.py')]
     for path in source_files:
         shutil.copy2(path, output / path.name)
     manifest = dict(scope=__doc__, negative_controls=args.negative_controls,
                     rounds=args.rounds, first=args.first, samples=args.samples, warmup=harness.WARMUP,
-                    viewport=args.viewport, working_directory=str(working), endpoint='MTLDrawable.presentedTime',
+                    viewport=args.viewport, float_windows=args.float_windows,
+                    working_directory=str(working), endpoint='MTLDrawable.presentedTime',
                     head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=Path(__file__).parent, text=True).strip(),
                     binaries={name: executable_identity(path) for name, path in
                               [('zig', zig / 'telar'), ('cpp_gui', cpp / 'telar-gui'),
@@ -119,6 +124,8 @@ def main():
         negative_controls(output, library, options, zig / 'telar')
         return
     rows = []
+    host = HostLoadGate(output / 'host-load.json')
+    host.checkpoint('before-series')
     for round_index in range(args.rounds):
         pair = {}
         zig_first = (round_index % 2 == 0) == (args.first == 'zig')
@@ -130,11 +137,12 @@ def main():
                                          endpoint='presented', idle_seconds=0, case='tabs', panes=4,
                                          throughput=False, text_pattern='repeat', background_mib_per_second=None,
                                          viewport=args.viewport, float_windows=args.float_windows, capture=False, cwd=working)
-            row = harness.measure(mode, directory, (zig / 'telar', None, library, output / 'config.lua', options))
-            receipts = [json.loads(path.read_text()) for path in sorted((directory / 'switching').glob('*.json'))]
-            publications = {tab: (directory / 'switching' / f'{tab}.events').read_bytes() for tab in range(4)}
-            row['switch_validation'] = validate_switch(row, receipts, publications)
-            row['switch_fixtures'] = receipts
+            with host.run(directory.name):
+                row = harness.measure(mode, directory, (zig / 'telar', None, library, output / 'config.lua', options))
+                receipts = [json.loads(path.read_text()) for path in sorted((directory / 'switching').glob('*.json'))]
+                publications = {tab: (directory / 'switching' / f'{tab}.events').read_bytes() for tab in range(4)}
+                row['switch_validation'] = validate_switch(row, receipts, publications, require_phase=True)
+                row['switch_fixtures'] = receipts
             row.update(round=round_index, case='tab-switch')
             cpu = row['measurement_user_cpu_seconds'] + row['measurement_system_cpu_seconds']
             row['summary']['gui_cpu_ms_per_input'] = cpu * 1000 / args.samples
@@ -143,6 +151,7 @@ def main():
             (output / 'runs.json').write_text(json.dumps(rows, indent=2) + '\n')
             print(json.dumps(dict(round=round_index, mode=mode, summary=row['summary'])), flush=True)
         harness.validate_telar_grids(pair['gui'], pair['gui-cpp'])
+    host.finish()
     pairs = [{row['mode']: row['summary'] for row in rows if row['round'] == index}
              for index in range(args.rounds)]
     summary = {metric: dict(zig=statistics.median(pair['gui'][metric] for pair in pairs),

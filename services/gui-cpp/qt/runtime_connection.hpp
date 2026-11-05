@@ -13,6 +13,7 @@
 #include <QLocalSocket>
 #include <QTimer>
 #include <array>
+#include <concepts>
 #include <optional>
 #include <string_view>
 
@@ -75,6 +76,12 @@ public:
 
     output_.resize(Codec::encodedSize(message));
     write(Codec::encode(message, output_));
+
+    if constexpr (std::same_as<Message, OpenPane>) {
+      if (accepted_) {
+        static_cast<void>(socket_.flush());
+      }
+    }
   }
 
 signals:

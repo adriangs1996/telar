@@ -37,6 +37,7 @@
 #include <QtCore/qlogging.h>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
+#include <QtCore/qobjectdefs.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -44,6 +45,7 @@
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <cmath>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -165,10 +167,116 @@ private:
   unsigned &destroyed_;
 };
 
+class AncestorItem final : public QQuickItem {
+public:
+  [[nodiscard]] auto observerCounts() const {
+    return std::array{receivers(SIGNAL(xChanged())), receivers(SIGNAL(yChanged())), receivers(SIGNAL(widthChanged())), receivers(SIGNAL(heightChanged())), receivers(SIGNAL(rotationChanged())), receivers(SIGNAL(scaleChanged())), receivers(SIGNAL(transformOriginChanged(TransformOrigin))), receivers(SIGNAL(parentChanged(QQuickItem *)))};
+  }
+};
+
 class ChromeTextTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void ancestorConnectionsFollowTheCurrentChain() {
+    AncestorItem first;
+    AncestorItem second;
+    auto middle = std::make_unique<AncestorItem>();
+    AncestorItem nearest;
+    middle->setParentItem(&first);
+    nearest.setParentItem(middle.get());
+    const auto absent = first.observerCounts();
+    auto present = absent;
+    for (auto &count : present) {
+      ++count;
+    }
+
+    {
+      NativeChromeText label{&nearest};
+      QCOMPARE(first.observerCounts(), present);
+      QCOMPARE(middle->observerCounts(), present);
+      QCOMPARE(nearest.observerCounts(), present);
+      QCOMPARE(second.observerCounts(), absent);
+
+      middle->setParentItem(&second);
+      QCOMPARE(first.observerCounts(), absent);
+      QCOMPARE(second.observerCounts(), present);
+      QCOMPARE(middle->observerCounts(), present);
+      QCOMPARE(nearest.observerCounts(), present);
+
+      nearest.setParentItem(&first);
+      QCOMPARE(first.observerCounts(), present);
+      QCOMPARE(second.observerCounts(), absent);
+      QCOMPARE(middle->observerCounts(), absent);
+      QCOMPARE(nearest.observerCounts(), present);
+
+      nearest.setParentItem(middle.get());
+      middle.reset();
+      QVERIFY(nearest.parentItem() == nullptr);
+      QCOMPARE(first.observerCounts(), absent);
+      QCOMPARE(second.observerCounts(), absent);
+      QCOMPARE(nearest.observerCounts(), present);
+
+      label.setParentItem(&second);
+      QCOMPARE(nearest.observerCounts(), absent);
+      QCOMPARE(second.observerCounts(), present);
+      label.setParentItem(nullptr);
+      QCOMPARE(second.observerCounts(), absent);
+      label.setParentItem(&nearest);
+      QCOMPARE(nearest.observerCounts(), present);
+    }
+
+    QCOMPARE(first.observerCounts(), absent);
+    QCOMPARE(second.observerCounts(), absent);
+    QCOMPARE(nearest.observerCounts(), absent);
+  }
+
+  Q_SLOT static void reparentedAncestorsKeepChromePixelsExact() {
+    QQuickWindow window;
+    window.setColor(Qt::black);
+    window.resize(window_width, window_height);
+    QQuickItem first{window.contentItem()};
+    QQuickItem second{window.contentItem()};
+    QQuickItem middle{&first};
+    QQuickItem nearest{&middle};
+    NativeChromeText label{&nearest};
+    label.setPosition({label_left, label_top});
+    label.setSize({label_width, label_height});
+    label.setPixelSize(font_size);
+    label.setColor(Qt::white);
+    label.setText(QStringLiteral("AVATAR fi ffi"));
+    label.setElide(Qt::ElideNone);
+    const auto scale = window.effectiveDevicePixelRatio();
+    constexpr qreal first_phase = 0.1;
+    constexpr qreal second_phase = 0.9;
+    constexpr qreal root_offset = 3;
+    first.setX(first_phase / scale);
+    second.setPosition({root_offset, root_offset});
+    QVERIFY(test::showComponentWindow(window, wait_ms));
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && label.available(), wait_ms);
+    const auto matches = [&] {
+      const auto actual = grabFrame(window);
+      const ReferencePaint paint{.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale};
+
+      return !actual.isNull() && containsInk(actual) && actual == reference(actual.size(), label.text(), paint);
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    middle.setParentItem(&second);
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    second.setX(root_offset + (second_phase / scale));
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    first.setY(root_offset);
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    nearest.setParentItem(&first);
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    first.setX(second_phase / scale);
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    nearest.setParentItem(&middle);
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+    middle.setParentItem(&first);
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+  }
+
   Q_SLOT static void failedFontCollectionReleasesPreviousScene() {
     unsigned destroyed = 0;
     QQuickWindow window;

@@ -183,7 +183,11 @@ HistoryActionSurface Application::historyActionSurface() const {
   return actions->actionSurface(dialog_generation_);
 }
 
-void Application::activateHistoryCardAction(HistoryCardAction action) {
+void Application::activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice) {
+  if (!session().historyBrowser().accepts(choice)) {
+    return;
+  }
+
   switch (action) {
   case HistoryCardAction::copy: executeHistory(HistoryAction::copy); break;
   case HistoryCardAction::erase: executeHistory(HistoryAction::erase); break;

@@ -22,15 +22,16 @@ HistoryRowLayout {
     property bool interactive: true
     property var actionController: null
     property string revision: ""
-    readonly property var regions: layout
+    property alias regions: root.layout
+    readonly property var lineRegions: lineLayout
+    readonly property var geometryRegions: geometryLayout
     property string commandText: record.command
-    property string query: ""
     property real viewportHeight: 0
     property bool commandLoaded: true
     property string inspectionKey: "Ctrl+O"
     property bool macStyle: false
     property bool paneOpen: false
-    implicitHeight: cardVisible ? regions.cardHeight : rowHeight
+    implicitHeight: cardVisible ? geometryRegions.cardHeight : rowHeight
     signal activated(string revision)
     signal actionTriggered(string action)
 
@@ -38,7 +39,6 @@ HistoryRowLayout {
         ratio: root.ratio,
         rowHeight: root.rowHeight,
         commandText: root.commandText,
-        query: root.query,
         cellWidth: root.typography.grid.cellWidth,
         cellHeight: root.typography.grid.cellHeight,
         smallPixels: root.typography.small,
@@ -61,37 +61,37 @@ HistoryRowLayout {
     NativeRoundedRectangle {
         id: background
         objectName: "historyRowBackground"
-        x: root.regions.frame.x
-        y: root.regions.frame.y
-        width: root.regions.frame.width
-        height: root.regions.frame.height
-        radius: root.regions.radius
-        color: Qt.alpha(root.colors.surface0, root.highlight > 0 ? root.highlight : ((root.actionController ? (root.actionController.historyHoveredRow === root.historyIndex && root.actionController.historyHoveredRowRevision === root.revision) : pointer.containsMouse) ? root.regions.hoverAlpha : 0))
+        x: root.geometryRegions.frame.x
+        y: root.geometryRegions.frame.y
+        width: root.geometryRegions.frame.width
+        height: root.geometryRegions.frame.height
+        radius: root.geometryRegions.radius
+        color: Qt.alpha(root.colors.surface0, root.highlight > 0 ? root.highlight : ((root.actionController ? (root.actionController.historyHoveredRow === root.historyIndex && root.actionController.historyHoveredRowRevision === root.revision) : pointer.containsMouse) ? root.geometryRegions.hoverAlpha : 0))
     }
 
     NativeRoundedRectangle {
         anchors.fill: background
-        radius: root.regions.radius
-        color: Qt.alpha(root.colors.accent, root.regions.selectionTintAlpha * root.highlight)
+        radius: root.geometryRegions.radius
+        color: Qt.alpha(root.colors.accent, root.geometryRegions.selectionTintAlpha * root.highlight)
         visible: root.highlight > 0
     }
 
     NativeRoundedRectangle {
         anchors.fill: background
-        radius: root.regions.radius
+        radius: root.geometryRegions.radius
         color: "transparent"
-        borderColor: Qt.alpha(root.colors.accent, root.regions.selectionRingAlpha * root.highlight)
-        borderWidth: root.regions.stroke
+        borderColor: Qt.alpha(root.colors.accent, root.geometryRegions.selectionRingAlpha * root.highlight)
+        borderWidth: root.geometryRegions.stroke
         visible: root.highlight > 0
     }
 
     Item {
         id: frameClip
         z: 1
-        x: root.regions.frame.x
-        y: root.regions.frame.y
-        width: root.regions.frame.width
-        height: root.regions.frame.height
+        x: root.geometryRegions.frame.x
+        y: root.geometryRegions.frame.y
+        width: root.geometryRegions.frame.width
+        height: root.geometryRegions.frame.height
         clip: true
 
         Item {
@@ -102,21 +102,21 @@ HistoryRowLayout {
 
             CellText {
                 objectName: "historyStatus"
-                x: root.regions.status.x
-                y: root.regions.status.y
-                width: root.regions.status.width
-                height: root.regions.status.height
+                x: root.geometryRegions.status.x
+                y: root.geometryRegions.status.y
+                width: root.geometryRegions.status.width
+                height: root.geometryRegions.status.height
                 text: root.record.statusGlyph
                 color: root.colors[root.record.statusColor]
                 grid: root.typography.grid
             }
 
             Repeater {
-                model: root.regions.lines.length
+                model: root.lineRegions.length
                 delegate: Item {
                     id: line
                     required property int index
-                    readonly property var value: root.regions.lines[index]
+                    readonly property var value: root.lineRegions[index]
                     width: root.width
                     height: root.height
 
@@ -145,16 +145,23 @@ HistoryRowLayout {
                         Accessible.ignored: true
                     }
 
+                    HistoryMatchModel {
+                        id: matches
+                        records: line.value.matches
+                    }
+
                     Repeater {
-                        model: line.value.matches
+                        model: matches.model
                         delegate: CellText {
                             objectName: "historyMatch"
-                            required property var modelData
-                            x: modelData.bounds.x
-                            y: modelData.bounds.y
-                            width: modelData.bounds.width
-                            height: modelData.bounds.height
-                            text: modelData.text
+                            required property int index
+                            required property var record
+                            visible: index < matches.activeCount
+                            x: record.bounds.x
+                            y: record.bounds.y
+                            width: record.bounds.width
+                            height: record.bounds.height
+                            text: record.text
                             color: root.colors.accent
                             grid: root.typography.grid
                             bold: true
@@ -166,10 +173,10 @@ HistoryRowLayout {
 
             Item {
                 objectName: "historyProvider"
-                x: root.regions.provider.x
-                y: root.regions.provider.y
-                width: root.regions.provider.width
-                height: root.regions.provider.height
+                x: root.geometryRegions.provider.x
+                y: root.geometryRegions.provider.y
+                width: root.geometryRegions.provider.width
+                height: root.geometryRegions.provider.height
                 visible: width > 0
 
                 ProviderMark {
@@ -183,7 +190,7 @@ HistoryRowLayout {
                 NativeRoundedRectangle {
                     anchors.fill: parent
                     color: root.colors.surface1
-                    radius: root.regions.providerRadius
+                    radius: root.geometryRegions.providerRadius
                     visible: root.record.providerMark === 0
                 }
 
@@ -202,13 +209,13 @@ HistoryRowLayout {
             ChromeText {
                 id: cwd
                 objectName: "historyDirectory"
-                x: root.regions.cwd.x
-                y: root.regions.cwd.y
-                width: root.regions.cwd.width
-                height: root.regions.cwd.height
+                x: root.geometryRegions.cwd.x
+                y: root.geometryRegions.cwd.y
+                width: root.geometryRegions.cwd.width
+                height: root.geometryRegions.cwd.height
                 text: root.record.compactCwd
                 color: root.colors.subtext0
-                opacity: root.regions.cwdAlpha
+                opacity: root.geometryRegions.cwdAlpha
                 pixelSize: root.typography.small
                 elide: Text.ElideNone
                 visible: width > 0
@@ -217,10 +224,10 @@ HistoryRowLayout {
             ChromeText {
                 id: timestamp
                 objectName: "historyTimestamp"
-                x: root.regions.time.x
-                y: root.regions.time.y
-                width: root.regions.time.width
-                height: root.regions.time.height
+                x: root.geometryRegions.time.x
+                y: root.geometryRegions.time.y
+                width: root.geometryRegions.time.width
+                height: root.geometryRegions.time.height
                 text: root.grouped ? root.record.clock : root.record.date
                 color: root.colors.subtext0
                 pixelSize: root.typography.small
@@ -229,10 +236,10 @@ HistoryRowLayout {
             }
 
             Loader {
-                x: root.regions.meta.x
-                y: root.regions.meta.y
-                width: root.regions.meta.width
-                height: root.regions.meta.height
+                x: root.geometryRegions.meta.x
+                y: root.geometryRegions.meta.y
+                width: root.geometryRegions.meta.width
+                height: root.geometryRegions.meta.height
                 active: root.cardVisible
                 sourceComponent: HistoryMeta {
                     record: root.record
@@ -243,10 +250,12 @@ HistoryRowLayout {
                     paneOpen: root.paneOpen
                     interactive: root.interactive
                     actionController: root.actionController
+                    historyIndex: root.historyIndex
+                    revision: root.revision
                     commandLoaded: root.commandLoaded
                     showDirectory: root.showCwd
                     macStyle: root.macStyle
-                    more: root.regions.more
+                    more: root.geometryRegions.more
                     onActionTriggered: action => root.actionTriggered(action)
                 }
             }

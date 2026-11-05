@@ -1,7 +1,8 @@
+import math
 import unittest
 
 from tab_switch_fixture import PUBLICATION
-from tab_switch_report import publication_events, validate_switch
+from tab_switch_report import publication_events, stage_samples, validate_switch
 
 
 def example():
@@ -20,6 +21,51 @@ def example():
 
 
 class SwitchReportTest(unittest.TestCase):
+    def test_stage_observations_exclude_warmup_and_preserve_late_callbacks(self):
+        result, _, _ = example()
+        result.update(endpoint='presented', warmup=2, gpu_ms=[1, 2, 60, 10, 20, 30, 40, 45],
+                      gpu_work_ms=[1] * 8,
+                      presentation_ms=[(s['presented_at'] - s['input_at']) * 1000 for s in result['switch_samples']])
+        stages = stage_samples(result)
+        self.assertEqual(stages['input_to_completion_callback_ms'], [60, 10, 20, 30, 40, 45])
+        self.assertEqual(stages['gpu_execution_ms'], [1] * 6)
+        for actual, expected in zip(stages['presentation_minus_callback_ms'], [-10, 40, 30, 20, 10, 5]):
+            self.assertAlmostEqual(actual, expected)
+        for callback, remaining, total in zip(stages['input_to_completion_callback_ms'],
+                                               stages['presentation_minus_callback_ms'],
+                                               stages['input_to_presentation_ms']):
+            self.assertAlmostEqual(callback + remaining, total)
+
+    def test_stage_observations_reject_missing_or_misaligned_data(self):
+        for field, value in [('warmup', True), ('warmup', -1), ('warmup', 8),
+                             ('switch_samples', [None] * 8),
+                             ('gpu_ms', [1] * 7), ('gpu_ms', [math.nan] * 8),
+                             ('gpu_ms', [True] * 8), ('gpu_work_ms', [-1] * 8),
+                             ('gpu_work_ms', [math.inf] * 8), ('presentation_ms', [40] * 8),
+                             ('endpoint', 'gpu')]:
+            result, _, _ = example()
+            result.update(endpoint='presented', warmup=2, gpu_ms=[10] * 8,
+                          gpu_work_ms=[1] * 8,
+                          presentation_ms=[(s['presented_at'] - s['input_at']) * 1000 for s in result['switch_samples']])
+            result[field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                stage_samples(result)
+
+    def test_phase_delivery_requires_its_receipt_and_bounded_lateness(self):
+        result, receipts, events = example()
+        with self.assertRaisesRegex(ValueError, 'producer phase'):
+            validate_switch(result, receipts, events, require_phase=True)
+        start = result['switch_samples'][0]['input_at']
+        phase = dict(policy='widest_producer_gap', deadline=start - .001, clearance=.008)
+        result['initial_phase'] = phase
+        self.assertEqual(validate_switch(result, receipts, events, require_phase=True)['initial_phase'], phase)
+        for field, value in [('policy', 'unknown'), ('deadline', start + .001),
+                             ('deadline', start - .005), ('deadline', math.nan),
+                             ('clearance', 0), ('clearance', 1), ('clearance', math.inf)]:
+            result['initial_phase'] = dict(phase, **{field: value})
+            with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, 'producer phase'):
+                validate_switch(result, receipts, events, require_phase=True)
+
     def test_verified_targets_have_provenance_and_all_four_producers(self):
         result, receipts, events = example()
         report = validate_switch(result, receipts, events)

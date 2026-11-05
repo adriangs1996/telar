@@ -41,11 +41,41 @@ void HistoryRowLayout::setMeasurements(const QVariantMap &measurements) {
   }
 }
 
+void HistoryRowLayout::setQuery(const QString &query) {
+  if (query_ == query) {
+    return;
+  }
+
+  query_ = query;
+  query_bytes_ = query.toUtf8();
+  query_dirty_ = true;
+  emit queryChanged();
+  polish();
+}
+
+void HistoryRowLayout::publishLines() {
+  query_dirty_ = false;
+  emit lineLayoutChanged();
+  emit layoutChanged();
+}
+
 QRectF HistoryRowLayout::logical(Rect area) const noexcept {
   return {area.x / density_, area.y / density_, area.width / density_, area.height / density_};
 }
 
 QVariantMap HistoryRowLayout::layout() const {
+  auto result = geometryLayout();
+  result.insert(QStringLiteral("needed"), command_width_ / density_);
+  result.insert(QStringLiteral("lines"), commandLines());
+
+  return result;
+}
+
+HistoryRowLayout::GeometryState HistoryRowLayout::geometryState() const noexcept {
+  return {.row = geometry_, .density = density_, .ratio = ratio_, .card_height = card_.height, .meta = card_.meta, .more = card_.more};
+}
+
+QVariantMap HistoryRowLayout::geometryLayout() const {
   return {
       {QStringLiteral("frame"), logical(geometry_.frame)},
       {QStringLiteral("status"), logical(geometry_.status)},
@@ -55,7 +85,6 @@ QVariantMap HistoryRowLayout::layout() const {
       {QStringLiteral("time"), logical(geometry_.time)},
       {QStringLiteral("radius"), HistoryRowGeometry::corner_radius * ratio_},
       {QStringLiteral("stroke"), ratio_},
-      {QStringLiteral("needed"), command_width_ / density_},
       {QStringLiteral("providerRadius"), HistoryRowGeometry::provider_radius * ratio_},
       {QStringLiteral("selectionTintAlpha"), HistoryRowGeometry::selection_tint_alpha},
       {QStringLiteral("selectionRingAlpha"), HistoryRowGeometry::selection_ring_alpha},
@@ -65,7 +94,6 @@ QVariantMap HistoryRowLayout::layout() const {
       {QStringLiteral("meta"), logical(card_.meta)},
       {QStringLiteral("more"), card_.more},
       {QStringLiteral("moreBound"), HistoryCard::more_bound},
-      {QStringLiteral("lines"), commandLines()},
   };
 }
 
@@ -102,8 +130,7 @@ QVariantMap HistoryRowLayout::commandLine(std::string_view text, Rect bounds, bo
 }
 
 QVariantList HistoryRowLayout::commandLines() const {
-  const auto query = measurements_.value(QStringLiteral("query")).toString().toUtf8();
-  HistoryMatchHighlight highlight{{query.constData(), static_cast<std::size_t>(query.size())}};
+  HistoryMatchHighlight highlight{{query_bytes_.constData(), static_cast<std::size_t>(query_bytes_.size())}};
   QVariantList result;
   if (!expanded_) {
     const std::string_view text{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
@@ -132,6 +159,14 @@ void HistoryRowLayout::prepareCommand() {
 }
 
 void HistoryRowLayout::updatePolish() {
+  if (!measurements_dirty_) {
+    if (query_dirty_) {
+      publishLines();
+    }
+
+    return;
+  }
+
   const auto density = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   const auto advance = [&](const QString &name) {
     const auto value = measurements_.value(name).toDouble();
@@ -163,6 +198,7 @@ void HistoryRowLayout::updatePolish() {
   const auto row_height = advance(QStringLiteral("rowHeight"));
   const auto geometry = HistoryRowGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, row_height, measured);
   if (geometry != geometry_ || density != density_ || ratio != ratio_ || command_width != command_width_ || measurements_dirty_) {
+    const auto previous_geometry = geometryState();
     geometry_ = geometry;
     density_ = density;
     ratio_ = ratio;
@@ -182,7 +218,11 @@ void HistoryRowLayout::updatePolish() {
     }
 
     measurements_dirty_ = false;
-    emit layoutChanged();
+    if (geometryState() != previous_geometry) {
+      emit geometryLayoutChanged();
+    }
+
+    publishLines();
   }
 }
 
@@ -193,12 +233,16 @@ void HistoryRowLayout::componentComplete() {
 
 void HistoryRowLayout::geometryChange(const QRectF &current, const QRectF &previous) {
   QQuickItem::geometryChange(current, previous);
-  polish();
+  if (current.size() != previous.size()) {
+    measurements_dirty_ = true;
+    polish();
+  }
 }
 
 void HistoryRowLayout::itemChange(ItemChange change, const ItemChangeData &data) {
   QQuickItem::itemChange(change, data);
   if (change == ItemDevicePixelRatioHasChanged || change == ItemSceneChange) {
+    measurements_dirty_ = true;
     polish();
   }
 }

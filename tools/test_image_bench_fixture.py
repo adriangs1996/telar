@@ -4,6 +4,7 @@ import io
 import json
 import mmap
 import os
+import re
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -17,6 +18,49 @@ from gui_tui_latency import finish_image_fixture, validate_image_receipt
 
 
 class ImageFixtureTest(unittest.TestCase):
+    def test_inline_publications_reconstruct_exact_pixels_across_chunk_boundaries(self):
+        for width in (1, 768, 769):
+            with self.subTest(width=width), tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+                fixture = benchmark.ImageFixture(Path(directory), (width, 1), transport='inline')
+                fixture.size = os.terminal_size((82, 21))
+                fixture.phase = 'ready'
+                output = io.BytesIO()
+                try:
+                    with patch.object(benchmark.sys, 'stdout', SimpleNamespace(buffer=output)):
+                        fixture.draw_marker()
+                        fixture.handle_marker_input(b'x')
+                    fixture.record()
+                    result = dict(fixtures=[json.loads(fixture.receipt.read_text())], gpu_ms=[1],
+                                  endpoint='gpu', image_transport='inline')
+                    validate_image_receipt(result, (width, 1))
+                    publications = []
+                    pending = bytearray()
+                    for header, payload in re.findall(rb'\x1b_G([^;]*);([^\x1b]*)\x1b\\', output.getvalue()):
+                        fields = dict(field.split(b'=', 1) for field in header.split(b','))
+                        if not pending:
+                            self.assertEqual(fields[b'a'], b'T')
+                            self.assertEqual(fields[b't'], b'd')
+                            self.assertEqual(fields[b's'], str(width).encode())
+                            self.assertEqual(fields[b'v'], b'1')
+                        self.assertLessEqual(len(payload), benchmark.INLINE_CHUNK_BYTES)
+                        pending.extend(base64.b64decode(payload, validate=True))
+                        if fields[b'm'] == b'0':
+                            publications.append(bytes(pending))
+                            pending.clear()
+                        else:
+                            self.assertEqual(fields[b'm'], b'1')
+                    self.assertEqual(pending, b'')
+                    self.assertEqual(publications, list(fixture.frames[:2]))
+                    self.assertEqual(fixture.shared_names, [])
+                    result['image_transport'] = 'shared-memory'
+                    with self.assertRaises(ValueError):
+                        validate_image_receipt(result, (width, 1))
+                finally:
+                    fixture.close()
+                cleanup = json.loads((Path(directory) / 'image-cleanup.json').read_text())
+                self.assertEqual(cleanup['names'], 0)
+                self.assertEqual(cleanup['unadopted_names'], [])
+
     def test_alpha_patterns_publish_magnified_pixels_with_independent_markers(self):
         for pattern in ('alpha-edge', 'alpha-gradient'):
             with self.subTest(pattern=pattern), tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
