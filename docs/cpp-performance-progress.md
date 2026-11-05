@@ -12847,3 +12847,131 @@ All F01-F16 complete-flow and native120 gates remain open. The next viewport
 candidate must retain these seven behaviors while reducing the extra history
 traversal and rechecking full native latency, rather than relying on component
 allocation or instruction-count improvements alone.
+
+## 2026-11-05: alternate viewport traversal rejected; runtime phase attribution qualified
+
+This pass starts at `b9386ffaa53d09629a1f974fdc826db8b15e66c0`. It classifies the
+preceding turn as progress: seven independent viewport scenarios and a rejected
+native candidate supplied concrete evidence for the next experiment. The goal
+remains active; no application optimization is adopted here. Scratch builds and
+receipts are under ignored `out-perf/dlls-viewport-position-01/`.
+
+### Position-only experiment
+
+The component reference is the preceding private, functionally corrected C,
+not the accepted application baseline. Sampling a 10-million-iteration
+selection/two-resolution loop reaches `PageList.pin`, `trackPin`/`untrackPin`
+and `pointFromPin`; the profile also contains startup/loader observations.
+Its duration is diagnostic and excluded from timing acceptance.
+
+D selects historical rows near the end by temporarily scrolling there, tracking
+the viewport origin, then restoring the shared terminal's prior viewport. It
+keeps screen-coordinate lookup for rows nearer the beginning. The intent was to
+use the terminal's closer-end traversal without adding retained cache state.
+It still resolves tracked references normally; no revision cache is introduced.
+The frozen D runtime is
+`8d465df81f9aee2c68368fe408aa535a6f6290becee675dd9155b30c6e5f1c07`;
+GUI/helper/Qt remain the accepted versions from the preceding pass.
+
+Before timing, the adapted existing projection oracle compares C/D byte-exact:
+2,328 records, 34,796,014 bytes, SHA-256
+`dad442ae8815951f3ec320aa27edce85b00a3cc07a20e47eb36ee101fb4ccda1`.
+This includes internal row revisions, full/delta frames and complete cells.
+The seven real-runtime parity cases all pass in
+`/tmp/telar-perf-viewport-position-D-oracle-01`, with qualified host boundaries
+and owned cleanup. Scoped allocation/lifetime checks include reflow, independent
+references, alternate screens, pruning, clearing, allocation failure and
+restoration of both live and historical shared viewports after selection.
+The fresh-reference fixture still observes three allocations/328 additional
+live bytes and no allocation during 100 movements. A second fixture reuses
+previously allocated tracking storage, so its one-allocation/48-byte result is
+not a reduction attributable to D.
+
+`/tmp/telar-perf-viewport-position-component-pairs-01` contains seven alternating
+pairs for six cases, 84 runs and 170 qualified host boundaries, maximum load1
+2.45997. Each lookup case performs 20 million iterations; the mutation control
+performs one million, after 100 warmups. The stationary corpus contains 4,096
+numbered ASCII lines at 82x21. Each iteration consumes two resolved positions;
+selection cases additionally move within a bounded 100-row range. Paired output
+checksums match. Construction, projection, wire work and GUI presentation are
+excluded. This is warm component throughput, not native per-action latency or
+a bound on cold-cache application costs.
+
+| Position work, median ns/iteration | C | D | D wins / 7 |
+| --- | ---: | ---: | ---: |
+| Select near beginning, resolve twice | 29.52986 | 30.15295 | 0 |
+| Select near end, resolve twice | 36.44341 | 45.72061 | 0 |
+| Resolve near beginning twice | 13.77966 | 13.77581 | 4 |
+| Resolve near end twice | 18.85162 | 19.47445 | 2 |
+| Feed cursor control, resolve twice | 62.90813 | 62.58150 | 4 |
+| Request live, resolve twice | 11.01043 | 10.67721 | 7 |
+
+D fails the target and a selection control consistently. It is rejected before
+native acceptance pairs; its live-case win cannot rescue it. Actual native
+assembly retains the two additional scroll calls/restoration path. The wrapper
+kernels compile for arm64, x86-64 and x86-64-v3 with the same 16-byte viewport
+object; these are code-generation checks, not x86/Linux execution. The component
+result also does not establish the cause of C's earlier whole-window CPU loss.
+
+### Reusable runtime phase observer
+
+The earlier runtime resource interval includes GUI setup, warmup and measured
+input. A new diagnostic observer separates those phases rather than assigning
+all CPU differences to scrolling. `build_runtime_phase_probe.py` builds an
+isolated scroll probe, passes the socket-verified runtime PID, and samples
+`ProcessResources` before the first warmup input, before the first measured input,
+and after the last qualified presentation. It writes only at finish. The outer
+`native_runtime_resources.capture()` adapter supplies the pre-GUI and post-GUI
+snapshots. The ordinary native observer and application binaries are unchanged.
+
+`macos_process_resources_json.h` shares the existing helper's JSON formatter with
+the observer. The standalone helper retains its schema and native-architecture
+clock guard, now propagating a serialization error. A rebuilt native helper and
+the frozen helper produce compatible identity/timebase/schema observations of
+the same owned process. `runtime_phase_report.py` validates all five snapshots,
+PID/start/UUID/timebase continuity, native/resource clock brackets, non-overlapping
+and fully covered actions, and exact additive integer counters across the four
+phases. Floating CPU sums use a bounded numerical comparison. Fifteen scoped
+unit tests cover both the existing resource parser and new phase checks,
+including wrong identities/counters at every internal boundary, invalid clocks,
+missing samples, phase/action mismatches and failed runs. Missing/duplicate
+source-hook controls reject observer generation.
+
+An initial two-boundary diagnostic in `/tmp/telar-perf-runtime-scroll-phases-01`
+completed two pairs with valid host/content/cleanup checks and found substantial
+CPU before measured input. It combines preparation and warmup, so it is retained
+as preliminary evidence and is not pooled with the final three-boundary series.
+The final series `/tmp/telar-perf-runtime-scroll-phases-02` has two alternating
+A/C pairs, 100 measured inputs plus 20 warmups each, 10 qualified host boundaries
+and maximum load1 1.94043. A is accepted runtime `1f1849d1…`; C is the preceding
+rejected tracked-reference runtime `3e70bf7d…`. Both use the same accepted GUI,
+helper, Qt, configuration, 1600x1000 drawable, scale 2, 82x21 grid and scroll
+packet corpus. Native row/presentation, framework, resource and cleanup checks
+pass. No builds, tests or profiles overlap either diagnostic series.
+
+| Diagnostic runtime CPU ms | Preparation | 20 warmups | 100 measured inputs | After measurement |
+| --- | ---: | ---: | ---: | ---: |
+| Pair 0, accepted A | 43.7016 | 5.3460 | 32.0609 | 0.8090 |
+| Pair 0, rejected C | 37.7888 | 6.7680 | 31.9011 | 1.3341 |
+| Pair 1, rejected C | 42.5468 | 5.7377 | 36.4383 | 0.9917 |
+| Pair 1, accepted A | 45.4444 | 7.2939 | 29.6911 | 0.8780 |
+
+Measured inputs account for 35.64–42.51% of runtime CPU in this final series.
+Preparation and warmup are distinct, substantial work; the A/C phase differences
+remain mixed and do not establish a causal explanation for the prior six-pair
+regression. The queries' native-clock brackets range from 11.125 to 133.458 us.
+Observer overhead is not subtracted, and neither timings nor two-pair phase
+comparisons establish acceptance or reverse C's rejection.
+
+The final observer source uses braced conditionals. Its rebuilt `phase-probe-03`
+has byte-identical `__text` and `__cstring` sections to the measured
+`phase-probe-02` (2,430 and 403 dump rows respectively); the receipt preserves
+that narrow code-generation comparison. It is not a claim that differently
+located dylibs have the same whole-file hash. Source identities and all raw
+phase brackets/counters remain available for independent reanalysis.
+
+The next profile should attribute actual preparation and measured-input work
+separately, retaining the original complete-window gate. These observations do
+not prove that VT parsing, IPC, allocations, cache behavior or Qt conversion
+causes the remaining difference. No F01-F16 complete-stack or native120 gate is
+closed. The four original pending runtime files remain untouched.

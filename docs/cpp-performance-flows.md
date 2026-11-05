@@ -134,6 +134,19 @@ The helper records the Mach timebase, process start time, executable UUID and
 clock brackets. Memory values are boundary snapshots and a lifetime footprint
 maximum, not an interval peak. This optional adapter is not enabled by the CLI.
 
+For diagnostic runtime phase attribution in the discrete scroll fixture, build
+`python3 tools/build_runtime_phase_probe.py NEW_DIRECTORY`. The generated harness
+passes the socket-verified runtime PID to a private observer. Three resource
+queries separate preparation, warmup, measured input and the remaining GUI
+lifetime. Wrap its `measure()` with `native_runtime_resources.capture()` to retain
+the outer resource interval, then run
+`python3 tools/runtime_phase_report.py RUN_DIRECTORY --output NEW_REPORT.json`.
+The report checks PID/start/UUID/timebase, native clock brackets, coverage of the
+warmup and measured actions, and additive counters across all phases. Missing or
+inconsistent data rejects the report. These queries and final serialization
+perturb the GUI process: all results are diagnostic and cannot replace ordinary
+paired latency, CPU or native120 acceptance. The original observer stays unchanged.
+
 For diagnostic GUI CPU attribution on native macOS, use
 `python3 tools/build_thread_cpu_probe.py OUT` to build an isolated tab-switch
 probe. It adds measured-interval hooks and a 100 ms in-process observer from
