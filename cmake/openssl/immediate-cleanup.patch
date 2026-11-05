@@ -1,0 +1,25 @@
+OPENSSL_cleanup() documents that DO_NOT_SKIP_OPENSSL_CLEANUP deinitializes the
+library immediately, but OpenSSL 4 returns early on any toolchain with global
+destructors, which is every GCC and Clang build. telar routes OpenSSL's
+allocations through its own allocator and must get every allocation back when
+it shuts OpenSSL down, so the documented behavior is restored here.
+
+--- a/crypto/init.c
++++ b/crypto/init.c
+@@ -497,11 +497,12 @@
+ void OPENSSL_cleanup(void)
+ {
+     do_global_cleanup = 1;
+-#if defined(OSSL_CLEANUP_USING_DESTRUCTOR)
+-    return;
+-#endif /* defined(OSSL_CLEANUP_USING_DESTRUCTOR) */
+-
+ #if defined(DO_NOT_SKIP_OPENSSL_CLEANUP)
+     ossl_cleanup_destructor();
++    return;
+ #endif /* defined(DO_NOT_SKIP_OPENSSL_CLEANUP) */
++
++#if defined(OSSL_CLEANUP_USING_DESTRUCTOR)
++    return;
++#endif /* defined(OSSL_CLEANUP_USING_DESTRUCTOR) */
+ }

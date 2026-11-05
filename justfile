@@ -82,7 +82,7 @@ editor: runtime-editor
     set -euo pipefail
     options=(-G Ninja -DCMAKE_BUILD_TYPE=Debug "-DGHOSTTY_VT_ROOT={{ vt_prefix }}")
     if command -v brew >/dev/null; then
-        options+=("-DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang" "-DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++" "-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)")
+        options+=("-DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang" "-DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++")
     fi
     for project in dlls/telar-base dlls/telar-client dlls/telar-config dlls/telar-lua dlls/telar-platform dlls/telar-plugins dlls/telar-tls services/cli-cpp; do
         cmake -S "$project" -B "$project/out" "${options[@]}" >/dev/null
@@ -163,7 +163,7 @@ dev-app binary state_dir:
 [private]
 [working-directory: "services/runtime-cpp"]
 runtime-configure directory build_type *options:
-    cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" -DNGHTTP2_ROOT="$(brew --prefix libnghttp2)" -DBROTLI_ROOT="$(brew --prefix brotli)" -DZSTD_ROOT="$(brew --prefix zstd)" -DPNG_ROOT="$(brew --prefix libpng)" {{ options }}
+    cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" {{ options }}
 
 [private]
 [working-directory: "services/gui-cpp"]

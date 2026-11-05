@@ -43,60 +43,45 @@ int main() {}" TELAR_MUSL)
   endif()
 endif()
 
-if(TELAR_LINUX_DISTRIBUTABLE)
-  find_library(SQLITE3_LIBRARY NAMES libsqlite3.a REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/openssl.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/native_libraries.cmake")
+
+# Earlier configurations searched the system for these; the managed build
+# supplies them now.
+foreach(variable IN ITEMS NGHTTP2_ROOT NGHTTP2_INCLUDE_DIR NGHTTP2_LIBRARY BROTLI_ROOT BROTLI_INCLUDE_DIR
+    BROTLI_DECODER_LIBRARY BROTLI_ENCODER_LIBRARY BROTLI_COMMON_LIBRARY ZSTD_ROOT ZSTD_INCLUDE_DIR ZSTD_LIBRARY
+    ZLIB_LIBRARY SQLITE3_LIBRARY PCAP_LIBRARY)
+  unset(${variable} CACHE)
+endforeach()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # The CLI links the managed SQLite for history instead of loading whatever
+  # the system has.
+  set(TELAR_LINKED_SQLITE ON)
 else()
-  find_library(SQLITE3_LIBRARY NAMES sqlite3 REQUIRED)
-endif()
-if(TELAR_RUNTIME_DISTRIBUTABLE)
-  set(OPENSSL_USE_STATIC_LIBS TRUE)
-endif()
-find_package(OpenSSL 3.0...<4.0 REQUIRED)
+  # macOS links the SDK's copies, which Apple patches with the OS, and never
+  # a package manager's.
+  set(sdk "${CMAKE_OSX_SYSROOT}")
+  if(NOT IS_ABSOLUTE "${sdk}")
+    if(NOT sdk)
+      set(sdk macosx)
+    endif()
 
-set(NGHTTP2_ROOT "" CACHE PATH "Installed nghttp2 prefix")
-find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h HINTS "${NGHTTP2_ROOT}/include" REQUIRED)
-find_library(NGHTTP2_LIBRARY NAMES libnghttp2.a nghttp2 HINTS "${NGHTTP2_ROOT}/lib" REQUIRED)
+    execute_process(COMMAND xcrun --sdk "${sdk}" --show-sdk-path
+      OUTPUT_VARIABLE sdk OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+  endif()
+
+  find_library(SQLITE3_LIBRARY NAMES sqlite3 PATHS "${sdk}/usr/lib" NO_DEFAULT_PATH REQUIRED)
+  find_library(ZLIB_LIBRARY NAMES z PATHS "${sdk}/usr/lib" NO_DEFAULT_PATH REQUIRED)
+  find_library(PCAP_LIBRARY NAMES pcap PATHS "${sdk}/usr/lib" NO_DEFAULT_PATH REQUIRED)
+endif()
 
 if(TELAR_LINUX_DISTRIBUTABLE)
-  find_library(ZLIB_LIBRARY NAMES libz.a REQUIRED)
-  find_library(PCAP_LIBRARY NAMES libpcap.a REQUIRED)
   # musl gives threads 128 KiB stacks unless the executable names a size;
   # the terminal engine needs glibc's 8 MiB.
   add_link_options(-static "LINKER:-z,stack-size=8388608")
-  # A static executable cannot dlopen, so the CLI links SQLite for history.
-  set(TELAR_LINKED_SQLITE ON)
-else()
-  find_library(ZLIB_LIBRARY NAMES z REQUIRED)
-  find_library(PCAP_LIBRARY NAMES pcap PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" REQUIRED)
 endif()
 
-set(BROTLI_ROOT "" CACHE PATH "Installed Brotli prefix")
-find_path(BROTLI_INCLUDE_DIR brotli/decode.h HINTS "${BROTLI_ROOT}/include" REQUIRED)
-find_library(BROTLI_DECODER_LIBRARY NAMES libbrotlidec.a brotlidec HINTS "${BROTLI_ROOT}/lib" REQUIRED)
-find_library(BROTLI_ENCODER_LIBRARY NAMES libbrotlienc.a brotlienc HINTS "${BROTLI_ROOT}/lib" REQUIRED)
-find_library(BROTLI_COMMON_LIBRARY NAMES libbrotlicommon.a brotlicommon HINTS "${BROTLI_ROOT}/lib" REQUIRED)
-
-set(ZSTD_ROOT "" CACHE PATH "Installed Zstd prefix")
-find_path(ZSTD_INCLUDE_DIR zstd.h HINTS "${ZSTD_ROOT}/include" REQUIRED)
-find_library(ZSTD_LIBRARY NAMES libzstd.a zstd HINTS "${ZSTD_ROOT}/lib" REQUIRED)
-
-# A static libcrypto may ask for zstd and zlib by name, which the linker would
-# take from their shared libraries; hand it the static ones found above.
-if(TELAR_LINUX_DISTRIBUTABLE)
-  foreach(target IN ITEMS OpenSSL::Crypto OpenSSL::SSL)
-    get_target_property(dependencies ${target} INTERFACE_LINK_LIBRARIES)
-    if(dependencies)
-      list(TRANSFORM dependencies REPLACE "^zstd$" "${ZSTD_LIBRARY}")
-      list(TRANSFORM dependencies REPLACE "^z$" "${ZLIB_LIBRARY}")
-      set_target_properties(${target} PROPERTIES INTERFACE_LINK_LIBRARIES "${dependencies}")
-    endif()
-  endforeach()
-endif()
-
-if(TELAR_RUNTIME_DISTRIBUTABLE)
-  foreach(dependency IN ITEMS GHOSTTY_VT_LIBRARY NGHTTP2_LIBRARY BROTLI_DECODER_LIBRARY BROTLI_ENCODER_LIBRARY BROTLI_COMMON_LIBRARY ZSTD_LIBRARY OPENSSL_SSL_LIBRARY OPENSSL_CRYPTO_LIBRARY)
-    if(NOT "${${dependency}}" MATCHES "\\.a$")
-      message(FATAL_ERROR "${dependency} must be static for distribution; configure a fresh build directory with a static library prefix")
-    endif()
-  endforeach()
+if(TELAR_RUNTIME_DISTRIBUTABLE AND NOT "${GHOSTTY_VT_LIBRARY}" MATCHES "\\.a$")
+  message(FATAL_ERROR "GHOSTTY_VT_LIBRARY must be static for distribution; configure a fresh build directory with a static library prefix")
 endif()

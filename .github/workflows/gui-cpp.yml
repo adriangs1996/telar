@@ -8,6 +8,7 @@ on:
       - 'services/gui-cpp/**'
       - 'packaging/release/install-linux-deps.sh'
       - 'dlls/telar-*/**'
+      - 'cmake/**'
       - 'justfile'
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'services/gui-cpp/**'
       - 'packaging/release/install-linux-deps.sh'
       - 'dlls/telar-*/**'
+      - 'cmake/**'
       - 'justfile'
 
 permissions:
@@ -62,7 +64,7 @@ jobs:
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .qt-cache
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('cmake/managed_build.cmake', 'services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
 
       - name: Test dependency integrity and package isolation
         run: python3 -m unittest discover -s services/gui-cpp/tools -p test_qt_dependency.py -v

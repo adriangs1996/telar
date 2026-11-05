@@ -5,10 +5,13 @@
 #include <openssl/crypto.h>
 #include <openssl/ssl.h>
 #include <stdexcept>
+#include <string_view>
 
 namespace telar::runtime {
 
-static_assert(OPENSSL_VERSION_MAJOR == 3, "TLS allocator ownership requires OpenSSL 3 immediate cleanup");
+// OPENSSL_cleanup must hand every allocation back before memory_ is cleared;
+// only the managed OpenSSL build, patched to clean up immediately, does that.
+static_assert(std::string_view{OPENSSL_VERSION_STR} == TELAR_OPENSSL_VERSION, "TLS allocator ownership requires the managed OpenSSL headers");
 
 template <ConcurrentAllocator Memory>
 class TlsLibrary {

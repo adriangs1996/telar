@@ -6,6 +6,8 @@ zig-pkg/
 /out-perf/
 # Verified Qt sources, private builds and installed SDKs managed by CMake.
 /.qt-cache/
+# Verified sources and private builds of the other pinned native dependencies.
+/.dependencies-cache/
 # Development runtime state and install staging written by the justfile.
 /.dev/
 

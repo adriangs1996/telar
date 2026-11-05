@@ -7,8 +7,8 @@
 #   packaging/release/sign-macos.sh STAGE             # Developer ID or ad hoc
 #   packaging/release/macos.sh package STAGE OUT_DIR
 #
-# `build` needs Homebrew's cmake, ninja, llvm, openssl@3, libnghttp2, brotli,
-# zstd and libpng, Zig 0.17 for libghostty-vt and Cargo for the diagram renderer.
+# `build` needs Homebrew's cmake, ninja and llvm, Zig 0.17 for libghostty-vt
+# and Cargo for the diagram renderer. CMake builds the pinned native libraries.
 # The managed Qt builds into TELAR_QT_CACHE (default STAGE/qt-cache) once.
 #
 # `package` writes telar-macos-ARCH.tar.gz, with the command line tools and
@@ -45,9 +45,7 @@ build() {
     # shellcheck disable=SC2086
     cmake -S "$root/services/runtime-cpp" -B "$stage/runtime" -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DTELAR_RUNTIME_DISTRIBUTABLE=ON -DBUILD_TESTING=OFF $compilers \
-        -DGHOSTTY_VT_ROOT="$ghostty" \
-        -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" -DNGHTTP2_ROOT="$(brew --prefix libnghttp2)" \
-        -DBROTLI_ROOT="$(brew --prefix brotli)" -DZSTD_ROOT="$(brew --prefix zstd)" -DPNG_ROOT="$(brew --prefix libpng)"
+        -DGHOSTTY_VT_ROOT="$ghostty"
     cmake --build "$stage/runtime" --target distributable-linkage
     cmake --install "$stage/runtime" --prefix "$stage/prefix"
 

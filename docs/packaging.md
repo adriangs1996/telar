@@ -199,6 +199,18 @@ stays optimized in Debug builds, as the emulator does.
 The notices of these libraries, FreeType and HarfBuzz install under
 `share/telar/licenses` and `Telar.app/Contents/Resources/licenses`.
 
+The C++ runtime and CLI link no third-party library from the system except
+macOS's SDK zlib, SQLite and libpcap. CMake downloads the releases pinned in
+`cmake/openssl/manifest.cmake` and `cmake/native/manifest.cmake` (nghttp2,
+Brotli and Zstd, plus zlib, SQLite and libpcap on Linux), checks their hashes,
+applies `cmake/openssl/immediate-cleanup.patch` and builds static libraries
+once into `TELAR_DEPENDENCIES_DIR` (default `.dependencies-cache/`), keyed by
+compiler and flags the way the managed Qt is. Building them needs Perl, make
+and patch, and on Linux flex and bison. Their licenses install under
+`share/telar/licenses`. Linux has no single
+place for the system's certificate bundle, so the runtime reads
+`SSL_CERT_FILE` or the first of the bundle paths Go's `crypto/x509` searches.
+
 ## Releases
 
 A tag `vX.Y.Z` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml).
@@ -257,10 +269,9 @@ and `usr/lib`.
 anything outside that table or asks for glibc newer than 2.38 or a
 libstdc++ newer than `GLIBCXX_3.4.32`. It reads
 `otool -L` on macOS and `readelf` on Linux. The C++ runtime and CLI build
-with `TELAR_RUNTIME_DISTRIBUTABLE`, which links OpenSSL, nghttp2, Brotli,
-Zstd and libghostty-vt statically everywhere, and on Linux also SQLite,
-zlib, pcap and the C++ library, then runs the same check on every
-executable.
+with `TELAR_RUNTIME_DISTRIBUTABLE`, which links libghostty-vt statically
+everywhere, beside the managed libraries that are always static, and on Linux
+also the C++ library, then runs the same check on every executable.
 
 The desktop build's floors are the runner's. Ubuntu 24.04's glibc 2.38
 headers turn `strtol` and `strtoul` into `__isoc23_strtol` and

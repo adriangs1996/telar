@@ -1,6 +1,7 @@
 #pragma once
 
 #include "telar_platform/error.hpp"
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -8,6 +9,7 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <span>
+#include <unistd.h>
 
 namespace telar::runtime {
 
@@ -16,14 +18,36 @@ class SystemCertificates {
     void operator()(unsigned char *bytes) const noexcept { OPENSSL_free(bytes); }
   };
 
+  // telar links its own OpenSSL, whose default bundle path matches only some
+  // distributions. These are the bundles Go's crypto/x509 looks for, in order.
+  static constexpr std::array bundles{
+    "/etc/ssl/certs/ca-certificates.crt",                // Debian, Ubuntu, Gentoo and others
+    "/etc/pki/tls/certs/ca-bundle.crt",                  // Fedora, RHEL 6
+    "/etc/ssl/ca-bundle.pem",                            // openSUSE
+    "/etc/pki/tls/cacert.pem",                           // OpenELEC
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", // CentOS, RHEL 7
+    "/etc/ssl/cert.pem",                                 // Alpine
+  };
+
+  static const char *bundle() noexcept {
+    const auto *path = std::getenv(X509_get_default_cert_file_env());
+    if (path != nullptr && path[0] != '\0') {
+      return path;
+    }
+
+    for (const auto *candidate : bundles) {
+      if (::access(candidate, R_OK) == 0) {
+        return candidate;
+      }
+    }
+
+    return bundles.back();
+  }
+
 public:
   template <typename Consumer>
   static void read(Consumer &&consume) {
-    const auto *path = std::getenv(X509_get_default_cert_file_env());
-    if (path == nullptr || path[0] == '\0') {
-      path = X509_get_default_cert_file();
-    }
-
+    const auto *path = bundle();
     const std::unique_ptr<BIO, decltype(&BIO_free)> file{BIO_new_file(path, "r"), &BIO_free};
     if (!file) {
       throw SystemError{"Open system certificate bundle", EACCES};

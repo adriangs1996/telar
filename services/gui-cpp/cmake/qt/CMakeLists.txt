@@ -3,8 +3,9 @@ project(telar_qt LANGUAGES C CXX)
 
 include(ExternalProject)
 include(manifest.cmake)
+include("${TELAR_MANAGED_BUILD}")
 find_program(TELAR_QT_PATCH patch REQUIRED)
-set(TELAR_QT_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/downloads" CACHE PATH "Verified Qt source archive cache")
+set(TELAR_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/downloads" CACHE PATH "Verified Qt source archive cache")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Private Qt installation" FORCE)
 
 if(APPLE)
@@ -19,7 +20,9 @@ if(APPLE)
   endif()
 endif()
 
+telar_forwarded_toolchain(toolchain)
 set(qt_arguments
+  ${toolchain}
   "-DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_INSTALL_PREFIX}"
   "-DCMAKE_BUILD_TYPE:STRING=Release"
   "-DBUILD_SHARED_LIBS:BOOL=ON"
@@ -29,18 +32,6 @@ set(qt_arguments
   "-DQT_HOST_PATH:PATH="
   "-DCMAKE_PREFIX_PATH:PATH=${CMAKE_INSTALL_PREFIX}"
   "-DQT_ADDITIONAL_PACKAGES_PREFIX_PATH:PATH=${CMAKE_INSTALL_PREFIX}")
-foreach(variable IN ITEMS
-    CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_MAKE_PROGRAM
-    CMAKE_OBJC_COMPILER CMAKE_OBJCXX_COMPILER CMAKE_OBJC_FLAGS CMAKE_OBJCXX_FLAGS
-    CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
-    CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT
-    CMAKE_TOOLCHAIN_FILE CMAKE_SYSROOT CMAKE_C_FLAGS CMAKE_CXX_FLAGS
-    CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE)
-  if(DEFINED ${variable} AND NOT "${${variable}}" STREQUAL "")
-    string(REPLACE ";" "|" value "${${variable}}")
-    list(APPEND qt_arguments "-D${variable}:STRING=${value}")
-  endif()
-endforeach()
 
 set(base_arguments
   -DFEATURE_widgets:BOOL=OFF
@@ -56,10 +47,13 @@ set(base_arguments
   -DFEATURE_system_png:BOOL=OFF
   -DFEATURE_system_textmarkdownreader:BOOL=OFF
   -DFEATURE_icu:BOOL=OFF
+  # The client reaches its runtime over local sockets only; Qt's TLS would
+  # load whichever OpenSSL the system has.
+  -DFEATURE_openssl:BOOL=OFF
   -DFEATURE_brotli:BOOL=OFF
   -DFEATURE_zstd:BOOL=OFF)
 if(APPLE)
-  list(APPEND base_arguments -DFEATURE_openssl:BOOL=OFF -DFEATURE_vulkan:BOOL=OFF)
+  list(APPEND base_arguments -DFEATURE_vulkan:BOOL=OFF)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND base_arguments -DFEATURE_fontconfig:BOOL=ON -DFEATURE_xcb:BOOL=ON -DFEATURE_vulkan:BOOL=ON)
 else()
@@ -72,7 +66,7 @@ function(telar_qt_module module)
     URL "${TELAR_QT_SOURCE_URL}/${module}-everywhere-src-${TELAR_QT_VERSION}.tar.xz"
     URL_HASH "SHA256=${TELAR_QT_SHA256_${module}}"
     TLS_VERIFY TRUE
-    DOWNLOAD_DIR "${TELAR_QT_DOWNLOAD_DIR}"
+    DOWNLOAD_DIR "${TELAR_DOWNLOAD_DIR}"
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     UPDATE_COMMAND ""
     PATCH_COMMAND ${MODULE_PATCH_COMMAND}
@@ -91,7 +85,7 @@ endfunction()
 telar_qt_module(qtbase ARGUMENTS ${base_arguments}
   PATCH_COMMAND "${CMAKE_COMMAND}"
     "-DSOURCE_DIR=<SOURCE_DIR>"
-    "-DDOWNLOAD_DIR=${TELAR_QT_DOWNLOAD_DIR}"
+    "-DDOWNLOAD_DIR=${TELAR_DOWNLOAD_DIR}"
     "-DPATCH_EXECUTABLE=${TELAR_QT_PATCH}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/patch.cmake")
 telar_qt_module(qtshadertools DEPENDS qtbase)

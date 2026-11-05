@@ -91,11 +91,10 @@ add_library(runtime-core STATIC
   history/database.cpp
   terminal/cell_projection.cpp)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
+target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_NATIVE_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC telar::tls)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
-target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC ghostty-vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
@@ -114,6 +113,8 @@ include(CTest)
 add_executable(telar-runtime main.cpp)
 target_link_libraries(telar-runtime PRIVATE runtime-core)
 install(TARGETS telar-runtime RUNTIME DESTINATION bin)
+# The pinned libraries are linked into both executables; their licenses travel with them.
+install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREFIX}/share/licenses/" DESTINATION share/telar/licenses)
 
 # `telar server` and the endpoint discovery start the runtime installed beside the CLI,
 # and panes get the CLI beside the runtime, so both build into the same directory.

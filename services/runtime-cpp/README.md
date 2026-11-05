@@ -8,11 +8,12 @@ provides the `telar` command the GUI's runtime discovery runs.
 
 ## Build and run
 
-Both platforms require CMake, Ninja, a C++23 compiler, Python 3, OpenSSL 3,
-nghttp2, Brotli, Zstd, SQLite, zlib and libpcap headers/libraries,
-and Zig 0.17.0. macOS requires version 26 and its SDK, which provides SQLite,
-zlib and libpcap. Linux uses its distribution's development packages and
-GNU process-spawn extensions, `epoll_pwait2`, `renameat2` and `arc4random_buf`.
+Both platforms require CMake, Ninja, a C++23 compiler, Python 3, Perl, make,
+patch and Zig 0.17.0; Linux also needs flex and bison. Configuration builds the
+pinned OpenSSL, nghttp2, Brotli and Zstd, and on Linux also zlib, SQLite and
+libpcap, statically into `TELAR_DEPENDENCIES_DIR`. macOS requires version 26
+and its SDK, which provides SQLite, zlib and libpcap. Linux uses GNU
+process-spawn extensions, `epoll_pwait2`, `renameat2` and `arc4random_buf`.
 Zig builds only
 libghostty-vt for production; the executable links no
 Telar Zig runtime code.
@@ -61,8 +62,7 @@ the privileged `traffic` helpers.
 `packaging/release/install-zig.sh PREFIX 0.17.0`, from the repository root,
 installs the pinned compiler after verifying the platform archive's SHA-256.
 On Arch/Omarchy, the runtime build dependencies are `base-devel`, `clang`,
-`cmake`, `ninja`, `python`, `pkgconf`, `openssl`, `libnghttp2`, `brotli`,
-`zstd`, `sqlite`, `zlib` and `libpcap`.
+`cmake`, `ninja`, `python`, `perl`, `patch`, `flex`, `bison` and `pkgconf`.
 
 Platform implementations live in `platform/macos` and `platform/linux`.
 `NativeEventLoop<Memory>` chooses kqueue or epoll at compile time. Linux
@@ -71,7 +71,8 @@ batches without allocations. Process identification, terminal ownership,
 peer credentials, host metrics, executable paths, descriptor cleanup and
 atomic file publication retain the same application interfaces.
 
-Linux reads the OpenSSL system certificate bundle. Explicit system trust
+Linux reads the distribution's certificate bundle: `SSL_CERT_FILE` when set,
+otherwise the first readable of the paths Go's `crypto/x509` searches. Explicit system trust
 installation uses `telar proxy trust install --linux trust` for p11-kit or
 `--linux update-ca-certificates` for Debian-style stores. Linux system-trust
 renewal requires an explicit operation because changing its store needs sudo.
@@ -101,16 +102,20 @@ C++23 features used by the protocol serializers in `dlls/telar-client`. The meas
 build uses LLVM 23.1.2; see [performance.md](performance.md) for the host,
 binary hashes, comparisons and limitations.
 
-Pass `-DOPENSSL_ROOT_DIR=/path/to/openssl-3` when the default installation is
-OpenSSL 4. The TLS allocation adapter requires immediate global cleanup while
-its injected allocator is alive. OpenSSL 4 defers that cleanup to a process
-exit destructor, so this implementation explicitly requires major version 3.
-See the [OpenSSL 4 cleanup contract](https://docs.openssl.org/4.0/man3/OPENSSL_init_crypto/).
+OpenSSL is never taken from the system. Configuration downloads the version
+pinned in `cmake/openssl/manifest.cmake`, verifies its SHA-256 and builds it
+statically, once, into `TELAR_DEPENDENCIES_DIR` (default
+`.dependencies-cache/` at the repository root). The TLS allocation adapter
+requires immediate global cleanup while its injected allocator is alive.
+OpenSSL 4 defers that cleanup to a process exit destructor even when built with
+`DO_NOT_SKIP_OPENSSL_CLEANUP`, contrary to its
+[cleanup contract](https://docs.openssl.org/4.1/man3/OPENSSL_init_crypto/), so
+`cmake/openssl/immediate-cleanup.patch` restores the documented behavior. A
+compile-time check rejects any other OpenSSL headers.
 Runtime proxy startup, authenticated CONNECT, opaque/TLS forwarding and pane
 environment injection are connected. HTTP/1 framing and exchange ordering are
 implemented. HTTP/2 inspection and stream tracking are integrated; the reference
-comparison uses nghttp2 1.70.0. Set `-DNGHTTP2_ROOT=/path/to/nghttp2` if CMake
-cannot find its headers and static library. HTTP/1 and HTTP/2 capture, bounded
+comparison used nghttp2 1.70.0. HTTP/1 and HTTP/2 capture, bounded
 delivery, background decoding and joining are integrated. Capture can be enabled
 independently of interception. System-trust management, CA rotation and runtime
 authority selection pass 62 cross-runtime cases with injected system-command
@@ -118,9 +123,8 @@ execution. Complete proxy-to-plugin integration coverage remains open.
 
 Capture storage, joining, bounded publication and content decoding have
 independent C++ implementations. Their libraries use injected allocation
-callbacks. The current dependencies are Brotli 1.2.0, Zstd 1.5.7 and SDK zlib
-1.2.12. Pass `-DBROTLI_ROOT=/path/to/brotli` and `-DZSTD_ROOT=/path/to/zstd` when
-CMake cannot find them. The capture pipeline accepts a tap through a template
+callbacks. Brotli and Zstd, and zlib on Linux, are the versions pinned in
+`cmake/native/manifest.cmake`; macOS uses its SDK's zlib. The capture pipeline accepts a tap through a template
 concept; with no configured tap it joins and releases captures without decoding
 their bodies. Small gzip, deflate and Zstd pass the paired Zig comparison;
 small Brotli and whole-runtime proxy acceptance remain open.
@@ -141,20 +145,20 @@ accessors; no offsets from a different Ghostty build are assumed.
 
 For an installation independent of Homebrew's dynamic libraries, configure a
 fresh Release build with `-DTELAR_RUNTIME_DISTRIBUTABLE=ON`, keeping the same
-compiler and dependency prefixes. This requires static OpenSSL 3,
-nghttp2, Brotli, Zstd and Ghostty archives. Each link runs the project's macOS
+compiler and Ghostty prefix; the other libraries are always the static managed
+builds. Each link runs the project's macOS
 dependency check and rejects non-system dynamic libraries. A cached dynamic
 dependency causes a configuration error instead of silently being retained.
 The minimum deployment target defaults to macOS 26.0.
-Linux installations normally use the distribution's shared libraries and
-`cmake --install out --prefix /path/to/staging`. The Homebrew linkage audit
+Linux installations use `cmake --install out --prefix /path/to/staging`. The Homebrew linkage audit
 only runs on macOS.
 
 `cmake --install out-distribution --prefix /path/to/staging` installs
 `bin/telar` and `bin/telar-runtime`, which must stay in the same directory. The
 GUI looks for `telar` beside its executable, in `Contents/Resources/bin`, then
 through the login shell's PATH. Choose a private staging directory when testing a
-replacement. Signed archives and bundled dependency notices remain pending.
+replacement. The licenses of the pinned libraries install under
+`share/telar/licenses`.
 
 The manually dispatched [C++ runtime workflow](../../.github/workflows/runtime-cpp.yml) builds
 Release and Debug with ASan/UBSan on macOS ARM64, Linux ARM64 and Linux

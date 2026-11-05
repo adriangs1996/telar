@@ -71,7 +71,7 @@ removed during configuration; there is no automatic system-Qt fallback. Private
 API compatibility still requires updating and rebuilding the complete pinned set.
 
 Linux also needs Fontconfig, Wayland-client/server, wayland-scanner, XCB/X11,
-xkbcommon, OpenGL/EGL and OpenSSL development packages. Qt's
+xkbcommon and OpenGL/EGL development packages. Qt's
 [Linux build requirements](https://doc.qt.io/qt-6/linux-requirements.html) list the
 XCB development packages. The managed build supplies Qt WaylandClient and
 WaylandCompositor, including private headers. Native test fixtures additionally
