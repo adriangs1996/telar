@@ -1,7 +1,6 @@
 import Telar.Gui
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
 Popup {
     id: root
@@ -12,19 +11,32 @@ Popup {
     readonly property bool machineMode: telar.dialog === "machine"
     readonly property bool peekMode: telar.dialog === "peek"
     readonly property bool customMode: historyMode || paletteMode || pathMode || machineMode || peekMode
-    readonly property var activeSearch: peekMode ? (peekBrowser.item?.queryField ?? search) : machineMode ? (machineBrowser.item?.queryField ?? search) : pathMode ? (pathBrowser.item?.queryField ?? search) : historyMode ? historyQuery : paletteMode ? (paletteBrowser.item?.queryField ?? search) : search
+    readonly property var activeSearch: peekMode ? (peekBrowser.item?.queryField ?? standardField) : machineMode ? (machineBrowser.item?.queryField ?? standardField) : pathMode ? (pathBrowser.item?.queryField ?? standardField) : historyMode ? historyQuery : paletteMode ? (paletteBrowser.item?.queryField ?? standardField) : standardField
     readonly property bool paletteMode: telar.dialog === "palette"
-    readonly property bool workspaceMode: telar.dialog === "new-workspace"
-    readonly property bool copySearchMode: telar.dialog === "copy-search"
     readonly property bool listing: historyMode || paletteMode
+    readonly property bool promptMode: telar.dialog.length > 0 && !customMode
+    readonly property bool workspaceMode: telar.dialog === "new-workspace"
+    readonly property var standardField: workspaceMode ? workspaceForm.field.input : prompt.field.input
     readonly property real dimmingAlpha: 0.25
     readonly property real historyEntranceOffset: Math.min(12 * root.ratio, Math.max(0, root.parent.height - historyBounds.y - historyBounds.height))
+    readonly property real promptEntranceOffset: 10 * root.ratio
+    readonly property real promptEntranceScale: 0.97
+    readonly property real reveal: historyMode ? historyMotion.reveal : promptMode ? promptMotion.reveal : 1
+    property int promptGeneration: 0
 
     ModalRevealLayout {
         id: historyMotion
         objectName: "historyModalMotion"
         active: root.historyMode
         generation: telar.historyState.generation ?? ""
+    }
+
+    // Each prompt rises into place as it opens, on the history modal's curve.
+    ModalRevealLayout {
+        id: promptMotion
+        objectName: "promptModalMotion"
+        active: root.promptMode
+        generation: String(root.promptGeneration)
     }
 
     function activateResult(alternate) {
@@ -64,13 +76,14 @@ Popup {
     readonly property rect machineBounds: machineMode ? telar.machinePromptGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect peekBounds: peekMode ? telar.peekGeometry.bounds : Qt.rect(0, 0, 0, 0)
     x: peekMode ? peekBounds.x : machineMode ? machineBounds.x : pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
-    y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y + historyEntranceOffset * (1 - historyMotion.reveal) : paletteMode ? paletteBounds.y : (parent.height - height) / 2
-    opacity: historyMode ? historyMotion.reveal : 1
-    width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, 640 * ratio)
+    y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y + historyEntranceOffset * (1 - historyMotion.reveal) : paletteMode ? paletteBounds.y : (parent.height - height) / 2 + promptEntranceOffset * (1 - promptMotion.reveal)
+    opacity: reveal
+    scale: promptMode ? promptEntranceScale + (1 - promptEntranceScale) * promptMotion.reveal : 1
+    width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, (workspaceMode ? 520 : 480) * ratio)
     height: peekMode ? peekBounds.height : machineMode ? machineBounds.height : pathMode ? pathBounds.height : historyMode ? historyBounds.height : paletteMode ? paletteBounds.height : contentItem.implicitHeight + topPadding + bottomPadding
     modal: true
     focus: true
-    padding: customMode ? 0 : 20 * ratio
+    padding: customMode ? 0 : 22 * ratio
     closePolicy: customMode ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     onClosed: {
         if (telar.dialog.length > 0)
@@ -79,11 +92,11 @@ Popup {
 
     Overlay.modal: Rectangle {
         color: "black"
-        opacity: root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha * (root.historyMode ? historyMotion.reveal : 1)
+        opacity: root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha * root.reveal
     }
 
     background: Loader {
-        sourceComponent: root.machineMode || root.peekMode ? machineSurface : root.pathMode ? pathSurface : root.historyMode || root.paletteMode ? historySurface : standardSurface
+        sourceComponent: root.machineMode || root.peekMode ? machineSurface : root.pathMode ? pathSurface : historySurface
     }
 
     Component {
@@ -124,15 +137,6 @@ Popup {
         }
     }
 
-    Component {
-        id: standardSurface
-        Rectangle {
-            color: telar.colors.surface
-            border.color: telar.colors.elevated
-            radius: 10 * root.ratio
-        }
-    }
-
     Connections {
         target: telar
         function onDialogChanged() {
@@ -140,7 +144,10 @@ Popup {
                 if (!root.paletteMode && !root.pathMode && !root.machineMode && !root.peekMode) {
                     root.activeSearch.text = "";
                 }
-                directory.text = "";
+                if (root.promptMode) {
+                    root.promptGeneration += 1;
+                }
+
                 root.open();
                 root.activeSearch.forceActiveFocus();
             } else {
@@ -163,7 +170,7 @@ Popup {
     }
 
     contentItem: Item {
-        implicitHeight: standardContent.implicitHeight
+        implicitHeight: root.workspaceMode ? workspaceForm.implicitHeight : prompt.implicitHeight
 
         Loader {
             id: peekBrowser
@@ -243,107 +250,20 @@ Popup {
             Keys.onBacktabPressed: event => historyBrowser.cycleFilter(event)
         }
 
-        ColumnLayout {
-            id: standardContent
+        PromptPanel {
+            id: prompt
             anchors.fill: parent
-            visible: !root.customMode
-            spacing: 16 * root.ratio
+            visible: !root.customMode && !root.workspaceMode
+            controller: telar
+            ratio: root.ratio
+        }
 
-            Label {
-                textFormat: Text.PlainText
-                text: root.copySearchMode ? "Search scrollback" : root.historyMode ? "Command history" : root.paletteMode ? "Commands" : root.workspaceMode ? "New workspace" : telar.dialog === "rename-tab" ? "Rename tab" : "Rename workspace"
-                color: telar.colors.foreground
-                font.pixelSize: 18 * root.ratio * telar.chromeTextScale
-                font.weight: Font.DemiBold
-            }
-
-            TextField {
-                id: search
-                objectName: root.historyMode || root.paletteMode ? "standardCommandSearch" : "commandSearch"
-                parent: standardContent
-
-                Layout.fillWidth: true
-                placeholderText: root.copySearchMode ? "Search scrollback" : root.historyMode ? "Search commands" : root.listing ? "Search…" : "Name"
-                color: telar.colors.foreground
-                selectionColor: telar.colors.accent
-                font.pixelSize: 14 * root.ratio * telar.chromeTextScale
-                Accessible.name: placeholderText
-                background: Rectangle {
-                    visible: !root.historyMode
-                    color: telar.colors.background
-                    border.color: search.activeFocus ? telar.colors.accent : telar.colors.elevated
-                    radius: 5 * root.ratio
-                }
-
-                onTextEdited: {
-                    if (root.historyMode) {
-                        telar.searchHistory(text);
-                    }
-                }
-                onAccepted: {
-                    if (!root.listing && text.trim().length > 0)
-                        telar.submitDialog({text: text, path: directory.text});
-                }
-                Keys.onDownPressed: root.moveSelection(1)
-                Keys.onUpPressed: root.moveSelection(-1)
-                Keys.onReturnPressed: event => root.acceptKey(event)
-                Keys.onEnterPressed: event => root.acceptKey(event)
-                Keys.onEscapePressed: {
-                    if (root.historyMode) {
-                        historyBrowser.cancelHistory();
-                    } else {
-                        telar.execute(GuiController.Action.cancel);
-                    }
-                }
-                Keys.onPressed: event => {
-                    event.accepted = root.historyMode && historyBrowser.handleKey(event);
-                }
-                Keys.onTabPressed: event => {
-                    if (root.historyMode) {
-                        historyBrowser.cycleFilter(event);
-                    } else {
-                        event.accepted = false;
-                    }
-                }
-                Keys.onBacktabPressed: event => {
-                    if (root.historyMode) {
-                        historyBrowser.cycleFilter(event);
-                    } else {
-                        event.accepted = false;
-                    }
-                }
-            }
-
-            TextField {
-                id: directory
-
-                Layout.fillWidth: true
-                visible: root.workspaceMode
-                placeholderText: "Directory"
-                color: telar.colors.foreground
-                font.pixelSize: 14 * root.ratio * telar.chromeTextScale
-                Accessible.name: "Workspace directory"
-                onAccepted: {
-                    if (search.text.trim().length > 0)
-                        telar.submitDialog({text: search.text, path: text});
-                }
-            }
-
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                visible: !root.listing
-
-                Button {
-                    text: "Cancel"
-                    onClicked: telar.execute(GuiController.Action.cancel)
-                }
-
-                Button {
-                    text: root.workspaceMode ? "Create workspace" : "Rename"
-                    enabled: search.text.trim().length > 0
-                    onClicked: telar.submitDialog({text: search.text, path: directory.text})
-                }
-            }
+        WorkspaceFormPanel {
+            id: workspaceForm
+            anchors.fill: parent
+            visible: root.workspaceMode
+            controller: telar
+            ratio: root.ratio
         }
     }
 }

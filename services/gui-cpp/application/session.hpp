@@ -514,13 +514,17 @@ public:
     return requestTabCreation(command.label(), command.argv());
   }
 
+  // Without a directory the workspace starts where the focused pane is, as
+  // in Zig.
   void createWorkspace(WorkspaceDraft draft) {
     auto launch = defaultLaunch();
     if (!draft.path.empty()) {
       launch.cwd = draft.path;
+    } else if (const auto *pane = focusedPane(); pane != nullptr) {
+      launch.cwd_source = pane->id;
     }
 
-    sendOpeningRequest(RequestKind::create_workspace, CreateWorkspace{.size = launchSize(), .name = draft.name, .launch = launch});
+    sendOpeningRequest(RequestKind::create_workspace, CreateWorkspace{.size = launchSize(), .name = draft.name, .create_cwd = draft.create_directory, .launch = launch});
   }
 
   template <PathEnvironment Environment>

@@ -32,6 +32,7 @@
 #include "palette/navigation_target.hpp"
 #include "palette/query.hpp"
 #include "palette/ranked_matches.hpp"
+#include "paths/directory_completion.hpp"
 #include "pick_controller.hpp"
 #include "plugin_worker.hpp"
 #include "pointer_dispatcher.hpp"
@@ -51,6 +52,7 @@
 #include "text/bounded_text.hpp"
 #include "window_frame_pacer.hpp"
 #include <QByteArray>
+#include <QFutureWatcher>
 #include <QColor>
 #include <QHash>
 #include <QObject>
@@ -159,6 +161,7 @@ class Application final : public QObject {
   Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap suggestionGeometry READ suggestionGeometry NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap pathPickerState READ pathPickerState NOTIFY pathPickerChanged)
+  Q_PROPERTY(QVariantMap workspaceFormState READ workspaceFormState NOTIFY workspaceFormChanged)
   Q_PROPERTY(QVariantMap pathPickerGeometry READ pathPickerGeometry NOTIFY pathPickerGeometryChanged)
 
 public:
@@ -324,6 +327,10 @@ public:
   Q_INVOKABLE void ascendPath();
   Q_INVOKABLE void insertPath(bool absolute);
   Q_INVOKABLE void activatePath(const QVariantMap &choice);
+  Q_INVOKABLE void editWorkspaceDirectory(const QString &text);
+  Q_INVOKABLE void moveWorkspaceDirectory(int delta);
+  Q_INVOKABLE QString acceptWorkspaceDirectory();
+  Q_INVOKABLE QString chooseWorkspaceDirectory(int index);
   Q_INVOKABLE void reportPaletteQueryLimit(qulonglong requested_bytes);
   Q_INVOKABLE void movePalette(int delta);
   Q_INVOKABLE void setPaletteMode(int mode);
@@ -384,6 +391,7 @@ public:
   [[nodiscard]] QVariantMap runtimeLinkState() const;
   [[nodiscard]] QVariantMap runtimeLinkGeometry() const;
   [[nodiscard]] QVariantMap pathPickerState() const;
+  [[nodiscard]] QVariantMap workspaceFormState() const;
   [[nodiscard]] QVariantMap pathPickerGeometry() const;
   [[nodiscard]] QVariantMap historyGeometry() const;
   [[nodiscard]] QVariantMap sidebarGeometry() const;
@@ -419,6 +427,7 @@ signals:
   void historyHoverChanged();
   void paletteChanged();
   void pathPickerChanged();
+  void workspaceFormChanged();
   void pathPickerGeometryChanged();
   void stateChanged();
   void statusModeChanged();
@@ -559,6 +568,26 @@ private:
   [[nodiscard]] PathPickerPlacement pathPlacement() const;
   QString path_query_;
   std::size_t path_selection_ = 0;
+
+  // The new workspace form's folder suggestions. Listings run one at a time
+  // on a worker; the query typed meanwhile starts once the running one lands.
+  struct WorkspaceForm {
+    QString wanted;
+    QString listing;
+    QString landed;
+    DirectoryCompletion completion;
+    std::size_t selection = 0;
+    bool confirm_create = false;
+  };
+
+  void resetWorkspaceForm();
+  void listWorkspaceDirectory();
+  void landWorkspaceDirectory();
+  bool submitWorkspace(const QVariantMap &input);
+  [[nodiscard]] bool workspaceListingCurrent() const;
+  [[nodiscard]] QString expandWorkspaceDirectory(const QString &text) const;
+  WorkspaceForm workspace_form_;
+  QFutureWatcher<DirectoryCompletion> workspace_listing_;
   static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};
 
   struct PresentedPane {

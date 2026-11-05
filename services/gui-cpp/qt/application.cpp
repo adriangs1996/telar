@@ -25,6 +25,7 @@
 #include "mode_projection.hpp"
 #include "palette/query.hpp"
 #include "pane_projection.hpp"
+#include "paths/directory_completion.hpp"
 #include "platform/awake_clock.hpp"
 #include "platform/host_name.hpp"
 #include "platform/window.hpp"
@@ -47,6 +48,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QEvent>
+#include <QFutureWatcher>
 #include <QGuiApplication>
 #include <QPointer>
 #include <QQuickItem>
@@ -152,6 +154,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(this, &Application::windowGeometryChanged, this, &Application::paletteChanged);
   connect(this, &Application::windowGeometryChanged, this, &Application::pathPickerGeometryChanged);
   connect(this, &Application::pathPickerChanged, this, &Application::pathPickerGeometryChanged);
+  connect(&workspace_listing_, &QFutureWatcher<DirectoryCompletion>::finished, this, &Application::landWorkspaceDirectory);
   connect(this, &Application::prefixChanged, this, &Application::statusModeChanged);
   connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
   connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
@@ -1074,7 +1077,9 @@ void Application::submitDialog(const QVariantMap &input) {
     const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
     const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
     if (dialog_ == QLatin1StringView("new-workspace")) {
-      session().createWorkspace({.name = text, .path = {path.constData(), static_cast<std::size_t>(path.size())}});
+      if (!submitWorkspace(input)) {
+        return;
+      }
     } else if (dialog_ == QLatin1StringView("rename-tab")) {
       session().renameTab(text);
     } else if (dialog_ == QLatin1StringView("rename-workspace")) {
@@ -1395,6 +1400,10 @@ void Application::showDialog(const QString &kind, const QString &text) {
   presented_history_hover_.reset();
   pointer_dispatcher_.presentHistoryActions({});
   pointer_dispatcher_.retireHistoryHover();
+
+  if (kind == QLatin1StringView("new-workspace") || dialog_ == QLatin1StringView("new-workspace")) {
+    resetWorkspaceForm();
+  }
 
   dialog_ = kind;
   dialog_text_ = text;

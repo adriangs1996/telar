@@ -36,6 +36,7 @@ enum class TabCreationOutcome : std::uint8_t {
 struct WorkspaceDraft {
   std::string_view name;
   std::string_view path;
+  bool create_directory = false;
 };
 
 struct PaneScrollDelta {

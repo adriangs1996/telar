@@ -739,6 +739,126 @@ private:
     QCOMPARE(terminal.application(), nullptr);
   }
 
+  Q_SLOT void promptDialogRenamesTab() {
+    const auto tab_label = [&] {
+      return client_->tabs()->data(client_->tabs()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
+    };
+    const auto original_label = tab_label();
+    const auto cleanup = qScopeGuard([this] {
+      client_->execute(Application::Action::cancel);
+    });
+    auto *motion = window_->findChild<ModalRevealLayout *>(QStringLiteral("promptModalMotion"));
+    QVERIFY(motion != nullptr);
+    qreal lowest_reveal = 1;
+    const auto connection = QObject::connect(motion, &ModalRevealLayout::frameChanged, window_, [&] {
+      lowest_reveal = std::min(lowest_reveal, motion->reveal());
+    });
+    const auto disconnect = qScopeGuard([connection] { QObject::disconnect(connection); });
+
+    client_->execute(Application::Action::rename_tab);
+    QCOMPARE(client_->dialog(), QStringLiteral("rename-tab"));
+    const auto *field = window_->findChild<NativeFormField *>(QStringLiteral("commandSearch"));
+    const auto *submit = window_->findChild<QQuickItem *>(QStringLiteral("promptSubmit"));
+    QVERIFY(field != nullptr && submit != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), runtime_wait_ms);
+    // The prompt enters from transparent on the first frame after it opens.
+    QTRY_VERIFY_WITH_TIMEOUT(lowest_reveal < 1, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(motion->reveal(), qreal{1}, runtime_wait_ms);
+    QVERIFY(!submit->property("interactive").toBool());
+
+    const auto renamed = QStringLiteral("Renamed by keys");
+    typeText(renamed);
+    QTRY_COMPARE_WITH_TIMEOUT(field->text(), renamed, runtime_wait_ms);
+    QVERIFY(submit->property("interactive").toBool());
+    captureArtifact(QStringLiteral("prompt-rename-tab"));
+
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(tab_label(), renamed, runtime_wait_ms);
+    QCOMPARE(client_->dialog(), QString{});
+
+    client_->execute(Application::Action::rename_tab);
+    QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), runtime_wait_ms);
+    typeText(QStringLiteral("discarded"));
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
+    QCOMPARE(tab_label(), renamed);
+
+    client_->execute(Application::Action::rename_tab);
+    client_->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
+    QTRY_COMPARE_WITH_TIMEOUT(tab_label(), original_label, runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void workspaceFormCompletesFoldersAndCreatesMissingOnes() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QDir root{QFileInfo{directory.path()}.canonicalFilePath()};
+    for (const auto *name : {"alpha", "beta", ".hidden"}) {
+      QVERIFY(root.mkdir(QString::fromLatin1(name)));
+    }
+
+    writeTestFile(root.filePath(QStringLiteral("notes.txt")), "file");
+    const auto workspaces = client_->workspaces()->rowCount();
+    const auto cleanup = qScopeGuard([this] {
+      client_->execute(Application::Action::cancel);
+    });
+    const auto entries = [this] {
+      return client_->workspaceFormState().value(QStringLiteral("entries")).toStringList();
+    };
+    const auto focused = [this] {
+      return window_->activeFocusItem() == nullptr ? QString{} : window_->activeFocusItem()->objectName();
+    };
+
+    client_->execute(Application::Action::new_workspace);
+    QCOMPARE(client_->dialog(), QStringLiteral("new-workspace"));
+    QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("commandSearch"), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("workspaceDirectory"), runtime_wait_ms);
+    const auto *field = window_->findChild<NativeFormField *>(QStringLiteral("workspaceDirectory"));
+    QVERIFY(field != nullptr);
+    QCOMPARE(field->text(), QString{});
+
+    typeText(root.path() + QLatin1Char('/'));
+    QTRY_COMPARE_WITH_TIMEOUT(entries(), (QStringList{QStringLiteral("alpha"), QStringLiteral("beta")}), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Down);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceFormState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+    captureArtifact(QStringLiteral("workspace-folders"));
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_COMPARE_WITH_TIMEOUT(field->text(), root.filePath(QStringLiteral("beta")) + QLatin1Char('/'), runtime_wait_ms);
+    QCOMPARE(focused(), QStringLiteral("workspaceDirectory"));
+    QTest::keyClick(window_, Qt::Key_Backtab);
+    QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("commandSearch"), runtime_wait_ms);
+
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("workspaceDirectory"), runtime_wait_ms);
+    typeText(QStringLiteral("gamma"));
+    const auto missing = root.filePath(QStringLiteral("beta/gamma"));
+    QTRY_COMPARE_WITH_TIMEOUT(field->text(), missing, runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->workspaceFormState().value(QStringLiteral("confirmCreate")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->dialog(), QStringLiteral("new-workspace"));
+    QVERIFY(!QFileInfo::exists(missing));
+    captureArtifact(QStringLiteral("workspace-confirm"));
+
+    const auto workspace_names = [this] {
+      QStringList names;
+      for (int row = 0; row < client_->workspaces()->rowCount(); ++row) {
+        names.append(client_->workspaces()->data(client_->workspaces()->index(row, 0), ListModel::record_role).toMap().value(QStringLiteral("name")).toString());
+      }
+
+      return names;
+    };
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rowCount(), workspaces + 1, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo{missing}.isDir(), runtime_wait_ms);
+    QVERIFY2(workspace_names().contains(QStringLiteral("gamma")), qPrintable(workspace_names().join(QLatin1Char(','))));
+    client_->execute(Application::Action::close_tab);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rowCount(), workspaces, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void qmlActionBindings() {
     const auto original_tabs = client_->tabs()->rowCount();
     const auto cleanup = qScopeGuard([this, original_tabs] {
@@ -2514,13 +2634,14 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void historyKeyboardSubmission() {
-    auto *search = window_->findChild<QQuickItem *>(QStringLiteral("commandSearch"));
     const auto *pane = firstPane();
-    if (search == nullptr || pane == nullptr) {
-      QFAIL("Required history search and terminal fixtures are missing");
+    QVERIFY(pane != nullptr);
+    client_->execute(Application::Action::history);
+    auto *search = window_->findChild<QQuickItem *>(QStringLiteral("commandSearch"));
+    if (search == nullptr) {
+      QFAIL("Required history search fixture is missing");
     }
 
-    client_->execute(Application::Action::history);
     client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
     QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
     search->forceActiveFocus();
@@ -6537,6 +6658,25 @@ return {api_version=2, client={keybindings={
     }
 
     QTRY_VERIFY_WITH_TIMEOUT(client_->dialog().isEmpty(), runtime_wait_ms);
+  }
+
+  // Saves the window when TELAR_GUI_TEST_ARTIFACT_DIRECTORY names a directory.
+  void captureArtifact(const QString &name) {
+    const auto directory = qEnvironmentVariable("TELAR_GUI_TEST_ARTIFACT_DIRECTORY");
+    if (directory.isEmpty()) {
+      return;
+    }
+
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(QDir{directory}.mkpath(QStringLiteral(".")));
+    QVERIFY(window_->grabWindow().save(QDir{directory}.filePath(name + QStringLiteral(".png"))));
+  }
+
+  // QTest types whole strings only into widgets; a window takes one key at a time.
+  void typeText(const QString &text) {
+    for (const auto character : text) {
+      QTest::keyClick(window_, character.toLatin1());
+    }
   }
 
   void captureHistoryArtifact(const QString &name) {
