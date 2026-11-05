@@ -12008,3 +12008,104 @@ The reusable decoded-state/delivery oracles and builder extension are committed 
 pending snapshot/viewport state in one discriminator, to avoid a second flag check
 in ordinary frame preparation. That is a new hypothesis, not an established cause
 or permission to overlook the observed regressions.
+
+## 2026-11-05: compact viewport state rejected; native work savings confirmed
+
+`out-perf/dlls-viewport-state-01` replaces the previous candidate's two flags with
+one `Pending` discriminator (`none`, `snapshot`, `viewport`). Snapshot recovery has
+priority over later viewport requests; delivery retains the old immediate-update
+policy. The ARM64 FrameSync object remains 408 bytes. All variants are private
+VFS overlays over accepted headers, excluding the four unrelated pending pacing
+files. No candidate production change is adopted.
+
+The decoded-state oracle is extended in `1054b684d` to issue another viewport
+request after explicit snapshot recovery, including while an acknowledgment is
+outstanding. A negative implementation that overwrites snapshot priority fails the
+intended snapshot-count assertion. Both enum variants preserve the 35,313,351-byte
+canonical stream, SHA256 `26ea0604a61e0b6cba1d9651cc024e34ee395f061ae53883d2448e03d6ac28db`.
+The real two-client delivery oracle and existing FrameSync/delivery tests pass.
+Scoped ASan/UBSan checks pass on the probe and instantiated runtime/GUI templates;
+reused libraries are uninstrumented and leak detection is disabled. A separate
+portable fixture executes existing FrameSync tests and 120 decoded GUI frames on
+ARM64 and under Rosetta for x86-64 and x86-64-v3. This does not qualify Linux or
+native x86 GUI performance. All three target lowerings are inspected.
+
+The first component attempt is deferred before any workload: load1 is 7.24902.
+No partial result is retained as timing evidence. The fresh seven-pair series
+`/tmp/telar-perf-viewport-state-pairs-02` completes 84 runs with 170 qualified host
+boundaries, maximum load1 4.15820. The early pending-state guard wins all seven
+ASCII, links, output-during-scroll and exposed-handle pairs, but loses all seven
+resize pairs (244419.854 → 246935.146 ns/operation). **Reject this variant.**
+The resize regression's cause is not established.
+
+A separate late-guard variant checks the pending discriminator only after finding
+empty damage, unchanged metadata and an equal header. Actual ARM64 linked code
+confirms that ordinary modified frames bypass that additional load/check. The
+seven-pair series `viewport-state-pairs-03` completes 84 runs and 170 qualified
+boundaries, maximum load1 2.20996. No own builds/tests/profiles overlap either series.
+
+| Component ns/operation | Accepted algorithm | Late guard | Candidate lower |
+| --- | ---: | ---: | ---: |
+| ASCII | 13796.784 | 7759.860 | 7/7 |
+| Links | 20748.967 | 14411.757 | 7/7 |
+| Output during scroll | 14064.221 | 7292.182 | 7/7 |
+| Resize | 246166.313 | 247764.542 | 2/7 |
+| Exposed handle | 13793.386 | 7783.731 | 7/7 |
+| Live output | 7150.838 | 7162.816 | 3/7 |
+
+The predeclared component rule passes: at least six target wins, no control with
+zero or one win. Resize/live medians are worse and are not claimed as improvements.
+Native B is this late-guard implementation, SHA256 `502ecb20d838…`; A remains
+`1f1849d1881f…`, with identical GUI `bc55d0e84d76…`, helper and pinned Qt.
+Final drawable pixels match both A/B and the earlier reference PNG exactly
+(`ec87ced6f6c9…`). The capture is diagnostic, not timing or continuous-motion evidence.
+
+`/tmp/telar-perf-viewport-state-native-pairs-01` completes six alternating pairs,
+100 measured inputs plus 20 warmups each, and 26 qualified host boundaries,
+maximum load1 2.38135. Native packets, geometry, Qt identity, runtime resources and
+owned cleanup pass. No builds/tests/profiles overlap ordinary timing.
+
+| Native metric | Accepted C++ | Late guard | Candidate lower |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50 ms | 30.50110 | 31.34176 | 1/6 |
+| Input-to-present p95 ms | 38.61426 | 39.19399 | 2/6 |
+| Input-to-present p99 ms | 45.47522 | 42.18634 | 4/6 |
+| Input-to-present maximum ms | 45.72871 | 44.41252 | 3/6 |
+| GUI CPU ms/input | 4.90073 | 5.16635 | 2/6 |
+| GUI peak RSS MiB | 200.85156 | 198.25000 | 4/6 |
+| Runtime CPU ms/run | 81.23002 | 83.49288 | 3/6 |
+| Runtime instructions/run | 410592737.5 | 397976601.5 | 6/6 |
+| Runtime cycles/run | 175051826 | 173851016 | 5/6 |
+
+**Reject the late-guard variant.** Both primary gates miss five wins, and p50
+regresses consistently. The private summary initially omitted p50 from its control
+predicate; it now includes every latency percentile, preserving all raw results
+and the already failed primary decision. No broad controls or independent-Zig
+promotion follows. Runtime counters cover setup, warmup, inputs and GUI exit,
+not just input processing; CPU and cycles are not interchangeable acceptance metrics.
+
+A separately instrumented native census in `viewport-state-census-01` records ten
+uint64 fields at successful frame preparation: mach ticks, runtime/pane/frame/base
+IDs, scroll offset, payload bytes, encoded cells and grid. Actual timebase conversion
+maps records into each input-to-positive-presentation interval. Every measured
+input has exactly one frame with the expected row, runtime identity and 82×21 grid.
+Across 100 inputs, A prepares 100 snapshots, 172,200 cells and 479,692 payload bytes;
+B prepares 100 acknowledged deltas, 26,561 cells and 146,618 payload bytes. These
+are prepared payload bytes, not socket/syscall totals. The uninstrumented candidate
+receives the same trace environment but creates no trace file, as required by the
+negative control. All three native sequences/resources/cleanup and matching geometry
+pass; eight host boundaries qualify, maximum load1 2.17871. All census timings are
+excluded. The work savings are real, but do not override native rejection.
+
+Descriptive decomposition of the ordinary series finds input-to-GPU-callback p50
+9.18822 → 9.54460 ms (3/6), command-buffer interval p50 0.23196 → 0.23458 ms
+(2/6), and signed presentation-minus-callback p50 21.74869 → 21.75435 ms (4/6).
+The callback clock is not hardware GPU completion; the command buffer includes
+observer readback. The residual does not establish a queue depth, refresh count
+or causal buffering delay. Prior drawable-pool and display-link diagnostics above
+already investigated related hypotheses. Qt currently uses two frame slots while
+the observed drawable pool has three; these are distinct mechanisms. No new Qt
+buffering change is justified by this decomposition. The next coverage gap is
+continuous native scroll: the current discrete input oracle cannot certify 120 Hz
+motion, reverse scrolling, selection or return to live output. All F01–F16 gates
+remain open and the persistent goal stays active.
