@@ -12204,3 +12204,202 @@ output/scrollback eviction, resize, copy-mode ownership, keyboard return to live
 transport failure and detach/reconnect. Only then should native scroll and the
 broader latency/CPU controls qualify it. The four unrelated pacing files remain
 unchanged, no candidate is adopted, and all complete-flow gates remain open.
+
+## 2026-11-05: retained per-attachment scroll intent candidate
+
+`out-perf/dlls-scroll-intent-01` investigates the repeated SetPaneViewport targets
+exposed by continuous native scroll. The runtime retains the raw absolute request
+in each attachment; each delivery clamps that request against current terminal
+bounds without overwriting the attachment's request. Detach destroys that state.
+A private real-Ghostty probe passes 49 checks across seven requested offsets,
+resize/restore, alternate-screen entry/exit, output growth and history clearing.
+This supports retaining one optional requested offset in the GUI pane, resetting
+it on a new attachment/disconnect and clamping it only when deriving a new input.
+It does not require an offset-based acknowledgment or an additional IPC message.
+
+The bounded FIFO/ACK/resize model rejects clearing pending input merely because an
+incoming offset matches the latest target: a matching older frame can precede a
+resized intermediate frame. Three input events suffice for a counterexample.
+Persistent intent and a serial single-inflight alternative pass this scoped model;
+serializing input is unnecessary for the existing runtime contract. This is not a
+proof of every output, eviction, selection or multi-client interleaving.
+
+Candidate B separates the incoming Screen metadata from the retained requested
+offset. Wheel/key scroll routing and keyboard return to live use the latter;
+successful sends update it, failed sends do not. Copy viewport requests use the
+same state. B passes the initial eight real Session cases but an expanded copy-exit
+case rejects it: an older frame can already show the entry offset, causing the
+copy planner to omit the restoration although a newer target is still requested.
+Candidate C synthesizes missing viewport messages for copy navigation generally;
+a horizontal-motion negative control rejects this because it replaces a pending
+vertical target with a stale frame's offset. Neither B nor C is adopted.
+
+Candidate D limits that additional restoration to leaving keyboard copy mode.
+The nine-case real Session oracle covers delayed and reversed inputs, ambiguous
+matching/resize frames, pre-request frames, bounds and temporary clamp/restore,
+integer extremes, failed transport, keyboard return, copy exit, horizontal copy
+motion and attachment/disconnect reset. It passes ARM64, x86-64 and x86-64-v3
+(Rosetta), plus scoped ARM64 ASan/UBSan. The sanitizer scope is the test TU and
+AwakeClock, not the system libraries or the entire native application. These runs
+do not establish Linux or emulated-platform performance.
+
+The existing Session test's alternate-scroll fixture initially fails B because
+it injects offsets unrelated to its last request. A private copy adds explicit
+scroll setup before three such responses, retaining all existing assertions;
+both accepted A and D pass this request-consistent fixture. This adjustment is
+recorded, not treated as an unmodified-suite pass. Broader pre-existing copy-frame
+reconciliation heuristics remain outside this correction.
+
+The private full-GUI build recompiles all 48 production objects dependent on the
+changed pane layout/session headers, replaces the corresponding members in a
+private archive and relinks against unchanged Qt and other libraries. Its relink
+control differs from accepted A in 47 bytes, all within LC_UUID/ad-hoc signature;
+all file-backed code/data sections match. D GUI SHA256 is `f49f721f25f8…`, paired
+with unchanged accepted runtime `1f1849d1881f…` and helper `87beebb065f0…`.
+No pending runtime pacing changes enter these executables. Production GUI source
+remains unchanged during qualification.
+
+Actual Pane<SystemAllocator> grows from 576 to 584 bytes, alignment 8, on all three
+macOS targets. The getter lowers to scalar loads, saturation and conditional
+selects on ARM64 and x86-64; it has no allocation or function call. The existing
+per-input send remains; no per-event allocation is introduced by the retained
+field. The first isolated layout compile lacked the SystemAllocator namespace;
+the corrected build and assembly listings are retained separately.
+
+`/tmp/telar-perf-scroll-intent-D-six-01` completes all six fresh native sequences:
+21 serial inputs then 900 continuous inputs, each ending at the exact expected
+row 1,313. All content, offered-rate, positive-presentation, native geometry,
+foreground, Qt and independent active-display reference checks pass. Every
+half-second offered-rate bin has 60 inputs. The six windows contain 713, 718, 717,
+713, 718 and 718 changed frames, or 118.8333–119.6667 changes per observation
+second; missed refresh opportunities are 7, 2, 3, 7, 2 and 2. The reference is
+120.00060 Hz. Fourteen host boundaries qualify, maximum load1 2.31299; every owned
+runtime/child/socket cleanup completes. This qualifies the exercised content and
+cadence observations, not a paired speedup or complete F06/native120 acceptance.
+
+A separate D GUI/instrumented accepted-runtime census,
+`/tmp/telar-perf-scroll-intent-D-census-01`, receives exactly 921 requests, all
+advancing three rows with no repeated target. Each of the 900 continuous input
+intervals contains exactly one request for the owned client/pane/runtime; the last
+requested offset is 1,312 and the visible final row 1,313. Four host boundaries
+qualify, maximum load1 1.74854, and cleanup completes. Its independent display
+reference changes cadence/phase or misses coverage, so it is explicitly ineligible
+for cadence/performance use. Message-count evidence is retained; instrumentation
+times are excluded. The prior uninstrumented negative trace control remains part
+of the instrumentation provenance.
+
+The first full-drawable A/D diagnostic uses 100 measured inputs plus 20 warmups.
+Both final PNGs match byte-for-byte, SHA256 `60df36e00a01…`, at row 3,716. Six host
+boundaries qualify, maximum load1 1.82861; cleanup completes. An initial assertion
+incorrectly compares this against the historical three-sample capture at a
+different final viewport; its failure is retained. It is not a candidate visual
+difference. Matching historical-workload capture and paired regression controls
+are recorded below. No diagnostic readback times count as gains.
+
+A refined model keeps the incoming displayed offset separate even while intent is
+pending, matching D's Screen behavior. Persistent intent passes 4,311 visited
+states/32 terminal states; the serial alternative passes 3,347/28. Both finish at
+maximum depth 25 within a limit of 28. Latest-offset retirement still fails with
+the same three-input counterexample (4,743 visited states before rejection).
+The original simplified model remains alongside this refinement.
+
+The native linked assembly shows that LLVM now outlines Session::scroll, which
+was inlined into Application::scroll in A. The D body retains the original pane
+search and transport send, adds scalar target selection/clamping and stores the
+optional target only after the send returns. It introduces no direct allocator
+call. This is an actual code-generation change, not evidence of identical code
+placement, and is evaluated by the native controls rather than assumed free.
+
+`/tmp/telar-perf-scroll-intent-D-pairs-01` completes six alternated discrete-scroll
+pairs with 100 measured inputs and 20 warmups per run. All 26 host boundaries
+qualify, maximum load1 2.58398; content/grid/Qt checks and owned cleanup pass.
+Medians of per-run summaries, with D wins out of six:
+
+| Measurement | Accepted A | Candidate D | D wins |
+| --- | ---: | ---: | ---: |
+| p50 latency, ms | 31.38000 | 31.29343 | 4 |
+| p95 latency, ms | 40.04587 | 38.18860 | 5 |
+| p99 latency, ms | 45.49539 | 42.97747 | 4 |
+| maximum latency, ms | 46.12931 | 48.39829 | 3 |
+| GUI CPU, ms/input | 4.95628 | 4.80911 | 3 |
+| GUI lifetime peak RSS, MiB | 193.61719 | 205.38281 | 2 |
+| runtime CPU, ms/run | 80.60527 | 80.33633 | 3 |
+| runtime instructions/run | 412,898,923 | 411,342,473 | 5 |
+| runtime cycles/run | 173,965,171 | 176,316,122.5 | 4 |
+
+The runtime interval includes startup of the GUI, warmup and measured inputs,
+excluding runtime startup/shutdown and child CPU; it is not the GUI input interval.
+There is no consistent latency/GUI-CPU/runtime-CPU regression under the frozen
+0–1-win rejection rule, but no CPU improvement is established. The 8-byte object
+layout increase does not explain or bound the observed GUI peak-RSS variation.
+This is a correction's regression control, not a complete-flow performance claim.
+
+The matching three-sample/20-warmup drawable diagnostic now also reproduces the
+historical SHA256 `ec87ced6f6c9…` exactly for both A and D (six host boundaries,
+maximum load1 2.05469). Separate single-pane typing, TUI, splits and tabs captures
+all match A and their historical PNG references byte-for-byte. Their 18 host
+boundaries qualify, maximum load1 2.87695, and owned cleanup completes.
+The D-linked existing Session-effects and attachment-layout tests pass; offscreen
+scene tests pass 53/53 and chrome tests 16/16. All affected test objects are rebuilt
+with the D overlay and the private D GUI archive; accepted artifacts are untouched.
+
+`/tmp/telar-perf-scroll-intent-D-controls-timing-01` completes all 48 native
+regression-control runs: six alternated A/D pairs for single-pane typing, TUI,
+splits and tabs, 100 measured inputs plus 20 warmups. All 98 host boundaries
+qualify, maximum load1 2.51318. Workload/content/grid/Qt qualification and owned
+cleanup pass. Values below are A → D medians, followed by D wins out of six.
+
+| Case | p50 ms | p95 ms | p99 ms | max ms | GUI CPU ms/input | runtime CPU ms/run |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| single | 24.86140 → 24.97690 (2) | 32.85720 → 33.00579 (1) | 34.19188 → 37.01535 (2) | 37.26302 → 37.74548 (2) | 3.85167 → 3.85618 (4) | 82.92840 → 84.36046 (2) |
+| tui | 28.76651 → 28.85579 (1) | 39.25639 → 37.48366 (4) | 44.30740 → 42.64514 (4) | 49.74215 → 51.96944 (3) | 5.05746 → 5.31697 (1) | 99.00958 → 104.95290 (1) |
+| splits | 25.30016 → 24.95348 (4) | 32.90199 → 33.13572 (2) | 37.73429 → 37.29795 (3) | 38.79102 → 38.69088 (2) | 4.05729 → 4.01741 (4) | 101.12565 → 100.59106 (4) |
+| tabs | 24.90782 → 24.88828 (3) | 33.04641 → 33.07689 (3) | 37.20786 → 37.04139 (4) | 37.68819 → 41.17440 (1) | 3.81388 → 3.91812 (3) | 99.29573 → 99.06081 (2) |
+
+| Case | GUI lifetime peak RSS MiB | runtime instructions/run | runtime cycles/run |
+| --- | ---: | ---: | ---: |
+| single | 202.773 → 204.781 (3) | 89859269.500 → 90636787.500 (1) | 140557860.000 → 141236578.000 (2) |
+| tui | 218.359 → 220.664 (3) | 180442303.000 → 179927698.000 (4) | 182457101.000 → 185873444.500 (1) |
+| splits | 199.945 → 199.156 (3) | 131375991.500 → 130792877.000 (3) | 179699159.000 → 177609818.500 (5) |
+| tabs | 205.984 → 204.758 (3) | 132073909.500 → 131330243.500 (4) | 179669050.000 → 177660050.500 (4) |
+
+D is **rejected**, despite fixing the exercised scroll-input loss. Consistent
+losses are single-pane p95 (1/6), TUI p50 (1/6), TUI GUI CPU (1/6), TUI runtime
+CPU (1/6), and tabs maximum latency (1/6). TUI GUI CPU rises about 5.13% and runtime
+CPU about 6.00%. The cause is not established; no identical-code-placement
+exception is asserted. Neither these results nor the successful target-scroll
+p95 can justify adoption. No additional repeated timing series selects away the
+regressions.
+
+A separate TUI census uses the same instrumented accepted runtime with A and D,
+plus an uninstrumented A negative control under the same forwarded trace variables.
+`/tmp/telar-perf-scroll-intent-D-tui-census-01` qualifies eight host boundaries,
+maximum load1 2.71387; content/grid/Qt checks and owned cleanup pass. Neither
+instrumented variant receives any SetPaneViewport request. Across the whole
+session, including initialization and warmup, A emits 139 frames/5 snapshots,
+228,694 payload bytes and 97,041 encoded cells; D emits 138 frames/5 snapshots,
+230,979 bytes and 98,105 cells. Initialization includes intermediate grids before
+the qualified 82×21 workload. These are not measured-input-only counts and do not
+explain CPU causally. The negative control creates neither trace file. All census
+times are excluded. More viewport requests and a simple increase in total frame
+count are not supported as explanations in this diagnostic.
+
+Source review also identifies a separate live-output parity gap. Zig CellSync
+tracks a viewport pin and clears it when returning to the bottom; accepted C++
+retains a raw absolute offset and re-applies it before later frame refreshes.
+An isolated real-Terminal/Ghostty reproduction starts with 100 output lines,
+requests the then-current bottom (offset 80), restores the shared terminal to
+bottom as delivery does, appends 25 lines, and re-applies the retained request.
+It observes offset 80 although the new bottom is 105; explicit scrollToBottom
+observes 105. This is a component/source reproduction, not a native full-flow
+claim or proof of the TUI regression. It motivates a separate end-to-end oracle
+for live following and history anchoring before changing attachment semantics.
+A permanent GUI absolute target would need revisiting if runtime viewport
+ownership changes; the current D experiment only mirrors the existing contract.
+
+The four pending runtime-pacing files remain byte-identical to their pre-pass
+hashes. No GUI production change is adopted. Accepted GUI `bc55d0e84d76…`, runtime
+`1f1849d1881f…`, helper and Qt remain the baseline; all F01–F16 complete-stack gates
+stay open and the persistent objective stays active. The next work is a narrower
+correction with retained input ownership, targeted cost attribution, and explicit
+live-output/anchoring oracles, not acceptance of D or blanket removal of RAII.
