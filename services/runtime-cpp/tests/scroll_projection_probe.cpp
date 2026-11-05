@@ -107,6 +107,10 @@ struct Fixture {
   void publish(bool emit, bool restore_viewport = true) {
     terminal.refresh();
     if (emit) {
+      check(!terminal.dirty());
+      const auto revision = terminal.screen.revision;
+      terminal.refresh();
+      check(!terminal.dirty() && terminal.screen.revision == revision);
       full.requestSnapshot();
       frame(full, true);
       record(std::span<const ScreenCell>{terminal.screen.cells});
@@ -121,6 +125,10 @@ struct Fixture {
 
   void scroll(std::uint32_t offset, bool emit) {
     terminal.scrollTo(offset);
+    if (emit) {
+      check(terminal.dirty());
+    }
+
     publish(emit);
   }
 };
@@ -137,7 +145,22 @@ void verify() {
       fixture.scroll(scroll_start + (scroll_step * (step < verify_half_cycle ? step : (verify_half_cycle * 2) - 1 - step)), true);
     }
 
+    fixture.terminal.scrollToBottom();
+    fixture.publish(true);
+    fixture.terminal.feed(bytes("\x1b[1;1Hchanged cached row"));
+    check(fixture.terminal.dirty());
+    fixture.terminal.scrollTo(0);
+    fixture.terminal.scrollToBottom();
+    fixture.scroll(history_rows - rows - scroll_step, true);
+    fixture.terminal.feed(bytes("\x1b[38;2;20;"));
+    fixture.scroll(scroll_start, true);
+    fixture.terminal.feed(bytes("40;60mcompleted control\x1b[0m"));
+    fixture.scroll(scroll_start + scroll_step, true);
+
     fixture.terminal.configureColors({.foreground = std::array<Byte, 3>{90, 70, 50}, .background = std::array<Byte, 3>{3, 5, 7}, .palette = std::array<Byte, 48>{}});
+    check(fixture.terminal.dirty());
+    fixture.terminal.scrollTo(0);
+    fixture.terminal.scrollToBottom();
     fixture.scroll(1003, true);
     fixture.terminal.configureCursorColor(std::array<Byte, 3>{1, 2, 3});
     fixture.scroll(1006, true);

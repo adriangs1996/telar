@@ -11787,3 +11787,99 @@ runtime lint target excludes tests. No whole-TU lint-clean claim is made.
 All complete F01-F16/native120 requirements remain open. A next distinct lead is
 encoding content-versus-viewport dirtiness in the existing dirty state, avoiding
 separate validity updates; it needs its own oracle and measurements before use.
+
+### Dirty-state viewport projection — 2026-11-05
+
+A successor to the four rejected overlap variants replaces the existing dirty bool
+with clean/content/viewport states. Pending content invalidation survives successive
+viewport changes. Content-mutating operations invalidate before mutation; an exposed
+Ghostty handle permanently disables reuse. The viewport path updates Ghostty state,
+reuses overlapping cells with memmove, converts only entering rows and preserves row
+revisions, metadata and frame bytes. There is no separate cell cache or validity stamp;
+ARM64 `sizeof(Terminal<SystemAllocator>)` stays 49,144. The experiment is isolated in
+`out-perf/dlls-runtime-scroll-state-01`; production sources are not changed by it.
+
+The reusable scroll oracle now exercises clean refresh idempotence, pending content
+across several viewport changes, partial/completed control input and color invalidation
+across viewport changes. Reference and candidate produce the same 1,176 records and
+17,725,074 bytes, SHA-256
+`38dbabbf71791d93c960bdddda26e8bb3db8a76bac1d013b8f4416f9a147baa8`.
+The expanded stream passes scoped ASan/UBSan with the probe TU and instantiated
+Terminal/frame code instrumented; reused libraries remain uninstrumented. Existing
+Terminal tests pass. Actual refresh kernels compile for ARM64, x86-64 and x86-64-v3;
+linked ARM64 disassembly confirms overlap memmove. These are codegen checks, not
+x86/Linux execution.
+
+Seven alternating component pairs per case complete 84 runs and 170 qualified host
+boundaries in `/tmp/telar-perf-runtime-scroll-state-pairs-01`. Both targets win 7/7;
+none of the four controls has a consistent loss. Controls with mixed wins are not
+claimed as improvements. Source counters are separate from ordinary timing.
+
+| Component ns/operation | Reference | Candidate | Candidate lower |
+| --- | ---: | ---: | ---: |
+| ASCII | 7786.840 | 4995.438 | 7/7 |
+| Links | 14212.488 | 11093.719 | 7/7 |
+| Output | 7267.343 | 7261.710 | 3/7 |
+| Resize | 247153.459 | 246605.167 | 5/7 |
+| Exposed handle | 7784.423 | 7785.768 | 4/7 |
+| Live output | 7119.458 | 7124.134 | 4/7 |
+
+Native reference `1f1849d1881f…` is byte-exact to the accepted runtime. Candidate
+`eb7778965dd6…` uses the same GUI `bc55d0e84d76…`, helper and Qt frameworks. Private
+main-TU overlays include accepted HEAD delivery/client/history definitions, excluding
+the pre-existing pending pacing edits. Runtime-core dependency receipts show that no
+reused object includes the modified Terminal header. Full final-window readback is
+pixel-exact between A/B and the prior packet-validated capture (PNG SHA-256
+`ec87ced6f6c97b8de5057ed62eefa1b98970cc34c066c40db8381bd85e1f164d`).
+This qualifies the final drawable, not every intermediate pixel or native120 cadence.
+
+A separate diagnostic runtime `c96a0b09dca4…` records successful reuse with PID,
+mach time, offset, row count and terminal purpose. The first attempted census is
+invalid: the ordinary harness correctly filters inherited TELAR_ variables. A private
+harness explicitly delivers the trace path per run. The repeated census in
+`/tmp/telar-perf-runtime-scroll-state-census-02` qualifies host, packet, presentation,
+Qt, resource and cleanup checks; uninstrumented B writes no trace as a negative control.
+
+The initial expectation of one projection per input is false. Within the 100 measured
+input-to-presentation windows, there are 100 three-row movements and 104 same-position
+refreshes. PID/time/packet joins require exactly one movement per input and only the
+previous position before it or the expected position afterwards. The successful paths
+reuse 3,984 rows and convert 300. This is an instrumented candidate work census, not
+a measured reference work delta; its timings are excluded. Repeated preparation of an
+unchanged viewport is a distinct lead for reducing work further.
+
+Six alternating native pairs complete in
+`/tmp/telar-perf-runtime-scroll-state-native-pairs-01`, with 100 measured inputs and
+20 warmups per run, 26 qualified host boundaries and maximum load1 4.90723. No
+builds, tests or profiles overlap timing. Native packet/presentation, geometry, Qt,
+resource and owned-process cleanup checks pass. The predeclared primary gate requires
+both p95 and runtime CPU/run to improve in at least 5/6 pairs.
+
+| Native metric | Reference | Candidate | Candidate lower |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50 ms | 31.17794 | 31.61602 | 0/6 |
+| Input-to-present p95 ms | 37.93948 | 40.33196 | 2/6 |
+| Input-to-present p99 ms | 44.47142 | 42.53031 | 4/6 |
+| Input-to-present maximum ms | 48.64990 | 46.86290 | 5/6 |
+| GUI CPU ms/input | 4.85024 | 5.05419 | 2/6 |
+| GUI peak RSS MiB | 191.38281 | 191.44531 | 3/6 |
+| Runtime CPU ms/run | 82.50671 | 80.53177 | 4/6 |
+| Runtime instructions/run | 414017269.50000 | 384012150.50000 | 6/6 |
+
+Runtime counters cover GUI setup, warmup, measured inputs and GUI exit, excluding
+runtime startup/shutdown and child CPU. They are not per-input runtime counters.
+The candidate reduces runtime instructions in 6/6 pairs, but p95 wins only 2/6 and
+runtime CPU 4/6. P50 loses consistently (0/6). It therefore fails the primary gate
+and is rejected; no independent-Zig promotion or broad regression suite is justified.
+The cause of the native latency differences is not established. Reduced projection
+work is real, but does not demonstrate improved whole-application responsiveness.
+No production Terminal change is installed; the four pre-existing pending runtime
+files remain byte-identical. Only the expanded reusable oracle and this report are
+retained in Git. All complete F01-F16/native120 acceptance remains open.
+
+A further source lead is `Runtime::handle(SetPaneViewport)`, which requests a full
+snapshot for every viewport change, while attachment delivery restores the live
+bottom after preparing a historical frame. Avoiding redundant projection/preparation
+or using an acknowledged delta could save more work. This is unproven and requires
+multi-client, outstanding-ack, viewport-return and output-during-scroll equivalence
+before any timing or adoption; it is not a reason to accept the rejected overlap path.
