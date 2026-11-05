@@ -12109,3 +12109,98 @@ buffering change is justified by this decomposition. The next coverage gap is
 continuous native scroll: the current discrete input oracle cannot certify 120 Hz
 motion, reverse scrolling, selection or return to live output. All F01–F16 gates
 remain open and the persistent goal stays active.
+
+## 2026-11-05: continuous scroll exposes repeated viewport targets
+
+`out-perf/dlls-scroll-cadence-01` adds a private continuous-scroll diagnostic on the
+accepted complete stacks, following the discrete F06 probe. It first verifies 21
+serial upward responses (20 warmups, one additional readiness response), then
+injects 900 native discrete AppKit wheel events at a declared 120 Hz. Every event
+moves three rows in the stationary 4,096-row corpus. The six-second observation
+window follows one second of continuous warmup; input continues for another half
+second, and completion requires the exact final row on a positive presentation.
+The origin after serial input is row 4,013 and the final target is row 1,313.
+
+The probe retains absolute scheduled/dispatch/return times, GPU callback and native
+presentation times, decoded top-row packets and a separate Core Video reference.
+It records all observed continuous frames, including invalid/zero/missing
+presentation observations, before selecting the declared window. Content must map
+to an already dispatched input without backward row progress. Half-second input
+counts must meet the unchanged 5% offered-rate gate; the display reference keeps
+its 5% stability and 0.25 ms native-interval residual tolerances. Geometry, display,
+foreground, VSync, corpus owner and final-row checks remain mandatory. A synthetic
+positive and 14 negative mutations pass the private validator. This is direct
+synthetic discrete wheel delivery, not a physical trackpad, momentum, reverse,
+selection or return-to-live workload. There is no paired acceptance timing.
+
+`/tmp/telar-perf-scroll-cadence-qual-01` fails on accepted C++ after all 900 events:
+the last observed row is 1,316 rather than 1,313. All 21 serial inputs pass. The
+final-row watchdog correctly rejects the run after two seconds. Three recorded
+host boundaries pass, maximum load1 1.41113, but the aborted controller leaves the
+series pending/ineligible. Owned runtime/children/socket cleanup completes.
+The first observer boxes a compound verification expression as JSON integer 1;
+version 2 explicitly boxes BOOL. That reporting fix does not alter wheel dispatch
+or the native final-row watchdog and cannot explain the missing three rows.
+
+Version 2's independent Zig diagnostic, `scroll-cadence-qual-02`, reaches the exact
+final row. All 12 offered-rate bins contain 60 inputs. Its six-second window has
+720 observed frames, 714 changed rows and 119 changes per observation second.
+The independent reference qualifies at 120.00060 Hz; six intervals span two
+refreshes, with a longest changed-content gap of 16.66658 ms. Four host boundaries
+qualify, maximum load1 1.63770. This is one diagnostic, not a paired Zig/C++ result
+or complete native120 acceptance. Repeating accepted C++ with the corrected
+observer in `scroll-cadence-qual-03` again ends at row 1,316 and fails the final-row
+watchdog. Its three host boundaries pass, maximum load1 1.69385; the incomplete
+series is ineligible. All serial/geometry/owner and cleanup checks pass.
+
+A deterministic Session reproduction uses the actual current client headers,
+codec and frame application: start at offset 100, issue two +3-row scroll actions,
+and observe requests 97 then 94. Deliver a delayed frame for the first request
+(offset 97), then issue the third action. The client requests 94 again instead of
+91. `Screen::apply` adopts the incoming frame's scroll offset, while `Session::scroll`
+uses that same field as its next input base. This demonstrates lost accumulated
+input under a valid ordering, independently of Qt, Metal or host scheduling.
+The initial private probe compile needed a missing namespace qualification; the
+corrected ARM64 build/run succeeds and retains its commands and JSON result.
+No production source is changed by this reproduction.
+
+A separate runtime census instruments accepted frame preparation and every received
+SetPaneViewport, retaining mach-clock ticks and runtime/client/pane identities.
+Only the main runtime TU is rebuilt, using the accepted clean delivery/client
+headers and corrected listener object. Its runtime SHA256 is `cdc016de4463…`;
+GUI `bc55d0e84d76…`, helper and Qt remain unchanged. Instrumentation is private and
+all of its times are excluded. `scroll-cadence-census-01` receives exactly 921
+viewport requests: 21 serial and 900 continuous, exactly one in each continuous
+input interval. Every record identifies the owned runtime/client/pane. Continuous
+inputs 7 and 17 repeat their predecessor's requested offsets, 3,994 and 3,967,
+instead of advancing another three rows. All other adjacent requests advance by
+three. The last requested offset is 1,318 and visible row 1,319; the expected final
+row is 1,313. The final-row watchdog rejects the sequence. Three recorded host
+boundaries pass, maximum load1 2.58789; cleanup completes. Frame preparation records
+are retained alongside requests, but do not timestamp client frame application.
+This directly locates duplicated targets upstream of runtime viewport handling;
+the deterministic Session test establishes a matching client-side loss mechanism.
+It does not prove an exact client callback ordering from runtime timestamps alone.
+
+`scroll-cadence-trace-control-01` forwards the same trace environment to the
+uninstrumented accepted runtime. Neither trace file is created. This run happens
+to reach the correct final row and observes 720 changed rows over six seconds,
+with 719 one-refresh intervals and no missing opportunity between those changes.
+Its reference qualifies at 120.00060 Hz, longest gap 8.34158 ms, and all offered-rate
+bins contain 60 inputs. Four host boundaries qualify, maximum load1 2.26318.
+This positive control is retained alongside all failures: the defect is ordering
+sensitive, not evidence of a fixed 60 Hz ceiling. Selecting this run as a C++ win
+would be invalid. All five diagnostics preserve exact serial input/corpus identity,
+1600×1000 scale-2 geometry, 82×21 fixture size and owned cleanup; loaded C++ Qt
+identities are verified, including failed sequences.
+
+The next implementation target is separating pending scroll intent from the
+viewport described by an arriving frame, with a bounded delivery/coalescing policy.
+An offset-only acknowledgment is ambiguous when direction reverses or unrelated
+frames arrive, so a simple "clear pending when offsets match" flag is not yet a
+proven solution. A correction needs an asynchronous reference model covering
+multiple inputs before replies, reversed directions, coalesced responses,
+output/scrollback eviction, resize, copy-mode ownership, keyboard return to live,
+transport failure and detach/reconnect. Only then should native scroll and the
+broader latency/CPU controls qualify it. The four unrelated pacing files remain
+unchanged, no candidate is adopted, and all complete-flow gates remain open.
