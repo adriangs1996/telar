@@ -104,6 +104,7 @@ int main() {
   select(first, 56);
   const auto recovery = deliver(first, false, false);
   sync.requestSnapshot();
+  select(first, 55);
   check(sync.acknowledge(recovery));
   deliver(first, true, true);
   first.session().frame_interval = std::chrono::seconds{1};

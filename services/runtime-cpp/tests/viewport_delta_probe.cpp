@@ -226,6 +226,7 @@ void verify() {
     fixture.defer_ack = true;
     fixture.scroll(3988, true);
     fixture.delta.requestSnapshot();
+    requestViewport(fixture.delta);
     check(fixture.delta.prepare(fixture.terminal.screen).empty());
     check(fixture.delta.acknowledge(fixture.delta_frame_id));
     fixture.defer_ack = false;
