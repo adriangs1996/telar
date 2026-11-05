@@ -13045,13 +13045,17 @@ response, processing-error and complete-APC handling. It adds no storage or cach
 The oracle covers six fragment sizes, ASCII, ANSI, links, partial images,
 placement/cursor state, alternate screens, filtered queries, cancellation,
 invalid uploads and unavailable file input. It records complete image metadata,
-pixels, placements, responses and limit flags. The accepted and candidate builds
-produce identical 402 records/15,287 bytes, SHA
+pixels, placements, responses and limit flags. The original accepted and candidate
+probe builds produced identical 402 records/15,287 bytes, SHA
 `ad715c74d2bc0163ce0415daf592a90154c918f306b62f95061d12759bc06d44`.
-The existing media and graphics-limit suites also pass with B. Comparisons use
-identical ordered fixtures; cross-fixture equality is not asserted because
-generations advance across terminal instances and some response boundaries differ.
-This is not a full visible-text or native pixel oracle.
+That v1 functional receipt is withdrawn: the subsequent transient-input audit
+found an invalid empty-queue consume in the probe, documented below. The existing
+media and graphics-limit suites pass independently with B. Image generations
+advance across instances, but the missing responses were an oracle defect, not
+evidence of a fragmentation-dependent application bug. The corrected oracle
+checks complete expected replies. It still does not establish full visible-text
+or native pixel parity. The benchmark path never calls the defective snapshot
+routine, so the component timing series remains valid.
 
 `/tmp/telar-perf-media-ordinary-scan-pairs-01` contains seven alternating pairs
 for four component cases: 56 runs, 114 qualified boundaries, maximum load1
@@ -13116,3 +13120,215 @@ open. B remains private and the accepted production baseline is unchanged.
 The runtime memory observations are final boundary samples and a lifetime
 maximum, not measured-input peaks. All four original pending runtime files
 retain their pre-experiment SHA-256 values.
+
+## 2026-11-05: media scan rejected; ordinary-run aggregation experiments
+
+The preceding scan-elimination B remains unadopted and is now rejected.
+`/tmp/telar-perf-media-ordinary-pixels-01` first qualified native A/B final PNGs
+for 1024x1024, 3840x2160, 16x16 alpha-edge and 16x16 alpha-gradient images. All
+four PNG pairs are byte-identical, with matching image receipts, dimensions,
+payloads, native presentations and owned shared-memory cleanup. The alpha images
+use the existing 8x4-cell placement. These are final-frame visual controls,
+not proof of every intermediate pixel or timing acceptance. The eight runs use
+three measured replacements after 20 warmups; all 18 host boundaries qualify,
+maximum load1 2.02930.
+
+`/tmp/telar-perf-media-ordinary-output-pairs-01` then completes six alternating
+A/B pairs with the same accepted GUI/helper/Qt, 1600x1000 drawable, scale 2 and
+82x21 grid. Each run sends 8 MiB of variable ASCII and 8 MiB of variable ANSI,
+then measures 100 presented-input samples after 20 warmups. Throughput ends at
+a PTY DSR response; it is separate from subsequent native presentation latency
+and is not a full output-transcript or media-worker completion oracle. Corpus
+SHA-256 values are `616c9c0bc0db83ef45ffad755503b4249a206081677cd05b41bb804755e0037d`
+and `b3708df3c06e513a24def94140e9cfb448ad025dd8690ac0e93d80ac2f987ff6`.
+All paired payloads, byte counts and grids match. Native content/presentation,
+framework identity, resources and cleanup pass. All 26 host boundaries qualify,
+maximum load1 4.64747, with no overlapping builds/tests/profiles. The process
+handle and final qualified host receipt both completed before the next build.
+
+| Output control | A median | B median | B lower / 6 |
+| --- | ---: | ---: | ---: |
+| ASCII write-to-DSR ms | 109.02515 | 111.92896 | 0 |
+| ANSI write-to-DSR ms | 109.37127 | 107.72971 | 3 |
+| Subsequent presented-input p50 ms | 24.90805 | 25.02966 | 2 |
+| Subsequent presented-input p95 ms | 32.79074 | 33.16748 | 1 |
+| Subsequent presented-input p99 ms | 35.61867 | 36.53733 | 2 |
+| Subsequent presented-input maximum ms | 38.09590 | 40.87615 | 2 |
+| GUI CPU ms/input | 3.95515 | 3.92603 | 3 |
+| GUI peak RSS MiB | 204.11719 | 206.55469 | 2 |
+| Runtime CPU ms/outer window | 433.74996 | 437.29542 | 1 |
+| Runtime instructions/outer window | 3,599,511,984 | 3,553,947,600 | 6 |
+| Runtime cycles/outer window | 1,194,100,505.5 | 1,205,940,632 | 0 |
+
+Fewer instructions and the earlier scroll p50 win do not offset consistent ASCII,
+p95 and runtime-resource losses. Cause is not established and no code-placement
+exemption is claimed. Further B timing controls are unnecessary for adoption
+after this rejection; fixed-rate output and image timing remain open for the
+accepted stack and future candidates. The modest memory increase is not the
+reason for rejection.
+
+### Corrected response and lifetime oracle
+
+The next experiment added temporary caller buffers to `media_input_probe.cpp`.
+This exposed nondeterministic missing replies in the probe, including in an
+instrumented unchanged baseline. Byte tracing confirmed identical input and
+backend streams, with 109 callback reply bytes for every fragment-size fixture.
+The defect was the oracle's unconditional `consumeResponses(0)` on an empty
+queue. That violates `PtyResponseQueue::consume`'s precondition; with assertions
+disabled, an uninitialized slot length could corrupt the queue count. A private
+assert-enabled build of the original oracle reliably aborts at that precondition;
+the fixed build passes. This defect is in the test consumer, not demonstrated in
+the production media parser or candidate borrowing logic.
+
+The oracle now drains only present replies, includes every queued response in
+its record and independently checks the exact expected success/error sequence
+after each input part. `verify-transient` overwrites temporary bytes through a
+volatile pointer before releasing them, so poisoning cannot disappear as a dead
+store. Stable and transient fixtures must agree byte-for-byte, including all
+image metadata, pixels, placements, replies and limit flags. The corrected
+402-record output is 15,396 bytes, SHA
+`b51c15945f5b309c2f6fafb367f9a47fa8f90cb4f707c2016d27f0e44776b15a`.
+The original 15,287-byte receipt is retained only as rejected diagnostic evidence.
+The benchmark mode never called the faulty snapshot routine; its earlier timing
+results are not invalidated by this oracle repair.
+
+### Borrowed contiguous runs: C rejected
+
+Private prefix `out-perf/dlls-media-borrowed-runs-01` tests retaining only ordinary
+spans that belong to the current input buffer. Contiguous spans merge without
+copying; internal parser/stack fragments flush immediately, and pending bytes
+flush before non-query APC work and before `feed()` returns. Exception handling
+clears both views before closing the failed producer. Two spans grow the
+`MediaTerminal<SystemAllocator>` object from 14,656 to 14,688 bytes on the native
+target. Arm64, x86-64 and x86-64-v3 wrappers compile; no x86/Linux execution is
+claimed. The existing media/graphics-limit suites pass, as do the corrected
+stable/transient byte oracles and 24 repeated temporary-input checks. Scoped
+ASan/UBSan/LSan checks pass with identical output; linked runtime/Ghostty libraries
+remain uninstrumented. The measured v3 source is archived separately from the
+final volatile-poisoning oracle revision.
+
+A separate census for 101 ANSI corpus feeds observes 161,600 ingestion calls in
+A and 101 in C (1,600 to one per feed). Census timings are excluded. Nevertheless,
+the uninstrumented seven-pair component series
+`/tmp/telar-perf-media-borrowed-component-pairs-01` has a consistent graphics loss:
+56 runs, 5,000 iterations after 100 warmups, 114 qualified host boundaries,
+maximum load1 1.55127. Source workload, bytes and final image/placement counts
+match the preceding component contract.
+
+| Component feed, median ns/iteration | A | C | C lower / 7 |
+| --- | ---: | ---: | ---: |
+| ASCII | 4,311.0166 | 4,287.8500 | 4 |
+| ANSI | 122,053.2334 | 79,943.7584 | 7 |
+| OSC links | 163,772.0500 | 164,688.6750 | 3 |
+| Graphics | 61,696.8332 | 62,974.8750 | 1 |
+
+C is rejected before native timing. Its 34.5% ANSI gain cannot override that
+regression. No cause or placement exemption is established.
+
+### Bounded copied runs: D
+
+Private prefix `out-perf/dlls-media-buffered-runs-01` instead uses a 256-byte
+ordinary-input buffer, allowing both caller and temporary parser fragments to
+share a backend write. Large fragments still pass directly; pending bytes flush
+before APC work, overflow and return. Buffered classified fragments enter
+`ingest` directly; complete image commands retain their existing file/limit path.
+This avoids rescanning the concatenated filtered stream for file commands.
+No caller pointer survives a callback. The native object grows by 264 bytes,
+14,656 to 14,920; this is inline storage, not an allocation per fragment.
+
+The corrected stable and volatile-poisoned transient oracles match A exactly.
+Existing media/graphics-limit suites and scoped ASan/UBSan/LSan pass. Code-generation
+wrappers compile on arm64, x86-64 and x86-64-v3. A separate 101-feed census observes
+the following ingestion counts; its timing is not used for acceptance:
+
+| Corpus | A calls | D calls |
+| --- | ---: | ---: |
+| ASCII | 101 | 101 |
+| ANSI | 161,600 | 3,434 |
+| OSC links | 64,640 | 1,313 |
+| Graphics | 25,856 | 19,392 |
+
+The extra storage enables fewer backend calls in both ANSI and graphics, but
+these counts alone cannot establish a performance win. Production remains on
+the accepted baseline and all complete-stack/native120 gates remain open.
+
+The uninstrumented component series
+`/tmp/telar-perf-media-buffered-component-pairs-01` completes seven alternating
+pairs per case, with the same 5,000-iteration/100-warmup contract. All 56 runs
+match offered bytes and final image/placement counts; 114 host boundaries qualify,
+maximum load1 1.69874, with no concurrent builds/tests/profiles.
+
+| Component feed, median ns/iteration | A | D | D lower / 7 |
+| --- | ---: | ---: | ---: |
+| ASCII | 4,311.7834 | 4,284.2334 | 6 |
+| ANSI | 121,201.6500 | 76,796.5000 | 7 |
+| OSC links | 161,946.7166 | 144,890.8416 | 7 |
+| Graphics | 61,954.2750 | 60,166.2500 | 7 |
+
+D qualifies at component scope, including graphics. Its 36.6% ANSI, 10.5% OSC
+and 2.9% graphics reductions remain provisional until native output and image
+controls qualify. This is an explicit 264-byte per-object storage trade for fewer
+backend calls, not a claim about whole-process memory or every complete flow.
+
+The uninstrumented native D runtime is
+`73391d154c74bc1c89a2f6b898284aa713f21797e7cea3c200cf45159c573116`.
+Rebuilding the accepted source with the current compiler, dependencies and
+main-only overlay procedure exactly reproduces runtime A SHA
+`1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`;
+GUI/helper hashes also match. The actual D runtime media-parser disassembly is
+preserved separately from the wrapper code-generation checks. It contains 356
+listing lines; fewer source or assembly lines are not the optimization criterion.
+
+`/tmp/telar-perf-media-buffered-output-pairs-01` completes six alternating pairs
+with the same 8 MiB variable ASCII/ANSI corpora and subsequent 100-input/20-warmup
+native contract as B's rejected output series. All 26 host boundaries qualify,
+maximum load1 3.28809. Payload/grid, content/presentation, framework/resource
+identity and owned cleanup checks pass; no builds/tests/profiles overlap timing.
+
+| Output control | A median | D median | D lower / 6 |
+| --- | ---: | ---: | ---: |
+| ASCII write-to-DSR ms | 113.31119 | 114.32390 | 2 |
+| ANSI write-to-DSR ms | 108.50013 | 104.35229 | 5 |
+| Subsequent presented-input p50 ms | 25.66702 | 25.10429 | 5 |
+| Subsequent presented-input p95 ms | 32.68458 | 33.09456 | 2 |
+| Subsequent presented-input p99 ms | 35.50853 | 36.99603 | 3 |
+| Subsequent presented-input maximum ms | 38.77981 | 37.22829 | 4 |
+| GUI CPU ms/input | 3.83716 | 3.86857 | 4 |
+| GUI peak RSS MiB | 204.45313 | 206.41406 | 3 |
+| Runtime CPU ms/outer window | 449.67746 | 426.56985 | 5 |
+| Runtime instructions/outer window | 3,617,005,736.5 | 3,326,079,248 | 6 |
+| Runtime cycles/outer window | 1,226,353,369 | 1,184,232,787 | 5 |
+| Runtime final resident MiB | 39.61719 | 39.67969 | 3 |
+| Runtime final footprint MiB | 32.35197 | 32.40670 | 3 |
+| Runtime lifetime footprint maximum MiB | 32.36760 | 32.42232 | 3 |
+
+The targeted ANSI path and whole-window runtime resources improve consistently,
+as does subsequent p50. ASCII and tails remain mixed, with worse p95/p99 medians;
+they are not relabeled as wins. This is sufficient to continue D's qualification,
+not to declare F04 complete or adopt it before image and other regression controls.
+
+The first D visual series, `/tmp/telar-perf-media-buffered-pixels-01`, stopped
+after one pair because the private controller retained a `-B/window.png` path
+instead of D. Both owned runtimes had cleaned up. The incomplete series is
+explicitly marked discarded, retaining its observations and failure receipt;
+the controller path was corrected before a fresh complete series.
+`/tmp/telar-perf-media-buffered-pixels-02` completes all eight A/D runs with
+18 qualified host boundaries, maximum load1 2.01856. The 1K, 4K, alpha-edge and
+alpha-gradient PNG pairs are byte-identical and match the accepted captures
+from B's visual controls. Dimensions, payloads, presentations, framework identity
+and owned shared-memory cleanup pass. These capture-run timings are excluded
+from performance acceptance.
+
+A separate diagnostic byte-stream oracle compares every byte delivered to the
+backend, not just image output. For each of six fragment sizes, A and D consume
+the same 15,169 input bytes, emit the same 15,430 normalized backend bytes and
+receive the same 109 callback response bytes. The backend SHA is
+`6ebfa2d19d54b50a8309b5e335dfe9c92fa70749b6e2530325db5a8fc3a3c167`.
+Both instrumented probes also produce the complete corrected output oracle.
+Only call boundaries differ; this evidence excludes skipped ordinary bytes in
+this fixture, not every possible workload.
+
+D remains private pending native image timing, fixed-rate output, additional
+interaction/regression controls and broader safety/input coverage. No F01-F16
+or native120 gate is closed. The accepted production baseline and four original
+pending runtime files remain unchanged.

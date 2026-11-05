@@ -27,7 +27,7 @@ void message(const Message &value) {
   record(Codec::encode(value, buffer));
 }
 
-void snapshot(MediaTerminal<SystemAllocator> &terminal) {
+std::string snapshot(MediaTerminal<SystemAllocator> &terminal) {
   terminal.refresh();
   const GraphicsHeader header{1, terminal.graphics.revision() + 1};
   message(GraphicsSnapshot{header, SnapshotPhase::begin});
@@ -41,11 +41,18 @@ void snapshot(MediaTerminal<SystemAllocator> &terminal) {
   }
 
   message(GraphicsSnapshot{header, SnapshotPhase::end});
-  record(terminal.responses());
-  terminal.consumeResponses(terminal.responses().size());
+  std::string responses;
+  while (!terminal.responses().empty()) {
+    const auto next = terminal.responses();
+    responses.append(textView(next));
+    terminal.consumeResponses(next.size());
+  }
+
+  record(byteView(responses));
   const auto limits = terminal.takeUploadLimits();
   const std::array<Byte, 3> flags{limits.bytes, limits.chunks, terminal.responseFailed()};
   record(flags);
+  return responses;
 }
 
 std::string corpus(std::string_view name) {
@@ -68,7 +75,7 @@ std::string corpus(std::string_view name) {
   return result;
 }
 
-void verify() {
+void verify(bool transient) {
   const std::vector<std::string> parts{
       corpus("ascii"), corpus("ansi"), corpus("osc"),
       "\x1b_Ga=t,f=32,s=1,v=1,i=7,m=1,q=2;/wAA\x1b\\",
@@ -80,17 +87,39 @@ void verify() {
       "\x1b_Ga=t,t=f,f=32,s=1,v=1,i=12;L3RlbGFyLW5vLXN1Y2gtZmlsZQ==\x1b\\",
       "\x1b_Ga=d,d=I,i=7;\x1b\\\x1b[?1049h\x1b_Ga=d,d=A;\x1b\\",
   };
+  const std::array<std::string_view, 11> replies{
+      "", "", "", "",
+      "\x1b_Gi=7;OK\x1b\\",
+      "\x1b_Gi=9;OK\x1b\\",
+      "",
+      "\x1b_Gi=7;OK\x1b\\",
+      "\x1b_Gi=8;EINVAL: invalid data\x1b\\\x1b_Gi=7;OK\x1b\\",
+      "\x1b_Gi=12;EINVAL: unsupported medium\x1b\\",
+      "",
+  };
+  check(parts.size() == replies.size());
   SystemAllocator memory;
   for (const auto chunk : {1U, 2U, 3U, 7U, 31U, 4096U}) {
     MediaTerminal terminal{memory, size, GraphicsLimits{}};
-    for (const auto &part : parts) {
+    for (std::size_t index = 0; index < parts.size(); ++index) {
+      const auto &part = parts[index];
       auto remaining = byteView(part);
       while (!remaining.empty()) {
         const auto count = std::min<std::size_t>(chunk, remaining.size());
-        terminal.feed(remaining.first(count));
+        if (transient) {
+          std::string temporary{textView(remaining.first(count))};
+          terminal.feed(byteView(temporary));
+          volatile char *poison = temporary.data();
+          for (std::size_t byte = 0; byte < temporary.size(); ++byte) {
+            poison[byte] = '?';
+          }
+        } else {
+          terminal.feed(remaining.first(count));
+        }
+
         remaining = remaining.subspan(count);
       }
-      snapshot(terminal);
+      check(snapshot(terminal) == replies[index]);
     }
   }
 }
@@ -120,8 +149,8 @@ int main(int argc, char **argv) {
   try {
     check(argc == 2 || argc == 3);
     const std::string_view name{argv[1]};
-    if (name == "verify") {
-      verify();
+    if (name == "verify" || name == "verify-transient") {
+      verify(name == "verify-transient");
     } else {
       check(argc == 3);
       std::size_t iterations = 0;
