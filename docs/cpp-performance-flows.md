@@ -147,6 +147,23 @@ inconsistent data rejects the report. These queries and final serialization
 perturb the GUI process: all results are diagnostic and cannot replace ordinary
 paired latency, CPU or native120 acceptance. The original observer stays unchanged.
 
+To attribute those phases to runtime scopes on macOS, prepare
+`python3 tools/prepare_runtime_scope_overlay.py NEW_DIRECTORY --base-overlay BASE.json`
+(omit the base option for an unmodified source baseline). Compile the diagnostic
+runtime main translation unit with `-ivfsoverlay NEW_DIRECTORY/overlay.json`,
+preserving Release flags and frozen libraries. The overlay does not instrument
+already compiled library objects. Forward `TELAR_RUNTIME_PHASE_TRACE` explicitly
+through the private harness environment, using `RUN_DIRECTORY/runtime-trace` as
+its value; the ordinary harness filters inherited Telar environment variables.
+After normal owned-runtime shutdown, run
+`python3 tools/runtime_scope_report.py RUN_DIRECTORY --output NEW_REPORT.json`.
+The report requires the verified runtime's complete, overflow-free trace and
+the phase observer's qualified resource/action files. It clips nested scopes to
+conservative phase windows and reports inclusive/exclusive elapsed time, not CPU.
+Uninstrumented callees and waits remain in exclusive time; thread totals can
+overlap. The fixed trace buffer reserves 14 MiB and the observer adds per-event
+work, so these runs cannot establish timing or memory acceptance.
+
 For diagnostic GUI CPU attribution on native macOS, use
 `python3 tools/build_thread_cpu_probe.py OUT` to build an isolated tab-switch
 probe. It adds measured-interval hooks and a 100 ms in-process observer from

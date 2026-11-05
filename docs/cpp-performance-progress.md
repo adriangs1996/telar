@@ -12975,3 +12975,144 @@ separately, retaining the original complete-window gate. These observations do
 not prove that VT parsing, IPC, allocations, cache behavior or Qt conversion
 causes the remaining difference. No F01-F16 complete-stack or native120 gate is
 closed. The four original pending runtime files remain untouched.
+
+## 2026-11-05: runtime scope attribution and redundant media scanning
+
+The phase observer now supports a bounded, macOS-only scope trace through
+`prepare_runtime_scope_overlay.py`, `macos_runtime_scope_trace.hpp` and
+`runtime_scope_report.py`. The overlay keeps Release flags, `TELAR_DEBUG=0`
+and `TELAR_DIAGNOSTICS=0`. It instruments existing header/main scopes plus
+terminal control, projection and finish scopes, recording terminal purpose,
+object address and relevant input length. Existing out-of-line library objects
+remain unchanged and uninstrumented. Records use a fixed buffer and atomic
+index; there are no per-event allocations or file writes. Normal process exit
+writes a private, exclusive-created per-PID JSONL file. This is diagnostic
+instrumentation, never a production optimization or acceptance build.
+
+The parser selects the socket-verified runtime PID, validates the monotonic clock,
+header, exact count and zero overflow, then validates the existing resource and
+native action boundaries. It rejects crossing scopes on one thread. Conservative
+phase windows exclude the resource query brackets; direct-child subtraction
+avoids double-counting nested scopes. Work counts include only fully contained
+events. Scope durations are elapsed time, including waits and observer overhead,
+not CPU time. Different threads can overlap. In particular, `runtime.run` includes
+the idle event loop and must not be ranked as active work. Six new tests cover
+overflow, identity, clock, invalid fields, nesting, clipping, equal timestamps,
+separate threads, lifetime coverage and instrumentation anchors; the existing
+four phase tests and eleven resource tests also pass.
+
+Private prefix `out-perf/dlls-runtime-phase-trace-01` retains the sources, builds,
+receipts and oracles. The initial R trace in
+`/tmp/telar-perf-runtime-phase-trace-01` overflowed its 65,536-record buffer:
+84,659 events, 19,123 dropped. Its attribution is rejected. R2 uses 262,144
+56-byte slots (14 MiB reserved) and runtime SHA
+`7fed9fbcc61ab368883410d8f751be6313c3e8d45e27abccaf6648e52102c489`.
+Both R and R2 preserve all 34,796,014 projection-oracle bytes, SHA
+`dad442ae8815951f3ec320aa27edce85b00a3cc07a20e47eb36ee101fb4ccda1`.
+The reusable overlay generates byte-identical trace/terminal/frame headers to R2.
+
+The final diagnostic `/tmp/telar-perf-runtime-phase-trace-02` runs R2 then accepted
+A once each, with 100 measured inputs and 20 warmups. All six host boundaries
+qualify, maximum load1 4.31934; native content, presentation, framework identity,
+resources and owned cleanup pass. No builds, tests or profiles overlap the series.
+R2 emits 84,976 events with zero loss; A emits none. The GUI/helper/Qt remain the
+accepted binaries, with the preceding 1600x1000, scale-2, 82x21 configuration and
+894,730-byte scroll packet corpus. These observer timings do not establish wins.
+
+| R2 phase | Runtime CPU ms | Selected scope observations |
+| --- | ---: | --- |
+| Setup | 49.4376 | Visible and observation control paths each consume 895,517 bytes in 881 calls; 72,245 media ingestion calls |
+| Warmup | 8.3012 | 45 terminal projections and frame preparations |
+| Measured inputs | 34.8524 | 212 terminal projections and frame preparations; 315 client deliveries |
+| After measurement | 0.9336 | 11 additional projections |
+
+In the measured phase, projection scopes total 12.037 ms elapsed and frame
+preparation scopes 5.134 ms. Setup media ingestion totals 6.000 ms elapsed,
+with considerable per-call observer work. These are instrumented observations,
+not uninstrumented cost estimates. Counts cover all publications in each phase,
+not exactly two publications attributed to every input. Setup includes additional
+readiness traffic beyond the scroll corpus. Neither this trace nor the prior
+resource counters establish an allocation/Qt-conversion cause.
+
+Source inspection identifies an algorithmic candidate in `MediaTerminal::ordinary`:
+`GraphicsFileInput::feed` searches each already classified fragment for complete
+Kitty file commands. The parser retains APCs for `complete()`, which already uses
+`GraphicsFileInput::frame`; ordinary and streamed non-APC fragments need no such
+search. Private variant B calls `ingest(bytes)` directly, retaining upload-limit,
+response, processing-error and complete-APC handling. It adds no storage or cache.
+
+`media_input_probe.cpp` supplies a reusable component workload and byte oracle.
+The oracle covers six fragment sizes, ASCII, ANSI, links, partial images,
+placement/cursor state, alternate screens, filtered queries, cancellation,
+invalid uploads and unavailable file input. It records complete image metadata,
+pixels, placements, responses and limit flags. The accepted and candidate builds
+produce identical 402 records/15,287 bytes, SHA
+`ad715c74d2bc0163ce0415daf592a90154c918f306b62f95061d12759bc06d44`.
+The existing media and graphics-limit suites also pass with B. Comparisons use
+identical ordered fixtures; cross-fixture equality is not asserted because
+generations advance across terminal instances and some response boundaries differ.
+This is not a full visible-text or native pixel oracle.
+
+`/tmp/telar-perf-media-ordinary-scan-pairs-01` contains seven alternating pairs
+for four component cases: 56 runs, 114 qualified boundaries, maximum load1
+1.91504. Each run feeds a 64-row corpus 5,000 times after 100 warmups; construction,
+final graphics refresh, wire encoding, GUI and presentation are outside timing.
+The matched byte counts and final image/placement counts pass. Private builds
+and complete source manifests are under `out-perf/dlls-media-ordinary-scan-01`.
+
+| Component feed, median ns/iteration | A | B | B wins / 7 |
+| --- | ---: | ---: | ---: |
+| ASCII, 3,648 bytes | 4,308.0750 | 4,211.2918 | 7 |
+| ANSI, 8,320 bytes | 121,615.0916 | 109,000.7500 | 7 |
+| OSC links, 2,880 bytes | 163,504.0666 | 158,819.5666 | 7 |
+| Graphics, 2,816 bytes | 62,090.1000 | 61,024.4082 | 6 |
+
+Wrapper code generation on arm64, x86-64 baseline and x86-64-v3 confirms that
+ordinary ingestion tail-calls `ingest` directly instead of loading the file limit
+and tail-calling the scanning helper. These are compilation checks, not x86/Linux
+execution. The component gain is provisional pending uninstrumented native
+regression controls and the relevant output/image workloads. No complete-stack
+F01-F16 or native120 acceptance gate closes from this component result.
+
+The actual arm64 runtime media-parser disassembly also confirms the change:
+five call sites enter `GraphicsFileInput::feed` in A and call `ingest` directly
+in B. The preserved address-bounded listings contain 301 and 296 lines
+respectively; line counts are not cycle estimates.
+
+The uninstrumented runtime B is
+`2e2912ca5fde5b250708e647106ed9cc5416827478c2c3572166737a42768a7c`.
+The first native regression series, `/tmp/telar-perf-media-ordinary-native-pairs-01`,
+completes six alternating pairs against accepted runtime `1f1849d1…`, with the
+same accepted GUI/helper/Qt, ordinary scroll observer, corpus and geometry.
+All 12 runs complete 100 measured inputs and 20 warmups, with valid packets,
+presentation, resource identity, frameworks and owned cleanup. The 26 host
+boundaries qualify, maximum load1 1.88770. Both process completion and terminal
+host status were checked before subsequent analysis. No builds, tests or profiles
+overlap timing.
+
+| Discrete native scroll control | A median | B median | B lower / 6 |
+| --- | ---: | ---: | ---: |
+| p50 ms | 31.96581 | 29.84910 | 5 |
+| p95 ms | 40.21339 | 38.17019 | 4 |
+| p99 ms | 42.92702 | 41.93675 | 4 |
+| Maximum ms | 47.10467 | 47.00702 | 4 |
+| GUI CPU ms/input | 4.99701 | 4.54718 | 5 |
+| GUI peak RSS MiB | 205.43750 | 206.38281 | 1 |
+| Runtime CPU ms/outer window | 81.17121 | 79.57415 | 3 |
+| Runtime instructions/outer window | 404,190,644.5 | 403,557,447.0 | 4 |
+| Runtime cycles/outer window | 170,028,567.0 | 173,069,980.0 | 2 |
+| Runtime final resident MiB | 26.49219 | 26.41406 | 4 |
+| Runtime final footprint MiB | 19.21136 | 19.07072 | 5 |
+| Runtime lifetime footprint maximum MiB | 19.22699 | 19.08635 | 5 |
+
+The p50 control is favorable, while tail and runtime-resource results are mixed.
+The GUI RSS increase is retained explicitly: about 0.95 MiB/0.46%, with an
+unchanged GUI binary and no new candidate storage. Its cause is not established;
+it is not relabeled as a proven memory-for-speed mechanism. Adrian explicitly
+allows modest memory concessions, so this observation alone does not discard
+the candidate. It also does not justify adoption. Sustained output, graphics,
+additional regression/visual controls and independent Zig comparisons remain
+open. B remains private and the accepted production baseline is unchanged.
+The runtime memory observations are final boundary samples and a lifetime
+maximum, not measured-input peaks. All four original pending runtime files
+retain their pre-experiment SHA-256 values.
