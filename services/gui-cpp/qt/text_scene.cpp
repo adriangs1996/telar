@@ -42,20 +42,18 @@ TextScene::TextScene(QQuickWindow &window)
       layout_(memory_),
       row_(memory_) {}
 
-void TextScene::configure([[maybe_unused]] const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection) {
+void TextScene::configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection) {
 #ifdef Q_OS_MACOS
   if (!font.thicken) {
     optical_.reset();
   } else if (!optical_) {
     optical_ = OpticalText::create();
   }
-
-  rasterization_ = font.thicken ? fonts::GlyphRasterization{.optical = true, .strength = font.thicken_strength} : fonts::GlyphRasterization{};
 #endif
+  rasterization_ = font.thicken ? fonts::GlyphRasterization{.optical = true, .strength = font.thicken_strength} : fonts::GlyphRasterization{};
   grid_ = grid;
   collection_ = collection;
   fonts_ = ResidentFonts::shared(collection_);
-#ifdef Q_OS_MACOS
   if (rasterization_.optical) {
     optical_glyphs_ = ChromeGlyphImages<ResidentFonts, true>::shared(window_, fonts_, rasterization_);
     resident_glyphs_.reset();
@@ -63,9 +61,7 @@ void TextScene::configure([[maybe_unused]] const FontConfiguration &font, FontGr
     optical_glyphs_.reset();
     resident_glyphs_ = ChromeGlyphImages<ResidentFonts>::shared(window_, fonts_);
   }
-#else
-  resident_glyphs_ = ChromeGlyphImages<ResidentFonts>::shared(window_, fonts_);
-#endif
+
   row_.resetFont();
 }
 

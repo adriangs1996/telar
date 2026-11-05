@@ -20,7 +20,7 @@ Rectangle {
     width: region.width ?? 0
     height: region.height ?? 0
     visible: width > 0 && height > 0 && shelf.items.length > 0
-    color: application.colors.panelBackground
+    color: application.colors.panel_bg
     clip: true
 
     function hovered(area): bool {

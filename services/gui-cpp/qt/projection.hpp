@@ -197,8 +197,8 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   const auto &theme = configuration.theme;
   auto window_background = theme.background;
   window_background.a = configuration.background_opacity;
-  const auto panel_color = theme.chrome[static_cast<std::size_t>(PaletteRole::panel_bg)];
-  const bool transparent_panel = configuration.background_opacity < 1 && panel_color.kind == CellColor::Kind::default_color;
+  // Chrome bands reveal the window background; covering overlays use the opaque palette role.
+  const bool transparent_panel = configuration.background_opacity < 1;
   const auto panel_background = transparent_panel ? QColor{Qt::transparent} : toQColor(theme.chromeColor(PaletteRole::panel_bg));
   QVariantMap colors;
   colors.insert(QStringLiteral("background"), toQColor(theme.background));

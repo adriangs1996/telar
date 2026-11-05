@@ -1,3 +1,4 @@
+#include "application/dependencies.hpp"
 #include "application/records.hpp"
 #include "core/configuration.hpp"
 #include "core/geometry.hpp"
@@ -12,7 +13,9 @@
 #include "presentation/workspace_mark.hpp"
 #include "presentation/workspace_window.hpp"
 #include "qml_fixture.hpp"
+#include "qt/application.hpp"
 #include "qt/list_model.hpp"
+#include "qt/metrics_projection.hpp"
 #include "qt/projection.hpp"
 #include "qt/provider_artwork.hpp"
 #include "qt/provider_mark.hpp"
@@ -34,12 +37,15 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
+#include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSignalSpy>
 #include <QString>
 #include <QTest>
 #include <QTimer>
+#include <QTemporaryFile>
+#include <QtQuick/qquickitemgrabresult.h>
 #include <algorithm>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
@@ -60,6 +66,7 @@ namespace {
 
 using namespace telar::gui;
 using namespace telar::gui::qt;
+using telar::CellColor;
 using test::createChrome;
 using test::visualItems;
 
@@ -92,6 +99,16 @@ QVariantMap tabProperties(ListModel &tabs, int width) {
       {QStringLiteral("colors"), themeColors(Configuration{})},
       {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}},
   };
+}
+
+QVariantMap navigationProperties(ListModel &tabs, int width) {
+  auto properties = tabProperties(tabs, width);
+  properties.insert(QStringLiteral("tabModel"), properties.take(QStringLiteral("model")));
+  properties.insert(QStringLiteral("workspace"), QVariantMap{});
+  properties.insert(QStringLiteral("controlsInset"), 0);
+  properties.insert(QStringLiteral("workbenchLeft"), fixture_sidebar_width);
+
+  return properties;
 }
 
 QRectF tabBounds(const QAbstractItemModel &model, int row) {
@@ -151,16 +168,103 @@ private:
     bundledFonts();
   }
 
+  Q_SLOT static void chromeBandsUseTheSingleWindowBackground() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    ListModel workspaces;
+    ListModel agents;
+    constexpr int width = 1000;
+    const ChromeMetrics chrome;
+    const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), navigationProperties(tabs, width));
+    const auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), sidebarProperties(workspaces, agents, true, 0));
+    const QVariantMap status_properties{
+        {QStringLiteral("width"), width},
+        {QStringLiteral("height"), chrome.top_bar},
+        {QStringLiteral("metrics"), metricsRecord({})},
+        {QStringLiteral("colors"), themeColors(Configuration{})},
+        {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), chrome.small}}},
+    };
+    const auto status = createChrome(engine, QStringLiteral("StatusBar"), status_properties);
+    const std::array<QQuickItem *, 3> bands{navigation.get(), sidebar.get(), status.get()};
+    for (auto *band : bands) {
+      band->setParentItem(window.contentItem());
+      // Controls and separators may cover content; isolate the band's background.
+      for (auto *child : band->childItems()) {
+        child->setVisible(false);
+      }
+    }
+
+    window.setColor(Qt::transparent);
+    window.resize(width, fixture_height);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
+    Configuration configuration;
+    constexpr auto explicit_panel = Color::rgb(0x405060);
+    constexpr std::array opacities{0.0F, 0.25F, 0.75F, 1.0F, 0.5F};
+    for (const bool custom_panel : {false, true}) {
+      configuration.theme.chrome[static_cast<std::size_t>(PaletteRole::panel_bg)] = custom_panel ? CellColor{.kind = CellColor::Kind::rgb, .channels = {0x40, 0x50, 0x60}} : CellColor{};
+      const auto covering = toQColor(custom_panel ? explicit_panel : configuration.theme.background);
+      for (const auto opacity : opacities) {
+        configuration.background_opacity = opacity;
+        const auto colors = themeColors(configuration);
+        const QColor expected = opacity < 1 ? QColor{Qt::transparent} : covering;
+        QCOMPARE(colors.value(QStringLiteral("panelBackground")).value<QColor>(), expected);
+        QCOMPARE(colors.value(QStringLiteral("panel_bg")).value<QColor>(), covering);
+        for (auto *band : bands) {
+          QVERIFY(band->setProperty("colors", colors));
+          QCOMPARE(band->property("color").value<QColor>(), expected);
+          QCOMPARE(band->opacity(), qreal{1});
+          const auto capture = band->grabToImage();
+          QVERIFY(!capture.isNull());
+          QTRY_VERIFY_WITH_TIMEOUT(!capture->image().isNull(), fixture_wait_ms);
+          const auto image = capture->image();
+          const auto pixel = image.pixelColor(2, 2);
+          const auto diagnostic = QStringLiteral("%1 at opacity %2: actual %3, expected %4").arg(QString::fromLatin1(band->metaObject()->className())).arg(opacity).arg(pixel.name(QColor::HexArgb), expected.name(QColor::HexArgb));
+          QVERIFY2(pixel == expected, qPrintable(diagnostic));
+        }
+      }
+    }
+  }
+
+  Q_SLOT static void attachmentOverlaysKeepCoveringPanelColors() {
+    QTemporaryFile configuration;
+    QVERIFY(configuration.open());
+    const QByteArray source{"return {api_version=2,theme='terminal',gui={window={background_opacity=0.5}}}"};
+    QCOMPARE(configuration.write(source), source.size());
+    configuration.close();
+    ApplicationAllocator memory;
+    Application application{memory};
+    application.loadConfiguration(configuration.fileName(), {}, {});
+    QCOMPARE(application.error(), QString{});
+    QQmlEngine engine;
+    const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
+    const auto load = [&](const QString &path) {
+      QQmlComponent component{&engine, QUrl::fromLocalFile(path)};
+      auto object = std::unique_ptr<QObject>{component.createWithInitialProperties(properties)};
+      if (!object) {
+        throw std::runtime_error{component.errorString().toStdString()};
+      }
+
+      return object;
+    };
+    const auto shelf = load(QFINDTESTDATA("../qt/AttachmentShelf.qml"));
+    const auto modal = load(QFINDTESTDATA("../qt/AttachmentModal.qml"));
+    QQmlExpression modal_color{qmlContext(modal.get()), modal.get(), QStringLiteral("modal.color")};
+    const auto actual = modal_color.evaluate().value<QColor>();
+    QVERIFY2(!modal_color.hasError(), qPrintable(modal_color.error().toString()));
+    const auto expected = application.colors().value(QStringLiteral("panel_bg")).value<QColor>();
+    QCOMPARE(expected.alpha(), 255);
+    QCOMPARE(shelf->property("color").value<QColor>(), expected);
+    QCOMPARE(actual, expected);
+  }
+
   Q_SLOT static void tabsLiveInNavigationRatherThanConfiguredBottomSlots() {
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
     tabs.reconcile(tabRecords({.count = 2, .active = 0}));
-    auto properties = tabProperties(tabs, 1000);
-    properties.insert(QStringLiteral("tabModel"), properties.take(QStringLiteral("model")));
-    properties.insert(QStringLiteral("workspace"), QVariantMap{});
-    properties.insert(QStringLiteral("controlsInset"), 0);
-    properties.insert(QStringLiteral("workbenchLeft"), fixture_sidebar_width);
+    auto properties = navigationProperties(tabs, 1000);
     const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
     navigation->setParentItem(window.contentItem());
     window.resize(1000, ChromeMetrics{}.top_bar);

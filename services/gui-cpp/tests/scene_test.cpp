@@ -843,12 +843,8 @@ private:
     const auto strong = fixture.capture();
     QCOMPARE(fixture.cellSize(), cell);
     QCOMPARE(strong.size(), plain.size());
-#ifdef Q_OS_MACOS
     QVERIFY(plain != light || plain != strong);
-#else
-    QCOMPARE(light, plain);
-    QCOMPARE(strong, plain);
-#endif
+    QVERIFY(light != strong);
     QCOMPARE(fixture.capture(), strong);
     fixture.setFontRendering(false, 0);
     QCOMPARE(fixture.capture(), plain);
@@ -863,12 +859,8 @@ private:
     const auto light_cursor = fixture.capture();
     fixture.setFontRendering(true, FontConfiguration::maximum_thicken_strength);
     const auto strong_cursor = fixture.capture();
-#ifdef Q_OS_MACOS
     QVERIFY(default_cursor != light_cursor || default_cursor != strong_cursor);
-#else
-    QCOMPARE(default_cursor, light_cursor);
-    QCOMPARE(light_cursor, strong_cursor);
-#endif
+    QVERIFY(light_cursor != strong_cursor);
     fixture.setCell(plain_style, CursorShape::block, false);
     fixture.setPreedit(QStringLiteral("M"));
     const auto strong_preedit = fixture.capture();
@@ -876,12 +868,8 @@ private:
     const auto light_preedit = fixture.capture();
     fixture.setFontRendering(false, 0);
     const auto default_preedit = fixture.capture();
-#ifdef Q_OS_MACOS
     QVERIFY(default_preedit != light_preedit || default_preedit != strong_preedit);
-#else
-    QCOMPARE(default_preedit, light_preedit);
-    QCOMPARE(light_preedit, strong_preedit);
-#endif
+    QVERIFY(light_preedit != strong_preedit);
   }
 
   Q_SLOT static void proceduralInkIgnoresFontSmoothing() {

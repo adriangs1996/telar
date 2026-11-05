@@ -15,6 +15,7 @@
 #include <freetype/freetype.h>
 #include <freetype/ftimage.h>
 #include <freetype/ftmm.h>
+#include <freetype/ftoutln.h>
 #include <freetype/ftsizes.h>
 #include <freetype/ftsynth.h>
 #include <freetype/fttypes.h>
@@ -331,6 +332,18 @@ GlyphBitmapView Face::rasterize(GlyphRasterRequest request) {
 
   if (request.style.italic) {
     FT_GlyphSlot_Oblique(slot);
+  }
+
+  if (request.thicken_strength != 0 && slot->format == FT_GLYPH_FORMAT_OUTLINE) {
+    // A bounded half-pixel dilation changes ink, not advances or the terminal grid.
+    constexpr FT_Pos maximum_thickening = 32;
+    constexpr unsigned maximum_strength = std::numeric_limits<std::uint8_t>::max();
+    const auto strength = static_cast<FT_Pos>((request.thicken_strength * maximum_thickening + maximum_strength / 2) / maximum_strength);
+    if (FT_Outline_EmboldenXY(&slot->outline, strength, strength) != 0) {
+      throw std::runtime_error{"GlyphThickeningFailed"};
+    }
+
+    FT_Outline_Translate(&slot->outline, -strength / 2, -strength / 2);
   }
 
   if (FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL) != 0) {

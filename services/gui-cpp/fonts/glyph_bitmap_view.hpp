@@ -17,6 +17,7 @@ struct GlyphRasterRequest {
   std::uint32_t index = 0;
   std::uint16_t pixel_height = 0;
   GlyphStyle style;
+  std::uint8_t thicken_strength = 0;
 };
 
 struct GlyphBitmapView {

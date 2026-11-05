@@ -188,6 +188,10 @@ private:
         throw std::invalid_argument{"OpticalFontAssetsUnavailable"};
       }
     }
+#else
+    if constexpr (optical) {
+      request.thicken_strength = rasterization_.strength;
+    }
 #endif
 
     return fonts_->face(role).rasterize(request);

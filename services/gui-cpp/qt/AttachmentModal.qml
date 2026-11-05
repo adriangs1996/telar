@@ -56,7 +56,7 @@ FocusScope {
         y: root.regions.bounds?.y ?? 0
         width: root.regions.bounds?.width ?? 0
         height: root.regions.bounds?.height ?? 0
-        color: root.application.colors.panelBackground
+        color: root.application.colors.panel_bg
         border.color: root.application.colors.accent
         border.width: root.physicalPixel
 

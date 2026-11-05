@@ -166,7 +166,7 @@ void scheduleSmokeTest(const QCommandLineParser &parser, telar::gui::qt::Applica
       return;
     }
 
-    std::cout << "connected=" << client.connected() << " panes=" << client.panes()->rowCount() << " graphics_api=" << static_cast<int>(window.rendererInterface()->graphicsApi()) << " error=" << client.error().toStdString() << '\n';
+    std::cout << "connected=" << client.connected() << " panes=" << client.panes()->rowCount() << " graphics_api=" << static_cast<int>(window.rendererInterface()->graphicsApi()) << " background_opacity=" << client.configuration().background_opacity << " clear_alpha=" << window.color().alphaF() << " alpha_buffer_bits=" << window.format().alphaBufferSize() << " error=" << client.error().toStdString() << '\n';
     const auto healthy = client.connected() && client.panes()->rowCount() > 0 && client.error().isEmpty();
     QGuiApplication::exit(healthy ? EXIT_SUCCESS : EXIT_FAILURE);
   });

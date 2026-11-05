@@ -10,7 +10,13 @@ Window {
     minimumHeight: 200
     visible: true
     title: telar.title
-    color: telar.colors.windowBackground
+    color: "transparent"
+
+    Rectangle {
+        objectName: "windowBackground"
+        anchors.fill: parent
+        color: telar.colors.windowBackground
+    }
 
     readonly property real ratio: telar.chromeRatio
     readonly property var geometry: telar.windowGeometry

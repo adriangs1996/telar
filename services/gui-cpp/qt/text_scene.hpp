@@ -77,9 +77,7 @@ private:
   std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
   std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>> resident_glyphs_;
-#ifdef Q_OS_MACOS
   std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>> optical_glyphs_;
-#endif
   FontGrid grid_;
   fonts::GlyphRasterization rasterization_;
   QRectF bounds_;

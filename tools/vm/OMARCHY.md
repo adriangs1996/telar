@@ -43,8 +43,45 @@ replaces `omarchy.desktop` with `hyprland-uwsm.desktop`.
 The VM launches Quickshell with Qt Quick's software renderer. Its accelerated
 renderer produced opaque desktop layers after the Omarchy update, hiding
 application windows. The override applies to the Omarchy shell launcher;
-Telar uses OpenGL through the VM's accelerated graphics backend. This
-configuration does not change Telar's renderer on native Linux installations.
+Telar uses OpenGL through the VM's accelerated graphics backend.
+
+The VM's Hyprland overlay disables `quirks.skip_non_kms_dmabuf_formats`. With
+that quirk enabled, Hyprland advertises only the virtual display plane's `XR24`
+format to Wayland clients. Composited RGBA buffers need not support direct
+scanout: the same virgl driver supports `AR24` and EGL configurations with eight
+alpha bits. Disabling the filter restores those formats without changing the
+renderer or restarting the runtime. The overlay is loaded on every desktop login
+and installed by `build`; an already running desktop needs a configuration reload.
+
+Telar clears the window to transparent and paints its configured background as a
+scenegraph rectangle. This preserves premultiplied color as well as alpha with
+both GPU and software rendering. Explicit terminal background colors remain
+opaque. These VM choices do not change native Linux installations.
+
+Check the overlay without a running compositor:
+
+```sh
+lua tools/vm/test_omarchy_environment.lua
+```
+
+Native Wayland/OpenGL checks after the fix identify `virgl (Apple M3)`,
+`graphics_api=3` and eight alpha bits. Captured backgrounds at opacity 0.3, 0.9
+and 1 have alpha 77, 230 and 255 respectively, retaining the configured RGB
+within two channel steps instead of brightening it. The window-background
+regression also passes on Wayland/OpenGL, Cocoa/Metal and both software backends.
+Its isolated test fixture used `-O0`, linked against the Release GUI libraries;
+these are correctness checks, not performance measurements. The four Lua overlay
+cases pass. Reloading the overlay preserves the setting without config errors.
+Only the GUI was restarted to remove its earlier software override; the runtime
+PID and all preexisting direct child processes survived.
+
+The Linux thickening checks pass `gui-font-resolver` and `gui-scene` with the
+offscreen/software renderer. The three targeted text/cursor/preedit/procedural
+scene checks also pass through accelerated XWayland. Direct accelerated Wayland
+`gui-scene-test` font comparisons still fail, including unchanged-rendering and
+procedural controls; one attempt reports capture DPR changing from 1.5 to 1.
+Their cause remains open. The passing window-background regression does not
+qualify those separate font comparisons.
 
 The 2026-11-03 ARM64 validation built the Release runtime and GUI with the
 pinned Qt sources. The Wayland/OpenGL smoke test reported

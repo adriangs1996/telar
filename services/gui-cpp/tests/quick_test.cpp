@@ -4072,6 +4072,35 @@ return {api_version=2, client={keybindings={
     QCOMPARE(peer.error(), QString{});
   }
 
+  Q_SLOT void translucentWindowBackgroundPreservesColor() {
+    const QTemporaryDir directory;
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    const auto restore = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    auto *background = window_->findChild<QQuickItem *>(QStringLiteral("windowBackground"));
+    QVERIFY(background != nullptr);
+    constexpr std::array opacities{0.25, 0.75, 1.0, 0.25};
+    constexpr int channel_tolerance = 2;
+    for (const auto opacity : opacities) {
+      const auto source = QStringLiteral("return {api_version=2,gui={window={background_opacity=%1}}}").arg(opacity).toUtf8();
+      writeTestFile(path, source.constData());
+      client_->loadConfiguration(path, {}, {});
+      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(window_->color(), QColor{Qt::transparent});
+      const auto expected = client_->colors().value(QStringLiteral("windowBackground")).value<QColor>();
+      QCOMPARE(background->property("color").value<QColor>(), expected);
+      const auto capture = background->grabToImage(QSize{64, 64});
+      QVERIFY(!capture.isNull());
+      QTRY_VERIFY_WITH_TIMEOUT(!capture->image().isNull(), runtime_wait_ms);
+      const auto actual = capture->image().pixelColor(0, 0);
+      QVERIFY(std::abs(actual.alpha() - expected.alpha()) <= 1);
+      QVERIFY(std::abs(actual.red() - expected.red()) <= channel_tolerance);
+      QVERIFY(std::abs(actual.green() - expected.green()) <= channel_tolerance);
+      QVERIFY(std::abs(actual.blue() - expected.blue()) <= channel_tolerance);
+    }
+  }
+
   Q_SLOT void appearanceChangesPreserveInputAndLayout() {
     const telar::gui::test::AppearanceFixture appearance;
     const QTemporaryDir directory;
@@ -4096,7 +4125,8 @@ return {api_version=2, client={keybindings={
     const QColor light_text{1, 2, 3};
     QCOMPARE(client_->colors().value(QStringLiteral("foreground")).value<QColor>(), light_text);
     constexpr auto panel_rgb = 0x070809;
-    QCOMPARE(client_->colors().value(QStringLiteral("panelBackground")).value<QColor>(), QColor::fromRgb(panel_rgb));
+    QCOMPARE(client_->colors().value(QStringLiteral("panelBackground")).value<QColor>(), QColor{Qt::transparent});
+    QCOMPARE(client_->colors().value(QStringLiteral("panel_bg")).value<QColor>(), QColor::fromRgb(panel_rgb));
     QCOMPARE(client_->sidebarWidth(), before_width);
     QTest::keyClick(window_, Qt::Key_S);
     QCOMPARE(client_->sidebarVisible(), !visible);

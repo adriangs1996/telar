@@ -197,6 +197,52 @@ private:
     }
   }
 
+  Q_SLOT static void thickeningChangesInkWithoutChangingShapingOrMetrics() {
+    SystemAllocator memory;
+    const FontSource source{memory, FontConfiguration{}};
+    fonts::Face face{source.bytes(), source.match()};
+    const auto ink = [](fonts::GlyphBitmapView bitmap) {
+      std::uint64_t coverage = 0;
+      for (std::uint32_t row = 0; row < bitmap.height; ++row) {
+        for (const auto value : bitmap.row(row)) {
+          coverage += value;
+        }
+      }
+
+      return coverage;
+    };
+    constexpr std::array<std::uint16_t, 4> heights{13, 26, 39, 96};
+    constexpr std::array styles{fonts::GlyphStyle{}, fonts::GlyphStyle{.bold = true}, fonts::GlyphStyle{.italic = true}, fonts::GlyphStyle{.bold = true, .italic = true}};
+    constexpr std::uint8_t medium_strength = 128;
+    for (const auto height : heights) {
+      const auto shaped = face.shape("M", height);
+      const auto glyph = shaped.glyph(0);
+      const auto advance = shaped.advance();
+      const auto metrics = face.metrics(height);
+      for (const auto style : styles) {
+        fonts::GlyphRasterRequest request{.index = glyph.index, .pixel_height = height, .style = style};
+        const auto plain = ink(face.rasterize(request));
+        request.thicken_strength = medium_strength;
+        const auto medium = ink(face.rasterize(request));
+        request.thicken_strength = FontConfiguration::maximum_thicken_strength;
+        const auto strong = ink(face.rasterize(request));
+        QVERIFY(medium > plain);
+        QVERIFY(strong > medium);
+        request.thicken_strength = 0;
+        QCOMPARE(ink(face.rasterize(request)), plain);
+      }
+
+      const auto restored = face.shape("M", height);
+      QVERIFY(restored.glyph(0) == glyph);
+      QCOMPARE(restored.advance(), advance);
+      QCOMPARE(face.metrics(height).maximum_advance, metrics.maximum_advance);
+      QCOMPARE(face.metrics(height).line_height, metrics.line_height);
+      QCOMPARE(face.metrics(height).ascender, metrics.ascender);
+      const auto space = face.shape(" ", height).glyph(0).index;
+      QCOMPARE(ink(face.rasterize({.index = space, .pixel_height = height, .style = {}, .thicken_strength = FontConfiguration::maximum_thicken_strength})), std::uint64_t{0});
+    }
+  }
+
   Q_SLOT static void retainsOneSourceAcrossPanelsAndScales() {
     SystemAllocator system;
     BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};

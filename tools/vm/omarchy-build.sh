@@ -59,7 +59,8 @@ elif [[ $command == run ]]; then
   export TELAR_SOCKET_PATH="$TELAR_SOCKET"
   export TELAR_BIN_PATH="$PWD/.dev/vm/bin/telar"
   export TELAR_HISTORY="$PWD/.dev/vm/history.db"
-  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  export XDG_RUNTIME_DIR
   export QSG_RHI_BACKEND=opengl
   export QT_QPA_PLATFORM=wayland
   test -x services/gui-cpp/out-vm/telar-gui

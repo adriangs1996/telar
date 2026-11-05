@@ -32,6 +32,18 @@ storage. Qt caches the resulting masks and retains glyph meshes between damaged
 frames. Font shaping and cell placement remain in `fonts` and `qt`; these font
 adapters no longer include or compile files from the Zig GUI.
 
+`gui.font.thicken` applies to terminal text, cursor text and preedit on both
+platforms. macOS uses CoreText optical smoothing. Linux uses a centered FreeType
+outline dilation, from zero at `thicken_strength=0` to half a physical pixel at
+255, independently of bold/italic styling. It leaves shaping advances and the
+terminal grid unchanged. The two rasterizers do not promise pixel-identical ink.
+Procedural box, block and braille glyphs are not thickened.
+
+When `gui.window.background_opacity` is below one, sidebar, navigation/status bars
+and pane bands reveal the window's single background, even with an explicit
+`panel_bg` color. Text and controls retain their own opacity. Image attachment
+shelves and preview modals keep covering panel backgrounds, matching Zig.
+
 ## Build
 
 Dependencies are CMake 3.24+, Ninja, Python 3, `patch`, a C++23 compiler and the

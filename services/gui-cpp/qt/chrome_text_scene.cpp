@@ -501,12 +501,10 @@ QSGNode *paintChromeText(QSGNode *previous, QQuickWindow &window, const ChromeTe
   return paintText<false>(previous, window, paint, collection, fonts::GlyphRasterization{});
 }
 
-QSGNode *paintTerminalText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, [[maybe_unused]] fonts::GlyphRasterization rasterization) {
-#ifdef Q_OS_MACOS
+QSGNode *paintTerminalText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization) {
   if (rasterization.optical) {
     return paintText<true>(previous, window, paint, collection, rasterization);
   }
-#endif
 
   return paintText<false>(previous, window, paint, collection, fonts::GlyphRasterization{});
 }
