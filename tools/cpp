@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""One pinned toolchain entry point for development, CI and release builds."""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+PROJECTS = {'runtime': 'services/runtime-cpp', 'cli': 'services/cli-cpp',
+            'gui': 'services/gui-cpp', 'auth': 'services/auth-daemon',
+            **{name: 'dlls/telar-' + name for name in ('base', 'client', 'platform', 'lua', 'plugins', 'config', 'tls')},
+            'websock': 'dlls/websock'}
+CACHE = ROOT / '.toolchain'
+
+
+def run(*args, **kwargs):
+    subprocess.run([str(arg) for arg in args], check=True, **kwargs)
+
+
+def toolchain():
+    expected = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'tools/toolchain/source.py'))).hexdigest()
+    stamp = CACHE / '.manifest'
+    if not stamp.exists() or stamp.read_text().strip() != expected:
+        run(sys.executable, ROOT / 'tools/bootstrap-cpp.py')
+    os.environ['PATH'] = str(CACHE / 'bin') + os.pathsep + os.environ['PATH']
+    return CACHE / 'toolchain.cmake'
+
+
+def vt():
+    manifest = json.loads((ROOT / 'tools/toolchain/manifest.json').read_text())
+    zig = CACHE / ('zig-' + manifest['versions']['zig'])
+    CACHE.mkdir(exist_ok=True)
+    with (CACHE / '.vt-lock').open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not (zig / '.complete').exists():
+            run(ROOT / 'packaging/release/install-zig.sh', zig, manifest['versions']['zig'])
+            (zig / '.complete').touch()
+        recipe = ROOT / 'services/runtime-cpp'
+        identity = hashlib.sha256()
+        for file in ('tools/build_ghostty.py', 'vendor/ghostty-vt-state.patch', 'vendor/wuffs-codec.json'):
+            identity.update((recipe / file).read_bytes())
+        identity.update(manifest['versions']['zig'].encode())
+        build = ROOT / '.dependencies-cache/ghostty' / identity.hexdigest()
+        prefix = build / 'install'
+        run(sys.executable, recipe / 'tools/build_ghostty.py', '--zig', zig / 'zig', '--build-dir', build, '--prefix', prefix)
+        return prefix
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == 'exec':
+        extra = sys.argv[2:]
+        if extra and extra[0] == '--':
+            extra = extra[1:]
+        if not extra:
+            raise SystemExit('Use tools/cpp exec -- COMMAND ARG...')
+        toolchain()
+        os.execvp(extra[0], extra)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=('bootstrap', 'vt', 'configure', 'build', 'test', 'exec'))
+    parser.add_argument('project', nargs='?', choices=tuple(PROJECTS))
+    parser.add_argument('-B', '--build-dir', type=Path)
+    parser.add_argument('--config', choices=('Debug', 'Release', 'RelWithDebInfo'), default='Debug')
+    parser.add_argument('--sanitizers', action='store_true')
+    parser.add_argument('--headless', action='store_true')
+    args, extra = parser.parse_known_args()
+    if extra and extra[0] == '--':
+        extra = extra[1:]
+    chain = toolchain()
+    if args.command == 'bootstrap':
+        return
+    if args.command == 'vt':
+        print(vt())
+        return
+    if args.command == 'exec':
+        if args.project or not extra:
+            parser.error('Use tools/cpp exec -- COMMAND ARG...')
+        os.execvp(extra[0], extra)
+    if args.project is None:
+        parser.error('A project is required')
+    source = ROOT / PROJECTS[args.project]
+    build = (args.build_dir or source / 'out').resolve()
+    if args.command == 'configure':
+        options = ['-DCMAKE_BUILD_TYPE=' + args.config,
+                   '-DCMAKE_TOOLCHAIN_FILE=' + str(chain),
+                   '-DTELAR_SANITIZERS=' + ('ON' if args.sanitizers else 'OFF')]
+        needs_vt = args.project in ('runtime', 'cli', 'gui', 'config', 'tls')
+        if needs_vt and not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
+            options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))
+        if args.headless:
+            options += ['-DTELAR_CLIPBOARD_NATIVE=OFF', '-DTELAR_GUI_NATIVE=OFF']
+        run('cmake', '-S', source, '-B', build, '-G', 'Ninja', *options, *extra)
+    elif args.command == 'build':
+        run('cmake', '--build', build, *extra)
+    else:
+        run('ctest', '--test-dir', build, '--output-on-failure', *extra)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(error.returncode)

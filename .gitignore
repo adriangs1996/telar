@@ -28,3 +28,6 @@ __pycache__/
 
 # Written by tools/client_smoke.py on every run.
 /tools/client-smoke-server.log
+
+# Verified, repository-local C++ build tools.
+/.toolchain/
