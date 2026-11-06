@@ -1,6 +1,6 @@
+#include "qt/bundled_fonts.hpp"
 #include "qt/native_rounded_rectangle.hpp"
 #include "shape_atlas.hpp"
-#include "qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QFile>
@@ -31,6 +31,7 @@
 #include <QtTest/QTest>
 #include <QtTest/qsignalspy.h>
 #include <QtTest/qtestcase.h>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -160,6 +161,45 @@ private:
     }
 
     QCOMPARE(window.grabWindow(), actual);
+  }
+
+  Q_SLOT static void backgroundReplacementKeepsFinalAlphaAndOpaqueInk() {
+    QQuickWindow window;
+    window.resize(240, 180);
+    window.setColor(Qt::transparent);
+    NativeRoundedRectangle base{window.contentItem()};
+    base.setSize({240, 180});
+    base.setColor(Qt::white);
+    NativeRoundedRectangle surface{window.contentItem()};
+    surface.setPosition({20, 20});
+    surface.setSize({160, 120});
+    surface.setReplaceBackground(true);
+    NativeRoundedRectangle ink{window.contentItem()};
+    ink.setPosition({80, 60});
+    ink.setSize({20, 20});
+    ink.setColor(Qt::blue);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    const auto density = window.effectiveDevicePixelRatio();
+    for (const auto opacity : {0.0F, 0.25F, 0.75F, 1.0F, 0.25F}) {
+      surface.setColor(QColor::fromRgbF(0.2F, 0.4F, 0.6F, opacity));
+      const auto frame = window.grabWindow();
+      QVERIFY(!frame.isNull());
+      const auto pixel = frame.pixelColor(qRound(40 * density), qRound(40 * density));
+      QVERIFY(std::abs(pixel.alphaF() - opacity) <= 1.0 / 255);
+      QCOMPARE(frame.pixelColor(qRound(90 * density), qRound(70 * density)), QColor{Qt::blue});
+      QCOMPARE(frame.pixelColor(qRound(5 * density), qRound(5 * density)), QColor{Qt::white});
+    }
+    surface.setRadius(16);
+    surface.setBackdropColor(QColor::fromRgbF(0.1F, 0.1F, 0.1F, 0.8F));
+    surface.setSquareBottom(true);
+    const auto rounded = window.grabWindow();
+    QVERIFY(std::abs(rounded.pixelColor(qRound(20 * density), qRound(20 * density)).alphaF() - 0.8) <= 1.0 / 255);
+    // Stay inside the flat corner, clear of the outer-edge antialiasing band.
+    QVERIFY(std::abs(rounded.pixelColor(qRound(21 * density), qRound(138 * density)).alphaF() - 0.25) <= 1.0 / 255);
+    surface.setReplaceBackground(false);
+    const auto blended = window.grabWindow();
+    QCOMPARE(blended.pixelColor(qRound(40 * density), qRound(40 * density)).alpha(), 255);
   }
 
   Q_SLOT static void projectiveParentUsesHomogeneousOrigin() {

@@ -39,6 +39,7 @@ class TerminalItem : public QQuickItem {
   QML_NAMED_ELEMENT(TerminalView)
   Q_PROPERTY(QObject *application READ application WRITE setApplication NOTIFY applicationChanged)
   Q_PROPERTY(QString paneId READ paneId WRITE setPaneId NOTIFY paneIdChanged)
+  Q_PROPERTY(bool backgroundProvided READ backgroundProvided WRITE setBackgroundProvided NOTIFY backgroundProvidedChanged)
   Q_PROPERTY(QString hoveredLink READ hoveredLink NOTIFY linkHoverChanged)
   Q_PROPERTY(QVariantMap linkPreview READ linkPreview NOTIFY linkHoverChanged)
 
@@ -56,6 +57,8 @@ public:
   [[nodiscard]] std::uint64_t paneIdentity() const noexcept;
   void setPaneId(const QString &identity);
   [[nodiscard]] QSizeF cellSize() const noexcept;
+  [[nodiscard]] bool backgroundProvided() const noexcept;
+  void setBackgroundProvided(bool provided);
   [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
   [[nodiscard]] QString hoveredLink() const;
   [[nodiscard]] QVariantMap linkPreview() const;
@@ -65,6 +68,7 @@ public:
 signals:
   void applicationChanged();
   void paneIdChanged();
+  void backgroundProvidedChanged();
   void linkHoverChanged();
 
 protected:
@@ -163,6 +167,7 @@ private:
   bool cursor_on_ = true;
   bool selecting_ = false;
   bool keyboard_ = false;
+  bool background_provided_ = false;
   bool window_active_ = false;
 
   struct PressedKey {

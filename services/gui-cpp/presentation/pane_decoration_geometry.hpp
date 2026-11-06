@@ -14,7 +14,7 @@ struct PaneDecorationGeometry {
   static constexpr float frame_radius = ChromeStyle::surface_radius;
   static constexpr float frame_line_width = 1;
   static constexpr float frame_inset_share = 0.2F;
-  static constexpr float dim_alpha = 0.08F;
+  static constexpr float dim_alpha = 0;
   static constexpr std::size_t panel_count = 6;
 
   Rect outer;

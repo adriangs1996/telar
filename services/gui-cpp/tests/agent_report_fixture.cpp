@@ -11,6 +11,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QSocketNotifier>
 #include <QtCore/qtypes.h>
 #include <array>
 #include <cstddef>
@@ -56,8 +57,9 @@ bool consume(telar::gui::qt::RuntimeConnection &connection, const telar::ReportA
     if (completed.request_id == static_cast<std::uint64_t>(Request::verify)) {
       connection.send(report);
     } else if (completed.request_id == report.request_id) {
-      std::cout << report.event << '\n'
-                << std::flush;
+      if (!report.event.empty()) {
+        std::cout << report.event << '\n' << std::flush;
+      }
 
       return true;
     }
@@ -90,22 +92,40 @@ int telar::gui::test::runAgentReportFixture(int &argc, char **argv) {
   qt::RuntimeConnection connection{memory};
   QTimer deadline;
   deadline.setSingleShot(true);
-  const ReportAgent report{.request_id = static_cast<std::uint64_t>(Request::report), .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::claude, .state = AgentReportState::blocked, .session = "gui-attention", .blocked_reason = AgentBlockedReason::question, .event = "GUI_ATTENTION_READY"};
-  QObject::connect(&connection, &qt::RuntimeConnection::connected, &application, [&] {
+  ReportAgent report{.request_id = static_cast<std::uint64_t>(Request::report), .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::claude, .state = AgentReportState::blocked, .session = "gui-attention", .blocked_reason = AgentBlockedReason::question, .event = "GUI_ATTENTION_READY"};
+  QSocketNotifier input{0, QSocketNotifier::Read};
+  QObject callbacks;
+  QObject::connect(&input, &QSocketNotifier::activated, &callbacks, [&] {
+    std::string command;
+    if (!std::getline(std::cin, command)) {
+      QCoreApplication::quit();
+      return;
+    }
+    if (command != "ready" && command != "question") {
+      return;
+    }
+    ++report.request_id;
+    report.state = command == "ready" ? AgentReportState::ready : AgentReportState::blocked;
+    report.blocked_reason = command == "ready" ? AgentBlockedReason::none : AgentBlockedReason::question;
+    report.event = {};
+    deadline.start(timeout_ms);
+    connection.send(report);
+  });
+  QObject::connect(&connection, &qt::RuntimeConnection::connected, &callbacks, [&] {
     connection.send(VerifyPaneDescent{.request_id = static_cast<std::uint64_t>(Request::verify), .pane_id = pane, .pane_generation = generation});
   });
-  QObject::connect(&connection, &qt::RuntimeConnection::payloadReceived, &application, [&](QByteArrayView payload) {
+  QObject::connect(&connection, &qt::RuntimeConnection::payloadReceived, &callbacks, [&](QByteArrayView payload) {
     if (consume(connection, report, payload)) {
       deadline.stop();
     }
   });
-  QObject::connect(&connection, &qt::RuntimeConnection::errorChanged, &application, [&] {
+  QObject::connect(&connection, &qt::RuntimeConnection::errorChanged, &callbacks, [&] {
     if (!connection.error().isEmpty()) {
       std::cerr << connection.error().toStdString() << '\n';
       QCoreApplication::exit(1);
     }
   });
-  QObject::connect(&deadline, &QTimer::timeout, &application, [] {
+  QObject::connect(&deadline, &QTimer::timeout, &callbacks, [] {
     QCoreApplication::exit(1);
   });
   deadline.start(timeout_ms);

@@ -1,41 +1,48 @@
 #pragma once
 
+#include "core/background_opacity.hpp"
 #include "core/color.hpp"
 
 namespace telar::gui {
 
-  // Separate navigation, gutters and pane bands without imposing a palette.
+  // Background alphas are final surface opacities, not stacked tints.
   struct ChromeSurfaces {
-    Color navigation;
+    Color sidebar;
+    Color topbar;
+    Color bottombar;
     Color workbench;
     Color pane;
     Color header;
     Color active_header;
+    Color text;
 
-    [[nodiscard]] static ChromeSurfaces derive(const Theme &theme, float opacity) noexcept {
+    [[nodiscard]] static ChromeSurfaces derive(const Theme &theme, float fallback, const BackgroundOpacity &opacity = {}) noexcept {
       const auto panel = theme.chromeColor(PaletteRole::panel_bg);
       const auto ink = theme.chromeColor(PaletteRole::text);
-      constexpr float navigation_mix = 0.09F;
-      constexpr float header_mix = 0.055F;
-      constexpr float active_header_mix = 0.09F;
-      constexpr float gutter_mix = 0.28F;
-      const bool translucent = opacity < 1;
-      const auto band = [&](float amount) {
-        return translucent ? Color{.r = ink.r, .g = ink.g, .b = ink.b, .a = amount} : mix(panel, ink, amount);
-      };
-      const auto background = theme.background;
-      const auto end = background.r + background.g + background.b < 1.5F ? Color::rgb(0x000000) : Color::rgb(0xffffff);
+      const bool dark = theme.background.r + theme.background.g + theme.background.b < 1.5F;
+      const auto gutter_end = Color::rgb(dark ? 0x000000 : 0xffffff);
+      const auto text_end = Color::rgb(dark ? 0xffffff : 0x000000);
+      const auto navigation = mix(panel, ink, 0.09F);
+      const auto pane_opacity = opacity.resolve(BackgroundOpacity::Surface::pane, fallback);
 
       return {
-          .navigation = band(navigation_mix),
-          .workbench = translucent ? Color{.a = 0} : mix(background, end, gutter_mix),
-          .pane = translucent ? Color{.a = 0} : panel,
-          .header = band(header_mix),
-          .active_header = band(active_header_mix),
+          .sidebar = alpha(navigation, opacity.resolve(BackgroundOpacity::Surface::sidebar, fallback)),
+          .topbar = alpha(navigation, opacity.resolve(BackgroundOpacity::Surface::topbar, fallback)),
+          .bottombar = alpha(panel, opacity.resolve(BackgroundOpacity::Surface::bottombar, fallback)),
+          .workbench = alpha(mix(theme.background, gutter_end, 0.28F), opacity.resolve(BackgroundOpacity::Surface::workspace, fallback)),
+          .pane = alpha(panel, pane_opacity),
+          .header = alpha(mix(panel, ink, 0.055F), pane_opacity),
+          .active_header = alpha(mix(panel, ink, 0.09F), pane_opacity),
+          .text = mix(ink, text_end, 0.2F),
       };
     }
 
   private:
+    [[nodiscard]] static Color alpha(Color color, float value) noexcept {
+      color.a = value;
+      return color;
+    }
+
     [[nodiscard]] static Color mix(Color base, Color ink, float amount) noexcept {
       return {
           .r = base.r + (ink.r - base.r) * amount,

@@ -21,7 +21,7 @@ AbstractButton {
         text: root.text
         pixelSize: root.pixelSize
         emphasized: root.emphasized
-        color: root.colors.text
+        color: root.colors.chromeText ?? root.colors.text
         opacity: root.enabled ? 1 : 0.45
         horizontalAlignment: Text.AlignHCenter
         wholePixelCentering: true

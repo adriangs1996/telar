@@ -12,6 +12,9 @@ struct RoundedRectangleStyle {
   Color border{.a = 0};
   float radius = 0;
   float border_width = 0;
+  Color backdrop{.a = 0};
+  bool replace_background = false;
+  bool square_bottom = false;
 
   bool operator==(const RoundedRectangleStyle &) const = default;
 };
@@ -33,21 +36,23 @@ struct RoundedRectangle {
 
     constexpr float pixel_center = 0.5F;
     const Point half_size{.x = size.x * pixel_center, .y = size.y * pixel_center};
-    const auto horizontal = std::abs(local.x - half_size.x) - half_size.x + style.radius;
-    const auto vertical = std::abs(local.y - half_size.y) - half_size.y + style.radius;
+    const auto radius = style.square_bottom && local.y > half_size.y ? 0 : style.radius;
+    const auto horizontal = std::abs(local.x - half_size.x) - half_size.x + radius;
+    const auto vertical = std::abs(local.y - half_size.y) - half_size.y + radius;
     const auto outside_horizontal = std::max(horizontal, 0.0F);
     const auto outside_vertical = std::max(vertical, 0.0F);
-    const auto distance = std::sqrt((outside_horizontal * outside_horizontal) + (outside_vertical * outside_vertical)) + std::min(std::max(horizontal, vertical), 0.0F) - style.radius;
+    const auto distance = std::sqrt((outside_horizontal * outside_horizontal) + (outside_vertical * outside_vertical)) + std::min(std::max(horizontal, vertical), 0.0F) - radius;
     const auto outer = 1 - std::clamp(distance + pixel_center, 0.0F, 1.0F);
     const auto inner = 1 - std::clamp(distance + style.border_width + pixel_center, 0.0F, 1.0F);
     const auto fill_alpha = style.fill.a * inner;
     const auto border_alpha = style.border.a * (outer - inner);
-    const auto alpha = fill_alpha + border_alpha;
+    const auto backdrop_alpha = style.replace_background ? style.backdrop.a * (1 - outer) : 0;
+    const auto alpha = fill_alpha + border_alpha + backdrop_alpha;
     if (alpha <= 0) {
       return {.a = 0};
     }
 
-    return {.r = ((style.fill.r * fill_alpha) + (style.border.r * border_alpha)) / alpha, .g = ((style.fill.g * fill_alpha) + (style.border.g * border_alpha)) / alpha, .b = ((style.fill.b * fill_alpha) + (style.border.b * border_alpha)) / alpha, .a = alpha};
+    return {.r = ((style.fill.r * fill_alpha) + (style.border.r * border_alpha) + (style.backdrop.r * backdrop_alpha)) / alpha, .g = ((style.fill.g * fill_alpha) + (style.border.g * border_alpha) + (style.backdrop.g * backdrop_alpha)) / alpha, .b = ((style.fill.b * fill_alpha) + (style.border.b * border_alpha) + (style.backdrop.b * backdrop_alpha)) / alpha, .a = alpha};
   }
 
   bool operator==(const RoundedRectangle &) const = default;

@@ -223,7 +223,9 @@ private:
         QCOMPARE(colors.value(QStringLiteral("panel_bg")).value<QColor>(), covering);
         for (auto *band : bands) {
           QVERIFY(band->setProperty("colors", colors));
-          const auto band_color = band == status.get() ? expected : colors.value(QStringLiteral("navigationBackground")).value<QColor>();
+          const auto role = band == status.get() ? QStringLiteral("bottombarBackground") : band == sidebar.get() ? QStringLiteral("sidebarBackground")
+                                                                                                                 : QStringLiteral("topbarBackground");
+          const auto band_color = colors.value(role).value<QColor>();
           QCOMPARE(band->property("color").value<QColor>(), band_color);
           QCOMPARE(band->opacity(), qreal{1});
           const auto capture = band->grabToImage();
@@ -232,8 +234,15 @@ private:
           const auto image = capture->image();
           const auto pixel = image.pixelColor(2, 2);
           const auto diagnostic = QStringLiteral("%1 at opacity %2: actual %3, expected %4").arg(QString::fromLatin1(band->metaObject()->className())).arg(opacity).arg(pixel.name(QColor::HexArgb), band_color.name(QColor::HexArgb));
-          // Compare stored ink, not the lossy unpremultiplication of a faint tint.
-          QVERIFY2(qPremultiply(pixel.rgba()) == qPremultiply(band_color.rgba()), qPrintable(diagnostic));
+          // QColor retains 16-bit channels; the render target quantizes premultiplied ink to eight bits.
+          const auto actual_ink = qPremultiply(pixel.rgba());
+          const auto expected_ink = qPremultiply(band_color.rgba());
+          QCOMPARE(qAlpha(actual_ink), qAlpha(expected_ink));
+          const std::array differences{qRed(actual_ink) - qRed(expected_ink), qGreen(actual_ink) - qGreen(expected_ink), qBlue(actual_ink) - qBlue(expected_ink)};
+          QVERIFY2(std::ranges::all_of(differences, [](int difference) {
+                     return difference >= -1 && difference <= 1;
+                   }),
+                   qPrintable(diagnostic));
         }
       }
     }
@@ -299,6 +308,39 @@ private:
     const auto bottom = createChrome(engine, QStringLiteral("ComponentSlot"), bottom_properties);
     QCOMPARE(bottom->implicitWidth(), qreal{0});
     QVERIFY(bottom->findChild<TabStripLayout *>() == nullptr);
+  }
+
+  Q_SLOT static void selectedTabEmphasisDoesNotMoveAdjacentTabs() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    tabs.reconcile(tabRecords({.count = 2, .active = 0}));
+    auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, 600));
+    strip->setParentItem(window.contentItem());
+    auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr);
+    window.resize(600, ChromeMetrics{}.top_bar);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, fixture_wait_ms);
+    const auto selected_caption = [&] {
+      QString selected;
+      for (const auto *caption : visualItems(*strip, QStringLiteral("tabCaption"))) {
+        if (caption->property("emphasized").toBool()) {
+          if (!selected.isEmpty()) {
+            return QStringLiteral("multiple");
+          }
+          selected = caption->parentItem()->property("tabKey").toString();
+        }
+      }
+      return selected;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:0"), fixture_wait_ms);
+    const std::array before{tabBounds(*layout->items(), 0), tabBounds(*layout->items(), 1)};
+    tabs.reconcile(tabRecords({.count = 2, .active = 1}));
+    QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:1"), fixture_wait_ms);
+    QCOMPARE(tabBounds(*layout->items(), 0), before[0]);
+    QCOMPARE(tabBounds(*layout->items(), 1), before[1]);
   }
 
   Q_SLOT static void workspaceAndMachineStayVisibleInBothSidebarModes() {

@@ -10,14 +10,16 @@ PaneHeaderLayout {
     required property var colors
     required property var typography
     property bool focused: false
-    readonly property real indexSide: 22 * ratio
+    // Preserve program and state before numbering, context and progress.
+    readonly property bool compact: statusChip.implicitWidth > 0 && width < statusChip.implicitWidth + 4 * typography.body + (22 + 16 + 6 + 8) * ratio
+    readonly property real indexSide: compact ? 0 : 22 * ratio
     measurements: ({
         index: root.indexSide,
         name: nameLabel.implicitWidth,
         chip: statusChip.implicitWidth,
         paused: root.record.imagesPaused ? pausedLabel.implicitWidth : 0,
-        progress: progress.fullWidth,
-        compactProgress: progress.compactWidth,
+        progress: root.compact ? 0 : progress.fullWidth,
+        compactProgress: root.compact ? 0 : progress.compactWidth,
         needsAttention: root.record.needsAttention ?? false
     })
 
@@ -28,6 +30,7 @@ PaneHeaderLayout {
         width: Math.min(root.indexSide, root.indexBounds.width)
         height: width
         radius: ChromeStyle.smallRadius * root.ratio
+        visible: root.indexSide > 0
         color: Qt.alpha(root.focused ? root.colors.accent : root.colors.text, root.focused ? 0.16 : 0.06)
     }
 
@@ -39,9 +42,10 @@ PaneHeaderLayout {
         width: Math.min(root.indexSide, root.indexBounds.width)
         height: root.indexBounds.height
         text: root.record.index
+        visible: root.indexSide > 0
         emphasized: true
         pixelSize: root.typography.body
-        color: root.focused ? root.colors.accent : root.colors.text
+        color: root.focused ? root.colors.accent : root.colors.chromeText
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideNone
     }
@@ -53,11 +57,11 @@ PaneHeaderLayout {
         y: root.nameBounds.y
         width: root.nameBounds.width
         height: root.nameBounds.height
-        text: root.record.program
-        pixelSize: root.typography.body + root.ratio
-        color: root.colors.text
+        text: root.compact ? root.record.index + " " + root.record.program : root.record.context && width >= 4 * root.typography.body ? root.record.program + " · " + root.record.context : root.record.program
+        pixelSize: root.typography.body + 2 * root.ratio
+        color: root.colors.chromeText
         emphasized: root.focused
-        elide: Text.ElideRight
+        elide: implicitWidth > width ? Text.ElideMiddle : Text.ElideNone
     }
 
     ChromeText {

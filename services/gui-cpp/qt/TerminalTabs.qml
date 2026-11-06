@@ -15,7 +15,7 @@ Item {
     property real textScale: 1
     property bool prefixPending: false
     readonly property real wellPadding: 3 * ratio
-    readonly property real captionSize: typography.body + ratio
+    readonly property real captionSize: typography.body + 2 * ratio
     signal selected(string key)
     signal closed(string key)
     signal renamed()
@@ -32,7 +32,8 @@ Item {
         hovered: pointer.hovered
         font.family: "IBM Plex Sans"
         font.pixelSize: root.captionSize
-        font.weight: Font.Normal
+        // Reserve the heavier label width so selection does not shift adjacent tabs.
+        font.weight: Font.DemiBold
         pixelSize: root.captionSize
     }
 
@@ -75,9 +76,9 @@ Item {
         width: layout.selectionBounds.width
         height: layout.selectionBounds.height
         radius: layout.style.pillRadius
-        color: root.colors.surface1
-        borderColor: root.colors.text
-        borderAlpha: 0.26
+        color: Qt.tint(root.colors.surface1, Qt.alpha(root.colors.accent, 0.1))
+        borderColor: root.colors.accent
+        borderAlpha: 0.52
         borderWidth: 1 / Screen.devicePixelRatio
         visible: width > 0 && height > 0
 
@@ -156,6 +157,7 @@ Item {
                 mark: tab.source
                 colors: root.colors
                 dimmed: false
+                ink: root.colors.chromeText
                 ratio: root.ratio
                 pixelSize: root.typography.body
                 visible: !root.prefixPending
@@ -176,16 +178,17 @@ Item {
             }
 
             ChromeText {
+                objectName: "tabCaption"
                 x: tab.record.caption.x
                 y: tab.record.caption.y
                 width: tab.record.caption.width
                 height: tab.record.caption.height
-                text: tab.source.label
+                text: (tab.record.truncated && !root.prefixPending ? tab.source.number + " · " : "") + tab.source.label
                 pixelSize: root.captionSize
-                color: root.colors.text
+                color: tab.source.selected ? root.colors.text : root.colors.chromeText
+                emphasized: tab.source.selected
                 visible: !tab.record.compact
-                elide: Text.ElideNone
-                fadeWidth: tab.record.truncated ? layout.style.fadeWidth : 0
+                elide: tab.record.truncated ? Text.ElideMiddle : Text.ElideNone
             }
 
             NativeTabActivity {
@@ -220,7 +223,7 @@ Item {
             }
 
             Accessible.role: Accessible.PageTab
-            Accessible.name: source.label
+            Accessible.name: (record.truncated ? source.number + ", " : "") + source.label
             Accessible.selected: source.selected
             Accessible.onPressAction: root.selected(source.key)
         }
@@ -298,7 +301,8 @@ Item {
         height: layout.plus.height
         visible: width > 0 && height > 0
         colors: root.colors
-        pixelSize: root.typography.body
+        pixelSize: root.typography.body + 4 * root.ratio
+        emphasized: true
         cornerRadius: layout.style.pillRadius
         text: "+"
         Accessible.name: "New tab"

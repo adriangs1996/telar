@@ -9,6 +9,7 @@ Item {
     required property real pixelSize
     property real ratio: 1
     property bool dimmed: false
+    property color ink: colors.subtext0
     property string primaryFamily
     property string primaryStyle
 
@@ -32,7 +33,7 @@ Item {
         glyph: root.mark.glyph ?? "\uea85"
         primaryFamily: root.primaryFamily
         primaryStyle: root.primaryStyle
-        color: root.dimmed ? root.colors.overlay1 : root.colors.subtext0
+        color: root.dimmed ? root.colors.overlay1 : root.ink
         pixelSize: root.pixelSize
         visible: root.provider === 0
     }

@@ -1948,6 +1948,21 @@ private:
     const auto entries = test::visualItems(*menu_content, QStringLiteral("paneActionEntry"));
     QCOMPARE(entries.size(), 4);
     captureArtifact(QStringLiteral("chrome-pane-actions"));
+    const auto menu_window_size = window_->size();
+    const auto restore_menu_size = qScopeGuard([this, menu_window_size] { window_->resize(menu_window_size); });
+    window_->resize(1600, menu_window_size.height());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    if (!menu->property("visible").toBool()) {
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene(button->boundingRect().center()).toPoint());
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(menu->property("visible").toBool(), runtime_wait_ms);
+    captureArtifact(QStringLiteral("chrome-pane-actions-wide"));
+    window_->resize(menu_window_size);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    if (!menu->property("visible").toBool()) {
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene(button->boundingRect().center()).toPoint());
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(menu->property("visible").toBool(), runtime_wait_ms);
     const auto split = std::ranges::find_if(entries, [](const auto *entry) {
       return entry->property("text").toString() == QLatin1StringView("Split right");
     });
@@ -1960,12 +1975,14 @@ private:
       const auto key = client_->panes()->data(client_->panes()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
       client_->execute(Application::Action::close_pane, key);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), count - 1, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     }
 
     QCOMPARE(client_->error(), QString{});
   }
 
   Q_SLOT void paneTransitionsResizeTheTerminalOnlyOnce() {
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     const QPointer<TerminalItem> terminal{terminalIn(window_->contentItem())};
     QVERIFY(terminal != nullptr);
     const QSignalSpy widths{terminal, &QQuickItem::widthChanged};
@@ -4334,7 +4351,7 @@ return {api_version=2, client={keybindings={
     const auto restore = qScopeGuard([this] {
       client_->loadConfiguration({}, {}, {});
     });
-    auto *background = window_->findChild<QQuickItem *>(QStringLiteral("windowBackground"));
+    auto *background = window_->findChild<QQuickItem *>(QStringLiteral("workspaceBackground"));
     QVERIFY(background != nullptr);
     constexpr std::array opacities{0.25, 0.75, 1.0, 0.25};
     constexpr int channel_tolerance = 2;
@@ -4344,7 +4361,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->error(), QString{});
       QCOMPARE(window_->color(), QColor{Qt::transparent});
-      const auto expected = client_->colors().value(QStringLiteral("windowBackground")).value<QColor>();
+      const auto expected = client_->colors().value(QStringLiteral("workbenchBackground")).value<QColor>();
       QCOMPARE(background->property("color").value<QColor>(), expected);
       const auto capture = background->grabToImage(QSize{64, 64});
       QVERIFY(!capture.isNull());
@@ -4355,6 +4372,39 @@ return {api_version=2, client={keybindings={
       QVERIFY(std::abs(actual.green() - expected.green()) <= channel_tolerance);
       QVERIFY(std::abs(actual.blue() - expected.blue()) <= channel_tolerance);
     }
+  }
+
+  Q_SLOT void independentSurfaceOpacityDoesNotStack() {
+    const QTemporaryDir directory;
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    const auto restore = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    writeTestFile(path, "return {api_version=2,gui={window={background_opacity=1},opacity={topbar=0.2,sidebar=0.4,bottombar=0.6,workspace=0.8,pane=0.3}}}");
+    client_->loadConfiguration(path, {}, {});
+    QCOMPARE(client_->error(), QString{});
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto geometry = client_->windowGeometry();
+    const auto sidebar = geometry.value(QStringLiteral("sidebar")).toRectF();
+    const auto navigation = geometry.value(QStringLiteral("navigation")).toRectF();
+    const auto status = geometry.value(QStringLiteral("status")).toRectF();
+    const auto frame = window_->grabWindow();
+    QVERIFY(!frame.isNull());
+    const auto verify = [&](QPointF logical, double opacity) {
+      const auto position = (logical * window_->devicePixelRatio()).toPoint();
+      const auto actual = frame.pixelColor(position).alphaF();
+      QVERIFY2(std::abs(actual - opacity) <= 1.0 / 255, qPrintable(QStringLiteral("At %1,%2: alpha %3, expected %4").arg(logical.x()).arg(logical.y()).arg(actual).arg(opacity)));
+    };
+    verify({window_->width() - 2.0, navigation.bottom() - 2}, 0.2);
+    verify({sidebar.right() - 2, sidebar.bottom() - 2}, 0.4);
+    verify({window_->width() - 2.0, status.bottom() - 2}, 0.6);
+    verify({sidebar.right() + 4, sidebar.bottom() - 2}, 0.8);
+    const auto backgrounds = test::visualItems(*window_->contentItem(), QStringLiteral("paneTerminalBackground"));
+    QVERIFY(!backgrounds.isEmpty());
+    for (const auto *background : backgrounds) {
+      verify(background->mapToScene({background->width() - 2, background->height() - 2}), 0.3);
+    }
+    captureArtifact(QStringLiteral("chrome-independent-opacity"));
   }
 
   Q_SLOT void appearanceChangesPreserveInputAndLayout() {
@@ -4487,7 +4537,9 @@ return {api_version=2, client={keybindings={
   Q_SLOT void attentionRingsFollowUnfocusedAttachedPanes() {
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
     const TabRestorePoint before{.count = client_->tabs()->rowCount(), .pane_id = firstPane()->id};
-    const auto restore = qScopeGuard([this, before] {
+    const auto original_window_size = window_->size();
+    const auto restore = qScopeGuard([this, before, original_window_size] {
+      window_->resize(original_window_size);
       closeTemporaryTab(before);
     });
     client_->execute(Application::Action::new_tab);
@@ -4495,16 +4547,24 @@ return {api_version=2, client={keybindings={
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
     const auto source_id = firstPane()->id;
     const telar::gui::PaneAttentionKey attachment{.pane_id = source_id, .attachment_generation = firstPane()->attachment_generation};
-    const auto *source_terminal = terminalIn(window_->contentItem());
+    const QPointer<TerminalItem> source_terminal{terminalIn(window_->contentItem())};
     QVERIFY(source_terminal != nullptr);
     client_->execute(Application::Action::split_horizontal);
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
-    const auto *other_terminal = focusedTerminalBeside(*window_, *source_terminal);
+    const QPointer<TerminalItem> other_terminal{focusedTerminalBeside(*window_, *source_terminal)};
     QVERIFY(other_terminal != nullptr);
     const auto other_id = other_terminal->paneIdentity();
-    const auto report = QStringLiteral("%1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(source_id).arg(firstPane()->generation);
+    const auto report = QStringLiteral("stty -echo; %1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(source_id).arg(firstPane()->generation);
     client_->input(source_id, report.toUtf8());
     QTRY_VERIFY2_WITH_TIMEOUT(screenText(client_->pane(source_id)->screen, ScreenTextLayout::logical).contains(QStringLiteral("GUI_ATTENTION_READY")), qPrintable(screenText(client_->pane(source_id)->screen)), runtime_wait_ms);
+    QProcess title_report;
+    title_report.start(runtime_.program(), {QStringLiteral("agent"), QStringLiteral("report-title"), QString::number(source_id), QStringLiteral("Visual state check"), QStringLiteral("--socket"), socket_});
+    QVERIFY(title_report.waitForFinished(runtime_wait_ms));
+    QCOMPARE(title_report.exitCode(), 0);
+    const auto captions = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneProgram"));
+    QCOMPARE(captions.size(), 1);
+    const auto fixed_caption = QStringLiteral("gui-quick-test · Visual state check");
+    QTRY_COMPARE_WITH_TIMEOUT(captions.front()->property("text").toString(), fixed_caption, runtime_wait_ms);
     const auto rings = [&] {
       return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("paneAttentionRing"));
     };
@@ -4517,10 +4577,43 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::focus_pane, QString::number(source_id));
     QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus(), runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty() && retired.isNull(), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    captureArtifact(QStringLiteral("question-focused"));
     client_->execute(Application::Action::focus_pane, QString::number(other_id));
     QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
     QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::PaneAttentionKey{}), attachment);
 
+    QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
+    captureArtifact(QStringLiteral("question-unfocused"));
+    const auto statuses = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneStatus"));
+    QCOMPARE(statuses.size(), 1);
+    client_->input(source_id, "ready\r");
+    QTRY_COMPARE_WITH_TIMEOUT(statuses.front()->property("statusText").toString(), QStringLiteral("ready"), runtime_wait_ms);
+    QCOMPARE(captions.front()->property("text").toString(), fixed_caption);
+    QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    captureArtifact(QStringLiteral("ready-unfocused"));
+    client_->execute(Application::Action::focus_pane, QString::number(source_id));
+    QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus(), runtime_wait_ms);
+    captureArtifact(QStringLiteral("ready-focused"));
+    window_->resize(1600, original_window_size.height());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(source_terminal != nullptr && other_terminal != nullptr);
+    captureArtifact(QStringLiteral("ready-focused-wide"));
+    client_->execute(Application::Action::focus_pane, QString::number(other_id));
+    QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
+    captureArtifact(QStringLiteral("ready-unfocused-wide"));
+    client_->input(source_id, "question\r");
+    QTRY_COMPARE_WITH_TIMEOUT(statuses.front()->property("statusText").toString(), QStringLiteral("question"), runtime_wait_ms);
+    QCOMPARE(captions.front()->property("text").toString(), fixed_caption);
+    QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
+    captureArtifact(QStringLiteral("question-unfocused-wide"));
+    client_->execute(Application::Action::focus_pane, QString::number(source_id));
+    QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus() && rings().isEmpty(), runtime_wait_ms);
+    captureArtifact(QStringLiteral("question-focused-wide"));
+    client_->execute(Application::Action::focus_pane, QString::number(other_id));
+    QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
     client_->execute(Application::Action::fullscreen);
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
@@ -6355,7 +6448,7 @@ return {api_version=2, client={keybindings={
     const auto path = directory.filePath(QStringLiteral("config.lua"));
     QFile file{path};
     QVERIFY(file.open(QIODevice::WriteOnly));
-    const QByteArray source{"return {api_version=2,gui={font={size=18.25},window={background_opacity=0.75,padding={x=2.5}}},client={prefix='shift+tab',input={sequence_timeout_ms=500},keybindings={telar.bind_global({'g'},telar.action.toggle_sidebar())}}}"};
+    const QByteArray source{"return {api_version=2,gui={font={size=18.25},window={background_opacity=0.75,padding={x=2.5}},opacity={pane=0.25,topbar=1}},client={prefix='shift+tab',input={sequence_timeout_ms=500},keybindings={telar.bind_global({'g'},telar.action.toggle_sidebar())}}}"};
     QCOMPARE(file.write(source), source.size());
     file.close();
     client_->loadConfiguration(path, {}, {});
@@ -6370,6 +6463,9 @@ return {api_version=2, client={keybindings={
     const auto gui = telar::runtime::JsonValue::parse({gui_text.constData(), static_cast<std::size_t>(gui_text.size())});
     QCOMPARE(requiredJsonField(requiredJsonField(gui, "font"), "size").encoded(), std::string_view{"18.25"});
     QCOMPARE(requiredJsonField(requiredJsonField(gui, "window"), "background_opacity").encoded(), std::string_view{"0.75"});
+    QCOMPARE(requiredJsonField(requiredJsonField(gui, "opacity"), "pane").encoded(), std::string_view{"0.25"});
+    QCOMPARE(requiredJsonField(requiredJsonField(gui, "opacity"), "topbar").encoded(), std::string_view{"1"});
+    QCOMPARE(requiredJsonField(requiredJsonField(gui, "opacity"), "workspace").encoded(), std::string_view{"0.75"});
     peer.request(telar::ClientAction::config_show, 3, "input");
     QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
     QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);

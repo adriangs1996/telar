@@ -361,6 +361,18 @@ void TerminalItem::geometryChange(const QRectF &current, const QRectF &previous)
   refreshLinkHover();
 }
 
+bool TerminalItem::backgroundProvided() const noexcept {
+  return background_provided_;
+}
+
+void TerminalItem::setBackgroundProvided(bool provided) {
+  if (background_provided_ != provided) {
+    background_provided_ = provided;
+    update();
+    emit backgroundProvidedChanged();
+  }
+}
+
 QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *update_data) {
   const auto *current = pane();
   if (current == nullptr || application_ == nullptr || window() == nullptr || !font_collection_) {
@@ -404,6 +416,7 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
       .cursor_override = copy_cursor,
       .hovered_link = link_hover_.current() ? &link_hover_.current()->match : nullptr,
       .owner = this,
+      .background_provided = background_provided_,
   };
   auto *node = TerminalScene::synchronizeNode(previous, *window(), frame);
   prepared_frame_ = {

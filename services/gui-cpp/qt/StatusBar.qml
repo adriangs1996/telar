@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Telar.Gui
 import "ComponentFit.js" as ComponentFit
 
-Rectangle {
+NativeRoundedRectangle {
     id: root
 
     required property var metrics
@@ -23,7 +24,8 @@ Rectangle {
     readonly property real metricsWidth: Math.max(0, contentWidth - (tlsChip.visible ? tlsChip.width + badgeGap : 0))
     readonly property real density: Screen.devicePixelRatio
 
-    color: colors.panelBackground
+    color: colors.bottombarBackground
+    replaceBackground: true
 
     Item {
         id: row

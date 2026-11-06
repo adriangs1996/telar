@@ -71,6 +71,26 @@ void historyPreferences() {
   }
 }
 
+void independentBackgroundOpacity() {
+  using Surface = BackgroundOpacity::Surface;
+  const auto inherited = read({.source = R"(return {api_version=2,gui={window={background_opacity=0.75},opacity={sidebar=0.5,pane=0.25}},profiles={other={gui={window={background_opacity=1},opacity={topbar=0}}}}})", .profile = "other"});
+  require(inherited.opacity.resolve(Surface::sidebar, inherited.background_opacity) == 0.5F && inherited.opacity.resolve(Surface::pane, inherited.background_opacity) == 0.25F, "profiles must preserve explicit surface opacities");
+  require(inherited.opacity.resolve(Surface::topbar, inherited.background_opacity) == 0 && inherited.opacity.resolve(Surface::workspace, inherited.background_opacity) == 1, "unconfigured regions must inherit the adopted global value, including profile changes");
+  require(inherited.opacity.minimum(inherited.background_opacity) == 0, "the native window must allow transparency when any region needs it");
+  BackgroundOpacity opaque;
+  opaque.overrides.fill(1.0F);
+  require(opaque.minimum(0.25F) == 1, "fully opaque overrides must not retain unnecessary native transparency or blur");
+  for (const auto *source : {R"(return {api_version=2,gui={opacity={pane=-0.01}}})", R"(return {api_version=2,gui={opacity={sidebar=1.01}}})", R"(return {api_version=2,gui={opacity={topbar=false}}})", R"(return {api_version=2,gui={opacity={workspace=0/0}}})", R"(return {api_version=2,gui={opacity={pane=math.huge}}})", R"(return {api_version=2,gui={opacity={unknown=0.5}}})"}) {
+    bool rejected = false;
+    try {
+      read({.source = source, .profile = {}});
+    } catch (const std::exception &) {
+      rejected = true;
+    }
+    require(rejected, "invalid surface opacity must fail before adoption");
+  }
+}
+
 void editorPreferences() {
   const auto inherited = read({.source = R"(return {api_version=2, client={editor="nvim"}, profiles={other={client={editor="/opt/Editor With Spaces"}}, inherited={client={pane_gaps=false}}}})", .profile = "inherited"});
   require(inherited.editor.view() == "nvim", "unrelated profile fields must preserve the configured editor");
@@ -217,6 +237,7 @@ void invalidCallbacksAndRecovery() {
 int main() {
   try {
     historyPreferences();
+    independentBackgroundOpacity();
     editorPreferences();
     windowTitlePreferences();
     keymapProfilesAndCallbacks();
