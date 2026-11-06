@@ -986,6 +986,12 @@ void Application::refreshPanes() {
     const auto &geometry = session().workbenchGeometry();
     const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
     const auto fullscreen_entries = fullscreenEntries(*tab);
+    const auto motion_context = QStringLiteral("%1/%2/%3/%4/%5")
+                                    .arg(machine_view_revision_)
+                                    .arg(static_cast<int>(tab->location.workspace.kind))
+                                    .arg(tab->location.workspace.id)
+                                    .arg(tab->location.tab_id)
+                                    .arg(tab->fullscreen);
 
     for (const auto &placement : tab->layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen)) {
       const auto *pane = session().findPane(placement.pane_id);
@@ -994,6 +1000,7 @@ void Application::refreshPanes() {
       }
 
       auto record = paneRecord(*pane, placement, geometry, tab->focused_pane == pane->id, terminal_grid_.scale);
+      record.insert(QStringLiteral("motionContext"), motion_context);
       record.insert(QStringLiteral("fullscreen"), tab->fullscreen);
       if (tab->fullscreen) {
         record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);

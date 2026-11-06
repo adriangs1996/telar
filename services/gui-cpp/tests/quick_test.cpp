@@ -40,6 +40,7 @@
 #include "qt/native_mode_layout.hpp"
 #include "qt/notification_layout.hpp"
 #include "qt/pane_attention_value.hpp"
+#include "qt/pane_motion_layout.hpp"
 #include "qt/runtime_connection.hpp"
 #include "qt/terminal_item.hpp"
 #include "qt/window_animation_clock.hpp"
@@ -1873,6 +1874,41 @@ private:
     QCOMPARE(client_->workspaceListCollapsed(), !collapsed);
     QTest::keyClick(window_, Qt::Key_S);
     QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void paneTransitionsResizeTheTerminalOnlyOnce() {
+    const QPointer<TerminalItem> terminal{terminalIn(window_->contentItem())};
+    QVERIFY(terminal != nullptr);
+    const QSignalSpy widths{terminal, &QQuickItem::widthChanged};
+    const QSignalSpy heights{terminal, &QQuickItem::heightChanged};
+    client_->execute(Application::Action::split_horizontal);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+    const auto split_id = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+    const auto *layout = window_->findChild<PaneMotionLayout *>();
+    QVERIFY(layout != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, runtime_wait_ms);
+    const auto settled = [&] {
+      const auto *model = layout->items();
+      for (int index = 0; index < model->rowCount(); ++index) {
+        const auto record = model->data(model->index(index, 0), ListModel::record_role).toMap();
+        if (record.value(QStringLiteral("visualBounds")).toRectF() != QRectF{record.value(QStringLiteral("x")).toReal(), record.value(QStringLiteral("y")).toReal(), record.value(QStringLiteral("width")).toReal(), record.value(QStringLiteral("height")).toReal()}) {
+          return false;
+        }
+      }
+      return true;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
+    QVERIFY(terminal != nullptr);
+    QCOMPARE(widths.size(), 1);
+    QVERIFY(heights.size() <= 1);
+    client_->execute(Application::Action::close_pane, split_id);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
+    QVERIFY(terminal != nullptr);
+    QCOMPARE(widths.size(), 2);
+    QVERIFY(heights.size() <= 2);
     QCOMPARE(client_->error(), QString{});
   }
 

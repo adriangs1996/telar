@@ -15,20 +15,38 @@ Item {
         ratio: root.ratio
     }
 
-    Repeater {
+    PaneMotionLayout {
+        id: motion
+        anchors.fill: parent
         model: root.application.panes
+    }
+
+    Repeater {
+        model: motion.items
 
         delegate: Item {
             id: pane
 
             required property var record
             readonly property bool framed: record.framed
-            x: record.x
-            y: record.y
-            width: record.width
-            height: record.height
+            x: record.visualBounds.x
+            y: record.visualBounds.y
+            width: record.visualBounds.width
+            height: record.visualBounds.height
+            readonly property real contentWidth: resizing ? Math.max(0, record.content.width + width - record.width) : record.content.width
+            readonly property real contentHeight: resizing ? Math.max(0, record.content.height + height - record.height) : record.content.height
+            readonly property real frameWidth: resizing ? Math.max(0, record.frame.width + width - record.width) : record.frame.width
+            readonly property real frameHeight: resizing ? Math.max(0, record.frame.height + height - record.height) : record.frame.height
+            readonly property bool resizing: width !== record.width || height !== record.height
+            visible: width > 0 && height > 0
+
             Repeater {
-                model: pane.record.panels
+                model: !pane.framed ? [] : !pane.resizing ? pane.record.panels : [
+                    Qt.rect(0, 0, pane.frameWidth, pane.record.content.y),
+                    Qt.rect(0, pane.record.content.y + pane.contentHeight, pane.frameWidth, Math.max(0, pane.frameHeight - pane.record.content.y - pane.contentHeight)),
+                    Qt.rect(0, pane.record.content.y, pane.record.content.x, pane.contentHeight),
+                    Qt.rect(pane.record.content.x + pane.contentWidth, pane.record.content.y, Math.max(0, pane.frameWidth - pane.record.content.x - pane.contentWidth), pane.contentHeight)
+                ]
 
                 delegate: Rectangle {
                     required property rect modelData
@@ -52,8 +70,8 @@ Item {
                 objectName: "paneFrame"
                 x: pane.record.frame.x
                 y: pane.record.frame.y
-                width: pane.record.frame.width
-                height: pane.record.frame.height
+                width: pane.frameWidth
+                height: pane.frameHeight
                 borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.overlay0
                 borderWidth: pane.record.frameLineWidth
                 radius: pane.record.frameRadius * root.ratio
@@ -83,95 +101,109 @@ Item {
                 }
             }
 
-            TerminalView {
-                id: terminal
-
+            Item {
+                id: viewport
                 x: pane.record.content.x
                 y: pane.record.content.y
-                width: pane.record.content.width
-                height: pane.record.content.height
-                application: root.application
-                paneId: pane.record.key
-                property bool focusReady: false
-                readonly property bool modelFocused: pane.record.focused
+                width: pane.contentWidth
+                height: pane.contentHeight
+                clip: true
 
-                function focusSelectedPane() {
-                    if (terminal.modelFocused && root.application.dialog.length === 0 && !root.keyboardCovered) {
-                        terminal.forceActiveFocus();
-                    }
-                }
+                TerminalView {
+                    id: terminal
 
-                function restoreFocusIfVacant() {
-                    const window = terminal.Window.window;
-                    if (!window) {
-                        return;
-                    }
+                    // Commit the terminal grid once; animate only its viewport.
+                    width: pane.record.content.width
+                    height: pane.record.content.height
+                    application: root.application
+                    paneId: pane.record.key
+                    property bool focusReady: false
+                    readonly property bool modelFocused: pane.record.focused
 
-                    const owner = window.activeFocusItem;
-                    // Visual loaders can inherit focus after their input control is retired.
-                    if (owner && owner !== window.contentItem && !(owner instanceof Loader) && owner.visible && owner.enabled) {
-                        return;
-                    }
-
-                    terminal.focusSelectedPane();
-                }
-
-                // Geometry refreshes keep the same selection and must preserve chrome focus.
-                onModelFocusedChanged: {
-                    if (!terminal.modelFocused) {
-                        terminal.focus = false;
-                    } else if (terminal.focusReady) {
-                        terminal.focusSelectedPane();
-                    }
-                }
-                Component.onCompleted: {
-                    terminal.focusReady = true;
-                    terminal.focusSelectedPane();
-                }
-
-                Rectangle {
-                    anchors.fill: parent
-                    visible: pane.framed && !pane.record.focused
-                    color: Qt.rgba(root.application.colors.background.r, root.application.colors.background.g, root.application.colors.background.b, 1)
-                    opacity: pane.record.dimAlpha
-                }
-
-                LinkPreview {
-                    preview: terminal.linkPreview
-                    colors: root.application.colors
-
-                    function publishBounds() {
-                        terminal.setLinkPreviewBounds(visible ? Qt.rect(x, y, width, height) : Qt.rect(0, 0, 0, 0));
-                    }
-
-                    onVisibleChanged: publishBounds()
-                    onXChanged: publishBounds()
-                    onYChanged: publishBounds()
-                    onWidthChanged: publishBounds()
-                    onHeightChanged: publishBounds()
-                }
-
-                Connections {
-                    target: root.application
-                    function onDialogChanged() {
-                        terminal.focusSelectedPane();
-                    }
-                }
-
-                Connections {
-                    target: terminal.Window.window
-                    function onActiveFocusItemChanged() {
-                        if (terminal.modelFocused) {
-                            Qt.callLater(terminal.restoreFocusIfVacant);
+                    function focusSelectedPane() {
+                        if (terminal.modelFocused && root.application.dialog.length === 0 && !root.keyboardCovered) {
+                            terminal.forceActiveFocus();
                         }
                     }
-                }
 
-                Connections {
-                    target: root
-                    function onKeyboardCoveredChanged() {
-                        if (!root.keyboardCovered && terminal.modelFocused) {
-                            Qt.callLater(terminal.restoreFocusIfVacant);
+                    function restoreFocusIfVacant() {
+                        const window = terminal.Window.window;
+                        if (!window) {
+                            return;
+                        }
+
+                        const owner = window.activeFocusItem;
+                        // Visual loaders can inherit focus after their input control is retired.
+                        if (owner && owner !== window.contentItem && !(owner instanceof Loader) && owner.visible && owner.enabled) {
+                            return;
+                        }
+
+                        terminal.focusSelectedPane();
+                    }
+
+                    onVisibleChanged: {
+                        if (visible && terminal.focusReady && terminal.modelFocused) {
+                            Qt.callLater(terminal.focusSelectedPane);
+                        }
+                    }
+
+                    // Geometry refreshes keep the same selection and must preserve chrome focus.
+                    onModelFocusedChanged: {
+                        if (!terminal.modelFocused) {
+                            terminal.focus = false;
+                        } else if (terminal.focusReady) {
+                            terminal.focusSelectedPane();
+                        }
+                    }
+                    Component.onCompleted: {
+                        terminal.focusReady = true;
+                        terminal.focusSelectedPane();
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: pane.framed && !pane.record.focused
+                        color: Qt.rgba(root.application.colors.background.r, root.application.colors.background.g, root.application.colors.background.b, 1)
+                        opacity: pane.record.dimAlpha
+                    }
+
+                    LinkPreview {
+                        preview: terminal.linkPreview
+                        colors: root.application.colors
+
+                        function publishBounds() {
+                            terminal.setLinkPreviewBounds(visible ? Qt.rect(x, y, width, height) : Qt.rect(0, 0, 0, 0));
+                        }
+
+                        onVisibleChanged: publishBounds()
+                        onXChanged: publishBounds()
+                        onYChanged: publishBounds()
+                        onWidthChanged: publishBounds()
+                        onHeightChanged: publishBounds()
+                    }
+
+                    Connections {
+                        target: root.application
+                        function onDialogChanged() {
+                            terminal.focusSelectedPane();
+                        }
+                    }
+
+                    Connections {
+                        target: terminal.Window.window
+                        function onActiveFocusItemChanged() {
+                            if (terminal.modelFocused) {
+                                Qt.callLater(terminal.restoreFocusIfVacant);
+                            }
+                        }
+                    }
+
+                    Connections {
+                        target: root
+                        function onKeyboardCoveredChanged() {
+                            if (!root.keyboardCovered && terminal.modelFocused) {
+                                Qt.callLater(terminal.restoreFocusIfVacant);
+                            }
                         }
                     }
                 }
@@ -198,8 +230,8 @@ Item {
             Loader {
                 x: pane.record.frame.x
                 y: pane.record.frame.y
-                width: pane.record.frame.width
-                height: pane.record.frame.height
+                width: pane.frameWidth
+                height: pane.frameHeight
                 active: pane.framed && !pane.record.focused && (pane.record.chrome.needsAttention ?? false)
                 sourceComponent: NativePaneAttention {
                     objectName: "paneAttentionRing"

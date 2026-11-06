@@ -132,6 +132,13 @@ skips saved-layout restoration. Without a command, the login-shell resolver
 supplies the interactive shell. Saved and temporary SSH machines can be selected
 with the machine picker or the corresponding launch options.
 
+Pane splits reveal the new pane over 180 ms; closing a pane expands the survivors
+over 150 ms. Both use cubic ease-out without scaling terminal text. Terminal grids
+receive their destination size once; only presentation bounds and clipping animate.
+Divider dragging, window resizing, tab/machine changes and fullscreen transitions
+remain immediate. Set `TELAR_GUI_PANE_ANIMATIONS=0` before launching the C++ GUI to
+disable these transitions.
+
 Remote discovery and GUI bridges reuse a per-destination interactive SSH control
 master (`ssh-i-*`), separate from the CLI and Git transfer master (`ssh-*`). A
 repository or file transfer therefore cannot queue its bytes on the GUI's SSH
