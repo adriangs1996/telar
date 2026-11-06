@@ -1,8 +1,25 @@
-#include "graphics/file_input.hpp"
-#include "tests/check.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../graphics/child_file.hpp"
+#include "../graphics/temporary_path.hpp"
+#include "../graphics/kitty_control.hpp"
+#include <cstdint>
+#include "../graphics/kitty_framing.hpp"
+#include <algorithm>
+#include <charconv>
+#include "check.hpp"
 #include <cstdio>
 #include <string>
 #include <vector>
+
+#include "tests/check.hpp"
+
+
+import telar.runtime.graphics.file_input;
 
 using namespace telar;
 using namespace telar::runtime;

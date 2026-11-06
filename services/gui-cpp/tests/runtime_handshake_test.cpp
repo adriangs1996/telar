@@ -1,25 +1,45 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "core/memory.hpp"
-#include "machines/connection_policy.hpp"
-#include "machines/failure.hpp"
-#include "telar_client/codecs/telar_handshake.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
-#include "transport/frame_stream.hpp"
-#include "transport/runtime_handshake.hpp"
-#include "transport/runtime_protocol.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "transport/runtime_link.hpp"
-#include <algorithm>
+#include "../core/memory.hpp"
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <algorithm>
+#include <optional>
+#include <string_view>
+#include "telar_client/codecs/telar_codec.hpp"
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <concepts>
+#include <type_traits>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include <utility>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <chrono>
+#include <limits>
 #include <exception>
 #include <iostream>
-#include <span>
-#include <stdexcept>
 #include <string>
-#include <string_view>
-#include <type_traits>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.client;
+import telar.gui.transport.runtime_link;
 
 namespace {
 

@@ -1,13 +1,29 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/notification_center.hpp"
-#include "application/notification_item.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "deadline_timer.hpp"
-#include "links/link_target.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/display_metrics.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include <array>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <cmath>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include "deadline_timer.hpp"
 #include "terminal_item.hpp"
 #include <QByteArray>
 #include <QMetaObject>
@@ -20,11 +36,15 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <limits>
-#include <optional>
+
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.links.cell_links;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 

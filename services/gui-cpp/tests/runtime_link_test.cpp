@@ -1,16 +1,37 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "machines/failure.hpp"
-#include "machines/machine_row.hpp"
-#include "transport/runtime_link.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include <algorithm>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <chrono>
+#include <limits>
 #include <exception>
 #include <iostream>
-#include <limits>
 #include <string>
-#include <string_view>
 #include <type_traits>
+
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.transport.runtime_link;
 
 namespace {
 

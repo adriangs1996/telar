@@ -1,8 +1,37 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "telar_tls/handle.hpp"
-#include "tls/alpn_offer.hpp"
+#include <exception>
+#include <memory>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <cerrno>
+#include <csignal>
+#include <sys/socket.h>
+#include "telar_platform/file_descriptor.hpp"
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include "telar_base/memory/fixed_text.hpp"
+#include <string_view>
 #include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <cstdint>
+#include <span>
 #include <vector>
+
+
+
+import telar.tls;
+import telar.runtime.tls.interception;
 
 using namespace telar;
 using namespace telar::runtime;

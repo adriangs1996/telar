@@ -1,10 +1,50 @@
-#include "agents/agent.hpp"
-#include "agents/description_generator.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include "telar_base/text/utf8.hpp"
+#include <cstring>
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cstddef>
+#include <stdexcept>
+#include "telar_base/memory/allocator.hpp"
+#include <cassert>
+#include <exception>
+#include "telar_base/program_identity.hpp"
+#include <cerrno>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <limits.h>
+#include <atomic>
+#include <poll.h>
+#include <sys/wait.h>
+#include "telar_platform/trace.hpp"
 #include "check.hpp"
-#include "history/pane_writer.hpp"
-#include "history/schema.hpp"
-#include "platform/observation_worker.hpp"
+#include <sqlite3.h>
+#include <concepts>
+#include <condition_variable>
+#include <pthread.h>
 #include <thread>
+
+
+
+import telar.runtime.agents.snapshot;
+import telar.runtime.agents.description_generator;
+import telar.runtime.history.store;
+import telar.runtime.platform.request_worker;
 
 using namespace telar;
 using namespace telar::runtime;

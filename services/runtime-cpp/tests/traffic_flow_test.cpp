@@ -1,11 +1,65 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "traffic/interception.hpp"
-#include "traffic/tcp_flows.hpp"
-#include "proxy/flow_state.hpp"
-#include "proxy/application_relay.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <cstdint>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <optional>
+#include <chrono>
+#include "telar_base/memory/fixed_text.hpp"
+#include <stdexcept>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <atomic>
+#include <mutex>
+#include <pcap/pcap.h>
+#include <string>
+#include <unordered_map>
+#include <concepts>
+#include <cstdio>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <limits>
+#include <brotli/decode.h>
+#include <brotli/encode.h>
+#include <zlib.h>
+#include <memory>
+#include <zstd.h>
+#include <charconv>
+#include <csignal>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <initializer_list>
+#include "telar_platform/trace.hpp"
+#include <cassert>
+#include <condition_variable>
+#include <type_traits>
+#include <unistd.h>
+#include <nghttp2/nghttp2.h>
 #include "test_byte_stream.hpp"
 #include "packet_fixture.hpp"
 #include <thread>
+
+
+
+import telar.runtime.traffic.control_backend;
+import telar.runtime.traffic.capture_analysis;
+import telar.runtime.proxy.application_relay;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -188,12 +242,12 @@ static void reconstruction(SystemAllocator &memory) {
     TcpFlows flows{memory};
     std::string outbound, inbound;
     std::vector<Kind> kinds;
-    auto consume = [&](const Event &event) {
+    auto consume = [&](const traffic::Event &event) {
       check(event.offline == ipv6);
       const auto flow = FlowCodec::decode(event.bytes);
       check(flow.id >> 63 && flow.source == FlowSource::capture);
       if (event.kind == Kind::stream_data) {
-        auto &output = flow.direction == Direction::outbound ? outbound : inbound;
+        auto &output = flow.direction == traffic::Direction::outbound ? outbound : inbound;
         check(flow.offset == output.size());
         output.append(reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size());
       }
@@ -201,7 +255,7 @@ static void reconstruction(SystemAllocator &memory) {
     };
     auto send = [&](bool incoming, std::uint32_t sequence, Byte flags, std::string_view body = {}) {
       const auto packet = tcp(ipv6, incoming, sequence, flags, body);
-      Event event{.session = 11, .interface_index = 1, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(packet.size()), .offline = ipv6, .interface = "fixture", .bytes = packet};
+      traffic::Event event{.session = 11, .interface_index = 1, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(packet.size()), .offline = ipv6, .interface = "fixture", .bytes = packet};
       flows.packet(event, consume);
       for (std::size_t prefix = 0; prefix < packet.size(); ++prefix) {
         event.bytes = std::span{packet}.first(prefix);
@@ -229,15 +283,15 @@ static void passiveGaps(SystemAllocator &memory) {
   TcpFlows flows{memory};
   std::string output;
   std::size_t gaps = 0;
-  Direction gap_direction = Direction::outbound;
-  auto emit = [&](const Event &event) {
+  traffic::Direction gap_direction = traffic::Direction::outbound;
+  auto emit = [&](const traffic::Event &event) {
     const auto flow = FlowCodec::decode(event.bytes);
     if (event.kind == Kind::flow_gap) { ++gaps; gap_direction = flow.direction; }
     if (event.kind == Kind::stream_data) { output.append(reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size()); }
   };
   auto send = [&](bool incoming, std::uint32_t sequence, Byte flags, std::string_view bytes = {}) {
     const auto packet = tcp(false, incoming, sequence, flags, bytes);
-    flows.packet(Event{.link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(packet.size()), .bytes = packet}, emit);
+    flows.packet(traffic::Event{.link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(packet.size()), .bytes = packet}, emit);
   };
   send(false, 0, 2);
   send(false, 4, 16, "def");
@@ -246,7 +300,7 @@ static void passiveGaps(SystemAllocator &memory) {
   send(true, 9, 18);
   send(true, 14, 16, "later");
   send(false, 7, 4);
-  check(gaps == 1 && gap_direction == Direction::inbound);
+  check(gaps == 1 && gap_direction == traffic::Direction::inbound);
   send(false, 0, 2);
   send(false, 4, 16, "wrong");
   send(false, 1, 16, "abcde");

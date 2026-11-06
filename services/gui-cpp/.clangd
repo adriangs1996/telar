@@ -3,24 +3,7 @@ CompileFlags:
 
 ---
 If:
-  PathMatch: (config|components)/.*\.hpp
-CompileFlags:
-  CompilationDatabase: out/clangd/config
-
----
-If:
-  PathMatch: (application|attachments|core|fonts|graphics|history|input|links|machines|palette|paths|platform|presentation|suggestions|terminal|text|transport)/.*\.hpp
-CompileFlags:
-  CompilationDatabase: out/clangd/domain
-
----
-If:
-  PathMatch: (qt/.*|platform/environment)\.hpp
-CompileFlags:
-  CompilationDatabase: out/clangd/qt
-
----
-If:
-  PathMatch: tests/.*\.hpp
-CompileFlags:
-  CompilationDatabase: out/clangd/tests
+  PathMatch: tests/.*
+Diagnostics:
+  ClangTidy:
+    Remove: '*'

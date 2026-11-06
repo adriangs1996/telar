@@ -1,10 +1,22 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "agent_oracle.hpp"
-#include "history/database.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <exception>
+#include <sqlite3.h>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <termios.h>
 #include <thread>
+
+
+
+import telar.runtime.history.store;
 
 using namespace telar;
 using namespace telar::runtime;

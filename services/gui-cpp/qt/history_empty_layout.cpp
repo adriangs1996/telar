@@ -1,11 +1,31 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "history_empty_layout.hpp"
-#include "core/metrics.hpp"
-#include "history/entry.hpp"
-#include "presentation/form_button_style.hpp"
-#include "presentation/history_empty.hpp"
-#include "presentation/history_empty_geometry.hpp"
-#include "projection.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "projection.hpp"
 #include <QQuickWindow>
 #include <QQuickItem>
 #include <QPointer>
@@ -16,12 +36,14 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <limits>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.history.browser;
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 

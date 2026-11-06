@@ -1,10 +1,23 @@
-#include "machines/failure.hpp"
-#include "remote_bridge.hpp"
-#include "ssh_options.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include "../qt/remote_bridge.hpp"
+#include "../qt/ssh_options.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "transport/runtime_protocol.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <optional>
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -19,16 +32,19 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
 #include <chrono>
-#include <cstddef>
 #include <functional>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include "remote_bridge.hpp"
+#include "ssh_options.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.client;
+import telar.gui.transport.runtime_link;
 
 namespace {
 

@@ -1,10 +1,24 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "text/utf16_prefix.hpp"
+
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
 #include <QByteArray>
 #include <QChar>
 #include <QString>
-#include <cstddef>
+
+#pragma once
+
+
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

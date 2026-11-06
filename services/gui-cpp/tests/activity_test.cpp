@@ -1,26 +1,63 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "activity_fixture.hpp"
 #include "agent_fixture.hpp"
 #include "allocation_gate.hpp"
-#include "application/agent_replica.hpp"
-#include "application/records.hpp"
-#include "application/session.hpp"
-#include "application/workspace_replica.hpp"
-#include "core/memory.hpp"
-#include "presentation/activity_card.hpp"
-#include "presentation/activity_order.hpp"
-#include "session_fixture.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include <cstddef>
-#include <exception>
-#include <iostream>
+#include <cstdint>
+#include "../core/memory.hpp"
+#include <algorithm>
 #include <limits>
-#include <new>
+#include "../core/terminal_size.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
 #include <optional>
 #include <span>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include <string_view>
 #include <stdexcept>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../terminal/cell_position.hpp"
+#include <bit>
+#include <tuple>
+#include <cmath>
+#include "../input/wheel_accumulator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <memory>
+#include <compare>
+#include "session_fixture.hpp"
+#include <iostream>
+#include <new>
 #include <string>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.application.session;
+import telar.gui.presentation.application_mark;
+import telar.gui.presentation.activity_order;
 
 namespace {
 

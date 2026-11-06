@@ -43,7 +43,7 @@ elseif(MODE STREQUAL "format" OR MODE STREQUAL "format-check")
   endif()
 
   file(GLOB_RECURSE sources
-    "${SOURCE_DIR}/*.cpp" "${SOURCE_DIR}/*.cc" "${SOURCE_DIR}/*.cxx"
+    "${SOURCE_DIR}/*.cppm" "${SOURCE_DIR}/*.cpp" "${SOURCE_DIR}/*.cc" "${SOURCE_DIR}/*.cxx"
     "${SOURCE_DIR}/*.h" "${SOURCE_DIR}/*.hpp" "${SOURCE_DIR}/*.hh" "${SOURCE_DIR}/*.hxx"
     "${SOURCE_DIR}/*.ipp" "${SOURCE_DIR}/*.tpp")
   list(FILTER sources EXCLUDE REGEX "/(out[^/]*|build[^/]*|cmake-build[^/]*|\\.git|vendor|third_party|generated)/")

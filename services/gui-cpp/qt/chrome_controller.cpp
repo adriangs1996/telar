@@ -1,10 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/workbench_geometry.hpp"
-#include "core/configuration.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "presentation/display_metrics.hpp"
-#include "presentation/history_modal_geometry.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <stdexcept>
+#include <initializer_list>
 #include "projection.hpp"
 #include "sidebar_projection.hpp"
 #include "typography_projection.hpp"
@@ -14,12 +32,14 @@
 #include <QtCore/qstring.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <utility>
+
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.metrics;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 

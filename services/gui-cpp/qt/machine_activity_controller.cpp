@@ -1,16 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "activity_projection.hpp"
 #include "agent_projection.hpp"
 #include "application.hpp"
-#include "application/dependencies.hpp"
-#include "application/records.hpp"
-#include "core/memory.hpp"
+#include "../application/dependencies.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
 #include "machine_activity_target.hpp"
 #include "machine_client.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machines.hpp"
-#include "presentation/activity_card.hpp"
-#include "presentation/activity_order.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include <stdexcept>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <tuple>
+#include <compare>
 #include <QByteArray>
 #include <QPointF>
 #include <QQuickItem>
@@ -22,15 +48,15 @@
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qtypes.h>
 #include <QtCore/qtmetamacros.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-#include <variant>
+
+#include "application/dependencies.hpp"
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.machines.picker;
+import telar.gui.presentation.application_mark;
+import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 

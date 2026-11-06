@@ -1,13 +1,40 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "ancestor_geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
 #include "font_collection.hpp"
-#include "fonts/text_layout.hpp"
+#include <bit>
+#include <stdexcept>
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <limits>
+#include <type_traits>
+#include <concepts>
+#include <utility>
+#include <ghostty/vt/unicode.h>
 #include "resident_fonts.hpp"
-#include "terminal/font_grid.hpp"
-#include "text/text_fit.hpp"
+#include <charconv>
+#include <system_error>
 #include <QByteArray>
 #include <QColor>
 #include <QMetaObject>
@@ -17,10 +44,16 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string_view>
+
+#pragma once
+
+#include "core/memory.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.terminal.font_grid;
+import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 

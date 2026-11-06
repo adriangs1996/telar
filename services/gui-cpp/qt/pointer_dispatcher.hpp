@@ -1,26 +1,43 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "input/child_mouse.hpp"
-#include "input/history_action_capture.hpp"
-#include "input/history_hover.hpp"
-#include "input/tab_drag.hpp"
-#include "input/tab_drop_slots.hpp"
-#include "input/tab_drop_surface.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <optional>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
 #include <span>
+#include <variant>
+#include <limits>
+#include <ranges>
 #include "native_pointer_events.hpp"
 #include "history_scroll_events.hpp"
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QPointF>
 #include <QString>
-#include <optional>
-#include <cstdint>
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
-#include <string_view>
-#include <array>
-#include <cstddef>
+
+#pragma once
+
+
+import telar.gui.input.child_mouse;
 
 namespace telar::gui::qt {
 

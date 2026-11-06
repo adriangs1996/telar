@@ -1,11 +1,33 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "paths/labels.hpp"
-#include "paths/limits.hpp"
-#include "paths/page.hpp"
-#include "presentation/path_picker_placement.hpp"
+#include <cstddef>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <string_view>
+#include <charconv>
+#include <concepts>
+#include <stdexcept>
+#include <system_error>
+#include <limits>
+#include "../terminal/cell_position.hpp"
+#include <optional>
 #include "projection.hpp"
-#include "text/utf16_prefix.hpp"
-#include "qt/utf16_encoding.hpp"
+#include <bit>
+#include "utf16_encoding.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>
 #include <QString>
@@ -17,10 +39,13 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
+
+#include "qt/utf16_encoding.hpp"
+
+
+import telar.gui.paths.label;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

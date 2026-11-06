@@ -1,27 +1,42 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "box_font.hpp"
-#include "core/color.hpp"
-#include "core/geometry.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include "curve_scene.hpp"
 #include "projection.hpp"
 #include "scene_nodes.hpp"
-#include "terminal/glyphs/block.hpp"
-#include "terminal/glyphs/box.hpp"
-#include "terminal/glyphs/box_curve.hpp"
-#include "terminal/glyphs/braille.hpp"
-#include "terminal/glyphs/ink.hpp"
-#include "terminal/glyphs/symbol.hpp"
+#include <limits>
+#include <span>
+#include <stdexcept>
+#include <bit>
+
+#include <initializer_list>
 #include <QFont>
 #include <QQuickWindow>
 #include <QRectF>
 #include <QSGNode>
 #include <QSGSimpleRectNode>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <string_view>
+
+#pragma once
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.terminal.glyphs.curve_cache;
+import telar.gui.terminal.copy_mode;
+
 
 namespace telar::gui::qt {
 

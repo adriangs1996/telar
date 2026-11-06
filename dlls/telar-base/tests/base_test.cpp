@@ -1,13 +1,32 @@
-#include "telar_base/diagnostics/limit_ledger.hpp"
-#include "telar_base/memory/buffer_allocator.hpp"
-#include "telar_base/memory/c_allocation_blocks.hpp"
-#include "telar_base/memory/erasing_allocator.hpp"
-#include "telar_base/memory/recycling_allocator.hpp"
-#include "telar_base/memory/retained_stream.hpp"
-#include "telar_base/text/json_fields.hpp"
-#include "telar_base/text/json_node.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/diagnostics/limit_reach.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <limits>
+#include <span>
+#include "telar_base/memory/allocator.hpp"
+#include <cstdint>
+#include <cstring>
+#include <cstddef>
+#include <exception>
+#include <charconv>
+#include <optional>
+#include <string_view>
 #include <stdexcept>
+#include "telar_base/text/utf8.hpp"
+
+
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
 
 namespace {
 

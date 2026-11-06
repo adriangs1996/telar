@@ -1,17 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "attachment_shelf.hpp"
-#include "application/dependencies.hpp"
+#include "../application/dependencies.hpp"
 #include "attachment_preview.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/types.hpp"
-#include "attachments/marker_screen.hpp"
-#include "attachments/marker_removal.hpp"
-#include "input/terminal_key.hpp"
-#include "input/binding.hpp"
-#include "input/key_event.hpp"
+#include "../attachments/catalog.hpp"
+#include "../attachments/types.hpp"
+#include "../attachments/marker_screen.hpp"
+#include "../attachments/marker_removal.hpp"
+#include <cstdint>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <optional>
 #include <string_view>
 #include <limits>
 #include "clipboard_images.hpp"
-#include "platform/clipboard_image_source.hpp"
+#include "../platform/clipboard_image_source.hpp"
 #include <QImage>
 #include <QPointF>
 #include <QObject>
@@ -22,12 +33,18 @@
 #include <QtCore/qmetatype.h>
 #include <QtCore/qtmetamacros.h>
 #include <exception>
-#include <cstddef>
-#include <cstdint>
 #include <QtCore/qcontainerfwd.h>
-#include <optional>
-#include <stdexcept>
 #include <utility>
+
+#include "application/dependencies.hpp"
+#include "attachments/catalog.hpp"
+#include "attachments/types.hpp"
+#include "attachments/marker_screen.hpp"
+#include "attachments/marker_removal.hpp"
+#include "platform/clipboard_image_source.hpp"
+
+
+import telar.gui.input.key_encoder;
 
 namespace telar::gui::qt {
 

@@ -1,8 +1,12 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "platform/awake_clock.hpp"
+
+#include <cstdint>
 #include "qml_fixture.hpp"
-#include "qt/history_selection_layout.hpp"
+#include "../qt/history_selection_layout.hpp"
 #include <QDebug>
 #include <QEvent>
 #include <QMetaObject>
@@ -20,9 +24,14 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <mutex>
+
+#pragma once
+#include "qt/history_selection_layout.hpp"
+
+
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::test {
 

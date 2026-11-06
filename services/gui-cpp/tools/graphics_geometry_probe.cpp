@@ -1,17 +1,29 @@
-#include "core/geometry.hpp"
-#include "graphics/display_box.hpp"
-#include "graphics/image_draw_budget.hpp"
-#include "graphics/placement.hpp"
-#include "graphics/source_rect.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <limits>
+#include <cstddef>
 #include "probe_graphics.hpp"
 #include "probe_io.hpp"
 #include <array>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <tuple>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.graphics.texture_cache;
 
 namespace {
 

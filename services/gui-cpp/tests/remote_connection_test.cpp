@@ -1,16 +1,35 @@
-#include "application/dependencies.hpp"
-#include "machines/failure.hpp"
-#include "machines/machine_row.hpp"
-#include "remote_bridge.hpp"
-#include "runtime_connection.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "../qt/remote_bridge.hpp"
+#include "../qt/runtime_connection.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_handshake.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "transport/runtime_link.hpp"
-#include "transport/runtime_protocol.hpp"
+#include <algorithm>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <chrono>
+#include <limits>
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCoreApplication>
@@ -29,15 +48,18 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
 #include <vector>
+
+#include "application/dependencies.hpp"
+#include "remote_bridge.hpp"
+#include "runtime_connection.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.client;
+import telar.gui.transport.runtime_link;
 
 namespace {
 

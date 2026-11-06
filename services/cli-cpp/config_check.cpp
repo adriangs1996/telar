@@ -1,12 +1,58 @@
-#include "config_check.hpp"
-#include "telar_config/local_modules.hpp"
-#include "telar_config/snapshot_reader.hpp"
-#include "telar_lua/json.hpp"
-#include "telar_platform/process_environment.hpp"
-#include "telar_platform/read_file.hpp"
-#include "telar_plugins/package_registry.hpp"
+module;
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <type_traits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cstring>
+#include <cstdio>
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_base/text/utf8.hpp"
+#include <cinttypes>
+#include <cmath>
+#include <initializer_list>
+#include <string>
+#include <cstddef>
+#include <concepts>
+#include <format>
+#include <utility>
+#include <ghostty/vt/unicode.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <arpa/inet.h>
+#include "telar_config/graphics/limits.hpp"
+#include <exception>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstdlib>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <openssl/sha.h>
+#include <unistd.h>
+#include <dirent.h>
 #include "window_config_bootstrap.hpp"
 #include <filesystem>
+
+module telar.cli.tab;
+
+import telar.config;
+import telar.lua;
+import telar.platform;
+import telar.plugins;
+
 
 namespace telar::runtime::cli {
 

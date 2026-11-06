@@ -1,18 +1,36 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "command_process.hpp"
-#include "links/link_opening.hpp"
-#include "links/link_target.hpp"
-#include "platform/external_links.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
+#include <limits>
+#include <optional>
+#include <array>
+#include <utility>
 #include "projection.hpp"
 #include <QIODevice>
 #include <QProcess>
 #include <QStringList>
 #include <chrono>
 #include <concepts>
-#include <optional>
 #include <stdexcept>
 #include <variant>
+
+#pragma once
+
+
+
+import telar.gui.links.link_hover;
+import telar.gui.links.cell_links;
+import telar.gui.platform.login_shell;
 
 namespace telar::gui::qt {
 

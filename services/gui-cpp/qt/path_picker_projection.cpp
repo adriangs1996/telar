@@ -1,21 +1,46 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/workbench_geometry.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
 #include "chrome_fonts.hpp"
-#include "core/cell_rectangle.hpp"
-#include "core/geometry.hpp"
-#include "fonts/face.hpp"
-#include "fonts/shaped_run_view.hpp"
-#include "paths/label.hpp"
-#include "paths/labels.hpp"
-#include "paths/page.hpp"
-#include "platform/window.hpp"
-#include "presentation/path_picker_footer.hpp"
-#include "presentation/path_picker_geometry.hpp"
-#include "presentation/path_picker_placement.hpp"
-#include "projection.hpp"
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include <string_view>
+#include "../platform/font.h"
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <stdexcept>
+#include <type_traits>
+#include <bit>
+#include <ghostty/vt/unicode.h>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "text/cell_text_measure.hpp"
+#include <charconv>
+#include <concepts>
+#include <system_error>
+#include "../platform/window.hpp"
+#include "../terminal/cell_position.hpp"
+#include "projection.hpp"
 #include <QQuickWindow>
 #include <QStringLiteral>
 #include <QVariantList>
@@ -25,13 +50,19 @@
 #include <QtCore/qstringfwd.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <string_view>
 #include <utility>
+
+#include "platform/window.hpp"
+#include "terminal/cell_position.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.paths.label;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 namespace {

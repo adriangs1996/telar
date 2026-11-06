@@ -1,13 +1,114 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "platform/linux/proc_file.hpp"
-#include "platform/process_inspector.hpp"
-#include "platform/system_certificates.hpp"
-#include "redirect/socket_owners.hpp"
-#include "telar_platform/temporary_directory.hpp"
-#include "telar_tls/certificate_pair.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <charconv>
+#include <cstdint>
+#include <cstdio>
+#include <fcntl.h>
+#include <limits>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include "telar_base/text/utf8.hpp"
+#include <cstring>
+#include <sys/types.h>
+#if (defined(__APPLE__))
+#include <cerrno>
+#endif
+#if (defined(__APPLE__))
+#include <exception>
+#endif
+#if (defined(__APPLE__))
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+#if (defined(__APPLE__))
+#include <Security/Security.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <memory>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdlib>
+#endif
+#if (!(defined(__APPLE__)))
+#include <memory>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/err.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/pem.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/x509.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <cstddef>
+#include "telar_client/codecs/telar_wire.hpp"
+#if (defined(__APPLE__))
+#include <libproc.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <dirent.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include <cstdlib>
+#include <limits.h>
+#include "telar_platform/random_bytes.hpp"
+#include "telar_platform/trace.hpp"
+#include <exception>
+#include <memory>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <ctime>
 #include <string>
 #include <sys/prctl.h>
+
+
+
+import telar.runtime.platform.launch_program;
+import telar.runtime.platform.process_probe;
+import telar.runtime.platform.system_certificates;
+import telar.runtime.redirect.socket_owners;
+import telar.platform;
+import telar.tls;
 
 using namespace telar;
 using namespace telar::runtime;

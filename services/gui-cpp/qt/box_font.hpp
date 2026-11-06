@@ -1,17 +1,25 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "terminal/glyphs/box_stroke.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <QByteArray>
 #include <QFont>
 #include <QFontInfo>
 #include <QRawFont>
 #include <QtCore/qendian.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
 #include <limits>
 #include <stdexcept>
+
+#pragma once
+
+
+import telar.gui.terminal.copy_mode;
 
 namespace telar::gui::qt {
 

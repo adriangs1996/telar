@@ -1,5 +1,15 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "history_selection_layout.hpp"
-#include "presentation/history_selection_motion.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include "window_animation_clock.hpp"
 #include <QMetaObject>
 #include <QPointer>
@@ -11,9 +21,10 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
+
+
+
+import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 

@@ -1,10 +1,23 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "curve_scene.hpp"
 #include "curve_mask.hpp"
 #include "curve_mask_node.hpp"
 #include "projection.hpp"
 #include "scene_nodes.hpp"
-#include "terminal/glyphs/box_curve.hpp"
-#include "terminal/glyphs/box_metrics.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <stdexcept>
+#include <algorithm>
+#include <cmath>
+#include <array>
+#include <limits>
+#include <optional>
 #include <QImage>
 #include <QPainter>
 #include <QRectF>
@@ -13,15 +26,12 @@
 #include <QSGSimpleTextureNode>
 #include <QSGTexture>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <utility>
+
+
+
+import telar.gui.terminal.glyphs.curve_cache;
 
 namespace telar::gui::qt {
 

@@ -1,9 +1,68 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "traffic/capture.hpp"
-#include "traffic/service.hpp"
-#include "exchange_capture/producer.hpp"
-#include <filesystem>
+#include "telar_platform/random_bytes.hpp"
+#include <optional>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cerrno>
+#include <exception>
+#include <csignal>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <array>
+#include "telar_platform/file_descriptor.hpp"
+#include <algorithm>
+#include <poll.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <limits>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <net/if.h>
+#include <pcap/pcap.h>
+#include <pthread.h>
+#include <atomic>
+#include <cassert>
+#include <stdexcept>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <string>
+#include <unordered_map>
+#include <charconv>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <limits.h>
+#include <memory>
+#include <mutex>
+#include <condition_variable>
+#include <type_traits>
 #include <thread>
+#include <brotli/decode.h>
+#include <initializer_list>
+#include <zlib.h>
+#include "telar_platform/trace.hpp"
+#include <zstd.h>
+#include <filesystem>
+
+
+
+import telar.runtime.traffic.capture;
+import telar.runtime.traffic.control_backend;
+import telar.runtime.exchange_capture.producer;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -24,7 +83,7 @@ struct Received {
   std::vector<Byte> bytes;
   std::uint64_t drops = 0;
 
-  Event event() const { return Protocol::decode(bytes); }
+  traffic::Event event() const { return Protocol::decode(bytes); }
 };
 
 static Received receive(int socket) {
@@ -49,7 +108,7 @@ static FileDescriptor subscriber(const std::string &path, std::string_view filte
   return socket;
 }
 
-static void publish(int socket, Event event) {
+static void publish(int socket, traffic::Event event) {
   std::array<Byte, Limits::frame_bytes> output;
   const auto body = Protocol::encode(output, event);
   sendAll(socket, Protocol::prefix(body.size()));
@@ -87,7 +146,7 @@ static std::vector<Byte> packet(Byte protocol, std::string_view body) {
 static void codecAndFilters() {
   const auto udp = packet(17, std::string_view{"a\0b", 3});
   const auto tcp = packet(6, "ignored");
-  Event original{.session = UINT64_MAX, .sequence = UINT64_MAX, .timestamp_us = 1234567, .interface_index = 7, .link_type = DLT_EN10MB, .original_bytes = static_cast<std::uint32_t>(udp.size() + 1), .kernel_drops = UINT64_MAX - 1, .capture_drops = 12, .runtime_drops = 34, .interface = "en0", .bytes = udp};
+  traffic::Event original{.session = UINT64_MAX, .sequence = UINT64_MAX, .timestamp_us = 1234567, .interface_index = 7, .link_type = DLT_EN10MB, .original_bytes = static_cast<std::uint32_t>(udp.size() + 1), .kernel_drops = UINT64_MAX - 1, .capture_drops = 12, .runtime_drops = 34, .interface = "en0", .bytes = udp};
   std::array<Byte, Limits::frame_bytes> output;
   const auto encoded = Protocol::encode(output, original);
   const auto decoded = Protocol::decode(encoded);
@@ -206,7 +265,7 @@ static void backpressureAndIsolation(const std::string &path) {
 
   std::vector<Byte> body(64 * 1024, 0xab);
   for (std::uint64_t sequence = 1; sequence <= 256; ++sequence) {
-    publish(producer.get(), Event{.session = 9, .sequence = sequence, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(body.size()), .interface = "fixture", .bytes = body});
+    publish(producer.get(), traffic::Event{.session = 9, .sequence = sequence, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(body.size()), .interface = "fixture", .bytes = body});
   }
 
   // An unread subscriber must not prevent new subscriptions or valid control replies.

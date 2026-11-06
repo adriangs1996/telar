@@ -1,24 +1,47 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/pane_bottom_reservation.hpp"
-#include "application/records.hpp"
-#include "attachment_shelf.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/types.hpp"
-#include "attachments/marker_screen.hpp"
-#include "attachments/marker_input.hpp"
-#include "attachments/marker_removal.hpp"
-#include "attachments/path_markers.hpp"
-#include "input/binding.hpp"
-#include "input/key_event.hpp"
-#include "input/terminal_key.hpp"
-#include "machines/machines.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include <cstdint>
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <limits>
+#include <exception>
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "terminal/screen.hpp"
-#include "application/workbench_geometry.hpp"
-#include "presentation/attachment_modal_geometry.hpp"
-#include "presentation/display_metrics.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "attachment_shelf.hpp"
+#include "../attachments/catalog.hpp"
+#include "../attachments/types.hpp"
+#include "../attachments/marker_screen.hpp"
+#include "../attachments/marker_removal.hpp"
+#include <stdexcept>
+#include <tuple>
+#include <bit>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <charconv>
+#include <system_error>
+#include "../attachments/path_markers.hpp"
+#include <cstring>
+#include "telar_base/memory/fixed_text.hpp"
+#include "../platform/clipboard_image_source.hpp"
+#include <cmath>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <chrono>
 #include "projection.hpp"
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
@@ -31,12 +54,23 @@
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <exception>
-#include <string_view>
+
+#include "attachments/catalog.hpp"
+#include "attachments/types.hpp"
+#include "attachments/marker_screen.hpp"
+#include "attachments/marker_removal.hpp"
+#include "attachments/path_markers.hpp"
+#include "platform/clipboard_image_source.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.application.workspace_replica;
+import telar.gui.attachments.marker_input;
+import telar.gui.input.key_encoder;
+import telar.gui.machines.picker;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 

@@ -1,15 +1,84 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "proxy/connect_handshake.hpp"
-#include "proxy/duplex_relay.hpp"
-#include "proxy/listener.hpp"
-#include "proxy/relay_direction.hpp"
-#include "proxy/socket_watch.hpp"
-#include "socket_pair.hpp"
+#include <cstdint>
+#include <cstring>
+#include <netinet/in.h>
+#include <optional>
+#include <sys/socket.h>
+#include <string_view>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <cstddef>
+#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <cerrno>
+#include <exception>
+#include <csignal>
+#include <netinet/tcp.h>
+#include <span>
+#include "telar_platform/random_bytes.hpp"
+#include <cstdlib>
 #include "telar_base/text/base64.hpp"
-#include "test_byte_stream.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <variant>
+#include <concepts>
+#include <unistd.h>
+#include <chrono>
+#include <atomic>
+#include <pthread.h>
+#include <netdb.h>
+#include "telar_platform/trace.hpp"
+#include <type_traits>
+#include <utility>
+#include <bitset>
 #include <poll.h>
+#if (defined(__APPLE__))
+#include <sys/event.h>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <climits>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <fcntl.h>
+#endif
+#if (defined(__linux__))
+#include <sched.h>
+#endif
+#if (defined(__linux__))
+#include <sys/epoll.h>
+#endif
+#if (defined(__linux__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__))
+#endif
+#include "socket_pair.hpp"
+#include "test_byte_stream.hpp"
 #include <string>
 #include <thread>
+
+
+
+import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.proxy.application_relay;
+import telar.runtime.proxy.runtime;
+import telar.runtime.proxy.relay_direction;
+import telar.runtime.proxy.http1_capture;
 
 using namespace telar;
 using namespace telar::runtime;

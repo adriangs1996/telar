@@ -1,5 +1,20 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "window_animation_clock.hpp"
-#include "core/configuration.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
 #include "history_loading_layout.hpp"
 #include "history_selection_layout.hpp"
 #include "modal_reveal_layout.hpp"
@@ -9,9 +24,10 @@
 #include "native_pane_attention.hpp"
 #include "native_tab_activity.hpp"
 #include "notification_layout.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/attention_fades.hpp"
-#include "presentation/frame_pacer.hpp"
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <variant>
 #include <QEvent>
 #include <QObject>
 #include <QQuickWindow>
@@ -21,14 +37,15 @@
 #include <QWindow>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qstringliteral.h>
-#include <algorithm>
 #include <cmath>
-#include <chrono>
-#include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
 #include <tuple>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

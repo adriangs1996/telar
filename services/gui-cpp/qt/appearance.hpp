@@ -1,7 +1,21 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <QtCore/qnamespace.h>
+
 #pragma once
 
-#include "core/theme_values.hpp"
-#include <QtCore/qnamespace.h>
+
+import telar.gui.core.metrics;
 
 namespace telar::gui::qt {
 

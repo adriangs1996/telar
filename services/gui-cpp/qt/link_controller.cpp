@@ -1,20 +1,45 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
 #include "external_link_opener.hpp"
-#include "links/cell_links.hpp"
-#include "links/file_path.hpp"
-#include "links/link_target.hpp"
-#include "links/link_text.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <limits>
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
-#include "platform/environment.hpp"
+#include "../platform/environment.hpp"
 #include "projection.hpp"
-#include "terminal/cell_position.hpp"
 #include <QString>
 #include <QtCore/qtmetamacros.h>
-#include <cstdint>
 #include <exception>
-#include <optional>
-#include <string_view>
+
+#include "platform/environment.hpp"
+#include "terminal/cell_position.hpp"
+
+
+import telar.gui.links.cell_links;
+import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
 

@@ -1,16 +1,86 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#if (TELAR_DEBUG)
+#endif
+#if (TELAR_DEBUG)
+#endif
+
 #include "telar_platform/trace.hpp"
-#include "telar_platform/thread_name.hpp"
+#include <pthread.h>
+#if (TELAR_DEBUG)
+#include <cerrno>
+#endif
+#if (TELAR_DEBUG)
+#include <exception>
+#endif
+#if (TELAR_DEBUG)
+#include "telar_platform/file_descriptor.hpp"
+#endif
+#if (TELAR_DEBUG)
+#include <algorithm>
+#endif
+#if (TELAR_DEBUG)
+#include <array>
+#endif
+#if (TELAR_DEBUG)
+#include <fcntl.h>
+#endif
+#if (TELAR_DEBUG)
+#include <limits.h>
+#endif
+#if (TELAR_DEBUG)
+#include <string_view>
+#endif
+#if (TELAR_DEBUG)
+#include <sys/stat.h>
+#endif
+#if (TELAR_DEBUG)
+#include <cstdint>
+#endif
+#if (TELAR_DEBUG)
+#endif
+#if (TELAR_DEBUG)
+#include <unistd.h>
+#endif
+#if (TELAR_DEBUG)
+#include <atomic>
+#endif
+#if (TELAR_DEBUG)
+#include <condition_variable>
+#endif
+#if (TELAR_DEBUG)
+#include <cstdio>
+#endif
+#if (TELAR_DEBUG)
+#include <cstring>
+#endif
+#if (TELAR_DEBUG)
+#include <mutex>
+#endif
+
 
 #if TELAR_DEBUG
-#include "telar_platform/private_directory.hpp"
-#include "telar_platform/thread_identity.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 #include <mutex>
-#include <pthread.h>
+
+#if (TELAR_DEBUG)
+#endif
+#if (TELAR_DEBUG)
+#endif
+
+import telar.platform;
+#if (TELAR_DEBUG)
+import telar.platform;
+#endif
+#if (TELAR_DEBUG)
+#endif
 
 namespace telar::runtime::trace {
 namespace {

@@ -1,18 +1,21 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/command_handler.hpp"
+
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <concepts>
 #include "assertions.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
 #include <algorithm>
 #include <array>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -22,6 +25,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#pragma once
+
+
+import telar.gui.application.host_effects;
 
 namespace telar::gui::test {
 

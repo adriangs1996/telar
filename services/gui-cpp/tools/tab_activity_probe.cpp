@@ -1,31 +1,53 @@
-#include "application/records.hpp"
-#include "core/color.hpp"
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/theme_values.hpp"
-#include "graphics/progress_capsule.hpp"
-#include "graphics/progress_ring.hpp"
-#include "graphics/rounded_rectangle.hpp"
-#include "graphics/store.hpp"
-#include "platform/progress_cosine.hpp"
-#include "presentation/progress_animation.hpp"
-#include "presentation/progress_motion.hpp"
-#include "presentation/tab_activity.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <cmath>
+#include <numbers>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <tuple>
+#include <charconv>
+#include <cstring>
+#include <system_error>
 #include "probe_io.hpp"
 #include "probe_text.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <cstdio>
-#include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.graphics.texture_cache;
+import telar.gui.platform.private_file_stamp;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.activity_order;
 
 namespace {
 

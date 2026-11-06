@@ -1,16 +1,33 @@
-#include "core/cpu_history.hpp"
-#include "core/theme_values.hpp"
-#include "presentation/bar_metrics.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <bit>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <optional>
+#include <string_view>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <bit>
 #include <cstdio>
 #include <exception>
 #include <limits>
 #include <memory>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.json_writer;
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace {
 

@@ -1,25 +1,38 @@
-#include "core/geometry.hpp"
-#include "core/unicode_scalar.hpp"
-#include "terminal/glyphs/alpha_raster.hpp"
-#include "terminal/glyphs/block.hpp"
-#include "terminal/glyphs/box.hpp"
-#include "terminal/glyphs/box_curve.hpp"
-#include "terminal/glyphs/box_metrics.hpp"
-#include "terminal/glyphs/box_stroke.hpp"
-#include "terminal/glyphs/braille.hpp"
-#include "terminal/glyphs/curve_cache.hpp"
-#include "terminal/glyphs/symbol.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <algorithm>
-#include <array>
-#include <cstddef>
+#include <cmath>
 #include <cstdint>
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <span>
+#include <limits>
+
+#include <initializer_list>
+#include <concepts>
+#include <functional>
+#include <type_traits>
+#include <utility>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.core.unicode_scalar;
+import telar.gui.terminal.font_grid;
+import telar.gui.terminal.glyphs.curve_cache;
+import telar.gui.terminal.copy_mode;
+
 
 namespace {
 

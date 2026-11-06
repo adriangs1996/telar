@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 4.4.5)
 
 # Export the SDK path so standalone LLVM tools can resolve Apple's C++ headers.
 if(CMAKE_HOST_APPLE AND (NOT CMAKE_SYSTEM_NAME OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
@@ -11,6 +11,7 @@ if(CMAKE_HOST_APPLE AND (NOT CMAKE_SYSTEM_NAME OR CMAKE_SYSTEM_NAME STREQUAL "Da
 endif()
 
 project(ebnf VERSION 0.1.0 LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,9 +23,15 @@ option(EBNF_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" 
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
 
+add_library(ebnf-core STATIC)
+add_library(ebnf::ebnf ALIAS ebnf-core)
+telar_modules(ebnf-core)
+target_link_libraries(ebnf-core PUBLIC tbc::tbc)
+target_include_directories(ebnf-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+
 add_library(ebnf_options INTERFACE)
 target_include_directories(ebnf_options INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(ebnf_options INTERFACE tbc::tbc)
+target_link_libraries(ebnf_options INTERFACE tbc::tbc ebnf-core)
 
 # CONFIGURE_DEPENDS rechecks source additions and removals during each build.
 file(GLOB_RECURSE ebnf_sources RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DEPENDS

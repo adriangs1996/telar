@@ -1,17 +1,41 @@
-#include "application/dependencies.hpp"
-#include "application/notification_item.hpp"
-#include "controlled_awake_clock.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "graphics/pauses.hpp"
-#include "graphics/store.hpp"
-#include "qml_fixture.hpp"
-#include "qt/application.hpp"
-#include "qt/list_model.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include "controlled_awake_clock.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <optional>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "qt/bundled_fonts.hpp"
+#include <span>
+#include <variant>
+#include <concepts>
+#include <utility>
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include "qml_fixture.hpp"
+#include "../qt/application.hpp"
+#include "../qt/list_model.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
@@ -32,11 +56,19 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <span>
+
+#include "application/dependencies.hpp"
+#include "core/memory.hpp"
+#include "qt/application.hpp"
+#include "qt/list_model.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.graphics.pauses;
+import telar.gui.graphics.texture_cache;
 
 namespace {
 

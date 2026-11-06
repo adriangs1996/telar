@@ -1,9 +1,20 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "telar_platform/error.hpp"
-#include "terminal/ghostty_handle.hpp"
-#include <cstring>
+#include <cerrno>
 #include <exception>
+#include "../terminal/ghostty_handle.hpp"
+#include <cstring>
 #include <unistd.h>
+
+#include "terminal/ghostty_handle.hpp"
+
+
+import telar.platform;
 
 int main(int argc, char **argv) {
   if (argc == 2 && std::strcmp(argv[1], "--process-identification-fixture") == 0) {

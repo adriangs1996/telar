@@ -44,7 +44,7 @@ add_executable(control-query-accounting-probe tests/control_accounting_probe.cpp
 target_link_libraries(control-query-accounting-probe PRIVATE runtime-core)
 add_executable(control-queue-tests tests/control_queue_test.cpp tests/pty_response_queue_test.cpp)
 target_include_directories(control-queue-tests PRIVATE .)
-target_link_libraries(control-queue-tests PRIVATE telar::base)
+target_link_libraries(control-queue-tests PRIVATE runtime-core)
 target_compile_options(control-queue-tests PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME control-queue-tests COMMAND control-queue-tests)
 add_executable(control-parser-tests tests/control_parser_test.cpp)
@@ -100,7 +100,7 @@ add_test(NAME control-kitty-colors-tests COMMAND control-kitty-colors-tests)
 add_executable(runtime-clipboard-tests tests/runtime_clipboard_test.cpp)
 target_link_libraries(runtime-clipboard-tests PRIVATE runtime-core)
 if(APPLE AND TELAR_CLIPBOARD_NATIVE)
-  target_sources(runtime-clipboard-tests PRIVATE tests/runtime_clipboard_native_test.mm
+  target_sources(runtime-clipboard-tests PRIVATE tests/runtime_clipboard_native_test.cpp
     ../gui-cpp/tests/platform/macos/private_clipboard.mm)
   target_include_directories(runtime-clipboard-tests PRIVATE ../gui-cpp/tests)
   set_target_properties(runtime-clipboard-tests PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES)

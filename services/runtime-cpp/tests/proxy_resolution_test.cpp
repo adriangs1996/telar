@@ -1,10 +1,39 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "proxy/name_resolutions.hpp"
+#include <pthread.h>
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <netinet/in.h>
+#include <optional>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <span>
+#include <string_view>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <cstddef>
+#include "telar_platform/trace.hpp"
+#include <concepts>
+#include <type_traits>
+#include <utility>
 #include <atomic>
 #include <chrono>
 #include <poll.h>
 #include <semaphore>
 #include <thread>
+
+
+
+import telar.runtime.proxy.relay_direction;
 
 using namespace telar;
 using namespace telar::runtime;

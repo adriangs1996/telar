@@ -1,27 +1,64 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/records.hpp"
-#include "application/workbench_geometry.hpp"
-#include "core/calendar_sample.hpp"
-#include "core/configuration.hpp"
-#include "history/entry.hpp"
+
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include <cmath>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
 #include "pane_attention_value.hpp"
-#include "presentation/application_mark.hpp"
-#include "presentation/chrome_surfaces.hpp"
-#include "presentation/history_labels.hpp"
-#include "presentation/history_path.hpp"
-#include "presentation/pane_decoration_geometry.hpp"
-#include "presentation/tab_activity.hpp"
-#include "presentation/tab_caption.hpp"
-#include "presentation/workspace_mark.hpp"
+#include "telar_base/text/utf8.hpp"
+#include <charconv>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <bit>
+#include <ghostty/vt/unicode.h>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <tuple>
 #include "progress_value.hpp"
-#include "telar_config/agents/provider.hpp"
 #include <QChar>
 #include <QColor>
 #include <QRectF>
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
-#include <span>
+
+#pragma once
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.application.sound_playback;
+import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.history.browser;
+import telar.gui.presentation.application_mark;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.activity_order;
+import telar.config;
 
 namespace telar::gui::qt {
 

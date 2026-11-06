@@ -1,24 +1,39 @@
-#include "default_bindings.hpp"
-#include "history/choice.hpp"
-#include "input/action.hpp"
-#include "input/binding.hpp"
-#include "input/configuration.hpp"
-#include "input/history_action_capture.hpp"
-#include "input/key_event.hpp"
-#include "input/key_router.hpp"
-#include "presentation/history_actions.hpp"
-#include <algorithm>
-#include <array>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+
 #include <cstddef>
 #include <cstdint>
+#include <array>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <cmath>
+#include <concepts>
+#include <limits>
 #include <cstdio>
 #include <exception>
 #include <initializer_list>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
+
+
+
+
+import telar.gui.history.browser;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
+import telar.gui.input.configuration;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_filter_geometry;
+
+import telar.gui.config.gui_query;
 
 namespace {
 

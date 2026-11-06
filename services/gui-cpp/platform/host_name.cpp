@@ -1,7 +1,12 @@
-#include "host_name.hpp"
+module;
+
 #include <QByteArray>
 #include <QString>
 #include <QSysInfo>
+
+module telar.gui.platform.login_shell;
+
+
 
 namespace telar::gui::platform {
 

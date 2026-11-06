@@ -1,12 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_agent_status.hpp"
 #include "agent_status_value.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/agent_animation.hpp"
-#include "presentation/agent_status.hpp"
-#include "presentation/pane_chrome.hpp"
-#include "presentation/progress_animation.hpp"
-#include "presentation/status_age.hpp"
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
 #include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <numbers>
 #include "window_animation_clock.hpp"
 #include <QAnyStringView>
 #include <QPointer>
@@ -19,8 +35,14 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstdint>
-#include <optional>
+
+
+
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.presentation.activity_order;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
 

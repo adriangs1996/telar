@@ -1,20 +1,38 @@
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "graphics/placeholder.hpp"
-#include "graphics/placement.hpp"
-#include "graphics/store.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "terminal/screen.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <algorithm>
-#include <array>
-#include <cstddef>
+#include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <exception>
-#include <iostream>
+#include "../core/memory.hpp"
 #include <string_view>
+#include "placeholder_diacritics.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <limits>
+#include "../terminal/screen.hpp"
+#include <array>
+#include <optional>
+#include <atomic>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <concepts>
+#include <utility>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <cstddef>
+#include <cstdio>
+#include <iostream>
+
+#include "core/memory.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.graphics.texture_cache;
 
 namespace {
 

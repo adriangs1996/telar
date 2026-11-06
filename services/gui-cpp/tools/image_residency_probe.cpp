@@ -1,11 +1,28 @@
-#include "graphics/image_residency.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <atomic>
 #include <cstdint>
+#include <limits>
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
+
+
+
+import telar.gui.graphics.texture_cache;
 
 namespace {
 

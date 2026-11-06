@@ -1,18 +1,52 @@
-#include "core/memory.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+
+#include "../core/memory.hpp"
 #include "plugin_catalog_cases.hpp"
 #include "plugin_effect_cases.hpp"
-#include "qt/plugin_packages.hpp"
-#include "telar_base/text/hexadecimal.hpp"
-#include "telar_platform/temporary_directory.hpp"
-#include "telar_plugins/package.hpp"
-#include "telar_plugins/package_copy_storage.hpp"
-#include "telar_plugins/package_inspection.hpp"
-#include "telar_plugins/package_registry_storage.hpp"
-#include "telar_plugins/specifications.hpp"
-#ifdef __APPLE__
-#include "telar_plugins/package_copy.hpp"
-#include "telar_plugins/package_inspector.hpp"
-#include "telar_plugins/package_registry.hpp"
+#include "../qt/plugin_packages.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cstdint>
+#include <span>
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <dirent.h>
+#include <fcntl.h>
+#include <algorithm>
+#include <array>
+#include <cstdlib>
+#include <limits.h>
+#include <string_view>
+#include <sys/stat.h>
+#include "telar_base/memory/fixed_text.hpp"
+#include <charconv>
+#include <optional>
+#include <stdexcept>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstddef>
+#include "telar_platform/open_directory.h"
+#include <unistd.h>
+#include <chrono>
+#include <concepts>
+#include <limits>
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <openssl/sha.h>
+#endif
+#if (defined(__APPLE__))
 #endif
 #include <QFile>
 #include <QIODevice>
@@ -20,17 +54,32 @@
 #include <QString>
 #include <QTemporaryDir>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <cstddef>
-#include <exception>
-#include <fcntl.h>
 #include <filesystem>
 #include <iostream>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <sys/stat.h>
 #include <utility>
+
+#include "core/memory.hpp"
+#include "qt/plugin_packages.hpp"
+#ifdef __APPLE__
+#endif
+
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+
+import telar.base.text;
+import telar.platform;
+import telar.plugins;
+#if (defined(__APPLE__))
+import telar.plugins;
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
 
 namespace {
 

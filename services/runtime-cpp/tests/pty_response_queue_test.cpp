@@ -1,9 +1,21 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "terminal/pty_response_queue.hpp"
-#include "terminal/response_outbox.hpp"
+#include "../terminal/pty_response_queue.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <stdexcept>
 #include <thread>
 #include <atomic>
 #include <vector>
+
+#include "terminal/pty_response_queue.hpp"
+
+
+import telar.runtime.terminal.osc_scanner;
 
 using namespace telar;
 using namespace telar::runtime;

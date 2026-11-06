@@ -1,12 +1,41 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "config/plugin_query.hpp"
+
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <algorithm>
 #include <array>
+#include <charconv>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <functional>
 #include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string_view>
+#include <system_error>
+#include <type_traits>
 #include <utility>
+#include "../core/memory.hpp"
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <limits.h>
+
+#pragma once
+
+
+import telar.gui.config.plugin_query;
 
 namespace telar::gui::test {
 

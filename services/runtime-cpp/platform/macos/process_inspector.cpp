@@ -1,14 +1,30 @@
-#include "../process_inspector.hpp"
-#include "../process_arguments.hpp"
+module;
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include "telar_base/text/utf8.hpp"
-#include <cstdio>
 #include <cstring>
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cstdio>
 #include <libproc.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/un.h>
-#include <unistd.h>
+
+module telar.runtime.platform.process_probe;
+
+
+
 
 namespace telar::runtime {
 

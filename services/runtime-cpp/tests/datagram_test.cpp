@@ -1,8 +1,46 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
 #include "packet_fixture.hpp"
 #include "tls_fixture.hpp"
-#include "traffic/capture_analysis.hpp"
-#include "traffic/recordings.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <array>
+#include <optional>
+#include <pcap/pcap.h>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <chrono>
+#include <string>
+#include <unordered_map>
+#include "telar_platform/random_bytes.hpp"
+#include <atomic>
+#include <cassert>
+#include <stdexcept>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <memory>
+#include "telar_base/memory/fixed_text.hpp"
+#include <exception>
+#include <charconv>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <limits.h>
+#include <mutex>
+
+
+
+import telar.runtime.traffic.capture_analysis;
+import telar.runtime.traffic.control_backend;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -36,7 +74,7 @@ static std::vector<Byte> packet(bool ipv6, bool icmp, std::string_view body) {
   return bytes;
 }
 
-static Event event(std::span<const Byte> bytes) {
+static traffic::Event event(std::span<const Byte> bytes) {
   return {.session = 9, .sequence = 17, .timestamp_us = 234, .interface_index = 7, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(bytes.size()), .offline = true, .interface = "datagram-fixture", .bytes = bytes};
 }
 
@@ -47,7 +85,7 @@ static void analysisAndCodec(TlsTestMemory &memory) {
       const std::string body{"a\0b-datagram", 12};
       auto bytes = packet(ipv6, icmp, body);
       std::size_t received = 0;
-      const auto emit = [&](const Event &item) {
+      const auto emit = [&](const traffic::Event &item) {
         check(item.kind == Kind::datagram && item.session == 9 && item.sequence == 17 && item.interface_index == 7 && item.interface == "datagram-fixture" && item.offline);
         const auto parsed = DatagramCodec::decode(item.bytes);
         check(parsed.ipv6 == ipv6 && !parsed.truncated);
@@ -66,7 +104,7 @@ static void analysisAndCodec(TlsTestMemory &memory) {
       analysis.packet(event(bytes), Selection::datagrams, emit);
       check(received == 1);
       bytes.pop_back();
-      analysis.packet(event(bytes), Selection::datagrams, [&](const Event &item) {
+      analysis.packet(event(bytes), Selection::datagrams, [&](const traffic::Event &item) {
         const auto parsed = DatagramCodec::decode(item.bytes);
         check(parsed.truncated && parsed.original_bytes == parsed.bytes.size() + 1);
         ++received;
@@ -79,7 +117,7 @@ static void analysisAndCodec(TlsTestMemory &memory) {
           if (parsed) { check(parsed->truncated); }
         }
       }
-      analysis.expire([](const Event &) { check(false); }, true);
+      analysis.expire([](const traffic::Event &) { check(false); }, true);
     }
   }
 }
@@ -112,7 +150,7 @@ static void fragmentedAndSelected(TlsTestMemory &memory) {
     last.insert(last.end(), original.begin() + prefix + 16, original.end());
     CaptureAnalysis analysis{memory};
     std::size_t count = 0;
-    const auto emit = [&](const Event &item) {
+    const auto emit = [&](const traffic::Event &item) {
       check(item.kind == Kind::datagram);
       check(std::ranges::equal(DatagramCodec::decode(item.bytes).bytes, body));
       ++count;
@@ -121,8 +159,8 @@ static void fragmentedAndSelected(TlsTestMemory &memory) {
     check(count == 0);
     analysis.packet(event(first), Selection::datagrams, emit);
     check(count == 1);
-    analysis.packet(event(original), Selection::flows, [](const Event &) { check(false); });
-    analysis.expire([](const Event &) { check(false); }, true);
+    analysis.packet(event(original), Selection::flows, [](const traffic::Event &) { check(false); });
+    analysis.expire([](const traffic::Event &) { check(false); }, true);
   }
 }
 
@@ -133,7 +171,7 @@ static void recordedDatagrams(TlsTestMemory &memory) {
   check(recordings.selects(Selection::datagrams) && !recordings.selects(Selection::flows));
   CaptureAnalysis analysis{memory};
   const auto bytes = packet(false, false, "recorded");
-  analysis.packet(event(bytes), Selection::datagrams, [&](const Event &item) { recordings.record(item, {}); });
+  analysis.packet(event(bytes), Selection::datagrams, [&](const traffic::Event &item) { recordings.record(item, {}); });
   const auto page = recording::Protocol::page(recordings.handle({.id = started.id}, output.bytes()));
   check(page.count == 1);
   plugins::FrameReader rows{page.rows};
@@ -157,17 +195,17 @@ static void malformedAndExtensions(TlsTestMemory &memory) {
     const auto prefix = ipv6 ? 40u : 20u;
     for (const auto length : {0, 7, 13, 65535}) {
       word(bytes, prefix + 4, static_cast<std::uint16_t>(length));
-      analysis.packet(event(bytes), Selection::datagrams, [](const Event &) { check(false); });
+      analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event &) { check(false); });
     }
     bytes = packet(ipv6, false, {});
-    analysis.packet(event(bytes), Selection::datagrams, [](const Event &item) { check(DatagramCodec::decode(item.bytes).bytes.empty()); });
+    analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event &item) { check(DatagramCodec::decode(item.bytes).bytes.empty()); });
     if (ipv6) {
       bytes = packet(true, false, "options");
       bytes.insert(bytes.begin() + 40, 8, 0);
       bytes[6] = 0;
       bytes[40] = 17;
       word(bytes, 4, bytes.size() - 40);
-      analysis.packet(event(bytes), Selection::datagrams, [](const Event &item) {
+      analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event &item) {
         const auto parsed = DatagramCodec::decode(item.bytes);
         check(parsed.transport == DatagramTransport::udp && parsed.original_bytes == 7 && !parsed.truncated);
       });

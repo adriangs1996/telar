@@ -1,14 +1,39 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "machine_profiles_source.hpp"
-#include "application/dependencies.hpp"
-#include "machines/edit.hpp"
-#include "machines/failure.hpp"
-#include "machines/messages.hpp"
-#include "machines/owned_edit.hpp"
-#include "machines/profile_store.hpp"
-#include "platform/file_stamp.hpp"
-#include "platform/profile_file.hpp"
-#include "platform/secure_random.hpp"
+#include "../application/dependencies.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "../core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <bit>
+#include <limits>
+#include <new>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <sys/stat.h>
+#include <sys/param.h>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <stop_token>
 #include <QFuture>
 #include <QString>
 #include <QtConcurrentRun>
@@ -17,14 +42,15 @@
 #include <QtCore/qtimer.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <stop_token>
-#include <string_view>
 #include <utility>
+
+#include "application/dependencies.hpp"
+
+
+import telar.gui.machines.profile_store;
+import telar.gui.machines.discovery;
+import telar.gui.platform.profile_file;
+import telar.gui.platform.private_file_stamp;
 
 namespace telar::gui::qt {
 

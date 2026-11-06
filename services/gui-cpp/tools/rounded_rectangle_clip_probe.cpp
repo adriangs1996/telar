@@ -1,12 +1,26 @@
-#include "graphics/rounded_rectangle.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+
+
+
+import telar.gui.graphics.placeholder;
 
 namespace {
 

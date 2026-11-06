@@ -16,7 +16,7 @@ void sqliteNextInvalidates(tbc::view<spec::statement &> statement) {
 
 // CASE: runtime.sqlite_copy_survives_next
 // PAIR: runtime.sqlite_next
-// SOURCE: services/runtime-cpp/history/result_rows.hpp :: HistoryRows::append
+// SOURCE: services/runtime-cpp/history/store.cppm :: HistoryRows::append
 // STATUS: pending
 // CONTRACT: Copying row text into owned storage severs its SQLite-row dependency.
 // SCENARIO: A copied string remains valid after stepping to the next row.
@@ -71,7 +71,7 @@ tbc::view<std::string_view, tbc::lt::a> sqliteStatementEscape() {
 
 // CASE: runtime.sqlite_owned_result
 // PAIR: runtime.sqlite_owner
-// SOURCE: services/runtime-cpp/history/result_rows.hpp :: HistoryRows::copy
+// SOURCE: services/runtime-cpp/history/store.cppm :: HistoryRows::copy
 // STATUS: pending
 // CONTRACT: Return an owning copy instead of the SQLite-managed view.
 // SCENARIO: Destroying the statement does not affect the returned string.

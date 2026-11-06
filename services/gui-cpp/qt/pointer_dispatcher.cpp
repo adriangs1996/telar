@@ -1,20 +1,44 @@
-#include "input/history_action_capture.hpp"
-#include "input/history_hover.hpp"
-#include "history/choice.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
 #include <span>
 #include <variant>
 #include <QString>
 #include "pointer_dispatcher.hpp"
 #include "application.hpp"
-#include "platform/scroll_event.hpp"
-#include <string_view>
+#include "../platform/scroll_event.hpp"
 #include <QCoreApplication>
 #include "attachment_shelf.hpp"
 #include "native_pointer_events.hpp"
-#include "application/records.hpp"
-#include "input/child_mouse.hpp"
-#include "input/mouse_encoder.hpp"
-#include "links/link_gesture.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "../terminal/cell_position.hpp"
 #include "mouse_buttons.hpp"
 #include "terminal_item.hpp"
 #include <QMouseEvent>
@@ -28,13 +52,15 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qtypes.h>
 #include <QtCore/qstringliteral.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <utility>
+
+#include "platform/scroll_event.hpp"
+
+
+import telar.gui.input.child_mouse;
+import telar.gui.history.browser;
+import telar.gui.application.workspace_replica;
+import telar.gui.input.configuration;
+import telar.gui.links.link_hover;
 
 namespace telar::gui::qt {
 

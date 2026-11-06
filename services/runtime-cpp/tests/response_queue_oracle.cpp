@@ -1,4 +1,26 @@
-#include "transport/outgoing_frames.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <concepts>
+#include <stdexcept>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <array>
+#include <bit>
+#include <exception>
+
+
+
+import telar.runtime.transport.connection;
 
 using namespace telar;
 using namespace telar::runtime;

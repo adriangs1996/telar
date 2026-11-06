@@ -6,7 +6,7 @@ using int_view = tbc::view<const int &, tbc::lt::a>;
 
 // CASE: core.shared_write
 // PAIR: core.shared_liveness
-// SOURCE: dlls/ebnf/lexer.hpp :: token
+// SOURCE: dlls/ebnf/lexer.cppm :: token
 // STATUS: pending
 // CONTRACT: Shared references protect their referent from writes while required.
 // SCENARIO: The later read keeps the loan live; diagnose the intervening write.
@@ -21,7 +21,7 @@ void sharedWrite() {
 
 // CASE: core.ended_shared
 // PAIR: core.shared_liveness
-// SOURCE: dlls/ebnf/lexer.hpp :: token
+// SOURCE: dlls/ebnf/lexer.cppm :: token
 // STATUS: pending
 // CONTRACT: A loan with no remaining use or observing destructor may end before scope exit.
 // SCENARIO: The view is consumed before the write; accept the later mutation.

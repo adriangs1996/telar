@@ -42,6 +42,6 @@ execute_process(
     -j "${GUI_LINT_JOBS}"
     -export-fixes "${GUI_BUILD_DIRECTORY}/clang-tidy.yaml"
     -quiet
-    "/services/gui-cpp/(?!out[^/]*/).*\\.(cpp|mm)$"
+    "/services/gui-cpp/(?!out[^/]*/).*\\.(cpp|cppm|mm)$"
   WORKING_DIRECTORY "${gui_directory}"
   COMMAND_ERROR_IS_FATAL ANY)

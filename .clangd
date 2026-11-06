@@ -1,0 +1,4 @@
+CompileFlags:
+  # clangd rebuilds its own BMIs with its parsing options and cache identity.
+  # The compilation database supplies the source graph for import discovery.
+  Remove: ['-fmodule-file=*', '-fmodule-output=*']

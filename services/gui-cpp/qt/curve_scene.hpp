@@ -1,15 +1,35 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/color.hpp"
-#include "core/geometry.hpp"
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include "curve_mask.hpp"
-#include "terminal/glyphs/box_curve.hpp"
-#include "terminal/glyphs/curve_cache.hpp"
+#include <span>
+#include <stdexcept>
+#include <limits>
+#include <bit>
+#include <concepts>
+#include <functional>
+#include <type_traits>
+#include <utility>
 #include <QQuickWindow>
 #include <QSGNode>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <optional>
+
+#pragma once
+
+
+import telar.gui.core.metrics;
+import telar.gui.terminal.glyphs.curve_cache;
 
 namespace telar::gui::qt {
 

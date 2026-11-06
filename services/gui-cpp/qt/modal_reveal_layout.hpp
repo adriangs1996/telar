@@ -1,13 +1,23 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "presentation/modal_motion.hpp"
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include <QMetaObject>
 #include <QPointer>
 #include <QQuickItem>
 #include <QString>
 #include <QtQml/qqmlregistration.h>
-#include <cstdint>
-#include <optional>
+
+#pragma once
+
+
+import telar.gui.presentation.suggestion_labels;
 
 namespace telar::gui::qt {
 

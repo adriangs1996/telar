@@ -1,21 +1,43 @@
-#include "application/agent_replica.hpp"
-#include "application/records.hpp"
-#include "application/workspace_replica.hpp"
-#include "core/memory.hpp"
-#include "presentation/activity_order.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_messages.hpp"
+#include <cstdint>
+#include "../core/memory.hpp"
+#include <algorithm>
+#include <limits>
+#include "../core/terminal_size.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include <stdexcept>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <tuple>
+#include <compare>
 #include "probe_io.hpp"
 #include "probe_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <deque>
-#include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.presentation.activity_order;
 
 namespace {
 

@@ -1,24 +1,47 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/dependencies.hpp"
-#include "application/records.hpp"
-#include "core/theme_values.hpp"
-#include "history/browser.hpp"
-#include "history/choice.hpp"
-#include "history/entry.hpp"
-#include "history/search.hpp"
+#include "../application/dependencies.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include <stdexcept>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "key_adapter.hpp"
 #include "list_model.hpp"
-#include "platform/wall_clock.hpp"
-#include "platform/window.hpp"
-#include "presentation/history_labels.hpp"
-#include "presentation/history_inspection.hpp"
-#include "presentation/history_path.hpp"
-#include "presentation/tab_caption.hpp"
-#include "text/bounded_text.hpp"
+#include "../platform/window.hpp"
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include <chrono>
+#include <bit>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <ghostty/vt/unicode.h>
 #include "projection.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QtCore/qbytearrayview.h>
@@ -29,9 +52,17 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <string_view>
-#include <utility>
+
+#include "application/dependencies.hpp"
+#include "platform/window.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.history.browser;
+import telar.gui.platform.notification_commands;
+import telar.gui.presentation.history_inspection;
+import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 

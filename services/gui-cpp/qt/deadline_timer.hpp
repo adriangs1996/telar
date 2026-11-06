@@ -1,11 +1,25 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/notification_item.hpp"
-#include <QTimer>
+
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string_view>
+#include <QTimer>
 #include <optional>
+
+#pragma once
+
+
+import telar.gui.application.workspace_replica;
 
 namespace telar::gui::qt {
 

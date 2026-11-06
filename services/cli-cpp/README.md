@@ -20,7 +20,7 @@ The runtime's build includes this directory and writes `telar` next to
 `telar-runtime`. To build only the CLI:
 
 ```sh
-cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release -DGHOSTTY_VT_ROOT=/path/to/libghostty-vt
+../../tools/cpp configure cli --config Release
 cmake --build out
 ctest --test-dir out --output-on-failure
 ```
@@ -39,6 +39,14 @@ the parity and latency checks.
 remote machine/worktree commands, the deliberate native wire differences and
 the remaining runtime gaps. Repository preparation still needs the machine
 family's profile listing and dispatch entry point to be integrated.
+
+## Reproducible C++ modules build
+
+Use the [shared toolchain and module guide](../../docs/build/cpp-modules.md)
+for a clean clone, pinned bootstrap, configure/build/test commands, diagnostics
+variants and clangd. The compiler and tools are selected by `tools/cpp` on both
+macOS and Linux. C++ module sources are primary; Qt/moc, Objective-C++, generated
+interfaces and preprocessor contracts retain documented textual boundaries.
 
 ## Agent hooks
 

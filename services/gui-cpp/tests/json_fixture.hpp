@@ -1,9 +1,23 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "telar_base/text/json.hpp"
+
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <charconv>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
 #include <stdexcept>
 #include <string>
-#include <string_view>
+
+#pragma once
+
+
+import telar.base.text;
 
 namespace telar::gui::test {
 

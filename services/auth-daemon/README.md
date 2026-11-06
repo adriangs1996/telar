@@ -23,7 +23,8 @@ The format and clang-tidy profiles are shared with the C++ runtime through
 relative symlinks. Tooling targets use the existing generic CMake script in
 `dlls/tbc/cmake/tooling.cmake`; TBC is not a build dependency.
 
-Requirements are CMake 3.25 or newer, Ninja and a C++23 compiler. Formatting and
+Use `../../tools/cpp bootstrap` and add `../../.toolchain/bin` to `PATH`.
+The presets use the pinned LLVM 23.1.5 / CMake 4.4.5 / Ninja 1.13.2 toolchain. Formatting and
 linting additionally require clang-format and clang-tidy, preferably from the
 compiler's LLVM installation. The `just` recipes select Homebrew LLVM on macOS
 and the default toolchain on Linux, like the GUI recipes.

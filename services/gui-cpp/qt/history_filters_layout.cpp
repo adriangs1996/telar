@@ -1,11 +1,30 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "history_filters_layout.hpp"
-#include "input/history_hover.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "presentation/history_actions.hpp"
-#include "presentation/history_filter_chip_geometry.hpp"
-#include "presentation/history_filter_geometry.hpp"
-#include "presentation/history_filter_labels.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>
@@ -16,12 +35,12 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <cstdint>
-#include <span>
-#include <cmath>
-#include <cstddef>
-#include <string_view>
+
+
+
+import telar.gui.input.child_mouse;
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 

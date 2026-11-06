@@ -1,16 +1,30 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "command_process.hpp"
 #include "host_command.hpp"
-#include "platform/sound_commands.hpp"
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <string_view>
 #include "telar_client/serializers/telar_protocol.hpp"
+#include <cstdint>
+#include <stdexcept>
 #include <QProcess>
 #include <chrono>
 #include <concepts>
-#include <cstddef>
 #include <exception>
 #include <optional>
-#include <stdexcept>
+
+#pragma once
+
+
+
+import telar.gui.platform.notification_commands;
 
 namespace telar::gui::qt {
 

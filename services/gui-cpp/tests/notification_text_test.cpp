@@ -1,11 +1,35 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "presentation/notification_text.hpp"
-#include "text/grapheme_cursor.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include <array>
+#include <charconv>
+#include <concepts>
 #include <cstddef>
+#include <cstring>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include <bit>
+#include <cstdint>
+#include <optional>
+#include <algorithm>
+#include <ghostty/vt/unicode.h>
+#include <cmath>
+#include <span>
 #include <exception>
 #include <iostream>
-#include <string_view>
 #include <utility>
+
+
+
+import telar.gui.presentation.history_meta_geometry;
+import telar.gui.text.bounded_editor;
 
 namespace {
 

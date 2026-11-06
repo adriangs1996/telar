@@ -1,16 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "tab_strip_layout.hpp"
 #include "chrome_fonts.hpp"
-#include "core/metrics.hpp"
-#include "input/tab_drag.hpp"
-#include "input/tab_drop_slots.hpp"
-#include "list_model.hpp"
-#include "presentation/progress_geometry.hpp"
-#include "presentation/tab_activity.hpp"
-#include "presentation/tab_motion_frame.hpp"
-#include "presentation/tab_motions.hpp"
-#include "presentation/tab_strip_geometry.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <limits>
+#include "list_model.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include <concepts>
+#include <utility>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <tuple>
+#include <charconv>
+#include <cstring>
+#include <system_error>
 #include "window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
@@ -27,17 +53,13 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.activity_order;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

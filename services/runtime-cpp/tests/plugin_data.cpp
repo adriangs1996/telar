@@ -1,6 +1,34 @@
-#include "plugins/frame_writer.hpp"
-#include "telar_plugins/manifest.hpp"
-#include "telar_plugins/trust_store.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <charconv>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <array>
+#include <stdexcept>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+
+
+
+import telar.runtime.plugins.protocol;
+import telar.plugins;
 
 using namespace telar;
 using namespace telar::runtime;

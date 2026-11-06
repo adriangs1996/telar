@@ -1,22 +1,40 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
 #include "erasure_allocator.hpp"
-#include "platform/clipboard_image_file.h"
-#include "platform/clipboard_image_pipe.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "platform/clipboard_pipe_status.h"
-#include "telar_platform/file_descriptor.hpp"
+#include "../platform/clipboard_image_file.h"
+#include "../attachments/secure_erase.hpp"
+#include "../attachments/sensitive_bytes.hpp"
+#include "../attachments/types.hpp"
+#include "../core/memory.hpp"
+#include "../platform/clipboard_image_source.hpp"
 #include <algorithm>
 #include <array>
-#include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstddef>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <time.h>
+#include <unistd.h>
+#include "platform/clipboard_pipe_status.h"
+#include "telar_platform/file_descriptor.hpp"
+#include <atomic>
 #include <exception>
 #include <iostream>
 #include <new>
-#include <span>
-#include <stdexcept>
 #include <thread>
-#include <unistd.h>
+
+#include "platform/clipboard_image_file.h"
+#include "platform/clipboard_image_source.hpp"
+
+
+import telar.gui.platform.profile_file;
 
 namespace {
 

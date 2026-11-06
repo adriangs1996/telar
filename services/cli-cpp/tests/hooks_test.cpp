@@ -1,9 +1,50 @@
-#include "../hooks/input.hpp"
-#include "../hooks/map.hpp"
-#include "../hooks/target.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <charconv>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <cerrno>
+#include "telar_platform/trace.hpp"
+#include <unistd.h>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <algorithm>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <chrono>
+#include <limits>
+#include <cstring>
+#include <concepts>
+#include <dirent.h>
+#include <cstdlib>
+#include <openssl/md5.h>
+#include <cstddef>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include "telar_client/codecs/telar_codec.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include <stdexcept>
 #include "check.hpp"
-#include "telar_platform/temporary_directory.hpp"
 #include <fstream>
+
+
+
+import telar.cli.hook;
+import telar.platform;
 
 using namespace telar;
 using namespace telar::runtime;

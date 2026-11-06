@@ -1,10 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "png_decoder.hpp"
-#include "storage.hpp"
+#include "../diagnostics/line.hpp"
+#include "../terminal/ghostty_allocator.hpp"
+#include "../terminal/ghostty_handle.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <optional>
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
 #include <ghostty/wuffs-v0.4.h>
 #include <bit>
 #include <cstddef>
 #include <limits>
 #include <utility>
+
+
+
+import telar.runtime.graphics.prepared_images;
 
 namespace telar::runtime {
 namespace {

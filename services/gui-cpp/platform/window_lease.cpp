@@ -1,22 +1,30 @@
-#include "window_lease.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/open_beneath.hpp"
-#include "telar_platform/private_directory.hpp"
-#include <algorithm>
+module;
+
 #include <array>
+#include <climits>
+#include <cstdint>
+#include <string_view>
+#include "telar_platform/file_descriptor.hpp"
 #include <cerrno>
+#include <exception>
+#include <algorithm>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <span>
 #include <stdexcept>
-#include <string_view>
 #include <sys/file.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <system_error>
 #include <unistd.h>
+
+module telar.gui.platform.notification_commands;
+
+import telar.platform;
+
 
 namespace telar::gui::platform {
 

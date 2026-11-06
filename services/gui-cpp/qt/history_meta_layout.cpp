@@ -1,15 +1,33 @@
-#include "input/history_action_capture.hpp"
-#include "history/choice.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <optional>
+#include <utility>
 #include "history_meta_layout.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "core/theme_values.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include "history_hint_projection.hpp"
-#include "presentation/history_actions.hpp"
-#include "presentation/history_card.hpp"
-#include "presentation/history_facts.hpp"
-#include "presentation/history_meta_geometry.hpp"
+#include <bit>
+#include <stdexcept>
+#include <ghostty/vt/unicode.h>
+#include <limits>
 #include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -20,13 +38,14 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <optional>
-#include <string_view>
+
+
+
+import telar.gui.input.child_mouse;
+import telar.gui.history.browser;
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_meta_geometry;
 
 namespace telar::gui::qt {
 

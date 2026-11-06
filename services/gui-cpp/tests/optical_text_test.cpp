@@ -1,8 +1,19 @@
-#include "core/memory.hpp"
-#include "fonts/native_match.hpp"
-#include "platform/macos/glyph_rasterizer.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/optical_text.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include <span>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include "../qt/bundled_fonts.hpp"
+#include "../qt/optical_text.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFile>
@@ -21,17 +32,22 @@
 #include <QtGui/qglyphrun.h>
 #include <QtGui/qrawfont.h>
 #include <QtGui/qrgb.h>
-#include <algorithm>
 #include <array>
-#include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <memory>
 #include <stdexcept>
 #include <vector>
+#include "../platform/macos/glyph_rasterizer.h"
+
+#include "core/memory.hpp"
+#include "qt/bundled_fonts.hpp"
+#include "qt/optical_text.hpp"
+
+
+import telar.gui.fonts.face;
+import telar.gui.platform.private_file_stamp;
 
 extern "C" {
 #include "glyph_rasterizer.h"

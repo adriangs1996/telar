@@ -18,6 +18,8 @@ target_link_libraries(your_target PRIVATE telar::platform)
 
 ## Editor
 
-`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
-include directories and definitions consumers compile these headers with
-(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.
+Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
+`tools/cpp configure platform` generates `out/compile_commands.json`.
+Build the project before opening importers, then launch `.toolchain/bin/clangd`
+with `--experimental-modules-support`. Module interfaces have their own compile
+commands; the remaining native ABI and macro headers borrow consumer commands.

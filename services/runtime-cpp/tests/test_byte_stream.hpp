@@ -1,11 +1,23 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "check.hpp"
-#include "platform/byte_stream.hpp"
+#include <concepts>
+#include <cstdint>
+#include <span>
 #include <algorithm>
 #include <cstring>
 #include <limits>
 #include <string>
+
+#pragma once
+
+
+
+import telar.runtime.platform.stream_read_buffer;
 
 class TestByteStream {
 public:

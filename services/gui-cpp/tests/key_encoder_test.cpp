@@ -1,17 +1,33 @@
-#include "core/unicode_scalar.hpp"
-#include "input/binding.hpp"
-#include "input/key_encoder.hpp"
-#include "input/key_event.hpp"
-#include "input/terminal_key.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <array>
+#include <bit>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <span>
+#include <tuple>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <charconv>
+#include <limits>
+#include <system_error>
+#include <utility>
+#include "telar_client/codecs/telar_wire.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.input.key_encoder;
 
 namespace {
 

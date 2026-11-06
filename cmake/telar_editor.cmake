@@ -1,17 +1,13 @@
-# Editor support for the C++ projects under dlls/ and services/.
-#
-# A dll configured on its own (`cmake -S dlls/NAME -B dlls/NAME/out`) has no
-# translation units of its own for clangd to borrow flags from, so
-# telar_editor_flags writes out/clangd/compile_flags.txt with the include
-# directories and definitions its consumers compile its headers with,
-# dependencies included. The dll's .clangd points clangd there.
+# Each compiled module has an entry in out/compile_commands.json. The editor
+# probe also supplies a context for residual native ABI and macro headers.
+# Supplemental flags remain available to editors without module awareness.
 
 # Standalone LLVM tools need the SDK named on macOS. Include before project().
-if(CMAKE_HOST_APPLE AND NOT DEFINED CMAKE_OSX_SYSROOT AND NOT DEFINED ENV{SDKROOT})
+if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_SYSROOT AND NOT DEFINED ENV{SDKROOT})
   execute_process(COMMAND xcrun --sdk macosx --show-sdk-path
     OUTPUT_VARIABLE telar_editor_sdk OUTPUT_STRIP_TRAILING_WHITESPACE
     COMMAND_ERROR_IS_FATAL ANY)
-  set(CMAKE_OSX_SYSROOT "${telar_editor_sdk}" CACHE PATH "macOS SDK")
+  set(CMAKE_OSX_SYSROOT "${telar_editor_sdk}" CACHE PATH "macOS SDK" FORCE)
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

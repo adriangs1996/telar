@@ -1,13 +1,23 @@
-#include "managed_directory.hpp"
-#include "platform/path_limits.hpp"
-#include "telar_platform/error.hpp"
-#include "telar_platform/private_directory.hpp"
+module;
+
+#include <string_view>
+#include <cstddef>
+#include <sys/param.h>
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <array>
-#include <cerrno>
-#include <stdexcept>
-#include <string_view>
+#include <fcntl.h>
+#include <limits.h>
 #include <sys/stat.h>
+#include <stdexcept>
+
+module telar.gui.platform.login_shell;
+
+import telar.gui.platform.profile_file;
+import telar.platform;
+
 
 namespace telar::gui::platform {
 

@@ -1,7 +1,27 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "capture_oracle.hpp"
-#include "exchange_capture/half.hpp"
+#include <algorithm>
+#include <atomic>
+#include <cassert>
+#include <cstddef>
+#include "telar_base/memory/allocator.hpp"
+#include <cstring>
+#include <cstdint>
+#include <span>
 #include <array>
+#include <stdexcept>
+#include <string_view>
 #include <optional>
+#include <chrono>
+
+
+
+import telar.runtime.exchange_capture.exchange;
 
 using namespace telar;
 using namespace telar::runtime;

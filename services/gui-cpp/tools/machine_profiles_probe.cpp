@@ -1,18 +1,38 @@
-#include "core/memory.hpp"
-#include "machines/failure.hpp"
-#include "machines/field_rules.hpp"
-#include "machines/identity.hpp"
-#include "machines/profile.hpp"
-#include "machines/profile_codec.hpp"
-#include "machines/profiles.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include <string_view>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <bit>
+#include <limits>
+#include <new>
 #include "probe_io.hpp"
 #include "probe_text.hpp"
-#include <cstdint>
 #include <cstdio>
-#include <exception>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.profile_store;
 
 namespace {
 

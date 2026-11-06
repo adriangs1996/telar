@@ -1,17 +1,42 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/geometry.hpp"
-#include "input/history_hover.hpp"
-#include "presentation/history_filter_geometry.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include <QQuickItem>
 #include <QRectF>
 #include <QStringList>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstddef>
-#include <cstdint>
-#include <span>
+
+#pragma once
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 

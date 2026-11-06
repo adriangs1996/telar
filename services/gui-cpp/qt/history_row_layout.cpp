@@ -1,11 +1,27 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "history_row_layout.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "presentation/history_card.hpp"
-#include "presentation/history_command_line.hpp"
-#include "presentation/history_match_highlight.hpp"
-#include "presentation/history_row_geometry.hpp"
-#include "text/cell_text_measure.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <bit>
+#include <stdexcept>
+#include <ghostty/vt/unicode.h>
+#include <limits>
+#include <concepts>
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -16,12 +32,14 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_meta_geometry;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

@@ -1,4 +1,24 @@
-#include "command_capture/osc_zones.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../diagnostics/line.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <chrono>
+#include <cstdint>
+#include <charconv>
+#include <cstring>
+#include <limits>
+#include <optional>
+#include <utility>
+
+
+
+import telar.runtime.command_capture.tracker;
 
 using namespace telar;
 using namespace telar::runtime;

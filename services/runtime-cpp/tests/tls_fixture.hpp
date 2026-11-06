@@ -1,10 +1,57 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "check.hpp"
-#include "telar_platform/private_directory.hpp"
-#include "telar_tls/authority.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <algorithm>
+#include <array>
+#include <fcntl.h>
+#include <limits.h>
+#include <string_view>
+#include <sys/stat.h>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
 #include <cstring>
+#include <cstdint>
+#include "telar_platform/random_bytes.hpp"
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <unistd.h>
+#endif
+#include <span>
+#include <unistd.h>
+#include <cstdlib>
+#include "telar_platform/trace.hpp"
+#include <memory>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <arpa/inet.h>
+#include <optional>
+#include <chrono>
+#include <ctime>
+#include <openssl/crypto.h>
+#include <stdexcept>
 #include <filesystem>
+
+#pragma once
+
+
+
+import telar.platform;
+import telar.tls;
 
 using namespace telar;
 using namespace telar::runtime;

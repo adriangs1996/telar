@@ -1,7 +1,24 @@
-#include "http1/head.hpp"
-#include "http1/message_relay.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <cstddef>
+#include <string_view>
+#include <limits>
+#include <optional>
 #include <cstdint>
+#include <concepts>
+#include <span>
+#include <algorithm>
 #include <cstring>
+#include <array>
+
+
+
+import telar.runtime.http1.head;
+import telar.runtime.http1.intercepted_relay;
 
 struct Result {
   std::uint64_t length;

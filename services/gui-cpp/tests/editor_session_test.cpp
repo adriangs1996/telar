@@ -1,22 +1,58 @@
-#include "application/pane_layout.hpp"
-#include "application/session.hpp"
-#include "assertions.hpp"
-#include "core/memory.hpp"
-#include "links/file_path.hpp"
-#include "links/link_target.hpp"
-#include "session_fixture.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <exception>
-#include <iostream>
 #include <optional>
-#include <stdexcept>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <concepts>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include <string_view>
+#include <stdexcept>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "../core/memory.hpp"
+#include "../core/terminal_size.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include <utility>
+#include "../terminal/screen.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../terminal/cell_position.hpp"
+#include <bit>
+#include <tuple>
+#include <cmath>
+#include "../input/wheel_accumulator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <memory>
+#include "assertions.hpp"
+#include "session_fixture.hpp"
+#include <cstdio>
+#include <iostream>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.application.session;
+import telar.gui.links.cell_links;
 
 namespace {
 

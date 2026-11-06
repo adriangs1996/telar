@@ -1,21 +1,43 @@
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "presentation/palette_geometry.hpp"
-#include "presentation/suggestion_geometry.hpp"
-#include "presentation/suggestion_labels.hpp"
-#include "presentation/suggestion_preview.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <limits>
+#include <stdexcept>
+#include <bit>
+#include <ghostty/vt/unicode.h>
 #include "probe_geometry.hpp"
 #include "probe_io.hpp"
 #include "probe_text.hpp"
-#include "suggestions/state.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "terminal/font_grid.hpp"
-#include <cstdint>
 #include <cstdio>
 #include <exception>
-#include <stdexcept>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.suggestions.state;
+import telar.gui.terminal.font_grid;
 
 namespace {
 

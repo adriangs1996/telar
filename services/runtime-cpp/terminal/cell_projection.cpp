@@ -1,5 +1,15 @@
-#include "cell_projection.hpp"
+module;
+
+#include "ghostty_handle.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
+#include <cstring>
+#include <array>
+
+module telar.runtime.terminal.text_reader;
+
+
 
 namespace telar::runtime {
 

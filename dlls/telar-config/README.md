@@ -3,7 +3,7 @@
 Reading and validating telar's Lua configuration: the client sections the GUI
 applies and the runtime sections it reports, with the option types they produce
 (`agents/`, `proxy/`, `history/`, `graphics/`, `terminal/`). The runtime's
-configuration loader stays in `services/runtime-cpp/config`. It is header-only
+configuration loader stays in `services/runtime-cpp/config`. It uses the compiled `telar.config` module
 C++23 and links `telar-lua` and `telar-plugins`.
 
 ```cmake
@@ -12,11 +12,13 @@ target_link_libraries(your_target PRIVATE telar::config)
 ```
 
 ```cpp
-#include "telar_config/runtime_values.hpp"
+import telar.config;
 ```
 
 ## Editor
 
-`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
-include directories and definitions consumers compile these headers with
-(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.
+Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
+`tools/cpp configure config` generates `out/compile_commands.json`.
+Build the project before opening importers, then launch `.toolchain/bin/clangd`
+with `--experimental-modules-support`. Module interfaces have their own compile
+commands; the remaining native ABI and macro headers borrow consumer commands.

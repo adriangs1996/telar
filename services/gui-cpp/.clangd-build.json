@@ -1,7 +1,26 @@
 {
   "build_directory": "out",
   "commands": [
-    ["cmake", "-S", ".", "-B", "out"],
-    ["cmake", "--build", "out", "--target", "gui-editor", "--parallel", "2"]
+    [
+      "../../tools/cpp",
+      "configure",
+      "gui",
+      "-B",
+      "out",
+      "--config",
+      "Debug"
+    ],
+    [
+      "../../tools/cpp",
+      "exec",
+      "--",
+      "cmake",
+      "--build",
+      "out",
+      "--target",
+      "gui-editor",
+      "--parallel",
+      "2"
+    ]
   ]
 }

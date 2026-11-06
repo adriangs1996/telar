@@ -1,21 +1,40 @@
-#include "core/configuration.hpp"
-#include "core/memory.hpp"
-#include "fonts/face.hpp"
-#include "fonts/font_coverage.hpp"
-#include "fonts/font_query.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "fonts/native_match.hpp"
-#include "fonts/shaped_run_view.hpp"
-#include "platform/font.h"
-#include "qt/bundled_fonts.hpp"
-#include "qt/font_cache.hpp"
-#include "qt/font_resolver.hpp"
-#include "qt/font_source.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/terminal_font.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/memory.hpp"
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include <bit>
+#include <concepts>
+#include <utility>
+#include "../qt/bundled_fonts.hpp"
+#include "../qt/font_cache.hpp"
+#include "../qt/font_resolver.hpp"
+#include "../qt/font_source.hpp"
+#include "../qt/resident_fonts.hpp"
+#include "../qt/terminal_font.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "terminal/font_grid.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFont>
@@ -30,14 +49,23 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <new>
-#include <stdexcept>
 #include <vector>
+
+#include "core/memory.hpp"
+#include "platform/font.h"
+#include "qt/bundled_fonts.hpp"
+#include "qt/font_cache.hpp"
+#include "qt/font_resolver.hpp"
+#include "qt/font_source.hpp"
+#include "qt/resident_fonts.hpp"
+#include "qt/terminal_font.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.font_requests;
+import telar.gui.terminal.font_grid;
 
 namespace {
 

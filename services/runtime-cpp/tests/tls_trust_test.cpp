@@ -1,11 +1,110 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "platform/system_certificates.hpp"
-#include "telar_tls/authority.hpp"
-#include "tls/system_root_bundle.hpp"
-#include "tls/trust_store.hpp"
-#include "tls_fixture.hpp"
+#if (defined(__APPLE__))
+#include <cerrno>
+#endif
+#if (defined(__APPLE__))
+#include <exception>
+#endif
+#if (defined(__APPLE__))
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+#if (defined(__APPLE__))
+#include <Security/Security.h>
+#endif
+#if (defined(__APPLE__))
+#include <array>
+#endif
+#if (defined(__APPLE__))
+#include <cstdint>
+#endif
+#if (defined(__APPLE__))
+#include <memory>
+#endif
+#if (defined(__APPLE__))
+#include <span>
+#endif
+#if (!(defined(__APPLE__)))
+#include <array>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdint>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdlib>
+#endif
+#if (!(defined(__APPLE__)))
+#include <memory>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/err.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/pem.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/x509.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <span>
+#endif
+#if (!(defined(__APPLE__)))
+#include <unistd.h>
+#endif
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <cstdint>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_platform/random_bytes.hpp"
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <unistd.h>
+#endif
+#include <cerrno>
+#include <span>
+#include <unistd.h>
+#include <algorithm>
+#include <cstdlib>
+#include <string_view>
+#include "telar_platform/trace.hpp"
+#include <exception>
+#include <memory>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
 #include <arpa/inet.h>
+#include <optional>
+#include <chrono>
+#include <ctime>
+#include <openssl/crypto.h>
+#include <stdexcept>
+#include <cassert>
+#include "tls_fixture.hpp"
 #include <type_traits>
+
+
+
+import telar.runtime.platform.system_certificates;
+import telar.tls;
+import telar.runtime.tls.system_root_bundle;
+import telar.runtime.tls.interception;
 
 using namespace telar;
 using namespace telar::runtime;

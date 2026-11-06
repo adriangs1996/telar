@@ -1,5 +1,10 @@
-#include "platform/window.hpp"
-#include "background_effect.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../window.hpp"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QLatin1StringView>
@@ -17,6 +22,11 @@
 #include <QtCore/qtenvironmentvariables.h>
 #include <cstdint>
 #include <memory>
+
+#include "platform/window.hpp"
+
+
+import telar.gui.platform.private_file_stamp;
 
 namespace telar::gui::platform {
 

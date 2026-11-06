@@ -1,7 +1,22 @@
-#include "application/notification_payload.hpp"
-#include "qt/command_process.hpp"
-#include "qt/sound_player.hpp"
-#include "qt/system_notifier.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstddef>
+#include <cstring>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include "../qt/command_process.hpp"
+#include "../qt/sound_player.hpp"
+#include "../qt/system_notifier.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -11,12 +26,18 @@
 #include <QString>
 #include <QStringList>
 #include <QtCore/qtypes.h>
-#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <optional>
 #include <utility>
+
+#include "qt/command_process.hpp"
+#include "qt/sound_player.hpp"
+#include "qt/system_notifier.hpp"
+
+
+import telar.gui.application.host_effects;
 
 namespace {
 

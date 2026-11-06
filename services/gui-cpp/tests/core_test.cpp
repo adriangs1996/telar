@@ -1,32 +1,51 @@
-#include "application/pane_layout.hpp"
-#include "core/cell_rectangle.hpp"
-#include "core/configuration.hpp"
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "input/history_text.hpp"
-#include "input/mouse_encoder.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/memory.hpp"
+#include "../core/terminal_size.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <charconv>
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "terminal/copy_range.hpp"
-#include "terminal/screen.hpp"
-#include "transport/frame_stream.hpp"
-#include <algorithm>
-#include <array>
-#include <cstdint>
+#include <concepts>
+#include "../terminal/screen.hpp"
+#include <stdexcept>
+#include <type_traits>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <span>
-#include <stdexcept>
 #include <string>
-#include <string_view>
+
+#include "core/memory.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.input.configuration;
+import telar.gui.terminal.font_grid;
+import telar.gui.transport.runtime_link;
 
 namespace {
 

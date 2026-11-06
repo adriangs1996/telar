@@ -1,21 +1,34 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/memory.hpp"
+
+#include "../core/memory.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_handshake.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <span>
+#include <variant>
 #include "telar_client/serializers/telar_serializer.hpp"
-#include "transport/frame_stream.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <concepts>
+#include <stdexcept>
+#include <type_traits>
 #include <QLocalSocket>
 #include <QObject>
 #include <algorithm>
-#include <array>
-#include <cstddef>
 #include <cstdint>
-#include <span>
 #include <vector>
+
+#pragma once
+
+#include "core/memory.hpp"
+
+
+import telar.client;
+import telar.gui.transport.runtime_link;
 
 namespace telar::gui::test {
 

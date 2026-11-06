@@ -1,9 +1,41 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "components/configuration.hpp"
-#include "components/pick_items.hpp"
-#include "components/pick_matches.hpp"
-#include "core/memory.hpp"
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <cstddef>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
+#include <limits>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
+#include "telar_base/text/utf8.hpp"
+#include "../core/memory.hpp"
 #include "machine_client_key.hpp"
 #include "surface_command.hpp"
 #include <QByteArray>
@@ -12,12 +44,14 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+#pragma once
+#include "core/memory.hpp"
+
+
+import telar.gui.components.configuration;
+import telar.gui.components.builtin_content;
 
 namespace telar::gui::qt {
 

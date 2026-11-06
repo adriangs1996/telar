@@ -1,15 +1,37 @@
-#include "application/host_metrics.hpp"
-#include "core/configuration.hpp"
-#include "core/metrics.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
 #include "metrics_fixture.hpp"
-#include "presentation/bar_metrics.hpp"
-#include "presentation/mode_hints.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <utility>
+#include <tuple>
 #include "qml_fixture.hpp"
-#include "qt/component_projection.hpp"
-#include "qt/metrics_projection.hpp"
-#include "qt/mode_projection.hpp"
-#include "qt/projection.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/component_projection.hpp"
+#include "../qt/metrics_projection.hpp"
+#include "../qt/mode_projection.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -27,10 +49,18 @@
 #include <QtCore/qvariant.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cstdint>
-#include <optional>
-#include <string_view>
+
+#include "qt/component_projection.hpp"
+#include "qt/metrics_projection.hpp"
+#include "qt/mode_projection.hpp"
+#include "qt/projection.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.application.host_effects;
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_inspection;
 
 namespace {
 

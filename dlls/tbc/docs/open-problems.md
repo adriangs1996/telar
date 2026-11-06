@@ -124,7 +124,7 @@ none does yet. Cross-translation-unit summaries would infer these instead.
 
 ## In-progress `dlls/ebnf` edits
 
-`lifetime-check` reports a contract violation at `dlls/ebnf/parser.hpp:166`
+`lifetime-check` reports a contract violation at `dlls/ebnf/parser.cppm:166`
 after `parsing_ring_buffer` became `std::array<token, N>`. The checker from
 before field paths reports it too. `lifetime-check-tests` does not compile
 while `tests/lexer_test.cpp` ignores `nodiscard` results.

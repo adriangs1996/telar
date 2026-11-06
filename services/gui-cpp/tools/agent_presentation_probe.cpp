@@ -1,16 +1,37 @@
-#include "core/theme_values.hpp"
-#include "presentation/agent_card_geometry.hpp"
-#include "presentation/agent_status.hpp"
-#include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "probe_io.hpp"
+#include <bit>
 #include <cstdio>
 #include <exception>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.activity_order;
 
 namespace {
 
@@ -102,5 +123,3 @@ int main() {
     return 1;
   }
 }
-
-#include "core/geometry.hpp"

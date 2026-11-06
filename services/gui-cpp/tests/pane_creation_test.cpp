@@ -1,23 +1,60 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "allocation_gate.hpp"
-#include "application/records.hpp"
-#include "application/session.hpp"
-#include "application/workbench_geometry.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../terminal/cell_position.hpp"
+#include <bit>
+#include <tuple>
+#include <cmath>
+#include "../input/wheel_accumulator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <memory>
 #include "assertions.hpp"
+#include "session_fixture.hpp"
+#include <iostream>
+#include <new>
+
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "session_fixture.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <new>
-#include <optional>
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.application.session;
+import telar.gui.application.sound_playback;
 
 namespace {
 

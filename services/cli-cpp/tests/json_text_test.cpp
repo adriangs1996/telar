@@ -1,5 +1,18 @@
-#include "../json_text.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/allocator.hpp"
+#include <cstdint>
+#include <optional>
+#include <string_view>
 #include "check.hpp"
+
+
+
+import telar.cli.output;
 
 using namespace telar;
 using namespace telar::runtime;

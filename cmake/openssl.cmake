@@ -19,6 +19,8 @@ endforeach()
 set(OPENSSL_ROOT_DIR "${TELAR_OPENSSL_PREFIX}")
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL ${TELAR_OPENSSL_VERSION} EXACT REQUIRED COMPONENTS SSL Crypto)
+# The shared managed installation is consumed across sibling subdirectories.
+set_property(TARGET OpenSSL::SSL OpenSSL::Crypto PROPERTY IMPORTED_GLOBAL TRUE)
 foreach(path IN ITEMS OPENSSL_INCLUDE_DIR OPENSSL_CRYPTO_LIBRARY OPENSSL_SSL_LIBRARY)
   cmake_path(IS_PREFIX TELAR_OPENSSL_PREFIX "${${path}}" NORMALIZE managed)
   if(NOT managed)

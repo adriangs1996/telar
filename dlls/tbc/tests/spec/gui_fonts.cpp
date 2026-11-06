@@ -2,7 +2,7 @@
 
 // CASE: gui.font_bytes_escape
 // PAIR: gui.font_input
-// SOURCE: services/gui-cpp/fonts/face.hpp :: Face / selectFace
+// SOURCE: services/gui-cpp/fonts/face.cppm :: Face / selectFace
 // STATUS: pending
 // CONTRACT: A font face retains its input font bytes through the foreign font object's destruction.
 // SCENARIO: Reject returning a face constructed over a local font-data buffer.
@@ -15,7 +15,7 @@ tbc::view<spec::font_face, tbc::lt::a> fontBytesEscape() {
 
 // CASE: gui.font_caller_bytes
 // PAIR: gui.font_input
-// SOURCE: services/gui-cpp/fonts/face.hpp :: Face
+// SOURCE: services/gui-cpp/fonts/face.cppm :: Face
 // STATUS: pending
 // CONTRACT: The returned face carries a dependency on the caller-owned font storage.
 // SCENARIO: A span descriptor is local, but its referent belongs to the caller; accept.
@@ -42,7 +42,7 @@ void shapeReusesScratch(tbc::view<spec::font_face &> face) {
 
 // CASE: gui.shape_copied_scratch
 // PAIR: gui.shaping_scratch
-// SOURCE: services/gui-cpp/fonts/shaped_run_view.hpp :: ShapedRunView::glyph
+// SOURCE: services/gui-cpp/fonts/face_views.cppm :: ShapedRunView::glyph
 // STATUS: pending
 // CONTRACT: Copying shaped glyph values produces owned data; input text is consumed, not retained.
 // SCENARIO: A temporary text input and a subsequent shape are safe for the copied glyphs.
@@ -58,7 +58,7 @@ void shapeCopiedScratch(tbc::view<spec::font_face &> face) {
 
 // CASE: gui.shape_independent_faces
 // PAIR: gui.shaping_scratch
-// SOURCE: services/gui-cpp/fonts/face.hpp :: shaping_buffer_
+// SOURCE: services/gui-cpp/fonts/face.cppm :: shaping_buffer_
 // STATUS: pending
 // CONTRACT: Scratch invalidation is scoped to a resource instance, not globally to a type.
 // SCENARIO: Construct distinct faces; shaping the second must not invalidate the first's run.
@@ -90,7 +90,7 @@ void bitmapReusesSlot(tbc::view<spec::font_face &> face) {
 
 // CASE: gui.bitmap_owned_copy
 // PAIR: gui.raster_scratch
-// SOURCE: services/gui-cpp/fonts/glyph_bitmap_view.hpp :: GlyphBitmapView::coverage
+// SOURCE: services/gui-cpp/fonts/face.cppm :: GlyphBitmapView::coverage
 // STATUS: pending
 // CONTRACT: Copying coverage bytes into owned storage ends the scratch dependency.
 // SCENARIO: Upload/copy the old bytes before rasterizing again; accept the owned result.

@@ -1,12 +1,26 @@
-#include "presentation/history_actions.hpp"
-#include "input/history_action_capture.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
+#include <optional>
+#include <utility>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
+
+
+
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.input.child_mouse;
 
 namespace {
 

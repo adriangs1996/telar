@@ -1,6 +1,11 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "http2/frame.hpp"
+
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <span>
@@ -8,6 +13,11 @@
 #include <vector>
 #include <nghttp2/nghttp2.h>
 #include "check.hpp"
+
+#pragma once
+
+
+import telar.runtime.http2.frame_reader;
 
 inline std::string hpackFields(std::span<const std::pair<std::string_view, std::string_view>> fields) {
   nghttp2_hd_deflater *raw = nullptr;

@@ -2,7 +2,7 @@
 
 // CASE: access.unchecked_index
 // PAIR: access.index_bounds
-// SOURCE: services/gui-cpp/fonts/glyph_bitmap_view.hpp :: GlyphBitmapView::row
+// SOURCE: services/gui-cpp/fonts/face.cppm :: GlyphBitmapView::row
 // STATUS: pending
 // CONTRACT: The safety profile requires a proven bound or a checked access operation.
 // SCENARIO: An arbitrary index is not proven smaller than the span length.
@@ -14,7 +14,7 @@ void uncheckedIndex(tbc::view<std::span<const int>> values, std::size_t index) {
 
 // CASE: access.guarded_index
 // PAIR: access.index_bounds
-// SOURCE: services/gui-cpp/fonts/glyph_bitmap_view.hpp :: GlyphBitmapView::row
+// SOURCE: services/gui-cpp/fonts/face.cppm :: GlyphBitmapView::row
 // STATUS: pending
 // CONTRACT: The guard establishes the exact inequality required by this indexing operation.
 // SCENARIO: Reject the out-of-range path before performing the access.

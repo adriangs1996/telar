@@ -1,18 +1,30 @@
-#include "core/memory.hpp"
-#include "peek/command.hpp"
-#include "peek/screen.hpp"
-#include "peek/target.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include <cstdint>
+#include <string_view>
+#include <cstddef>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <optional>
+#include <stdexcept>
 #include "probe_io.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <stdexcept>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.peek.screen;
 
 namespace {
 

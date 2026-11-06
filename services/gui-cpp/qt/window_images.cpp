@@ -1,20 +1,33 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "window_images.hpp"
-#include "application/dependencies.hpp"
-#include "core/geometry.hpp"
+#include "../application/dependencies.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include "deadline_timer.hpp"
-#include "graphics/display_box.hpp"
-#include "graphics/image_draw_budget.hpp"
-#include "graphics/image_residency.hpp"
-#include "graphics/lifetime.hpp"
-#include "graphics/placement.hpp"
-#include "graphics/placement_selection.hpp"
-#include "graphics/source_rect.hpp"
-#include "graphics/store.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <limits>
+#include <cstddef>
+#include <atomic>
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include "../core/memory.hpp"
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include "graphics_scene.hpp"
 #include "image_resource.hpp"
-#include "platform/awake_clock.hpp"
 #include "scene_nodes.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <QEvent>
 #include <QImage>
 #include <QObject>
@@ -27,17 +40,16 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
 #include <bit>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
-#include <span>
-#include <utility>
+
+#include "application/dependencies.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.graphics.texture_cache;
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::qt {
 

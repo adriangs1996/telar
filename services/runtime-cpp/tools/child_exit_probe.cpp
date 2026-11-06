@@ -1,6 +1,16 @@
-#include "terminal/screen.hpp"
-#include "tests/check.hpp"
-#include "tests/protocol_peer.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "cell_layout.hpp"
+#include "../terminal/ghostty_handle.hpp"
+#include <cstring>
+#include "../tests/check.hpp"
+#include "../tests/protocol_peer.hpp"
 #include <chrono>
 #include <csignal>
 #include <filesystem>
@@ -11,6 +21,12 @@
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
+
+#include "tests/check.hpp"
+#include "tests/protocol_peer.hpp"
+
+
+import telar.runtime.terminal.text_reader;
 
 using namespace telar;
 using Clock = std::chrono::steady_clock;

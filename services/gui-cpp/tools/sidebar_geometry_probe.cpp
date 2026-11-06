@@ -1,16 +1,33 @@
-#include "core/configuration.hpp"
-#include "core/metrics.hpp"
-#include "presentation/agent_card_geometry.hpp"
-#include "presentation/sidebar_geometry.hpp"
-#include "probe_geometry.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "probe_geometry.hpp"
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.suggestion_geometry;
 
 namespace {
 

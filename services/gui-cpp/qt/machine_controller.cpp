@@ -1,13 +1,38 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/host_metrics.hpp"
-#include "core/memory.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../core/memory.hpp"
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machine_token.hpp"
-#include "machines/machines.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/agent_order.hpp"
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "../core/terminal_size.hpp"
+#include <atomic>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <utility>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <tuple>
 #include "remote_bridge.hpp"
 #include "runtime_connection.hpp"
 #include <QByteArrayView>
@@ -15,11 +40,14 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <utility>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.host_effects;
+import telar.gui.machines.picker;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 

@@ -1,5 +1,24 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "terminal/frame_sync.hpp"
+#include "../diagnostics/line.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_platform/trace.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "cell_layout.hpp"
+#include "../terminal/ghostty_handle.hpp"
+#include <cstring>
+#include <tuple>
+
+
+
+import telar.runtime.terminal.text_reader;
 
 using namespace telar;
 using namespace telar::runtime;

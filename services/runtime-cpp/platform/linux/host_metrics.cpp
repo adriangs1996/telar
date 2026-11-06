@@ -1,5 +1,13 @@
-#include "../host_metrics.hpp"
-#include "telar_platform/directory_stream.hpp"
+module;
+
+#include <concepts>
+#include <cstdint>
+#include <optional>
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <dirent.h>
+#include <fcntl.h>
 #include "telar_platform/trace.hpp"
 #include <algorithm>
 #include <array>
@@ -11,6 +19,11 @@
 #include <string_view>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+
+module telar.runtime.platform.stream_read_buffer;
+
+import telar.platform;
+
 
 namespace telar::runtime {
 namespace {

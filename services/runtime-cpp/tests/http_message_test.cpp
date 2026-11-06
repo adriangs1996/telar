@@ -1,11 +1,39 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "http/content_codec.hpp"
-#include "http/message.hpp"
-#include "http1/message_relay.hpp"
-#include "test_byte_stream.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <optional>
+#include <brotli/decode.h>
+#include <brotli/encode.h>
+#include <zlib.h>
 #include <array>
+#include <memory>
+#include <stdexcept>
+#include <zstd.h>
+#include <limits>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include <charconv>
+#include <concepts>
+#include <algorithm>
+#include "test_byte_stream.hpp"
 #include <string>
 #include <vector>
+
+
+
+import telar.runtime.http.message;
+import telar.runtime.http1.intercepted_relay;
 
 using namespace telar;
 using namespace telar::runtime;

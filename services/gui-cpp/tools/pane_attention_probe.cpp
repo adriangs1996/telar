@@ -1,17 +1,35 @@
-#include "core/color.hpp"
-#include "core/geometry.hpp"
-#include "graphics/rounded_rectangle.hpp"
-#include "presentation/attention_fades.hpp"
-#include "presentation/pane_attention_geometry.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <variant>
+#include "../core/terminal_size.hpp"
 #include "probe_geometry.hpp"
 #include "probe_io.hpp"
-#include <algorithm>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.presentation.frame_pacer;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace {
 

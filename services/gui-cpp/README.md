@@ -7,6 +7,14 @@ Current delivery scope and remaining work are in [DAILY_DRIVER.md](DAILY_DRIVER.
 Before profiling or optimizing the client, read [OPTIMIZATION.md](OPTIMIZATION.md)
 for the frozen benchmark, rejected experiments and reproduction procedure.
 
+## Reproducible C++ modules build
+
+Use the [shared toolchain and module guide](../../docs/build/cpp-modules.md)
+for a clean clone, pinned bootstrap, configure/build/test commands, diagnostics
+variants and clangd. The compiler and tools are selected by `tools/cpp` on both
+macOS and Linux. C++ module sources are primary; Qt/moc, Objective-C++, generated
+interfaces and preprocessor contracts retain documented textual boundaries.
+
 ## Source layout
 
 | Directory | Responsibility |
@@ -46,7 +54,7 @@ shelves and preview modals keep covering panel backgrounds, matching Zig.
 
 ## Build
 
-Dependencies are CMake 3.24+, Ninja, Python 3, `patch`, a C++23 compiler and the
+Dependencies are the pinned LLVM 23.1.5, CMake 4.4.5 and Ninja 1.13.2 toolchain, Python 3, `patch`, and the
 platform SDK/development libraries below. Installing Qt is not required. The
 static-analysis profile requires LLVM 23 or newer.
 
@@ -79,31 +87,18 @@ use Sway, wtype and a private D-Bus session.
 Optional X11 clipboard tests use Xvfb, xauth and
 libX11. macOS native adapters use AppKit, CoreText and CoreGraphics.
 
-CMake fetches and verifies the pinned font dependencies. Use an existing
-libghostty-vt installation from the runtime build or build the pinned dependency:
+CMake fetches and verifies the pinned font dependencies. From the repository root:
 
 ```sh
-python3 services/runtime-cpp/tools/build_ghostty.py \
-  --build-dir services/gui-cpp/out-dependencies/ghostty-build \
-  --prefix services/gui-cpp/out-dependencies/ghostty
+tools/cpp bootstrap
+tools/cpp configure gui --config Release -- -DTELAR_GUI_QT_JOBS=2
+tools/cpp build gui -- --parallel 2
 ```
 
-Configure and build from the repository root:
-
-```sh
-cmake -S services/gui-cpp -B services/gui-cpp/out -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_COMPILER=clang \
-  -DCMAKE_CXX_COMPILER=clang++ \
-  -DGHOSTTY_VT_ROOT="$PWD/services/gui-cpp/out-dependencies/ghostty" \
-  -DTELAR_GUI_QT_JOBS=2
-cmake --build services/gui-cpp/out --parallel 2
-```
-
-On macOS, use the Xcode SDK and a C++23 compiler. `just app`, `just gui-test` and
-`just install-gui` use the same managed Qt bootstrap through the GUI CMake project;
-they do not need Homebrew's Qt packages. They still use Homebrew's LLVM and the
-runtime's separately documented dependencies.
+`tools/cpp configure` also bootstraps the verified Zig compiler and VT recipe.
+The native Xcode SDK is required on macOS. On Linux, use the documented desktop
+SDK installer. `just app`, `just gui-test` and `just install-gui` use this same
+toolchain and managed Qt build.
 
 The GUI still generates some data from Telar Zig sources. Building Ghostty also
 uses Zig; removing those dependencies is a separate migration.
@@ -163,13 +158,12 @@ Configure and build `gui-editor` before opening headers, so generated headers an
 Qt metadata exist:
 
 ```sh
-cmake -S services/gui-cpp -B services/gui-cpp/out
-cmake --build services/gui-cpp/out --target gui-editor --parallel 2
+tools/cpp configure gui
+tools/cpp build gui -- --target gui-editor --parallel 2
 ```
 
 `.clangd` uses `out/compile_commands.json` and generated compilation contexts under
-`out/clangd` for configuration, domain, Qt and test headers. Use clangd from the
-same LLVM installation as the compiler. `.clangd-build.json` provides the existing
+`out/clangd` for configuration, domain, Qt and test headers. Launch `.toolchain/bin/clangd --experimental-modules-support`. `.clangd-build.json` provides the existing
 build-on-save integration.
 
 ## Tests and static analysis

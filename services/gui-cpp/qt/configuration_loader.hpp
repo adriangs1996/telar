@@ -1,17 +1,47 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include <cstddef>
+#include <span>
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <algorithm>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/memory.hpp"
+#include <sys/stat.h>
+#include "plugin_packages.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <charconv>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <QMap>
+#include <QString>
+
 #pragma once
 
 #include "application/dependencies.hpp"
-#include "config/plugin_overrides.hpp"
-#include "core/configuration.hpp"
 #include "core/memory.hpp"
-#include "platform/file_stamp.hpp"
-#include "platform/private_file_stamp.hpp"
-#include "plugin_packages.hpp"
-#include "telar_plugins/trust_store.hpp"
-#include <QMap>
-#include <QString>
-#include <cstdint>
-#include <optional>
+
+
+import telar.gui.config.plugin_query;
+import telar.gui.core.metrics;
+import telar.gui.platform.profile_file;
+import telar.gui.platform.private_file_stamp;
+import telar.plugins;
 
 namespace telar::gui {
 

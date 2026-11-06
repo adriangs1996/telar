@@ -123,7 +123,7 @@ void libraryViewsInOwnerLive(const library::string &owner) {
 
 // CASE: library.compiled_function
 // PAIR: library.function
-// SOURCE: services/runtime-cpp/tls/alpn_selection.hpp :: selectAlpn
+// SOURCE: services/runtime-cpp/tls/interception.cppm :: selectAlpn
 // STATUS: implemented
 // CONTRACT: A compiled library function is outside the analysis and is not reported.
 // SCENARIO: The result of a function without a visible body is used; accept.
@@ -135,7 +135,7 @@ void libraryCompiledFunction() {
 
 // CASE: library.inline_function
 // PAIR: library.function
-// SOURCE: services/runtime-cpp/tls/alpn_selection.hpp :: selectAlpn
+// SOURCE: services/runtime-cpp/tls/interception.cppm :: selectAlpn
 // STATUS: implemented
 // CONTRACT: A library function with a visible body is inferred from the shape of its arguments.
 // SCENARIO: The pointer passed through the library function views a local buffer and is returned.
@@ -148,7 +148,7 @@ const char *libraryInlineFunction() {
 
 // CASE: library.constant_expression
 // PAIR: library.constant
-// SOURCE: services/runtime-cpp/diagnostics/trace.hpp :: trace::literal
+// SOURCE: dlls/telar-platform/include/telar_platform/trace.hpp :: trace::literal
 // STATUS: implemented
 // CONTRACT: A constant-evaluated result borrows exactly what its expression borrows.
 // SCENARIO: An immediate function returns a literal-backed view; accept.
@@ -160,7 +160,7 @@ std::string_view libraryConstantExpression() {
 
 // CASE: library.constant_alongside_local
 // PAIR: library.constant
-// SOURCE: services/runtime-cpp/diagnostics/trace.hpp :: trace::literal
+// SOURCE: dlls/telar-platform/include/telar_platform/trace.hpp :: trace::literal
 // STATUS: implemented
 // CONTRACT: Unwrapping constant evaluation does not hide a borrow of local storage.
 // SCENARIO: A view of a local string is returned next to a constant one.

@@ -1,10 +1,16 @@
-#include "stdio_socket.hpp"
-#include "telar_platform/error.hpp"
+module;
+
 #include "telar_platform/file_descriptor.hpp"
-#include <array>
 #include <cerrno>
+#include <exception>
+#include <array>
 #include <sys/socket.h>
 #include <unistd.h>
+
+module telar.gui.platform.notification_commands;
+
+import telar.platform;
+
 
 namespace telar::gui::platform {
 

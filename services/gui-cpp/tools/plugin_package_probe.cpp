@@ -1,13 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include "../qt/plugin_packages.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cstdint>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <exception>
+#include <charconv>
+#include <optional>
+#include <string_view>
+#include <array>
+#include <stdexcept>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <limits.h>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <chrono>
+#include <dirent.h>
+#include <concepts>
+#include <limits>
+#include <QCoreApplication>
+#include <iostream>
+
 #include "core/memory.hpp"
 #include "qt/plugin_packages.hpp"
-#include "telar_plugins/inspection.hpp"
-#include "telar_plugins/package_inspection.hpp"
-#include <QCoreApplication>
-#include <cstddef>
-#include <exception>
-#include <iostream>
-#include <stdexcept>
-#include <string_view>
+
+
+import telar.plugins;
 
 int main(int argc, char **argv) {
   const QCoreApplication application{argc, argv};

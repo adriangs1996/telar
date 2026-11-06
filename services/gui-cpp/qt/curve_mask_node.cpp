@@ -1,7 +1,18 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "curve_mask_node.hpp"
 #include "alpha_mask_material.hpp"
 #include "alpha_mask_vertex.hpp"
-#include "core/color.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
 #include "curve_mask.hpp"
 #include "scene_nodes.hpp"
 #include <QPointF>
@@ -9,10 +20,12 @@
 #include <QSGGeometry>
 #include <QSGGeometryNode>
 #include <QSGNode>
-#include <array>
-#include <cstddef>
 #include <span>
 #include <utility>
+
+
+
+import telar.gui.core.metrics;
 
 namespace telar::gui::qt {
 namespace {

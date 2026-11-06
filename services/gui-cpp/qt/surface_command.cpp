@@ -1,5 +1,11 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "surface_command.hpp"
-#include "platform/process_group.hpp"
+#include <cstdint>
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include <QByteArray>
@@ -21,6 +27,10 @@
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+
+
+
+import telar.gui.platform.private_file_stamp;
 
 namespace telar::gui::qt {
 

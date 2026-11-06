@@ -1,34 +1,59 @@
-#include "profile_file.hpp"
-#include "path_limits.hpp"
-#include "secure_random.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_platform/error.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/open_beneath.hpp"
-#include "telar_platform/private_directory.hpp"
-#include "telar_platform/write_descriptor.hpp"
-#include "text/bounded_text.hpp"
-#include <algorithm>
-#include <array>
-#include <cerrno>
-#include <chrono>
+module;
+
+#include "../core/memory.hpp"
 #include <cstddef>
+#include <sys/param.h>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <array>
 #include <cstdint>
 #include <fcntl.h>
-#include <semaphore>
+#include <limits.h>
+#include <sys/stat.h>
+#include <optional>
+#include <stdexcept>
 #include <stop_token>
 #include <string_view>
+#include <span>
+#include <algorithm>
+#include <unistd.h>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <chrono>
+#include <semaphore>
 #include <sys/file.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <utility>
+#if (defined(__APPLE__))
+#include <sys/stdio.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/unistd.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdio>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+
+module telar.gui.platform.profile_file;
+
+
+import telar.gui.platform.private_file_stamp;
+import telar.platform;
+import telar.gui.text.json_unsigned_integer;
+
 
 #ifdef __APPLE__
 #include <sys/stdio.h>
 #include <sys/unistd.h>
 #else
 #include <cstdio>
-#include <unistd.h>
 #endif
 
 namespace telar::gui::platform {

@@ -1,11 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "http2/direction_observer.hpp"
+#include <concepts>
+#include <cstdint>
+#include <span>
+#include <string_view>
+#include <limits>
+#include <optional>
+#include <algorithm>
+#include "telar_base/memory/allocator.hpp"
+#include <cstring>
+#include <cstddef>
+#include <nghttp2/nghttp2.h>
+#include <array>
 #include "http2_fixture.hpp"
-#include "proxy/http2_connection.hpp"
-#include "telar_base/memory/c_allocation_blocks.hpp"
+#include <atomic>
+#include <cerrno>
+#include <exception>
+#include <csignal>
+#include <sys/socket.h>
+#include "telar_platform/file_descriptor.hpp"
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <unistd.h>
+#include "telar_platform/trace.hpp"
 #include "test_byte_stream.hpp"
 #include <string>
 #include <vector>
+
+
+
+import telar.runtime.http2.direction_observer;
+import telar.runtime.proxy.application_relay;
+import telar.base.memory;
 
 using namespace telar;
 using namespace telar::runtime;

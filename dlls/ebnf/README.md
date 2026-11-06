@@ -4,21 +4,15 @@ Standalone C++23 project. Run these commands from `dlls/ebnf`.
 
 ## Requirements
 
-- CMake 3.25 or newer and Ninja.
-- A compiler with C++23 support.
-- Network access for the first test configure, which downloads GoogleTest v1.18.0.
-- `clangd`, `clang-format`, and `clang-tidy` on `PATH`. Prefer LLVM tools from the same installation.
+Use the [shared pinned toolchain](../../docs/build/cpp-modules.md). From the
+repository root, run `tools/cpp bootstrap`, then add `.toolchain/bin` to `PATH`.
+This provides LLVM/clangd 23.1.5, CMake 4.4.5, Ninja 1.13.2 and Just 1.59.0.
+The presets select `.toolchain/toolchain.cmake`; do not mix compiler installations
+inside an existing build directory. Python 3.9+ and the native development SDK
+are prerequisites. The first test configure fetches verified GoogleTest sources.
 
-On macOS with Homebrew:
-
-```sh
-brew install cmake ninja llvm
-export PATH="$(brew --prefix llvm)/bin:$PATH"
-```
-
-On Linux, install these tools with your package manager. Set `CXX=clang++` or
-`CXX=g++` before the first configure to choose a compiler. CMake caches that choice
-per build directory.
+The lexer and parser are real module interfaces; link `ebnf::ebnf` and import
+`telar.ebnf.lexer` / `telar.ebnf.parser`. TBC annotation headers remain textual.
 
 ## Build and test
 

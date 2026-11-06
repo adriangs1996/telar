@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <memory>
 #include <span>
+#include <string_view>
 
 namespace telar::gui::test {
 
@@ -19,6 +20,7 @@ public:
 
   void setPng(std::span<const std::byte> bytes);
   void clear();
+  void setText(std::string_view text);
 
 private:
   struct Native;

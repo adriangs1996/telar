@@ -1,16 +1,31 @@
-#include "application/pane_layout.hpp"
-#include "core/geometry.hpp"
-#include "presentation/fullscreen_strip_geometry.hpp"
-#include "probe_geometry.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstddef>
-#include <cstdint>
+#include <optional>
+#include <span>
+#include <variant>
+#include <cmath>
+#include "probe_geometry.hpp"
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <span>
 #include <stdexcept>
+
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.metrics;
+import telar.gui.presentation.frame_pacer;
 
 namespace {
 

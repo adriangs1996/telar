@@ -1,14 +1,25 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "presentation/history_selection_motion.hpp"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include <QMetaObject>
 #include <QPointer>
 #include <QQuickItem>
 #include <QString>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
-#include <cstdint>
-#include <optional>
+
+#pragma once
+
+
+import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 

@@ -1,7 +1,19 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "http2_oracle.hpp"
-#include "platform/byte_stream.hpp"
+#include <concepts>
+#include <cstdint>
+#include <span>
+
+#pragma once
+
+
+
+import telar.runtime.platform.stream_read_buffer;
 
 class Http2OracleStream {
 public:

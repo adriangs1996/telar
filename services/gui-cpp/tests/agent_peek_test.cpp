@@ -1,34 +1,64 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "allocation_gate.hpp"
-#include "application/session.hpp"
-#include "application/notification_item.hpp"
-#include "assertions.hpp"
-#include "core/memory.hpp"
-#include "core/cell_rectangle.hpp"
-#include "peek/command.hpp"
-#include "peek/limits.hpp"
-#include "peek/screen.hpp"
-#include "peek/target.hpp"
-#include "presentation/peek_geometry.hpp"
-#include "session_fixture.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
-#include <array>
-#include <cstddef>
+#include <concepts>
 #include <cstdint>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <new>
 #include <optional>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <limits>
+#include <string_view>
+#include <array>
 #include <span>
 #include <stdexcept>
-#include <string>
-#include <string_view>
-#include <type_traits>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "../core/memory.hpp"
+#include "../core/terminal_size.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
 #include <utility>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../terminal/cell_position.hpp"
+#include <bit>
+#include <tuple>
+#include <cmath>
+#include "../input/wheel_accumulator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <memory>
+#include "assertions.hpp"
+#include "session_fixture.hpp"
+#include <iostream>
+#include <new>
+#include <string>
+#include <type_traits>
 #include <vector>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.session;
+import telar.gui.application.workspace_replica;
+import telar.gui.core.unicode_scalar;
+import telar.gui.peek.screen;
+import telar.gui.presentation.suggestion_labels;
 
 namespace {
 

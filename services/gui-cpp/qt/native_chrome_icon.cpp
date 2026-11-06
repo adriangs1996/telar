@@ -1,8 +1,37 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_chrome_icon.hpp"
 #include "chrome_icon_scene.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "fonts/icon_layout.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include <concepts>
+#include <utility>
+#include <bit>
+#include <ghostty/vt/unicode.h>
 #include "resident_fonts.hpp"
 #include <QByteArray>
 #include <QColor>
@@ -15,12 +44,13 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <memory>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.row_text_layout;
 
 namespace telar::gui::qt {
 

@@ -1,6 +1,19 @@
 #pragma once
+#ifdef __clangd__
+static_assert(true);
+#endif
+#include <tbc/view.hpp>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <vector>
 
-#include "parser.hpp"
+
 
 #include <gtest/gtest.h>
 
@@ -10,6 +23,7 @@
 #include <ostream>
 #include <string>
 
+import telar.ebnf.parser;
 namespace ebnf {
   constexpr auto tokenKindName(token_kind kind) -> std::string_view {
     switch (kind) {

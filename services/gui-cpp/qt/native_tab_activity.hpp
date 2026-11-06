@@ -1,8 +1,37 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "ancestor_geometry.hpp"
-#include "presentation/progress_motion.hpp"
-#include "presentation/tab_activity.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <tuple>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include <cmath>
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>
@@ -11,8 +40,13 @@
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstdint>
-#include <optional>
+
+#pragma once
+
+
+
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 

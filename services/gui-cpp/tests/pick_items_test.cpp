@@ -1,17 +1,45 @@
-#include "components/pick_items.hpp"
-#include "components/pick_items_reader.hpp"
-#include "components/pick_matches.hpp"
-#include "core/memory.hpp"
-#include "telar_config/limit_notices.hpp"
-#include "telar_lua/value.hpp"
-#include "telar_lua/vm.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
+#include <array>
+#include <cinttypes>
+#include <cstdio>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cstring>
+#include <cmath>
+#include <initializer_list>
+#include <string>
+#include <charconv>
+#include <system_error>
+#include <span>
+#include "../core/memory.hpp"
 #include <exception>
 #include <iostream>
-#include <stdexcept>
-#include <string>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.components.builtin_content;
+import telar.config;
+import telar.lua;
 
 namespace {
 

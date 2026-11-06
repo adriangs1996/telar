@@ -1,5 +1,56 @@
-#include "../pane_agent_control.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <span>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include "telar_client/codecs/telar_codec.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <optional>
+#include <stdexcept>
+#include "telar_platform/random_bytes.hpp"
+#include <algorithm>
+#include <limits>
+#include <string_view>
+#include <type_traits>
+#include <charconv>
+#include <string>
 #include <cstdio>
+#include <concepts>
+#include <cstdlib>
+#include <limits.h>
+#if (defined(__APPLE__))
+#include <mach-o/dyld.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <csignal>
+#include <dirent.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <thread>
+#include <chrono>
+
+
+
+import telar.cli.project_setup;
 
 using namespace telar;
 using namespace telar::runtime;

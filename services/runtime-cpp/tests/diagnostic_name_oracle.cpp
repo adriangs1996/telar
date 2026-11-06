@@ -1,4 +1,17 @@
-#include "diagnostics/log_name.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include <string_view>
+
+
+
+import telar.runtime.diagnostics.runtime_telemetry;
 
 extern "C" std::uint64_t classify_name(const char *bytes, std::size_t length) {
   const auto parsed = telar::runtime::diagnostics::LogName::parse({bytes, length});

@@ -1,17 +1,24 @@
-#include "box_curve.hpp"
-#include "alpha_raster.hpp"
-#include "box_metrics.hpp"
-#include "core/geometry.hpp"
-#include "symbol.hpp"
-#include <algorithm>
-#include <array>
-#include <cmath>
+module;
+
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <span>
 #include <stdexcept>
+#include <algorithm>
+#include <cmath>
+#include <array>
+#include <limits>
+#include <optional>
+#include <bit>
+#include <string_view>
+
+module telar.gui.terminal.glyphs.curve_cache;
+
+import telar.gui.terminal.font_grid;
+
+import telar.gui.core.metrics;
+import telar.gui.terminal.copy_mode;
+
 
 namespace telar::gui::glyphs {
 

@@ -1,20 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "chrome_text_scene.hpp"
 #include "alpha_mask.hpp"
 #include "alpha_mask_material.hpp"
 #include "alpha_mask_vertex.hpp"
 #include "chrome_glyph_images.hpp"
-#include "core/color.hpp"
-#include "core/geometry.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include "font_collection.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/glyph_rasterization.hpp"
-#include "fonts/glyph_transform.hpp"
-#include "fonts/ink_bounds.hpp"
-#include "fonts/shaped_run_view.hpp"
-#include "fonts/text_layout.hpp"
+#include <concepts>
+#include <utility>
+#include <limits>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <stdexcept>
+#include <hb.h>
+#include <span>
+#include "../core/memory.hpp"
+#include <bit>
+#include <freetype/freetype.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <type_traits>
+#include <ghostty/vt/unicode.h>
 #include "resident_fonts.hpp"
 #include "scene_nodes.hpp"
-#include "terminal/font_grid.hpp"
 #include <QColor>
 #include <QImage>
 #include <QList>
@@ -33,17 +55,15 @@
 #include <QtCore/qtypes.h>
 #include <QtCore/qtversion.h>
 #include <QtCore/qtversionchecks.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <initializer_list>
-#include <limits>
-#include <memory>
-#include <span>
-#include <stdexcept>
-#include <type_traits>
-#include <utility>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.font_requests;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 namespace {

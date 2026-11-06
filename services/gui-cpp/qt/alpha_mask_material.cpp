@@ -1,5 +1,16 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "alpha_mask_material.hpp"
-#include "core/color.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
 #include "physical_pixel_matrix.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
@@ -10,11 +21,13 @@
 #include <QtCore/qlogging.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qsgmaterialtype.h>
-#include <array>
-#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <tuple>
+
+
+
+import telar.gui.core.metrics;
 
 namespace telar::gui::qt {
 namespace {

@@ -24,6 +24,6 @@ execute_process(COMMAND "${runtime_run_clang_tidy}"
     -clang-tidy-binary "${runtime_clang_tidy}"
     -config-file "${runtime_directory}/.clang-tidy"
     -p "${runtime_build_directory}" -j "${JOBS}"
-    "/(services/(runtime|cli)-cpp/(?!(?:.*/)?tests/)|dlls/telar-platform/src/).*\\.cpp$"
+    "/(services/(runtime|cli)-cpp/(?!(?:.*/)?tests/)|dlls/telar-platform/src/).*\\.(cpp|cppm)$"
   WORKING_DIRECTORY "${runtime_directory}"
   COMMAND_ERROR_IS_FATAL ANY)

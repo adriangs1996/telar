@@ -1,16 +1,41 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/dependencies.hpp"
-#include "application/workbench_geometry.hpp"
+#include "../application/dependencies.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
 #include "machine_activity_target.hpp"
-#include "peek/limits.hpp"
-#include "peek/screen.hpp"
-#include "peek/target.hpp"
-#include "presentation/agent_order.hpp"
-#include "presentation/peek_geometry.hpp"
-#include "presentation/peek_labels.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <stdexcept>
+#include <string_view>
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include <concepts>
+#include <utility>
+#include "../terminal/screen.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <tuple>
+#include <charconv>
+#include <cstring>
+#include <system_error>
 #include "projection.hpp"
-#include "text/utf16_prefix.hpp"
-#include "qt/utf16_encoding.hpp"
+#include <bit>
+#include "utf16_encoding.hpp"
 #include <QtCore/qstringliteral.h>
 #include <QByteArray>
 #include <QLatin1StringView>
@@ -24,10 +49,17 @@
 #include <QtCore/qstringfwd.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
-#include <variant>
+
+#include "application/dependencies.hpp"
+#include "qt/utf16_encoding.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.peek.screen;
+import telar.gui.presentation.activity_order;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.presentation.notification_stack;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

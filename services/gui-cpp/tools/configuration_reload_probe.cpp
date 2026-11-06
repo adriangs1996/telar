@@ -1,10 +1,27 @@
-#include "application/dependencies.hpp"
-#include "config/callback.hpp"
-#include "core/configuration.hpp"
-#include "input/action.hpp"
-#include "input/configuration.hpp"
-#include "qt/configuration_source.hpp"
-#include "qt/bundled_fonts.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+
+#include "../qt/configuration_source.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -17,11 +34,21 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
+
+#include "application/dependencies.hpp"
+#include "qt/configuration_source.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.config.plugin_effects;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.configuration;
+
+import telar.gui.config.gui_query;
 
 namespace {
 

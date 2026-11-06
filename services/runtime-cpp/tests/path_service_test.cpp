@@ -1,6 +1,46 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "runtime/path_service.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <cassert>
+#include <cstring>
+#include <exception>
+#include <cstddef>
+#include "telar_base/program_identity.hpp"
+#include <cerrno>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <sys/types.h>
+#include <limits.h>
+#include <atomic>
+#include <chrono>
+#include <poll.h>
+#include <sys/wait.h>
+#include <charconv>
+#include "telar_platform/trace.hpp"
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unordered_set>
+#include "telar_base/memory/fixed_text.hpp"
+#include <concepts>
+#include <condition_variable>
+#include <pthread.h>
 #include <thread>
+
+
+
+import telar.runtime.runtime.media_service;
 
 using namespace telar;
 using namespace telar::runtime;

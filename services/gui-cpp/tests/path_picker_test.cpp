@@ -1,23 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "core/cell_rectangle.hpp"
-#include "paths/insertion.hpp"
-#include "paths/label.hpp"
-#include "paths/labels.hpp"
-#include "paths/limits.hpp"
-#include "paths/page.hpp"
-#include "presentation/path_picker_footer.hpp"
-#include "presentation/path_picker_geometry.hpp"
-#include "presentation/path_picker_placement.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include <array>
-#include <cstddef>
+#include <algorithm>
 #include <cstdint>
+#include <limits>
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstddef>
+#include <cstring>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <optional>
+#include <bit>
+#include <ghostty/vt/unicode.h>
+#include "../terminal/cell_position.hpp"
 #include <exception>
 #include <iostream>
-#include <optional>
 #include <string>
-#include <string_view>
+
+#include "terminal/cell_position.hpp"
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.paths.label;
+import telar.gui.presentation.form_field_geometry;
 
 namespace {
 

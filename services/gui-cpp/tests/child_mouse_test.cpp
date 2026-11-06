@@ -1,14 +1,27 @@
-#include "core/terminal_surface.hpp"
-#include "input/child_mouse.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <optional>
 #include <array>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
 
 namespace {
 

@@ -1,12 +1,24 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "attachment_preview.hpp"
-#include "application/dependencies.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/preview_size.hpp"
-#include "attachments/secure_erase.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
-#include "graphics/artwork_resize.hpp"
+#include "../application/dependencies.hpp"
+#include "../attachments/catalog.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+#include "../attachments/secure_erase.hpp"
+#include "../attachments/sensitive_bytes.hpp"
+#include "../attachments/types.hpp"
+#include "../core/memory.hpp"
+#include <array>
+#include <cstddef>
+#include <limits>
+#include <span>
 #include "telar_base/memory/allocator.hpp"
 #include <QBuffer>
 #include <QByteArray>
@@ -16,13 +28,20 @@
 #include <QImageReader>
 #include <QSize>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <new>
-#include <span>
-#include <stdexcept>
 #include <utility>
+
+#include "application/dependencies.hpp"
+#include "attachments/catalog.hpp"
+#include "attachments/secure_erase.hpp"
+#include "attachments/sensitive_bytes.hpp"
+#include "attachments/types.hpp"
+#include "core/memory.hpp"
+
+
+import telar.gui.attachments.marker_input;
+import telar.gui.graphics.pauses;
 
 namespace telar::gui::qt {
 

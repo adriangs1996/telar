@@ -1,38 +1,67 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "configuration_source.hpp"
 #include "appearance.hpp"
-#include "application/client_view_state.hpp"
-#include "application/dependencies.hpp"
-#include "components/configuration.hpp"
-#include "components/invocation.hpp"
-#include "components/pick_items.hpp"
-#include "components/source.hpp"
-#include "config/action_descriptions.hpp"
-#include "config/binding_query.hpp"
-#include "config/callback.hpp"
-#include "config/client_query.hpp"
-#include "config/generation.hpp"
-#include "config/gui_query.hpp"
-#include "config/input_query.hpp"
-#include "config/plugin_catalog.hpp"
-#include "config/plugin_effects.hpp"
-#include "config/plugin_invocation.hpp"
-#include "config/plugin_query.hpp"
-#include "config/query.hpp"
-#include "config/runtime_query.hpp"
-#include "config/theme_query.hpp"
-#include "config/themes.hpp"
-#include "configuration_loader.hpp"
-#include "core/configuration.hpp"
-#include "core/theme_values.hpp"
-#include "font_resolver.hpp"
-#include "input/action.hpp"
-#include "input/binding.hpp"
-#include "platform/window.hpp"
-#include "presentation/theme.hpp"
-#include "telar_base/memory/allocator.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+#include <utility>
+#include <string_view>
+#include "../application/dependencies.hpp"
+#include <array>
+#include <optional>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <cstddef>
+#include <variant>
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_config/command_tab_view.hpp"
-#include "telar_plugins/identity.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
+#include "telar_base/text/utf8.hpp"
+#include <tuple>
+#include "../core/memory.hpp"
+#include <bit>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <functional>
+#include <type_traits>
+
+#include "telar_client/serializers/telar_frame.hpp"
+#include "gui_config_bootstrap.hpp"
+
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_config/graphics/limits.hpp"
+#include <arpa/inet.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <format>
+#include <ghostty/vt/unicode.h>
+#include <exception>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include "configuration_loader.hpp"
+#include "font_resolver.hpp"
+#include "../platform/window.hpp"
 #include <QByteArray>
 #include <QFileInfo>
 #include <QFuture>
@@ -48,14 +77,26 @@
 #include <QtCore/qtimer.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+#include "application/dependencies.hpp"
+#include "platform/window.hpp"
+
+
+import telar.gui.application.host_effects;
+import telar.gui.components.configuration;
+import telar.gui.components.builtin_content;
+import telar.gui.config.plugin_query;
+import telar.gui.config.plugin_effects;
+import telar.gui.config.gui_query;
+import telar.gui.config.generation;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
+import telar.gui.presentation.suggestion_geometry;
+import telar.config;
+import telar.plugins;
+
+
 
 namespace telar::gui::qt {
 

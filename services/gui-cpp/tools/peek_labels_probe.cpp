@@ -1,15 +1,41 @@
-#include "application/records.hpp"
-#include "core/memory.hpp"
-#include "presentation/peek_labels.hpp"
-#include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
 #include <cstdint>
-#include <cstdio>
+#include <limits>
 #include <exception>
-#include <iostream>
-#include <stdexcept>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
 #include <string_view>
+#include <charconv>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "probe_io.hpp"
+#include <cstdio>
+#include <iostream>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.presentation.notification_stack;
 
 namespace {
 

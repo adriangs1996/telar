@@ -1,22 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "machine_chrome_layout.hpp"
 #include "application.hpp"
-#include "core/color_name.hpp"
-#include "core/configuration.hpp"
-#include "core/memory.hpp"
-#include "core/theme_values.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/text_layout.hpp"
-#include "machines/limits.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machine_token.hpp"
-#include "machines/machines.hpp"
-#include "presentation/display_metrics.hpp"
-#include "presentation/chrome_style.hpp"
-#include "presentation/machine_chrome_geometry.hpp"
-#include "presentation/machine_facts.hpp"
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <variant>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/memory.hpp"
+#include <concepts>
+#include <utility>
+#include <bit>
+#include <stdexcept>
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <cmath>
+#include <limits>
+#include <type_traits>
+#include <ghostty/vt/unicode.h>
+#include <charconv>
+#include <system_error>
+#include "../core/terminal_size.hpp"
 #include "projection.hpp"
 #include "resident_fonts.hpp"
-#include "text/bounded_text.hpp"
 #include "window_font_catalog.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
@@ -35,14 +55,21 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <cstddef>
 #include <exception>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
-#include <variant>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 namespace {

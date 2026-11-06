@@ -1,7 +1,17 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/color.hpp"
-#include "graphics/rounded_rectangle.hpp"
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include "projection.hpp"
 #include "rounded_rectangle_scene.hpp"
 #include "scene_nodes.hpp"
@@ -11,6 +21,12 @@
 #include <QSGSimpleRectNode>
 #include <QtCore/qtypes.h>
 #include <memory>
+
+#pragma once
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 

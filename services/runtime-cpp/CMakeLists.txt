@@ -1,6 +1,8 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.4.5)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
 project(telar_runtime LANGUAGES C CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -96,6 +98,7 @@ add_library(runtime-core STATIC
   platform/local_listener.cpp
   history/database.cpp
   terminal/cell_projection.cpp)
+telar_modules(runtime-core)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_NATIVE_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC telar::tls telar-clipboard)
@@ -111,7 +114,7 @@ else()
   target_link_libraries(runtime-core PUBLIC util)
 endif()
 option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)
-target_compile_definitions(runtime-core PUBLIC TELAR_DEBUG=$<CONFIG:Debug> TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_RUNTIME_DIAGNOSTICS}>>)
+
 target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)
 add_dependencies(runtime-core cell-layout)
 
@@ -128,17 +131,8 @@ add_subdirectory(../cli-cpp "${CMAKE_CURRENT_BINARY_DIR}/cli")
 set_target_properties(telar PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 option(TELAR_RUNTIME_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
-if(TELAR_RUNTIME_SANITIZERS)
-  if(TELAR_RUNTIME_DISTRIBUTABLE)
-    message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
-  endif()
-  target_compile_options(telar-clipboard PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_compile_options(telar-lua-vm PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_compile_options(telar-platform PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_compile_options(runtime-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(runtime-core PUBLIC -fsanitize=address,undefined)
-  target_compile_options(cli-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(cli-core PUBLIC -fsanitize=address,undefined)
+if(TELAR_SANITIZERS AND TELAR_RUNTIME_DISTRIBUTABLE)
+  message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
 endif()
 
 # The installed executables may link only the base system (glibc on Linux);

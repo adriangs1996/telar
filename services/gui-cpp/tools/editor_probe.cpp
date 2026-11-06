@@ -1,12 +1,31 @@
-#include "core/memory.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
 #include "probe_io.hpp"
 #include "probe_text.hpp"
-#include "text/bounded_editor.hpp"
+#include <array>
+#include <bit>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <ghostty/vt/unicode.h>
+#include <cstring>
+#include <limits>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.text.bounded_editor;
 
 namespace {
 

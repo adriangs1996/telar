@@ -1,4 +1,13 @@
-#include "platform/login_shell.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <array>
 #include <cstdio>
 #include <cstddef>
@@ -8,12 +17,12 @@
 #include <filesystem>
 #include <iostream>
 #include <mach-o/dyld.h>
-#include <span>
-#include <string>
-#include <string_view>
 #include <sys/syslimits.h>
 #include <unistd.h>
-#include <vector>
+
+
+
+import telar.gui.platform.login_shell;
 
 namespace {
 

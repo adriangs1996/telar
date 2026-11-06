@@ -44,7 +44,7 @@ void inlineBorrowedCapture() {
 
 // CASE: runtime.published_borrowed_request
 // PAIR: runtime.request_snapshot
-// SOURCE: services/runtime-cpp/paths/query_task.hpp :: OwnedPathQuery::assign
+// SOURCE: services/runtime-cpp/paths/query_task.cppm :: OwnedPathQuery::assign
 // STATUS: pending
 // CONTRACT: A request retained by a deferred task must not borrow a producer's stack strings.
 // SCENARIO: An owning aggregate containing string_view fields is still a borrowed request.
@@ -64,7 +64,7 @@ void publishedBorrowedRequest() {
 
 // CASE: runtime.published_owned_request
 // PAIR: runtime.request_snapshot
-// SOURCE: services/runtime-cpp/paths/query_task.hpp :: OwnedPathQuery::assign
+// SOURCE: services/runtime-cpp/paths/query_task.cppm :: OwnedPathQuery::assign
 // STATUS: pending
 // CONTRACT: An owned snapshot copies each retained request field before publication.
 // SCENARIO: Deep-copy root/query and move the aggregate into the deferred task.

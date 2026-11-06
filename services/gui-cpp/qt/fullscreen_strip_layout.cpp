@@ -1,13 +1,40 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "fullscreen_strip_layout.hpp"
-#include "application/pane_layout.hpp"
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include <cmath>
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include "font_collection.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/text_layout.hpp"
+#include <concepts>
+#include <utility>
+#include <bit>
+#include <stdexcept>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <type_traits>
+#include <ghostty/vt/unicode.h>
 #include "pane_chrome_style.hpp"
-#include "presentation/fullscreen_strip_geometry.hpp"
 #include "projection.hpp"
 #include "resident_fonts.hpp"
 #include "window_font_catalog.hpp"
@@ -25,16 +52,16 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <memory>
-#include <span>
-#include <string_view>
-#include <utility>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

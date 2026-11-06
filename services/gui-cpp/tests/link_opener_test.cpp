@@ -1,8 +1,21 @@
-#include "external_link_opener.hpp"
-#include "links/link_target.hpp"
-#include "platform/environment.hpp"
-#include "platform/external_links.hpp"
-#include "projection.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../qt/external_link_opener.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
+#include <limits>
+#include <optional>
+#include <array>
+#include "../platform/environment.hpp"
+#include "../qt/projection.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QProcess>
@@ -20,16 +33,20 @@
 #include <QtTest/qtestcase.h>
 #include <cerrno>
 #include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
 #include <stdexcept>
-#include <string_view>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "external_link_opener.hpp"
+#include "platform/environment.hpp"
+#include "projection.hpp"
+
+
+import telar.gui.links.cell_links;
+import telar.gui.platform.login_shell;
 
 namespace {
 

@@ -30,7 +30,7 @@ def main():
             raise ValueError("Invalid or duplicated box edge")
         table[codepoint] = dict(fields)
 
-    lines = ["#pragma once", "", '#include "terminal/glyphs/box_edges.hpp"', "#include <array>", "", "namespace telar::gui::glyphs {", "", "inline constexpr auto box_edge_table = std::to_array<BoxEdges>({"]
+    lines = ["", "", "namespace telar::gui::glyphs {", "", "inline constexpr auto box_edge_table = std::to_array<BoxEdges>({"]
     for codepoint in range(first_codepoint, last_codepoint + 1):
         fields = table.get(codepoint, {})
         values = ", ".join(f".{direction} = BoxWeight::{weights[fields[direction]]}" for direction in directions if direction in fields)

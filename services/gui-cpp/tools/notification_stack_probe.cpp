@@ -1,17 +1,38 @@
-#include "application/notification_center.hpp"
-#include "application/notification_item.hpp"
-#include "presentation/notification_stack.hpp"
-#include "probe_geometry.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <string_view>
+#include <array>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <cmath>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <concepts>
+#include "probe_geometry.hpp"
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <span>
-#include <stdexcept>
+
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.presentation.notification_stack;
 
 namespace {
 

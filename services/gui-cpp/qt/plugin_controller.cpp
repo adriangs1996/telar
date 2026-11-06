@@ -1,19 +1,50 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/notification_item.hpp"
-#include "config/action_descriptions.hpp"
-#include "config/plugin_effects.hpp"
-#include "config/plugin_invocation.hpp"
-#include "input/action.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include "../core/memory.hpp"
+#include <array>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <variant>
+#include <optional>
+#include <utility>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <charconv>
+#include <limits.h>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <bit>
 #include "machine_client.hpp"
 #include "plugin_worker.hpp"
-#include "platform/runtime_endpoint.hpp"
+#include <string>
 #include <QString>
 #include <QtCore/qtmetamacros.h>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <stdexcept>
-#include <variant>
+
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.config.plugin_query;
+import telar.gui.config.plugin_effects;
+import telar.gui.input.copy_pointer;
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::qt {
 

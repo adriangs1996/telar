@@ -1,6 +1,54 @@
-#include "../event_loop.hpp"
-#include "telar_platform/error.hpp"
+module;
+
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <chrono>
+#include <concepts>
+#include <cstdint>
+#include <span>
+#if (defined(__APPLE__))
+#include <sys/event.h>
+#endif
+#if (defined(__linux__))
+#include <cerrno>
+#endif
+#if (defined(__linux__))
+#include <exception>
+#endif
+#if (defined(__linux__))
+#include <algorithm>
+#endif
+#if (defined(__linux__))
+#include <atomic>
+#endif
+#if (defined(__linux__))
+#include <climits>
+#endif
+#if (defined(__linux__))
 #include <csignal>
+#endif
+#if (defined(__linux__))
+#include <fcntl.h>
+#endif
+#if (defined(__linux__))
+#include <sched.h>
+#endif
+#if (defined(__linux__))
+#include <sys/epoll.h>
+#endif
+#if (defined(__linux__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__))
+#include <unistd.h>
+#endif
+#include <csignal>
+
+module telar.runtime.platform.system_certificates;
+
+import telar.platform;
+
 
 namespace telar::runtime {
 

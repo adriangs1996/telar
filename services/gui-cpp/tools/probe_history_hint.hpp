@@ -1,16 +1,31 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "core/theme_values.hpp"
-#include "presentation/history_hint_geometry.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include "probe_geometry.hpp"
 #include "probe_io.hpp"
 #include "probe_text.hpp"
 #include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
+
+#pragma once
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_meta_geometry;
 
 namespace telar::gui::probe {
 

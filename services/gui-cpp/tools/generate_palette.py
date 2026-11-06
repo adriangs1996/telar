@@ -17,7 +17,7 @@ def main() -> None:
     if not entries or re.sub(pattern, "", catalogue[1], flags=re.DOTALL).strip(" \n\t,"):
         raise ValueError("Unrecognized original command palette entry")
 
-    lines = ["#pragma once", "", '#include "input/action.hpp"', "#include <array>", "#include <string_view>", "", "namespace telar::gui {", "", "struct PaletteAction {", "  BindingActionKind action;", "  std::string_view label;", "};", "", "inline constexpr auto palette_actions = std::to_array<PaletteAction>({"]
+    lines = ["", "", "namespace telar::gui {", "", "struct PaletteAction {", "  BindingActionKind action;", "  std::string_view label;", "};", "", "inline constexpr auto palette_actions = std::to_array<PaletteAction>({"]
     for entry in entries:
         kind, parameter = action_name(entry[1])
         if parameter:

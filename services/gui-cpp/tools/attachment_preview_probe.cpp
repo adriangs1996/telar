@@ -1,14 +1,26 @@
-#include "attachments/preview_size.hpp"
-#include "core/memory.hpp"
-#include "graphics/artwork_resize.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+#include "../core/memory.hpp"
 #include <array>
 #include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <iostream>
 #include <limits>
 #include <span>
-#include <stdexcept>
+#include <exception>
+#include <iostream>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.attachments.marker_input;
+import telar.gui.graphics.pauses;
 
 namespace {
 

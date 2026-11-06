@@ -8,34 +8,17 @@ exceptions, and analysis boundaries, with official references and checked exampl
 
 ## Requirements
 
-- CMake 3.25+, Ninja, and a C++23 compiler.
-- LLVM/Clang 18+ development libraries for `tbc-lint`, including `clang-cpp`.
-- `clangd`, `clang-format`, and `clang-tidy`, preferably from that LLVM installation.
-- Python 3 for CLI contract tests.
-- Network access on the first test configure to fetch the pinned GoogleTest archive.
+Use the [shared pinned toolchain](../../docs/build/cpp-modules.md). From the
+repository root, run `tools/cpp bootstrap`, then add `.toolchain/bin` to `PATH`.
+This provides LLVM/clangd 23.1.5, CMake 4.4.5, Ninja 1.13.2 and Just 1.59.0.
+The presets select `.toolchain/toolchain.cmake`; do not mix compiler installations
+inside an existing build directory. Python 3.9+ and the native development SDK
+are prerequisites. The first test configure fetches verified GoogleTest sources.
 
-On macOS:
-
-```sh
-brew install cmake ninja llvm
-export PATH="$(brew --prefix llvm)/bin:$PATH"
-export CMAKE_PREFIX_PATH="$(brew --prefix llvm)${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-export CC=clang CXX=clang++
-```
-
-On Ubuntu 24.04:
-
-```sh
-sudo apt-get install cmake ninja-build clang-18 llvm-18-dev libclang-18-dev libclang-cpp18-dev clang-tools-18 clang-format-18 clang-tidy-18 python3
-export PATH="/usr/lib/llvm-18/bin:$PATH"
-export CMAKE_PREFIX_PATH="/usr/lib/llvm-18${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-export CC=clang CXX=clang++
-```
-
-Other installations can pass `-DLLVM_DIR=/prefix/lib/cmake/llvm` and
-`-DClang_DIR=/prefix/lib/cmake/clang`. Keep the Clang libraries and resource headers
-from the same installation. The linter uses their configured resource directory;
-reconfigure and rebuild it after replacing that LLVM installation.
+The TBC annotations remain textual because their macros and source locations are
+consumed by Clang AST analysis. The pinned LLVM distribution also supplies the
+linter development headers, libraries and resource directory. No separate
+Homebrew or distro LLVM SDK is needed.
 
 ## Build and test
 

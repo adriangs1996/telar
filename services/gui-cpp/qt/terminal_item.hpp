@@ -1,20 +1,36 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/terminal_surface.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include "application.hpp"
 #include "font_collection.hpp"
-#include "input/child_mouse.hpp"
-#include "input/mouse_encoder.hpp"
-#include "input/terminal_key.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <optional>
+#include <array>
+#include <charconv>
+#include <limits>
+#include <string_view>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "../input/wheel_accumulator.hpp"
 #include "link_presentation.hpp"
 #include "link_preview.hpp"
-#include "links/link_gesture.hpp"
-#include "links/link_hover.hpp"
-#include "links/pointer_policy.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "../terminal/cell_position.hpp"
+#include <utility>
 #include "resident_fonts.hpp"
-#include "terminal/font_grid.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <chrono>
 #include "terminal_preparation.hpp"
 #include "terminal_font.hpp"
 #include "window_font_catalog.hpp"
@@ -24,9 +40,20 @@
 #include <QQuickItem>
 #include <QTimer>
 #include <QtQml/qqmlregistration.h>
-#include <array>
 #include <memory>
-#include <span>
+
+#pragma once
+
+#include "input/wheel_accumulator.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
+import telar.gui.input.configuration;
+import telar.gui.input.key_encoder;
+import telar.gui.links.link_hover;
+import telar.gui.links.path_expansion;
+import telar.gui.terminal.font_grid;
 
 namespace telar::gui::test {
 class TerminalCursor;

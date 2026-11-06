@@ -1,16 +1,31 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "components/clock.hpp"
-#include "components/content.hpp"
-#include "components/icon.hpp"
-#include "components/invocation.hpp"
-#include "components/node.hpp"
-#include "config/action_descriptions.hpp"
-#include "core/color.hpp"
-#include "core/color_name.hpp"
-#include "core/theme_values.hpp"
-#include "input/action.hpp"
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <lua.h>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
 #include "telar_client/serializers/telar_cells.hpp"
+#include <variant>
+#include <limits>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "../core/memory.hpp"
 #include <QColor>
 #include <QString>
 #include <QStringLiteral>
@@ -19,13 +34,15 @@
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <concepts>
-#include <cstddef>
-#include <optional>
-#include <string_view>
-#include <utility>
-#include <variant>
+
+#pragma once
+
+
+import telar.gui.components.builtin_content;
+import telar.gui.components.configuration;
+import telar.gui.config.plugin_query;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
 
 namespace telar::gui::qt {
 

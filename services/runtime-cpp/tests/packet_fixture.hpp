@@ -1,8 +1,27 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "traffic/protocol.hpp"
+
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <array>
+#include <optional>
 #include <algorithm>
 #include <vector>
+
+#pragma once
+
+
+import telar.runtime.traffic.control_protocol;
 
 namespace telar::runtime::traffic_test {
 

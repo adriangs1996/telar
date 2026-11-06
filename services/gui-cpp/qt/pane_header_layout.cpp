@@ -1,7 +1,26 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "pane_header_layout.hpp"
-#include "core/geometry.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include "pane_chrome_style.hpp"
-#include "presentation/pane_chrome.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>
@@ -11,7 +30,11 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cmath>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 

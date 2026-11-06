@@ -1,6 +1,8 @@
+# include-cleaner currently diagnoses implicit primary-module imports as missing headers.
 InheritParentConfig: false
 Checks: >-
   *,
+  -misc-include-cleaner,
   -abseil-*,
   -altera-*,
   -android-*,

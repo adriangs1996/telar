@@ -1,10 +1,24 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "input/child_mouse.hpp"
-#include <QtCore/qnamespace.h>
+
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <optional>
+#include <QtCore/qnamespace.h>
 #include <array>
 #include <utility>
+
+#pragma once
+
+
+import telar.gui.input.child_mouse;
 
 namespace telar::gui::qt {
 

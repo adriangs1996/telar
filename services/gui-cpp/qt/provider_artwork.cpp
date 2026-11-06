@@ -1,7 +1,21 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "provider_artwork.hpp"
-#include "graphics/artwork_resize.hpp"
-#include "presentation/application_mark.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <span>
 #include "telar_client/serializers/telar_messages.hpp"
+#include <string_view>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QIODevice>
@@ -12,11 +26,12 @@
 #include <QtCore/qstring.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
 #include <iterator>
-#include <span>
+
+
+
+import telar.gui.graphics.pauses;
+import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
 

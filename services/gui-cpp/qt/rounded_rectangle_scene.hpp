@@ -1,10 +1,26 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "graphics/rounded_rectangle.hpp"
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include <QQuickWindow>
 #include <QSGNode>
 #include <QtCore/qtypes.h>
 #include <span>
+
+#pragma once
+
+
+import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 

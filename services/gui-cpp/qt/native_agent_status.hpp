@@ -1,7 +1,13 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "presentation/status_age.hpp"
+
 #include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <QPointer>
 #include <QQuickItem>
 #include <QRectF>
@@ -9,8 +15,12 @@
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstdint>
 #include <optional>
+
+#pragma once
+
+
+import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
 

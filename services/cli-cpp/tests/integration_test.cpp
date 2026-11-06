@@ -1,7 +1,49 @@
-#include "../integration/hook_settings.hpp"
-#include "../integration/skills.hpp"
-#include "../integration_options.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <stdexcept>
+#include "telar_base/memory/allocator.hpp"
+#include <string_view>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <concepts>
+#include <cstdlib>
+#include <exception>
+#include <charconv>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <limits.h>
+#include <unistd.h>
+#include "telar_platform/random_bytes.hpp"
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#endif
+#include <algorithm>
+#include "integration_assets.hpp"
+#include <cstring>
+#include <limits>
+#include <type_traits>
 #include "check.hpp"
+
+
+
+import telar.cli.integration.settings;
+import telar.cli.tab;
 
 using namespace telar;
 using namespace telar::runtime;

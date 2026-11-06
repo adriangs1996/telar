@@ -1,10 +1,44 @@
-#include "graphics/media_terminal.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../terminal/control/classification.hpp"
+#include "../terminal/control/parser.hpp"
+#include "../terminal/pty_response_queue.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <stdexcept>
+#include "../graphics/kitty_control.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include "../graphics/child_file.hpp"
+#include "../graphics/temporary_path.hpp"
+#include "../graphics/kitty_framing.hpp"
+#include <algorithm>
+#include <charconv>
+#include "../diagnostics/line.hpp"
+#include "../terminal/ghostty_allocator.hpp"
+#include "../terminal/ghostty_handle.hpp"
+#include <optional>
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include "telar_config/graphics/limits.hpp"
+#include "telar_platform/trace.hpp"
+#include <limits>
 #include "telar_client/codecs/telar_codec.hpp"
-#include "tests/check.hpp"
+#include "check.hpp"
 #include <chrono>
 #include <cstdio>
 #include <string>
 #include <vector>
+
+#include "tests/check.hpp"
+
+
+import telar.runtime.graphics.pane_media;
 
 using namespace telar;
 using namespace telar::runtime;

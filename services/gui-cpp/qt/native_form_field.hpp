@@ -1,9 +1,28 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "form_composition_events.hpp"
 #include "form_input_context.hpp"
-#include "presentation/form_field_geometry.hpp"
-#include "text/bounded_editor.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <limits>
+#include <stdexcept>
+#include <bit>
+#include <ghostty/vt/unicode.h>
+#include <cstring>
 #include <QByteArray>
 #include <QFocusEvent>
 #include <QInputMethodEvent>
@@ -15,7 +34,13 @@
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstddef>
+
+#pragma once
+
+
+
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

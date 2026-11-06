@@ -1,13 +1,35 @@
-#include "core/memory.hpp"
-#include "platform/clipboard_image_pipe.hpp"
-#include <charconv>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include "../attachments/secure_erase.hpp"
+#include "../attachments/sensitive_bytes.hpp"
+#include "../attachments/types.hpp"
+#include "../platform/clipboard_image_source.hpp"
+#include <algorithm>
+#include <array>
+#include <cerrno>
+#include <chrono>
 #include <cstddef>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <time.h>
+#include <unistd.h>
+#include <charconv>
 #include <cstdint>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
 #include <string_view>
 #include <system_error>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.platform.profile_file;
 
 namespace {
 

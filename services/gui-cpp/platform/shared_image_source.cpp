@@ -1,4 +1,9 @@
-#include "shared_image_source.hpp"
+module;
+
+#include "telar_platform/file_descriptor.hpp"
+#include <cstdint>
+#include <span>
+#include <string_view>
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_platform/graphics/child_shared_memory.hpp"
 #include <algorithm>
@@ -8,6 +13,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
+
+module telar.gui.platform.profile_file;
+
+
 
 namespace telar::gui::platform {
 

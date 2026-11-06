@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.4.5)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_gui LANGUAGES C CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,11 +22,11 @@ configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/gu
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/src/client/config/bootstrap.lua")
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.hpp"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_themes.py" "${TELAR_ROOT}/src/model/appearance/theme_support.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.hpp"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.inc"
+  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_themes.py" "${TELAR_ROOT}/src/model/appearance/theme_support.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.inc"
   DEPENDS tools/generate_themes.py "${TELAR_ROOT}/src/model/appearance/theme_support.zig" "${TELAR_ROOT}/src/model/appearance/TerminalTheme.zig" "${TELAR_ROOT}/src/model/appearance/Palette.zig"
   VERBATIM)
-add_custom_target(gui-themes DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.hpp")
+add_custom_target(gui-themes DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.inc")
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholder_diacritics.hpp"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_graphics_tables.py" "${TELAR_ROOT}/lib/kitty_protocol/unicode_placeholder.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholder_diacritics.hpp"
@@ -32,41 +34,41 @@ add_custom_command(
   VERBATIM)
 add_custom_target(gui-graphics-tables DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholder_diacritics.hpp")
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.hpp"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_bindings.py" "${TELAR_ROOT}/src/client/config/default_bindings.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.hpp"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.inc"
+  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_bindings.py" "${TELAR_ROOT}/src/client/config/default_bindings.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.inc"
   DEPENDS tools/generate_bindings.py "${TELAR_ROOT}/src/client/config/default_bindings.zig"
   VERBATIM)
-add_custom_target(gui-bindings DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.hpp")
+add_custom_target(gui-bindings DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.inc")
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.hpp"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_palette.py" "${TELAR_ROOT}/src/model/state/command_palette.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.hpp"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.inc"
+  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_palette.py" "${TELAR_ROOT}/src/model/state/command_palette.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.inc"
   DEPENDS tools/generate_palette.py tools/generate_bindings.py "${TELAR_ROOT}/src/model/state/command_palette.zig"
   VERBATIM)
-add_custom_target(gui-palette-actions DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.hpp")
+add_custom_target(gui-palette-actions DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.inc")
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.hpp"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_box_edges.py" "${TELAR_ROOT}/lib/cellglyphs/box_lines.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.hpp"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.inc"
+  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_box_edges.py" "${TELAR_ROOT}/lib/cellglyphs/box_lines.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.inc"
   DEPENDS tools/generate_box_edges.py "${TELAR_ROOT}/lib/cellglyphs/box_lines.zig" "${TELAR_ROOT}/lib/cellglyphs/BoxLines.zig" "${TELAR_ROOT}/lib/cellglyphs/box_style.zig"
   VERBATIM)
-add_custom_target(gui-box-edges DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.hpp")
+add_custom_target(gui-box-edges DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.inc")
 
-add_library(gui-glyphs STATIC terminal/glyphs/box_curve.cpp)
-target_include_directories(gui-glyphs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_compile_options(gui-glyphs PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
-add_dependencies(gui-glyphs gui-box-edges)
+include(cmake/fonts.cmake)
 
-add_library(gui-clock STATIC platform/awake_clock.cpp platform/wall_clock.cpp)
-target_include_directories(gui-clock PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_options(gui-clock PRIVATE -Wall -Wextra -Wpedantic)
-
-add_library(gui-core INTERFACE)
-target_include_directories(gui-core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
-add_dependencies(gui-core gui-graphics-tables gui-bindings gui-box-edges gui-palette-actions)
-target_link_libraries(gui-core INTERFACE gui-glyphs gui-clock telar::config)
-target_compile_definitions(gui-core INTERFACE TELAR_DIAGNOSTICS=0)
-target_compile_options(gui-core INTERFACE -Wall -Wextra -Wpedantic)
+add_library(gui-core STATIC terminal/glyphs/box_curve.cpp platform/awake_clock.cpp platform/wall_clock.cpp)
+telar_modules(gui-core)
+target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
+add_dependencies(gui-core gui-graphics-tables gui-bindings gui-box-edges gui-palette-actions gui-themes)
+target_link_libraries(gui-core PUBLIC telar::config gui-harfbuzz)
+target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)
+set_source_files_properties(terminal/glyphs/box_curve.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+# Compatibility target names for existing focused tests; their implementations
+# now share the domain module provider and its compilation configuration.
+add_library(gui-glyphs INTERFACE)
+target_link_libraries(gui-glyphs INTERFACE gui-core)
+add_library(gui-clock INTERFACE)
+target_link_libraries(gui-clock INTERFACE gui-core)
 
 add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity.cpp platform/window_lease.cpp platform/profile_file.cpp platform/secure_random.cpp platform/stdio_socket.cpp platform/managed_directory.cpp platform/process_group.cpp platform/process_group.c)
 target_sources(gui-posix PRIVATE platform/shared_image_source.cpp)
@@ -93,6 +95,7 @@ add_library(gui-unicode UNKNOWN IMPORTED)
 set_target_properties(gui-unicode PROPERTIES
   IMPORTED_LOCATION "${GHOSTTY_VT_LIBRARY}"
   INTERFACE_INCLUDE_DIRECTORIES "${GHOSTTY_VT_INCLUDE_DIR}")
+target_link_libraries(gui-core PUBLIC gui-unicode)
 target_link_libraries(gui-config INTERFACE gui-core gui-unicode)
 target_include_directories(gui-config INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_dependencies(gui-config gui-themes)
@@ -108,17 +111,6 @@ file(GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/clangd/domain/compile_flags.txt"
   CONTENT "-xc++\n-std=c++${CMAKE_CXX_STANDARD}\n-I$<JOIN:$<REMOVE_DUPLICATES:$<TARGET_PROPERTY:gui-editor-context,INTERFACE_INCLUDE_DIRECTORIES>>,\n-I>\n-D$<JOIN:$<TARGET_PROPERTY:gui-editor-context,INTERFACE_COMPILE_DEFINITIONS>,\n-D>\n")
 
-if(TELAR_GUI_SANITIZERS)
-  target_compile_options(telar-gui-command PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(telar-gui-command PRIVATE -fsanitize=address,undefined)
-  target_compile_options(gui-clock PUBLIC "$<$<COMPILE_LANGUAGE:C,CXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
-  target_link_options(gui-clock INTERFACE -fsanitize=address,undefined)
-  target_compile_options(gui-glyphs PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_compile_options(telar-lua-vm PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_compile_options(telar-platform PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_compile_options(gui-core INTERFACE "$<$<COMPILE_LANGUAGE:C,CXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
-  target_link_options(gui-core INTERFACE -fsanitize=address,undefined)
-endif()
 
 include(CTest)
 if(BUILD_TESTING)
@@ -727,7 +719,6 @@ if(BUILD_TESTING)
 endif()
 
 if(TELAR_GUI_NATIVE)
-  include(cmake/fonts.cmake)
   add_library(gui-fonts STATIC fonts/face.cpp fonts/ligature_coverage.cpp)
   target_link_libraries(gui-fonts PUBLIC gui-core gui-harfbuzz)
   target_link_libraries(gui-editor-context INTERFACE gui-fonts)
@@ -870,7 +861,7 @@ if(TELAR_GUI_NATIVE)
       if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
         target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
       endif()
-      if(TELAR_GUI_SANITIZERS)
+      if(TELAR_SANITIZERS)
         set_property(SOURCE platform/macos/clipboard_image_source.mm APPEND PROPERTY COMPILE_OPTIONS -fsanitize=address,undefined -fno-omit-frame-pointer)
         target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
       endif()
@@ -1148,7 +1139,7 @@ if(TELAR_GUI_NATIVE)
       if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
         target_compile_options(gui-machine-window-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
       endif()
-      if(TELAR_GUI_SANITIZERS)
+      if(TELAR_SANITIZERS)
         target_compile_options(gui-machine-window-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
       endif()
     endif()
@@ -1406,3 +1397,25 @@ if(TELAR_GUI_NATIVE)
   install(FILES licenses/ghostty-vt.txt DESTINATION share/licenses/telar-gui)
   install(FILES "${gui_font_directory}/JetBrainsMono-OFL.txt" "${gui_font_directory}/TelarForma-OFL.txt" DESTINATION share/licenses/telar-gui)
 endif()
+
+# moc includes the textual QObject headers, which import domain modules. Their
+# generated translation units must participate in the same native dependency scan.
+get_property(gui_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(gui_target IN LISTS gui_targets)
+  get_target_property(gui_automoc ${gui_target} AUTOMOC)
+  if(gui_automoc)
+    get_target_property(gui_autogen_directory ${gui_target} AUTOGEN_BUILD_DIR)
+    if(NOT gui_autogen_directory)
+      set(gui_autogen_directory "${CMAKE_CURRENT_BINARY_DIR}/${gui_target}_autogen")
+    endif()
+    # CMake deliberately disables scanning on its synthetic moc source. A
+    # separate ordinary generated unit lets the scanner discover header imports.
+    set_source_files_properties("${gui_autogen_directory}/mocs_compilation.cpp"
+      PROPERTIES HEADER_FILE_ONLY ON)
+    set(gui_moc_imports "${CMAKE_CURRENT_BINARY_DIR}/${gui_target}_moc_imports.cpp")
+    file(GENERATE OUTPUT "${gui_moc_imports}"
+      CONTENT "#include \"${gui_autogen_directory}/mocs_compilation.cpp\"\n")
+    set_source_files_properties("${gui_moc_imports}" PROPERTIES GENERATED TRUE CXX_SCAN_FOR_MODULES ON SKIP_AUTOMOC ON)
+    target_sources(${gui_target} PRIVATE "${gui_moc_imports}")
+  endif()
+endforeach()

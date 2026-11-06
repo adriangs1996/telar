@@ -1,17 +1,37 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "input/binding.hpp"
-#include "input/copy_pointer.hpp"
+#include <cstdint>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <optional>
 #include "key_adapter.hpp"
-#include "terminal/copy_grid.hpp"
-#include "terminal/copy_state.hpp"
+#include <utility>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <QtCore/qbytearrayview.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtGui/qevent.h>
-#include <cstdint>
 #include <exception>
-#include <optional>
+
+
+
+import telar.gui.input.key_encoder;
+import telar.gui.input.copy_pointer;
+import telar.gui.terminal.font_grid;
+import telar.gui.terminal.copy_mode;
 
 namespace telar::gui::qt {
 

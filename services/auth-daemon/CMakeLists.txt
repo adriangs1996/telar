@@ -1,7 +1,8 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
 project(telar_auth_daemon LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,7 +17,6 @@ endif()
 
 add_executable(telar-auth-daemon main.cpp)
 target_compile_options(telar-auth-daemon PRIVATE -Wall -Wextra -Wpedantic)
-target_compile_definitions(telar-auth-daemon PRIVATE TELAR_DEBUG=$<CONFIG:Debug>)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(telar-auth-daemon PRIVATE _GNU_SOURCE)
 endif()

@@ -1,34 +1,83 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "allocation_gate.hpp"
-#include "application/records.hpp"
-#include "application/session.hpp"
-#include "assertions.hpp"
-#include "config/callback.hpp"
-#include "config/command_tab_action.hpp"
-#include "config/generation.hpp"
-#include "core/memory.hpp"
-#include "input/action.hpp"
-#include "input/tab_drag.hpp"
-#include "session_fixture.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_config/command_tab_reference.hpp"
-#include "telar_config/command_tab_registry.hpp"
-#include "telar_config/command_tab_view.hpp"
-#include "telar_config/limit_notices.hpp"
+#include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>
+#include <concepts>
+#include <utility>
 #include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <new>
 #include <optional>
-#include <stdexcept>
-#include <string>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
 #include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../terminal/cell_position.hpp"
+#include <bit>
+#include <tuple>
+#include <cmath>
+#include "../input/wheel_accumulator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <memory>
+#include "assertions.hpp"
+#include <cinttypes>
+#include <cstdio>
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <initializer_list>
+#include <string>
+
+#include "gui_config_bootstrap.hpp"
+
+#include <limits.h>
+#include <sys/stat.h>
+#include <arpa/inet.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <format>
+#include <ghostty/vt/unicode.h>
+#include "session_fixture.hpp"
+#include <iostream>
+#include <new>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.application.session;
+import telar.gui.config.plugin_effects;
+import telar.gui.config.plugin_query;
+import telar.gui.config.generation;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.child_mouse;
+import telar.config;
+
+import telar.gui.config.gui_query;
+
 
 namespace {
 

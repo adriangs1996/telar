@@ -1,16 +1,27 @@
-#include "input/tab_drag.hpp"
-#include "input/tab_drop_slots.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <cstddef>
+#include <limits>
 #include "probe_io.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
-#include <span>
+
+
+
+import telar.gui.input.child_mouse;
 
 namespace {
 using namespace telar;

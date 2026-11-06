@@ -1,26 +1,51 @@
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/font_runs.hpp"
-#include "fonts/glyph_transform.hpp"
-#include "fonts/text_layout.hpp"
-#include "probe_io.hpp"
-#include "probe_text.hpp"
-#include "tests/font_fixture.hpp"
-#include "text/text_fit.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "../core/memory.hpp"
+#include <concepts>
+#include <cstddef>
+#include <optional>
+#include <utility>
 #include <array>
 #include <bit>
-#include <cstddef>
-#include <cstdint>
+#include <stdexcept>
+#include <string_view>
+#include <ghostty/vt/unicode.h>
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <limits>
+#include <type_traits>
+#include "probe_io.hpp"
+#include "probe_text.hpp"
+#include "../tests/font_fixture.hpp"
+#include <charconv>
+#include <system_error>
 #include <cstdio>
 #include <exception>
 #include <filesystem>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+#include "core/memory.hpp"
+#include "tests/font_fixture.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.text.json_unsigned_integer;
 
 namespace {
 

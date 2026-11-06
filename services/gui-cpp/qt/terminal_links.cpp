@@ -1,18 +1,34 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/dependencies.hpp"
-#include "core/geometry.hpp"
-#include "core/terminal_surface.hpp"
-#include "core/view_version.hpp"
+#include "../application/dependencies.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include "key_adapter.hpp"
 #include "link_presentation.hpp"
 #include "link_preview.hpp"
-#include "links/cell_links.hpp"
-#include "links/link_hit.hpp"
-#include "links/link_hover.hpp"
-#include "links/pointer_policy.hpp"
-#include "projection.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "terminal/cell_position.hpp"
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
+#include <cstddef>
+#include <optional>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <limits>
+#include <array>
+#include <charconv>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <utility>
+#include "projection.hpp"
 #include "terminal_item.hpp"
 #include "terminal_preparation.hpp"
 #include <QClipboard>
@@ -26,13 +42,18 @@
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qquickwindow.h>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
 #include <exception>
 #include <memory>
-#include <optional>
-#include <utility>
+
+#include "application/dependencies.hpp"
+#include "terminal/cell_position.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.core.unicode_scalar;
+import telar.gui.links.cell_links;
+import telar.gui.links.link_hover;
+import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
 

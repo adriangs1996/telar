@@ -1,7 +1,26 @@
-#include "application/dependencies.hpp"
-#include "platform/clipboard_image_pipe.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "platform/linux/wayland_clipboard_image_monitor.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "../attachments/secure_erase.hpp"
+#include "../attachments/sensitive_bytes.hpp"
+#include "../attachments/types.hpp"
+#include "../core/memory.hpp"
+#include "../platform/clipboard_image_source.hpp"
+#include <algorithm>
+#include <array>
+#include <cerrno>
+#include <chrono>
+#include <cstddef>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <time.h>
+#include <unistd.h>
+#include "../platform/linux/wayland_clipboard_image_monitor.hpp"
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>
@@ -12,18 +31,22 @@
 #include <QtCore/qtypes.h>
 #include <QString>
 #include <QtCore/qstringliteral.h>
-#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <optional>
 #include <sys/poll.h>
-#include <stdexcept>
 #include <string_view>
-#include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
+
+#include "application/dependencies.hpp"
+#include "platform/clipboard_image_source.hpp"
+#include "platform/linux/wayland_clipboard_image_monitor.hpp"
+
+
+import telar.gui.platform.profile_file;
 
 namespace {
 

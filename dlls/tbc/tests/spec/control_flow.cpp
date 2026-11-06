@@ -53,7 +53,7 @@ namespace flow {
 
 // CASE: flow.branch_invalidates
 // PAIR: flow.branch_paths
-// SOURCE: dlls/telar-base/include/telar_base/memory/byte_queue.hpp :: reserve
+// SOURCE: dlls/telar-base/include/telar_base/memory.cppm :: reserve
 // STATUS: pending
 // CONTRACT: A borrow needed after a join must survive every incoming reachable path.
 // SCENARIO: Only one branch reallocates, but that path still reaches the old view's read.
@@ -69,7 +69,7 @@ void branchInvalidates(tbc::view<spec::byte_queue &> queue, bool grow) {
 
 // CASE: flow.invalidating_branch_returns
 // PAIR: flow.branch_paths
-// SOURCE: dlls/telar-base/include/telar_base/memory/byte_queue.hpp :: reserve
+// SOURCE: dlls/telar-base/include/telar_base/memory.cppm :: reserve
 // STATUS: pending
 // CONTRACT: A view need not stay live on a path which cannot reach a later use.
 // SCENARIO: The invalidating branch returns; the read is reachable only without growth.

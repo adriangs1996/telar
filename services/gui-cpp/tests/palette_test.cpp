@@ -1,20 +1,39 @@
-#include "core/metrics.hpp"
-#include "palette/navigation_label.hpp"
-#include "palette/query.hpp"
-#include "palette/ranked_matches.hpp"
-#include "presentation/palette_geometry.hpp"
-#include "presentation/palette_row_window.hpp"
-#include <algorithm>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include <bit>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <span>
+#include <utility>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <stdexcept>
 #include <string>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.palette.navigation_label;
+import telar.gui.presentation.suggestion_geometry;
 
 namespace {
 

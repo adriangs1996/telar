@@ -1,19 +1,29 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "input/key_character.hpp"
 
-#include "input/binding.hpp"
-#include "input/key_event.hpp"
-#include "input/terminal_key.hpp"
-#include "platform/keyboard.hpp"
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <span>
+#include <tuple>
 #include <QKeyEvent>
 #include <QStringView>
-#include <algorithm>
-#include <array>
-#include <cstdint>
 #include <limits>
-#include <optional>
 #include <utility>
+
+#pragma once
+
+
+import telar.gui.input.key_encoder;
+import telar.gui.platform.private_file_stamp;
 
 namespace telar::gui::qt {
 

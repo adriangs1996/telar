@@ -1,18 +1,26 @@
-#include "ligature_coverage.hpp"
-#include "core/unicode_scalar.hpp"
-#include "ligature_role.hpp"
-#include <algorithm>
+module;
+
+#include <cstdint>
 #include <array>
 #include <cstddef>
-#include <cstdint>
-#include <exception>
 #include <freetype/freetype.h>
-#include <freetype/tttables.h>
-#include <hb-ot.h>
 #include <hb.h>
-#include <limits>
 #include <memory>
 #include <string_view>
+#include <bit>
+#include <optional>
+#include <stdexcept>
+#include <algorithm>
+#include <exception>
+#include <freetype/tttables.h>
+#include <hb-ot.h>
+#include <limits>
+
+module telar.gui.fonts.face;
+
+import telar.gui.core.unicode_scalar;
+
+
 
 namespace telar::gui::fonts {
 namespace {

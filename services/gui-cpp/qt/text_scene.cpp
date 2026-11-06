@@ -1,18 +1,43 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "text_scene.hpp"
 #include "chrome_glyph_images.hpp"
 #include "chrome_text_scene.hpp"
-#include "core/color.hpp"
-#include "core/configuration.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
 #include "font_collection.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "fonts/row_text_layout.hpp"
+#include <concepts>
+#include <utility>
+#include <span>
+#include "../core/memory.hpp"
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include <bit>
+#include "../terminal/screen.hpp"
+#include <ghostty/vt/unicode.h>
 #include "projection.hpp"
 #include "resident_fonts.hpp"
 #include "scene_nodes.hpp"
-#include "terminal/font_grid.hpp"
-#include "terminal/screen.hpp"
-#ifdef Q_OS_MACOS
+#if (defined(Q_OS_MACOS))
 #include "optical_text.hpp"
 #endif
 #include <QBrush>
@@ -28,12 +53,18 @@
 #include <QTextOption>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
 #include <exception>
-#include <memory>
-#include <span>
-#include <stdexcept>
-#include <utility>
+
+#include "terminal/screen.hpp"
+#ifdef Q_OS_MACOS
+#include "optical_text.hpp"
+#endif
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 

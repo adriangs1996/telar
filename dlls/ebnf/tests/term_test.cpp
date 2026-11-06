@@ -1,8 +1,22 @@
-#include "parser.hpp"
+#ifdef __clangd__
+static_assert(true);
+#endif
+#include <tbc/view.hpp>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <vector>
+
 #include "tests/parser_assertions.hpp"
 
 #include <gtest/gtest.h>
 
+import telar.ebnf.parser;
 namespace {
   TEST(Term, IdentifierProducesReference) {
     auto tokenizer = ebnf::Lexer{};

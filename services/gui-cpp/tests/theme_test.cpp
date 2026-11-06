@@ -1,23 +1,70 @@
-#include "config/generation.hpp"
-#include "config/query.hpp"
-#include "config/theme_query.hpp"
-#include "config/themes.hpp"
-#include "core/color.hpp"
-#include "core/memory.hpp"
-#include "core/theme_values.hpp"
-#include "input/action.hpp"
-#include "presentation/theme.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include <cstdint>
+#include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdio>
-#include <exception>
-#include <iostream>
-#include <limits>
+#include <span>
 #include <stdexcept>
-#include <string>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include "telar_base/text/utf8.hpp"
 #include <string_view>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
+#include <cstdio>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cstring>
+#include <cmath>
+#include <initializer_list>
+#include <optional>
+#include <string>
+#include <limits>
+#include <utility>
+#include <bit>
+#include <concepts>
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <charconv>
+#include <system_error>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "gui_config_bootstrap.hpp"
+
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_config/graphics/limits.hpp"
+#include <arpa/inet.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <format>
+#include <ghostty/vt/unicode.h>
+#include <exception>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <functional>
+#include <type_traits>
+#include <iostream>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.config.generation;
+import telar.gui.config.gui_query;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.presentation.suggestion_geometry;
+
+
 
 namespace {
 

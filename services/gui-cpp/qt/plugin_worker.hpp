@@ -1,15 +1,44 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/dependencies.hpp"
+
+#include "../application/dependencies.hpp"
 #include "command_process.hpp"
-#include "config/plugin_effects.hpp"
-#include "config/plugin_invocation.hpp"
-#include "core/memory.hpp"
-#include "plugin_packages.hpp"
+#include "../core/memory.hpp"
+#include <cstdint>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_platform/temporary_directory.hpp"
-#include "telar_plugins/package_copy_storage.hpp"
-#include "telar_plugins/package_inspection.hpp"
+#include <exception>
+#include <charconv>
+#include <limits.h>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <bit>
+#include "plugin_packages.hpp"
+#include <dirent.h>
+#include <cstdlib>
+#include "telar_platform/open_directory.h"
+#include <unistd.h>
+#include <chrono>
+#include <concepts>
+#include <limits>
 #include <QDebug>
 #include <QFuture>
 #include <QFutureWatcher>
@@ -21,17 +50,17 @@
 #include <QtConcurrentRun>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <exception>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+#include "core/memory.hpp"
+
+
+import telar.gui.config.plugin_effects;
+import telar.platform;
+import telar.plugins;
 
 namespace telar::gui::qt {
 

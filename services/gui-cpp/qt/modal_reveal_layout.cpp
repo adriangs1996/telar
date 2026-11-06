@@ -1,5 +1,14 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "modal_reveal_layout.hpp"
-#include "presentation/modal_motion.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include "window_animation_clock.hpp"
 #include <QMetaObject>
 #include <QPointer>
@@ -8,8 +17,10 @@
 #include <QString>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstdint>
-#include <optional>
+
+
+
+import telar.gui.presentation.suggestion_labels;
 
 namespace telar::gui::qt {
 

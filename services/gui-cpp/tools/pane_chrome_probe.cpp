@@ -1,15 +1,34 @@
-#include "core/geometry.hpp"
-#include "presentation/pane_chrome.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include "probe_geometry.hpp"
 #include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.activity_order;
 
 namespace {
 

@@ -1,26 +1,46 @@
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "core/theme_values.hpp"
-#include "presentation/history_actions.hpp"
-#include "presentation/history_facts.hpp"
-#include "presentation/history_hint_geometry.hpp"
-#include "presentation/history_labels.hpp"
-#include "presentation/history_meta_geometry.hpp"
-#include "presentation/history_path.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <bit>
+#include <stdexcept>
+#include <ghostty/vt/unicode.h>
+#include <limits>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
 #include "probe_geometry.hpp"
 #include "probe_history_hint.hpp"
 #include "probe_io.hpp"
 #include "probe_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_meta_geometry;
+import telar.gui.presentation.history_inspection;
 
 namespace {
 

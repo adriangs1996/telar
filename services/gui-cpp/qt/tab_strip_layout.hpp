@@ -1,11 +1,21 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "chrome_fonts.hpp"
-#include "input/tab_drag.hpp"
-#include "input/tab_drop_slots.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <cstddef>
+#include <limits>
 #include "list_model.hpp"
-#include "presentation/tab_motion_frame.hpp"
-#include "presentation/tab_motions.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
 #include <QMetaObject>
@@ -15,9 +25,14 @@
 #include <QString>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
-#include <array>
-#include <cstddef>
 #include <memory>
+
+#pragma once
+
+
+
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

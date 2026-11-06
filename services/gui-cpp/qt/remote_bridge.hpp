@@ -1,16 +1,31 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "machines/connection_policy.hpp"
-#include "machines/discovery.hpp"
-#include "machines/failure.hpp"
-#include "machines/field_rules.hpp"
-#include "machines/remote_command.hpp"
-#include "platform/managed_directory.hpp"
-#include "platform/path_limits.hpp"
-#include "platform/stdio_socket.hpp"
-#include "ssh_options.hpp"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <algorithm>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include <cstring>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <charconv>
+#include <concepts>
+#include <system_error>
+#include <sys/param.h>
 #include "telar_platform/file_descriptor.hpp"
-#include "transport/runtime_protocol.hpp"
+#include "ssh_options.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QIODevice>
@@ -20,15 +35,19 @@
 #include <QStringList>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrentRun>
-#include <array>
 #include <chrono>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <optional>
-#include <string_view>
 #include <utility>
+
+#pragma once
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.profile_store;
+import telar.gui.platform.login_shell;
+import telar.gui.platform.profile_file;
+import telar.gui.platform.notification_commands;
+import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 

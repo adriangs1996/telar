@@ -1,13 +1,213 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "redirect/helper.hpp"
-#include "redirect/ingress.hpp"
-#include "proxy/service.hpp"
+#include <optional>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cerrno>
+#include <exception>
+#include <csignal>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <array>
+#include "telar_platform/file_descriptor.hpp"
+#include <algorithm>
+#include <poll.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#if (defined(__APPLE__))
+#include "telar_base/memory/fixed_text.hpp"
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <net/if.h>
+#endif
+#if (defined(__APPLE__))
+#include <net/if_utun.h>
+#endif
+#if (defined(__APPLE__))
+#include <netinet6/in6_var.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <sys/ioctl.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/kern_control.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <sys/sys_domain.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include "telar_base/memory/fixed_text.hpp"
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <arpa/inet.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <fcntl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_ether.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_tun.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <net/if.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/ioctl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/uio.h>
+#endif
+#include <arpa/inet.h>
+#include <memory>
+#include <pcap/pcap.h>
+#include <sys/ioctl.h>
+#include <stdexcept>
+#include <netinet/in.h>
+#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <fcntl.h>
+#include <limits.h>
+#include "telar_platform/random_bytes.hpp"
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#endif
+#include <cstdlib>
+#include <chrono>
+#include <sys/file.h>
+#include <thread>
+#include <sys/sockio.h>
+#include <netinet/tcp.h>
+#include "telar_base/program_identity.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <net/if_dl.h>
+#include <net/route.h>
+#include <limits>
+#include "telar_base/text/utf8.hpp"
+#include <sys/uio.h>
+#include <netinet/in_pcb.h>
+#include <netinet/tcp_fsm.h>
+#include <netinet/tcp_var.h>
+#include <sys/socketvar.h>
+#include <sys/sysctl.h>
+#if (defined(__APPLE__))
+#include <libproc.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <dirent.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include <atomic>
+#include <pthread.h>
+#include "telar_base/text/base64.hpp"
+#include <variant>
+#include <concepts>
+#include <netdb.h>
+#include "telar_platform/trace.hpp"
+#include <type_traits>
+#include <brotli/decode.h>
+#include <brotli/encode.h>
+#include <zlib.h>
+#include <zstd.h>
+#include <initializer_list>
+#include <cassert>
+#include <condition_variable>
+#include <mutex>
+#include <nghttp2/nghttp2.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/x509v3.h>
+#include <openssl/crypto.h>
+#include <ctime>
+#include <bitset>
+#if (defined(__APPLE__))
+#include <sys/event.h>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <climits>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <sched.h>
+#endif
+#if (defined(__linux__))
+#include <sys/epoll.h>
+#endif
+#if (defined(__linux__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__))
+#endif
 #include "tls_fixture.hpp"
-#include "traffic/service.hpp"
+#include <string>
+#include <unordered_map>
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "http2_fixture.hpp"
 #include <filesystem>
 #include <functional>
-#include <mutex>
+
+
+
+import telar.runtime.redirect.socket_owners;
+import telar.runtime.redirect.ingress;
+import telar.runtime.proxy.runtime;
+import telar.runtime.traffic.control_backend;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -1,18 +1,26 @@
-#include "face.hpp"
-#include "glyph_bitmap_view.hpp"
-#include "ligature_coverage.hpp"
-#include "native_match.hpp"
-#include "platform/font.h"
-#include "shaped_run_view.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "terminal/font_grid.hpp"
-#include "terminal/glyphs/box_stroke.hpp"
-#include <algorithm>
-#include <array>
-#include <cmath>
+module;
+
 #include <cstddef>
 #include <cstdint>
+#include <span>
+#include <array>
 #include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include <string_view>
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <optional>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include <freetype/ftimage.h>
 #include <freetype/ftmm.h>
 #include <freetype/ftoutln.h>
@@ -20,13 +28,17 @@
 #include <freetype/ftsynth.h>
 #include <freetype/fttypes.h>
 #include <hb-ft.h>
-#include <hb.h>
-#include <limits>
-#include <memory>
-#include <span>
-#include <stdexcept>
-#include <string_view>
 #include <utility>
+
+module telar.gui.fonts.face;
+
+
+
+
+import telar.gui.terminal.font_grid;
+import telar.gui.terminal.copy_mode;
+
+#include "platform/font.h"
 
 namespace telar::gui::fonts {
 namespace {

@@ -1,23 +1,50 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "allocation_gate.hpp"
 #include "assertions.hpp"
-#include "core/memory.hpp"
+#include "../core/memory.hpp"
 #include "font_fixture.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/row_text_layout.hpp"
-#include "terminal/screen.hpp"
-#include "terminal/text_runs.hpp"
-#include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <utility>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <string_view>
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include <bit>
+#include "../terminal/screen.hpp"
+#include <ghostty/vt/unicode.h>
 #include <exception>
 #include <filesystem>
 #include <iostream>
-#include <limits>
 #include <new>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
+
+#include "core/memory.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.fonts.face;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.terminal.copy_mode;
 
 namespace {
 

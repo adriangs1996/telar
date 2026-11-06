@@ -1,15 +1,44 @@
-#include "application/records.hpp"
-#include "core/configuration.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "graphics/store.hpp"
-#include "presentation/tab_activity.hpp"
-#include "qml_fixture.hpp"
-#include "qt/fullscreen_strip_layout.hpp"
-#include "qt/pane_projection.hpp"
-#include "qt/projection.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
 #include "telar_client/serializers/telar_messages.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <tuple>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "qml_fixture.hpp"
+#include "../qt/fullscreen_strip_layout.hpp"
+#include "../qt/pane_projection.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QFont>
 #include <QGuiApplication>
 #include <QObject>
@@ -30,9 +59,18 @@
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestmouse.h>
-#include <array>
-#include <cstdint>
-#include <span>
+
+#include "core/memory.hpp"
+#include "qt/fullscreen_strip_layout.hpp"
+#include "qt/pane_projection.hpp"
+#include "qt/projection.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.graphics.texture_cache;
+import telar.gui.presentation.activity_order;
 
 namespace {
 

@@ -1,21 +1,55 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/notification_item.hpp"
-#include "application/records.hpp"
-#include "components/configuration.hpp"
-#include "config/action_descriptions.hpp"
-#include "config/callback.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <utility>
+#include <optional>
+#include <span>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <charconv>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include <cinttypes>
+#include <tuple>
 #include "configuration_source.hpp"
-#include "input/action.hpp"
-#include "input/binding.hpp"
-#include "input/key_event.hpp"
-#include "input/key_label.hpp"
+#include <bit>
 #include "key_bindings.hpp"
 #include "native_form_field.hpp"
-#include "palette_actions.hpp"
-#include "platform/window.hpp"
+
+#include "../platform/window.hpp"
 #include "projection.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QString>
 #include <QStringLiteral>
 #include <QVariantList>
@@ -29,17 +63,19 @@
 #include <QtCore/qtypes.h>
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <utility>
-#include <variant>
+
+
+#include "platform/window.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.components.configuration;
+import telar.gui.config.plugin_query;
+import telar.gui.config.plugin_effects;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
+
+import telar.gui.config.gui_query;
 
 namespace telar::gui::qt {
 

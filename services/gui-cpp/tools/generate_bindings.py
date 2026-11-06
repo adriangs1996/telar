@@ -51,7 +51,7 @@ def main() -> None:
     if len(bindings) != expected:
         raise ValueError(f"Expected {expected} default bindings, found {len(bindings)}")
 
-    lines = ["#pragma once", "", '#include "input/action.hpp"', '#include "input/binding.hpp"', "#include <array>", "", "namespace telar::gui {", "", "struct DefaultBinding {", "  KeyChord suffix;", "  BindingAction action;", "};", "", "inline constexpr auto default_bindings = std::to_array<DefaultBinding>({"]
+    lines = ["", "", "namespace telar::gui {", "", "struct DefaultBinding {", "  KeyChord suffix;", "  BindingAction action;", "};", "", "inline constexpr auto default_bindings = std::to_array<DefaultBinding>({"]
     for key, action in bindings:
         kind, parameter = action_name(action)
         fields = f".kind = BindingActionKind::{kind}"

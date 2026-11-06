@@ -1,11 +1,37 @@
-#include "application/dependencies.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
 #include "assertions.hpp"
-#include "machines/edit.hpp"
-#include "machines/messages.hpp"
-#include "machines/profile.hpp"
-#include "platform/profile_file.hpp"
-#include "qt/machine_profiles_source.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "../core/memory.hpp"
+#include <sys/param.h>
 #include "telar_client/codecs/telar_wire.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <stop_token>
+#include "../qt/machine_profiles_source.hpp"
 #include <QElapsedTimer>
 #include <QObject>
 #include <QSignalSpy>
@@ -16,12 +42,17 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <cstddef>
 #include <filesystem>
 #include <memory>
-#include <optional>
 #include <string>
-#include <string_view>
+
+#include "application/dependencies.hpp"
+#include "qt/machine_profiles_source.hpp"
+
+
+import telar.gui.machines.profile_store;
+import telar.gui.machines.discovery;
+import telar.gui.platform.profile_file;
 
 namespace {
 

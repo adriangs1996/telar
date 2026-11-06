@@ -1,13 +1,43 @@
-#include "telar_platform/pty_process.hpp"
-#include "telar_platform/child_descriptors.hpp"
-#include "telar_platform/error.hpp"
-#include <algorithm>
+module;
+
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <optional>
+#include <sys/types.h>
+#include <array>
+#if (defined(__APPLE__))
+#include <libproc.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <limits.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/close_range.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/syscall.h>
+#endif
+#include <unistd.h>
 #include <cerrno>
+#include <exception>
+#include <algorithm>
 #include <csignal>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <termios.h>
+#if (defined(__APPLE__))
+#include <util.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <pty.h>
+#endif
+
+module telar.platform;
+
+
+
+
 #ifdef __APPLE__
 #include <util.h>
 #else

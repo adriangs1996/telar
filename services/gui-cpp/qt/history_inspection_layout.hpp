@@ -1,12 +1,38 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "history/choice.hpp"
-#include "input/history_hover.hpp"
-#include "presentation/history_inspection.hpp"
-#include "presentation/history_inspection_geometry.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include "../input/wheel_accumulator.hpp"
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <span>
+#include <variant>
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <limits>
+#include <bit>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <ghostty/vt/unicode.h>
+#include <initializer_list>
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>
@@ -14,10 +40,16 @@
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <span>
+
+#pragma once
+#include "input/wheel_accumulator.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.history.browser;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 

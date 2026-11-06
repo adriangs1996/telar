@@ -1,19 +1,31 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "terminal_scene.hpp"
 #include "cell_glyphs.hpp"
-#include "core/cell_rectangle.hpp"
-#include "core/color.hpp"
-#include "core/placeholder_prefix.hpp"
-#include "core/terminal_size.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "links/link_grid.hpp"
-#include "links/link_regions.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "../core/terminal_size.hpp"
+#include <span>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "projection.hpp"
 #include "scene_nodes.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "terminal/glyphs/symbol.hpp"
-#include "terminal/screen.hpp"
+#include <bit>
+#include <stdexcept>
 #include "terminal_decorations.hpp"
 #include "text_scene.hpp"
 #include <QPointF>
@@ -28,14 +40,21 @@
 #include <QtQuick/qsggeometry.h>
 #include <QtQuick/qsgnode.h>
 #include <QtQuick/qsgsimplerectnode.h>
-#include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <span>
 #include <utility>
+
+#include "core/terminal_size.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.core.json_writer;
+import telar.gui.fonts.face;
+import telar.gui.links.path_expansion;
+import telar.gui.links.link_hover;
+import telar.gui.terminal.copy_mode;
 
 namespace telar::gui::qt {
 

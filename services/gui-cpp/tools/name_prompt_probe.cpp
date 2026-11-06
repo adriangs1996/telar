@@ -1,11 +1,22 @@
-#include "core/cell_rectangle.hpp"
-#include "presentation/name_prompt_geometry.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include "probe_io.hpp"
 #include <array>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
+
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.presentation.suggestion_labels;
 
 namespace {
 

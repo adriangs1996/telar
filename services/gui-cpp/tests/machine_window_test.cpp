@@ -1,49 +1,96 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#if (defined(__APPLE__))
+#endif
+
 #include "activity_fixture.hpp"
-#include "application/dependencies.hpp"
-#include "application/notification_item.hpp"
-#include "config/plugin_invocation.hpp"
-#include "core/view_version.hpp"
+#include "../application/dependencies.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include <array>
+#include <optional>
+#include <utility>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <charconv>
+#include <limits.h>
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machine_token.hpp"
-#include "machines/machines.hpp"
+#include <concepts>
+#include <cstring>
+#include <system_error>
 #include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "qt/application.hpp"
-#include "qt/plugin_worker.hpp"
+#include "../qt/application.hpp"
+#include "../qt/plugin_worker.hpp"
 #include <QByteArray>
 #include <QColor>
-#ifdef __APPLE__
-#include "qt/attachment_shelf.hpp"
-#include "qt/key_adapter.hpp"
-#include "application/pane_bottom_reservation.hpp"
-#include "platform/private_clipboard.hpp"
-#include <QBuffer>
-#include <QRectF>
-#include <QImage>
-#include <QDebug>
-#include <QtCore/qlogging.h>
-#include <QSGRendererInterface>
-#include <QFont>
-#include <QScopeGuard>
-#include <QtGui/qtestsupport_gui.h>
-#include <span>
+#if (defined(__APPLE__))
+#include "../qt/attachment_shelf.hpp"
 #endif
-#include "qt/external_link_opener.hpp"
-#include "qt/list_model.hpp"
-#include "qt/machine_chrome_layout.hpp"
-#include "qt/machine_client.hpp"
-#include "qt/machine_client_key.hpp"
-#include "qt/terminal_item.hpp"
+#if (defined(__APPLE__))
+#include "../qt/key_adapter.hpp"
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include "platform/private_clipboard.hpp"
+#endif
+#if (defined(__APPLE__))
+#include <QBuffer>
+#endif
+#if (defined(__APPLE__))
+#include <QRectF>
+#endif
+#if (defined(__APPLE__))
+#include <QImage>
+#endif
+#if (defined(__APPLE__))
+#include <QDebug>
+#endif
+#if (defined(__APPLE__))
+#include <QtCore/qlogging.h>
+#endif
+#if (defined(__APPLE__))
+#include <QSGRendererInterface>
+#endif
+#if (defined(__APPLE__))
+#include <QFont>
+#endif
+#if (defined(__APPLE__))
+#include <QScopeGuard>
+#endif
+#if (defined(__APPLE__))
+#include <QtGui/qtestsupport_gui.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#include "../qt/external_link_opener.hpp"
+#include "../qt/list_model.hpp"
+#include "../qt/machine_chrome_layout.hpp"
+#include "../qt/machine_client.hpp"
+#include "../qt/machine_client_key.hpp"
+#include "../qt/terminal_item.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "transport/runtime_link.hpp"
-#include "qt/bundled_fonts.hpp"
+#include <chrono>
+#include "../qt/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
@@ -82,11 +129,44 @@
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestkeyboard.h>
 #include <QtTest/qtestmouse.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <string_view>
+
+#include "application/dependencies.hpp"
+#include "qt/application.hpp"
+#include "qt/plugin_worker.hpp"
+#ifdef __APPLE__
+#include "qt/attachment_shelf.hpp"
+#include "qt/key_adapter.hpp"
+#include "platform/private_clipboard.hpp"
+#include <QBuffer>
+#include <QRectF>
+#include <QImage>
+#include <QDebug>
+#include <QtCore/qlogging.h>
+#include <QSGRendererInterface>
+#include <QFont>
+#include <QScopeGuard>
+#include <QtGui/qtestsupport_gui.h>
+#endif
+#include "qt/external_link_opener.hpp"
+#include "qt/list_model.hpp"
+#include "qt/machine_chrome_layout.hpp"
+#include "qt/machine_client.hpp"
+#include "qt/machine_client_key.hpp"
+#include "qt/terminal_item.hpp"
+#include "qt/bundled_fonts.hpp"
+
+#if (defined(__APPLE__))
+#endif
+
+import telar.gui.application.workspace_replica;
+import telar.gui.config.plugin_effects;
+import telar.gui.core.unicode_scalar;
+import telar.gui.machines.picker;
+#if (defined(__APPLE__))
+import telar.gui.application.sound_playback;
+#endif
+import telar.gui.transport.runtime_link;
 
 namespace telar::gui::test {
 

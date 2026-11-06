@@ -1,14 +1,31 @@
-#include "application/dependencies.hpp"
-#include "application/notification_item.hpp"
-#include "core/configuration.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <optional>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
-#include "qt/application.hpp"
-#include "qt/list_model.hpp"
-#include "qt/notification_layout.hpp"
-#include "qt/projection.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/application.hpp"
+#include "../qt/list_model.hpp"
+#include "../qt/notification_layout.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QColor>
@@ -34,11 +51,19 @@
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestkeyboard.h>
 #include <QtTest/qtestmouse.h>
-#include <array>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
+
+#include "application/dependencies.hpp"
+#include "qt/application.hpp"
+#include "qt/list_model.hpp"
+#include "qt/notification_layout.hpp"
+#include "qt/projection.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
 
 namespace {
 

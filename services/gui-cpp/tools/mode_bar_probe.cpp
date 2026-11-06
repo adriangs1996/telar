@@ -1,18 +1,36 @@
-#include "core/geometry.hpp"
-#include "core/theme_values.hpp"
-#include "input/binding.hpp"
-#include "input/key_character.hpp"
-#include "presentation/mode_bar_layout.hpp"
-#include "presentation/mode_hints.hpp"
-#include <array>
-#include <bit>
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <bit>
+#include <utility>
+#include <concepts>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include <ghostty/vt/unicode.h>
 #include <cstdio>
 #include <exception>
 #include <memory>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.key_encoder;
+import telar.gui.presentation.history_inspection;
 
 namespace {
 

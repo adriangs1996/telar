@@ -1,16 +1,255 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "diagnostics/file_storage.hpp"
-#include "diagnostics/log_writer.hpp"
-#include "diagnostics/proxy_sample.hpp"
-#include "diagnostics/runtime_counters.hpp"
-#include "diagnostics/runtime_telemetry.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_platform/temporary_directory.hpp"
-#include "terminal/frame_sync.hpp"
-#include "terminal/terminal.hpp"
+#include <atomic>
+#include <chrono>
+#include <sys/stat.h>
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <cstdint>
+#include <concepts>
+#include <condition_variable>
+#include <optional>
+#include <pthread.h>
+#include "../diagnostics/line.hpp"
+#include <cstring>
+#include <limits>
+#include <string_view>
+#include <dirent.h>
+#include <fcntl.h>
+#include <algorithm>
+#include <csignal>
+#include <cstdio>
+#include <limits.h>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#if (TELAR_DIAGNOSTICS)
+#include "../diagnostics/timing.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <cstddef>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_base/memory/allocation_statistics.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
+#include <mach/mach.h>
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#include <charconv>
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#include <span>
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#endif
+#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
+#include <unistd.h>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <span>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <sys/types.h>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <bit>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <stdexcept>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <variant>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_client/serializers/telar_messages.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <cassert>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_client/codecs/telar_codec.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_client/serializers/telar_serializer.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/ghostty_allocator.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/ghostty_handle.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../graphics/kitty_framing.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../graphics/media_budget.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../graphics/kitty_control.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../graphics/child_file.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_platform/graphics/child_shared_memory.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <utility>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/control/classification.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/control/parser.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/pty_response_queue.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../graphics/temporary_path.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <charconv>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_config/graphics/limits.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_platform/trace.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_platform/random_bytes.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_platform/mapped_region.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <cstdlib>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <sys/mman.h>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_base/memory/fixed_text.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_base/text/utf8.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <unistd.h>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_client/serializers/telar_frame.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "cell_layout.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <tuple>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/control/engine.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_client/codecs/telar_value_codec.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "../terminal/graphics_cursor.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <memory>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_base/program_identity.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <sys/uio.h>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <sys/wait.h>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <system_error>
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include "telar_base/diagnostics/limit_reach.hpp"
+#endif
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <thread>
+
+
+
+import telar.runtime.diagnostics.operation;
+import telar.runtime.diagnostics.runtime_telemetry;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.platform;
+import telar.runtime.terminal.text_reader;
 
 using namespace telar;
 using namespace telar::runtime;

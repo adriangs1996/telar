@@ -1,6 +1,17 @@
-#include "core/memory.hpp"
-#include "platform/font.h"
-#include "telar_platform/read_file.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include "../platform/font.h"
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
 #include "terminal_font_requests_variant.hpp"
 #include <array>
 #include <cstdint>
@@ -9,6 +20,12 @@
 #include <memory>
 #include <stdexcept>
 #include <vector>
+
+#include "core/memory.hpp"
+#include "platform/font.h"
+
+
+import telar.platform;
 
 using namespace telar;
 using namespace telar::gui;

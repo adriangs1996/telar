@@ -1,14 +1,31 @@
-#include "application/notification_payload.hpp"
-#include "assertions.hpp"
-#include "platform/notification_commands.hpp"
-#include "platform/sound_commands.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <array>
+#include <charconv>
+#include <concepts>
 #include <cstddef>
-#include <exception>
-#include <iostream>
+#include <cstring>
 #include <stdexcept>
 #include <string_view>
+#include <system_error>
+#include "assertions.hpp"
+#include <algorithm>
+#include <span>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cstdint>
+#include <exception>
+#include <iostream>
+
+
+
+import telar.gui.application.host_effects;
+import telar.gui.platform.notification_commands;
 
 namespace {
 

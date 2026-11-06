@@ -1,6 +1,7 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(websock LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,11 +11,13 @@ if(NOT TARGET telar-base)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../telar-base" "${CMAKE_CURRENT_BINARY_DIR}/telar-base")
 endif()
 
-add_library(websock INTERFACE)
+add_library(websock STATIC)
 add_library(telar::websock ALIAS websock)
-target_compile_features(websock INTERFACE cxx_std_23)
-target_link_libraries(websock INTERFACE telar::base)
-target_include_directories(websock INTERFACE
+telar_modules(websock)
+telar_modules(websock)
+target_compile_features(websock PUBLIC cxx_std_23)
+target_link_libraries(websock PUBLIC telar::base)
+target_include_directories(websock PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/includes>"
   "$<INSTALL_INTERFACE:include>")
 
@@ -63,7 +66,9 @@ set(websock_package_directory "lib/cmake/websock")
 configure_package_config_file(cmake/websock-config.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/websock-config.cmake"
   INSTALL_DESTINATION "${websock_package_directory}")
-install(TARGETS websock EXPORT websock-targets)
-install(DIRECTORY includes/ DESTINATION include)
-install(EXPORT websock-targets NAMESPACE telar:: DESTINATION "${websock_package_directory}")
+install(TARGETS websock EXPORT websock-targets
+  ARCHIVE DESTINATION lib
+  FILE_SET CXX_MODULES DESTINATION share/websock/modules)
+install(DIRECTORY includes/ DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+install(EXPORT websock-targets NAMESPACE telar:: CXX_MODULES_DIRECTORY modules DESTINATION "${websock_package_directory}")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/websock-config.cmake" DESTINATION "${websock_package_directory}")

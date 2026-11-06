@@ -1,16 +1,38 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/records.hpp"
-#include "input/child_mouse.hpp"
-#include "input/copy_pointer.hpp"
-#include "input/mouse_encoder.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include <cmath>
+#include "telar_client/serializers/telar_frame.hpp"
+#include "../terminal/cell_position.hpp"
+#include <charconv>
+#include "../input/wheel_accumulator.hpp"
 #include "key_adapter.hpp"
 #include "mouse_buttons.hpp"
 #include "pointer_dispatcher.hpp"
 #include "scroll_event.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "terminal/copy_grid.hpp"
-#include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -21,10 +43,16 @@
 #include <QWheelEvent>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <utility>
+
+#include "input/wheel_accumulator.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.input.child_mouse;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.configuration;
+import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 

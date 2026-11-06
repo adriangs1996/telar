@@ -1,8 +1,21 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
 #include "erasure_checking_allocator.hpp"
-#include "telar_base/memory/recycling_allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <array>
 #include <cstdint>
 #include <span>
+
+
+
+import telar.base.memory;
 
 using namespace telar;
 

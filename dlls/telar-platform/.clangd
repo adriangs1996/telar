@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: out/clangd
+  CompilationDatabase: out
 
 ---
 If:

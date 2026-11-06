@@ -1,14 +1,32 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_form_field.hpp"
 #include "cell_text_grid.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include "form_input_context.hpp"
 #include "form_text_grid.hpp"
-#include "qt/utf16_encoding.hpp"
+#include "utf16_encoding.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "text/bounded_editor.hpp"
-#include "text/cell_text_measure.hpp"
-#include "text/utf16_prefix.hpp"
+#include <bit>
+#include <stdexcept>
+#include <ghostty/vt/unicode.h>
+#include <cstring>
+#include <limits>
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QInputMethod>
@@ -24,15 +42,14 @@
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <limits>
-#include <optional>
-#include <string_view>
 #include <utility>
+
+#include "qt/utf16_encoding.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

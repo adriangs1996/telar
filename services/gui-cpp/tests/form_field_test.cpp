@@ -1,14 +1,26 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "clipboard_fixture.hpp"
 #include "frame_fixture.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/form_input_context.hpp"
-#include "qt/native_form_field.hpp"
-#include "qt/projection.hpp"
-#include "qt/utf16_encoding.hpp"
+#include "../qt/bundled_fonts.hpp"
+#include "../qt/form_input_context.hpp"
+#include "../qt/native_form_field.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/utf16_encoding.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "text/utf16_prefix.hpp"
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
 #include <QClipboard>
 #include <QFont>
 #include <QGuiApplication>
@@ -34,14 +46,19 @@
 #include <QtTest/qtestkeyboard.h>
 #include <QtTest/qtestmouse.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <limits>
 #include <memory>
-#include <string_view>
 #include <utility>
+
+#include "qt/bundled_fonts.hpp"
+#include "qt/form_input_context.hpp"
+#include "qt/native_form_field.hpp"
+#include "qt/projection.hpp"
+#include "qt/utf16_encoding.hpp"
+
+
+import telar.gui.text.bounded_editor;
 
 namespace {
 

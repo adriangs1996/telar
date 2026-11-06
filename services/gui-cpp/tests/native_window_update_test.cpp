@@ -1,9 +1,27 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
 #include "gui_wait.hpp"
-#include "platform/awake_clock.hpp"
-#include "platform/window.hpp"
-#include "presentation/frame_pacer.hpp"
-#include "qt/window_frame_pacer.hpp"
+#include <cstdint>
+#include "../platform/window.hpp"
+#include <algorithm>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../qt/window_frame_pacer.hpp"
 #include <QEvent>
 #include <QGuiApplication>
 #include <QWindow>
@@ -11,6 +29,13 @@
 #include <iostream>
 #include <qpa/qplatformwindow.h>
 #include <utility>
+
+#include "platform/window.hpp"
+#include "qt/window_frame_pacer.hpp"
+
+
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.frame_pacer;
 
 namespace {
 

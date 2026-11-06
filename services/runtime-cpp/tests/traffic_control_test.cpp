@@ -1,11 +1,179 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
 #include "socket_pair.hpp"
-#include "telar_platform/temporary_directory.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <dirent.h>
+#include <fcntl.h>
+#include <algorithm>
+#include <array>
+#include <cstdlib>
+#include <limits.h>
+#include <string_view>
+#include <sys/stat.h>
 #include "tls_fixture.hpp"
-#include "traffic/connection.hpp"
-#include "traffic/control_backend.hpp"
-#include "traffic/control_service.hpp"
+#include <optional>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <csignal>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <poll.h>
+#include <sys/un.h>
+#include <atomic>
+#include <concepts>
+#include <condition_variable>
+#include <pthread.h>
+#include <chrono>
+#include <cassert>
+#include <stdexcept>
+#include <limits>
+#include <brotli/decode.h>
+#include <initializer_list>
+#include <zlib.h>
+#include "telar_platform/trace.hpp"
+#include <zstd.h>
+#include <mutex>
+#include <type_traits>
+#if (defined(__APPLE__))
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+#if (defined(__APPLE__))
+#include <Security/Security.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <memory>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <memory>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/err.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/pem.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <openssl/x509.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include <sys/uio.h>
+#include <thread>
+#include "telar_platform/random_bytes.hpp"
+#include "telar_base/program_identity.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <bitset>
+#include <openssl/sha.h>
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#endif
+#include "telar_base/text/base64.hpp"
+#include <variant>
+#include <netdb.h>
+#include <brotli/encode.h>
+#include <memory>
+#include <nghttp2/nghttp2.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/x509v3.h>
+#include <openssl/crypto.h>
+#include <ctime>
+#if (defined(__APPLE__))
+#include <sys/event.h>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <climits>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <sched.h>
+#endif
+#if (defined(__linux__))
+#include <sys/epoll.h>
+#endif
+#if (defined(__linux__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__))
+#endif
+#include <spawn.h>
+#include <sys/wait.h>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <sys/resource.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#if (defined(__APPLE__))
+#include <libproc.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include <pcap/pcap.h>
+#include <string>
+#include <unordered_map>
 #include <vector>
+
+
+
+import telar.platform;
+import telar.runtime.traffic.capture;
+import telar.runtime.traffic.control_backend;
 
 using namespace telar;
 using namespace telar::runtime;

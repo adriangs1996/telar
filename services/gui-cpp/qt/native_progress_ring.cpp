@@ -1,7 +1,19 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_progress_ring.hpp"
-#include "core/color.hpp"
-#include "core/geometry.hpp"
-#include "graphics/progress_ring.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
+#include <numbers>
 #include "rounded_paints_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -10,10 +22,13 @@
 #include <QSGNode>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
 #include <limits>
 #include <memory>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 

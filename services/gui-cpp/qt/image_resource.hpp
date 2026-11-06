@@ -1,13 +1,31 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "graphics/image_draw_budget.hpp"
-#include "graphics/image_residency.hpp"
-#include "graphics/placement.hpp"
+
+#include <cstddef>
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <optional>
+#include <span>
+#include <cmath>
+#include "telar_client/serializers/telar_messages.hpp"
 #include <QImage>
 #include <QSGNode>
 #include <QSGTexture>
-#include <cstdint>
 #include <memory>
+
+#pragma once
+
+
+import telar.gui.graphics.texture_cache;
+import telar.gui.graphics.placeholder;
 
 class QQuickWindow;
 

@@ -1,8 +1,41 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "http1/intercepted_relay.hpp"
-#include "proxy/http1_connection.hpp"
+#include <cstddef>
+#include <string_view>
+#include <limits>
+#include <optional>
+#include <cstdint>
+#include "telar_base/memory/allocator.hpp"
+#include <cstring>
+#include <span>
+#include <utility>
+#include <brotli/decode.h>
+#include <brotli/encode.h>
+#include <zlib.h>
+#include <array>
+#include <memory>
+#include <stdexcept>
+#include <zstd.h>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include <charconv>
+#include <chrono>
+#include <concepts>
+#include <algorithm>
+#include <atomic>
+#include "telar_platform/trace.hpp"
 #include "test_byte_stream.hpp"
 #include <thread>
+
+
+
+import telar.runtime.http1.intercepted_relay;
+import telar.runtime.proxy.http1_capture;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -18,9 +51,9 @@ struct HttpOwner final : HttpControl {
   std::vector<std::string> errors;
   std::uint64_t next = 0, ticket = 0;
   Verdict answer = Verdict::pending;
-  Direction direction = Direction::outbound;
+  traffic::Direction direction = traffic::Direction::outbound;
   explicit HttpOwner(SystemAllocator &memory) : memory(memory) {}
-  HttpPolicy policy(const FlowEvent &event) noexcept override { return {observe_response || event.direction == Direction::outbound, fail_closed}; }
+  HttpPolicy policy(const FlowEvent &event) noexcept override { return {observe_response || event.direction == traffic::Direction::outbound, fail_closed}; }
   std::uint64_t interceptHttp(const FlowEvent &event) noexcept override {
     check(ticket == 0);
     input.assign(event.bytes.begin(), event.bytes.end());
@@ -80,7 +113,7 @@ void editing(SystemAllocator &memory) {
   origin.write_limit = 3;
   origin.alternating_writes = true;
   pump(connection, child, origin, [&] { return owner.ticket != 0; });
-  check(origin.output.empty() && owner.direction == Direction::outbound);
+  check(origin.output.empty() && owner.direction == traffic::Direction::outbound);
   check(HttpMessageCodec::decode(owner.input).body.size() == 3);
   const std::array<Byte, 7> changed{'c', 'h', 0, 'a', 'n', 'g', 'e'};
   owner.replace(changed, "/edited");
@@ -89,7 +122,7 @@ void editing(SystemAllocator &memory) {
   origin.input = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nold";
   origin.visible = origin.input.size();
   pump(connection, child, origin, [&] { return owner.ticket != 0; });
-  check(child.output.empty() && owner.direction == Direction::inbound);
+  check(child.output.empty() && owner.direction == traffic::Direction::inbound);
   owner.replace(changed);
   pump(connection, child, origin, [&] { return child.output.ends_with(std::string{"ch\0ange", 7}); });
   check(child.output.contains("Content-Length: 7\r\n") && owner.errors.empty());

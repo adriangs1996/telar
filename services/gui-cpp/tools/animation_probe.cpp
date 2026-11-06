@@ -1,7 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "animation_presentation.hpp"
+#include "../application/dependencies.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../platform/window.hpp"
+#include "../tests/platform/window_activation.hpp"
+#include "../qt/application.hpp"
+#include "../qt/bundled_fonts.hpp"
+#include "../qt/list_model.hpp"
+#include "../qt/modal_reveal_layout.hpp"
+#include "../qt/native_rounded_rectangle.hpp"
+#include "../qt/tab_strip_layout.hpp"
+#include "../qt/window_animation_clock.hpp"
+#include <QCommandLineParser>
+#include <QGuiApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QQuickWindow>
+#include <QScreen>
+#include <QTimer>
+#include <QVariantMap>
+#include <iostream>
+#include <memory>
+
 #include "application/dependencies.hpp"
-#include "core/configuration.hpp"
-#include "platform/awake_clock.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
 #include "qt/application.hpp"
@@ -11,18 +46,10 @@
 #include "qt/native_rounded_rectangle.hpp"
 #include "qt/tab_strip_layout.hpp"
 #include "qt/window_animation_clock.hpp"
-#include <QCommandLineParser>
-#include <QGuiApplication>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QQuickWindow>
-#include <QScreen>
-#include <QTimer>
-#include <QVariantMap>
-#include <array>
-#include <cstdint>
-#include <iostream>
-#include <memory>
+
+
+import telar.gui.core.metrics;
+import telar.gui.platform.profile_file;
 
 namespace {
 

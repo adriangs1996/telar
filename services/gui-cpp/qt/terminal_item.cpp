@@ -1,22 +1,52 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "terminal_item.hpp"
 #include "application.hpp"
-#include "application/dependencies.hpp"
-#include "application/records.hpp"
-#include "core/terminal_size.hpp"
-#include "fonts/font_coverage.hpp"
-#include "fonts/font_role.hpp"
+#include "../application/dependencies.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include <bit>
+#include <stdexcept>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <type_traits>
 #include "graphics_scene.hpp"
-#include "input/key_event.hpp"
-#include "input/wheel_accumulator.hpp"
+#include <tuple>
+#include "../input/wheel_accumulator.hpp"
 #include "key_adapter.hpp"
 #include "key_encoding.hpp"
-#include "platform/window.hpp"
+#include "../platform/window.hpp"
 #include "resident_fonts.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "terminal/copy_grid.hpp"
-#include "terminal/screen.hpp"
-#include "terminal/selection.hpp"
+#include "../terminal/cell_position.hpp"
 #include "terminal_font.hpp"
 #include "terminal_scene.hpp"
 #include "window_font_catalog.hpp"
@@ -45,16 +75,20 @@
 #include <QtCore/qvariant.h>
 #include <QtGui/qtextformat.h>
 #include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+#include "application/dependencies.hpp"
+#include "core/terminal_size.hpp"
+#include "input/wheel_accumulator.hpp"
+#include "platform/window.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.fonts.font_requests;
+import telar.gui.fonts.face;
+import telar.gui.input.key_encoder;
+import telar.gui.terminal.font_grid;
+import telar.gui.terminal.copy_mode;
 
 namespace telar::gui::qt {
 

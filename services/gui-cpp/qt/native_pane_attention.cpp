@@ -1,10 +1,24 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_pane_attention.hpp"
-#include "core/color.hpp"
-#include "core/geometry.hpp"
-#include "graphics/rounded_rectangle.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include "pane_attention_value.hpp"
-#include "presentation/pane_attention_geometry.hpp"
-#include "presentation/pane_decoration_geometry.hpp"
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <variant>
+#include "../core/terminal_size.hpp"
 #include "rounded_paints_scene.hpp"
 #include "window_animation_clock.hpp"
 #include <QColor>
@@ -17,11 +31,13 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cmath>
-#include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 

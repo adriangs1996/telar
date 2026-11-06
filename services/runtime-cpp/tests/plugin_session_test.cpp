@@ -1,11 +1,73 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "platform/completion_signal.hpp"
-#include "plugins/restart_window.hpp"
-#include "plugins/run_worker.hpp"
-#include "plugins/session.hpp"
-#include "telar_platform/executable_path.hpp"
-#include "telar_platform/write_descriptor.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <array>
+#include <cstdint>
+#include <chrono>
+#include <cstddef>
+#include <algorithm>
+#include <concepts>
+#include <span>
+#include <cstring>
+#include <cassert>
+#include <atomic>
+#include "telar_base/memory/allocator.hpp"
+#include <stdexcept>
+#include <string_view>
+#include <optional>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include <utility>
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <charconv>
+#include <pcap/pcap.h>
+#include <arpa/inet.h>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <limits.h>
+#include <memory>
+#include "telar_platform/random_bytes.hpp"
+#include <mutex>
+#include "traffic_api.hpp"
+#include "plugin_bootstrap.hpp"
+#include <sys/stat.h>
+#include <fcntl.h>
+#include "telar_platform/trace.hpp"
+#include <poll.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <climits>
+#include <csignal>
 #include <thread>
+#include <cstdlib>
+#if (defined(__APPLE__))
+#include <mach-o/dyld.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+
+
+
+import telar.runtime.platform.request_worker;
+import telar.runtime.plugins.tap_configuration;
+import telar.runtime.plugins.run_worker;
+import telar.runtime.plugins.worker;
+import telar.platform;
 
 using namespace telar;
 using namespace telar::runtime;

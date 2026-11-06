@@ -1,22 +1,41 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/dependencies.hpp"
-#include "core/geometry.hpp"
-#include "graphics/display_box.hpp"
-#include "graphics/image_draw_budget.hpp"
-#include "graphics/image_residency.hpp"
-#include "graphics/placement_selection.hpp"
-#include "graphics/source_rect.hpp"
-#include "graphics/store.hpp"
+
+#include "../application/dependencies.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <limits>
+#include <cstddef>
+#include <atomic>
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include "../core/memory.hpp"
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include "image_resource.hpp"
 #include <QObject>
 #include <QQuickWindow>
 #include <QTimer>
-#include <array>
-#include <atomic>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.graphics.texture_cache;
 
 namespace telar::gui::qt {
 

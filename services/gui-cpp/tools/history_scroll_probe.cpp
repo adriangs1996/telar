@@ -1,11 +1,23 @@
-#include "core/geometry.hpp"
-#include "input/history_scroll.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include "../input/wheel_accumulator.hpp"
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
+
+#include "input/wheel_accumulator.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
 
 namespace {
 

@@ -1,12 +1,24 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "history/choice.hpp"
-#include "presentation/history_actions.hpp"
-#include "qt/application.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <array>
+#include <string_view>
+#include "../qt/application.hpp"
 #include <QDebug>
 #include <QPointF>
 #include <optional>
-#include <string_view>
+
+#pragma once
+#include "qt/application.hpp"
+
+
+import telar.gui.history.browser;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::test {
 

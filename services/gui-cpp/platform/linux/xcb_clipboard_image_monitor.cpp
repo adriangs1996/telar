@@ -1,11 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "xcb_clipboard_image_monitor.hpp"
-#include "application/dependencies.hpp"
-#include "attachments/secure_erase.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
-#include "platform/clipboard_image_pipe.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "platform/clipboard_image_transfer.hpp"
+#include "../../application/dependencies.hpp"
+#include "../../attachments/secure_erase.hpp"
+#include "../../attachments/types.hpp"
+#include "../../core/memory.hpp"
+#include "../../attachments/sensitive_bytes.hpp"
+#include "../clipboard_image_source.hpp"
+#include <algorithm>
+#include <array>
+#include <cerrno>
+#include <chrono>
+#include <cstddef>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <time.h>
+#include <unistd.h>
+#include <atomic>
+#include <optional>
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include <QAbstractNativeEventFilter>
@@ -17,22 +34,25 @@
 #include <QtCore/qtconfigmacros.h>
 #include <QtCore/qtypes.h>
 #include <QtGui/qguiapplication_platform.h>
-#include <array>
-#include <cerrno>
-#include <chrono>
-#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
-#include <optional>
-#include <span>
 #include <string_view>
 #include <sys/socket.h>
 #include <utility>
 #include <xcb/xcb.h>
 #include <xcb/xcbext.h>
 #include <xcb/xproto.h>
+
+#include "application/dependencies.hpp"
+#include "attachments/secure_erase.hpp"
+#include "attachments/types.hpp"
+#include "core/memory.hpp"
+#include "platform/clipboard_image_source.hpp"
+
+
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::platform {
 

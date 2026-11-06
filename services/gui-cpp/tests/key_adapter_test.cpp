@@ -1,10 +1,26 @@
-#include "core/unicode_scalar.hpp"
-#include "input/binding.hpp"
-#include "input/key_encoder.hpp"
-#include "input/terminal_key.hpp"
-#include "platform/keyboard.hpp"
-#include "qt/key_adapter.hpp"
-#include "qt/key_encoding.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <span>
+#include <tuple>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <charconv>
+#include <limits>
+#include <system_error>
+#include <utility>
+#include "../qt/key_adapter.hpp"
+#include "../qt/key_encoding.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>
 #include <QString>
@@ -13,7 +29,14 @@
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
+
+#include "qt/key_adapter.hpp"
+#include "qt/key_encoding.hpp"
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.input.key_encoder;
+import telar.gui.platform.private_file_stamp;
 
 namespace {
 

@@ -1,13 +1,30 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "core/geometry.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include "form_text_grid.hpp"
-#include "palette/query.hpp"
-#include "presentation/palette_geometry.hpp"
-#include "presentation/suggestion_geometry.hpp"
-#include "presentation/suggestion_labels.hpp"
-#include "presentation/suggestion_preview.hpp"
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <limits>
+#include <stdexcept>
+#include <bit>
+#include <ghostty/vt/unicode.h>
 #include "projection.hpp"
-#include "suggestions/state.hpp"
 #include <QByteArray>
 #include <QQuickWindow>
 #include <QString>
@@ -20,10 +37,16 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <optional>
-#include <string_view>
 #include <utility>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.palette.navigation_label;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.suggestions.state;
 
 namespace telar::gui::qt {
 

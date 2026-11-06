@@ -1,9 +1,112 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "telar_platform/random_bytes.hpp"
 #include "check.hpp"
-#include "platform/private_tunnel.hpp"
-#include "traffic/datagram.hpp"
+#if (defined(__APPLE__))
+#include "telar_base/memory/fixed_text.hpp"
+#endif
+#if (defined(__APPLE__))
+#include <cerrno>
+#endif
+#if (defined(__APPLE__))
+#include <exception>
+#endif
+#if (defined(__APPLE__))
+#include "telar_platform/file_descriptor.hpp"
+#endif
+#if (defined(__APPLE__))
+#include <algorithm>
+#endif
+#if (defined(__APPLE__))
+#include <array>
+#endif
+#if (defined(__APPLE__))
+#include <cstdint>
+#endif
+#if (defined(__APPLE__))
+#include <net/if.h>
+#endif
+#if (defined(__APPLE__))
+#include <net/if_utun.h>
+#endif
+#if (defined(__APPLE__))
+#include <netinet6/in6_var.h>
+#endif
+#if (defined(__APPLE__))
+#include <span>
+#endif
+#if (defined(__APPLE__))
+#include <sys/ioctl.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/kern_control.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/socket.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/sys_domain.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include "telar_base/memory/fixed_text.hpp"
+#endif
+#if (!(defined(__APPLE__)))
+#include "telar_platform/file_descriptor.hpp"
+#endif
+#if (!(defined(__APPLE__)))
+#include <algorithm>
+#endif
+#if (!(defined(__APPLE__)))
+#include <arpa/inet.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdint>
+#endif
+#if (!(defined(__APPLE__)))
+#include <fcntl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_ether.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_tun.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <net/if.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <span>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/ioctl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/uio.h>
+#endif
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <array>
 #include <optional>
+#include <pcap/pcap.h>
+#include <algorithm>
+#include <arpa/inet.h>
 #include <poll.h>
+
+
+
+import telar.runtime.platform.git_status;
+import telar.runtime.traffic.capture_analysis;
 
 using namespace telar;
 using namespace telar::runtime;

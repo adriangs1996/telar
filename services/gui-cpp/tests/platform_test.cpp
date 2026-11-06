@@ -1,17 +1,35 @@
-#include "platform/managed_directory.hpp"
-#include "platform/peer_identity.hpp"
-#include "platform/window_lease.hpp"
-#include "telar_platform/temporary_directory.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <string_view>
+#include <cstdint>
 #include <array>
-#include <cstdio>
-#include <cstdlib>
+#include <climits>
+#include <cerrno>
 #include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <dirent.h>
+#include <fcntl.h>
+#include <algorithm>
+#include <cstdlib>
+#include <limits.h>
+#include <sys/stat.h>
+#include <cstdio>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <unistd.h>
+
+
+
+import telar.gui.platform.login_shell;
+import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.notification_commands;
+import telar.platform;
 
 namespace {
 

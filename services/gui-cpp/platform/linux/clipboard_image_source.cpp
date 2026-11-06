@@ -1,12 +1,28 @@
-#include "platform/clipboard_image_source.hpp"
-#include "application/dependencies.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/secure_erase.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
-#include "platform/clipboard_image_pipe.hpp"
-#include "platform/clipboard_image_transfer.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../clipboard_image_source.hpp"
+#include "../../application/dependencies.hpp"
+#include "../../attachments/catalog.hpp"
+#include "../../attachments/secure_erase.hpp"
+#include "../../attachments/sensitive_bytes.hpp"
+#include "../../attachments/types.hpp"
+#include "../../core/memory.hpp"
+#include <algorithm>
+#include <array>
+#include <cerrno>
+#include <chrono>
+#include <cstddef>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <time.h>
+#include <unistd.h>
+#include <atomic>
+#include <optional>
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include <QBuffer>
@@ -20,12 +36,20 @@
 #include <QSize>
 #include <QString>
 #include <QtCore/qstringliteral.h>
-#include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
-#include <span>
 #include <utility>
+
+#include "platform/clipboard_image_source.hpp"
+#include "application/dependencies.hpp"
+#include "attachments/catalog.hpp"
+#include "attachments/secure_erase.hpp"
+#include "attachments/sensitive_bytes.hpp"
+#include "attachments/types.hpp"
+#include "core/memory.hpp"
+
+
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::platform {
 

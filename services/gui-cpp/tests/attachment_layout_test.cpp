@@ -1,13 +1,27 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "application/pane_bottom_reservation.hpp"
-#include "application/pane_layout.hpp"
-#include "core/cell_rectangle.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <algorithm>
 #include <cstdint>
+#include <algorithm>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
 #include <exception>
 #include <iostream>
-#include <optional>
+
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.unicode_scalar;
 
 namespace {
 

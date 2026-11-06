@@ -1,18 +1,42 @@
-#include "application/dependencies.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
 #include "assertions.hpp"
 #include "gui_wait.hpp"
-#include "machines/identity.hpp"
-#include "machines/limits.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machines.hpp"
-#include "platform/profile_file.hpp"
-#include "qt/application.hpp"
-#include "qt/machine_client.hpp"
-#include "qt/machine_client_key.hpp"
-#include "qt/machine_profiles_source.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "../core/memory.hpp"
+#include <sys/param.h>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <stop_token>
+#include "../qt/application.hpp"
+#include "../qt/machine_client.hpp"
+#include "../qt/machine_client_key.hpp"
+#include "../qt/machine_profiles_source.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -31,13 +55,19 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+#include "application/dependencies.hpp"
+#include "qt/application.hpp"
+#include "qt/machine_client.hpp"
+#include "qt/machine_client_key.hpp"
+#include "qt/machine_profiles_source.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::test {
 

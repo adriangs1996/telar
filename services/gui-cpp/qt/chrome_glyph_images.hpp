@@ -1,9 +1,19 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#if (defined(Q_OS_MACOS))
+#endif
 
 #include "alpha_mask.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "fonts/glyph_rasterization.hpp"
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <utility>
+#include <span>
+#include <limits>
 #include <QColor>
 #include <QHash>
 #include <QImage>
@@ -15,19 +25,47 @@
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#ifdef Q_OS_MACOS
-#include "core/memory.hpp"
-#include "platform/macos/glyph_rasterizer.hpp"
+#if (defined(Q_OS_MACOS))
+#include "../core/memory.hpp"
+#endif
+#if (defined(Q_OS_MACOS))
+#include "../platform/font.h"
+#endif
+#if (defined(Q_OS_MACOS))
+#include <algorithm>
+#endif
+#if (defined(Q_OS_MACOS))
+#include <cstring>
+#endif
+#if (defined(Q_OS_MACOS))
+#endif
+#if (defined(Q_OS_MACOS))
+#endif
+#if (defined(Q_OS_MACOS))
+#endif
+#if (defined(Q_OS_MACOS))
+#include <memory>
 #endif
 #include <array>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
-#include <utility>
+
+#pragma once
+
+#ifdef Q_OS_MACOS
+#include "core/memory.hpp"
+#endif
+
+#if (defined(Q_OS_MACOS))
+#endif
+
+import telar.gui.fonts.face;
+import telar.gui.fonts.font_requests;
+#if (defined(Q_OS_MACOS))
+import telar.gui.platform.private_file_stamp;
+#endif
 
 namespace telar::gui::qt {
 

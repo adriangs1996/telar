@@ -1,28 +1,41 @@
-#include "core/geometry.hpp"
-#include "core/terminal_surface.hpp"
-#include "core/view_version.hpp"
-#include "links/link_gesture.hpp"
-#include "links/link_grid.hpp"
-#include "links/link_hit.hpp"
-#include "links/link_hover.hpp"
-#include "links/link_match.hpp"
-#include "links/link_regions.hpp"
-#include "links/link_target.hpp"
-#include "links/link_text.hpp"
-#include "links/pointer_policy.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
-#include <array>
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstddef>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <limits>
+#include <optional>
+#include <array>
+#include "../terminal/cell_position.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <utility>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "../terminal/screen.hpp"
+#include <span>
+#include "telar_client/serializers/telar_messages.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
-#include <string_view>
+
+#include "terminal/screen.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.core.unicode_scalar;
+import telar.gui.links.link_hover;
+import telar.gui.links.path_expansion;
+import telar.gui.links.cell_links;
 
 namespace {
 

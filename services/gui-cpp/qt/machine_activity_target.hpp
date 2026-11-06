@@ -1,10 +1,19 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "machine_client_key.hpp"
-#include "palette/navigation_target.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <cstdint>
 #include <variant>
+
+#pragma once
+
+
+
+import telar.gui.palette.navigation_label;
 
 namespace telar::gui::qt {
 

@@ -1,5 +1,19 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_form_field.hpp"
-#include "text/grapheme_cursor.hpp"
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <ghostty/vt/unicode.h>
 #include <QFont>
 #include <QGuiApplication>
 #include <QInputMethod>
@@ -13,11 +27,11 @@
 #include <QtCore/qtypes.h>
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
-#include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
+
+
+
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

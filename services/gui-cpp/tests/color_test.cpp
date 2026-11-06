@@ -1,15 +1,27 @@
-#include "core/color.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
-#include <bit>
-#include <cfenv>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <bit>
+#include <cfenv>
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
+
+
+
+import telar.gui.core.metrics;
 
 namespace {
 

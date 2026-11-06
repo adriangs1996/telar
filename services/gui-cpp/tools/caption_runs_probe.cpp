@@ -1,10 +1,27 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "probe_io.hpp"
-#include "text/caption_runs.hpp"
+#include <array>
+#include <bit>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <ghostty/vt/unicode.h>
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <string>
+
+
+
+import telar.gui.text.bounded_editor;
 
 int main() try {
   using namespace telar::gui;

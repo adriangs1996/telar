@@ -1,9 +1,31 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "agent_oracle.hpp"
 #include <chrono>
 #include <filesystem>
 #include <iostream>
-#include "platform/process_inspector.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include "telar_base/text/utf8.hpp"
+#include <cstring>
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
 #include <thread>
+
+
+
+import telar.runtime.platform.process_probe;
 
 using namespace telar;
 

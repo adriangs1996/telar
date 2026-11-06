@@ -1,23 +1,69 @@
-#include "application/session.hpp"
-#include "assertions.hpp"
-#include "graphics/store.hpp"
-#include "platform/shared_image_source.hpp"
-#include "session_fixture.hpp"
-#include "telar_platform/graphics/shared_image_storage.hpp"
-#include <algorithm>
-#include <array>
-#include <cerrno>
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <concepts>
 #include <cstdint>
-#include <exception>
-#include <fcntl.h>
-#include <iostream>
+#include <optional>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <limits>
+#include <string_view>
+#include <array>
 #include <span>
+#include <stdexcept>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "../core/memory.hpp"
+#include "../core/terminal_size.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include <utility>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "../terminal/cell_position.hpp"
+#include <bit>
+#include <tuple>
+#include <cmath>
+#include "../input/wheel_accumulator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <memory>
+#include "assertions.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "session_fixture.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include "telar_platform/mapped_region.hpp"
+#include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <cerrno>
+#include <iostream>
 #include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
+
+
+
+import telar.gui.application.session;
+import telar.gui.graphics.texture_cache;
+import telar.gui.platform.profile_file;
+import telar.platform;
 
 namespace {
 

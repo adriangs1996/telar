@@ -1,19 +1,51 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/host_metrics.hpp"
-#include "application/records.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <concepts>
+#include <utility>
+#include <optional>
+#include <variant>
+#include "../terminal/screen.hpp"
+#include <string_view>
 #include "component_projection.hpp"
 #include "component_surface_state.hpp"
-#include "components/builtin_content.hpp"
-#include "components/clock.hpp"
-#include "components/configuration.hpp"
-#include "components/content.hpp"
-#include "components/invocation.hpp"
-#include "components/node.hpp"
-#include "components/source.hpp"
-#include "config/action_descriptions.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <charconv>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include <cinttypes>
+#include <tuple>
 #include "configuration_source.hpp"
-#include "input/action.hpp"
-#include "links/link_target.hpp"
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
 #include "projection.hpp"
@@ -32,16 +64,16 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qscopeguard.h>
 #include <QtCore/qtmetamacros.h>
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+
+
+import telar.gui.application.host_effects;
+import telar.gui.application.workspace_replica;
+import telar.gui.components.builtin_content;
+import telar.gui.components.configuration;
+import telar.gui.config.plugin_query;
+import telar.gui.input.copy_pointer;
+import telar.gui.links.cell_links;
 
 namespace telar::gui::qt {
 

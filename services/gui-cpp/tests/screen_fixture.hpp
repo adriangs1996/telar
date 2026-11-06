@@ -1,15 +1,33 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include "../qt/projection.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <QString>
+#include <QtCore/qchar.h>
+
 #pragma once
 
 #include "application/dependencies.hpp"
-#include "links/link_grid.hpp"
 #include "qt/projection.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "terminal/screen.hpp"
-#include <QString>
-#include <QtCore/qchar.h>
-#include <cstddef>
-#include <cstdint>
+
+
+import telar.gui.links.path_expansion;
 
 namespace telar::gui::test {
 

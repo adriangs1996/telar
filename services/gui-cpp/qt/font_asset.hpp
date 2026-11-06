@@ -1,10 +1,23 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include "font_source.hpp"
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include <span>
+#include <cstdint>
+
 #pragma once
 
 #include "core/memory.hpp"
-#include "font_source.hpp"
-#include "fonts/native_match.hpp"
-#include <cstdint>
-#include <span>
+
+
+import telar.gui.fonts.face;
 
 namespace telar::gui::qt {
 

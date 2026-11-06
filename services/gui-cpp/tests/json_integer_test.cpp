@@ -1,15 +1,29 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "core/memory.hpp"
-#include "text/binary_fraction.hpp"
-#include "text/json_unsigned_integer.hpp"
-#include "text/number_radix.hpp"
-#include <cstddef>
+#include "../core/memory.hpp"
 #include <cstdint>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <bit>
+#include <concepts>
+#include <limits>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
 #include <string>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.text.json_unsigned_integer;
 
 namespace {
 

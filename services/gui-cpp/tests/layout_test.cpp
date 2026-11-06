@@ -1,19 +1,35 @@
-#include "application/layout_token.hpp"
-#include "application/pane_layout.hpp"
-#include "core/cell_rectangle.hpp"
-#include "core/memory.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstddef>
-#include <cstdint>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include <charconv>
+#include <string_view>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <string_view>
-#include <variant>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.core.unicode_scalar;
 
 namespace {
 

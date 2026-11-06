@@ -1,7 +1,23 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "check.hpp"
-#include "proxy/socket.hpp"
+#include <cerrno>
+#include <exception>
+#include <csignal>
+#include <sys/socket.h>
+#include "telar_platform/file_descriptor.hpp"
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
+#pragma once
+
+
+
+import telar.runtime.proxy.relay_direction;
 
 using telar::runtime::configureProxySocket;
 using telar::runtime::FileDescriptor;

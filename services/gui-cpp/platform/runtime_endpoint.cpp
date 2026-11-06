@@ -1,8 +1,16 @@
-#include "runtime_endpoint.hpp"
-#include "login_shell.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
-#include <algorithm>
+module;
+
+#include "telar_platform/process_environment.h"
+
+#include <string>
+#include <span>
+#include <string_view>
+#include <vector>
 #include <array>
+#include <cstddef>
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
@@ -15,19 +23,25 @@
 #include <signal.h>
 #include <spawn.h>
 #include <stdexcept>
-#include <string_view>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
-#include <vector>
+#if (defined(__APPLE__))
+#include <mach-o/dyld.h>
+#endif
+
+module telar.gui.platform.profile_file;
+
+import telar.gui.platform.login_shell;
+import telar.client;
+
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
 #endif
 
-extern char **environ;
 
 namespace telar::gui::platform {
 namespace {

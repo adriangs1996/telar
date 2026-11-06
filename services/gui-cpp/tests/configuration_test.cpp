@@ -1,21 +1,69 @@
-#include "config/callback.hpp"
-#include "config/generation.hpp"
-#include "config/reader.hpp"
-#include "core/color.hpp"
-#include "core/configuration.hpp"
-#include "core/memory.hpp"
-#include "gui_config_bootstrap.hpp"
-#include "input/action.hpp"
-#include "input/binding.hpp"
-#include "telar_lua/vm.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <array>
-#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
 #include <cstdio>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cstring>
+#include <cmath>
+#include <initializer_list>
+#include <string>
+#include <limits>
+#include <bit>
+#include <concepts>
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <charconv>
+#include <system_error>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "gui_config_bootstrap.hpp"
+
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_config/graphics/limits.hpp"
+#include <arpa/inet.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <format>
+#include <ghostty/vt/unicode.h>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.config.plugin_effects;
+import telar.gui.config.generation;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
+import telar.lua;
+
+import telar.gui.config.gui_query;
+
 
 namespace {
 

@@ -1,9 +1,40 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "protocol_peer.hpp"
-#include "telar_config/agents/provider.hpp"
-#include "telar_platform/command_output.hpp"
+#include <string_view>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include "telar_base/memory/allocator.hpp"
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <exception>
+#include <cstddef>
+#include "telar_base/program_identity.hpp"
+#include <cerrno>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <optional>
+#include <sys/types.h>
+#include <limits.h>
+#include <atomic>
+#include <chrono>
+#include <poll.h>
+#include <sys/wait.h>
 #include <thread>
+
+#pragma once
+
+
+
+import telar.config;
+import telar.platform;
 
 namespace hook_fixture {
 

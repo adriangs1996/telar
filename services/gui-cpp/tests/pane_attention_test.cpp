@@ -1,13 +1,30 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "controlled_awake_clock.hpp"
-#include "core/configuration.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
 #include "gui_wait.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/attention_fades.hpp"
-#include "presentation/frame_pacer.hpp"
-#include "presentation/pane_decoration_geometry.hpp"
-#include "qt/native_pane_attention.hpp"
-#include "qt/pane_attention_value.hpp"
-#include "qt/window_animation_clock.hpp"
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <variant>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "../qt/native_pane_attention.hpp"
+#include "../qt/pane_attention_value.hpp"
+#include "../qt/window_animation_clock.hpp"
 #include "shape_atlas.hpp"
 #include <QColor>
 #include <QCoreApplication>
@@ -41,11 +58,19 @@
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <cstdint>
 #include <memory>
-#include <optional>
 #include <utility>
 #include <vector>
+
+#include "qt/native_pane_attention.hpp"
+#include "qt/pane_attention_value.hpp"
+#include "qt/window_animation_clock.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.frame_pacer;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace {
 

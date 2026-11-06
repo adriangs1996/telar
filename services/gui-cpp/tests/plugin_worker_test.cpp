@@ -1,15 +1,42 @@
-#include "application/dependencies.hpp"
-#include "config/action_descriptions.hpp"
-#include "config/plugin_effects.hpp"
-#include "config/plugin_invocation.hpp"
-#include "qt/plugin_packages.hpp"
-#include "qt/plugin_worker.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "../core/memory.hpp"
+#include <cstdint>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include <optional>
+#include <string_view>
+#include <utility>
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <charconv>
+#include <limits.h>
+#include <cerrno>
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/write_descriptor.hpp"
-#include "telar_plugins/package_inspection.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <bit>
+#include "../qt/plugin_packages.hpp"
+#include "../qt/plugin_worker.hpp"
+#include <unistd.h>
+#include <chrono>
+#include <dirent.h>
+#include <concepts>
+#include <limits>
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>
@@ -24,24 +51,21 @@
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
-#include <cstdint>
 #include <cstdlib>
-#include <exception>
 #include <filesystem>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string>
-#include <string_view>
-#include <sys/stat.h>
 #include <system_error>
-#include <unistd.h>
-#include <variant>
 #include <vector>
+
+#include "application/dependencies.hpp"
+#include "qt/plugin_packages.hpp"
+#include "qt/plugin_worker.hpp"
+
+
+import telar.gui.config.plugin_query;
+import telar.gui.config.plugin_effects;
+import telar.platform;
+import telar.plugins;
 
 namespace {
 

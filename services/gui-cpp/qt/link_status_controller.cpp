@@ -1,14 +1,44 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "machines/machine_row.hpp"
-#include "presentation/display_metrics.hpp"
-#include "presentation/link_status_geometry.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <algorithm>
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include <limits>
 #include "projection.hpp"
-#include "transport/runtime_link.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include <QQuickWindow>
 #include <QString>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qvariant.h>
+
+
+
+import telar.gui.machines.picker;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 

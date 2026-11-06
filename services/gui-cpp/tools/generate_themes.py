@@ -92,12 +92,7 @@ def main():
         r"\.(\w+)", re.search(r"const roles = \.\{([^}]+)\}", syntax_source)[1]
     )
     output = [
-        "#pragma once",
         "",
-        '#include "core/theme_values.hpp"',
-        "#include <array>",
-        "#include <optional>",
-        "#include <string_view>",
         "",
         "namespace telar::gui {",
         "",

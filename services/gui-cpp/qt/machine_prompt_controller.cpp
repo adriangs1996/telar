@@ -1,13 +1,32 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/workbench_geometry.hpp"
-#include "machines/edit.hpp"
-#include "machines/limits.hpp"
-#include "machines/machine_token.hpp"
-#include "machines/machines.hpp"
-#include "presentation/name_prompt_geometry.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "projection.hpp"
-#include "text/utf16_prefix.hpp"
-#include "qt/utf16_encoding.hpp"
+#include <bit>
+#include "utf16_encoding.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>
 #include <QQuickWindow>
@@ -19,9 +38,16 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cstddef>
-#include <optional>
-#include <string_view>
+
+#include "qt/utf16_encoding.hpp"
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.machines.profile_store;
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

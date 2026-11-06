@@ -1,21 +1,46 @@
-#include "core/memory.hpp"
-#include "fonts/face.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "fonts/native_match.hpp"
-#include "fonts/shaped_run_view.hpp"
-#include "platform/font.h"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_platform/read_file.hpp"
-#include <array>
-#include <bit>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <exception>
-#include <memory>
 #include <span>
-#include <stdexcept>
+#include <array>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
 #include <string_view>
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <optional>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <bit>
+#include <cstdio>
+
+#include "core/memory.hpp"
+#include "platform/font.h"
+
+
+import telar.gui.fonts.face;
+import telar.platform;
 
 namespace {
 

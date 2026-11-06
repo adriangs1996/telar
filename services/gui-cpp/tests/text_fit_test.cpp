@@ -1,12 +1,31 @@
-#include "text/grapheme_cursor.hpp"
-#include "text/text_fit.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <array>
+#include <bit>
 #include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <algorithm>
+#include <ghostty/vt/unicode.h>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <cmath>
 #include <cstdio>
 #include <exception>
 #include <limits>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.text.bounded_editor;
+import telar.gui.text.json_unsigned_integer;
 
 namespace {
 

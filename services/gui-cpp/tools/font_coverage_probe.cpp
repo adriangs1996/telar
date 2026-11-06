@@ -1,18 +1,46 @@
-#include "core/memory.hpp"
-#include "core/unicode_scalar.hpp"
-#include "fonts/face.hpp"
-#include "fonts/native_match.hpp"
-#include "platform/font.h"
-#include "telar_platform/read_file.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <exception>
-#include <limits>
-#include <span>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <type_traits>
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <cstdio>
+
+#include "core/memory.hpp"
+#include "platform/font.h"
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.fonts.face;
+import telar.platform;
 
 namespace {
 

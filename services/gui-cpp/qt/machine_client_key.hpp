@@ -1,7 +1,15 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <cstdint>
+
 #pragma once
 
-#include "machines/machine_token.hpp"
-#include <cstdint>
+
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

@@ -59,7 +59,7 @@ void movedOwnerPreservesView() {
 
 // CASE: runtime.queue_slot_removed
 // PAIR: runtime.queue_slot
-// SOURCE: services/runtime-cpp/platform/request_queue.hpp :: operator[] / take
+// SOURCE: services/runtime-cpp/platform/request_worker.cppm :: operator[] / take
 // STATUS: pending
 // CONTRACT: take destroys the old optional slot object after transferring its value.
 // SCENARIO: A reference to that slot is invalid even if its value was moved elsewhere.
@@ -74,7 +74,7 @@ void queueSlotRemoved(tbc::view<spec::request_queue &> queue) {
 
 // CASE: runtime.queue_taken_owner
 // PAIR: runtime.queue_slot
-// SOURCE: services/runtime-cpp/platform/request_queue.hpp :: take
+// SOURCE: services/runtime-cpp/platform/request_worker.cppm :: take
 // STATUS: pending
 // CONTRACT: The returned string owns its transferred value independently of the old slot.
 // SCENARIO: A view acquired from the taken string remains valid after more queue removals.

@@ -1,11 +1,27 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "graphics/atomic_frame_filter.hpp"
-#include "graphics/frame_source.hpp"
+#include "../graphics/kitty_control.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <algorithm>
+#include <array>
+#include "../graphics/child_file.hpp"
+#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <cstring>
 #include <filesystem>
 #include <set>
 #include <string>
 #include <vector>
+
+
+
+import telar.runtime.graphics.pane_media;
 
 using namespace telar;
 using namespace telar::runtime;

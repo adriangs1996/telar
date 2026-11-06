@@ -1,15 +1,29 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/metrics.hpp"
-#include "list_model.hpp"
-#include "machines/limits.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machine_token.hpp"
-#include "presentation/machine_chrome_geometry.hpp"
-#include "presentation/machine_facts.hpp"
-#include "resident_fonts.hpp"
-#include "telar_base/memory/fixed_text.hpp"
+
 #include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "list_model.hpp"
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <span>
+#include "resident_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QList>
@@ -20,12 +34,16 @@
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <string_view>
+
+#pragma once
+
+
+import telar.gui.core.metrics;
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 

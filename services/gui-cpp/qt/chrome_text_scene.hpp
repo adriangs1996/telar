@@ -1,13 +1,35 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/color.hpp"
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
 #include "font_collection.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "fonts/glyph_rasterization.hpp"
-#include "fonts/shaped_run_view.hpp"
-#include "fonts/text_layout.hpp"
-#include "terminal/font_grid.hpp"
+#include <concepts>
+#include <utility>
+#include <span>
+#include <limits>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <stdexcept>
+#include <hb.h>
+#include "../core/memory.hpp"
+#include <bit>
+#include <freetype/freetype.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <type_traits>
+#include <ghostty/vt/unicode.h>
 #include <QColor>
 #include <QPointF>
 #include <QQuickWindow>
@@ -16,10 +38,15 @@
 #include <QSizeF>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#include <cstdint>
-#include <memory>
-#include <optional>
-#include <span>
+
+#pragma once
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.font_requests;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 

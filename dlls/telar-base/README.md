@@ -5,7 +5,7 @@ JSON and other text codecs (`text/`), allocators, sensitive buffers and
 fixed-capacity containers (`memory/`), the diagnostics switches and timing
 (`diagnostics/`), the editor kinds (`editors/`), the history search policy
 (`history/`), and the program name and version children see (`program_identity.hpp`).
-It is header-only C++23, with no dependency on the client protocol or runtime.
+It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime.
 Allocators and their adapters live in the neutral `telar` namespace. The caller
 owns their lifetime; consumers inject them by reference.
 
@@ -20,26 +20,30 @@ target_link_libraries(your_target PRIVATE telar::base)
 ```
 
 ```cpp
-#include "telar_base/text/utf8.hpp"
-#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp" // Native allocator ABI
+import telar.base.text;
+import telar.base.memory;
+import telar.base.diagnostics;
 ```
 
 ## Standalone checks
 
 ```sh
-cmake -S dlls/telar-base -B dlls/telar-base/out -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build dlls/telar-base/out
-ctest --test-dir dlls/telar-base/out --output-on-failure
+tools/cpp configure base
+tools/cpp build base
+tools/cpp test base
 ```
 
-The standalone build compiles every public header separately, with only the
+The standalone build compiles every module interface and each remaining ABI header separately, with only the
 base include directory available. Regression tests cover allocator injection,
 budgets, retained bytes, limits and JSON errors without loading the client
-protocol. Headers and the `telar::base` CMake target can also be installed with
+protocol. Module sources, residual headers and the `telar::base` CMake target can also be installed with
 `cmake --install` and consumed with `find_package(telar-base CONFIG REQUIRED)`.
 
 ## Editor
 
-`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
-include directories and definitions consumers compile these headers with
-(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.
+Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
+`tools/cpp configure base` generates `out/compile_commands.json`.
+Build the project before opening importers, then launch `.toolchain/bin/clangd`
+with `--experimental-modules-support`. Module interfaces have their own compile
+commands; the remaining native ABI and macro headers borrow consumer commands.

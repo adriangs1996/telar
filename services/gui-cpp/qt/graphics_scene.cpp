@@ -1,27 +1,46 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "graphics_scene.hpp"
-#include "application/dependencies.hpp"
-#include "core/geometry.hpp"
-#include "graphics/image_draw_budget.hpp"
-#include "graphics/image_residency.hpp"
-#include "graphics/placeholder.hpp"
-#include "graphics/placement.hpp"
-#include "graphics/store.hpp"
-#include "scene_nodes.hpp"
+#include "../application/dependencies.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstddef>
+#include <atomic>
+#include <limits>
+#include "telar_config/graphics/limits.hpp"
+#include <array>
+#include <concepts>
+#include <optional>
+#include <span>
+#include <string_view>
+#include "placeholder_diacritics.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
+#include "../terminal/screen.hpp"
+#include "../core/memory.hpp"
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <utility>
+#include "scene_nodes.hpp"
 #include "window_images.hpp"
 #include <QQuickWindow>
 #include <QSGTransformNode>
 #include <QtCore/qsize.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qsgnode.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <span>
 #include <stdexcept>
+
+#include "application/dependencies.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.texture_cache;
+import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 

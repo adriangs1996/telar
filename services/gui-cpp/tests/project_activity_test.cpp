@@ -1,19 +1,45 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "allocation_gate.hpp"
-#include "application/records.hpp"
-#include "application/workspace_replica.hpp"
-#include "assertions.hpp"
-#include "core/memory.hpp"
-#include "presentation/project_activity.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "text/label_text.hpp"
-#include <array>
-#include <cstddef>
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
 #include <cstdint>
-#include <exception>
-#include <iostream>
 #include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
 #include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include "assertions.hpp"
+#include <tuple>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include <iostream>
 #include <string>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.presentation.activity_order;
+import telar.gui.text.json_unsigned_integer;
 
 namespace {
 

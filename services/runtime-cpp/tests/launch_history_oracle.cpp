@@ -1,4 +1,37 @@
-#include "history/store.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_base/memory/allocator.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include "telar_base/text/utf8.hpp"
+#include <cstring>
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
+#include <atomic>
+#include <exception>
+#include <sqlite3.h>
+#include "telar_base/diagnostics/limit_reach.hpp"
+#include "telar_platform/trace.hpp"
+#include <bit>
+#include <concepts>
+#include <cassert>
+#include <unordered_set>
+
+
+
+import telar.runtime.history.store;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -1,28 +1,40 @@
-#include "core/memory.hpp"
-#include "links/cell_links.hpp"
-#include "links/link_grid.hpp"
-#include "links/link_target.hpp"
-#include "links/link_text.hpp"
-#include "links/markdown_links.hpp"
-#include "links/path_recognizer.hpp"
-#include "links/uri_recognizer.hpp"
-#include "telar_client/codecs/telar_cells.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <limits>
+#include <array>
+#include <charconv>
+#include "telar_client/codecs/telar_cells.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <span>
 #include <stdexcept>
-#include <string_view>
 #include <vector>
+
+#include "core/memory.hpp"
+#include "terminal/cell_position.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.links.cell_links;
+import telar.gui.links.path_expansion;
 
 namespace {
 

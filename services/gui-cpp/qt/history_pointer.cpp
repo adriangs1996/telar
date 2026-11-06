@@ -1,36 +1,67 @@
-#include "input/history_action_capture.hpp"
-#include "input/history_hover.hpp"
-#include "application/dependencies.hpp"
-#include "history/browser.hpp"
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <optional>
 #include <utility>
-#include "history/choice.hpp"
-#include "presentation/history_actions.hpp"
-#include "presentation/history_footer.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <span>
+#include <variant>
+#include "../application/dependencies.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include <limits>
 #include "application.hpp"
-#include "core/geometry.hpp"
-#include "history/entry.hpp"
-#include "input/history_scroll.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "presentation/history_modal_geometry.hpp"
+#include "../input/wheel_accumulator.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <initializer_list>
 #include "projection.hpp"
-#include "qt/history_row_layout.hpp"
-#include "qt/history_meta_layout.hpp"
-#include "qt/scroll_event.hpp"
+#include "history_row_layout.hpp"
+#include "history_meta_layout.hpp"
+#include "scroll_event.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>
 #include <QStringView>
 #include <QString>
 #include <QtCore/qstringliteral.h>
-#include <variant>
 #include <QWheelEvent>
 #include <QtCore/qobject.h>
 #include <QtCore/qtmetamacros.h>
-#include <algorithm>
-#include <cstdint>
-#include <optional>
+
+#include "application/dependencies.hpp"
+#include "input/wheel_accumulator.hpp"
+#include "qt/history_row_layout.hpp"
+#include "qt/history_meta_layout.hpp"
+#include "qt/scroll_event.hpp"
+
+
+import telar.gui.input.child_mouse;
+import telar.gui.history.browser;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_meta_geometry;
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 

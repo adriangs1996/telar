@@ -1,8 +1,20 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "http2/event.hpp"
+
+#include <concepts>
+#include <cstdint>
+#include <span>
+#include <string_view>
 #include <algorithm>
 #include <cstring>
+
+#pragma once
+
+
+import telar.runtime.http2.direction_observer;
 
 struct Http2OracleInput {
   const std::uint8_t *bytes;

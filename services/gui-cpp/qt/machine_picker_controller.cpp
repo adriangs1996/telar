@@ -1,19 +1,35 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
 #include "machine_client.hpp"
 #include "machine_profiles_source.hpp"
-#include "machines/edit.hpp"
-#include "machines/limits.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machines.hpp"
-#include "machines/picker.hpp"
-#include "machines/picker_target.hpp"
-#include "palette/query.hpp"
-#include "platform/runtime_endpoint.hpp"
-#include "presentation/palette_row_window.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include <utility>
+#include <string>
+#include <cmath>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
 #include "projection.hpp"
 #include "runtime_connection.hpp"
-#include "telar_config/command_tab_view.hpp"
-#include "text/bounded_text.hpp"
 #include <QLatin1StringView>
 #include <QString>
 #include <QVariantList>
@@ -23,13 +39,18 @@
 #include <QtCore/qstringfwd.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <optional>
-#include <string_view>
-#include <utility>
 #include <variant>
+
+
+
+import telar.gui.machines.profile_store;
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.palette.navigation_label;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.suggestion_geometry;
+import telar.config;
+import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 

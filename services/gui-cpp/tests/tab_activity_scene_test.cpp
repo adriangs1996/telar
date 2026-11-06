@@ -1,23 +1,50 @@
-#include "core/configuration.hpp"
-#include "core/metrics.hpp"
-#include "input/tab_drag.hpp"
-#include "input/tab_drop_slots.hpp"
-#include "presentation/progress_geometry.hpp"
-#include "presentation/progress_motion.hpp"
-#include "presentation/tab_activity.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <span>
+#include <limits>
+#include "../core/memory.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_config/graphics/limits.hpp"
+#include <concepts>
+#include <utility>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <stdexcept>
+#include <tuple>
+#include <charconv>
+#include <cstring>
+#include <system_error>
 #include "qml_fixture.hpp"
-#include "qt/list_model.hpp"
-#include "qt/native_agent_status.hpp"
-#include "qt/native_progress_ring.hpp"
-#include "qt/native_tab_activity.hpp"
-#include "qt/progress_value.hpp"
-#include "qt/projection.hpp"
-#include "qt/tab_strip_layout.hpp"
+#include "../qt/list_model.hpp"
+#include "../qt/native_agent_status.hpp"
+#include "../qt/native_progress_ring.hpp"
+#include "../qt/native_tab_activity.hpp"
+#include "../qt/progress_value.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/tab_strip_layout.hpp"
 #include "shape_atlas.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -48,12 +75,23 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cstddef>
 #include <memory>
-#include <optional>
-#include <utility>
 #include <vector>
+
+#include "qt/list_model.hpp"
+#include "qt/native_agent_status.hpp"
+#include "qt/native_progress_ring.hpp"
+#include "qt/native_tab_activity.hpp"
+#include "qt/progress_value.hpp"
+#include "qt/projection.hpp"
+#include "qt/tab_strip_layout.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.activity_order;
+import telar.gui.presentation.display_metrics;
 
 namespace {
 

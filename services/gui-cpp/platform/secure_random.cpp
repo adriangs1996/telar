@@ -1,10 +1,22 @@
-#include "secure_random.hpp"
-#include "telar_platform/error.hpp"
-#include <algorithm>
-#include <cerrno>
-#include <cstddef>
+module;
+
 #include <cstdint>
 #include <span>
+#include <cerrno>
+#include <exception>
+#include <algorithm>
+#include <cstddef>
+#if (defined(__APPLE__))
+#include <sys/random.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <unistd.h>
+#endif
+
+module telar.gui.platform.private_file_stamp;
+
+import telar.platform;
+
 
 #ifdef __APPLE__
 #include <sys/random.h>

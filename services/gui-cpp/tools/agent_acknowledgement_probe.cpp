@@ -1,13 +1,23 @@
-#include "application/agent_acknowledgement.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include <concepts>
 #include <cstdint>
+#include <optional>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
+
+
+
+import telar.gui.application.host_effects;
 
 namespace {
 

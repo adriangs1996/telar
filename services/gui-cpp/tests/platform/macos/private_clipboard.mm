@@ -60,6 +60,16 @@ void PrivateClipboard::setPng(std::span<const std::byte> bytes) {
   }
 }
 
+void PrivateClipboard::setText(std::string_view text) {
+  @autoreleasepool {
+    [native_->board clearContents];
+    NSString *const value = [[NSString alloc] initWithBytes:text.data() length:text.size() encoding:NSUTF8StringEncoding];
+    if (value == nil || ![native_->board setString:value forType:NSPasteboardTypeString]) {
+      throw std::runtime_error{"PrivateClipboardWriteFailed"};
+    }
+  }
+}
+
 void PrivateClipboard::clear() {
   [native_->board clearContents];
 }

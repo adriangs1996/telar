@@ -1,13 +1,53 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "protocol_peer.hpp"
-#include "proxy/secret_file.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include <cstddef>
+#include <cstring>
+#include <string_view>
+#include <algorithm>
+#include <array>
+#include <charconv>
+#include <cstdint>
+#include <cstdlib>
+#include <optional>
+#include <span>
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <unistd.h>
+#endif
+#include <unistd.h>
 #include "telar_base/text/base64.hpp"
-#include "telar_platform/socket_signals.hpp"
+#include <csignal>
+#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <atomic>
 #include <filesystem>
 #include <poll.h>
 #include <source_location>
 #include <thread>
+
+
+
+import telar.runtime.proxy.authenticate;
+import telar.platform;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -1,10 +1,19 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "application/dependencies.hpp"
-#include "attachment_preview.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/preview_size.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
+#include "../application/dependencies.hpp"
+#include "../qt/attachment_preview.hpp"
+#include "../attachments/catalog.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+#include "../attachments/sensitive_bytes.hpp"
+#include "../attachments/types.hpp"
 #include <QBuffer>
 #include <QByteArray>
 #include <QCoreApplication>
@@ -14,10 +23,18 @@
 #include <QtCore/qnamespace.h>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <span>
+
+#include "application/dependencies.hpp"
+#include "attachment_preview.hpp"
+#include "attachments/catalog.hpp"
+#include "attachments/sensitive_bytes.hpp"
+#include "attachments/types.hpp"
+
+
+import telar.gui.attachments.marker_input;
 
 namespace {
 

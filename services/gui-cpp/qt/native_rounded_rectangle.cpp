@@ -1,7 +1,18 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_rounded_rectangle.hpp"
-#include "core/color.hpp"
-#include "core/geometry.hpp"
-#include "graphics/rounded_rectangle.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <cmath>
 #include "rounded_rectangle_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -10,11 +21,13 @@
 #include <QSGNode>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <cmath>
 #include <limits>
 #include <memory>
-#include <optional>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 namespace {

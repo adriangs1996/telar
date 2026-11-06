@@ -1,7 +1,22 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "image_resource.hpp"
-#include "graphics/image_draw_budget.hpp"
-#include "graphics/image_residency.hpp"
-#include "graphics/placement.hpp"
+#include <cstddef>
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <optional>
+#include <span>
+#include <cmath>
+#include "telar_client/serializers/telar_messages.hpp"
 #include "graphics_scene.hpp"
 #include "scene_nodes.hpp"
 #include <QImage>
@@ -10,10 +25,7 @@
 #include <QThread>
 #include <QThreadPool>
 #include <QtConcurrent/QtConcurrentRun>
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#ifdef __aarch64__
+#if (defined(__aarch64__))
 #include <arm_neon.h>
 #endif
 #include <QQuickWindow>
@@ -30,6 +42,14 @@
 #include <rhi/qrhi.h>
 #include <tuple>
 #include <utility>
+
+#ifdef __aarch64__
+#include <arm_neon.h>
+#endif
+
+
+import telar.gui.graphics.texture_cache;
+import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 

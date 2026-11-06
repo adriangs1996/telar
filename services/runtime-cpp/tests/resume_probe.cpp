@@ -1,10 +1,23 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "protocol_peer.hpp"
-#include "telar_config/agents/provider.hpp"
+#include <string_view>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <thread>
+
+
+
+import telar.config;
 
 using namespace telar;
 using namespace telar::runtime;

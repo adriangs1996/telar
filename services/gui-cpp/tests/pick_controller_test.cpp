@@ -1,10 +1,57 @@
-#include "components/configuration.hpp"
-#include "components/invocation.hpp"
-#include "components/pick_items.hpp"
-#include "config/generation.hpp"
-#include "core/memory.hpp"
-#include "qt/pick_controller.hpp"
-#include "qt/surface_command.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <cstddef>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
+#include <limits>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
+#include "telar_base/text/utf8.hpp"
+#include <tuple>
+#include "../core/memory.hpp"
+#include <bit>
+
+#include "telar_client/serializers/telar_frame.hpp"
+#include "gui_config_bootstrap.hpp"
+
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_config/graphics/limits.hpp"
+#include <arpa/inet.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <format>
+#include <ghostty/vt/unicode.h>
+#include <exception>
+#include "../qt/pick_controller.hpp"
+#include "../qt/surface_command.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -20,15 +67,20 @@
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtypes.h>
-#include <chrono>
-#include <cstddef>
-#include <exception>
 #include <functional>
 #include <iostream>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <utility>
+
+#include "core/memory.hpp"
+#include "qt/pick_controller.hpp"
+#include "qt/surface_command.hpp"
+
+
+import telar.gui.components.configuration;
+import telar.gui.components.builtin_content;
+import telar.gui.config.generation;
+
+import telar.gui.config.gui_query;
+
 
 namespace {
 

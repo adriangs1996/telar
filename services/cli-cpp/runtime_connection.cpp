@@ -1,8 +1,30 @@
-#include "runtime_connection.hpp"
+module;
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <span>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include "telar_client/codecs/telar_codec.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/peer_credentials.hpp"
+#include <optional>
+#include <sys/types.h>
 #include <csignal>
 #include <pthread.h>
+
+module telar.cli.runtime_observer;
+
+import telar.platform;
+
 
 namespace telar::runtime::cli {
 

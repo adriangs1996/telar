@@ -1,18 +1,39 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/dependencies.hpp"
-#include "machines/edit.hpp"
-#include "machines/owned_edit.hpp"
-#include "machines/profiles.hpp"
-#include "platform/file_stamp.hpp"
+
+#include "../application/dependencies.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include <sys/stat.h>
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 #include <QTimer>
-#include <cstdint>
-#include <optional>
 #include <stop_token>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+
+
+import telar.gui.machines.profile_store;
+import telar.gui.platform.profile_file;
 
 namespace telar::gui::qt {
 

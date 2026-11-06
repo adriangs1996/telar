@@ -1,13 +1,52 @@
-#include "window.hpp"
-#include "control_session.hpp"
-#include "failure.hpp"
-#include "telar_platform/executable_path.hpp"
-#include "telar_platform/runtime_paths.hpp"
-#include "window_json.hpp"
-#include "window_options.hpp"
+module;
+
 #include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include <limits>
+#include <span>
+#include <stdexcept>
+#include <type_traits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <string>
+#include <cerrno>
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include "telar_client/codecs/telar_codec.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cstdlib>
+#include <limits.h>
+#if (defined(__APPLE__))
+#include <mach-o/dyld.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <concepts>
+#include <charconv>
+#include <cmath>
 #include <cstdio>
 #include <print>
+
+module telar.cli.window;
+
+import telar.cli.runtime_observer;
+import telar.cli.output;
+import telar.platform;
+
+
+
 
 namespace telar::runtime::cli::window {
 

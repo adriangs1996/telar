@@ -1,10 +1,160 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "redirect/socket_owners.hpp"
-#include "redirect/helper.hpp"
-#include "redirect/route_path.hpp"
-#include "redirect/socket_accounts.hpp"
+#include <cstdint>
+#include <cstring>
+#include <netinet/in.h>
+#include <optional>
+#include <sys/socket.h>
+#include <string_view>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <cstddef>
+#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <span>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <chrono>
+#include <limits>
+#include "telar_base/text/utf8.hpp"
+#include <sys/types.h>
+#include <unistd.h>
+#if (defined(__APPLE__))
+#include <libproc.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cerrno>
+#endif
+#if (!(defined(__APPLE__)))
+#include <exception>
+#endif
+#if (!(defined(__APPLE__)))
+#include "telar_platform/file_descriptor.hpp"
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <fcntl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <dirent.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdio>
+#endif
+#include <csignal>
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <utility>
+#include "telar_platform/file_descriptor.hpp"
+#include <poll.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <net/if.h>
+#endif
+#if (defined(__APPLE__))
+#include <net/if_utun.h>
+#endif
+#if (defined(__APPLE__))
+#include <netinet6/in6_var.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <sys/ioctl.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/kern_control.h>
+#endif
+#if (defined(__APPLE__))
+#endif
+#if (defined(__APPLE__))
+#include <sys/sys_domain.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_ether.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_tun.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <net/if.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/ioctl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/uio.h>
+#endif
+#include <memory>
+#include <pcap/pcap.h>
+#include <sys/ioctl.h>
+#include <stdexcept>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <fcntl.h>
+#include <limits.h>
+#include "telar_platform/random_bytes.hpp"
+#include <cstdio>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#endif
+#include <cerrno>
+#include <cstdlib>
+#include <sys/file.h>
+#include <thread>
+#include <sys/sockio.h>
+#include <netinet/tcp.h>
+#include "telar_base/program_identity.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <net/if_dl.h>
+#include <net/route.h>
+#include <exception>
+#include <sys/uio.h>
+#include <netinet/in_pcb.h>
+#include <netinet/tcp_fsm.h>
+#include <netinet/tcp_var.h>
+#include <sys/socketvar.h>
+#include <sys/sysctl.h>
 #include <sys/wait.h>
 #include <vector>
+
+
+
+import telar.runtime.redirect.socket_owners;
+import telar.runtime.redirect.pf_rules;
 
 using namespace telar;
 using namespace telar::runtime;

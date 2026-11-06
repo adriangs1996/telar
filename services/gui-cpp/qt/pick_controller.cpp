@@ -1,7 +1,25 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "pick_controller.hpp"
 #include "application.hpp"
 #include "component_surface_state.hpp"
-#include "components/invocation.hpp"
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <lua.h>
 #include "configuration_source.hpp"
 #include "machine_client.hpp"
 #include <QQuickItem>
@@ -12,9 +30,11 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <chrono>
-#include <cstddef>
 #include <exception>
-#include <utility>
+
+
+
+import telar.gui.components.builtin_content;
 
 namespace telar::gui::qt {
 

@@ -1,6 +1,11 @@
-#include "process_group.hpp"
-#include "process_group.h"
+module;
+
 #include <cstdint>
+#include "process_group.h"
+
+module telar.gui.platform.private_file_stamp;
+
+
 
 namespace telar::gui::platform {
 

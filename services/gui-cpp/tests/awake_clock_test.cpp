@@ -1,10 +1,19 @@
-#include "platform/awake_clock.hpp"
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <cstdint>
+#include <cstddef>
 #include <ctime>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+
+
+
+import telar.gui.platform.profile_file;
 
 namespace {
 

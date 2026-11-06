@@ -1,30 +1,50 @@
-#include "application/dependencies.hpp"
-#include "application/records.hpp"
-#include "core/configuration.hpp"
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "core/theme_values.hpp"
-#include "graphics/store.hpp"
-#include "frame_fixture.hpp"
-#include "presentation/application_mark.hpp"
-#include "presentation/display_metrics.hpp"
-#include "presentation/tab_strip_geometry.hpp"
-#include "presentation/workspace_mark.hpp"
-#include "presentation/workspace_window.hpp"
-#include "qml_fixture.hpp"
-#include "qt/application.hpp"
-#include "qt/list_model.hpp"
-#include "qt/metrics_projection.hpp"
-#include "qt/projection.hpp"
-#include "qt/provider_artwork.hpp"
-#include "qt/provider_mark.hpp"
-#include "qt/sidebar_projection.hpp"
-#include "qt/tab_strip_layout.hpp"
-#include "qt/typography_projection.hpp"
-#include "qt/window_animation_clock.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
 #include "telar_client/serializers/telar_messages.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "frame_fixture.hpp"
+#include "telar_base/text/utf8.hpp"
+#include <stdexcept>
+#include <bit>
+#include "qml_fixture.hpp"
+#include "../qt/application.hpp"
+#include "../qt/list_model.hpp"
+#include "../qt/metrics_projection.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/provider_artwork.hpp"
+#include "../qt/provider_mark.hpp"
+#include "../qt/sidebar_projection.hpp"
+#include "../qt/tab_strip_layout.hpp"
+#include "../qt/typography_projection.hpp"
+#include "../qt/window_animation_clock.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QEvent>
@@ -46,7 +66,6 @@
 #include <QTimer>
 #include <QTemporaryFile>
 #include <QtQuick/qquickitemgrabresult.h>
-#include <algorithm>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
@@ -57,10 +76,31 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestmouse.h>
-#include <array>
-#include <cstddef>
 #include <memory>
-#include <span>
+
+#include "application/dependencies.hpp"
+#include "core/memory.hpp"
+#include "qt/application.hpp"
+#include "qt/list_model.hpp"
+#include "qt/metrics_projection.hpp"
+#include "qt/projection.hpp"
+#include "qt/provider_artwork.hpp"
+#include "qt/provider_mark.hpp"
+#include "qt/sidebar_projection.hpp"
+#include "qt/tab_strip_layout.hpp"
+#include "qt/typography_projection.hpp"
+#include "qt/window_animation_clock.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.graphics.texture_cache;
+import telar.gui.presentation.application_mark;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.frame_pacer;
+import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.notification_stack;
 
 namespace {
 

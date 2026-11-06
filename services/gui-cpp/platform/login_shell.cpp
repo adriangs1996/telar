@@ -1,7 +1,16 @@
-#include "login_shell.hpp"
+module;
+
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <cstdlib>
 #include <pwd.h>
 #include <unistd.h>
+
+module telar.gui.platform.login_shell;
+
+
 
 namespace telar::gui::platform::login_shell {
 std::string path() {

@@ -1,39 +1,80 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "components/invocation.hpp"
-#include "components/pick_items.hpp"
-#include "components/source.hpp"
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <lua.h>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
+#include <cstdio>
+#include <limits>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <variant>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <initializer_list>
+#include <string>
 #include "font_cache.hpp"
-
-#include "application/client_view_state.hpp"
-#include "application/dependencies.hpp"
-#include "config/action_descriptions.hpp"
-#include "config/callback.hpp"
-#include "config/plugin_effects.hpp"
-#include "config/plugin_invocation.hpp"
-#include "config/plugin_query.hpp"
-#include "config/query.hpp"
+#include "../application/dependencies.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <exception>
+#include <limits.h>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <bit>
+#include <functional>
+#include <type_traits>
 #include "configuration_loader.hpp"
-#include "core/configuration.hpp"
-#include "input/action.hpp"
-#include "input/configuration.hpp"
-#include "telar_config/command_tab_view.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QList>
 #include <QString>
 #include <QTimer>
-#include <array>
-#include <cstddef>
-#include <exception>
-#include <optional>
-#include <string_view>
+
+#pragma once
+#include "application/dependencies.hpp"
+
+
+import telar.gui.components.builtin_content;
+import telar.gui.components.configuration;
+import telar.gui.application.host_effects;
+import telar.gui.config.plugin_query;
+import telar.gui.config.plugin_effects;
+import telar.gui.config.gui_query;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.configuration;
+import telar.config;
+
 
 namespace telar::gui {
-
-namespace components {
-class Configuration;
-}
 
 template <Allocator Memory>
 class ConfigurationGeneration;

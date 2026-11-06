@@ -1,12 +1,23 @@
-#include "lexer.hpp"
+#ifdef __clangd__
+static_assert(true);
+#endif
+#include <tbc/view.hpp>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <vector>
+
 
 #include <gtest/gtest.h>
 
-#include <array>
-#include <stdexcept>
 #include <string>
-#include <string_view>
 
+import telar.ebnf.lexer;
 namespace {
   TEST(Lexer, GroupsIdentifiersAndUnquotedLiteralContents) {
     const auto source = std::string_view{"rule_12 = \"abc def\";"};

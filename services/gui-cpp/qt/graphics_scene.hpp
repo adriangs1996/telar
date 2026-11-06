@@ -1,10 +1,27 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/dependencies.hpp"
-#include "graphics/lifetime.hpp"
-#include "graphics/placeholder.hpp"
-#include "graphics/store.hpp"
-#include "terminal/screen.hpp"
+
+#include "../application/dependencies.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include "placeholder_diacritics.hpp"
+#include <algorithm>
+#include <cmath>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <array>
+#include <optional>
+#include "../core/memory.hpp"
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <concepts>
+#include <utility>
 #include "window_images.hpp"
 #include <QPointer>
 #include <QQuickItem>
@@ -12,10 +29,16 @@
 #include <QSGTexture>
 #include <QSGTransformNode>
 #include <QSizeF>
-#include <array>
-#include <limits>
-#include <optional>
 #include <span>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.graphics.texture_cache;
+import telar.gui.graphics.placeholder;
 
 class QQuickWindow;
 

@@ -1,4 +1,8 @@
-#include "../host_metrics.hpp"
+module;
+
+#include <concepts>
+#include <cstdint>
+#include <optional>
 #include "telar_platform/trace.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/ps/IOPSKeys.h>
@@ -9,6 +13,10 @@
 #include <memory>
 #include <sys/sysctl.h>
 #include <unistd.h>
+
+module telar.runtime.platform.stream_read_buffer;
+
+
 
 namespace telar::runtime {
 namespace {

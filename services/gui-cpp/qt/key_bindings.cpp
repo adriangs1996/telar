@@ -1,13 +1,35 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "key_bindings.hpp"
 #include "application.hpp"
-#include "application/records.hpp"
-#include "input/action.hpp"
-#include "input/binding.hpp"
-#include "input/configuration.hpp"
-#include "input/key_event.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include <stdexcept>
+#include <tuple>
+
 #include "key_adapter.hpp"
 #include "key_encoding.hpp"
-#include "presentation/mode_hints.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
 #include <QCoreApplication>
@@ -19,15 +41,17 @@
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
 #include <QtQuick/qquickwindow.h>
-#include <algorithm>
-#include <array>
-#include <cstdint>
 #include <cstring>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <utility>
+
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
+import telar.gui.input.configuration;
+import telar.gui.presentation.history_inspection;
+
+import telar.gui.config.gui_query;
 
 namespace telar::gui::qt {
 

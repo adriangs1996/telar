@@ -1,19 +1,44 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "notification_layout.hpp"
 #include "application.hpp"
-#include "application/notification_center.hpp"
-#include "application/notification_item.hpp"
-#include "core/geometry.hpp"
-#include "core/memory.hpp"
-#include "core/metrics.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/text_layout.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/notification_action_label.hpp"
-#include "presentation/notification_geometry.hpp"
-#include "presentation/notification_stack.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string_view>
+#include <array>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <cmath>
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <concepts>
+#include <utility>
+#include <bit>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <type_traits>
+#include <ghostty/vt/unicode.h>
+#include <charconv>
+#include <system_error>
 #include "projection.hpp"
 #include "resident_fonts.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "window_animation_clock.hpp"
 #include "window_font_catalog.hpp"
 #include <QAbstractItemModel>
@@ -31,15 +56,17 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.fonts.row_text_layout;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.notification_stack;
 
 namespace telar::gui::qt {
 namespace {

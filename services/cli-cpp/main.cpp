@@ -1,31 +1,112 @@
-#include "agent.hpp"
-#include "api_schema.hpp"
-#include "runtime_clipboard.hpp"
-#include "diagnostics.hpp"
-#include "execution.hpp"
-#include "file_transfer.hpp"
-#include "command_error.hpp"
-#include "help.hpp"
-#include "history.hpp"
-#include "hook.hpp"
-#include "integration.hpp"
-#include "integration_assets.hpp"
-#include "pane.hpp"
-#include "launch_commands.hpp"
-#include "plugin.hpp"
-#include "project_setup.hpp"
-#include "proxy_trust.hpp"
-#include "repository_prepare.hpp"
-#include "runtime_observer.hpp"
-#include "server.hpp"
-#include "tab.hpp"
-#include "workspace.hpp"
-#include "worktree.hpp"
-#include "window.hpp"
-#include <cstdio>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <exception>
 #include <span>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include "telar_client/codecs/telar_codec.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <optional>
+#include <stdexcept>
+#include "telar_platform/random_bytes.hpp"
+#include <algorithm>
+#include <limits>
 #include <string_view>
+#include <type_traits>
+#include <charconv>
+#include <string>
+#include <cstdio>
+#include <concepts>
+#include <cstdlib>
+#include <limits.h>
+#if (defined(__APPLE__))
+#include <mach-o/dyld.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <csignal>
+#include <dirent.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <thread>
+#include <chrono>
+#include <format>
+#include "telar_client/serializers/telar_messages.hpp"
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#endif
+#include <filesystem>
+#if (defined(__linux__))
+#include <sys/syscall.h>
+#endif
+#include <ctime>
+#include <memory>
+#include <poll.h>
+#include "help_texts.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_platform/trace.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include <openssl/md5.h>
+#include <cassert>
+#include "telar_base/program_identity.hpp"
+#include <sys/types.h>
+#include <atomic>
+#include "integration_assets.hpp"
+#include <openssl/sha.h>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_platform/open_directory.h"
+#include <cmath>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <arpa/inet.h>
+#include <openssl/crypto.h>
+#include <climits>
+#include <dlfcn.h>
+#include <utility>
+#include <sys/file.h>
+#include <signal.h>
+#include <vector>
+#include <system_error>
+#include <bit>
+#include <new>
+#include <pwd.h>
+
+
+
+import telar.cli.project_setup;
+import telar.cli.runtime_observer;
+import telar.cli.history;
+import telar.cli.server;
+import telar.cli.hook;
+import telar.cli.tab;
+import telar.cli.window;
+import telar.cli.plugin;
+import telar.cli.worktree;
+import telar.cli.worktree_git;
 
 namespace telar::runtime::cli {
 namespace {

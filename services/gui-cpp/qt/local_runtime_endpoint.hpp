@@ -1,13 +1,38 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/memory.hpp"
-#include "platform/runtime_endpoint.hpp"
-#include "telar_platform/process_environment.hpp"
-#include "telar_platform/runtime_paths.hpp"
-#include "telar_platform/server_options.hpp"
+
+#include "../core/memory.hpp"
+#include <string>
+#include <concepts>
+#include <cstdlib>
+#include <string_view>
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <algorithm>
+#include <array>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <span>
+#include <stdexcept>
+#include <charconv>
+#include <sys/un.h>
 #include <QLocalSocket>
 #include <QString>
 #include <QtCore/qtypes.h>
+
+#pragma once
+
+#include "core/memory.hpp"
+
+
+import telar.gui.platform.profile_file;
+import telar.platform;
 
 namespace telar::gui::qt {
 

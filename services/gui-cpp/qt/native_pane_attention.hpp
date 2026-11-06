@@ -1,8 +1,19 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "ancestor_geometry.hpp"
-#include "presentation/attention_fades.hpp"
-#include "presentation/chrome_style.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>
@@ -11,8 +22,13 @@
 #include <QVariant>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstdint>
-#include <optional>
+
+#pragma once
+
+
+
+import telar.gui.presentation.frame_pacer;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 

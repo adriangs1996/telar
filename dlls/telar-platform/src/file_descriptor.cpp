@@ -1,6 +1,17 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/error.hpp"
+#include <cerrno>
+#include <exception>
 #include <fcntl.h>
+
+
+
+import telar.platform;
 
 namespace telar::runtime {
 

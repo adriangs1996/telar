@@ -1,8 +1,114 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "client_peer.hpp"
-#include "runtime/agent_service.hpp"
-#include "runtime/descent_service.hpp"
-#include "runtime/workspace_service.hpp"
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdint>
+#include "../diagnostics/line.hpp"
+#include "telar_platform/trace.hpp"
+#include "../graphics/kitty_framing.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cstring>
+#include <variant>
+#include "../graphics/media_budget.hpp"
+#include "../graphics/kitty_control.hpp"
+#include <cstddef>
+#include <span>
+#include "../graphics/child_file.hpp"
+#include "telar_platform/graphics/child_shared_memory.hpp"
+#include <utility>
+#include "../terminal/control/classification.hpp"
+#include "../terminal/control/parser.hpp"
+#include "../terminal/pty_response_queue.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <stdexcept>
+#include "../graphics/temporary_path.hpp"
+#include <charconv>
+#include "../terminal/ghostty_allocator.hpp"
+#include "../terminal/ghostty_handle.hpp"
+#include <optional>
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <limits>
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include "telar_platform/mapped_region.hpp"
+#include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <string_view>
+#include <sys/mman.h>
+#include <atomic>
+#include "telar_client/serializers/telar_frame.hpp"
+#include "cell_layout.hpp"
+#include "../terminal/control/engine.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "../terminal/graphics_cursor.hpp"
+#include <cassert>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include <sys/types.h>
+#include <bit>
+#include <concepts>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <exception>
+#include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/serializers/telar_serializer.hpp"
+#include <cerrno>
+#include <unistd.h>
+#include <tuple>
+#include <memory>
+#include "telar_base/program_identity.hpp"
+#include <limits.h>
+#include <csignal>
+#include <sys/uio.h>
+#include <sys/wait.h>
+#include <system_error>
+#include "telar_base/diagnostics/limit_reach.hpp"
+#include <sys/stat.h>
+#if (defined(__APPLE__))
+#include <sys/event.h>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <climits>
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#endif
+#if (defined(__linux__))
+#include <sched.h>
+#endif
+#if (defined(__linux__))
+#include <sys/epoll.h>
+#endif
+#if (defined(__linux__))
+#include <sys/syscall.h>
+#endif
+#if (defined(__linux__))
+#endif
+#include <new>
+#include "telar_config/terminal/control/policy.hpp"
+#include <termios.h>
+#include <condition_variable>
+#include <pthread.h>
 #include <thread>
+
+
+
+import telar.runtime.runtime.runtime;
+import telar.runtime.runtime.client_control;
 
 using namespace telar;
 using namespace telar::runtime;

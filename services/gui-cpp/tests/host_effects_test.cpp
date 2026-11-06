@@ -1,11 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "allocation_gate.hpp"
-#include "application/notification_payload.hpp"
-#include "core/memory.hpp"
-#include "platform/sound_commands.hpp"
-#include "qt/command_process.hpp"
-#include "qt/sound_player.hpp"
-#include "qt/system_notifier.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstddef>
+#include <cstring>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include "../core/memory.hpp"
+#include <algorithm>
+#include <span>
 #include "telar_client/serializers/telar_protocol.hpp"
+#include <cstdint>
+#include "../qt/command_process.hpp"
+#include "../qt/sound_player.hpp"
+#include "../qt/system_notifier.hpp"
 #include <QCoreApplication>
 #include <QIODevice>
 #include <QObject>
@@ -17,15 +34,20 @@
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <chrono>
-#include <cstddef>
-#include <cstdint>
 #include <functional>
 #include <memory>
 #include <new>
 #include <optional>
-#include <stdexcept>
-#include <string_view>
 #include <vector>
+
+#include "core/memory.hpp"
+#include "qt/command_process.hpp"
+#include "qt/sound_player.hpp"
+#include "qt/system_notifier.hpp"
+
+
+import telar.gui.application.host_effects;
+import telar.gui.platform.notification_commands;
 
 namespace {
 

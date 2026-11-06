@@ -1,19 +1,34 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "runtime_connection.hpp"
-#include "application/dependencies.hpp"
-#include "machines/failure.hpp"
-#include "machines/machine_row.hpp"
-#include "platform/awake_clock.hpp"
-#include "platform/peer_identity.hpp"
+#include "../application/dependencies.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
 #include "remote_bridge.hpp"
-#include "telar_client/codecs/telar_handshake.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "transport/frame_stream.hpp"
-#include "transport/runtime_handshake.hpp"
-#include "transport/runtime_protocol.hpp"
+#include "../core/memory.hpp"
+#include <type_traits>
+#include <utility>
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
 #include <QStringLiteral>
@@ -22,15 +37,18 @@
 #include <QtCore/qstring.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <array>
 #include <chrono>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
+
+#include "application/dependencies.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.platform.profile_file;
+import telar.gui.platform.private_file_stamp;
+import telar.client;
+import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 

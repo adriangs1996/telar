@@ -1,14 +1,33 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/dependencies.hpp"
+
+#include "../application/dependencies.hpp"
 #include "cell_glyphs.hpp"
-#include "core/cell_rectangle.hpp"
-#include "core/configuration.hpp"
-#include "graphics/store.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/memory.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <concepts>
+#include <utility>
 #include "graphics_scene.hpp"
-#include "links/link_match.hpp"
-#include "terminal/screen.hpp"
-#include "terminal/selection.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "../terminal/cell_position.hpp"
+#include "../terminal/screen.hpp"
 #include "text_scene.hpp"
 #include "terminal_font.hpp"
 #include <QList>
@@ -18,8 +37,18 @@
 #include <QSGSimpleRectNode>
 #include <QSGTransformNode>
 #include <QString>
-#include <cstddef>
-#include <cstdint>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.graphics.texture_cache;
+import telar.gui.links.cell_links;
+import telar.gui.terminal.copy_mode;
 
 namespace telar::gui::qt {
 

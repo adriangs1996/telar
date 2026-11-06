@@ -1,16 +1,54 @@
-#include "agents/agent.hpp"
-#include "agents/hook_settings.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include "telar_base/text/utf8.hpp"
+#include <cstring>
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cstddef>
+#include <stdexcept>
+#include "telar_platform/file_descriptor.hpp"
+#include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include "check.hpp"
-#include "platform/process_arguments.hpp"
-#include "platform/process_probe.hpp"
-#include "telar_platform/command.hpp"
-#include "telar_platform/executable_path.hpp"
-#include "telar_platform/pipe_process.hpp"
-#include "telar_platform/pty_process.hpp"
+#include "telar_platform/trace.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/program_identity.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_client/serializers/telar_messages.hpp"
+#if (defined(__APPLE__))
+#include <mach-o/dyld.h>
+#endif
+#if (!(defined(__APPLE__)))
+#endif
 #include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <thread>
+
+
+
+import telar.runtime.agents.snapshot;
+import telar.runtime.agents.screen_inference;
+import telar.runtime.platform.process_probe;
+import telar.platform;
 
 using namespace telar;
 using namespace telar::runtime;

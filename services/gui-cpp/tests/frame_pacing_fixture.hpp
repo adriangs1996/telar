@@ -1,15 +1,39 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/pane_layout.hpp"
-#include "input/tab_drop_surface.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/frame_pacer.hpp"
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include <cmath>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <ranges>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../qt/application.hpp"
+#include "../qt/pointer_dispatcher.hpp"
+#include <stdexcept>
+
+#pragma once
 #include "qt/application.hpp"
 #include "qt/pointer_dispatcher.hpp"
-#include <array>
-#include <cstdint>
-#include <span>
-#include <stdexcept>
+
+
+import telar.gui.application.sound_playback;
+import telar.gui.input.child_mouse;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::test {
 

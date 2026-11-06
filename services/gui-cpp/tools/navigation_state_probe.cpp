@@ -1,19 +1,29 @@
-#include "application/navigation_history.hpp"
-#include "application/pane_layout.hpp"
-#include "application/saved_layouts.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <array>
-#include <concepts>
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
 #include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <memory>
+#include <stdexcept>
+#include <concepts>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <variant>
+
+
+
+import telar.gui.application.sound_playback;
 
 namespace {
 

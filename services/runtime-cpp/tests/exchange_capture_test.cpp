@@ -1,8 +1,30 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "exchange_capture/joiner.hpp"
+#include <algorithm>
+#include <atomic>
+#include <cassert>
+#include <cstddef>
+#include "telar_base/memory/allocator.hpp"
+#include <cstring>
+#include <cstdint>
+#include <span>
 #include <array>
+#include <stdexcept>
+#include <string_view>
+#include <optional>
+#include <chrono>
+#include <bit>
 #include <limits>
 #include <thread>
+
+
+
+import telar.runtime.exchange_capture.pipeline;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -1,21 +1,45 @@
-#include "core/metrics.hpp"
-#include "input/binding.hpp"
-#include "input/key_label.hpp"
-#include "palette/navigation_label.hpp"
-#include "palette/query.hpp"
-#include "palette/ranked_matches.hpp"
-#include "palette_actions.hpp"
-#include "presentation/palette_geometry.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include "../core/terminal_size.hpp"
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <bit>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <utility>
+
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.key_encoder;
+import telar.gui.palette.navigation_label;
+import telar.gui.presentation.suggestion_geometry;
+
+import telar.gui.config.gui_query;
 
 namespace {
 

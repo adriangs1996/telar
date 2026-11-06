@@ -2,7 +2,7 @@
 
 The client side of the runtime protocol: wire framing, message codecs and
 serializers, and `telar::Client`, which talks to a runtime over its Unix socket.
-It is header-only C++23 and depends on `telar::base`, the standard library and
+It is C++23 with compiled standard module interfaces and depends on `telar::base`, the standard library and
 POSIX sockets. The base library does not depend on this protocol. `RequestError`
 lives here because it carries a protocol-specific `FailureCode`.
 `services/gui-cpp` and the runtime CLI in `services/runtime-cpp` use it.
@@ -13,14 +13,16 @@ target_link_libraries(your_target PRIVATE telar::client)
 ```
 
 ```cpp
-#include "telar_client/telar.hpp"
+import telar.client;
 ```
 
-`telar.hpp` includes every header; include `telar_client/codecs/...` or
-`telar_client/serializers/...` directly to pull in less.
+`telar.client.telar` re-exports the client interfaces; import individual modules
+under `telar.client.codecs` or `telar.client.serializers` to use a narrower graph.
 
 ## Editor
 
-`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
-include directories and definitions consumers compile these headers with
-(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.
+Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
+`tools/cpp configure client` generates `out/compile_commands.json`.
+Build the project before opening importers, then launch `.toolchain/bin/clangd`
+with `--experimental-modules-support`. Module interfaces have their own compile
+commands; the remaining native ABI and macro headers borrow consumer commands.

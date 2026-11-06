@@ -1,30 +1,75 @@
-#include "config/callback.hpp"
-#include "config/client_query.hpp"
-#include "config/generation.hpp"
-#include "config/gui_query.hpp"
-#include "config/input_query.hpp"
-#include "config/query.hpp"
-#include "config/runtime_query.hpp"
-#include "core/configuration.hpp"
-#include "core/json_writer.hpp"
-#include "core/memory.hpp"
-#include "input/action.hpp"
-#include "json_fixture.hpp"
-#include "telar_base/text/json.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <array>
-#include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <new>
 #include <optional>
+#include <string_view>
+#include <utility>
+#include <algorithm>
+#include <cstddef>
 #include <span>
 #include <stdexcept>
+#include <tuple>
+#include "telar_base/memory/fixed_text.hpp"
+#include <limits>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <charconv>
+#include <cmath>
+#include <concepts>
+#include <cstring>
+#include <functional>
+#include <system_error>
+#include <type_traits>
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <variant>
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
+#include <cstdio>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <initializer_list>
 #include <string>
-#include <string_view>
+#include <bit>
+
+#include "gui_config_bootstrap.hpp"
+
+#include <limits.h>
+#include <sys/stat.h>
+#include "telar_config/graphics/limits.hpp"
+#include <arpa/inet.h>
+#include "telar_config/terminal/control/policy.hpp"
+#include <format>
+#include <ghostty/vt/unicode.h>
+#include <exception>
+#include "json_fixture.hpp"
+#include <iostream>
+#include <new>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.config.plugin_effects;
+import telar.gui.config.gui_query;
+import telar.gui.config.generation;
+import telar.gui.config.plugin_query;
+import telar.gui.core.metrics;
+import telar.gui.core.json_writer;
+import telar.gui.input.copy_pointer;
+import telar.base.text;
+
+
 
 namespace {
 

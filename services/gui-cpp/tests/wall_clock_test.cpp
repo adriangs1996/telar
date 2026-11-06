@@ -1,13 +1,22 @@
-#include "platform/wall_clock.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <cstdint>
 #include <charconv>
 #include <chrono>
-#include <cstdint>
 #include <ctime>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
 #include <system_error>
+
+
+
+import telar.gui.platform.notification_commands;
 
 namespace {
 

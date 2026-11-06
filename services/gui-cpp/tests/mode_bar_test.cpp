@@ -1,17 +1,37 @@
-#include "core/configuration.hpp"
-#include "input/action.hpp"
-#include "input/binding.hpp"
-#include "input/key_character.hpp"
-#include "input/key_router.hpp"
-#include "presentation/mode_bar_layout.hpp"
-#include "presentation/mode_hints.hpp"
-#include "presentation/mode_key_label.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <utility>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <bit>
+#include <concepts>
+#include <limits>
+#include <cmath>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include <ghostty/vt/unicode.h>
 #include "qml_fixture.hpp"
-#include "qt/cell_text_grid.hpp"
-#include "qt/mode_projection.hpp"
-#include "qt/native_cell_text.hpp"
-#include "qt/projection.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/cell_text_grid.hpp"
+#include "../qt/mode_projection.hpp"
+#include "../qt/native_cell_text.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFont>
@@ -35,10 +55,18 @@
 #include <QtCore/qvariant.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
+
+#include "qt/cell_text_grid.hpp"
+#include "qt/mode_projection.hpp"
+#include "qt/native_cell_text.hpp"
+#include "qt/projection.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
+import telar.gui.presentation.history_inspection;
 
 namespace {
 

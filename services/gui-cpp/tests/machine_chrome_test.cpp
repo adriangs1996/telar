@@ -1,23 +1,40 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "assertions.hpp"
-#include "core/color_name.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "core/theme_values.hpp"
-#include "machines/limits.hpp"
-#include "machines/machine_row.hpp"
-#include "presentation/machine_chrome_geometry.hpp"
-#include "presentation/machine_facts.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
+#include <string_view>
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <variant>
+#include <algorithm>
+#include <cmath>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include <span>
+#include "telar_client/codecs/telar_wire.hpp"
 #include <exception>
 #include <iostream>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace {
 

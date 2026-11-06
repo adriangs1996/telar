@@ -1,7 +1,17 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "native_cell_text.hpp"
 #include "cell_text_grid.hpp"
 #include "chrome_text_scene.hpp"
-#include "fonts/font_role.hpp"
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <utility>
 #include "font_collection.hpp"
 #include "resident_fonts.hpp"
 #include "window_font_catalog.hpp"
@@ -21,11 +31,13 @@
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <limits>
 #include <memory>
+
+
+
+import telar.gui.fonts.face;
 
 namespace telar::gui::qt {
 

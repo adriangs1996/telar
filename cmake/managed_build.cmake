@@ -52,6 +52,11 @@ function(telar_managed_build)
     string(APPEND identity ";toolchain=${digest}")
   endif()
 
+  if(APPLE AND CMAKE_OSX_SYSROOT)
+    execute_process(COMMAND xcrun --sdk "${CMAKE_OSX_SYSROOT}" --show-sdk-build-version
+      OUTPUT_VARIABLE sdk_build OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    string(APPEND identity ";sdk_build=${sdk_build}")
+  endif()
   string(SHA256 key "${identity}")
   file(MAKE_DIRECTORY "${managed_ROOT}")
   file(REAL_PATH "${managed_ROOT}" root)

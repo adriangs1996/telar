@@ -1,11 +1,22 @@
-#include "presentation/history_selection_motion.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <optional>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
+
+
+
+import telar.gui.presentation.display_metrics;
 
 int main() try {
   using namespace telar::gui;

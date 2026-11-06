@@ -1,18 +1,52 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "list_model.hpp"
-#include "presentation/agent_card_geometry.hpp"
-#include "presentation/display_metrics.hpp"
-#include "presentation/sidebar_geometry.hpp"
-#include "presentation/task_card_labels.hpp"
-#include "presentation/workspace_rail_geometry.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <limits>
+#include <stdexcept>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include "../core/memory.hpp"
+#include <atomic>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <utility>
+#include <span>
+#include <variant>
+#include "../terminal/screen.hpp"
 #include "projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
+
+#pragma once
+
+
+
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.activity_order;
+import telar.gui.presentation.notification_stack;
 
 namespace telar::gui::qt {
 

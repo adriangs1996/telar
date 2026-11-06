@@ -1,18 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "application/dependencies.hpp"
-#include "application/records.hpp"
-#include "core/geometry.hpp"
-#include "machines/picker_target.hpp"
-#include "palette/navigation_label.hpp"
-#include "palette/navigation_target.hpp"
-#include "palette/query.hpp"
-#include "presentation/palette_geometry.hpp"
-#include "presentation/palette_row_window.hpp"
-#include "projection.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "../application/dependencies.hpp"
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <exception>
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "text/utf16_prefix.hpp"
-#include "qt/utf16_encoding.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <utility>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "../terminal/screen.hpp"
+#include <string_view>
+#include <cmath>
+#include <bit>
+#include <stdexcept>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "projection.hpp"
+#include "utf16_encoding.hpp"
 #include <QByteArray>
 #include <QChar>
 #include <QLatin1StringView>
@@ -27,14 +51,17 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
-#include <variant>
+
+#include "application/dependencies.hpp"
+#include "qt/utf16_encoding.hpp"
+
+
+import telar.gui.application.workspace_replica;
+import telar.gui.core.metrics;
+import telar.gui.machines.picker;
+import telar.gui.palette.navigation_label;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

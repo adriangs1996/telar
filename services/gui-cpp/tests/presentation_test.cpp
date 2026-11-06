@@ -1,26 +1,47 @@
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "graphics/artwork_resize.hpp"
-#include "presentation/chrome_surfaces.hpp"
-#include "presentation/pane_decoration_geometry.hpp"
-#include "presentation/sidebar_columns.hpp"
-#include "presentation/sidebar_geometry.hpp"
-#include "presentation/tab_caption.hpp"
-#include "presentation/tab_motions.hpp"
-#include "presentation/tab_strip_geometry.hpp"
-#include "presentation/window_title.hpp"
-#include "presentation/workspace_mark.hpp"
-#include "presentation/workspace_rail_geometry.hpp"
-#include <array>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <limits>
+#include <span>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <variant>
+#include <stdexcept>
+#include <utility>
+#include <bit>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstring>
+#include "telar_client/serializers/telar_messages.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <span>
-#include <stdexcept>
 #include <string>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.pauses;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.presentation.suggestion_geometry;
+import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.frame_pacer;
+import telar.gui.presentation.application_mark;
+import telar.gui.presentation.notification_stack;
 
 namespace {
 

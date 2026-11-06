@@ -1,10 +1,37 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 
 #include "ancestor_geometry.hpp"
 #include "cell_text_grid.hpp"
-#include "core/memory.hpp"
+#include "../core/memory.hpp"
 #include "font_collection.hpp"
-#include "fonts/cell_text_layout.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <array>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include <string_view>
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <optional>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include <concepts>
+#include <utility>
+#include <bit>
+#include <ghostty/vt/unicode.h>
 #include <QColor>
 #include <QMetaObject>
 #include <QPointer>
@@ -14,8 +41,13 @@
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <cstdint>
-#include <memory>
+
+#pragma once
+
+#include "core/memory.hpp"
+
+
+import telar.gui.fonts.row_text_layout;
 
 namespace telar::gui::qt {
 

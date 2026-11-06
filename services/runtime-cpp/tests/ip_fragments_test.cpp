@@ -1,10 +1,34 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
 #include "packet_fixture.hpp"
 #include "tls_fixture.hpp"
-#include "traffic/ip_fragments.hpp"
-#include "traffic/tcp_flows.hpp"
-#include "traffic/capture_analysis.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <bit>
+#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
+#include <cstring>
+#include <cstdint>
+#include <span>
+#include <utility>
+#include <string_view>
+#include <array>
+#include <optional>
+#include <pcap/pcap.h>
+#include <algorithm>
+#include <chrono>
+#include <arpa/inet.h>
+#include <string>
+#include <unordered_map>
 #include <random>
+
+
+
+import telar.runtime.traffic.capture_analysis;
 
 using namespace telar;
 using namespace telar::runtime;

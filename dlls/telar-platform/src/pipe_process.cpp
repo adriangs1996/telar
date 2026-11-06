@@ -1,12 +1,26 @@
-#include "telar_platform/pipe_process.hpp"
-#include "telar_platform/error.hpp"
-#include "telar_platform/socket_signals.hpp"
-#include "telar_platform/spawn_options.hpp"
+module;
+
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <optional>
+#include <sys/types.h>
+#include <array>
+#include <cerrno>
+#include <exception>
 #include <csignal>
+#include <sys/socket.h>
+#include <cstdlib>
+#include <dirent.h>
 #include <fcntl.h>
 #include <spawn.h>
-#include <sys/socket.h>
 #include <sys/wait.h>
+
+module telar.platform;
+
+
+
+
+
 
 namespace telar::runtime {
 namespace {

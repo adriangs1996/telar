@@ -1,24 +1,45 @@
-#include "core/memory.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../core/memory.hpp"
 #include "frame_fixture.hpp"
-#include "history/entry.hpp"
-#include "presentation/history_labels.hpp"
-#include "presentation/history_loading.hpp"
-#include "presentation/loading_cue.hpp"
-#include "qml_fixture.hpp"
-#include "qt/projection.hpp"
-#include "qt/scroll_event.hpp"
-#include "qt/history_loading_layout.hpp"
-#include "qt/history_selection_layout.hpp"
-#include "qt/history_empty_layout.hpp"
-#include "qt/history_footer_layout.hpp"
-#include "qt/history_filters_layout.hpp"
-#include "qt/history_inspection_layout.hpp"
-#include "input/history_hover.hpp"
-#include "presentation/history_footer.hpp"
-#include "presentation/history_actions.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <string_view>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <algorithm>
+#include <chrono>
+#include <limits>
+#include <cmath>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "../core/terminal_size.hpp"
+#include "qml_fixture.hpp"
+#include "../qt/projection.hpp"
+#include "../qt/scroll_event.hpp"
+#include "../qt/history_loading_layout.hpp"
+#include "../qt/history_selection_layout.hpp"
+#include "../qt/history_empty_layout.hpp"
+#include "../qt/history_footer_layout.hpp"
+#include "../qt/history_filters_layout.hpp"
+#include "../qt/history_inspection_layout.hpp"
+#include <utility>
+#include <span>
+#include <variant>
+#include "../input/wheel_accumulator.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QList>
 #include <QCoreApplication>
@@ -55,14 +76,28 @@
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestmouse.h>
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <cstddef>
-#include <limits>
 #include <memory>
-#include <span>
-#include <variant>
+
+#include "core/memory.hpp"
+#include "qt/projection.hpp"
+#include "qt/scroll_event.hpp"
+#include "qt/history_loading_layout.hpp"
+#include "qt/history_selection_layout.hpp"
+#include "qt/history_empty_layout.hpp"
+#include "qt/history_footer_layout.hpp"
+#include "qt/history_filters_layout.hpp"
+#include "qt/history_inspection_layout.hpp"
+#include "input/wheel_accumulator.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.history.browser;
+import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.application_mark;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_meta_geometry;
+import telar.gui.presentation.history_filter_geometry;
 
 namespace {
 

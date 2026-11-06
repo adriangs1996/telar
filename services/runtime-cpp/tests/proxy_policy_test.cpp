@@ -1,6 +1,33 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "telar_config/proxy_reader.hpp"
-#include "telar_lua/vm.hpp"
+#include <chrono>
+#include <cstddef>
+#include "telar_base/memory/allocator.hpp"
+#include <string_view>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <optional>
+#include <span>
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <cstring>
+#include <stdexcept>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+
+
+
+import telar.config;
+import telar.lua;
 
 using namespace telar;
 using namespace telar::runtime;

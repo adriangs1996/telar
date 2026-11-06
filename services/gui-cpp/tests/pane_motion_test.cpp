@@ -1,14 +1,34 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
-#include "presentation/pane_motions.hpp"
-#include "qt/list_model.hpp"
-#include "qt/pane_motion_layout.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include <cmath>
+#include "../qt/list_model.hpp"
+#include "../qt/pane_motion_layout.hpp"
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRectF>
 #include <QTimer>
 #include <QtTest/QTest>
-#include <array>
+
+#include "qt/list_model.hpp"
+#include "qt/pane_motion_layout.hpp"
+
+
+import telar.gui.presentation.frame_pacer;
 
 namespace {
 

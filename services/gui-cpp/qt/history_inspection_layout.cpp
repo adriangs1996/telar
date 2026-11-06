@@ -1,12 +1,38 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "history_inspection_layout.hpp"
-#include "history/choice.hpp"
-#include "input/history_hover.hpp"
-#include "presentation/history_actions.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "core/theme_values.hpp"
-#include "presentation/history_inspection.hpp"
-#include "presentation/history_inspection_geometry.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <algorithm>
+#include <cmath>
+#include <array>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <limits>
+#include <bit>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <ghostty/vt/unicode.h>
+#include <initializer_list>
 #include "scroll_event.hpp"
 #include <QByteArray>
 #include <QQuickItem>
@@ -19,14 +45,15 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <span>
-#include <string_view>
+
+
+
+import telar.gui.history.browser;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.core.metrics;
+import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 namespace {

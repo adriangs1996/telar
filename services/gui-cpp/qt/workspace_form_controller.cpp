@@ -1,8 +1,28 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "links/path_expansion.hpp"
-#include "machines/machines.hpp"
-#include "paths/directory_completion.hpp"
-#include "platform/environment.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <algorithm>
+#include <optional>
+#include <span>
+#include <filesystem>
+#include <string>
+#include <vector>
+#include "../platform/environment.hpp"
 #include <QByteArray>
 #include <QFileInfo>
 #include <QtCore/qstringfwd.h>
@@ -12,12 +32,15 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cstddef>
 #include <exception>
-#include <stdexcept>
-#include <string_view>
 #include <utility>
+
+#include "platform/environment.hpp"
+
+
+import telar.gui.links.path_expansion;
+import telar.gui.machines.picker;
+import telar.gui.paths.label;
 
 namespace telar::gui::qt {
 

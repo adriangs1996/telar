@@ -1,15 +1,43 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "chrome_fonts.hpp"
-#include "core/memory.hpp"
+#include "../core/memory.hpp"
 #include "font_source.hpp"
-#include "fonts/face.hpp"
-#include "fonts/font_coverage.hpp"
-#include "fonts/font_role.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <array>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include <string_view>
+#include "../platform/font.h"
+#include <algorithm>
+#include <cstring>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <optional>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+#include <bit>
+#include <concepts>
+#include <utility>
 #include <QByteArray>
 #include <QtCore/qstringliteral.h>
-#include <cstdint>
-#include <memory>
-#include <stdexcept>
-#include <string_view>
+
+#include "core/memory.hpp"
+
+
+import telar.gui.fonts.face;
+import telar.gui.fonts.font_requests;
 
 namespace telar::gui::qt {
 namespace {

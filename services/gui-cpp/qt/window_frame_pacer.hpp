@@ -1,9 +1,25 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "core/monotonic_clock.hpp"
-#include "platform/awake_clock.hpp"
-#include "platform/window.hpp"
-#include "presentation/frame_pacer.hpp"
+
+#include <concepts>
+#include <cstdint>
+#include "../platform/window.hpp"
+#include <algorithm>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
 #include <QCoreApplication>
 #include <QEvent>
 #include <QObject>
@@ -11,14 +27,16 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QWindow>
-#include <algorithm>
-#include <concepts>
-#include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
-#include <span>
 #include <utility>
+
+#pragma once
+#include "platform/window.hpp"
+
+
+import telar.gui.core.unicode_scalar;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

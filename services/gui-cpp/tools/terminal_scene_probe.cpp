@@ -1,23 +1,40 @@
-#include "application/dependencies.hpp"
-#include "core/color.hpp"
-#include "core/configuration.hpp"
-#include "fonts/font_role.hpp"
-#include "graphics/store.hpp"
-#include "platform/window.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/font_asset.hpp"
-#include "qt/font_collection.hpp"
-#include "qt/font_resolver.hpp"
-#include "qt/font_source.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/terminal_scene.hpp"
-#include "qt/window_images.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <concepts>
+#include <utility>
+#include "../core/memory.hpp"
+#include <atomic>
+#include <limits>
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include "../platform/window.hpp"
+#include "../qt/bundled_fonts.hpp"
+#include "../qt/font_asset.hpp"
+#include "../qt/font_collection.hpp"
+#include "../qt/font_resolver.hpp"
+#include "../qt/font_source.hpp"
+#include "../qt/resident_fonts.hpp"
+#include "../qt/terminal_scene.hpp"
+#include "../qt/window_images.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "terminal/screen.hpp"
-#include "terminal/selection.hpp"
+#include "../terminal/screen.hpp"
 #include <QColor>
 #include <QCommandLineParser>
 #include <QGuiApplication>
@@ -34,17 +51,29 @@
 #include <QTimer>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
 #include <iostream>
 #include <memory>
 #include <span>
 #include <stdexcept>
-#include <utility>
 #include <vector>
+
+#include "application/dependencies.hpp"
+#include "platform/window.hpp"
+#include "qt/bundled_fonts.hpp"
+#include "qt/font_asset.hpp"
+#include "qt/font_collection.hpp"
+#include "qt/font_resolver.hpp"
+#include "qt/font_source.hpp"
+#include "qt/resident_fonts.hpp"
+#include "qt/terminal_scene.hpp"
+#include "qt/window_images.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
+import telar.gui.graphics.texture_cache;
+import telar.gui.terminal.copy_mode;
 
 namespace {
 

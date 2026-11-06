@@ -1,15 +1,30 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "platform/login_shell.hpp"
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 #include "machine_client.hpp"
 #include "machine_profiles_source.hpp"
-#include "machines/failure.hpp"
-#include "machines/machine_row.hpp"
-#include "machines/machines.hpp"
-#include "machines/profile.hpp"
-#include "machines/profiles.hpp"
-#include "machines/runtime_location.hpp"
-#include "platform/environment.hpp"
-#include "platform/peer_identity.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include <sys/un.h>
+#include "../platform/environment.hpp"
 #include "projection.hpp"
 #include "remote_bridge.hpp"
 #include "runtime_connection.hpp"
@@ -21,14 +36,16 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
 #include <exception>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
+
+#include "platform/environment.hpp"
+
+
+import telar.gui.platform.login_shell;
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.machines.profile_store;
+import telar.gui.platform.private_file_stamp;
 
 namespace telar::gui::qt {
 

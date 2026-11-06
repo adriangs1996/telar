@@ -1,19 +1,37 @@
-#include "application/dependencies.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../application/dependencies.hpp"
 #include "assertions.hpp"
-#include "graphics/image_residency.hpp"
-#include "graphics/placement_selection.hpp"
-#include "graphics/store.hpp"
-#include "platform/window.hpp"
-#include "qt/graphics_scene.hpp"
-#include "qt/scene_nodes.hpp"
-#include "qt/window_images.hpp"
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include "telar_config/graphics/limits.hpp"
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include "../core/memory.hpp"
+#include <exception>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "../platform/window.hpp"
+#include "../qt/graphics_scene.hpp"
+#include "../qt/scene_nodes.hpp"
+#include "../qt/window_images.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "terminal/screen.hpp"
+#include "../terminal/screen.hpp"
 #include <QColor>
 #include <QDir>
 #include <QGuiApplication>
@@ -37,18 +55,20 @@
 #include <QtGui/qtestsupport_gui.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <array>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
-#include <span>
 #include <stdexcept>
-#include <string_view>
-#include <utility>
 #include <vector>
+
+#include "application/dependencies.hpp"
+#include "platform/window.hpp"
+#include "qt/graphics_scene.hpp"
+#include "qt/scene_nodes.hpp"
+#include "qt/window_images.hpp"
+#include "terminal/screen.hpp"
+
+
+import telar.gui.graphics.texture_cache;
 
 namespace {
 

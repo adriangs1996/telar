@@ -1,14 +1,32 @@
-#include "presentation/frame_pacer.hpp"
-#include "probe_io.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstddef>
-#include <cstdint>
+#include <optional>
+#include <span>
+#include <variant>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
-#include <span>
 #include <stdexcept>
+
+
+
+import telar.gui.presentation.frame_pacer;
 
 namespace {
 

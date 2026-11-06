@@ -1,16 +1,30 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "presentation/attention_fades.hpp"
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <variant>
 #include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
 #include <QTimer>
-#include <algorithm>
 #include <concepts>
-#include <cstdint>
-#include <optional>
 #include <tuple>
+
+#pragma once
+
+
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

@@ -1,16 +1,37 @@
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "presentation/form_field_geometry.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "terminal/font_grid.hpp"
-#include "text/bounded_editor.hpp"
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <limits>
+#include <stdexcept>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <bit>
+#include <ghostty/vt/unicode.h>
+#include <cstring>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.terminal.font_grid;
+import telar.gui.text.bounded_editor;
 
 namespace {
 

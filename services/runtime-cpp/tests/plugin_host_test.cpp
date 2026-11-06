@@ -1,7 +1,57 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "plugins/host.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <array>
+#include <cstring>
+#include <stdexcept>
+#include <string_view>
+#include <optional>
+#include <span>
+#include <bit>
+#include <charconv>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <utility>
+#include <pcap/pcap.h>
+#include <algorithm>
+#include <arpa/inet.h>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include <atomic>
+#include <cassert>
+#include "telar_base/memory/fixed_text.hpp"
+#include <exception>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <limits.h>
+#include <memory>
+#include "telar_platform/random_bytes.hpp"
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <mutex>
+#include "traffic_api.hpp"
+#include "plugin_bootstrap.hpp"
+#include <sys/stat.h>
+#include <fcntl.h>
+#include "telar_platform/trace.hpp"
 #include <filesystem>
 #include <fstream>
+
+
+
+import telar.runtime.plugins.run_worker;
 
 using namespace telar;
 using namespace telar::runtime;

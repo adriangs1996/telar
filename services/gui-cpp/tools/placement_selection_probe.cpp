@@ -1,12 +1,28 @@
-#include "graphics/lifetime.hpp"
-#include "graphics/placement_selection.hpp"
-#include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <atomic>
 #include <cstdint>
+#include <limits>
+#include <cstddef>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <array>
+#include <span>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
+
+
+
+import telar.gui.graphics.texture_cache;
 
 namespace {
 

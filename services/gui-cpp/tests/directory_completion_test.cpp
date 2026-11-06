@@ -1,17 +1,28 @@
-#include "paths/directory_completion.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
 #include <cstddef>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <vector>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
-#include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
-#include <string>
-#include <system_error>
 #include <unistd.h>
-#include <vector>
+
+
+
+import telar.gui.paths.label;
 
 namespace {
 

@@ -1,17 +1,73 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "history/sqlite_allocator.hpp"
-#include "history/store.hpp"
-#include "platform/request_worker.hpp"
-#include "runtime/background_service.hpp"
-#include "telar_platform/temporary_directory.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <cstring>
+#include <sqlite3.h>
+#include <stdexcept>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include "telar_base/text/utf8.hpp"
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
+#include <atomic>
+#include <exception>
+#include "telar_base/diagnostics/limit_reach.hpp"
+#include "telar_platform/trace.hpp"
+#include <bit>
+#include <concepts>
+#include <cassert>
+#include <unordered_set>
+#include <cstddef>
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <type_traits>
+#include "telar_base/diagnostics/config.hpp"
+#include <condition_variable>
+#include <pthread.h>
+#include <variant>
+#include "../diagnostics/timing.hpp"
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#include <sys/stat.h>
+#endif
+#include <dirent.h>
+#include <fcntl.h>
+#include <cstdlib>
+#include <limits.h>
+#include <sys/stat.h>
 #include <fstream>
 #include <latch>
 #include <numeric>
 #include <poll.h>
 #include <set>
-#include <sys/stat.h>
 #include <tuple>
 #include <vector>
+
+
+
+import telar.runtime.history.event;
+import telar.runtime.history.store;
+import telar.runtime.platform.request_worker;
+import telar.runtime.runtime.media_service;
+import telar.platform;
 
 using namespace telar;
 using namespace telar::runtime;

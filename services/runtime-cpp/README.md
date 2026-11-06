@@ -6,6 +6,14 @@ Native control-query acceptance is tracked in
 as its reference. This executable is opt-in. An installation option
 provides the `telar` command the GUI's runtime discovery runs.
 
+## Reproducible C++ modules build
+
+Use the [shared toolchain and module guide](../../docs/build/cpp-modules.md)
+for a clean clone, pinned bootstrap, configure/build/test commands, diagnostics
+variants and clangd. The compiler and tools are selected by `tools/cpp` on both
+macOS and Linux. C++ module sources are primary; Qt/moc, Objective-C++, generated
+interfaces and preprocessor contracts retain documented textual boundaries.
+
 ## Build and run
 
 Both platforms require CMake, Ninja, a C++23 compiler, Python 3, Perl, make,
@@ -46,7 +54,7 @@ From this directory:
 
 ```sh
 python3 tools/build_ghostty.py --build-dir dependencies/ghostty --prefix dependencies/install
-cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release -DGHOSTTY_VT_ROOT="$PWD/dependencies/install"
+../../tools/cpp configure runtime --config Release -- -DGHOSTTY_VT_ROOT="$PWD/dependencies/install"
 cmake --build out
 ctest --test-dir out --output-on-failure
 runtime_directory=$(mktemp -d)
@@ -381,8 +389,8 @@ literal scope names, timestamps and thread identities, not terminal content,
 commands or prompts.
 
 ```sh
-cmake -S . -B out-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DGHOSTTY_VT_ROOT="$PWD/dependencies/install"
-cmake --build out-debug
+../../tools/cpp configure runtime -B out-debug --config Debug
+../../tools/cpp build runtime -B out-debug
 out-debug/telar-runtime --socket "$runtime_directory/debug.sock" --trace "$runtime_directory/runtime.trace.json"
 ```
 

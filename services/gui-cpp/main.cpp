@@ -1,15 +1,42 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application/dependencies.hpp"
-#include "machines/failure.hpp"
-#include "machines/opening.hpp"
-#include "machines/profile_codec.hpp"
-#include "machines/profiles.hpp"
-#include "platform/host_name.hpp"
-#include "platform/profile_file.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <string_view>
+#include <system_error>
+#include <span>
+#include "telar_base/memory/fixed_text.hpp"
+#include <optional>
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <algorithm>
+#include "core/memory.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <exception>
+#include <bit>
+#include <limits>
+#include <new>
+#include <sys/param.h>
+#include "telar_client/codecs/telar_wire.hpp"
+#include <cerrno>
+#include "telar_platform/file_descriptor.hpp"
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <stop_token>
 #include "platform/window.hpp"
 #include "qt/application.hpp"
 #include "qt/bundled_fonts.hpp"
 #include "qt/local_runtime_endpoint.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFileInfo>
@@ -28,11 +55,15 @@
 #include <QtCore/qtypes.h>
 #include <QtQuick/qquickwindow.h>
 #include <cstdlib>
-#include <exception>
 #include <iostream>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+
+
+import telar.gui.machines.discovery;
+import telar.gui.machines.picker;
+import telar.gui.machines.profile_store;
+import telar.gui.platform.login_shell;
+import telar.gui.platform.profile_file;
 
 namespace {
 

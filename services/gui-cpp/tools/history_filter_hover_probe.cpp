@@ -1,18 +1,36 @@
-#include "core/geometry.hpp"
-#include "history/choice.hpp"
-#include "input/history_action_capture.hpp"
-#include "input/history_hover.hpp"
-#include "presentation/history_actions.hpp"
-#include "presentation/history_footer.hpp"
-#include "probe_io.hpp"
-#include <array>
-#include <cstddef>
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstddef>
+#include <array>
+#include <string_view>
+#include <optional>
+#include <utility>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include <span>
+#include <variant>
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <span>
-#include <variant>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.history.browser;
+import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_meta_geometry;
 
 namespace {
 

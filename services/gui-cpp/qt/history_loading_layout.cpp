@@ -1,9 +1,25 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "history_loading_layout.hpp"
-#include "core/geometry.hpp"
-#include "core/metrics.hpp"
-#include "platform/awake_clock.hpp"
-#include "presentation/history_loading.hpp"
-#include "presentation/progress_animation.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include "../core/terminal_size.hpp"
+#include <concepts>
+#include <limits>
+#include <numbers>
 #include "projection.hpp"
 #include "window_animation_clock.hpp"
 #include <QQuickWindow>
@@ -12,9 +28,12 @@
 #include <QRectF>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <cmath>
-#include <cstdint>
-#include <optional>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.platform.profile_file;
+import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 

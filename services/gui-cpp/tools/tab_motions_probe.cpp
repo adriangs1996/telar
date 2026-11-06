@@ -1,13 +1,26 @@
-#include "presentation/tab_motion_frame.hpp"
-#include "presentation/tab_motions.hpp"
-#include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include <algorithm>
 #include <cstdint>
+#include <limits>
+#include <optional>
+#include <cmath>
+#include <array>
+#include <cstddef>
+#include <span>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "probe_io.hpp"
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <optional>
+
+
+
+import telar.gui.presentation.frame_pacer;
 
 int main() try {
   using namespace telar;

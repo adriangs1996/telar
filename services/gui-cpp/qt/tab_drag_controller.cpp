@@ -1,8 +1,21 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "application.hpp"
-#include "core/geometry.hpp"
-#include "input/tab_drag.hpp"
-#include "input/tab_drop_slots.hpp"
-#include "input/tab_drop_surface.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <array>
+#include <optional>
+#include <span>
+#include <cstddef>
+#include <limits>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <ranges>
 #include "pointer_dispatcher.hpp"
 #include "tab_strip_layout.hpp"
 #include <QKeyEvent>
@@ -13,13 +26,11 @@
 #include <QString>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <span>
+
+
+
+import telar.gui.core.metrics;
+import telar.gui.input.child_mouse;
 
 namespace telar::gui::qt {
 

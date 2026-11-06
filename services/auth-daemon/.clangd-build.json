@@ -1,6 +1,14 @@
 {
   "build_directory": "out",
   "commands": [
-    ["cmake", "-S", ".", "-B", "out"]
+    [
+      "../../tools/cpp",
+      "configure",
+      "auth",
+      "-B",
+      "out",
+      "--config",
+      "Debug"
+    ]
   ]
 }

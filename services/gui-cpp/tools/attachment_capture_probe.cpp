@@ -1,13 +1,23 @@
-#include "attachments/capture_state.hpp"
-#include "attachments/types.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "../attachments/types.hpp"
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <optional>
-#include <stdexcept>
+
+#include "attachments/types.hpp"
+
+
+import telar.gui.attachments.marker_input;
 
 namespace {
 

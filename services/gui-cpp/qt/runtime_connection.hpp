@@ -1,21 +1,48 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "application/dependencies.hpp"
-#include "machines/failure.hpp"
-#include "platform/shared_image_source.hpp"
-#include "remote_bridge.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+
+#include "../application/dependencies.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
 #include "telar_platform/file_descriptor.hpp"
-#include "transport/frame_stream.hpp"
-#include "transport/runtime_link.hpp"
+#include <span>
+#include <string_view>
+#include "remote_bridge.hpp"
+#include <variant>
+#include "telar_client/serializers/telar_serializer.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "../core/memory.hpp"
+#include "telar_client/codecs/telar_codec.hpp"
+#include <concepts>
+#include <type_traits>
+#include <algorithm>
+#include <optional>
+#include <charconv>
+#include <cstring>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include <chrono>
+#include <limits>
 #include <QByteArrayView>
 #include <QLocalSocket>
 #include <QTimer>
-#include <array>
-#include <concepts>
-#include <optional>
-#include <string_view>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+
+
+import telar.gui.machines.discovery;
+import telar.gui.platform.profile_file;
+import telar.client;
+import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 

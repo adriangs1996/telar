@@ -1,22 +1,43 @@
-#include "core/configuration.hpp"
-#include "core/unicode_scalar.hpp"
-#include "fonts/face.hpp"
-#include "fonts/font_requests.hpp"
-#include "fonts/font_query.hpp"
-#include "fonts/font_role.hpp"
-#include "fonts/glyph_bitmap_view.hpp"
-#include "fonts/shaped_run_view.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <algorithm>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include <chrono>
+#include <bit>
+#include <stdexcept>
+#include <span>
+#include <freetype/freetype.h>
+#include <hb.h>
+#include <memory>
+#include "../platform/font.h"
+#include <cstring>
+#include <cmath>
+#include <limits>
+#include <type_traits>
+#include <functional>
+#include <concepts>
+#include <utility>
 #include "frame_fixture.hpp"
-#include "qt/chrome_fonts.hpp"
-#include "qt/chrome_text_scene.hpp"
-#include "qt/native_chrome_text.hpp"
-#include "qt/native_cell_text.hpp"
-#include "qt/font_source.hpp"
-#include "qt/font_asset.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/window_font_catalog.hpp"
-#include "terminal/font_grid.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/chrome_fonts.hpp"
+#include "../qt/chrome_text_scene.hpp"
+#include "../qt/native_chrome_text.hpp"
+#include "../qt/native_cell_text.hpp"
+#include "../qt/font_source.hpp"
+#include "../qt/font_asset.hpp"
+#include "../qt/resident_fonts.hpp"
+#include "../qt/window_font_catalog.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QDebug>
@@ -44,13 +65,24 @@
 #include <QtGui/qrgb.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <cmath>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <stdexcept>
 #include <string>
+
+#include "qt/chrome_fonts.hpp"
+#include "qt/chrome_text_scene.hpp"
+#include "qt/native_chrome_text.hpp"
+#include "qt/native_cell_text.hpp"
+#include "qt/font_source.hpp"
+#include "qt/font_asset.hpp"
+#include "qt/resident_fonts.hpp"
+#include "qt/window_font_catalog.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.core.unicode_scalar;
+import telar.gui.fonts.face;
+import telar.gui.fonts.font_requests;
+import telar.gui.terminal.font_grid;
 
 namespace {
 

@@ -1,6 +1,41 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
 #include "check.hpp"
-#include "platform/request_worker.hpp"
+#include <cstddef>
+#include <cstdint>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
+#include <string_view>
+#include "telar_base/memory/fixed_text.hpp"
+#include <chrono>
+#include <limits>
+#include <optional>
+#include "telar_base/text/utf8.hpp"
+#include <cstring>
+#include <span>
+#include <sys/types.h>
+#include <unistd.h>
+#include <atomic>
+#include "telar_base/memory/allocator.hpp"
+#include <cerrno>
+#include <exception>
+#include "telar_platform/file_descriptor.hpp"
+#include <cassert>
+#include <type_traits>
+#include "telar_base/diagnostics/config.hpp"
+#include <condition_variable>
+#include <pthread.h>
+#include <variant>
 #include <poll.h>
+
+
+
+import telar.runtime.platform.request_worker;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -1,11 +1,23 @@
-#include "core/color.hpp"
-#include "fonts/font_role.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <concepts>
+#include <utility>
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "qt/alpha_mask_material.hpp"
-#include "qt/native_chrome_icon.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "../qt/alpha_mask_material.hpp"
+#include "../qt/native_chrome_icon.hpp"
+#include "../qt/resident_fonts.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QGuiApplication>
@@ -34,10 +46,18 @@
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <algorithm>
-#include <array>
 #include <cstdlib>
 #include <future>
 #include <thread>
+
+#include "qt/alpha_mask_material.hpp"
+#include "qt/native_chrome_icon.hpp"
+#include "qt/resident_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
+
+
+import telar.gui.core.metrics;
+import telar.gui.fonts.face;
 
 namespace {
 

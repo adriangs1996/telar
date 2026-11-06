@@ -1,4 +1,8 @@
-find_package(LLVM CONFIG REQUIRED)
+# Resolve the development SDK beside the selected compiler, including presets.
+get_filename_component(tbc_compiler "${CMAKE_CXX_COMPILER}" REALPATH)
+get_filename_component(tbc_bin "${tbc_compiler}" DIRECTORY)
+get_filename_component(tbc_llvm "${tbc_bin}/.." ABSOLUTE)
+find_package(LLVM CONFIG REQUIRED HINTS "${tbc_llvm}/lib/cmake/llvm")
 find_package(Clang CONFIG REQUIRED HINTS "${LLVM_DIR}/../clang")
 
 if(LLVM_VERSION_MAJOR LESS 18)
@@ -15,7 +19,12 @@ target_include_directories(tbc-lint SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_
 separate_arguments(tbc_llvm_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 target_compile_options(tbc-lint PRIVATE ${tbc_llvm_definitions})
 target_compile_definitions(tbc-lint PRIVATE "TBC_CLANG_RESOURCE_DIR=\"${tbc_clang_resources}\"")
-target_link_libraries(tbc-lint PRIVATE tbc_options clang-cpp LLVM)
+target_link_libraries(tbc-lint PRIVATE tbc_options clang-cpp)
+# Official LLVM distributions may embed LLVM in clang-cpp instead of shipping
+# the separate monolithic LLVM shared library used by distro development SDKs.
+if(TARGET LLVM)
+  target_link_libraries(tbc-lint PRIVATE LLVM)
+endif()
 
 if(NOT LLVM_ENABLE_RTTI)
   if(MSVC)

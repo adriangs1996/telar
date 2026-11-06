@@ -1,15 +1,48 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "components/source.hpp"
+
+#include <string_view>
+#include "telar_client/serializers/telar_cells.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <variant>
+#include <utility>
+#include "telar_client/serializers/telar_messages.hpp"
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <stdexcept>
+#include <system_error>
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
+#include <limits>
+#include <span>
+#include "telar_base/text/utf8.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+#include <string>
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <cinttypes>
 #include "machine_client_key.hpp"
 #include <QPointF>
 #include <QString>
 #include <QVariantList>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
+
+#pragma once
+
+
+import telar.gui.components.configuration;
 
 namespace telar::gui::qt {
 
