@@ -71,6 +71,7 @@ struct TerminalPresentation {
   std::optional<Cursor> cursor_override = std::nullopt;
   const LinkMatch *hovered_link = nullptr;
   QQuickItem *owner = nullptr;
+  bool background_provided = false;
 };
 
 class TerminalScene final : public QSGTransformNode {
@@ -120,5 +121,4 @@ private:
   std::uint64_t appearance_ = 0;
   qreal scale_ = 0;
 };
-
 }

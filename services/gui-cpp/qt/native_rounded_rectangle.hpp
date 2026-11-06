@@ -15,6 +15,9 @@ class NativeRoundedRectangle : public QQuickItem {
   Q_OBJECT
   QML_ELEMENT
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
+  Q_PROPERTY(bool replaceBackground READ replaceBackground WRITE setReplaceBackground NOTIFY compositionChanged)
+  Q_PROPERTY(QColor backdropColor READ backdropColor WRITE setBackdropColor NOTIFY compositionChanged)
+  Q_PROPERTY(bool squareBottom READ squareBottom WRITE setSquareBottom NOTIFY compositionChanged)
   Q_PROPERTY(QColor borderColor READ borderColor WRITE setBorderColor NOTIFY borderColorChanged)
   Q_PROPERTY(qreal borderAlpha READ borderAlpha WRITE setBorderAlpha NOTIFY borderAlphaChanged)
   Q_PROPERTY(qreal radius READ radius WRITE setRadius NOTIFY radiusChanged)
@@ -25,6 +28,12 @@ public:
   explicit NativeRoundedRectangle(QQuickItem *parent = nullptr);
   [[nodiscard]] QColor color() const;
   void setColor(const QColor &color);
+  [[nodiscard]] bool replaceBackground() const noexcept;
+  void setReplaceBackground(bool replace);
+  [[nodiscard]] QColor backdropColor() const;
+  void setBackdropColor(const QColor &color);
+  [[nodiscard]] bool squareBottom() const noexcept;
+  void setSquareBottom(bool square);
   [[nodiscard]] QColor borderColor() const;
   void setBorderColor(const QColor &color);
   [[nodiscard]] qreal borderAlpha() const noexcept;
@@ -39,6 +48,7 @@ public:
 
 signals:
   void colorChanged();
+  void compositionChanged();
   void borderColorChanged();
   void borderAlphaChanged();
   void radiusChanged();
@@ -53,6 +63,9 @@ protected:
 private:
   QColor color_ = Qt::transparent;
   QColor border_color_ = Qt::transparent;
+  QColor backdrop_color_ = Qt::transparent;
+  bool replace_background_ = false;
+  bool square_bottom_ = false;
   qreal radius_ = 0;
   qreal border_width_ = 0;
   float border_alpha_ = 1;

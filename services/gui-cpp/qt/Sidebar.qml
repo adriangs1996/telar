@@ -1,7 +1,7 @@
 import QtQuick
 import Telar.Gui
 
-Rectangle {
+NativeRoundedRectangle {
     id: root
 
     required property var colors
@@ -21,7 +21,8 @@ Rectangle {
     readonly property real resizeWidth: 6 * ratio
     readonly property real edgeWidth: regions.edgeWidth
 
-    color: colors.navigationBackground
+    color: colors.sidebarBackground
+    replaceBackground: true
     clip: true
 
     MachineChrome {
@@ -48,9 +49,9 @@ Rectangle {
             x: root.headerInset
             width: Math.max(0, parent.width - x - root.headerInset)
             height: parent.height
-            text: "activity"
-            color: root.colors.subtext0
-            pixelSize: root.typography.small
+            text: "Activity"
+            color: root.colors.chromeText
+            pixelSize: root.typography.body + root.ratio
             emphasized: true
         }
 

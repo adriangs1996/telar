@@ -233,19 +233,22 @@ inline QVariantMap fontSettings(const FontConfiguration &font) {
 
 inline QVariantMap themeColors(const Configuration &configuration) {
   const auto &theme = configuration.theme;
-  auto window_background = theme.background;
-  window_background.a = configuration.background_opacity;
-  // Chrome bands reveal the window background; covering overlays use the opaque palette role.
+  // Covering overlays retain opaque palette roles; region backgrounds resolve their own alpha.
   const bool transparent_panel = configuration.background_opacity < 1;
   const auto panel_background = transparent_panel ? QColor{Qt::transparent} : toQColor(theme.chromeColor(PaletteRole::panel_bg));
   QVariantMap colors;
   colors.insert(QStringLiteral("background"), toQColor(theme.background));
-  colors.insert(QStringLiteral("windowBackground"), toQColor(window_background));
   colors.insert(QStringLiteral("panelBackground"), panel_background);
-  const auto surfaces = ChromeSurfaces::derive(theme, configuration.background_opacity);
-  colors.insert(QStringLiteral("navigationBackground"), toQColor(surfaces.navigation));
+  const auto surfaces = ChromeSurfaces::derive(theme, configuration.background_opacity, configuration.opacity);
+  colors.insert(QStringLiteral("sidebarBackground"), toQColor(surfaces.sidebar));
+  colors.insert(QStringLiteral("topbarBackground"), toQColor(surfaces.topbar));
+  colors.insert(QStringLiteral("bottombarBackground"), toQColor(surfaces.bottombar));
+  colors.insert(QStringLiteral("chromeText"), toQColor(surfaces.text));
   colors.insert(QStringLiteral("workbenchBackground"), toQColor(surfaces.workbench));
   colors.insert(QStringLiteral("paneBackground"), toQColor(surfaces.pane));
+  auto terminal_background = theme.background;
+  terminal_background.a = surfaces.pane.a;
+  colors.insert(QStringLiteral("terminalBackground"), toQColor(terminal_background));
   colors.insert(QStringLiteral("paneHeaderBackground"), toQColor(surfaces.header));
   colors.insert(QStringLiteral("paneActiveHeaderBackground"), toQColor(surfaces.active_header));
   colors.insert(QStringLiteral("foreground"), toQColor(theme.chromeColor(PaletteRole::text)));

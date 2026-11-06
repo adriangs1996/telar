@@ -105,14 +105,14 @@ private:
                              ? center.x() < raster_coverage_.left() || center.y() < raster_coverage_.top() || center.x() >= raster_coverage_.right() || center.y() >= raster_coverage_.bottom()
                              : local.x < 0 || local.y < 0 || local.x >= raster_size_.x || local.y >= raster_size_.y;
     if (outside) {
-      return {.a = 0};
+      return {.a = -1};
     }
 
     return shape_.sample(local);
   }
 
   void paintSpan(int row, int begin, int end, Color color) const {
-    if (end > begin && color.a > 0) {
+    if (end > begin && color.a >= 0 && (color.a > 0 || shape_.style.replace_background)) {
       painter_.fillRect(QRect{begin, row, end - begin, 1}, QColor::fromRgbF(color.r, color.g, color.b, color.a));
     }
   }
@@ -197,7 +197,7 @@ public:
     painter->setWorldTransform(painter->deviceTransform().inverted());
     painter->setOpacity(inheritedOpacity());
     painter->setRenderHint(QPainter::Antialiasing, false);
-    painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
+    painter->setCompositionMode(shape_.style.replace_background ? QPainter::CompositionMode_Source : QPainter::CompositionMode_SourceOver);
     ShapeScanlines{*painter, shape_, density_, item_to_device, raster_size}.paint(bounds);
   }
 

@@ -177,6 +177,32 @@ class PaneHeaderTest : public QObject {
     QVERIFY(paneChromeRecord(pane, span, 2).value(QStringLiteral("agent")).toMap().isEmpty());
   }
 
+  Q_SLOT static void projectionAddsSafeSessionTitleOrDirectoryContext() {
+    SystemAllocator memory;
+    GraphicsBudget budget;
+    Pane pane{memory, 1, budget};
+    pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+    pane.generation = 2;
+    pane.foreground = "zsh";
+    pane.cwd = "/projects/telar";
+    pane.title = "Test\n\tresults";
+    QCOMPARE(paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("Testresults"));
+    pane.title.clear();
+    std::array<Agent<SystemAllocator>, 1> agents{Agent{memory}};
+    auto &agent = agents.front();
+    agent.pane_id = pane.id;
+    agent.pane_generation = pane.generation;
+    agent.location = pane.location;
+    agent.title_state = AgentTitleState::ready;
+    agent.title = "Fix session restore";
+    auto record = paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{agents}, 1);
+    QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("Fix session restore"));
+    QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("zsh"));
+    ++agent.pane_generation;
+    record = paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{agents}, 1);
+    QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("telar"));
+  }
+
   Q_SLOT static void routineStatesStayQuietAndInactiveTitlesStayReadable() {
     QQmlEngine engine;
     const ChromeMetrics chrome;
@@ -191,7 +217,7 @@ class PaneHeaderTest : public QObject {
     auto *background = named(*item, QStringLiteral("paneStatusBackground"));
     const auto *program = named(*item, QStringLiteral("paneProgram"));
     QVERIFY(background != nullptr && program != nullptr);
-    QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("text")).value<QColor>());
+    QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("chromeText")).value<QColor>());
     const auto attention_alpha = background->property("color").value<QColor>().alphaF();
     record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
     record.insert(QStringLiteral("needsAttention"), false);
@@ -199,6 +225,30 @@ class PaneHeaderTest : public QObject {
     const auto quiet_alpha = background->property("color").value<QColor>().alphaF();
     QVERIFY(attention_alpha > quiet_alpha * 3);
     QVERIFY(quiet_alpha < 0.05);
+  }
+
+  Q_SLOT static void compactHeaderKeepsTheProgramInsteadOfAnAmbiguousEllipsis() {
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(120, header_height);
+    const ChromeMetrics chrome;
+    auto record = headerRecord();
+    record.insert(QStringLiteral("program"), QStringLiteral("Pi"));
+    record.insert(QStringLiteral("context"), QStringLiteral("A long session title that cannot fit in this header"));
+    record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
+    record.insert(QStringLiteral("needsAttention"), false);
+    record.insert(QStringLiteral("progressText"), QString{});
+    record.remove(QStringLiteral("progressSample"));
+    record.insert(QStringLiteral("activityKind"), static_cast<int>(TabActivity::Kind::none));
+    auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}}});
+    item->setParentItem(window.contentItem());
+    item->setSize({120, header_height});
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    const auto *program = named(*item, QStringLiteral("paneProgram"));
+    QVERIFY(program != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(program->property("text").toString(), QStringLiteral("2 Pi"), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(program->width() >= program->implicitWidth(), wait_ms);
   }
 
   Q_SLOT static void independentHeaderKeepsAttentionBeforeProgress() {
@@ -228,7 +278,8 @@ class PaneHeaderTest : public QObject {
     QVERIFY(progress != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(progress->fraction() > 0 && !progress->compact(), wait_ms);
     item->setWidth(compact_header_width);
-    QTRY_VERIFY_WITH_TIMEOUT(layout->compactProgress() && layout->chipBounds().width() > 0, wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
+    QCOMPARE(program->property("text").toString(), QStringLiteral("2 clang++"));
     item->setWidth(attention_header_width);
     QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
     item->setWidth(status->implicitWidth() + 2 * PaneHeaderGeometry::margin);

@@ -698,7 +698,7 @@ void Application::configureWindow() {
     return;
   }
 
-  platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = static_cast<float>(ChromeMetrics::logical_top_bar * chromeRatio()), .background_opacity = configuration.background_opacity, .background_blur = configuration.background_blur});
+  platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = static_cast<float>(ChromeMetrics::logical_top_bar * chromeRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
   emit windowGeometryChanged();
 }
 

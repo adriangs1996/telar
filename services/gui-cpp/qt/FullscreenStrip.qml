@@ -106,6 +106,7 @@ FullscreenStripLayout {
         colors: root.colors
         typography: root.typography
         geometry: root.style
+        needsAttention: root.record.needsAttention ?? false
         visible: width > 0
     }
 

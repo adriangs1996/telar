@@ -56,15 +56,27 @@ ChromeButton {
                 objectName: "paneActionEntry"
                 required property var modelData
                 text: modelData.label
-                height: 32 * root.ratio
+                readonly property bool destructive: modelData.action === GuiController.Action.close_pane
+                height: (destructive ? 40 : 32) * root.ratio
+                topPadding: destructive ? 8 * root.ratio : 0
                 leftPadding: 8 * root.ratio
                 onTriggered: root.execute(modelData.action)
                 contentItem: ChromeText {
                     text: entry.text
-                    pixelSize: root.typography.body
-                    color: entry.modelData.action === GuiController.Action.close_pane ? root.colors.red : root.colors.text
+                    pixelSize: root.typography.body + root.ratio
+                    color: entry.destructive ? root.colors.red : root.colors.chromeText
+                }
+                Rectangle {
+                    x: 8 * root.ratio
+                    y: 2 * root.ratio
+                    width: Math.max(0, entry.width - 16 * root.ratio)
+                    height: 1 / Screen.devicePixelRatio
+                    color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
+                    visible: entry.destructive
                 }
                 background: NativeRoundedRectangle {
+                    y: entry.topPadding
+                    height: entry.height - y
                     color: Qt.alpha(root.colors.text, entry.highlighted ? ChromeStyle.selectionAlpha : 0)
                     radius: ChromeStyle.controlRadius * root.ratio
                 }

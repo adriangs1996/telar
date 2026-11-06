@@ -1,7 +1,7 @@
 import QtQuick
 import Telar.Gui
 
-Rectangle {
+NativeRoundedRectangle {
     id: root
 
     required property var colors
@@ -32,7 +32,8 @@ Rectangle {
     readonly property var machineContext: controller?.machineContext ?? {}
     readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28))
 
-    color: colors.navigationBackground
+    color: colors.topbarBackground
+    replaceBackground: true
     clip: true
 
     ChromeButton {
@@ -48,7 +49,7 @@ Rectangle {
         emphasized: !root.rail
         contentItem: ChromeIcon {
             glyph: "\uf0db"
-            color: root.colors.text
+            color: root.colors.chromeText
             pixelSize: 18 * root.ratio
         }
         Accessible.name: "Toggle sidebar"
@@ -77,8 +78,8 @@ Rectangle {
                 width: Math.max(0, parent.width - x - 4 * root.ratio - (root.machineContext.attention ? 12 * root.ratio : 0))
                 height: parent.height * 0.55
                 text: root.workspace.name || "workspace"
-                color: root.colors.text
-                pixelSize: root.typography.body
+                color: root.colors.chromeText
+                pixelSize: root.typography.body + 2 * root.ratio
                 emphasized: true
             }
 
@@ -91,7 +92,7 @@ Rectangle {
                 height: parent.height - y
                 text: root.machineContext.label || ""
                 color: root.colors.text
-                pixelSize: root.typography.small
+                pixelSize: root.typography.small + root.ratio
             }
 
             NativeRoundedRectangle {

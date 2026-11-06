@@ -333,7 +333,8 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::s
 
 void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation &frame) {
   background_.setRect(frame.bounds);
-  background_.setColor(frame.configuration.background_opacity < 1 ? QColor{Qt::transparent} : toQColor(frame.configuration.theme.background));
+  // Live panes provide their background; standalone scenes retain their own fill.
+  background_.setColor(frame.background_provided || frame.configuration.background_opacity < 1 ? QColor{Qt::transparent} : toQColor(frame.configuration.theme.background));
   synchronizeGrid(visibleCells(frame));
 
   const auto glyphs_changed = appearance_ != frame.appearance || scale_ != frame.scale;

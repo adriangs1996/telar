@@ -631,6 +631,15 @@ private:
     }
 
     window(gui.field("window"), configuration);
+    const auto opacity = gui.field("opacity");
+    if (opacity.present()) {
+      for (std::size_t index = 0; index < BackgroundOpacity::names.size(); ++index) {
+        const auto value = opacity.field(BackgroundOpacity::names[index]);
+        if (value.present()) {
+          configuration.opacity.overrides[index] = static_cast<float>(value.boundedNumber(1, 0, 1));
+        }
+      }
+    }
     const auto chrome = gui.field("chrome");
     if (chrome.present()) {
       configuration.chrome_scale = static_cast<float>(chrome.field("scale").boundedNumber(configuration.chrome_scale, Configuration::minimum_chrome_scale, Configuration::maximum_chrome_scale));

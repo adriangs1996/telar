@@ -179,6 +179,13 @@ public:
       object.member("window", [&](JsonWriter &value) {
         writeWindow(value, configuration, default_titlebar);
       });
+      object.member("opacity", [&](JsonWriter &value) {
+        value.object([&](JsonWriter &opacity) {
+          for (std::size_t index = 0; index < BackgroundOpacity::names.size(); ++index) {
+            opacity.member(BackgroundOpacity::names[index], configuration.opacity.resolve(static_cast<BackgroundOpacity::Surface>(index), configuration.background_opacity));
+          }
+        });
+      });
       object.member("chrome", [&](JsonWriter &value) {
         value.object([&](JsonWriter &chrome) {
           chrome.member("scale", configuration.chrome_scale);

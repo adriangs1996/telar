@@ -12,15 +12,19 @@ Window {
     title: telar.title
     color: "transparent"
 
-    Rectangle {
-        objectName: "windowBackground"
-        anchors.fill: parent
-        color: telar.colors.windowBackground
-    }
-
     readonly property real ratio: telar.chromeRatio
     readonly property var geometry: telar.windowGeometry
     readonly property real sidebarWidth: geometry.sidebar.width
+
+    NativeRoundedRectangle {
+        objectName: "workspaceBackground"
+        x: root.geometry.sidebar.width
+        y: root.geometry.navigation.height
+        width: Math.max(0, root.width - x)
+        height: Math.max(0, root.geometry.status.y - y)
+        color: telar.colors.workbenchBackground
+        replaceBackground: true
+    }
 
     NavigationBar {
         controller: telar

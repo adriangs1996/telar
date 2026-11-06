@@ -518,3 +518,115 @@ de error y no se hace un reformat masivo. Logs: `ebnf-format-check.log`,
 Esta corrección no ejecuta Linux, musl, Intel ni CI remota. Tampoco instala ni
 reinicia el Telar activo; la integración local en `overhaul` queda a cargo del
 coordinador, sin merge ni push desde esta rama.
+
+## Integración autorizada de `overhaul`
+
+La preparación de integración incorpora el commit completo
+`7a89a5cd68c1ed4e3e80605fd7572f50f4eaf633` (`wip`) mediante un merge en
+`cpp-modules-modern-build`, conservando ambos historiales. La base común es
+`3306dc584df23dd0eadb844057d757683d7a77a2`. Este merge está autorizado por el
+encargo de integración posterior; no mueve `overhaul` ni publica cambios.
+
+Los siete conflictos modify/delete trasladan la implementación entrante al
+propietario del inventario y mantienen eliminados los headers originales:
+
+| Header anterior | Módulo propietario |
+| --- | --- |
+| `telar_config/gui_validator.hpp` | `telar_config/config.cppm` |
+| `config/gui_query.hpp` | `config/gui_query.cppm` |
+| `config/reader.hpp` | `config/generation.cppm` |
+| `core/background_opacity.hpp` | `core/metrics.cppm` |
+| `graphics/rounded_rectangle.hpp` | `graphics/placeholder.cppm` |
+| `presentation/chrome_surfaces.hpp` | `presentation/display_metrics.cppm` |
+| `presentation/pane_decoration_geometry.hpp` | `presentation/history_inspection_geometry.cppm` |
+
+Así se conservan validación, lectura, consulta y resolución de opacidad por
+superficie; los colores finales de chrome; y la composición con backdrop,
+reemplazo de fondo y esquinas inferiores cuadradas. Se mantienen los `inline`
+explícitos de las definiciones trasladadas. El inventario sigue justificando las
+mismas fronteras textuales; no se añade una API de headers paralela.
+
+Los otros tres conflictos adaptan el WIP de WebSocket y el adaptador de panes Qt.
+WebSocket conserva `ServerOptions`, preparación/bind del socket, estado de servicio
+y smoke con hilo y espera. Sus headers de sistema/estándar pasan al fragmento
+global; `netinet/in.h` proporciona `htons` sin depender del header privado
+`sys/_endian.h`. El smoke importa `telar.websock`. No se completa el servidor WIP.
+El adaptador de panes conserva la selección/saneamiento de contexto de agente,
+título o directorio y añade el import del propietario de `TabCaption`.
+
+La revisión de los 41 archivos entrantes comprueba los cuerpos funcionales de
+módulos, adaptadores, QML, shaders y tests, descontando solo la traducción de
+includes/imports y los especificadores `inline`. Conserva además la espera de
+sincronización del test `quick` introducida en la migración. El README fusiona las
+nuevas reglas de opacidad con las instrucciones del build reproducible.
+
+### Verificación de la combinación
+
+En macOS ARM64 se reutilizaron el SDK fijado y los builds privados de la primera
+entrega. Los registros nuevos están bajo `.dev/integrate-overhaul/`; no se usan
+los artefactos `.dev/review-modules-*` del coordinador.
+
+```sh
+python3 tools/check-cpp-modules.py
+python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
+
+tools/cpp exec -- cmake --build .dev/modules/websock-final-sanitize --parallel 2
+tools/cpp exec -- ctest --test-dir .dev/modules/websock-final-sanitize --output-on-failure
+
+tools/cpp exec -- cmake --build .dev/modules/runtime-final-debug --parallel 3
+ulimit -n 8192
+tools/cpp exec -- ctest --test-dir .dev/modules/runtime-final-debug --output-on-failure --parallel 2
+
+tools/cpp exec -- cmake --build .dev/modules/gui-final-debug --parallel 3 \
+  --target telar-gui gui-config-test gui-config-query-test gui-chrome-test \
+  gui-pane-header-test gui-presentation-test gui-rounded-rectangle-test gui-quick-test
+tools/cpp exec -- ctest --test-dir .dev/modules/gui-final-debug --output-on-failure \
+  --parallel 1 -R '^gui-(config|config-query|chrome|pane-header|presentation|rounded-rectangle)$'
+tools/cpp exec -- ctest --test-dir .dev/modules/gui-final-debug --output-on-failure -R '^gui-quick$'
+```
+
+Pasan el inventario/grafo (162 módulos, 300 fronteras), las nueve regresiones de
+tooling, el build/smoke WebSocket con ASan/UBSan, el build completo runtime/CLI y
+el build de GUI nativa. Pasan las seis entradas CTest focalizadas de GUI anteriores,
+incluidas las expectativas nuevas de `overhaul`, sin modificar los tests para
+resolver fallos.
+
+Runtime completa 49/50 entradas en la primera pasada y la restante pasa al
+repetirla con el límite documentado de descriptores. La shell inicial tenía
+`ulimit -n 2560`; `runtime-tests` abortaba en `platform_test.cpp` al pedir
+`F_DUPFD` desde 4096. Con `ulimit -n 8192`, `ctest -R '^runtime-tests$'` pasa.
+Registros: `runtime-tests.log` y `runtime-retest.log`. No se altera ese test.
+
+La ejecución completa de `gui-quick` da 138 casos pasados, un fallo en
+`configuredGroupKeyboardActions` (`labels.size()` es 0, esperado 1) y un skip
+existente de minimización nativa bajo el plugin offscreen. Los casos nuevos de
+opacidad por superficie, contexto de pane y consultas GUI pasan. El target CTest
+sigue devolviendo error; no se declara la suite completa de GUI en verde.
+
+El contraste usa una copia exacta creada con `git archive
+7a89a5cd68c1ed4e3e80605fd7572f50f4eaf633` bajo
+`.dev/integrate-overhaul/original`, sin alterar sus fuentes. Se reconstruyen
+`gui-quick-test`, `telar` y `telar-runtime` originales con el mismo compilador,
+SDK, Qt y dependencias verificadas. Tanto el caso aislado de la combinación como
+el original fallan en la misma comparación 0 frente a 1; `initTestCase` y
+`cleanupTestCase` pasan en ambos. Registros: `gui-quick-isolated.log` y
+`original-quick.log`. Por tanto se conserva como fallo previo, fuera de las
+resoluciones de integración. La primera preparación de la referencia, que solo
+había construido la CLI, falló al arrancar el runtime ausente; queda separada en
+`original-quick-cli-only.log` y se repite tras construir `telar-runtime`.
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  TELAR_GUI_TEST_RUNTIME="$PWD/.dev/integrate-overhaul/original-runtime/telar" \
+  PATH="$PWD/.dev/integrate-overhaul/original-runtime:$PATH" \
+  tools/cpp exec -- .dev/integrate-overhaul/original-gui/gui-quick-test configuredGroupKeyboardActions
+
+git merge-base --is-ancestor 7a89a5cd68c1ed4e3e80605fd7572f50f4eaf633 HEAD
+git status --porcelain=v1
+```
+
+El resultado mantiene ese commit como ancestro y queda sin conflictos ni cambios
+pendientes. No se ejecutan Linux, musl, macOS Intel ni CI remota en esta
+integración. No se instala ni abre la aplicación activa, no se reinicia Telar,
+no se hace push y no se mueve ninguna referencia de `overhaul`. El fast-forward
+local final corresponde al coordinador; se conserva este worktree y sus artefactos.

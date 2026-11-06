@@ -47,10 +47,12 @@ outline dilation, from zero at `thicken_strength=0` to half a physical pixel at
 terminal grid unchanged. The two rasterizers do not promise pixel-identical ink.
 Procedural box, block and braille glyphs are not thickened.
 
-When `gui.window.background_opacity` is below one, sidebar, navigation/status bars
-and pane bands reveal the window's single background, even with an explicit
-`panel_bg` color. Text and controls retain their own opacity. Image attachment
-shelves and preview modals keep covering panel backgrounds, matching Zig.
+`gui.window.background_opacity` is the fallback for every background. Override
+`gui.opacity.sidebar`, `topbar`, `bottombar`, `workspace` or `pane` independently
+with a number from zero to one. Headers inherit the pane opacity. These are final
+background alphas, not multipliers or stacked overlays; text, icons and controls
+keep their own opacity. Explicit terminal application colors remain intact.
+Image attachment shelves and preview modals keep covering panel backgrounds.
 
 ## Build
 
@@ -124,9 +126,29 @@ available.
 Navigation and panel typography use their own reference size, independent of
 `gui.font.size`; `gui.chrome.scale` still scales chrome text. Theme-relative
 navigation, gutters and panel headers preserve the configured palette and window
-transparency. Panel headers reserve complete terminal rows, keep a fixed visual
-height and offer split, expand and close actions through their menu. Routine agent
-states stay neutral; requests for input and failures retain their semantic color.
+transparency. Selected tabs share the pane focus accent and use a heavier label;
+selection does not change tab widths. Panel headers reserve complete terminal rows, keep a fixed visual
+height and offer split, expand and close actions through their menu. Headers show
+process names beside available session, terminal-title or directory context. Narrow
+headers keep the pane number and program before optional context and progress.
+Routine agent states stay neutral; requests for input and failures retain their
+semantic color.
+
+```lua
+gui = {
+  window = { background_opacity = 0.9 },
+  opacity = {
+    sidebar = 0.95,
+    topbar = 1,
+    bottombar = 0.9,
+    workspace = 0.7,
+    pane = 0.8,
+  },
+}
+```
+
+Omitted region values inherit the global value after profile overrides. Native
+window transparency and blur stay enabled whenever any background needs them.
 
 `--cwd PATH` sets the launch directory. Positional arguments select a command for
 a newly opened pane; subsequent options are passed to that command. `--fresh`

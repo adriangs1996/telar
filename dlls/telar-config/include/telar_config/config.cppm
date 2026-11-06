@@ -2874,12 +2874,13 @@ public:
       return;
     }
 
-    gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps"});
+    gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps", "opacity"});
     font(gui.field("font"));
     cursor(gui.field("cursor"));
     window(gui.field("window"));
     chrome(gui.field("chrome"));
     sidebar(gui.field("sidebar"));
+    opacity(gui.field("opacity"));
     optionalWholeNumber(gui.field("max_fps"), 30, 240);
   }
 
@@ -2935,6 +2936,16 @@ private:
     if (table.present()) {
       table.onlyFields({"scale"});
       table.field("scale").boundedNumber(1, 0.5, 2);
+    }
+  }
+
+  inline static void opacity(const lua::Value &table) {
+    if (!table.present()) {
+      return;
+    }
+    table.onlyFields({"sidebar", "topbar", "bottombar", "workspace", "pane"});
+    for (const auto field : {"sidebar", "topbar", "bottombar", "workspace", "pane"}) {
+      table.field(field).boundedNumber(1, 0, 1);
     }
   }
 

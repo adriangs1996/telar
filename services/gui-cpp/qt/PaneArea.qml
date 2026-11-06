@@ -3,13 +3,12 @@ pragma ComponentBehavior: Bound
 import Telar.Gui
 import QtQuick
 
-Rectangle {
+Item {
     id: root
 
     required property GuiController application
     property real ratio: 1
     property bool keyboardCovered: false
-    color: application.colors.workbenchBackground
 
     AttachmentShelf {
         application: root.application
@@ -47,9 +46,10 @@ Rectangle {
                 y: pane.record.frame.y
                 width: pane.frameWidth
                 height: pane.frameHeight
-                radius: pane.record.frameRadius * root.ratio
+                radius: pane.framed ? pane.record.frameRadius * root.ratio : 0
                 color: root.application.colors.paneBackground
-                visible: pane.framed
+                replaceBackground: true
+                backdropColor: root.application.colors.workbenchBackground
             }
 
             Repeater {
@@ -78,14 +78,16 @@ Rectangle {
                 }
             }
 
-            Rectangle {
+            NativeRoundedRectangle {
                 objectName: "paneHeaderSurface"
                 x: pane.record.frame.x
                 y: pane.record.frame.y
                 width: pane.frameWidth
                 height: Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader)
-                topLeftRadius: pane.record.frameRadius * root.ratio
-                topRightRadius: topLeftRadius
+                radius: pane.record.frameRadius * root.ratio
+                squareBottom: true
+                replaceBackground: true
+                backdropColor: root.application.colors.workbenchBackground
                 color: pane.record.focused ? root.application.colors.paneActiveHeaderBackground : root.application.colors.paneHeaderBackground
                 visible: pane.framed && !pane.record.fullscreen
 
@@ -160,6 +162,13 @@ Rectangle {
                 height: pane.contentHeight
                 clip: true
 
+                NativeRoundedRectangle {
+                    objectName: "paneTerminalBackground"
+                    anchors.fill: parent
+                    color: root.application.colors.terminalBackground
+                    replaceBackground: true
+                }
+
                 TerminalView {
                     id: terminal
 
@@ -168,6 +177,7 @@ Rectangle {
                     height: pane.record.content.height
                     application: root.application
                     paneId: pane.record.key
+                    backgroundProvided: true
                     property bool focusReady: false
                     readonly property bool modelFocused: pane.record.focused
 
