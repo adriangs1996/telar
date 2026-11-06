@@ -25,7 +25,13 @@ def run(*args, **kwargs):
 def toolchain():
     expected = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'tools/toolchain/source.py'))).hexdigest()
     stamp = CACHE / '.manifest'
-    if not stamp.exists() or stamp.read_text().strip() != expected:
+    refresh = not stamp.exists() or stamp.read_text().strip() != expected
+    if platform.system() == 'Darwin':
+        sdk = ''.join(subprocess.check_output(['xcrun', '--sdk', 'macosx', option], text=True)
+                      for option in ('--show-sdk-path', '--show-sdk-build-version'))
+        sdk_stamp = CACHE / '.sdk'
+        refresh = refresh or not sdk_stamp.exists() or sdk_stamp.read_text() != sdk
+    if refresh:
         run(sys.executable, ROOT / 'tools/bootstrap-cpp.py')
     os.environ['PATH'] = str(CACHE / 'bin') + os.pathsep + os.environ['PATH']
     return CACHE / 'toolchain.cmake'

@@ -149,6 +149,7 @@ def main():
                 ('CMAKE_MAKE_PROGRAM', bin_dir / 'ninja'))))
         if platform.system() == 'Darwin':
             sdk = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], text=True).strip()
+            sdk_build = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-build-version'], text=True).strip()
             headers = Path(sdk) / 'usr/include/c++/v1'
             if not (headers / 'version').exists():
                 raise RuntimeError('The macOS SDK must provide libc++ headers')
@@ -182,6 +183,8 @@ def main():
         subprocess.run([str(bin_dir / 'clang++'), '--version'], check=True)
         subprocess.run([str(bin_dir / 'cmake'), '--version'], check=True)
         subprocess.run([str(bin_dir / 'ninja'), '--version'], check=True)
+        if platform.system() == 'Darwin':
+            (cache / '.sdk').write_text(sdk + '\n' + sdk_build + '\n')
         (cache / '.manifest').write_text(hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'tools/toolchain/source.py'))).hexdigest() + '\n')
         print(f'export PATH="{bin_dir}:$PATH"')
 
