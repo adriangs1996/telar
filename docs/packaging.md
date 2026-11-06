@@ -9,6 +9,9 @@ find `telar` afterwards. `telar` typed in a terminal opens the same window as
 the launchers; without a display (an SSH login, or Linux without
 `WAYLAND_DISPLAY`) it says so and names the CLI commands to use instead.
 
+The C++ services use the [pinned module build and onboarding guide](build/cpp-modules.md),
+including development, CI, standalone libraries and release packaging.
+
 ## Install a local build
 
 No releases are published yet. The release, installer and Homebrew sections

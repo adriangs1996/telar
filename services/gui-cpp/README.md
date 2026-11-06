@@ -162,17 +162,18 @@ tools/cpp configure gui
 tools/cpp build gui -- --target gui-editor --parallel 2
 ```
 
-`.clangd` uses `out/compile_commands.json` and generated compilation contexts under
-`out/clangd` for configuration, domain, Qt and test headers. Launch `.toolchain/bin/clangd --experimental-modules-support`. `.clangd-build.json` provides the existing
-build-on-save integration.
+`.clangd` uses `out/compile_commands.json` for modules and their importers.
+The editor target also generates supplemental contexts under `out/clangd` for
+textual adapters. Launch `.toolchain/bin/clangd --experimental-modules-support`.
+`.clangd-build.json` refreshes the same pinned configuration on save.
 
 ## Tests and static analysis
 
 Build the relevant test targets before running their CTest entries:
 
 ```sh
-cmake --build services/gui-cpp/out --target gui-core-test gui-config-test
-ctest --test-dir services/gui-cpp/out --output-on-failure -R '^gui-(core|config)$'
+tools/cpp build gui -- --target gui-core-test gui-config-test
+tools/cpp test gui -- -R '^gui-(core|config)$'
 ```
 
 Native integration tests use owned temporary runtimes and private clipboard/display

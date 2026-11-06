@@ -38,6 +38,10 @@ import telar.gui.presentation.frame_pacer;
 namespace telar::gui::test {
 
 struct FramePacing {
+  [[nodiscard]] static bool requestsPending(const qt::Application &application) noexcept {
+    return application.session().requestsPending();
+  }
+
   [[nodiscard]] static TabDropSurface tabs(const qt::Application &application) {
     return application.tabDropSurface();
   }

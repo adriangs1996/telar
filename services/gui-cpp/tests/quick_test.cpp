@@ -1996,6 +1996,9 @@ private:
     while (client_->panes()->rowCount() > 1) {
       const auto count = client_->panes()->rowCount();
       const auto key = client_->panes()->data(client_->panes()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      // Model projections can arrive before the acknowledgement releases the
+      // preceding pane operation. Wait for that operation before closing again.
+      QTRY_VERIFY_WITH_TIMEOUT(!test::FramePacing::requestsPending(*client_), runtime_wait_ms);
       client_->execute(Application::Action::close_pane, key);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), count - 1, runtime_wait_ms);
     }

@@ -3,6 +3,9 @@
 For an introduction and first launch, see the [README](../README.md).
 Run the commands below from the repository root.
 
+The C++ services use the [pinned module build and onboarding guide](build/cpp-modules.md),
+including development, CI, standalone libraries and release packaging.
+
 ## Build requirements
 
 Use Zig 0.16.0, the version declared in [build.zig.zon](../build.zig.zon).

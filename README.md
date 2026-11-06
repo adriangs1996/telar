@@ -16,6 +16,9 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+The C++ services use the [pinned module build and onboarding guide](docs/build/cpp-modules.md),
+including development, CI, standalone libraries and release packaging.
+
 ## About
 
 Telar is a terminal emulator and multiplexer for macOS and Linux. It brings
