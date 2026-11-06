@@ -33,7 +33,8 @@ struct SshOptions {
     auto prefix = byteView({digest.constData(), static_cast<std::size_t>(digest.size())}).first(sizeof(std::uint64_t));
     const auto hash = u64::decode(prefix) >> control_hash_shift;
 
-    return QStringLiteral("ssh-") + QString::number(hash, hexadecimal_base).rightJustified(control_hash_digits, QLatin1Char('0'));
+    // CLI dispatch and Git use ssh-* masters; never queue the GUI behind their transfers.
+    return QStringLiteral("ssh-i-") + QString::number(hash, hexadecimal_base).rightJustified(control_hash_digits, QLatin1Char('0'));
   }
 
   [[nodiscard]] static QStringList prepare(const QString &local_endpoint, QByteArrayView destination) {

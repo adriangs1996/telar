@@ -132,6 +132,13 @@ skips saved-layout restoration. Without a command, the login-shell resolver
 supplies the interactive shell. Saved and temporary SSH machines can be selected
 with the machine picker or the corresponding launch options.
 
+Remote discovery and GUI bridges reuse a per-destination interactive SSH control
+master (`ssh-i-*`), separate from the CLI and Git transfer master (`ssh-*`). A
+repository or file transfer therefore cannot queue its bytes on the GUI's SSH
+TCP connection. Authentication, host-key checks, keepalives and reconnect behavior
+are unchanged. Images carried inside the GUI bridge still share its stream with
+terminal updates; this does not give those images a separate transfer channel.
+
 History supports filtering, inspection and paste/run modes. Configured Enter
 behavior can be inverted with Shift+Enter. Session and input controllers retain
 pane, machine and generation identities across asynchronous operations.

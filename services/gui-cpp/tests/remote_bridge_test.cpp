@@ -151,6 +151,12 @@ private:
     QCOMPARE(arguments.at(arguments.size() - 3), QStringLiteral("--"));
     QCOMPARE(arguments.at(arguments.size() - 2), QStringLiteral("dev@box"));
     QCOMPARE(TestSshHost::requests.back().back(), QStringLiteral("exec telar server bridge"));
+    const auto interactive_control = QStringLiteral("ControlPath=") + directory.path() + QStringLiteral("/ssh-i-7d4a97d4fc1f");
+    const auto transfer_control = QStringLiteral("ControlPath=") + directory.path() + QStringLiteral("/ssh-7d4a97d4fc1f");
+    for (const auto &request : TestSshHost::requests) {
+      QVERIFY(request.contains(interactive_control));
+      QVERIFY(!request.contains(transfer_control));
+    }
     const QByteArray payload{"\0first\xfflast", 11};
     QCOMPARE(observer.channel.write(payload), payload.size());
     QVERIFY(observer.channel.flush());
@@ -255,12 +261,13 @@ private:
     const QTemporaryDir directory;
     const auto request = target(directory, QStringLiteral("dev@box"));
     const auto arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
-    QCOMPARE(SshOptions::controlName("dev@box"), QStringLiteral("ssh-7d4a97d4fc1f"));
-    QCOMPARE(SshOptions::controlName("dev@[2001:db8::1]"), QStringLiteral("ssh-46c899f86623"));
+    QCOMPARE(SshOptions::controlName("dev@box"), QStringLiteral("ssh-i-7d4a97d4fc1f"));
+    QCOMPARE(SshOptions::controlName("dev@[2001:db8::1]"), QStringLiteral("ssh-i-46c899f86623"));
     constexpr qsizetype managed_arguments = 14;
     QCOMPARE(arguments.size(), managed_arguments);
     QVERIFY(arguments.contains(QStringLiteral("BatchMode=yes")));
     QVERIFY(arguments.contains(QStringLiteral("ForwardAgent=no")));
+    QVERIFY(arguments.contains(QStringLiteral("ControlMaster=auto")));
     QVERIFY(arguments.contains(QStringLiteral("ControlPersist=600")));
     QCOMPARE(arguments.back(), QStringLiteral("ControlPath=") + directory.path() + QLatin1Char('/') + SshOptions::controlName("dev@box"));
     Observer observer;
