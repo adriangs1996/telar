@@ -151,8 +151,8 @@ runtime-editor: (runtime-configure "out" "Debug")
 
 # Analyze the production runtime sources without applying fixes.
 [working-directory: "services/runtime-cpp"]
-runtime-lint jobs="2": runtime-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" -P cmake/lint.cmake
+runtime-lint jobs="2" directory="out": (runtime-configure directory "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lint.cmake
 
 # Analyze the GUI sources with its clang-tidy profile.
 [working-directory: "services/gui-cpp"]

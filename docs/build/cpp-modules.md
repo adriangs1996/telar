@@ -436,8 +436,9 @@ codesign --verify --deep --strict .dev/modules/Telar-modules-final.app
 No se ejecutaron Linux, musl, ARM64 Linux ni macOS Intel; tampoco el bootstrap
 LLVM desde fuentes. Se revisaron sus pins, recetas, SDK y configuración, con la
 limitación anterior. El caso GUI residual anterior queda fuera de los cambios funcionales autorizados.
-No se ejecutó el lint completo de runtime/GUI; se verificaron
-sus perfiles y unidades representativas, además del lint completo de TBC.
+La primera entrega verificó perfiles y unidades representativas de runtime/GUI,
+además del lint completo de TBC. El seguimiento descrito debajo ejecuta el lint
+completo de runtime; el de GUI sigue sin ejecución completa.
 La primera carga de módulos grandes en clangd sigue teniendo un coste de caché
 alto y su soporte es experimental. No se ha medido rendimiento de ejecución para
 atribuir una mejora a la migración; los algoritmos calientes y sus oportunidades
@@ -445,3 +446,75 @@ de inline permanecen en las interfaces.
 
 No se instaló ni abrió la aplicación candidata, no se usó otra máquina para ejecutar builds,
 no se reinició el Telar activo y no se hizo merge, push ni se lanzó CI remota.
+
+## Correcciones de tooling posteriores a la revisión
+
+El encargo de seguimiento corrige la preparación de `runtime-lint` y la cobertura
+`.cppm` del formatter de EBNF. No cambia código de aplicación ni el fallo GUI
+`configuredGroupKeyboardActions` ya reproducido en el commit original.
+
+`just runtime-lint [jobs] [directory]` configura el proyecto y llama al script
+común. Este refresca primero el manifiesto Ninja, lee la base de compilación y
+selecciona una sola vez las unidades C++ de runtime, CLI y `telar-platform/src`,
+incluidas las herramientas bajo `tools`, conservando la exclusión de tests.
+Construye sus targets de objeto existentes: CMake/Ninja resuelven los proveedores,
+generadores y BMI de cada contexto y crean los `.modmap` antes de clang-tidy.
+El runner recibe exactamente los archivos preparados, escapados como expresiones
+regulares. Usa las herramientas del SDK del compilador; los errores de build y
+análisis se propagan. No depende de un build previo ni ejecuta tests.
+
+```sh
+# Run from the repository root; the directory starts empty.
+tools/cpp exec -- just runtime-lint 3 "$PWD/.dev/tooling-fix/runtime-lint"
+
+# The same preparation is available through the direct script entry point.
+tools/cpp configure runtime -B .dev/runtime-lint --config Debug
+tools/cpp exec -- cmake -DJOBS=3 \
+  -DRUNTIME_BUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
+  -P services/runtime-cpp/cmake/lint.cmake
+
+python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
+```
+
+La ejecución real en macOS ARM64 comenzó sin objetos ni BMI en
+`.dev/tooling-fix/runtime-lint`. Preparó los 112 contextos seleccionados, incluidos
+los de herramientas, con sus modmaps y 101 artefactos de módulos. Los 152 contextos
+de tests de esa base de compilación quedaron sin compilar. Clang-tidy analizó los 112 archivos y el punto de entrada `just runtime-lint`
+terminó con retorno 0. El perfil sigue emitiendo advertencias; no se ignoran sus
+errores ni se presenta como un análisis sin advertencias. Todos los modmaps
+seleccionados existen. Repetir sus targets de objeto da `ninja: no work to do` y
+conserva sus timestamps (`incremental-preparation.log`). El log completo está
+en `.dev/tooling-fix/runtime-lint.log`; los artefactos aislados del coordinador
+`.dev/review-modules-*` no se usaron como build de verificación.
+
+Las nueve regresiones de tooling pasan: seis de bootstrap, dos de formato y una
+de preparación de lint. Esta última compila un grafo mínimo de módulos con
+cabecera generada, importador y herramienta `EXCLUDE_FROM_ALL`; deja sin compilar
+un test deliberadamente inválido. La segunda ejecución conserva los objetos sin
+recompilar; al añadir otra herramienta, el script actualiza la base y la prepara
+y analiza sin configurar manualmente. También comprueba rutas con `+` y un
+ancestro llamado `tests`, y usa el alias del compilador en `.toolchain/bin`.
+Los tests no descargan ni construyen toolchains: el caso
+nativo usa el SDK ya preparado y se omite si falta. CI descubre ahora los tres
+archivos `test_cpp_*.py`.
+
+Se repitieron las regresiones contra los scripts anteriores a estas correcciones:
+las dos de formato y la de lint fallan. En la de lint solo se adaptó la selección
+del directorio temporal; sin preparación, el análisis sigue fallando por modmaps
+y módulos ausentes. Registro: `.dev/tooling-fix/counterfactual.log`.
+
+EBNF delega en el helper de TBC para compartir descubrimiento, invocación y
+exclusiones de builds/vendor/generados. Tanto `format` como `format-check` reciben
+los `.cppm`. Se verificó además con clang-format 23.1.5 sobre una copia pequeña:
+el check falla antes de formatear, `format` modifica la interfaz y el check
+posterior pasa; el archivo de vendor queda intacto.
+
+El `format-check` real de EBNF informa 529 diagnósticos de estilo en 14 archivos:
+503 corresponden a `lexer.cppm` y `parser.cppm`, ahora cubiertos. Los otros 26 en
+12 archivos también se reproducen con el script anterior. Se conserva el retorno
+de error y no se hace un reformat masivo. Logs: `ebnf-format-check.log`,
+`ebnf-format-before.log` y `format-real.log`, bajo `.dev/tooling-fix`.
+
+Esta corrección no ejecuta Linux, musl, Intel ni CI remota. Tampoco instala ni
+reinicia el Telar activo; la integración local en `overhaul` queda a cargo del
+coordinador, sin merge ni push desde esta rama.

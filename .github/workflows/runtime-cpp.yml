@@ -54,7 +54,7 @@ jobs:
           done
           python3 tools/check-cpp-package.py --package websock --build .dev/ci/websock
           python3 tools/check-cpp-modules.py
-          python3 -m unittest discover -s tools/tests -p test_cpp_bootstrap.py -v
+          python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
           tools/cpp configure base -B .dev/ci/base --config ${{ matrix.configuration }}
           tools/cpp build base -B .dev/ci/base -- --parallel 3
           tools/cpp test base -B .dev/ci/base
@@ -127,7 +127,7 @@ jobs:
           done
           python3 tools/check-cpp-package.py --package websock --build .dev/ci/websock
           python3 tools/check-cpp-modules.py
-          python3 -m unittest discover -s tools/tests -p test_cpp_bootstrap.py -v
+          python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
           tools/cpp configure base -B .dev/ci/base --config ${{ matrix.configuration }}
           tools/cpp build base -B .dev/ci/base -- --parallel 3
           tools/cpp test base -B .dev/ci/base

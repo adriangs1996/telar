@@ -236,17 +236,38 @@ and use `out/` as the build directory. Other editors can invoke
 
 ## Static analysis
 
-Install `clang-tidy` and `run-clang-tidy` from the same LLVM installation as
-the C++ compiler. From the repository root, run:
+The pinned bootstrap supplies `clang-tidy` and `run-clang-tidy` beside the
+configured compiler. From the repository root, run:
 
 ```sh
 just runtime-lint
 ```
 
-This refreshes `out/compile_commands.json` and generated headers, then analyzes
-the runtime's production C++ sources with `.clang-tidy`. The runner looks beside
-the configured compiler before searching PATH. It runs two processes by default;
-`just runtime-lint 4` selects four.
+This configures `out`, refreshes Ninja's compilation database, and builds the
+object targets of every selected runtime, CLI and platform translation unit.
+Their dependencies prepare generated headers, BMI and response modmaps before
+analysis, including tools outside the normal executable build. Test translation
+units are excluded. Both preparation and analysis use the same source selection
+and the configured compiler's LLVM tools. The preparation is incremental.
+
+The default parallelism is two; `just runtime-lint 4` selects four. A second
+argument selects a separate build directory:
+
+```sh
+just runtime-lint 3 "$PWD/.dev/runtime-lint"
+```
+
+The direct script entry point performs the same preparation after configuration:
+
+```sh
+tools/cpp configure runtime -B .dev/runtime-lint --config Debug
+tools/cpp exec -- cmake -DJOBS=3 \
+  -DRUNTIME_BUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
+  -P services/runtime-cpp/cmake/lint.cmake
+```
+
+Build and analysis errors propagate to the caller; the command does not run tests
+or install executables.
 
 All general clang-tidy checks are enabled, including the static analyzer, CERT,
 concurrency, C++ Core Guidelines, bugprone, performance, portability, modernization
