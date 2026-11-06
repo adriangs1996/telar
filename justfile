@@ -36,6 +36,62 @@ runtime-build directory="out" build_type="Debug": (runtime-configure directory b
 gui-build directory="out" build_type="Debug": (gui-configure directory build_type)
     cmake --build "{{ directory }}" --target telar-gui telar-gui-command
 
+# Build the standalone C++ auth daemon without the runtime or GUI dependencies.
+[working-directory: "services/auth-daemon"]
+auth-build directory="out" build_type="Debug": (auth-configure directory build_type)
+    cmake --build "{{ directory }}" --target telar-auth-daemon
+
+# Build and run the auth daemon tests. Extra arguments are passed to CTest.
+[working-directory: "services/auth-daemon"]
+auth-test *args: auth-build
+    ctest --test-dir out --output-on-failure {{ args }}
+
+# Refresh the auth daemon compilation database for clangd.
+auth-editor: (auth-configure "out" "Debug")
+
+# Analyze the auth daemon sources without applying fixes.
+[working-directory: "services/auth-daemon"]
+auth-lint: auth-editor
+    cmake --build out --target lint
+
+# Format the auth daemon sources.
+[working-directory: "services/auth-daemon"]
+auth-format: auth-editor
+    cmake --build out --target format
+
+# Check the auth daemon formatting without changing sources.
+[working-directory: "services/auth-daemon"]
+auth-format-check: auth-editor
+    cmake --build out --target format-check
+
+# Build the standalone WebSocket library's compilation smoke test.
+[working-directory: "dlls/websock"]
+websock-build directory="out" build_type="Debug": (websock-configure directory build_type)
+    cmake --build "{{ directory }}"
+
+# Run the WebSocket library tests. Extra arguments are passed to CTest.
+[working-directory: "dlls/websock"]
+websock-test *args: websock-build
+    ctest --test-dir out --output-on-failure {{ args }}
+
+# Refresh the WebSocket library's header flags and compilation database for clangd.
+websock-editor: (websock-configure "out" "Debug")
+
+# Analyze the WebSocket library sources without applying fixes.
+[working-directory: "dlls/websock"]
+websock-lint: websock-editor
+    cmake --build out --target lint
+
+# Format the WebSocket library sources.
+[working-directory: "dlls/websock"]
+websock-format: websock-editor
+    cmake --build out --target format
+
+# Check the WebSocket library formatting without changing sources.
+[working-directory: "dlls/websock"]
+websock-format-check: websock-editor
+    cmake --build out --target format-check
+
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:
     cargo build --release --locked --manifest-path "{{ renderer_dir }}/Cargo.toml" --target-dir "{{ renderer_dir }}/target"
@@ -76,7 +132,7 @@ gui-test *args: dev-bin (gui-configure "out" "Debug" "-DTELAR_GUI_TEST_RUNTIME="
 
 # Each project gets out/compile_commands.json and, for a dll, the header flags in
 # out/clangd/compile_flags.txt; its .clangd-build.json then refreshes them on save.
-# Configure the C++ projects under dlls/ and services/cli-cpp for clangd.
+# Configure the C++ libraries, CLI and auth daemon for clangd.
 editor: runtime-editor
     #!/usr/bin/env bash
     set -euo pipefail
@@ -84,7 +140,7 @@ editor: runtime-editor
     if command -v brew >/dev/null; then
         options+=("-DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang" "-DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++")
     fi
-    for project in dlls/telar-base dlls/telar-client dlls/telar-config dlls/telar-lua dlls/telar-platform dlls/telar-plugins dlls/telar-tls services/cli-cpp; do
+    for project in dlls/telar-base dlls/telar-client dlls/telar-config dlls/telar-lua dlls/telar-platform dlls/telar-plugins dlls/telar-tls dlls/websock services/cli-cpp services/auth-daemon; do
         cmake -S "$project" -B "$project/out" "${options[@]}" >/dev/null
         echo "configured $project/out"
     done
@@ -164,6 +220,16 @@ dev-app binary state_dir:
 [working-directory: "services/runtime-cpp"]
 runtime-configure directory build_type *options:
     cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" {{ options }}
+
+[private]
+[working-directory: "dlls/websock"]
+websock-configure directory build_type *options:
+    cmake -S . -B "{{ directory }}" -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} {{ gui_compilers }} {{ options }}
+
+[private]
+[working-directory: "services/auth-daemon"]
+auth-configure directory build_type *options:
+    cmake -S . -B "{{ directory }}" -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} {{ gui_compilers }} {{ options }}
 
 [private]
 [working-directory: "services/gui-cpp"]

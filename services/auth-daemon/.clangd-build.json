@@ -1,0 +1,6 @@
+{
+  "build_directory": "out",
+  "commands": [
+    ["cmake", "-S", ".", "-B", "out"]
+  ]
+}

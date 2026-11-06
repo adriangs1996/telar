@@ -25,6 +25,6 @@ ExtraArgs:
   - -Wno-c++17-compat
   - -Wno-c++20-compat
 WarningsAsErrors: ''
-HeaderFilterRegex: '(^|/)(services/(runtime|cli)-cpp|dlls/telar-(base|lua|platform|plugins|config|tls))/'
+HeaderFilterRegex: '(^|/)(services/((runtime|cli)-cpp|auth-daemon)|dlls/(websock|telar-(base|lua|platform|plugins|config|tls)))/'
 ExcludeHeaderFilterRegex: '(^|/)(dependencies|generated|out[^/]*|tests|third_party|vendor)/'
 SystemHeaders: false
