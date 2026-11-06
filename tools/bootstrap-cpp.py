@@ -8,6 +8,7 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import urllib.request
@@ -64,7 +65,8 @@ def prepare(tool, artifact, cache):
                         base = target.parent if member.issym() else unpacked
                         if not (base / member.linkname).resolve().is_relative_to(unpacked):
                             raise RuntimeError('Unsafe archive link')
-                package.extractall(unpacked)
+                    # Validate after each previous entry has materialized its links.
+                    package.extract(member, unpacked)
         children = list(unpacked.iterdir())
         content = children[0] if len(children) == 1 and children[0].is_dir() else unpacked
         if destination.exists():
@@ -80,6 +82,8 @@ def main():
     parser.add_argument('--from-source', action='store_true', help='Build verified tools with the native SDK (automatic on musl)')
     parser.add_argument('--jobs', type=int, default=4)
     args = parser.parse_args()
+    if sys.version_info < (3, 9):
+        parser.error("Python 3.9+ is required")
     if args.jobs < 1:
         parser.error('--jobs must be positive')
     key = f'{platform.system()}-{platform.machine()}'
@@ -91,7 +95,14 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         source_build = args.from_source or (platform.system() == 'Linux' and bool(list(Path('/lib').glob('ld-musl-*')))) or key not in manifest['artifacts']['llvm']
         if source_build:
-            import sys
+            # Where official host tools exist, use them to bootstrap LLVM from
+            # source without requiring a separately installed CMake or Ninja.
+            if not (platform.system() == 'Linux' and list(Path('/lib').glob('ld-musl-*'))):
+                cmake_seed = prepare('cmake', manifest['artifacts']['cmake'][key], cache)
+                ninja_seed = prepare('ninja', manifest['artifacts']['ninja'][key], cache)
+                seed_bin = cmake_seed / ('CMake.app/Contents/bin' if platform.system() == 'Darwin' else 'bin')
+                import os
+                os.environ['PATH'] = str(seed_bin) + os.pathsep + str(ninja_seed) + os.pathsep + os.environ['PATH']
             sys.path.insert(0, str(ROOT / 'tools/toolchain'))
             from source import build
             prefix = build(manifest, cache, prepare, ROOT, args.jobs)
@@ -109,9 +120,10 @@ def main():
             cmake_bin = paths['cmake'] / ('CMake.app/Contents/bin' if platform.system() == 'Darwin' else 'bin')
             llvm_bin = paths['llvm'] / 'bin'
             ninja_bin = paths['ninja']
+        just = prepare('just', manifest['artifacts']['just'][key], cache)
         bin_dir = cache / 'bin'
         bin_dir.mkdir(exist_ok=True)
-        for directory, names in ((cmake_bin, ('cmake', 'ctest', 'cpack')), (ninja_bin, ('ninja',)),
+        for directory, names in ((cmake_bin, ('cmake', 'ctest', 'cpack')), (ninja_bin, ('ninja',)), (just, ('just',)),
                                  (llvm_bin, ('clang', 'clang++', 'clang-scan-deps', 'clangd', 'clang-tidy', 'clang-format', 'ld.lld'))):
             for name in names:
                 target = directory / name

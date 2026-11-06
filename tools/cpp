@@ -5,6 +5,7 @@ import fcntl
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = {'runtime': 'services/runtime-cpp', 'cli': 'services/cli-cpp',
             'gui': 'services/gui-cpp', 'auth': 'services/auth-daemon',
             **{name: 'dlls/telar-' + name for name in ('base', 'client', 'platform', 'lua', 'plugins', 'config', 'tls')},
-            'websock': 'dlls/websock'}
+            'tbc': 'dlls/tbc', 'ebnf': 'dlls/ebnf', 'websock': 'dlls/websock'}
 CACHE = ROOT / '.toolchain'
 
 
@@ -44,8 +45,12 @@ def vt():
         for file in ('tools/build_ghostty.py', 'vendor/ghostty-vt-state.patch', 'vendor/wuffs-codec.json'):
             identity.update((recipe / file).read_bytes())
         identity.update(manifest['versions']['zig'].encode())
+        identity.update((platform.system() + platform.machine()).encode())
+        if platform.system() == 'Darwin':
+            identity.update(subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-build-version']))
         build = ROOT / '.dependencies-cache/ghostty' / identity.hexdigest()
         prefix = build / 'install'
+        os.environ['ZIG_GLOBAL_CACHE_DIR'] = str(CACHE / 'zig-cache')
         run(sys.executable, recipe / 'tools/build_ghostty.py', '--zig', zig / 'zig', '--build-dir', build, '--prefix', prefix)
         return prefix
 
@@ -87,6 +92,11 @@ def main():
         options = ['-DCMAKE_BUILD_TYPE=' + args.config,
                    '-DCMAKE_TOOLCHAIN_FILE=' + str(chain),
                    '-DTELAR_SANITIZERS=' + ('ON' if args.sanitizers else 'OFF')]
+        if args.project == 'tbc':
+            options += ['-DTBC_SANITIZERS=' + ('ON' if args.sanitizers else 'OFF')]
+            llvm = (CACHE / 'bin/clang').resolve().parents[1]
+            options += ['-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'),
+                        '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
         needs_vt = args.project in ('runtime', 'cli', 'gui', 'config', 'tls')
         if needs_vt and not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
             options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))

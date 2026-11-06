@@ -5,6 +5,7 @@ compiler, CMake, make, Perl and Python are development tools supplied by the SDK
 No application library is taken from this initial toolchain's installation.
 """
 import hashlib
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -16,7 +17,15 @@ def run(*args, **kwargs):
 
 
 def build(manifest, cache, prepare, root, jobs):
-    identity = hashlib.sha256((root / 'tools/toolchain/manifest.json').read_bytes()
+    host = [platform.system(), platform.machine(), os.environ.get('CC', 'cc'),
+            os.environ.get('CXX', 'c++'), os.environ.get('CFLAGS', ''),
+            os.environ.get('CXXFLAGS', ''), os.environ.get('LDFLAGS', '')]
+    for compiler in (os.environ.get('CC', 'cc'), os.environ.get('CXX', 'c++')):
+        host.append(subprocess.check_output([compiler, '--version'], text=True))
+    if platform.system() == 'Darwin':
+        for option in ('--show-sdk-path', '--show-sdk-build-version'):
+            host.append(subprocess.check_output(['xcrun', '--sdk', 'macosx', option], text=True))
+    identity = hashlib.sha256('\n'.join(host).encode() + (root / 'tools/toolchain/manifest.json').read_bytes()
                               + Path(__file__).read_bytes()
                               + (root / 'cmake/openssl/manifest.cmake').read_bytes()
                               + (root / 'cmake/openssl/CMakeLists.txt').read_bytes()).hexdigest()[:16]
@@ -47,6 +56,8 @@ def build(manifest, cache, prepare, root, jobs):
     options = ['-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_INSTALL_PREFIX=' + str(prefix),
                '-DCMAKE_MAKE_PROGRAM=' + str(prefix / 'bin/ninja'),
                '-DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld',
+               '-DLLVM_BUILD_LLVM_DYLIB=ON', '-DLLVM_LINK_LLVM_DYLIB=ON',
+               '-DCLANG_LINK_CLANG_DYLIB=ON',
                '-DLLVM_TARGETS_TO_BUILD=Native', '-DLLVM_INCLUDE_TESTS=OFF',
                '-DLLVM_INCLUDE_BENCHMARKS=OFF', '-DLLVM_ENABLE_ZLIB=OFF',
                '-DLLVM_ENABLE_ZSTD=OFF', '-DLLVM_ENABLE_LIBXML2=OFF',

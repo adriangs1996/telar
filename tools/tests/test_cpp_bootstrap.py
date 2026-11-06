@@ -43,7 +43,8 @@ class BootstrapIntegrity(unittest.TestCase):
             self.assertEqual((target / 'bin/tool').read_bytes(), b'verified tool\n')
             self.assertTrue((target / 'bin/tool').stat().st_mode & 0o111)
             with patch.object(bootstrap.urllib.request, 'urlopen', side_effect=AssertionError('unexpected download')):
-                self.assertEqual(self.prepare(directory, data), target)
+                pin = {'url': 'https://example.invalid/tool.tar.gz', 'sha256': hashlib.sha256(data).hexdigest()}
+                self.assertEqual(bootstrap.prepare('test', pin, Path(directory)), target)
 
     def test_mismatched_download_is_not_published(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -55,6 +56,18 @@ class BootstrapIntegrity(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(RuntimeError, 'Unsafe archive'):
                 self.prepare(directory, archive('../../escape'))
+
+    def test_archive_link_chain_cannot_escape_cache(self):
+        output = io.BytesIO()
+        with tarfile.open(fileobj=output, mode='w:gz') as package:
+            for name, target in (('a', '.'), ('b', 'a/../escape')):
+                entry = tarfile.TarInfo(name)
+                entry.type = tarfile.SYMTYPE
+                entry.linkname = target
+                package.addfile(entry)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, 'Unsafe archive link'):
+                self.prepare(directory, output.getvalue())
 
     def test_archive_symlink_cannot_escape_cache(self):
         with tempfile.TemporaryDirectory() as directory:
