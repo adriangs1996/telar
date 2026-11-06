@@ -15,8 +15,8 @@ struct TabStripGeometry {
   static constexpr std::size_t maximum_tabs = 64;
   static constexpr std::size_t cap_iterations = 24;
   static constexpr float pill_height = 30;
-  static constexpr float pill_radius = 10;
-  static constexpr float leading = 5;
+  static constexpr float pill_radius = pill_height / 2;
+  static constexpr float leading = 8;
   static constexpr float trailing = 12;
   static constexpr float spacing = 8;
   static constexpr float chip_side = 20;
@@ -25,6 +25,7 @@ struct TabStripGeometry {
   static constexpr float selected_chip_alpha = 0.1F;
   static constexpr float mark_side = 14;
   static constexpr float gap = 2;
+  static constexpr float control_gap = 8;
   static constexpr float inactive_maximum = 220;
   static constexpr float selected_maximum = 300;
   static constexpr float selected_share = 0.55F;

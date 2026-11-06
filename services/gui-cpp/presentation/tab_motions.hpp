@@ -18,9 +18,49 @@ struct TabMotionSlot {
   bool immediate = false;
 };
 
+struct TabMotion {
+  static constexpr std::uint64_t duration_ns = 180'000'000;
+  std::uint64_t id = 0;
+  Rect from;
+  Rect to;
+  std::uint64_t started = 0;
+  std::uint64_t duration = 0;
+  bool seen = true;
+
+  [[nodiscard]] Rect value(std::uint64_t now_ns) const noexcept {
+    float progress = 1;
+    if (now_ns < started) {
+      progress = 0;
+    } else if (duration != 0 && now_ns - started < duration) {
+      progress = static_cast<float>(now_ns - started) / static_cast<float>(duration);
+    }
+    const float remaining = 1 - progress;
+    const float eased = 1 - (remaining * remaining * remaining);
+
+    return {.x = from.x + ((to.x - from.x) * eased), .y = from.y + ((to.y - from.y) * eased), .width = from.width + ((to.width - from.width) * eased), .height = from.height + ((to.height - from.height) * eased)};
+  }
+
+  [[nodiscard]] Rect place(Rect bounds, TabMotionFrame &frame, bool immediate = false) noexcept {
+    if (immediate) {
+      from = bounds;
+      to = bounds;
+      duration = 0;
+      return bounds;
+    }
+    if (to != bounds) {
+      from = value(frame.now_ns);
+      to = bounds;
+      started = frame.now_ns;
+      duration = duration_ns;
+    }
+    frame.request(started, duration);
+    return value(frame.now_ns);
+  }
+};
+
 class TabMotions {
 public:
-  static constexpr std::uint64_t duration_ns = 180'000'000;
+  static constexpr std::uint64_t duration_ns = TabMotion::duration_ns;
 
   void begin(std::optional<WorkspaceLocation> workspace) noexcept {
     if (workspace_.has_value() != workspace.has_value() || (workspace_ && (workspace_->kind != workspace->kind || workspace_->id != workspace->id))) {
@@ -46,22 +86,7 @@ public:
       }
 
       motion.seen = true;
-      if (slot.immediate) {
-        motion.from = slot.bounds;
-        motion.to = slot.bounds;
-        motion.duration = 0;
-
-        return slot.bounds;
-      }
-      if (motion.to != slot.bounds) {
-        motion.from = motion.value(frame.now_ns);
-        motion.to = slot.bounds;
-        motion.started = frame.now_ns;
-        motion.duration = duration_ns;
-      }
-
-      frame.request(motion.started, motion.duration);
-      return motion.value(frame.now_ns);
+      return motion.place(slot.bounds, frame, slot.immediate);
     }
 
     if (count_ < entries_.size()) {
@@ -93,29 +118,7 @@ public:
   }
 
 private:
-  struct Motion {
-    std::uint64_t id = 0;
-    Rect from;
-    Rect to;
-    std::uint64_t started = 0;
-    std::uint64_t duration = 0;
-    bool seen = true;
-
-    [[nodiscard]] Rect value(std::uint64_t now_ns) const noexcept {
-      float progress = 1;
-      if (now_ns < started) {
-        progress = 0;
-      } else if (duration != 0 && now_ns - started < duration) {
-        progress = static_cast<float>(now_ns - started) / static_cast<float>(duration);
-      }
-      const float remaining = 1 - progress;
-      const float eased = 1 - (remaining * remaining * remaining);
-
-      return {.x = from.x + ((to.x - from.x) * eased), .y = from.y + ((to.y - from.y) * eased), .width = from.width + ((to.width - from.width) * eased), .height = from.height + ((to.height - from.height) * eased)};
-    }
-  };
-
-  std::array<Motion, TabStripGeometry::maximum_tabs> entries_{};
+  std::array<TabMotion, TabStripGeometry::maximum_tabs> entries_{};
   std::size_t count_ = 0;
   std::optional<WorkspaceLocation> workspace_;
 };

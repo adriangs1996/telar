@@ -24,16 +24,9 @@ Rectangle {
     readonly property real padding: 8 * ratio
     readonly property real toggleSide: 28 * ratio
     readonly property real controlGap: 8 * ratio
-    readonly property real machineControlHeight: 26 * ratio
-    readonly property real contextInset: 4 * ratio
     readonly property real contextMaximum: 160 * ratio
-    readonly property real separatorGap: 10 * ratio
-    readonly property real separatorHeight: 18 * ratio
-    readonly property real physicalPixel: 1 / Screen.devicePixelRatio
-    readonly property real controlsRight: toggle.x + toggle.width + controlGap
-    readonly property real machineRight: machine.shown ? machine.x + machine.width + controlGap : controlsRight
-    readonly property real contextWidth: rail ? Math.max(0, Math.min(contextName.implicitWidth, contextMaximum, (width - padding - machineRight) / 3 - contextInset)) : 0
-    readonly property real contextRight: machineRight + contextInset + contextWidth + 2 * separatorGap + physicalPixel
+    readonly property var machineContext: controller?.machineContext ?? {}
+    readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28))
 
     color: colors.panelBackground
     clip: true
@@ -54,45 +47,61 @@ Rectangle {
         onClicked: root.sidebarToggled()
     }
 
-    MachineChrome {
-        id: machine
-        objectName: "topBarMachineSegment"
-        controller: root.controller
-        segment: true
-        x: root.controlsRight
-        y: (root.height - height) / 2
-        width: Math.max(0, Math.min(preferredWidth, (root.width - root.padding - x) / 3))
-        height: Math.min(root.height, root.machineControlHeight)
+    ChromeButton {
+        id: identity
+        objectName: "topBarIdentity"
+        x: toggle.x + toggle.width + root.controlGap
+        y: (parent.height - height) / 2
+        width: Math.min(root.contextRoom, Math.max(contextName.implicitWidth, machineName.implicitWidth) + 8 * root.ratio + (root.machineContext.attention ? 12 * root.ratio : 0))
+        height: Math.min(parent.height, (root.typography.bodyRow ?? root.typography.body * 1.25) + (root.typography.smallRow ?? root.typography.small * 1.25))
         colors: root.colors
-    }
-
-    ChromeText {
-        id: contextName
-        x: root.machineRight + root.contextInset
-        width: root.contextWidth
-        height: parent.height
-        text: root.workspace.name ?? "workspace"
-        color: root.colors.text
         pixelSize: root.typography.body
-        emphasized: true
-        visible: root.rail
-        elide: Text.ElideNone
-        clip: true
-    }
+        cornerRadius: 6 * root.ratio
+        Accessible.name: contextName.text + ", " + machineName.text + ", switch machine"
+        onClicked: {
+            if (root.controller) root.controller.execute(GuiController.Action.machine_picker);
+        }
+        contentItem: Item {
+            ChromeText {
+                id: contextName
+                objectName: "workspaceContextName"
+                x: 4 * root.ratio
+                width: Math.max(0, parent.width - x - 4 * root.ratio - (root.machineContext.attention ? 12 * root.ratio : 0))
+                height: parent.height * 0.55
+                text: root.workspace.name || "workspace"
+                color: root.colors.text
+                pixelSize: root.typography.body
+                emphasized: true
+            }
 
-    Rectangle {
-        x: Math.floor((contextName.x + contextName.width + root.separatorGap) * Screen.devicePixelRatio) / Screen.devicePixelRatio
-        y: Math.floor((parent.height - height) * Screen.devicePixelRatio / 2) / Screen.devicePixelRatio
-        width: root.physicalPixel
-        height: Math.min(parent.height, root.separatorHeight)
-        color: root.colors.surface1
-        visible: root.rail && root.contextWidth > 0
+            ChromeText {
+                id: machineName
+                objectName: "topBarMachineLabel"
+                x: contextName.x
+                y: contextName.height
+                width: contextName.width
+                height: parent.height - y
+                text: root.machineContext.label || ""
+                color: root.colors.subtext0
+                pixelSize: root.typography.small
+            }
+
+            NativeRoundedRectangle {
+                x: Math.max(0, parent.width - width - 4 * root.ratio)
+                y: (parent.height - height) / 2
+                width: 6 * root.ratio
+                height: width
+                radius: width / 2
+                color: root.colors.yellow
+                visible: root.machineContext.attention ?? false
+            }
+        }
     }
 
     TerminalTabs {
         controller: root.controller
         model: root.tabModel
-        x: root.rail ? root.contextRight : Math.max(root.machineRight, root.workbenchLeft)
+        x: root.rail ? identity.x + identity.width + root.controlGap : Math.max(identity.x + identity.width + root.controlGap, root.workbenchLeft)
         width: Math.max(0, root.width - root.padding - x)
         height: root.height
         colors: root.colors

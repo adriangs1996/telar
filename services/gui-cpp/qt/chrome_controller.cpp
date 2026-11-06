@@ -27,6 +27,13 @@ DisplayMetrics Application::displayMetrics(qreal density) const {
   return DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
 }
 
+QVariantMap Application::machineContext() const {
+  return {
+      {QStringLiteral("label"), toQString(machines_.row(machines_.active()).label.view())},
+      {QStringLiteral("attention"), machines_.attentionElsewhere()},
+  };
+}
+
 qreal Application::chromeRatio() const {
   return configuration().font.size / ChromeMetrics::reference_font_size;
 }

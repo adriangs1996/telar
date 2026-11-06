@@ -289,6 +289,116 @@ private:
     QVERIFY(bottom->findChild<TabStripLayout *>() == nullptr);
   }
 
+  Q_SLOT static void workspaceAndMachineStayVisibleInBothSidebarModes() {
+    ApplicationAllocator memory;
+    Application application{memory};
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    tabs.reconcile(tabRecords({.count = 3, .active = 0}));
+    auto properties = navigationProperties(tabs, 1000);
+    properties.insert(QStringLiteral("controller"), QVariant::fromValue(&application));
+    properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("telar")}});
+    properties.insert(QStringLiteral("controlsInset"), 80);
+    const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
+    navigation->setParentItem(window.contentItem());
+    window.resize(1000, ChromeMetrics{}.top_bar);
+    window.show();
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    auto *layout = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr);
+    const auto names = visualItems(*navigation, QStringLiteral("workspaceContextName"));
+    const auto machines = visualItems(*navigation, QStringLiteral("topBarMachineLabel"));
+    QCOMPARE(names.size(), 1);
+    QCOMPARE(machines.size(), 1);
+    const auto *name = names.front();
+    const auto *machine = machines.front();
+    QCOMPARE(name->property("text").toString(), QStringLiteral("telar"));
+    QVERIFY(!machine->property("text").toString().isEmpty());
+    QCOMPARE(machine->property("text").toString(), application.machineContext().value(QStringLiteral("label")).toString());
+    for (const bool rail : {false, true}) {
+      QVERIFY(navigation->setProperty("rail", rail));
+      QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+      QVERIFY(name->isVisible() && machine->isVisible());
+      const auto name_bounds = name->mapRectToItem(navigation.get(), name->boundingRect());
+      const auto machine_bounds = machine->mapRectToItem(navigation.get(), machine->boundingRect());
+      QVERIFY(name_bounds.left() >= 80);
+      QVERIFY(name_bounds.bottom() <= machine_bounds.top());
+      QVERIFY(machine_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
+    }
+  }
+
+  Q_SLOT static void tabsShareOneWellAndOneSelectionCapsule() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    tabs.reconcile(tabRecords({.count = 3, .active = 0}));
+    const auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, 800));
+    strip->setParentItem(window.contentItem());
+    window.resize(800, ChromeMetrics{}.top_bar);
+    window.show();
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 3, fixture_wait_ms);
+    const auto wells = visualItems(*strip, QStringLiteral("tabWell"));
+    const auto selections = visualItems(*strip, QStringLiteral("tabSelection"));
+    QCOMPARE(wells.size(), 1);
+    QCOMPARE(selections.size(), 1);
+    QCOMPARE(layout->selectionBounds(), tabBounds(*layout->items(), 0));
+    const auto *well = wells.front();
+    const auto *selection = selections.front();
+    QVERIFY(well->width() > selection->width());
+    QVERIFY(well->mapRectToItem(strip.get(), well->boundingRect()).contains(selection->mapRectToItem(strip.get(), selection->boundingRect())));
+    QCOMPARE(selection->property("radius").toReal(), selection->height() / 2);
+    tabs.reconcile(tabRecords({.count = 3, .active = 2}));
+    QTRY_COMPARE_WITH_TIMEOUT(layout->selectionBounds(), tabBounds(*layout->items(), 2), fixture_wait_ms);
+    QCOMPARE(visualItems(*strip, QStringLiteral("tabSelection")).size(), 1);
+    tabs.reconcile({});
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, fixture_wait_ms);
+    QVERIFY(!well->isVisible() && !selection->isVisible());
+  }
+
+  Q_SLOT static void tabWellFitsNarrowAndScaledStrips_data() {
+    QTest::addColumn<int>("width");
+    QTest::addColumn<qreal>("ratio");
+    QTest::newRow("narrow") << 48 << qreal{1};
+    QTest::newRow("overflow") << 120 << qreal{1};
+    QTest::newRow("fractional") << 180 << qreal{1.5};
+    QTest::newRow("double") << 800 << qreal{2};
+  }
+
+  Q_SLOT static void tabWellFitsNarrowAndScaledStrips() {
+    QFETCH(int, width);
+    QFETCH(qreal, ratio);
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    tabs.reconcile(tabRecords({.count = 64, .active = 32}));
+    auto properties = tabProperties(tabs, width);
+    const auto height = ChromeMetrics::logical_top_bar * ratio;
+    properties.insert(QStringLiteral("height"), height);
+    properties.insert(QStringLiteral("ratio"), ratio);
+    const auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), properties);
+    strip->setParentItem(window.contentItem());
+    window.resize(width, static_cast<int>(height));
+    window.show();
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(layout->items()->rowCount() > 0, fixture_wait_ms);
+    const auto wells = visualItems(*strip, QStringLiteral("tabWell"));
+    QCOMPARE(wells.size(), 1);
+    const auto *well = wells.front();
+    QVERIFY(well->isVisible());
+    QVERIFY(well->width() <= width);
+    QVERIFY(well->height() <= height);
+    QVERIFY(layout->selectionBounds().height() <= well->height());
+    QVERIFY(!layout->counter().isEmpty());
+    const auto selection = layout->selectionBounds().translated(layout->position());
+    QVERIFY(selection.left() >= 0 && selection.right() <= width);
+  }
+
   Q_SLOT static void uncoveredLabelsKeepDimensions() {
     QQmlEngine engine;
     const ChromeMetrics chrome;
@@ -513,6 +623,48 @@ private:
     samples.clear();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     QCOMPARE(samples.size(), 0);
+  }
+
+  Q_SLOT static void selectionCapsuleAnimatesAndResetsWithItsWorkspace() {
+    QQuickWindow window;
+    ListModel tabs;
+    QList<QVariantMap> rows;
+    for (int id = 1; id <= 3; ++id) {
+      rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QStringLiteral("Terminal")}, {QStringLiteral("selected"), id == 1}});
+    }
+    tabs.reconcile(rows);
+    TabStripLayout layout{window.contentItem()};
+    layout.setSize(QSizeF{800, ChromeMetrics::logical_top_bar});
+    layout.setContext(1, telar::WorkspaceLocation{.id = 1});
+    QFont font{QStringLiteral("IBM Plex Sans")};
+    font.setPixelSize(13);
+    layout.setFont(font);
+    layout.setPixelSize(13);
+    layout.setModel(&tabs);
+    window.resize(800, static_cast<int>(ChromeMetrics::logical_top_bar));
+    window.show();
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QCOMPARE(layout.selectionBounds(), tabBounds(*layout.items(), 0));
+    layout.setHovered(true);
+    rows[0].insert(QStringLiteral("selected"), false);
+    rows[2].insert(QStringLiteral("selected"), true);
+    tabs.reconcile(rows);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QVERIFY(layout.transitioning());
+    QVERIFY(layout.selectionBounds().left() < tabBounds(*layout.items(), 2).left());
+    QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning(), fixture_wait_ms);
+    QCOMPARE(layout.selectionBounds(), tabBounds(*layout.items(), 2));
+    rows[2].insert(QStringLiteral("selected"), false);
+    rows[0].insert(QStringLiteral("selected"), true);
+    layout.setContext(1, telar::WorkspaceLocation{.id = 2});
+    tabs.reconcile(rows);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QCOMPARE(layout.selectionBounds(), tabBounds(*layout.items(), 0));
+    QVERIFY(!layout.transitioning());
+    layout.setSize(QSizeF{});
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QVERIFY(layout.selectionBounds().isEmpty() && layout.stripBounds().isEmpty());
+    QVERIFY(!layout.transitioning());
   }
 
   Q_SLOT static void tabsPackAndKeepTheirWidthsWhileHovered() {

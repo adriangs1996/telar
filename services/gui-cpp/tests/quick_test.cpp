@@ -1885,7 +1885,7 @@ private:
     client_->execute(Application::Action::split_horizontal);
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
     const auto split_id = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
-    const auto *layout = window_->findChild<PaneMotionLayout *>();
+    auto *layout = window_->findChild<PaneMotionLayout *>();
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, runtime_wait_ms);
     const auto settled = [&] {

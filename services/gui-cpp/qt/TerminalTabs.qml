@@ -5,6 +5,7 @@ import Telar.Gui
 
 Item {
     id: root
+    clip: true
 
     property var controller: null
     required property var model
@@ -13,6 +14,7 @@ Item {
     property real ratio: 1
     property real textScale: 1
     property bool prefixPending: false
+    readonly property real wellPadding: 3 * ratio
     signal selected(string key)
     signal closed(string key)
     signal renamed()
@@ -21,7 +23,9 @@ Item {
     TabStripLayout {
         id: layout
         objectName: "tabStripLayout"
-        anchors.fill: parent
+        x: root.wellPadding
+        width: Math.max(0, root.width - 2 * root.wellPadding)
+        height: root.height
         model: root.model
         ratio: root.ratio
         hovered: pointer.hovered
@@ -40,7 +44,55 @@ Item {
     }
 
     NativeRoundedRectangle {
-        x: layout.dropMarker.x
+        objectName: "tabWell"
+        x: layout.x + layout.stripBounds.x - root.wellPadding
+        y: layout.stripBounds.y - root.wellPadding
+        width: Math.min(root.width, layout.stripBounds.width + 2 * root.wellPadding)
+        height: Math.min(root.height, layout.stripBounds.height + 2 * root.wellPadding)
+        radius: height / 2
+        color: root.colors.text
+        opacity: 0.045
+        visible: layout.stripBounds.width > 0
+    }
+
+    NativeRoundedRectangle {
+        objectName: "tabSelectionShadow"
+        x: layout.x + layout.selectionBounds.x
+        y: layout.selectionBounds.y + root.ratio
+        width: layout.selectionBounds.width
+        height: layout.selectionBounds.height
+        radius: layout.style.pillRadius
+        color: "black"
+        opacity: 0.18
+        visible: width > 0 && height > 0
+    }
+
+    NativeRoundedRectangle {
+        objectName: "tabSelection"
+        x: layout.x + layout.selectionBounds.x
+        y: layout.selectionBounds.y
+        width: layout.selectionBounds.width
+        height: layout.selectionBounds.height
+        radius: layout.style.pillRadius
+        color: root.colors.surface1
+        borderColor: root.colors.text
+        borderAlpha: 0.18
+        borderWidth: 1 / Screen.devicePixelRatio
+        visible: width > 0 && height > 0
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 1 / Screen.devicePixelRatio
+            radius: Math.max(0, parent.radius - anchors.margins)
+            gradient: Gradient {
+                GradientStop { position: 0; color: Qt.rgba(root.colors.text.r, root.colors.text.g, root.colors.text.b, 0.09) }
+                GradientStop { position: 1; color: "transparent" }
+            }
+        }
+    }
+
+    NativeRoundedRectangle {
+        x: layout.x + layout.dropMarker.x
         y: layout.dropMarker.y
         width: layout.dropMarker.width
         height: layout.dropMarker.height
@@ -63,14 +115,25 @@ Item {
             readonly property bool pointed: root.controller ? layout.hoveredTab === tabKey : mouse.containsMouse
             readonly property bool lit: source.selected || pointed
 
-            x: record.bounds.x
+            x: layout.x + record.bounds.x
             y: record.bounds.y
             width: record.bounds.width
             height: record.bounds.height
             radius: layout.style.pillRadius
-            color: source.selected ? root.colors.surface1 : pointed ? root.colors.surface0 : "transparent"
+            color: pointed && !source.selected ? root.colors.surface0 : "transparent"
             clip: true
             z: record.dragging ? 1 : 0
+
+            Rectangle {
+                objectName: "tabSeparator"
+                x: parent.width - width
+                y: (parent.height - height) / 2
+                width: 1 / Screen.devicePixelRatio
+                height: 14 * root.ratio
+                color: root.colors.text
+                opacity: 0.12
+                visible: tab.record.separator && !tab.pointed
+            }
 
             NativeRoundedRectangle {
                 x: tab.record.chip.x
@@ -165,7 +228,7 @@ Item {
     NativeRoundedRectangle {
         objectName: "draggedTabOutline"
         z: 1
-        x: layout.draggedBounds.x
+        x: layout.x + layout.draggedBounds.x
         y: layout.draggedBounds.y
         width: layout.draggedBounds.width
         height: layout.draggedBounds.height
@@ -181,7 +244,7 @@ Item {
         z: 2
         pointerHovered: root.controller ? layout.hoveredTab === layout.counter.key : hovered
         objectName: "hiddenTabCounter"
-        x: layout.counter.bounds?.x ?? 0
+        x: layout.x + (layout.counter.bounds?.x ?? 0)
         y: layout.counter.bounds?.y ?? 0
         width: layout.counter.bounds?.width ?? 0
         height: layout.counter.bounds?.height ?? 0
@@ -228,7 +291,7 @@ Item {
     ChromeButton {
         objectName: "createTabButton"
         z: 2
-        x: layout.plus.x
+        x: layout.x + layout.plus.x
         y: layout.plus.y
         width: layout.plus.width
         height: layout.plus.height

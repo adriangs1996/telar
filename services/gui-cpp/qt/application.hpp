@@ -133,6 +133,7 @@ class Application final : public QObject {
   Q_PROPERTY(QVariantMap runtimeLinkGeometry READ runtimeLinkGeometry NOTIFY runtimeLinkChanged)
   Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
   Q_PROPERTY(QVariantMap workspaceContext READ workspaceContext NOTIFY stateChanged)
+  Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
   Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY configurationChanged)
   Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY configurationChanged)
   Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY configurationChanged)
@@ -396,6 +397,7 @@ public:
   [[nodiscard]] QVariantMap historyGeometry() const;
   [[nodiscard]] QVariantMap sidebarGeometry() const;
   [[nodiscard]] QVariantMap workspaceContext() const;
+  [[nodiscard]] QVariantMap machineContext() const;
   [[nodiscard]] bool sidebarVisible() const;
   [[nodiscard]] qreal sidebarWidth() const;
   [[nodiscard]] bool workspaceListCollapsed() const;

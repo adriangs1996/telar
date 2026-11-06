@@ -135,6 +135,7 @@ void TabStripLayout::setContext(std::uint64_t machine_view, std::optional<Worksp
   machine_view_ = machine_view;
   workspace_ = workspace;
   motions_ = {};
+  selection_motion_.reset();
   next_sample_ns_.reset();
   drag_preview_.reset();
   dragged_.reset();
@@ -277,6 +278,7 @@ void TabStripLayout::setModel(QAbstractItemModel *model) {
   }
 
   anchor_.clear();
+  selection_motion_.reset();
   emit modelChanged();
   polish();
 }
@@ -459,6 +461,9 @@ void TabStripLayout::raiseDraggedSlot() {
 void TabStripLayout::rebuild() {
   if (width() <= 0 || height() <= 0 || !std::isfinite(width()) || !std::isfinite(height()) || width() > std::numeric_limits<float>::max() || height() > std::numeric_limits<float>::max()) {
     plus_ = {};
+    strip_bounds_ = {};
+    selection_bounds_ = {};
+    selection_motion_.reset();
     motions_ = {};
     next_sample_ns_.reset();
     frame_requested_ = false;
@@ -483,7 +488,7 @@ void TabStripLayout::rebuild() {
   const auto plus_side = std::min(Geometry::plus_side * ratio, available);
   QList<QVariantMap> records;
   std::array<Geometry::Measure, Geometry::maximum_tabs> sizes;
-  const Geometry::Room room{.width = std::max(0.0F, available - plus_side - metrics.gap), .metrics = metrics};
+  const Geometry::Room room{.width = std::max(0.0F, available - plus_side - Geometry::control_gap * ratio), .metrics = metrics};
   const auto plan = measureTabs(records, sizes, room);
   const auto count = records.size();
 
@@ -501,6 +506,8 @@ void TabStripLayout::rebuild() {
   drop_slot_count_ = 0;
   drop_marker_ = {};
   dragged_bounds_ = {};
+  std::optional<Rect> selection;
+  bool selection_dragging = false;
   float left = 0;
   for (std::size_t position = 0; position < shown; ++position) {
     const auto index = order[position];
@@ -512,10 +519,17 @@ void TabStripLayout::rebuild() {
     const auto &record = records[static_cast<qsizetype>(index)];
     const auto id = record.value(QStringLiteral("key")).toString().toULongLong();
     const auto dragging = dragged_ == id;
+    const auto target = bounds;
     bounds = placeTab(id, bounds, frame);
+    if (record.value(QStringLiteral("selected")).toBool()) {
+      const auto selected_bounds = dragging ? bounds : target;
+      selection = Rect{.x = static_cast<float>(selected_bounds.x() * density), .y = static_cast<float>(selected_bounds.y() * density), .width = static_cast<float>(selected_bounds.width() * density), .height = static_cast<float>(selected_bounds.height() * density)};
+      selection_dragging = dragging;
+    }
 
     auto entry = positionedTab(record, sizes[index], bounds, plan.fits[index], metrics);
     entry.insert(QStringLiteral("dragging"), dragging);
+    entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records[static_cast<qsizetype>(order[position + 1])].value(QStringLiteral("selected")).toBool());
     positioned.append(std::move(entry));
     drop_slots_[drop_slot_count_++] = {.id = id, .bounds = {.x = static_cast<float>(bounds.x()), .y = static_cast<float>(bounds.y()), .width = static_cast<float>(bounds.width()), .height = static_cast<float>(bounds.height())}};
     left += plan.widths[index];
@@ -540,8 +554,20 @@ void TabStripLayout::rebuild() {
     left += counter_width;
   }
 
+  strip_bounds_ = count != 0 ? QRectF{0, top, std::min(left, available), height} : QRectF{};
+  selection_bounds_ = {};
+  if (selection) {
+    if (!selection_motion_) {
+      selection_motion_ = TabMotion{.from = *selection, .to = *selection};
+    }
+    const auto visible = selection_motion_->place(*selection, frame, selection_dragging || !workspace_);
+    selection_bounds_ = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
+  } else {
+    selection_motion_.reset();
+  }
+
   if (count != 0) {
-    left += metrics.gap;
+    left += Geometry::control_gap * ratio;
     anchor_ = records[static_cast<qsizetype>(plan.focus)].value(QStringLiteral("key")).toString();
   }
 

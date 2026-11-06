@@ -5,6 +5,7 @@
 #include "presentation/sidebar_geometry.hpp"
 #include "presentation/tab_caption.hpp"
 #include "presentation/tab_strip_geometry.hpp"
+#include "presentation/tab_motions.hpp"
 #include "presentation/workspace_mark.hpp"
 #include "presentation/workspace_rail_geometry.hpp"
 #include "presentation/window_title.hpp"
@@ -156,6 +157,23 @@ void tabStripsCompressAroundTheirFocus() {
   require(narrow.footprint(metrics) <= narrow_room, "the overflow counter and gaps must share the strip's budget");
 }
 
+void tabSelectionRetargetsWithoutJumping() {
+  using namespace telar::gui;
+  const Rect initial{.width = 80, .height = 30};
+  const Rect target{.x = 80, .width = 160, .height = 30};
+  TabMotion selection{.from = initial, .to = initial};
+  TabMotionFrame frame;
+  require(selection.place(initial, frame) == initial && !frame.deadline_ns, "an idle selection must not request frames");
+  require(selection.place(target, frame) == initial && frame.deadline_ns, "selection movement must start at the displayed capsule");
+  frame.begin(TabMotion::duration_ns / 2);
+  const auto halfway = selection.place(target, frame);
+  require(halfway == Rect{.x = 70, .width = 150, .height = 30}, "selection position and width must share the tab easing curve");
+  require(selection.place(initial, frame) == halfway, "rapid selection changes must retarget from the displayed position");
+  frame.begin(frame.now_ns + TabMotion::duration_ns);
+  require(selection.place(initial, frame) == initial && !frame.deadline_ns, "a settled selection must stop requesting frames");
+  require(selection.place(target, frame, true) == target && !frame.deadline_ns, "dragging or changing context must place the capsule immediately");
+}
+
 void artworkPreservesAlphaWithoutTransparentFringes() {
   using namespace telar::gui;
   constexpr std::array<std::uint8_t, 8> pixels{255, 0, 0, 0, 0, 0, 255, 255};
@@ -205,6 +223,7 @@ int main() {
     workspaceRailKeepsTheSelectionInView();
     tabCaptionsFollowForegroundAndDirectory();
     tabStripsCompressAroundTheirFocus();
+    tabSelectionRetargetsWithoutJumping();
     artworkPreservesAlphaWithoutTransparentFringes();
     artworkRejectsInvalidStorageBeforeWriting();
     std::puts("gui-presentation: passed");

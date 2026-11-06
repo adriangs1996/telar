@@ -33,6 +33,8 @@ class TabStripLayout : public QQuickItem {
   Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY ratioChanged)
   Q_PROPERTY(bool hovered READ hovered WRITE setHovered NOTIFY hoveredChanged)
   Q_PROPERTY(QRectF plus READ plus NOTIFY layoutChanged)
+  Q_PROPERTY(QRectF stripBounds READ stripBounds NOTIFY layoutChanged)
+  Q_PROPERTY(QRectF selectionBounds READ selectionBounds NOTIFY layoutChanged)
   Q_PROPERTY(QRectF dropMarker READ dropMarker NOTIFY layoutChanged)
   Q_PROPERTY(QRectF draggedBounds READ draggedBounds NOTIFY layoutChanged)
   Q_PROPERTY(QString hoveredTab READ hoveredTab NOTIFY pointerHoverChanged)
@@ -60,6 +62,12 @@ public:
   [[nodiscard]] bool hovered() const noexcept;
   void setHovered(bool hovered);
   [[nodiscard]] QRectF plus() const noexcept;
+  [[nodiscard]] QRectF stripBounds() const noexcept {
+    return strip_bounds_;
+  }
+  [[nodiscard]] QRectF selectionBounds() const noexcept {
+    return selection_bounds_;
+  }
   [[nodiscard]] QRectF dropMarker() const noexcept;
   [[nodiscard]] QRectF draggedBounds() const noexcept;
   [[nodiscard]] QString hoveredTab() const;
@@ -103,6 +111,7 @@ private:
   QPointer<WindowAnimationClock> clock_;
   QMetaObject::Connection frame_connection_;
   TabMotions motions_;
+  std::optional<TabMotion> selection_motion_;
   std::optional<WorkspaceLocation> workspace_;
   std::uint64_t machine_view_ = 0;
   std::optional<std::uint64_t> next_sample_ns_;
@@ -117,6 +126,8 @@ private:
   bool hovered_ = false;
   QString anchor_;
   QRectF plus_;
+  QRectF strip_bounds_;
+  QRectF selection_bounds_;
   QRectF drop_marker_;
   QRectF dragged_bounds_;
   std::array<TabDropSlot, TabDropSlots::capacity> drop_slots_{};
