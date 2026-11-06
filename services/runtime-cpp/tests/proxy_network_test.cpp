@@ -5,6 +5,7 @@
 #include <fstream>
 #include <cstring>
 
+using namespace telar;
 using namespace telar::runtime;
 
 void testProxyResolution();

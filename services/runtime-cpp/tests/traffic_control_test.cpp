@@ -7,6 +7,7 @@
 #include "traffic/control_service.hpp"
 #include <vector>
 
+using namespace telar;
 using namespace telar::runtime;
 using telar::Byte;
 namespace traffic_control = telar::runtime::traffic::control;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "telar_codec.hpp"
+#include "telar_base/text/utf8.hpp"
 
 #include <bit>
 #include <limits>
@@ -106,42 +107,6 @@ namespace telar {
     multiline,
     opaque
   };
-
-  enum class Utf8Validation : Byte { valid, invalid_leading, invalid_continuation, invalid_scalar };
-
-  inline Utf8Validation inspectUtf8(std::string_view value) noexcept {
-    std::size_t index = 0;
-    while (index < value.size()) {
-      const auto lead = static_cast<Byte>(value[index]);
-      if (lead < 0x80) {
-        ++index;
-        continue;
-      }
-
-      const std::size_t length = lead >= 0xc2 && lead <= 0xdf   ? 2
-                                 : lead >= 0xe0 && lead <= 0xef ? 3
-                                 : lead >= 0xf0 && lead <= 0xf4 ? 4
-                                                                : 0;
-      if (length == 0 || length > value.size() - index) {
-        return Utf8Validation::invalid_leading;
-      }
-
-      for (std::size_t i = 1; i < length; ++i) {
-        const auto byte = static_cast<Byte>(value[index + i]);
-        if (byte < 0x80 || byte > 0xbf) {
-          return Utf8Validation::invalid_continuation;
-        }
-      }
-      const auto second = static_cast<Byte>(value[index + 1]);
-      if ((lead == 0xe0 && second < 0xa0) || (lead == 0xed && second >= 0xa0) ||
-          (lead == 0xf0 && second < 0x90) || (lead == 0xf4 && second > 0x8f)) {
-        return Utf8Validation::invalid_scalar;
-      }
-      index += length;
-    }
-
-    return Utf8Validation::valid;
-  }
 
   inline void validateUtf8(std::string_view value) {
     switch (inspectUtf8(value)) {

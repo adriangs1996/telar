@@ -76,7 +76,7 @@ using PreparedPluginWorker = Owned<PluginWorkerSnapshot, ApplicationAllocator>;
 
 struct PluginWorkerPreparation {
   explicit PluginWorkerPreparation(ApplicationAllocator &memory)
-      : snapshot(nullptr, runtime::AllocationDeleter<PluginWorkerSnapshot, ApplicationAllocator>{memory}) {}
+      : snapshot(nullptr, AllocationDeleter<PluginWorkerSnapshot, ApplicationAllocator>{memory}) {}
 
   PreparedPluginWorker snapshot;
   QString error;
@@ -93,7 +93,7 @@ public:
   explicit PluginWorker(ApplicationAllocator &memory, Observer &observer)
       : memory_(memory),
         observer_(observer),
-        snapshot_(nullptr, runtime::AllocationDeleter<PluginWorkerSnapshot, ApplicationAllocator>{memory}),
+        snapshot_(nullptr, AllocationDeleter<PluginWorkerSnapshot, ApplicationAllocator>{memory}),
         process_(*this) {
     QObject::connect(&preparation_, &QFutureWatcher<PluginWorkerPreparation>::finished, &context_, [this] {
       snapshotReady();

@@ -15,6 +15,6 @@ public:
     budget.deallocate(pointer, size, alignment);
   }
 
-  telar::runtime::SystemAllocator system;
-  telar::runtime::BudgetAllocator<telar::runtime::SystemAllocator> budget{system, 2 * 1024 * 1024};
+  telar::SystemAllocator system;
+  telar::BudgetAllocator<telar::SystemAllocator> budget{system, 2 * 1024 * 1024};
 };

@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstring>
 
-namespace telar::runtime {
+namespace telar {
 
 inline void eraseSensitive(void *storage, std::size_t length) noexcept {
   if (length == 0) {

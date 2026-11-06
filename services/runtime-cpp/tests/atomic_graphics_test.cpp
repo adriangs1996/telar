@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const std::uint8_t> atomicBytes(std::string_view text) {

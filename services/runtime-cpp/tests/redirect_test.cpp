@@ -9,6 +9,7 @@
 #include <functional>
 #include <mutex>
 
+using namespace telar;
 using namespace telar::runtime;
 using telar::Byte;
 namespace redir = telar::runtime::redirect;

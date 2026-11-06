@@ -1,6 +1,6 @@
 #pragma once
 
-#include "telar_base/diagnostics/timing.hpp"
+#include "timing.hpp"
 #include <atomic>
 #include <exception>
 

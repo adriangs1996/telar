@@ -2,6 +2,7 @@
 #include "telar_lua/json.hpp"
 #include "telar_lua/vm.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 static int failWithResource(lua_State *state) {

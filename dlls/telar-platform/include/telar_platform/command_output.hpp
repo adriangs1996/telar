@@ -1,7 +1,7 @@
 #pragma once
 
 #include "telar_base/memory/byte_queue.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 #include "telar_platform/command.hpp"
 #include "telar_platform/pipe_process.hpp"
 #include <atomic>

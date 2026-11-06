@@ -64,7 +64,10 @@ add_subdirectory("${TELAR_ROOT}/dlls/websock" "${CMAKE_CURRENT_BINARY_DIR}/webso
 target_link_libraries(your_target PRIVATE telar::websock)
 ```
 
-The library currently has no runtime, GUI, TLS or third-party dependencies.
+The library depends on `telar::base` for the shared allocator contract, without
+runtime, GUI, client-protocol, TLS or third-party dependencies. `Server` accepts
+a caller-owned allocator satisfying `telar::Allocator`; it does not define a
+second allocation interface. The allocator must outlive the server.
 Its public include is `<websock/websock.hpp>`.
 
 To install the headers and CMake package:

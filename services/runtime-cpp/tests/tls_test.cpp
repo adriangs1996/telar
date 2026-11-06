@@ -8,6 +8,7 @@
 #include <fstream>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 void testTlsAlpn();

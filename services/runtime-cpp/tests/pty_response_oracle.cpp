@@ -1,5 +1,6 @@
 #include "terminal/pty_response_queue.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 struct Operation {

@@ -199,6 +199,7 @@ int run(std::span<char *const> words) {
 }
 
 auto main(int argc, char **argv) -> int {
+  using namespace telar;
   using namespace telar::runtime;
 
   const std::span<char *const> words = std::span<char *const>{argv, static_cast<std::size_t>(argc)}.subspan(argc > 0 ? 1 : 0);

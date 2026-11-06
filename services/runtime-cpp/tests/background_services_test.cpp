@@ -1,6 +1,7 @@
 #include "check.hpp"
 #include "editors/remote_editor.hpp"
 #include "paths/path_index.hpp"
+#include "platform/request_worker.hpp"
 #include "suggestions/engine.hpp"
 #include <filesystem>
 #include <fstream>
@@ -23,11 +24,35 @@ static void testJson(SystemAllocator &memory) {
     bool rejected = false;
     try {
       JsonValue::parse(invalid);
-    } catch (const RequestError &) {
+    } catch (const JsonError &) {
       rejected = true;
     }
     check(rejected);
   }
+}
+
+struct MalformedJsonService {
+  void process(std::span<const Byte>, EncodedReply<SystemAllocator> &) {
+    JsonValue::parse("{");
+  }
+};
+
+static void testJsonFailure(SystemAllocator &memory) {
+  MalformedJsonService service;
+  RequestWorker worker{memory, service};
+  worker.submit(7, QueryClients{.request_id = 42});
+  pollfd ready{.fd = worker.descriptor(), .events = POLLIN, .revents = 0};
+  check(::poll(&ready, 1, 2000) == 1);
+  bool received = false;
+  worker.collect([&](std::uint64_t client, ClientTag, std::span<const Byte> payload) {
+    std::array<Byte, 256> bytes;
+    DecodeStorage storage{bytes};
+    const auto failure = Codec::decode<RequestFailed>(payload, storage);
+    check(client == 7 && failure.request_id == 42);
+    check(failure.code == FailureCode::invalid_request && failure.message == "Invalid JSON record");
+    received = true;
+  });
+  check(received && !worker.pending());
 }
 
 static void testSuggestions(SystemAllocator &memory) {
@@ -189,6 +214,7 @@ static void testNeovimEditor(SystemAllocator &memory) {
 void testBackgroundServices() {
   SystemAllocator memory;
   testJson(memory);
+  testJsonFailure(memory);
   testSuggestions(memory);
   testPaths(memory);
   testMissingEditor(memory);

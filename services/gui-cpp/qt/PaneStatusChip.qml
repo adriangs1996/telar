@@ -9,6 +9,8 @@ NativeAgentStatus {
     required property var colors
     required property var typography
     required property var geometry
+    property bool needsAttention: false
+    readonly property color stateColor: colors[record.statusColor ?? "overlay1"]
     displayMode: NativeAgentStatus.DisplayMode.pane_chip
     implicitWidth: statusText.length > 0 ? Math.ceil((measure.implicitWidth + 2 * geometry.chipInset) * geometry.density) / geometry.density : 0
 
@@ -26,7 +28,7 @@ NativeAgentStatus {
         width: root.width
         height: chipHeight
         radius: root.geometry.chipRadius
-        color: root.colors[root.record.statusColor ?? "overlay1"]
+        color: Qt.alpha(root.stateColor, root.needsAttention ? 0.18 : 0.04)
     }
 
     ChromeText {
@@ -36,7 +38,7 @@ NativeAgentStatus {
         height: root.height
         text: root.statusText
         pixelSize: root.typography.body
-        color: root.colors.surface_dim
+        color: root.needsAttention ? root.stateColor : root.colors.text
         elide: Text.ElideNone
     }
 }

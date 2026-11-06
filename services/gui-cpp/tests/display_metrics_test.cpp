@@ -43,10 +43,10 @@ void fractionalDensityPreservesPhysicalRounding() {
   constexpr double density = 1.25;
   const auto display = DisplayMetrics::resolve(configuration, logical, cells, density);
   constexpr Viewport expected{.width = 1001, .height = 629, .scale = density, .controls = 31};
-  constexpr std::uint16_t expected_small = 16;
-  constexpr std::uint16_t expected_title = 18;
+  constexpr std::uint16_t expected_small = 14;
+  constexpr std::uint16_t expected_title = 16;
   require(display.viewport == expected, "frame and control extents must round at the physical pixel boundary");
-  require(display.chrome.small == expected_small && display.chrome.title == expected_title, "text roles must round after density is applied to the configured font");
+  require(display.chrome.small == expected_small && display.chrome.title == expected_title, "chrome text must round after density independently of the terminal font");
 }
 
 void invalidDensityAndUnrepresentableExtentsAreRejected() {
@@ -73,7 +73,6 @@ void invalidDensityAndUnrepresentableExtentsAreRejected() {
 
   require(rejected, "a physical viewport must fit the original unsigned extent type");
 }
-
 }
 
 int main() try {

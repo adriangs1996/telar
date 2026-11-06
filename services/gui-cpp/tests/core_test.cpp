@@ -394,6 +394,28 @@ void copyRanges() {
   }
 }
 
+void independentPaneHeaders() {
+  using namespace telar;
+  using namespace telar::gui;
+
+  PaneLayout layout;
+  require(layout.add(1, ClientLayoutAxis::horizontal, 0) && layout.add(2, ClientLayoutAxis::horizontal, 1), "header fixture must split");
+  constexpr CellRectangle area{.width = 100, .height = 40};
+  constexpr PaneLayout::Metrics metrics{.header = 3};
+  const auto split = layout.prospectiveSplit(area, ClientLayoutAxis::vertical, 1, metrics);
+  require(split.has_value(), "independent headers must permit a sufficiently large split");
+  for (const auto &placement : layout.arrange(area, metrics)) {
+    require(placement.content.y == placement.bounds.y + metrics.header, "a pane header must reserve complete terminal rows");
+    require(placement.content.x == placement.bounds.x + metrics.border && placement.content.width + 2 * metrics.border == placement.bounds.width, "header reservation must not change horizontal borders");
+    require(placement.content.bottom() + metrics.border == placement.bounds.bottom(), "independent headers must retain the bottom border");
+  }
+  require(split->existing_content == metrics.content({.width = 49, .height = 19}), "prospective and committed split sizes must reserve the same header");
+  require(!layout.prospectiveSplit({.width = 20, .height = 10}, ClientLayoutAxis::vertical, 1, metrics), "a split must refuse to consume the last content row");
+  require(metrics.content({.width = 2, .height = 2}).empty(), "tiny headers must saturate instead of underflowing");
+  constexpr PaneLayout::Metrics borderless{.border = 0, .header = 3};
+  require(borderless.content(area) == area, "disabled borders must not reserve an invisible header");
+}
+
 void windowGeometry() {
   using namespace telar::gui;
 
@@ -408,6 +430,14 @@ void windowGeometry() {
   const auto scaled_chrome = ChromeMetrics::resolve(configuration, viewport, cells);
   require(initial.terminal == scaled.terminal && original_chrome.top_bar == scaled_chrome.top_bar && original_chrome.title < scaled_chrome.title, "chrome scale must change text without changing terminal geometry or band heights");
 
+  for (const float terminal_size : {6.0F, 15.0F, 32.0F}) {
+    configuration.font.size = terminal_size;
+    const auto chrome = ChromeMetrics::resolve(configuration, viewport, cells);
+    const auto geometry = WindowGeometry::measure(configuration, viewport, cells);
+    require(chrome.ratio == scaled_chrome.ratio && chrome.top_bar == scaled_chrome.top_bar && chrome.pane_header == scaled_chrome.pane_header && chrome.title == scaled_chrome.title && chrome.small == scaled_chrome.small, "terminal font zoom must not resize navigation, panel headers or chrome text");
+    require(geometry.terminal == scaled.terminal, "terminal font zoom must preserve the workbench pixel bounds");
+  }
+
   constexpr float horizontal_padding = 10;
   constexpr float vertical_padding = 12;
   configuration.padding_x = horizontal_padding;
@@ -420,7 +450,6 @@ void windowGeometry() {
   const auto hidden = WindowGeometry::measure(configuration, viewport, cells);
   require(hidden.sidebar.width == 0 && hidden.terminal.x == horizontal_padding, "hiding the sidebar must return its full width to the terminal");
 }
-
 }
 
 int main() {
@@ -434,6 +463,7 @@ int main() {
     terminalConsumerStopsBeforeTheNextFrame();
     mouseEncoding();
     copyRanges();
+    independentPaneHeaders();
     windowGeometry();
     std::puts("gui-core: passed");
   } catch (const std::exception &error) {

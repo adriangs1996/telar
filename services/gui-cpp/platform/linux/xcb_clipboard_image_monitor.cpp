@@ -108,7 +108,7 @@ struct XcbClipboardImageMonitor::Native final : QAbstractNativeEventFilter {
 
     runtime::FileDescriptor reading{sockets.front()};
     writing_ = runtime::FileDescriptor{sockets.back()};
-    status_ = std::allocate_shared<ClipboardImageTransfer>(runtime::AllocatorRef<ClipboardImageTransfer, ApplicationAllocator>{memory_});
+    status_ = std::allocate_shared<ClipboardImageTransfer>(AllocatorRef<ClipboardImageTransfer, ApplicationAllocator>{memory_});
     window_ = xcb_generate_id(connection_);
     const auto *const screen = xcb_setup_roots_iterator(xcb_get_setup(connection_)).data;
     constexpr std::uint32_t events = XCB_EVENT_MASK_PROPERTY_CHANGE;

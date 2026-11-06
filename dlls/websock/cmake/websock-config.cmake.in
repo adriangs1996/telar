@@ -1,4 +1,6 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+find_dependency(telar-base CONFIG)
 include("${CMAKE_CURRENT_LIST_DIR}/websock-targets.cmake")
 check_required_components(websock)

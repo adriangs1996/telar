@@ -3,7 +3,7 @@
 #include "telar_base/memory/allocator.hpp"
 #include <cstring>
 
-namespace telar::runtime {
+namespace telar {
 
 template <Allocator Memory>
 class CAllocationBlocks {

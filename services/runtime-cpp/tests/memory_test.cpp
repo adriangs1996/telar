@@ -9,6 +9,7 @@
 #include <array>
 #include <optional>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static void testBufferAllocations() {

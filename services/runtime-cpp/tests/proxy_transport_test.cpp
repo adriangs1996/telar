@@ -11,6 +11,7 @@
 #include <string>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static void sendBytes(int socket, std::string_view bytes) {

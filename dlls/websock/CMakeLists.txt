@@ -6,9 +6,14 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT TARGET telar-base)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../telar-base" "${CMAKE_CURRENT_BINARY_DIR}/telar-base")
+endif()
+
 add_library(websock INTERFACE)
 add_library(telar::websock ALIAS websock)
 target_compile_features(websock INTERFACE cxx_std_23)
+target_link_libraries(websock INTERFACE telar::base)
 target_include_directories(websock INTERFACE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/includes>"
   "$<INSTALL_INTERFACE:include>")

@@ -71,14 +71,14 @@ std::optional<std::string_view> optionalText(const QByteArray &bytes) noexcept {
 
 }
 
-static_assert(runtime::ConcurrentAllocator<ApplicationAllocator>);
+static_assert(ConcurrentAllocator<ApplicationAllocator>);
 
 ConfigurationSource::ConfigurationSource(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
       fonts_(memory),
       default_keymap_(default_input_.compile()),
-      generation_(nullptr, runtime::AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
+      generation_(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
   debounce_.setSingleShot(true);
   constexpr int reload_debounce_ms = 100;
   debounce_.setInterval(reload_debounce_ms);

@@ -34,7 +34,7 @@ struct ImagePixels {
 
   static void release(void *context) noexcept {
     auto *const owner = static_cast<ImagePixels *>(context);
-    runtime::AllocationDeleter<ImagePixels, ApplicationAllocator>{owner->memory}(owner);
+    AllocationDeleter<ImagePixels, ApplicationAllocator>{owner->memory}(owner);
   }
 };
 

@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace telar::runtime::diagnostics {
+namespace telar {
 
 inline void accumulate(std::uint64_t &counter, std::uint64_t amount = 1) noexcept {
   counter += std::min(amount, std::numeric_limits<std::uint64_t>::max() - counter);

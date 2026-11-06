@@ -4,9 +4,11 @@
 #include "core/metrics.hpp"
 #include "graphics/store.hpp"
 #include "presentation/status_age.hpp"
+#include "presentation/pane_chrome.hpp"
 #include "presentation/tab_activity.hpp"
 #include "qml_fixture.hpp"
 #include "qt/agent_status_value.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "qt/native_agent_status.hpp"
 #include "qt/native_tab_activity.hpp"
 #include "qt/pane_header_layout.hpp"
@@ -15,7 +17,7 @@
 #include "qt/projection.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "qt/bundled_fonts.hpp"
+#include <QColor>
 #include <QFont>
 #include <QGuiApplication>
 #include <QObject>
@@ -136,6 +138,30 @@ class PaneHeaderTest : public QObject {
     QVERIFY(paneChromeRecord(pane, span, 2).value(QStringLiteral("agent")).toMap().isEmpty());
   }
 
+  Q_SLOT static void routineStatesStayQuietAndInactiveTitlesStayReadable() {
+    QQmlEngine engine;
+    const ChromeMetrics chrome;
+    const auto colors = themeColors(Configuration{});
+    const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}};
+    auto record = headerRecord();
+    auto item = createChrome(engine, QStringLiteral("PaneHeader"), {
+                                                                       {QStringLiteral("record"), record},
+                                                                       {QStringLiteral("colors"), colors},
+                                                                       {QStringLiteral("typography"), typography},
+                                                                   });
+    auto *background = named(*item, QStringLiteral("paneStatusBackground"));
+    const auto *program = named(*item, QStringLiteral("paneProgram"));
+    QVERIFY(background != nullptr && program != nullptr);
+    QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("text")).value<QColor>());
+    const auto attention_alpha = background->property("color").value<QColor>().alphaF();
+    record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
+    record.insert(QStringLiteral("needsAttention"), false);
+    QVERIFY(item->setProperty("record", record));
+    const auto quiet_alpha = background->property("color").value<QColor>().alphaF();
+    QVERIFY(attention_alpha > quiet_alpha * 3);
+    QVERIFY(quiet_alpha < 0.05);
+  }
+
   Q_SLOT static void independentHeaderKeepsAttentionBeforeProgress() {
     QQmlEngine engine;
     QQuickWindow window;
@@ -166,6 +192,8 @@ class PaneHeaderTest : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(layout->compactProgress() && layout->chipBounds().width() > 0, wait_ms);
     item->setWidth(attention_header_width);
     QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
+    item->setWidth(status->implicitWidth() + 2 * PaneHeaderGeometry::margin);
+    QTRY_VERIFY_WITH_TIMEOUT(layout->indexBounds().isEmpty() && layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
     auto record = headerRecord();
     record.insert(QStringLiteral("agent"), QVariantMap{});
     record.insert(QStringLiteral("needsAttention"), false);

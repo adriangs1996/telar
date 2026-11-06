@@ -34,7 +34,7 @@ public:
       : host_(host),
         memory_(memory),
         source_(source),
-        items_(nullptr, runtime::AllocationDeleter<components::PickItems, Memory>{memory}) {}
+        items_(nullptr, AllocationDeleter<components::PickItems, Memory>{memory}) {}
 
   [[nodiscard]] bool isOpen() const noexcept {
     return index_.has_value();

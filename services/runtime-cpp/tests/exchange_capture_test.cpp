@@ -4,6 +4,7 @@
 #include <limits>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static void testCaptureGrowthAndErasure() {

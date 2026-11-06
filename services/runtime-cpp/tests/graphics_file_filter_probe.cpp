@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+using namespace telar;
 using namespace telar::runtime;
 
 namespace {

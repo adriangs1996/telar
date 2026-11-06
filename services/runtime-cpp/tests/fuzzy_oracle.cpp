@@ -1,5 +1,6 @@
 #include "paths/fuzzy_match.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 extern "C" std::uint64_t fuzzy_score(const char *path, std::size_t path_length, const char *query, std::size_t query_length, std::uint16_t *positions) {

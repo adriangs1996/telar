@@ -2,6 +2,7 @@
 
 #include "telar_base/text/json.hpp"
 #include <array>
+#include <stdexcept>
 
 namespace telar::runtime {
 

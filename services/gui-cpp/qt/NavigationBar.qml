@@ -32,7 +32,7 @@ Rectangle {
     readonly property var machineContext: controller?.machineContext ?? {}
     readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28))
 
-    color: colors.panelBackground
+    color: colors.navigationBackground
     clip: true
 
     ChromeButton {
@@ -46,7 +46,11 @@ Rectangle {
         pixelSize: root.typography.body
         cornerRadius: ChromeStyle.controlRadius * root.ratio
         emphasized: !root.rail
-        text: "\u2261"
+        contentItem: ChromeIcon {
+            glyph: "\uf0db"
+            color: root.colors.text
+            pixelSize: 18 * root.ratio
+        }
         Accessible.name: "Toggle sidebar"
         onClicked: root.sidebarToggled()
     }
@@ -86,7 +90,7 @@ Rectangle {
                 width: contextName.width
                 height: parent.height - y
                 text: root.machineContext.label || ""
-                color: root.colors.subtext0
+                color: root.colors.text
                 pixelSize: root.typography.small
             }
 

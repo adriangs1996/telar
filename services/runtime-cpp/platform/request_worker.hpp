@@ -7,7 +7,8 @@
 #include "completion_signal.hpp"
 #include "request_queue.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_base/text/json_error.hpp"
+#include "telar_client/request_error.hpp"
 #include "telar_platform/error.hpp"
 #include <condition_variable>
 #include <pthread.h>
@@ -379,6 +380,10 @@ private:
       job.reply.send(RequestFailed{.request_id = job.request_id,
                                    .code = error.code(),
                                    .message = std::string_view{error.what()}.substr(0, maximum_failure_message)});
+    } catch (const JsonError &error) {
+      job.reply.send(RequestFailed{.request_id = job.request_id,
+                                   .code = FailureCode::invalid_request,
+                                   .message = error.what()});
     } catch (const std::bad_alloc &) {
       job.reply.send(RequestFailed{.request_id = job.request_id,
                                    .code = FailureCode::resource_limit,

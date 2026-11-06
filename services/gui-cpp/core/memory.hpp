@@ -4,14 +4,14 @@
 
 namespace telar::gui {
 
-using runtime::Allocator;
-using runtime::AllocatorRef;
-using runtime::BudgetAllocator;
-using runtime::makeOwned;
-using runtime::Owned;
-using runtime::String;
-using runtime::SynchronizedAllocator;
-using runtime::SystemAllocator;
-using runtime::Vector;
+  using ::telar::Allocator;
+  using ::telar::AllocatorRef;
+  using ::telar::BudgetAllocator;
+  using ::telar::makeOwned;
+  using ::telar::Owned;
+  using ::telar::String;
+  using ::telar::SynchronizedAllocator;
+  using ::telar::SystemAllocator;
+  using ::telar::Vector;
 
 }

@@ -4,6 +4,7 @@
 #include "traffic/capture_analysis.hpp"
 #include "traffic/recordings.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 using namespace telar::runtime::traffic;
 using telar::Byte;

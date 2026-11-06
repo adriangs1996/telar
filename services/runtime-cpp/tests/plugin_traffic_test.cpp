@@ -6,6 +6,7 @@
 #include "traffic/service.hpp"
 #include <fstream>
 
+using namespace telar;
 using namespace telar::runtime;
 using telar::Byte;
 namespace app = telar::runtime::plugins;

@@ -35,7 +35,7 @@ QVariantMap Application::machineContext() const {
 }
 
 qreal Application::chromeRatio() const {
-  return configuration().font.size / ChromeMetrics::reference_font_size;
+  return 1;
 }
 
 qreal Application::chromeTextScale() const {
@@ -134,7 +134,10 @@ void Application::synchronizeWorkbenchGeometry() {
   const WorkbenchGeometry workbench{
       .area = {.width = geometry.terminal.width, .height = geometry.terminal.height},
       .grid = grid,
-      .layout_metrics = {.gap = static_cast<std::uint8_t>(configuration.pane_gaps)},
+      .layout_metrics = {
+          .gap = static_cast<std::uint8_t>(configuration.pane_gaps),
+          .header = static_cast<std::uint8_t>(std::clamp(std::ceil(display.chrome.pane_header / static_cast<float>(grid.cell_height_px)), 1.0F, static_cast<float>(std::numeric_limits<std::uint8_t>::max()))),
+      },
   };
 
   const auto columns = std::clamp(std::floor(geometry.terminal.width / static_cast<float>(grid.cell_width_px)), 1.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max()));

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 
+using namespace telar;
 using namespace telar::runtime;
 namespace tap = telar::runtime::plugins;
 

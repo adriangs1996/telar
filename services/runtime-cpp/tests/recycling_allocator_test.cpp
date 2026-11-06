@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <span>
 
-using namespace telar::runtime;
+using namespace telar;
 
 void testRecyclingAllocator() {
   ErasureCheckingAllocator upstream;

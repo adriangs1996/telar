@@ -6,6 +6,7 @@
 #include <random>
 #include <source_location>
 
+using namespace telar;
 using namespace telar::runtime;
 using namespace telar::runtime::control;
 

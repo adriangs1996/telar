@@ -47,7 +47,7 @@ MachineChromeLayout {
                 width: control.record.labelBounds.width
                 height: control.record.labelBounds.height
                 text: control.record.text
-                color: control.record.active ? root.style.activeText : control.hovered || control.visualFocus ? root.colors.text : root.colors.subtext0
+                color: control.record.active ? root.style.activeText : root.colors.text
                 emphasized: control.record.bold
                 pixelSize: root.style.pixelSize
                 elide: Text.ElideNone

@@ -15,6 +15,7 @@ Item {
     property real textScale: 1
     property bool prefixPending: false
     readonly property real wellPadding: 3 * ratio
+    readonly property real captionSize: typography.body + ratio
     signal selected(string key)
     signal closed(string key)
     signal renamed()
@@ -30,9 +31,9 @@ Item {
         ratio: root.ratio
         hovered: pointer.hovered
         font.family: "IBM Plex Sans"
-        font.pixelSize: root.typography.body
+        font.pixelSize: root.captionSize
         font.weight: Font.Normal
-        pixelSize: root.typography.body
+        pixelSize: root.captionSize
     }
 
     HoverHandler {
@@ -76,7 +77,7 @@ Item {
         radius: layout.style.pillRadius
         color: root.colors.surface1
         borderColor: root.colors.text
-        borderAlpha: 0.18
+        borderAlpha: 0.26
         borderWidth: 1 / Screen.devicePixelRatio
         visible: width > 0 && height > 0
 
@@ -154,7 +155,7 @@ Item {
                 height: width
                 mark: tab.source
                 colors: root.colors
-                dimmed: !tab.lit
+                dimmed: false
                 ratio: root.ratio
                 pixelSize: root.typography.body
                 visible: !root.prefixPending
@@ -180,8 +181,8 @@ Item {
                 width: tab.record.caption.width
                 height: tab.record.caption.height
                 text: tab.source.label
-                pixelSize: root.typography.body
-                color: tab.lit ? root.colors.text : root.colors.subtext0
+                pixelSize: root.captionSize
+                color: root.colors.text
                 visible: !tab.record.compact
                 elide: Text.ElideNone
                 fadeWidth: tab.record.truncated ? layout.style.fadeWidth : 0
@@ -267,7 +268,7 @@ Item {
                 height: parent.height
                 text: "+" + (layout.counter.count ?? 0)
                 pixelSize: root.typography.small
-                color: hiddenCounter.pointerHovered || hiddenCounter.visualFocus ? root.colors.text : root.colors.subtext0
+                color: root.colors.text
                 elide: Text.ElideNone
             }
 

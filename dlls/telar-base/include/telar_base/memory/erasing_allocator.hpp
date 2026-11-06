@@ -3,7 +3,7 @@
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/erase_sensitive.hpp"
 
-namespace telar::runtime {
+namespace telar {
 
 template <Allocator Upstream>
 class ErasingAllocator {

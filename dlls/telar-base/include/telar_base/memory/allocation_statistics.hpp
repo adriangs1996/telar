@@ -5,7 +5,7 @@
 #include <array>
 #include <utility>
 
-namespace telar::runtime {
+namespace telar {
 
 enum class AllocationPath {
   interactive,
@@ -19,8 +19,8 @@ struct AllocationTotals {
   std::uint64_t bytes = 0;
 
   void record(std::size_t size) noexcept {
-    diagnostics::accumulate(count);
-    diagnostics::accumulate(bytes, size);
+    accumulate(count);
+    accumulate(bytes, size);
   }
 };
 

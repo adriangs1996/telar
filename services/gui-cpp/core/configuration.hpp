@@ -1,6 +1,7 @@
 #pragma once
 
 #include "color.hpp"
+#include "background_opacity.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
@@ -74,6 +75,7 @@ struct Configuration {
   bool cursor_blink = true;
   std::chrono::milliseconds blink_interval = default_blink_interval;
   float background_opacity = 1;
+  BackgroundOpacity opacity;
   std::uint8_t background_blur = 0;
   float padding_x = 0;
   float padding_y = 0;

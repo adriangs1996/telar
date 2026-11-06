@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 namespace {

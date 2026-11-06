@@ -1,6 +1,6 @@
 #pragma once
 
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 #include <sqlite3.h>
 
 namespace telar::runtime {

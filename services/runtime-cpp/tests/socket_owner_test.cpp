@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <vector>
 
+using namespace telar;
 using namespace telar::runtime;
 namespace redirect = telar::runtime::redirect;
 

@@ -6,6 +6,7 @@
 #include <cstring>
 
 auto main(int argc, char **argv) -> int {
+  using namespace telar;
   using namespace telar::runtime;
 
   std::span<char *> args(argv, argc);

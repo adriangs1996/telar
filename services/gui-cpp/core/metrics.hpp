@@ -22,7 +22,7 @@ struct ChromeMetrics {
   static constexpr float maximum_text = 4096;
   static constexpr float logical_top_bar = 42;
   static constexpr float logical_status_bar = 26;
-  static constexpr float logical_pane_header = 22;
+  static constexpr float logical_pane_header = 32;
   static constexpr float logical_pane_gap = 8;
   static constexpr float logical_pane_border = 1;
   static constexpr float title_ratio = 0.87F;
@@ -41,12 +41,12 @@ struct ChromeMetrics {
 
   static ChromeMetrics resolve(const Configuration &configuration, const Viewport &viewport, const CellMetrics &cells) noexcept {
     ChromeMetrics metrics;
-    metrics.ratio = viewport.scale * configuration.font.size / reference_font_size;
+    metrics.ratio = viewport.scale;
     metrics.top_bar = std::round(logical_top_bar * metrics.ratio);
     metrics.status_bar = std::round(logical_status_bar * metrics.ratio);
     metrics.pane_header = std::round(logical_pane_header * metrics.ratio);
 
-    const auto base = configuration.font.size * viewport.scale * configuration.chrome_scale;
+    const auto base = reference_font_size * viewport.scale * configuration.chrome_scale;
     const auto text_size = [](float value) {
       return static_cast<std::uint16_t>(std::clamp(std::round(value), minimum_text, maximum_text));
     };

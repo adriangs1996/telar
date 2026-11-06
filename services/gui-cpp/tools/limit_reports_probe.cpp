@@ -12,7 +12,7 @@
 namespace {
 
 using telar::gui::LimitReports;
-using telar::runtime::SystemAllocator;
+using telar::SystemAllocator;
 namespace probe = telar::gui::probe;
 
 enum class Operation : std::uint8_t {

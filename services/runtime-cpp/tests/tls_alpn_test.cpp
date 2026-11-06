@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <vector>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static std::vector<std::uint8_t> clientHello(std::span<const std::uint8_t> protocols) {

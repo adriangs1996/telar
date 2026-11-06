@@ -4,6 +4,7 @@
 #include "telar_base/text/json_fields.hpp"
 #include "telar_base/text/schema_version.hpp"
 #include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_platform/private_file.hpp"
 #include "telar_platform/write_private_file.hpp"
 

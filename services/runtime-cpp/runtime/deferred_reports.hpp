@@ -2,7 +2,7 @@
 
 #include "../agents/agent.hpp"
 #include "../model/runtime_model.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 
 namespace telar::runtime {
 

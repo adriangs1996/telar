@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 
+using namespace telar;
 using namespace telar::runtime;
 using namespace telar::runtime::cli;
 

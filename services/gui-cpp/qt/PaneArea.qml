@@ -3,12 +3,13 @@ pragma ComponentBehavior: Bound
 import Telar.Gui
 import QtQuick
 
-Item {
+Rectangle {
     id: root
 
     required property GuiController application
     property real ratio: 1
     property bool keyboardCovered: false
+    color: application.colors.workbenchBackground
 
     AttachmentShelf {
         application: root.application
@@ -47,7 +48,7 @@ Item {
                 width: pane.frameWidth
                 height: pane.frameHeight
                 radius: pane.record.frameRadius * root.ratio
-                color: root.application.colors.panelBackground
+                color: root.application.colors.paneBackground
                 visible: pane.framed
             }
 
@@ -77,6 +78,29 @@ Item {
                 }
             }
 
+            Rectangle {
+                objectName: "paneHeaderSurface"
+                x: pane.record.frame.x
+                y: pane.record.frame.y
+                width: pane.frameWidth
+                height: Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader)
+                topLeftRadius: pane.record.frameRadius * root.ratio
+                topRightRadius: topLeftRadius
+                color: pane.record.focused ? root.application.colors.paneActiveHeaderBackground : root.application.colors.paneHeaderBackground
+                visible: pane.framed && !pane.record.fullscreen
+
+            }
+
+            Rectangle {
+                objectName: "paneFocusMarker"
+                x: pane.record.frame.x + pane.record.frameRadius * root.ratio
+                y: pane.record.frame.y
+                width: Math.max(0, pane.frameWidth - 2 * pane.record.frameRadius * root.ratio)
+                height: 2 * root.ratio
+                color: root.application.colors.accent
+                visible: pane.framed && pane.record.focused && !pane.record.fullscreen
+            }
+
             NativeRoundedRectangle {
                 objectName: "paneFrame"
                 x: pane.record.frame.x
@@ -84,7 +108,7 @@ Item {
                 width: pane.frameWidth
                 height: pane.frameHeight
                 borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.text
-                borderAlpha: pane.record.focused ? ChromeStyle.focusAlpha : ChromeStyle.outlineAlpha
+                borderAlpha: pane.record.focused ? 0.35 : 0.18
                 borderWidth: pane.record.frameLineWidth
                 radius: pane.record.frameRadius * root.ratio
                 visible: pane.framed
@@ -93,16 +117,17 @@ Item {
             PaneHeader {
                 id: header
 
-                x: 0
-                y: 0
-                width: parent.width
-                height: pane.framed ? Math.min(parent.height, root.application.windowGeometry.paneHeader, root.application.windowGeometry.typography.grid.cellHeight) : 0
+                x: pane.record.frame.x
+                y: pane.record.frame.y
+                width: Math.max(0, pane.frameWidth - paneActions.width - 4 * root.ratio)
+                height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader) : 0
                 visible: pane.framed && !pane.record.fullscreen
                 record: pane.record.chrome
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
                 ratio: root.ratio
-                bandHeight: root.application.windowGeometry.paneHeader
+                bandHeight: height
+                focused: pane.record.focused
 
                 MouseArea {
                     anchors.fill: parent
@@ -111,6 +136,20 @@ Item {
                         terminal.forceActiveFocus(Qt.MouseFocusReason);
                     }
                 }
+            }
+
+            PaneActions {
+                id: paneActions
+                x: pane.record.frame.x + pane.frameWidth - width - 6 * root.ratio
+                y: pane.record.frame.y + (header.height - height) / 2
+                width: 26 * root.ratio
+                height: width
+                visible: pane.framed && !pane.record.fullscreen && header.height >= height && header.width > 80 * root.ratio
+                controller: root.application
+                paneKey: pane.record.key
+                colors: root.application.colors
+                typography: root.application.windowGeometry.typography
+                ratio: root.ratio
             }
 
             Item {

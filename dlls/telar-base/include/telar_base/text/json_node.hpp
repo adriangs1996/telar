@@ -17,7 +17,9 @@ public:
       : name_(AllocatorRef<char, Memory>{memory}), text_(AllocatorRef<char, Memory>{memory}), children_(AllocatorRef<JsonNode, Memory>{memory}), kind_(kind) {}
 
   static JsonNode parse(Memory &memory, std::string_view source) {
-    validateUtf8(source);
+    if (inspectUtf8(source) != Utf8Validation::valid) {
+      throw JsonError{};
+    }
     return fromValue(memory, JsonValue::parse(source, maximum_depth));
   }
 

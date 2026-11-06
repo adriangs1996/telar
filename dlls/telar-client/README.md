@@ -2,7 +2,9 @@
 
 The client side of the runtime protocol: wire framing, message codecs and
 serializers, and `telar::Client`, which talks to a runtime over its Unix socket.
-It is header-only C++23 and depends on the standard library and POSIX sockets.
+It is header-only C++23 and depends on `telar::base`, the standard library and
+POSIX sockets. The base library does not depend on this protocol. `RequestError`
+lives here because it carries a protocol-specific `FailureCode`.
 `services/gui-cpp` and the runtime CLI in `services/runtime-cpp` use it.
 
 ```cmake

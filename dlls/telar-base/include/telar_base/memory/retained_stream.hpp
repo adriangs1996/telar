@@ -1,7 +1,7 @@
 #pragma once
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include <cstdint>
 #include <cstring>
 #include <span>
 
@@ -9,6 +9,8 @@ namespace telar::runtime {
 
 template <Allocator Memory>
 class RetainedStream {
+  using Byte = std::uint8_t;
+
 public:
   explicit RetainedStream(Memory &memory, std::size_t capacity)
       : memory_(memory),

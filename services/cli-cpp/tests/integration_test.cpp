@@ -3,6 +3,7 @@
 #include "../integration_options.hpp"
 #include "check.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 using telar::AgentProvider;
 using namespace telar::runtime::cli;

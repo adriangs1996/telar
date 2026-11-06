@@ -83,7 +83,7 @@ public:
               throw Rejected{};
             }
           }
-        } catch (const RequestError &) {
+        } catch (const JsonError &) {
         }
       }
 

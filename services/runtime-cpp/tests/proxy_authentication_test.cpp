@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 
+using namespace telar;
 using namespace telar::runtime;
 
 void testProxyNetwork();

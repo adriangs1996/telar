@@ -4,7 +4,7 @@
 #include "telar_base/memory/erase_sensitive.hpp"
 #include <array>
 
-namespace telar::runtime {
+namespace telar {
 
 template <Allocator Upstream>
 class RecyclingAllocator {

@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <type_traits>
 
+using namespace telar;
 using namespace telar::runtime;
 
 #if defined(__APPLE__)

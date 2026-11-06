@@ -5,6 +5,7 @@
 #include <charconv>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static std::vector<std::uint8_t> decodeHexadecimal(std::string_view text) {

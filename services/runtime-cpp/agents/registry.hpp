@@ -2,7 +2,7 @@
 
 #include "agent.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 
 namespace telar::runtime {
 

@@ -1,9 +1,12 @@
 #pragma once
 
+#include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <limits>
+#include <span>
 
 namespace telar::runtime {
 

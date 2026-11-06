@@ -16,7 +16,7 @@
 
 namespace telar::gui::qt {
 
-static_assert(runtime::ConcurrentAllocator<ApplicationAllocator>);
+static_assert(ConcurrentAllocator<ApplicationAllocator>);
 
 ClipboardImages::ClipboardImages(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),

@@ -4,6 +4,7 @@
 #include "tls_fixture.hpp"
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 enum class ProxyServiceScenario { opaque,

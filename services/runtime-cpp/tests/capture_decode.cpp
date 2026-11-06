@@ -1,5 +1,6 @@
 #include "exchange_capture/content_decoder.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 struct Input {

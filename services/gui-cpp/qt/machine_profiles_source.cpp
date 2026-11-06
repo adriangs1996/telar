@@ -40,7 +40,7 @@ QString errorText(std::string_view text) {
 
 }
 
-static_assert(runtime::ConcurrentAllocator<ApplicationAllocator>);
+static_assert(ConcurrentAllocator<ApplicationAllocator>);
 
 MachineProfilesSource::MachineProfilesSource(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),

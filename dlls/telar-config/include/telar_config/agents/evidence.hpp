@@ -1,6 +1,6 @@
 #pragma once
 
-#include "telar_base/diagnostics/limit_ledger.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_platform/observation_time.hpp"
 #include <limits>
 #include <optional>

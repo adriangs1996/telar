@@ -1924,7 +1924,37 @@ private:
       QVERIFY(frame->property("borderAlpha").toReal() < 1);
     }
 
+    const auto headers = test::visualItems(*window_->contentItem(), QStringLiteral("paneHeaderSurface"));
+    const auto markers = test::visualItems(*window_->contentItem(), QStringLiteral("paneFocusMarker"));
+    QCOMPARE(headers.size(), surfaces.size());
+    QCOMPARE(std::ranges::count_if(markers, [](const auto *marker) {
+               return marker->isVisible();
+             }),
+             1);
+    for (const auto *header : headers) {
+      QVERIFY(header->height() >= ChromeMetrics::logical_pane_header - 2);
+    }
     captureArtifact(QStringLiteral("chrome-split-panes"));
+
+    const auto buttons = test::visualItems(*window_->contentItem(), QStringLiteral("paneActionsButton"));
+    QCOMPARE(buttons.size(), surfaces.size());
+    auto *button = buttons.front();
+    auto *menu = button->findChild<QObject *>(QStringLiteral("paneActionsMenu"));
+    QVERIFY(menu != nullptr);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene(button->boundingRect().center()).toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(menu->property("visible").toBool(), runtime_wait_ms);
+    auto *menu_content = menu->property("contentItem").value<QQuickItem *>();
+    QVERIFY(menu_content != nullptr);
+    const auto entries = test::visualItems(*menu_content, QStringLiteral("paneActionEntry"));
+    QCOMPARE(entries.size(), 4);
+    captureArtifact(QStringLiteral("chrome-pane-actions"));
+    const auto split = std::ranges::find_if(entries, [](const auto *entry) {
+      return entry->property("text").toString() == QLatin1StringView("Split right");
+    });
+    QVERIFY(split != entries.end());
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, (*split)->mapToScene((*split)->boundingRect().center()).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 4, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!menu->property("visible").toBool(), runtime_wait_ms);
     while (client_->panes()->rowCount() > 1) {
       const auto count = client_->panes()->rowCount();
       const auto key = client_->panes()->data(client_->panes()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
@@ -4384,14 +4414,16 @@ return {api_version=2, client={keybindings={
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
     const auto gutter = static_cast<std::uint16_t>(client_->configuration().pane_gaps);
     constexpr std::uint16_t border_cells = 2;
+    const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * window_->devicePixelRatio() / resolved.grid.height));
+    const auto vertical_chrome = header_cells + 1;
     const auto first_outer_columns = (full->cols - gutter) / 2;
     const auto second_outer_columns = full->cols - gutter - first_outer_columns;
     QTRY_COMPARE_WITH_TIMEOUT(client_->pane(source_id)->screen.columns(), first_outer_columns - border_cells, runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->pane(source_id)->screen.rows(), full->rows - border_cells, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->pane(source_id)->screen.rows(), full->rows - vertical_chrome, runtime_wait_ms);
     const auto second_record = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap();
     const auto second_id = second_record.value(QStringLiteral("key")).toString().toULongLong();
     QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.columns(), second_outer_columns - border_cells, runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.rows(), full->rows - border_cells, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.rows(), full->rows - vertical_chrome, runtime_wait_ms);
     client_->execute(Application::Action::split_vertical);
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
     client_->execute(Application::Action::new_tab);
@@ -4479,6 +4511,7 @@ return {api_version=2, client={keybindings={
     QTRY_VERIFY2_WITH_TIMEOUT(rings().size() == 1, qPrintable(screenText(client_->pane(source_id)->screen)), runtime_wait_ms);
     QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::PaneAttentionKey{}), attachment);
     QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
+    captureArtifact(QStringLiteral("chrome-attention"));
     const QPointer<QQuickItem> retired{rings().front()};
 
     client_->execute(Application::Action::focus_pane, QString::number(source_id));

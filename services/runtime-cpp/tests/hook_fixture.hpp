@@ -14,6 +14,7 @@ inline void require(bool valid, const char *message) {
 }
 
 inline std::string runHook(std::string_view provider, std::string_view input, bool merge_errors = false) {
+  using namespace telar;
   using namespace telar::runtime;
   const char *binary = std::getenv("TELAR_BIN_PATH");
   require(binary != nullptr, "Pane did not receive its runtime executable");

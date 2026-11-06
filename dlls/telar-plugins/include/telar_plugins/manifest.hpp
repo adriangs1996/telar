@@ -41,7 +41,7 @@ struct Manifest {
     Wire<Memory> wire{memory};
     try {
       wire.read(memory, *root);
-    } catch (const RequestError &) {
+    } catch (const JsonError &) {
       throw std::invalid_argument{"UnexpectedToken"};
     } catch (const std::invalid_argument &error) {
       throw std::invalid_argument{fieldFailure(error.what())};

@@ -4,6 +4,7 @@
 #include "http2_oracle_stream.hpp"
 #include "proxy/relay_direction.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 struct CaptureSink {

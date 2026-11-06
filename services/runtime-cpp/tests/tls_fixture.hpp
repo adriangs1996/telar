@@ -6,6 +6,7 @@
 #include <cstring>
 #include <filesystem>
 
+using namespace telar;
 using namespace telar::runtime;
 
 using TlsTestMemory = SynchronizedAllocator<BudgetAllocator<SystemAllocator>>;

@@ -9,6 +9,7 @@
 #include <string>
 #include <sys/prctl.h>
 
+using namespace telar;
 using namespace telar::runtime;
 
 namespace {

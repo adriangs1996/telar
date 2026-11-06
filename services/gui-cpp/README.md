@@ -126,6 +126,13 @@ modules, profiles, custom bindings, callbacks, plugins, bars, panels and picks u
 the existing Telar APIs. `--no-config`, `--profile NAME` and `--theme NAME` are
 available.
 
+Navigation and panel typography use their own reference size, independent of
+`gui.font.size`; `gui.chrome.scale` still scales chrome text. Theme-relative
+navigation, gutters and panel headers preserve the configured palette and window
+transparency. Panel headers reserve complete terminal rows, keep a fixed visual
+height and offer split, expand and close actions through their menu. Routine agent
+states stay neutral; requests for input and failures retain their semantic color.
+
 `--cwd PATH` sets the launch directory. Positional arguments select a command for
 a newly opened pane; subsequent options are passed to that command. `--fresh`
 skips saved-layout restoration. Without a command, the login-shell resolver

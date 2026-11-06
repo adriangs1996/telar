@@ -2,6 +2,7 @@
 #include "telar_config/proxy_reader.hpp"
 #include "telar_lua/vm.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 void testProxyAuthentication();

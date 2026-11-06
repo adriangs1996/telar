@@ -6,6 +6,7 @@
 #include <iostream>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static constexpr std::string_view session_reference = "0192-abcd";

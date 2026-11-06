@@ -4,6 +4,7 @@
 #include "test_byte_stream.hpp"
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 using namespace telar::runtime::traffic;
 using telar::Byte;

@@ -21,7 +21,7 @@ Rectangle {
     readonly property real resizeWidth: 6 * ratio
     readonly property real edgeWidth: regions.edgeWidth
 
-    color: colors.panelBackground
+    color: colors.navigationBackground
     clip: true
 
     MachineChrome {

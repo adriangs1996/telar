@@ -1,6 +1,7 @@
 #include "../json_text.hpp"
 #include "check.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 namespace {

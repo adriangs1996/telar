@@ -296,7 +296,7 @@ private:
 };
 
 WaylandClipboardImageMonitor::WaylandClipboardImageMonitor(ApplicationAllocator &memory, ::wl_display *display)
-    : native_(nullptr, runtime::AllocationDeleter<Native, ApplicationAllocator>{memory}) {
+    : native_(nullptr, AllocationDeleter<Native, ApplicationAllocator>{memory}) {
   if (display != nullptr) {
     native_ = makeOwned<Native>(memory, display);
   }

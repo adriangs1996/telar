@@ -9,8 +9,10 @@ PaneHeaderLayout {
     required property var record
     required property var colors
     required property var typography
+    property bool focused: false
+    readonly property real indexSide: 22 * ratio
     measurements: ({
-        index: indexLabel.implicitWidth,
+        index: root.indexSide,
         name: nameLabel.implicitWidth,
         chip: statusChip.implicitWidth,
         paused: root.record.imagesPaused ? pausedLabel.implicitWidth : 0,
@@ -19,17 +21,28 @@ PaneHeaderLayout {
         needsAttention: root.record.needsAttention ?? false
     })
 
+    NativeRoundedRectangle {
+        objectName: "paneIndexBackground"
+        x: root.indexBounds.x
+        y: root.indexBounds.y + (root.indexBounds.height - height) / 2
+        width: Math.min(root.indexSide, root.indexBounds.width)
+        height: width
+        radius: ChromeStyle.smallRadius * root.ratio
+        color: Qt.alpha(root.focused ? root.colors.accent : root.colors.text, root.focused ? 0.16 : 0.06)
+    }
+
     ChromeText {
         id: indexLabel
         objectName: "paneIndex"
         x: root.indexBounds.x
         y: root.indexBounds.y
-        width: root.indexBounds.width
+        width: Math.min(root.indexSide, root.indexBounds.width)
         height: root.indexBounds.height
         text: root.record.index
         emphasized: true
         pixelSize: root.typography.body
-        color: root.colors.text
+        color: root.focused ? root.colors.accent : root.colors.text
+        horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideNone
     }
 
@@ -41,9 +54,10 @@ PaneHeaderLayout {
         width: root.nameBounds.width
         height: root.nameBounds.height
         text: root.record.program
-        pixelSize: root.typography.body
-        color: root.colors.subtext0
-        elide: Text.ElideNone
+        pixelSize: root.typography.body + root.ratio
+        color: root.colors.text
+        emphasized: root.focused
+        elide: Text.ElideRight
     }
 
     ChromeText {
@@ -71,6 +85,7 @@ PaneHeaderLayout {
         colors: root.colors
         typography: root.typography
         geometry: root.style
+        needsAttention: root.record.needsAttention ?? false
         visible: root.chipBounds.width > 0
     }
 

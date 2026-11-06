@@ -1,9 +1,12 @@
 #pragma once
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_base/text/json_error.hpp"
 #include <charconv>
+#include <cstdint>
+#include <optional>
 #include <span>
+#include <string_view>
 
 namespace telar::runtime {
 
@@ -179,7 +182,7 @@ public:
 
 private:
   [[noreturn]] static void invalid() {
-    throw RequestError{FailureCode::invalid_request, "Invalid JSON record"};
+    throw JsonError{};
   }
 
   static void whitespace(std::string_view &input) noexcept {

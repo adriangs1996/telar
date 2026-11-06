@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <span>
 
-namespace telar::runtime {
+namespace telar {
 
 template <Allocator Upstream>
 class BufferAllocator {

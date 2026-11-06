@@ -27,9 +27,19 @@ public:
   struct Metrics {
     std::uint8_t border = 1;
     std::uint8_t gap = 1;
+    std::uint8_t header = 1;
 
-    [[nodiscard]] std::uint16_t minimumPaneExtent() const noexcept {
-      return 1 + (2 * static_cast<std::uint16_t>(border));
+    [[nodiscard]] std::uint16_t minimumPaneExtent(ClientLayoutAxis axis = ClientLayoutAxis::horizontal) const noexcept {
+      return border == 0 ? 1 : 1 + static_cast<std::uint16_t>(border) + (axis == ClientLayoutAxis::vertical ? std::max(border, header) : border);
+    }
+
+    [[nodiscard]] CellRectangle content(CellRectangle bounds) const noexcept {
+      auto result = bounds.inner(border);
+      const auto extra = border != 0 && header > border ? std::min<std::uint16_t>(header - border, result.height) : 0;
+      result.y = static_cast<std::uint16_t>(result.y + extra);
+      result.height = static_cast<std::uint16_t>(result.height - extra);
+
+      return result;
     }
 
     bool operator==(const Metrics &) const = default;
@@ -207,17 +217,17 @@ public:
       return std::nullopt;
     }
 
-    const auto minimum = metrics.minimumPaneExtent();
-    const auto split_minimum = static_cast<std::uint16_t>((2 * minimum) + metrics.gap);
+    const auto minimum_width = metrics.minimumPaneExtent(ClientLayoutAxis::horizontal);
+    const auto minimum_height = metrics.minimumPaneExtent(ClientLayoutAxis::vertical);
     const auto bounds = found->bounds;
-    const bool enough_space = axis == ClientLayoutAxis::horizontal ? bounds.width >= split_minimum && bounds.height >= minimum : bounds.width >= minimum && bounds.height >= split_minimum;
+    const bool enough_space = axis == ClientLayoutAxis::horizontal ? bounds.width >= (2 * minimum_width) + metrics.gap && bounds.height >= minimum_height : bounds.width >= minimum_width && bounds.height >= (2 * minimum_height) + metrics.gap;
     if (!enough_space) {
       return std::nullopt;
     }
 
     const auto geometry = partition(bounds, {.axis = axis, .ratio = ratio_half}, metrics.gap);
 
-    return SplitBounds{.existing_content = geometry.first.inner(metrics.border), .added_content = geometry.second.inner(metrics.border)};
+    return SplitBounds{.existing_content = metrics.content(geometry.first), .added_content = metrics.content(geometry.second)};
   }
 
   bool setSplitRatio(DividerPosition position) noexcept {
@@ -351,7 +361,7 @@ private:
       placement.bounds.height = static_cast<std::uint16_t>(placement.bounds.height - height);
       reserved_.y = static_cast<std::uint16_t>(static_cast<std::uint32_t>(reserved_.y) + placement.bounds.height);
       reserved_.height = height;
-      placement.content = borderless ? placement.bounds : placement.bounds.inner(metrics.border);
+      placement.content = borderless ? placement.bounds : metrics.content(placement.bounds);
 
       return;
     }
@@ -449,7 +459,7 @@ private:
         const auto second = pending[--count];
         pending[count++] = split->axis == axis ? static_cast<std::uint16_t>(first + metrics.gap + second) : std::max(first, second);
       } else {
-        pending[count++] = metrics.minimumPaneExtent();
+        pending[count++] = metrics.minimumPaneExtent(axis);
       }
     }
 
@@ -523,7 +533,7 @@ private:
       const auto current = pending[--pending_count];
       const auto &node = nodes_[index];
       if (const auto *pane = std::get_if<ClientLayoutPane>(&node)) {
-        placements_[placement_count_] = {.pane_id = pane->pane_id, .bounds = current, .display_index = static_cast<std::uint16_t>(placement_count_ + 1), .content = hasBorders(false, metrics) ? current.inner(metrics.border) : current, .framed = hasBorders(false, metrics)};
+        placements_[placement_count_] = {.pane_id = pane->pane_id, .bounds = current, .display_index = static_cast<std::uint16_t>(placement_count_ + 1), .content = hasBorders(false, metrics) ? metrics.content(current) : current, .framed = hasBorders(false, metrics)};
         ++placement_count_;
 
         continue;

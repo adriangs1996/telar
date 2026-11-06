@@ -7,6 +7,7 @@
 #include "history/entry.hpp"
 #include "pane_attention_value.hpp"
 #include "presentation/application_mark.hpp"
+#include "presentation/chrome_surfaces.hpp"
 #include "presentation/history_labels.hpp"
 #include "presentation/history_path.hpp"
 #include "presentation/pane_decoration_geometry.hpp"
@@ -204,6 +205,12 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   colors.insert(QStringLiteral("background"), toQColor(theme.background));
   colors.insert(QStringLiteral("windowBackground"), toQColor(window_background));
   colors.insert(QStringLiteral("panelBackground"), panel_background);
+  const auto surfaces = ChromeSurfaces::derive(theme, configuration.background_opacity);
+  colors.insert(QStringLiteral("navigationBackground"), toQColor(surfaces.navigation));
+  colors.insert(QStringLiteral("workbenchBackground"), toQColor(surfaces.workbench));
+  colors.insert(QStringLiteral("paneBackground"), toQColor(surfaces.pane));
+  colors.insert(QStringLiteral("paneHeaderBackground"), toQColor(surfaces.header));
+  colors.insert(QStringLiteral("paneActiveHeaderBackground"), toQColor(surfaces.active_header));
   colors.insert(QStringLiteral("foreground"), toQColor(theme.chromeColor(PaletteRole::text)));
   colors.insert(QStringLiteral("surface"), toQColor(theme.surface));
   colors.insert(QStringLiteral("elevated"), toQColor(theme.elevated));

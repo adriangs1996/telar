@@ -2,7 +2,7 @@
 
 #include "../proxy/name_resolutions.hpp"
 #include "target.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 #include <atomic>
 #include <chrono>
 #include <cstdio>

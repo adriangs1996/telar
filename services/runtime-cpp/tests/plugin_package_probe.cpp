@@ -4,6 +4,7 @@
 #include "telar_plugins/package_inspector.hpp"
 #include <cstdio>
 
+using namespace telar;
 using namespace telar::runtime;
 
 int main(int argc, char **argv) {

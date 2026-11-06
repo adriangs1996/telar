@@ -178,7 +178,7 @@ private:
     bundledFonts();
   }
 
-  Q_SLOT static void chromeBandsUseTheSingleWindowBackground() {
+  Q_SLOT static void chromeBandsKeepThemeRelativeSurfacesAndWindowTransparency() {
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
@@ -223,15 +223,17 @@ private:
         QCOMPARE(colors.value(QStringLiteral("panel_bg")).value<QColor>(), covering);
         for (auto *band : bands) {
           QVERIFY(band->setProperty("colors", colors));
-          QCOMPARE(band->property("color").value<QColor>(), expected);
+          const auto band_color = band == status.get() ? expected : colors.value(QStringLiteral("navigationBackground")).value<QColor>();
+          QCOMPARE(band->property("color").value<QColor>(), band_color);
           QCOMPARE(band->opacity(), qreal{1});
           const auto capture = band->grabToImage();
           QVERIFY(!capture.isNull());
           QTRY_VERIFY_WITH_TIMEOUT(!capture->image().isNull(), fixture_wait_ms);
           const auto image = capture->image();
           const auto pixel = image.pixelColor(2, 2);
-          const auto diagnostic = QStringLiteral("%1 at opacity %2: actual %3, expected %4").arg(QString::fromLatin1(band->metaObject()->className())).arg(opacity).arg(pixel.name(QColor::HexArgb), expected.name(QColor::HexArgb));
-          QVERIFY2(pixel == expected, qPrintable(diagnostic));
+          const auto diagnostic = QStringLiteral("%1 at opacity %2: actual %3, expected %4").arg(QString::fromLatin1(band->metaObject()->className())).arg(opacity).arg(pixel.name(QColor::HexArgb), band_color.name(QColor::HexArgb));
+          // Compare stored ink, not the lossy unpremultiplication of a faint tint.
+          QVERIFY2(qPremultiply(pixel.rgba()) == qPremultiply(band_color.rgba()), qPrintable(diagnostic));
         }
       }
     }

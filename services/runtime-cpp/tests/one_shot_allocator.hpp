@@ -37,7 +37,7 @@ public:
   }
 
 private:
-  telar::runtime::SystemAllocator upstream_;
+  telar::SystemAllocator upstream_;
   std::atomic<bool> fail_next_{false};
   std::atomic<std::size_t> failures_{0};
   std::atomic<std::size_t> live_{0};

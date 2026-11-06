@@ -9,7 +9,7 @@
 
 class ClientPeer {
 public:
-  explicit ClientPeer(telar::runtime::SystemAllocator &memory, telar::runtime::RuntimeModel<telar::runtime::SystemAllocator> &model, telar::runtime::ClientRole role)
+  explicit ClientPeer(telar::SystemAllocator &memory, telar::runtime::RuntimeModel<telar::SystemAllocator> &model, telar::runtime::ClientRole role)
       : memory_(memory),
         model_(model),
         id_(model.clients.nextId()) {
@@ -20,13 +20,13 @@ public:
                     .tv_usec = 0};
     check(::setsockopt(peer_.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
     telar::runtime::setNonblocking(sockets[0]);
-    auto client = telar::runtime::makeOwned<telar::runtime::ClientSession<telar::runtime::SystemAllocator>>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
+    auto client = telar::makeOwned<telar::runtime::ClientSession<telar::SystemAllocator>>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
     client->role = role;
     client->connection.negotiated = true;
     model.clients.insert(id_, std::move(client));
   }
 
-  telar::runtime::ClientSession<telar::runtime::SystemAllocator> &session() const {
+  telar::runtime::ClientSession<telar::SystemAllocator> &session() const {
     auto *client = model_.clients.find(id_);
     check(client != nullptr);
     return *client;
@@ -74,8 +74,8 @@ private:
     }
   }
 
-  telar::runtime::SystemAllocator &memory_;
-  telar::runtime::RuntimeModel<telar::runtime::SystemAllocator> &model_;
+  telar::SystemAllocator &memory_;
+  telar::runtime::RuntimeModel<telar::SystemAllocator> &model_;
   std::uint64_t id_;
   telar::runtime::FileDescriptor peer_;
   std::array<telar::Byte, 64 * 1024 + 1024> payload_;

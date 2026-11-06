@@ -165,8 +165,10 @@ struct PaneHeaderGeometry {
     }
 
     const auto end = band.x + band.width;
-    result.index = {.x = band.x, .y = band.y, .width = std::max(0.0F, end - band.x), .height = band.height};
-    auto x = band.x + std::min(measurements.index, result.index.width) + (part_gap * ratio);
+    const auto index_room = measurements.needs_attention ? std::max(0.0F, band.width - measurements.chip - part_gap * ratio) : band.width;
+    const auto index_width = std::min(measurements.index, index_room);
+    result.index = {.x = band.x, .y = band.y, .width = index_width, .height = band.height};
+    auto x = band.x + index_width + (index_width > 0 ? part_gap * ratio : 0);
     const auto chip_width = measurements.chip <= end - x ? measurements.chip : 0;
     const auto text_end = end - (chip_width != 0 ? chip_width + (chip_gap * ratio) : 0);
     const auto paused_width = measurements.paused > 0 ? measurements.paused + (chip_gap * ratio) : 0;

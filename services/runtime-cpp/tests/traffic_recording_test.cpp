@@ -4,6 +4,7 @@
 #include <fstream>
 #include <pcap/pcap.h>
 
+using namespace telar;
 using namespace telar::runtime;
 using telar::Byte;
 using telar::EncodingError;

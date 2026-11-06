@@ -21,7 +21,8 @@ AbstractButton {
         text: root.text
         pixelSize: root.pixelSize
         emphasized: root.emphasized
-        color: root.emphasized || root.pointerHovered || root.visualFocus ? root.colors.text : root.colors.subtext0
+        color: root.colors.text
+        opacity: root.enabled ? 1 : 0.45
         horizontalAlignment: Text.AlignHCenter
         wholePixelCentering: true
     }

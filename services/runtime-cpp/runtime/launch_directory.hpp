@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../model/runtime_model.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 #include <variant>
 
 namespace telar::runtime {

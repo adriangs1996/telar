@@ -10,7 +10,7 @@
 #include "launch_failure_cause.hpp"
 #include "limit_service.hpp"
 #include "pane_launch_options.hpp"
-#include "telar_base/request_error.hpp"
+#include "telar_client/request_error.hpp"
 #include "workspace_notifications.hpp"
 #include <charconv>
 #include <sys/wait.h>

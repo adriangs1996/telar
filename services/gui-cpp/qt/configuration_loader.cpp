@@ -39,7 +39,7 @@ std::optional<platform::FileStamp> fileStamp(const QString &path) {
 }
 
 ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator &memory)
-    : generation(nullptr, runtime::AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
+    : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
 }
 
 ConfigurationPreparation::~ConfigurationPreparation() = default;
@@ -57,7 +57,7 @@ PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory,
   }
 
   if (!request.force && observed == request.watch) {
-    return PreparedConfiguration{nullptr, runtime::AllocationDeleter<ConfigurationPreparation, ApplicationAllocator>{memory}};
+    return PreparedConfiguration{nullptr, AllocationDeleter<ConfigurationPreparation, ApplicationAllocator>{memory}};
   }
 
   auto result = makeOwned<ConfigurationPreparation>(memory, memory);

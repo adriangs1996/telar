@@ -116,7 +116,7 @@ private:
       JsonValue::parse(candidate);
       validateUnicodeEscapes(candidate.get_allocator().memory(), candidate);
       return true;
-    } catch (const RequestError &) {
+    } catch (const JsonError &) {
       return false;
     }
   }

@@ -2,6 +2,7 @@
 
 #include "../codecs/telar_codec.hpp"
 #include "../codecs/telar_value_codec.hpp"
+#include "telar_base/diagnostics/limit_reach.hpp"
 
 #include <optional>
 #include <stdexcept>
@@ -632,14 +633,6 @@ namespace telar {
     std::string_view path{};
     PathKind kind = PathKind::file;
     std::span<const std::uint16_t> positions{};
-  };
-
-  struct LimitReach {
-    std::string_view name{};
-    std::string_view noun{};
-    std::uint64_t value = 0;
-    std::optional<std::uint64_t> requested{};
-    std::string_view route{};
   };
 
   struct LimitListEntry {

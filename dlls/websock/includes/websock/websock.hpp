@@ -1,9 +1,11 @@
 #ifndef TELAR_WEBSOCK_HPP
 #define TELAR_WEBSOCK_HPP
 
+#include "telar_base/memory/allocator.hpp"
+
 namespace telar::websock {
 
-  template <typename IAllocator>
+  template <Allocator IAllocator>
   class Server final {
 
     IAllocator &allocator_;

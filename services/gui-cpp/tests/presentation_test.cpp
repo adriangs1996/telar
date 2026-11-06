@@ -1,25 +1,26 @@
-#include "presentation/sidebar_columns.hpp"
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
 #include "graphics/artwork_resize.hpp"
-#include "presentation/sidebar_geometry.hpp"
+#include "presentation/chrome_surfaces.hpp"
 #include "presentation/pane_decoration_geometry.hpp"
+#include "presentation/sidebar_columns.hpp"
+#include "presentation/sidebar_geometry.hpp"
 #include "presentation/tab_caption.hpp"
-#include "presentation/tab_strip_geometry.hpp"
 #include "presentation/tab_motions.hpp"
+#include "presentation/tab_strip_geometry.hpp"
+#include "presentation/window_title.hpp"
 #include "presentation/workspace_mark.hpp"
 #include "presentation/workspace_rail_geometry.hpp"
-#include "presentation/window_title.hpp"
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <array>
-#include <span>
 
 namespace {
 
@@ -80,6 +81,24 @@ void workspaceMarksPreserveTheOriginalInitial() {
   require(WorkspaceMark::resolve("🧶 project").initial.view() == "🧶", "four-byte initials must remain complete");
   for (const auto name : {std::string_view{}, std::string_view{"\xff"}, std::string_view{"\xe4\xb8"}, std::string_view{"\xed\xa0\x80"}}) {
     require(WorkspaceMark::resolve(name).initial.view().empty(), "malformed or absent initials must use the folder fallback");
+  }
+}
+
+void chromeSurfacesPreserveThemeAndTransparency() {
+  using namespace telar::gui;
+  for (const auto background : {Color::rgb(0x15151a), Color::rgb(0xf6f4ef)}) {
+    Theme theme;
+    theme.background = background;
+    theme.foreground = background.r < 0.5F ? Color::rgb(0xe0e0e0) : Color::rgb(0x202020);
+    const auto surfaces = ChromeSurfaces::derive(theme, 1);
+    require(surfaces.pane == theme.chromeColor(PaletteRole::panel_bg), "pane surfaces must respect the configured panel color");
+    require(surfaces.navigation != surfaces.pane && surfaces.header != surfaces.pane && surfaces.workbench != surfaces.pane, "light and dark themes must distinguish navigation, headers and gutters");
+    require(surfaces.active_header != surfaces.header, "focus must have a header signal independent of the border");
+    for (const auto opacity : {0.0F, 0.5F, 0.99F}) {
+      const auto translucent = ChromeSurfaces::derive(theme, opacity);
+      require(translucent.pane.a == 0 && translucent.workbench.a == 0, "transparent workbenches must retain the single window background");
+      require(translucent.navigation.a < 0.1F && translucent.active_header.a < 0.1F, "translucent bands must tint rather than cover the window");
+    }
   }
 }
 
@@ -250,6 +269,7 @@ int main() {
     titleBoundsAndSuffix();
     sidebarColumnBounds();
     workspaceMarksPreserveTheOriginalInitial();
+    chromeSurfacesPreserveThemeAndTransparency();
     paneSurfacesUseOnlyExistingChromeSpace();
     sidebarListsFollowTheReferenceBands();
     workspaceRailKeepsTheSelectionInView();

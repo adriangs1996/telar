@@ -22,7 +22,7 @@ public:
 
   explicit FontCache(Memory &memory) noexcept
       : memory_(memory),
-        generation_(nullptr, runtime::AllocationDeleter<Generation, Memory>{memory}) {}
+        generation_(nullptr, AllocationDeleter<Generation, Memory>{memory}) {}
 
   [[nodiscard]] ResolvedFont resolve(const FontConfiguration &font, qreal scale) {
     static_cast<void>(FontGrid::pixelHeight(font, static_cast<float>(scale)));

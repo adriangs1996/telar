@@ -324,7 +324,7 @@ struct ClipboardImageMonitor::Native {};
 
 ClipboardImageMonitor::ClipboardImageMonitor(ApplicationAllocator &memory)
     : memory_(memory),
-      native_(nullptr, runtime::AllocationDeleter<Native, ApplicationAllocator>{memory}) {}
+      native_(nullptr, AllocationDeleter<Native, ApplicationAllocator>{memory}) {}
 
 ClipboardImageMonitor::~ClipboardImageMonitor() = default;
 

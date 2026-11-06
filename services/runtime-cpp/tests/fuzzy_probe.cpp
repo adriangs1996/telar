@@ -2,6 +2,7 @@
 #include <fstream>
 #include <random>
 
+using namespace telar;
 using namespace telar::runtime;
 
 int main(int argc, char **argv) {

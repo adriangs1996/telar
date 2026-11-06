@@ -6,6 +6,7 @@
 #include <termios.h>
 #include <thread>
 
+using namespace telar;
 using namespace telar::runtime;
 
 static std::string_view active_phase = "startup";

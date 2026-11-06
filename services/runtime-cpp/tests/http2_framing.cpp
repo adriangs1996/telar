@@ -2,6 +2,7 @@
 #include "http2_oracle_stream.hpp"
 #include "proxy/relay_direction.hpp"
 
+using namespace telar;
 using namespace telar::runtime;
 
 extern "C" void relay(const Http2OracleInput *input, Http2OracleResult *result) {

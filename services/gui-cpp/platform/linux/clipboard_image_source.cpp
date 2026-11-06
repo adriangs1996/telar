@@ -105,7 +105,7 @@ ClipboardImageSource &ClipboardImageSource::operator=(ClipboardImageSource &&oth
 void ClipboardImageSource::clear() noexcept {
   if (native_ != nullptr) {
     auto *const transfer = static_cast<Transfer *>(native_);
-    runtime::AllocationDeleter<Transfer, ApplicationAllocator>{transfer->memory}(transfer);
+    AllocationDeleter<Transfer, ApplicationAllocator>{transfer->memory}(transfer);
     native_ = nullptr;
   }
 }

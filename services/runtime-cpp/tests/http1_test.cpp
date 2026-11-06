@@ -5,6 +5,7 @@
 #include "test_byte_stream.hpp"
 #include <array>
 
+using namespace telar;
 using namespace telar::runtime;
 
 class MessageObserver {

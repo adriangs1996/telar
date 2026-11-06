@@ -31,6 +31,7 @@
 #include "response_projection.hpp"
 #include "runtime_clipboard_service.hpp"
 #include "telar_base/editors/kind.hpp"
+#include "telar_base/text/json_error.hpp"
 #include "workspace_git_service.hpp"
 #include "workspace_service.hpp"
 #include "worktree_detection_service.hpp"
@@ -352,6 +353,10 @@ private:
       }
       client.connection.send(RequestFailed{.request_id = request_id,
                                            .code = error.code(),
+                                           .message = error.what()});
+    } catch (const JsonError &error) {
+      client.connection.send(RequestFailed{.request_id = request_id,
+                                           .code = FailureCode::invalid_request,
                                            .message = error.what()});
     } catch (const SystemError &error) {
       client.connection.send(RequestFailed{.request_id = request_id,
