@@ -10,7 +10,6 @@ NativeRoundedRectangle {
     required property var tabModel
     property var workspaceModel: null
     required property real controlsInset
-    required property real workbenchLeft
     property var controller: null
     property real ratio: 1
     property real textScale: 1
@@ -23,12 +22,17 @@ NativeRoundedRectangle {
     signal tabClosed(string key)
     signal tabRenamed()
     signal tabCreated()
+    signal paletteRequested()
 
     readonly property real padding: 8 * ratio
     readonly property real toggleSide: 28 * ratio
     readonly property real controlGap: 8 * ratio
     readonly property real contextMaximum: 160 * ratio
-    readonly property real tabsLeft: rail ? identity.x + identity.width + controlGap : Math.max(identity.x + identity.width + controlGap, workbenchLeft)
+    readonly property real tabsShare: 0.64
+    readonly property real tabsMinimum: identity.x + identity.width + 2 * controlGap
+    readonly property real tabsMaximum: projects.x - (projects.width > 0 ? 2 * controlGap : controlGap)
+    readonly property real tabsWidth: Math.max(0, Math.min(width * tabsShare, tabsMaximum - tabsMinimum))
+    readonly property real tabsLeft: Math.max(tabsMinimum, Math.min((width - tabsWidth) / 2, tabsMaximum - tabsWidth))
     readonly property var machineContext: controller?.machineContext ?? {}
     readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28))
 
@@ -110,8 +114,8 @@ NativeRoundedRectangle {
     ProjectSwitcher {
         id: projects
         objectName: "projectSwitcher"
-        x: root.width - root.padding - width
-        width: Math.max(0, Math.min(preferredWidth, (root.width - root.padding - root.tabsLeft) * 0.28))
+        x: paletteButton.x - (width > 0 ? root.controlGap : 0) - width
+        width: Math.max(0, Math.min(preferredWidth, root.width * 0.14))
         height: root.height
         model: root.workspaceModel
         selectedIndex: root.workspace.index ?? -1
@@ -122,11 +126,47 @@ NativeRoundedRectangle {
         onOverflowRequested: root.workspacePickerRequested()
     }
 
+    ChromeButton {
+        id: paletteButton
+        objectName: "paletteButton"
+        x: createTab.x - 4 * root.ratio - width
+        y: (parent.height - height) / 2
+        width: root.toggleSide
+        height: width
+        colors: root.colors
+        pixelSize: root.typography.body
+        cornerRadius: ChromeStyle.controlRadius * root.ratio
+        contentItem: ChromeIcon {
+            glyph: "\u{f0633}"
+            color: root.colors.chromeText
+            pixelSize: 16 * root.ratio
+        }
+        Accessible.name: "Open command palette"
+        onClicked: root.paletteRequested()
+    }
+
+    ChromeButton {
+        id: createTab
+        objectName: "createTabButton"
+        x: root.width - root.padding - width
+        y: (parent.height - height) / 2
+        width: root.toggleSide
+        height: width
+        colors: root.colors
+        pixelSize: root.typography.body + 4 * root.ratio
+        emphasized: true
+        cornerRadius: ChromeStyle.controlRadius * root.ratio
+        text: "+"
+        Accessible.name: "New tab"
+        onClicked: root.tabCreated()
+    }
+
     TerminalTabs {
         controller: root.controller
         model: root.tabModel
         x: root.tabsLeft
-        width: Math.max(0, projects.x - (projects.width > 0 ? root.controlGap : 0) - x)
+        width: root.tabsWidth
+        createBounds: Qt.rect(createTab.x - x, createTab.y, createTab.width, createTab.height)
         height: root.height
         colors: root.colors
         typography: root.typography
@@ -136,6 +176,5 @@ NativeRoundedRectangle {
         onSelected: key => root.tabSelected(key)
         onClosed: key => root.tabClosed(key)
         onRenamed: root.tabRenamed()
-        onCreated: root.tabCreated()
     }
 }

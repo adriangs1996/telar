@@ -60,6 +60,13 @@ inline QVariantMap agentCardGeometryRecord(const DisplayMetrics &display, float 
       {QStringLiteral("width"), bounds.width / density},
       {QStringLiteral("height"), bounds.height / density},
       {QStringLiteral("compactHeight"), geometry.compactHeight() / density},
+      {QStringLiteral("agentHeight"), geometry.agentHeight() / density},
+      {QStringLiteral("agentTitleRow"), geometry.title_row / density},
+      {QStringLiteral("agentDetailY"), (geometry.px(AgentCardGeometry::vertical_padding) + geometry.title_row + geometry.px(AgentCardGeometry::title_gap)) / density},
+      {QStringLiteral("agentDetailRow"), geometry.small_row / density},
+      {QStringLiteral("padding"), geometry.px(AgentCardGeometry::horizontal_padding) / density},
+      {QStringLiteral("tileWidth"), chrome.px(18) / density},
+      {QStringLiteral("tileHeight"), chrome.px(14) / density},
       {QStringLiteral("compactPadding"), geometry.px(AgentCardGeometry::compact_vertical_padding) / density},
       {QStringLiteral("taskIndent"), geometry.px(AgentCardGeometry::task_indent) / density},
       {QStringLiteral("planCellWidth"), geometry.px(TaskCardLabels::plan_cell_width) / density},
@@ -96,7 +103,6 @@ inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display
       {QStringLiteral("activity"), toQRectF(geometry.activity, density)},
       {QStringLiteral("workspaceHeight"), SidebarGeometry::workspaceHeight(chrome) / density},
       {QStringLiteral("cards"), agentCardGeometryRecord(display, geometry.activity.width)},
-      {QStringLiteral("edgeWidth"), SidebarGeometry::edge_width / density},
       {QStringLiteral("activitySeparatorY"), (std::floor(geometry.activity_header.y + (geometry.activity_header.height / 2)) - geometry.activity_header.y) / density},
   };
 }

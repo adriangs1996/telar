@@ -43,12 +43,12 @@ void textRowsResolveInPhysicalPixels() {
   constexpr double density = 2;
   const auto display = DisplayMetrics::resolve(configuration, logical, cells, density);
   const auto card = AgentCardGeometry::derive(display.chrome);
-  constexpr std::uint16_t expected_small_pixels = 22;
-  constexpr float expected_small_row = 29;
-  constexpr float expected_card_height = 136;
+  constexpr std::uint16_t expected_small_pixels = 26;
+  constexpr float expected_small_row = 34;
+  constexpr float expected_card_height = 151;
   constexpr Viewport expected{.width = 1600, .height = 1000, .scale = density};
   require(display.viewport == expected, "logical view dimensions must become physical dimensions once");
-  require(display.chrome.small == expected_small_pixels && card.small_row == expected_small_row, "a doubled small label needs the original 29-pixel line box");
+  require(display.chrome.small == expected_small_pixels && card.small_row == expected_small_row, "a doubled small label needs its 34-pixel line box");
   require(card.height() == expected_card_height, "complete card height must sum physical line boxes before projection");
 }
 
@@ -61,10 +61,10 @@ void fractionalDensityPreservesPhysicalRounding() {
   constexpr double density = 1.25;
   const auto display = DisplayMetrics::resolve(configuration, logical, cells, density);
   constexpr Viewport expected{.width = 1001, .height = 629, .scale = density, .controls = 31};
-  constexpr std::uint16_t expected_small = 14;
-  constexpr std::uint16_t expected_title = 16;
+  constexpr std::uint16_t expected_small = 18;
+  constexpr std::uint16_t expected_title = 21;
   require(display.viewport == expected, "frame and control extents must round at the physical pixel boundary");
-  require(display.chrome.small == expected_small && display.chrome.title == expected_title, "chrome text must round after density independently of the terminal font");
+  require(display.chrome.small == expected_small && display.chrome.title == expected_title, "chrome text must follow the terminal font and round after density");
 }
 
 void invalidDensityAndUnrepresentableExtentsAreRejected() {

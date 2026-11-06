@@ -65,6 +65,7 @@ QVariantMap agentRecord(const Agent<Memory> &agent, const AgentRecordContext &co
   AgentCardLabels::Project project;
   const auto project_label = AgentCardLabels::project(agent.workspace_label, context.machine, context.coordinator, project);
   const auto glyph = AgentCardLabels::providerGlyph(agent.provider_kind, agent.icon);
+  const auto tile = ApplicationMark::forApplication(runtime::describeProvider(agent.provider_kind).display_name);
   const auto provider_label = agent.display_name.empty() ? std::string_view{agent.provider_name} : std::string_view{agent.display_name};
 
   return {
@@ -83,6 +84,8 @@ QVariantMap agentRecord(const Agent<Memory> &agent, const AgentRecordContext &co
       {QStringLiteral("statusClock"), agent.status_clock.observed() ? statusAgeValue(agent.status_clock.interval()) : QVariant{}},
       {QStringLiteral("providerMark"), static_cast<int>(agent.provider_kind)},
       {QStringLiteral("glyph"), toQString(glyph)},
+      {QStringLiteral("tile"), toQString(tile.tile)},
+      {QStringLiteral("ink"), toQString(tile.ink)},
       {QStringLiteral("selected"), context.connected && context.selected},
       {QStringLiteral("enabled"), context.connected},
       {QStringLiteral("startsProject"), context.starts_project},

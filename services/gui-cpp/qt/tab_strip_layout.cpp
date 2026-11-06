@@ -91,7 +91,7 @@ QVariantMap positionedTab(const QVariantMap &tab, const Geometry::Measure &size,
   const auto width = static_cast<float>(bounds.width());
   const auto height = static_cast<float>(bounds.height());
   const auto chip_side = std::max(0.0F, std::min(size.chip, width - (2 * metrics.leading)));
-  const QRectF chip{metrics.leading, (height - chip_side) / 2, chip_side, chip_side};
+  const QRectF chip{metrics.leading, 0, chip_side, height};
   const auto status_right = width - (fit == Geometry::Fit::compact ? metrics.leading : metrics.trailing);
   const auto caption_left = metrics.leading + chip_side + metrics.spacing;
   const auto caption_right = status_right - size.statusSpace(metrics);
@@ -228,10 +228,6 @@ bool TabStripLayout::hovered() const noexcept {
   return hovered_;
 }
 
-QRectF TabStripLayout::plus() const noexcept {
-  return plus_;
-}
-
 QRectF TabStripLayout::dropMarker() const noexcept {
   return drop_marker_;
 }
@@ -339,12 +335,24 @@ void TabStripLayout::setHovered(bool hovered) {
   }
 }
 
+QRectF TabStripLayout::plus() const noexcept {
+  return plus_;
+}
+
+void TabStripLayout::setPlus(const QRectF &plus) {
+  if (plus_ != plus) {
+    plus_ = plus;
+    emit plusChanged();
+  }
+}
+
 QVariantMap TabStripLayout::style() const {
   return {
       {QStringLiteral("pillRadius"), Geometry::pill_radius * ratio_},
-      {QStringLiteral("chipRadius"), Geometry::chip_radius * ratio_},
-      {QStringLiteral("chipAlpha"), Geometry::chip_alpha},
-      {QStringLiteral("selectedChipAlpha"), Geometry::selected_chip_alpha},
+      {QStringLiteral("tileWidth"), Geometry::tile_width * ratio_},
+      {QStringLiteral("tileHeight"), Geometry::tile_height * ratio_},
+      {QStringLiteral("tileRadius"), Geometry::tile_radius * ratio_},
+      {QStringLiteral("pathGap"), Geometry::path_gap * ratio_},
       {QStringLiteral("markSide"), Geometry::mark_side * ratio_},
       {QStringLiteral("fadeWidth"), Geometry::fade_width * ratio_},
   };
@@ -420,7 +428,11 @@ TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap> &records, 
     const auto slot = static_cast<std::size_t>(index);
     const auto kind = record.value(QStringLiteral("activityKind")).toInt();
     const auto status_width = kind == static_cast<int>(TabActivity::Kind::progress) ? ProgressGeometry::compactWidth(ratio) : record.value(QStringLiteral("statusWidth")).toFloat() * ratio;
-    sizes[slot] = {.caption = captionAdvance(record.value(QStringLiteral("label")).toString()), .chip = Geometry::chip_side * ratio, .status = status_width};
+    const auto title = record.value(QStringLiteral("title"), record.value(QStringLiteral("label"))).toString();
+    const auto path = record.value(QStringLiteral("path")).toString();
+    const auto stacked = std::min(static_cast<std::size_t>(std::max<qsizetype>(record.value(QStringLiteral("cards")).toList().size(), 1)), Geometry::chip_widths.size());
+    const auto caption = captionAdvance(title) + (path.isEmpty() ? 0 : (Geometry::path_gap * ratio) + captionAdvance(path));
+    sizes[slot] = {.caption = caption, .chip = Geometry::chip_widths[stacked - 1] * ratio, .status = status_width};
     if (record.value(QStringLiteral("selected")).toBool()) {
       active = slot;
     }
@@ -471,6 +483,44 @@ QRectF TabStripLayout::placeTab(std::uint64_t id, QRectF bounds, TabMotionFrame 
   return bounds;
 }
 
+QVariantList TabStripLayout::placeCards(const QVariantMap &tab, TabMotionFrame &frame) {
+  const auto source = tab.value(QStringLiteral("cards")).toList();
+  std::array<TabCardInput, PaneLayout::maximum_panes> inputs{};
+  std::size_t count = 0;
+  for (const auto &entry : source) {
+    if (count == inputs.size()) {
+      break;
+    }
+
+    const auto card = entry.toMap();
+    inputs[count++] = {.pane = card.value(QStringLiteral("key")).toString().toULongLong(), .focused = card.value(QStringLiteral("focused")).toBool(), .attention = !card.value(QStringLiteral("attentionColor")).toString().isEmpty()};
+  }
+
+  std::array<TabCardPlacement, TabCardMotions::maximum_cards> placed{};
+  const auto written = card_motions_.place(std::span{inputs}.first(count), placed, frame);
+  // Delegates follow pane order, so a card keeps its item while its pose moves.
+  std::sort(placed.begin(), placed.begin() + written, [](const TabCardPlacement &left, const TabCardPlacement &right) {
+    return left.pane < right.pane;
+  });
+
+  QVariantList cards;
+  for (const auto &card : std::span{placed}.first(written)) {
+    const auto row = std::ranges::find(source, card.pane, [](const QVariant &entry) {
+      return entry.toMap().value(QStringLiteral("key")).toString().toULongLong();
+    });
+    auto record = row->toMap();
+    record.insert(QStringLiteral("x"), card.pose.x * ratio_);
+    record.insert(QStringLiteral("y"), card.pose.y * ratio_);
+    record.insert(QStringLiteral("rotation"), card.pose.rotation);
+    record.insert(QStringLiteral("scale"), card.pose.scale);
+    record.insert(QStringLiteral("rank"), static_cast<qulonglong>(card.rank));
+    record.insert(QStringLiteral("layer"), card.lifted ? static_cast<int>(TabCardMotions::maximum_cards) : static_cast<int>(TabCardMotions::maximum_cards - 1 - card.rank));
+    cards.append(std::move(record));
+  }
+
+  return cards;
+}
+
 void TabStripLayout::raiseDraggedSlot() {
   const auto delivered = std::span{drop_slots_}.first(drop_slot_count_);
   const auto lifted = std::ranges::find(delivered, dragged_, [](const TabDropSlot &slot) {
@@ -483,7 +533,6 @@ void TabStripLayout::raiseDraggedSlot() {
 
 void TabStripLayout::rebuild() {
   if (width() <= 0 || height() <= 0 || !std::isfinite(width()) || !std::isfinite(height()) || width() > std::numeric_limits<float>::max() || height() > std::numeric_limits<float>::max()) {
-    plus_ = {};
     strip_bounds_ = {};
     selection_bounds_ = {};
     selection_motion_.reset();
@@ -502,16 +551,16 @@ void TabStripLayout::rebuild() {
 
   TabMotionFrame frame{.now_ns = clock_.isNull() ? 0 : clock_->now(), .interval_ns = clock_.isNull() ? TabMotionFrame::default_interval_ns : clock_->frameInterval(), .deadline_ns = std::nullopt};
   motions_.begin(workspace_);
+  card_motions_.begin();
   const auto ratio = static_cast<float>(ratio_);
   const auto metrics = Geometry::Metrics::scaled(ratio);
   const auto available = static_cast<float>(width());
   const auto height = std::min(static_cast<float>(this->height()), Geometry::pill_height * ratio);
   const auto density = window() == nullptr ? qreal{1} : window()->effectiveDevicePixelRatio();
   const auto top = static_cast<float>(std::floor((this->height() - height) * density / 2) / density);
-  const auto plus_side = std::min(Geometry::plus_side * ratio, available);
   QList<QVariantMap> records;
   std::array<Geometry::Measure, Geometry::maximum_tabs> sizes;
-  const Geometry::Room room{.width = std::max(0.0F, available - plus_side - Geometry::control_gap * ratio), .metrics = metrics};
+  const Geometry::Room room{.width = available, .metrics = metrics};
   const auto plan = measureTabs(records, sizes, room);
   const auto count = records.size();
 
@@ -552,6 +601,7 @@ void TabStripLayout::rebuild() {
 
     auto entry = positionedTab(record, sizes[index], bounds, plan.fits[index], metrics);
     entry.insert(QStringLiteral("dragging"), dragging);
+    entry.insert(QStringLiteral("cards"), placeCards(record, frame));
     entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records[static_cast<qsizetype>(order[position + 1])].value(QStringLiteral("selected")).toBool());
     positioned.append(std::move(entry));
     drop_slots_[drop_slot_count_++] = {.id = id, .bounds = {.x = static_cast<float>(bounds.x()), .y = static_cast<float>(bounds.y()), .width = static_cast<float>(bounds.width()), .height = static_cast<float>(bounds.height())}};
@@ -590,12 +640,11 @@ void TabStripLayout::rebuild() {
   }
 
   if (count != 0) {
-    left += Geometry::control_gap * ratio;
     anchor_ = records[static_cast<qsizetype>(plan.focus)].value(QStringLiteral("key")).toString();
   }
 
-  plus_ = plus_side > 0 && height > 0 && left + plus_side <= available ? QRectF{left, top, plus_side, height} : QRectF{};
   motions_.finish();
+  card_motions_.finish();
   next_sample_ns_ = clock_.isNull() ? std::nullopt : frame.deadline_ns;
   frame_requested_ = false;
   if (!clock_.isNull()) {

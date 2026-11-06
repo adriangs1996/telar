@@ -40,7 +40,6 @@ Window {
         workspaceModel: telar.workspaces
         prefixPending: telar.prefixPending
         controlsInset: telar.windowControls
-        workbenchLeft: root.geometry.terminal.x
         ratio: root.ratio
         textScale: telar.chromeTextScale
         rail: root.geometry.rail
@@ -51,6 +50,7 @@ Window {
         onTabClosed: key => telar.execute(GuiController.Action.close_tab, key)
         onTabRenamed: telar.execute(GuiController.Action.rename_tab)
         onTabCreated: telar.execute(GuiController.Action.new_tab)
+        onPaletteRequested: telar.execute(GuiController.Action.palette)
     }
 
     Sidebar {

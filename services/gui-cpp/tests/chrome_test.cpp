@@ -123,6 +123,7 @@ QList<QVariantMap> tabRecords(WorkspaceWindow::Selection selection) {
         {QStringLiteral("label"), QStringLiteral("Terminal %1").arg(index)},
         {QStringLiteral("application"), QStringLiteral("sh")},
         {QStringLiteral("selected"), index == selection.active},
+        {QStringLiteral("cards"), QVariantList{QVariantMap{{QStringLiteral("key"), QString::number(index + 1)}, {QStringLiteral("focused"), true}, {QStringLiteral("glyph"), QStringLiteral("\uea85")}, {QStringLiteral("providerMark"), 0}}}},
     });
   }
 
@@ -137,7 +138,7 @@ QVariantMap tabProperties(ListModel &tabs, int width) {
       {QStringLiteral("height"), chrome.top_bar},
       {QStringLiteral("model"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&tabs))},
       {QStringLiteral("colors"), themeColors(Configuration{})},
-      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}},
+      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("title"), chrome.title}, {QStringLiteral("small"), chrome.small}}},
   };
 }
 
@@ -146,7 +147,6 @@ QVariantMap navigationProperties(ListModel &tabs, int width) {
   properties.insert(QStringLiteral("tabModel"), properties.take(QStringLiteral("model")));
   properties.insert(QStringLiteral("workspace"), QVariantMap{});
   properties.insert(QStringLiteral("controlsInset"), 0);
-  properties.insert(QStringLiteral("workbenchLeft"), fixture_sidebar_width);
 
   return properties;
 }
@@ -182,7 +182,7 @@ QVariantMap projectSwitcherProperties(ListModel &workspaces, int width, int sele
       {QStringLiteral("model"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&workspaces))},
       {QStringLiteral("selectedIndex"), selected},
       {QStringLiteral("colors"), themeColors(Configuration{})},
-      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}},
+      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("title"), chrome.title}, {QStringLiteral("small"), chrome.small}}},
   };
 }
 
@@ -192,7 +192,7 @@ QVariantMap sidebarProperties(ListModel &workspaces, ListModel &agents, bool exp
   const Rect area{.width = static_cast<float>(width), .height = fixture_height};
   auto geometry = sidebarRegionsRecord(area, {.chrome = chrome}, static_cast<std::size_t>(workspaces.rowCount()));
   const QVariantMap typography{
-      {QStringLiteral("body"), chrome.body},
+      {QStringLiteral("body"), chrome.body}, {QStringLiteral("title"), chrome.title},
       {QStringLiteral("small"), chrome.small},
       {QStringLiteral("bodyRow"), ChromeMetrics::lineHeight(chrome.body)},
       {QStringLiteral("smallRow"), ChromeMetrics::lineHeight(chrome.small)},
@@ -334,7 +334,6 @@ private:
     const auto *strip = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
     QVERIFY(strip != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*navigation, QStringLiteral("tabPill")).size(), 2, fixture_wait_ms);
-    QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() >= fixture_sidebar_width);
     QVERIFY(navigation->setProperty("rail", true));
     QTRY_VERIFY_WITH_TIMEOUT(strip->width() > 0, fixture_wait_ms);
     QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() < fixture_sidebar_width);
@@ -366,7 +365,7 @@ private:
     const auto selected_caption = [&] {
       QString selected;
       for (const auto *caption : visualItems(*strip, QStringLiteral("tabCaption"))) {
-        if (caption->property("emphasized").toBool()) {
+        if (caption->parentItem()->property("source").toMap().value(QStringLiteral("selected")).toBool()) {
           if (!selected.isEmpty()) {
             return QStringLiteral("multiple");
           }
@@ -512,8 +511,8 @@ private:
     QVERIFY(sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
     const auto *activity = sidebar->findChild<QQuickItem *>(QStringLiteral("sidebarActivity"));
     QVERIFY(activity != nullptr);
-    constexpr QPointF expected_position{8, 31};
-    constexpr QSizeF expected_size{263, 893};
+    constexpr QPointF expected_position{8, 40};
+    constexpr QSizeF expected_size{264, 884};
     QCOMPARE(activity->position(), expected_position);
     QCOMPARE(activity->size(), expected_size);
   }
@@ -529,8 +528,8 @@ private:
     const Rect area{.width = display.geometry.sidebar.width, .height = display.geometry.sidebar.height};
     const auto regions = sidebarRegionsRecord(area, display, 1);
     const auto cards = regions.value(QStringLiteral("cards")).toMap();
-    constexpr qreal expected_workspace_height = 51.5;
-    constexpr qreal expected_card_height = 68;
+    constexpr qreal expected_workspace_height = 55.5;
+    constexpr qreal expected_card_height = 75.5;
     QCOMPARE(regions.value(QStringLiteral("workspaceHeight")).toReal(), expected_workspace_height);
     QCOMPARE(cards.value(QStringLiteral("height")).toReal(), expected_card_height);
     workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
@@ -550,8 +549,6 @@ private:
     QVERIFY(activity != nullptr);
     QCOMPARE(activity->height(), regions.value(QStringLiteral("activity")).toRectF().height());
     QVERIFY(sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
-    const auto edge = sidebar->property("edgeWidth").toReal();
-    QCOMPARE(edge * density, qreal{1});
   }
 
   Q_SLOT static void applicationMarksNeedNoApplicationController() {
@@ -665,17 +662,17 @@ private:
     agents.back().title = "Session title";
     for (const auto state : {telar::AgentTitleState::placeholder, telar::AgentTitleState::pending, telar::AgentTitleState::ready, telar::AgentTitleState::failed}) {
       agents.back().title_state = state;
-      const auto record = tabRecord(tab, &pane, std::span<const Agent<SystemAllocator>>{agents}, true);
+      const auto record = tabRecord(tab, &pane, std::array<const Pane<SystemAllocator> *, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true);
       QCOMPARE(record.value(QStringLiteral("label")).toString(), state == telar::AgentTitleState::placeholder ? QStringLiteral("telar · Python") : QStringLiteral("Session title"));
       QCOMPARE(record.value(QStringLiteral("application")).toString(), QStringLiteral("Python"));
     }
 
     agents.front().location = location;
     agents.front().title_state = telar::AgentTitleState::placeholder;
-    QCOMPARE(tabRecord(tab, &pane, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
+    QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<SystemAllocator> *, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
     tab.label = "Review";
     tab.fullscreen = true;
-    QCOMPARE(tabRecord(tab, &pane, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
+    QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<SystemAllocator> *, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
   }
 
   Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {
@@ -766,8 +763,8 @@ private:
     using Geometry = TabStripGeometry;
     const auto metrics = Geometry::Metrics::scaled(1);
     const std::array sizes{
-        Geometry::Measure{.caption = 180, .chip = Geometry::chip_side},
-        Geometry::Measure{.caption = 20, .chip = Geometry::chip_side},
+        Geometry::Measure{.caption = 180, .chip = Geometry::chip_widths[0]},
+        Geometry::Measure{.caption = 20, .chip = Geometry::chip_widths[0]},
     };
     const auto room = sizes[0].whole(metrics) + metrics.gap + sizes[1].whole(metrics);
     const auto plan = Geometry::arrange(sizes, 0, {.width = room, .metrics = metrics});
@@ -785,9 +782,9 @@ private:
     using Geometry = TabStripGeometry;
     const auto metrics = Geometry::Metrics::scaled(1);
     std::array<Geometry::Measure, 3> sizes;
-    sizes.fill({.caption = 400, .chip = Geometry::chip_side});
+    sizes.fill({.caption = 400, .chip = Geometry::chip_widths[0]});
     const auto minimum_room = sizes[0].truncated(metrics) * static_cast<float>(sizes.size()) + metrics.gap * static_cast<float>(sizes.size() - 1);
-    for (const auto room : {minimum_room, 350.0F}) {
+    for (const auto room : {minimum_room, minimum_room + 30}) {
       for (std::size_t focus = 0; focus < sizes.size(); ++focus) {
         const auto plan = Geometry::arrange(sizes, focus, {.width = room, .metrics = metrics});
         QCOMPARE(plan.hidden(), std::size_t{0});
@@ -848,7 +845,7 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
-    constexpr int strip_width = 300;
+    constexpr int strip_width = 800;
     constexpr std::size_t tab_count = 4;
     tabs.reconcile(tabRecords({.count = tab_count, .active = 0}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, strip_width));
@@ -863,7 +860,7 @@ private:
     const auto second = tabBounds(*layout->items(), 1);
     QCOMPARE(first.top(), (ChromeMetrics::logical_top_bar - TabStripGeometry::pill_height) / 2);
     QCOMPARE(second.left(), first.right() + TabStripGeometry::gap);
-    QVERIFY(first.width() > second.width());
+    QCOMPARE(first.width(), second.width());
 
     layout->setHovered(true);
     tabs.reconcile(tabRecords({.count = tab_count, .active = 1}));
@@ -874,7 +871,7 @@ private:
     QCOMPARE(tabBounds(*layout->items(), 0), first);
     QCOMPARE(tabBounds(*layout->items(), 1), second);
     layout->setHovered(false);
-    QTRY_VERIFY_WITH_TIMEOUT(tabBounds(*layout->items(), 1).width() > second.width(), fixture_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(tabBounds(*layout->items(), 1), second, fixture_wait_ms);
   }
 
   Q_SLOT static void aHiddenTabCounterSelectsTheNearestTab() {
@@ -918,7 +915,7 @@ private:
     QQmlEngine engine;
     auto previous = std::make_unique<ListModel>();
     ListModel current;
-    constexpr int strip_width = 300;
+    constexpr int strip_width = 800;
     previous->reconcile(tabRecords({.count = 4, .active = 0}));
     current.reconcile(tabRecords({.count = 1, .active = 0}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(*previous, strip_width));
@@ -950,20 +947,18 @@ private:
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, fixture_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*strip, QStringLiteral("tabNumber")).size(), 1, fixture_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*strip, QStringLiteral("applicationNumber")).size(), 1, fixture_wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*strip, QStringLiteral("applicationGlyph")).size(), 1, fixture_wait_ms);
-    const auto *number = visualItems(*strip, QStringLiteral("tabNumber")).front();
+    const auto *number = visualItems(*strip, QStringLiteral("applicationNumber")).front();
     const auto *glyph = visualItems(*strip, QStringLiteral("applicationGlyph")).front();
     QVERIFY(!number->isVisible() && glyph->isVisible());
     const auto bounds = tabBounds(*layout->items(), 0);
     const auto counter = layout->counter();
-    const auto plus = layout->plus();
     QVERIFY(strip->setProperty("prefixPending", true));
     QVERIFY(number->isVisible() && !glyph->isVisible());
     QCOMPARE(number->property("text").toString(), QString::number(selected_index + 1));
     QCOMPARE(tabBounds(*layout->items(), 0), bounds);
     QCOMPARE(layout->counter(), counter);
-    QCOMPARE(layout->plus(), plus);
 
     QVERIFY(strip->setProperty("prefixPending", false));
     QVERIFY(!number->isVisible() && glyph->isVisible());
@@ -1040,7 +1035,7 @@ private:
       QVERIFY(navigation->setProperty("rail", rail));
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto bounds = switcher->mapRectToItem(navigation.get(), switcher->boundingRect());
-      QCOMPARE(bounds.right(), qreal{992});
+      QCOMPARE(bounds.right(), qreal{924});
       QVERIFY(strip->mapRectToItem(navigation.get(), strip->boundingRect()).right() < bounds.left());
       const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
       QCOMPARE(marks.size(), 3);

@@ -45,8 +45,6 @@ namespace telar::gui {
     Color bottombar;
     Color workbench;
     Color pane;
-    Color header;
-    Color active_header;
     Color text;
 
     [[nodiscard]] inline static ChromeSurfaces derive(const Theme &theme, float fallback, const BackgroundOpacity &opacity = {}) noexcept {
@@ -55,18 +53,16 @@ namespace telar::gui {
       const bool dark = theme.background.r + theme.background.g + theme.background.b < 1.5F;
       const auto gutter_end = Color::rgb(dark ? 0x000000 : 0xffffff);
       const auto text_end = Color::rgb(dark ? 0xffffff : 0x000000);
-      const auto navigation = mix(panel, ink, 0.09F);
-      const auto pane_opacity = opacity.resolve(BackgroundOpacity::Surface::pane, fallback);
+      const auto dim = theme.chromeColor(PaletteRole::surface_dim);
+      const auto sheet = dim == panel ? mix(panel, gutter_end, 0.28F) : dim;
 
       return {
-          .sidebar = alpha(navigation, opacity.resolve(BackgroundOpacity::Surface::sidebar, fallback)),
-          .topbar = alpha(navigation, opacity.resolve(BackgroundOpacity::Surface::topbar, fallback)),
-          .bottombar = alpha(panel, opacity.resolve(BackgroundOpacity::Surface::bottombar, fallback)),
-          .workbench = alpha(mix(theme.background, gutter_end, 0.28F), opacity.resolve(BackgroundOpacity::Surface::workspace, fallback)),
-          .pane = alpha(panel, pane_opacity),
-          .header = alpha(mix(panel, ink, 0.055F), pane_opacity),
-          .active_header = alpha(mix(panel, ink, 0.09F), pane_opacity),
-          .text = mix(ink, text_end, 0.2F),
+          .sidebar = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::sidebar, fallback)),
+          .topbar = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::topbar, fallback)),
+          .bottombar = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::bottombar, fallback)),
+          .workbench = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::workspace, fallback)),
+          .pane = alpha(panel, opacity.resolve(BackgroundOpacity::Surface::pane, fallback)),
+          .text = mix(ink, text_end, 0.7F),
       };
     }
 

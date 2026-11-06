@@ -14,12 +14,13 @@ Item {
     property real ratio: 1
     property real textScale: 1
     property bool prefixPending: false
+    property rect createBounds
     readonly property real wellPadding: 3 * ratio
-    readonly property real captionSize: typography.body + 2 * ratio
+    readonly property real captionSize: typography.title
+    readonly property real scaling: typography.title / 14
     signal selected(string key)
     signal closed(string key)
     signal renamed()
-    signal created()
 
     TabStripLayout {
         id: layout
@@ -28,8 +29,9 @@ Item {
         width: Math.max(0, root.width - 2 * root.wellPadding)
         height: root.height
         model: root.model
-        ratio: root.ratio
+        ratio: root.ratio * root.scaling
         hovered: pointer.hovered
+        plus: Qt.rect(root.createBounds.x - x, root.createBounds.y, root.createBounds.width, root.createBounds.height)
         font.family: "IBM Plex Sans"
         font.pixelSize: root.captionSize
         // Reserve the heavier label width so selection does not shift adjacent tabs.
@@ -52,8 +54,7 @@ Item {
         width: Math.min(root.width, layout.stripBounds.width + 2 * root.wellPadding)
         height: Math.min(root.height, layout.stripBounds.height + 2 * root.wellPadding)
         radius: height / 2
-        color: root.colors.text
-        opacity: 0.045
+        color: Qt.alpha(root.colors.chromeText, 0.07)
         visible: layout.stripBounds.width > 0
     }
 
@@ -69,6 +70,7 @@ Item {
         visible: width > 0 && height > 0
     }
 
+    // The selection is a lens: its rim carries the signal, its fill stays close to the surface.
     NativeRoundedRectangle {
         objectName: "tabSelection"
         x: layout.x + layout.selectionBounds.x
@@ -76,21 +78,11 @@ Item {
         width: layout.selectionBounds.width
         height: layout.selectionBounds.height
         radius: layout.style.pillRadius
-        color: Qt.tint(root.colors.surface1, Qt.alpha(root.colors.accent, 0.1))
-        borderColor: root.colors.accent
-        borderAlpha: 0.52
-        borderWidth: 1 / Screen.devicePixelRatio
+        color: Qt.alpha(root.colors.chromeText, 0.05)
+        borderColor: root.colors.chromeText
+        borderAlpha: 0.32
+        borderWidth: root.ratio
         visible: width > 0 && height > 0
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: 1 / Screen.devicePixelRatio
-            radius: Math.max(0, parent.radius - anchors.margins)
-            gradient: Gradient {
-                GradientStop { position: 0; color: Qt.rgba(root.colors.text.r, root.colors.text.g, root.colors.text.b, 0.09) }
-                GradientStop { position: 1; color: "transparent" }
-            }
-        }
     }
 
     NativeRoundedRectangle {
@@ -122,8 +114,7 @@ Item {
             width: record.bounds.width
             height: record.bounds.height
             radius: layout.style.pillRadius
-            color: pointed && !source.selected ? root.colors.surface0 : "transparent"
-            clip: true
+            color: pointed && !source.selected ? Qt.alpha(root.colors.chromeText, ChromeStyle.hoverAlpha) : "transparent"
             z: record.dragging ? 1 : 0
 
             Rectangle {
@@ -137,58 +128,62 @@ Item {
                 visible: tab.record.separator && !tab.pointed
             }
 
-            NativeRoundedRectangle {
-                x: tab.record.chip.x
-                y: tab.record.chip.y
-                width: tab.record.chip.width
-                height: tab.record.chip.height
-                radius: layout.style.chipRadius
-                color: root.colors.text
-                opacity: tab.source.selected ? layout.style.selectedChipAlpha : layout.style.chipAlpha
-            }
+            Repeater {
+                model: tab.record.cards.length
 
-            ApplicationMark {
-                primaryFamily: root.typography.primaryFamily ?? ""
-                primaryStyle: root.typography.primaryStyle ?? ""
-                x: tab.record.chip.x + (tab.record.chip.width - width) / 2
-                y: tab.record.chip.y + (tab.record.chip.height - height) / 2
-                width: Math.min(tab.record.chip.width, layout.style.markSide)
-                height: width
-                mark: tab.source
-                colors: root.colors
-                dimmed: false
-                ink: root.colors.chromeText
-                ratio: root.ratio
-                pixelSize: root.typography.body
-                visible: !root.prefixPending
-            }
-
-            ChromeText {
-                objectName: "tabNumber"
-                x: tab.record.chip.x + (tab.record.chip.width - width) / 2
-                y: tab.record.chip.y
-                width: Math.min(tab.record.chip.width, implicitWidth)
-                height: tab.record.chip.height
-                text: tab.source.number
-                pixelSize: root.typography.small
-                color: root.colors.text
-                emphasized: true
-                visible: root.prefixPending
-                elide: Text.ElideNone
+                delegate: ApplicationTile {
+                    required property int index
+                    readonly property var card: tab.record.cards[index] ?? ({})
+                    readonly property real rank: card.rank ?? 0
+                    objectName: "tabCard"
+                    x: tab.record.chip.x + (card.x ?? 0)
+                    y: tab.record.chip.y + (tab.record.chip.height - height) / 2 + (card.y ?? 0)
+                    z: card.layer ?? 0
+                    width: layout.style.tileWidth
+                    height: layout.style.tileHeight
+                    rotation: card.rotation ?? 0
+                    scale: card.scale ?? 1
+                    radius: layout.style.tileRadius
+                    visible: rank < 3
+                    mark: card
+                    attentionColor: rank > 0 ? (card.attentionColor ?? "") : ""
+                    colors: root.colors
+                    typography: root.typography
+                    ratio: root.ratio
+                    number: root.prefixPending && rank === 0 ? tab.source.number : ""
+                    borderColor: "#0a0810"
+                    borderAlpha: 0.72
+                    borderWidth: root.ratio
+                }
             }
 
             ChromeText {
+                id: caption
                 objectName: "tabCaption"
                 x: tab.record.caption.x
                 y: tab.record.caption.y
-                width: tab.record.caption.width
+                width: Math.min(tab.record.caption.width, implicitWidth)
                 height: tab.record.caption.height
-                text: (tab.record.truncated && !root.prefixPending ? tab.source.number + " · " : "") + tab.source.label
+                text: (tab.record.truncated && !root.prefixPending ? tab.source.number + " · " : "") + (tab.source.title ?? tab.source.label)
                 pixelSize: root.captionSize
-                color: tab.source.selected ? root.colors.text : root.colors.chromeText
-                emphasized: tab.source.selected
+                color: tab.source.selected ? root.colors.chromeText : root.colors.text
+                emphasized: true
                 visible: !tab.record.compact
-                elide: tab.record.truncated ? Text.ElideMiddle : Text.ElideNone
+                elide: Text.ElideRight
+            }
+
+            ChromeText {
+                objectName: "tabPath"
+                x: caption.x + caption.width + layout.style.pathGap
+                y: tab.record.caption.y
+                width: Math.max(0, tab.record.caption.x + tab.record.caption.width - x)
+                height: tab.record.caption.height
+                text: tab.source.path ?? ""
+                pixelSize: root.captionSize
+                color: root.colors.subtext0
+                visible: !tab.record.compact && width > 0 && text.length > 0
+                elide: Text.ElideNone
+                fadeWidth: implicitWidth > width ? layout.style.fadeWidth : 0
             }
 
             NativeTabActivity {
@@ -290,22 +285,5 @@ Item {
             if (root.controller) root.controller.selectCapturedTab();
             else root.selected(layout.counter.key);
         }
-    }
-
-    ChromeButton {
-        objectName: "createTabButton"
-        z: 2
-        x: layout.x + layout.plus.x
-        y: layout.plus.y
-        width: layout.plus.width
-        height: layout.plus.height
-        visible: width > 0 && height > 0
-        colors: root.colors
-        pixelSize: root.typography.body + 4 * root.ratio
-        emphasized: true
-        cornerRadius: layout.style.pillRadius
-        text: "+"
-        Accessible.name: "New tab"
-        onClicked: root.created()
     }
 }

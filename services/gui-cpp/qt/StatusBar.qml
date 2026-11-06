@@ -17,10 +17,13 @@ NativeRoundedRectangle {
     property real ratio: 1
     signal diagnosticDismissed()
 
-    readonly property real margin: 8 * ratio
+    readonly property real capsuleInset: 8 * ratio
+    readonly property real margin: capsuleInset
+    readonly property real trailingMargin: 2 * capsuleInset
+    readonly property real capsuleHeight: 22 * ratio
     readonly property real badgeGap: 10 * ratio
     readonly property real diagnosticShare: 0.5
-    readonly property real contentWidth: Math.max(0, width - 2 * margin)
+    readonly property real contentWidth: Math.max(0, width - margin - trailingMargin)
     readonly property real metricsWidth: Math.max(0, contentWidth - (tlsChip.visible ? tlsChip.width + badgeGap : 0))
     readonly property real density: Screen.devicePixelRatio
 
@@ -33,7 +36,6 @@ NativeRoundedRectangle {
         x: root.margin
         width: Math.max(0, root.metricsWidth - (diagnosticChip.visible ? diagnosticChip.width + root.badgeGap : 0))
         height: parent.height
-        clip: true
 
         MetricsGroup {
             width: parent.width
@@ -76,6 +78,22 @@ NativeRoundedRectangle {
                 return result;
             }
             readonly property int maximumOverflowCount: [leftSlot.fitNodes, centerSlot.fitNodes, rightSlot.fitNodes, legacySlot.fitNodes].reduce((total, nodes) => total + nodes.filter(node => node.parent < 0).length, 0)
+
+            Repeater {
+                model: [leftSlot, centerSlot, rightSlot, legacySlot]
+
+                delegate: NativeRoundedRectangle {
+                    required property var modelData
+                    objectName: "statusCapsule"
+                    x: modelData.x - root.capsuleInset
+                    y: (components.height - height) / 2
+                    width: modelData.width + 2 * root.capsuleInset
+                    height: root.capsuleHeight
+                    radius: height / 2
+                    color: Qt.alpha(root.colors.chromeText, 0.07)
+                    visible: modelData.width > 0
+                }
+            }
 
             ComponentSlot {
                 id: leftSlot
@@ -159,7 +177,7 @@ NativeRoundedRectangle {
     BarBadge {
         id: tlsChip
 
-        x: root.width - root.margin - width
+        x: root.width - root.trailingMargin - width
         y: Math.round((root.height - height) * root.density / 2) / root.density
         width: Math.min(implicitWidth, root.contentWidth)
         height: implicitHeight

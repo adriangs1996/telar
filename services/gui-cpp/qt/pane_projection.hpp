@@ -82,18 +82,18 @@ namespace telar::gui::qt {
       }
     }
 
-    if (context.empty() && !pane.title.empty() && pane.title != pane.foreground) {
-      context = pane.title;
-    }
-    if (context.empty()) {
-      context = TabCaption::directoryName(pane.cwd);
-    }
+    const std::string_view application = pane.foreground.empty() ? std::string_view{"shell"} : std::string_view{pane.foreground};
+    const auto mark = ApplicationMark::forApplication(application);
     const auto safe_context = WindowTitle::render("{pane_title}", {.workspace = {}, .tab = {}, .pane_title = context, .hostname = {}});
     const auto progress_color = PaneProgressPresentation::color(pane.progress_state);
     return {
         {QStringLiteral("index"), QString::number(index)},
         {QStringLiteral("program"), pane.foreground.empty() ? QStringLiteral("shell") : toQString(pane.foreground)},
-        {QStringLiteral("context"), toQString(safe_context.view())},
+        {QStringLiteral("context"), context.empty() ? displayPath(pane.cwd) : toQString(safe_context.view())},
+        {QStringLiteral("glyph"), toQString(mark.glyph)},
+        {QStringLiteral("providerMark"), static_cast<int>(mark.provider)},
+        {QStringLiteral("tile"), toQString(mark.tile)},
+        {QStringLiteral("ink"), toQString(mark.ink)},
         {QStringLiteral("agent"), agent_record},
         {QStringLiteral("needsAttention"), needs_attention},
         {QStringLiteral("imagesPaused"), images_paused},
@@ -108,13 +108,10 @@ namespace telar::gui::qt {
   QVariantMap fullscreenPaneRecord(const Pane<Memory> *pane, std::span<const Agent<Memory>> agents, FullscreenPaneEntry entry) {
     auto record = pane == nullptr ? QVariantMap{} : paneChromeRecord(*pane, agents, entry.index);
     const auto program = pane == nullptr || pane->foreground.empty() ? std::string_view{"shell"} : std::string_view{pane->foreground};
-    const auto mark = ApplicationMark::forApplication(program);
     record.insert(QStringLiteral("key"), QString::number(entry.pane_id));
     record.insert(QStringLiteral("index"), QString::number(entry.index));
     record.insert(QStringLiteral("program"), toQString(program));
     record.insert(QStringLiteral("focused"), entry.focused);
-    record.insert(QStringLiteral("glyph"), toQString(mark.glyph));
-    record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
     const auto agent = record.value(QStringLiteral("agent")).toMap();
     record.insert(QStringLiteral("attentionColor"), !entry.focused && record.value(QStringLiteral("needsAttention")).toBool() ? agent.value(QStringLiteral("statusColor")).toString() : QString{});
 

@@ -145,10 +145,10 @@ private:
     };
 
     constexpr std::array samples{
-        Sample{.density = 0.8, .navigation = 34, .footer = 21, .small_row = 12},
-        Sample{.density = 1, .navigation = 42, .footer = 26, .small_row = 15},
-        Sample{.density = 1.25, .navigation = 53, .footer = 33, .small_row = 19},
-        Sample{.density = 2, .navigation = 84, .footer = 52, .small_row = 29},
+        Sample{.density = 0.8, .navigation = 38, .footer = 33, .small_row = 13},
+        Sample{.density = 1, .navigation = 47, .footer = 41, .small_row = 17},
+        Sample{.density = 1.25, .navigation = 59, .footer = 51, .small_row = 21},
+        Sample{.density = 2, .navigation = 94, .footer = 81, .small_row = 34},
     };
     for (const auto sample : samples) {
       auto target = QQuickRenderTarget::fromPaintDevice(&image);

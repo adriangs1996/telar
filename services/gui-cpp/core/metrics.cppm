@@ -41,16 +41,19 @@ namespace telar::gui {
       pane
     };
     static constexpr std::array<const char *, 5> names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
+    // The window is glass by default: navigation lets the desktop through and terminals stay legible.
+    static constexpr float sheet_opacity = 0.78F;
+    static constexpr float pane_opacity = 0.97F;
     std::array<std::optional<float>, names.size()> overrides{};
 
     [[nodiscard]] inline float resolve(Surface surface, float fallback) const noexcept {
-      return overrides[static_cast<std::size_t>(surface)].value_or(fallback);
+      return overrides[static_cast<std::size_t>(surface)].value_or(std::min(fallback, surface == Surface::pane ? pane_opacity : sheet_opacity));
     }
 
     [[nodiscard]] inline float minimum(float fallback) const noexcept {
       auto result = 1.0F;
-      for (const auto value : overrides) {
-        result = std::min(result, value.value_or(fallback));
+      for (std::size_t index = 0; index < names.size(); ++index) {
+        result = std::min(result, resolve(static_cast<Surface>(index), fallback));
       }
       return result;
     }
@@ -443,7 +446,7 @@ struct Configuration {
   static constexpr std::chrono::milliseconds default_blink_interval{600};
   static constexpr std::chrono::milliseconds minimum_blink_interval{100};
   static constexpr std::chrono::milliseconds maximum_blink_interval{5000};
-  static constexpr float default_sidebar_width = 284;
+  static constexpr float default_sidebar_width = 240;
   static constexpr float minimum_sidebar_width = 220;
   static constexpr float maximum_sidebar_width = 800;
   static constexpr float minimum_chrome_scale = 0.5F;
@@ -468,7 +471,7 @@ struct Configuration {
   std::chrono::milliseconds blink_interval = default_blink_interval;
   float background_opacity = 1;
   BackgroundOpacity opacity;
-  std::uint8_t background_blur = 0;
+  std::uint8_t background_blur = default_background_blur;
   float padding_x = 0;
   float padding_y = 0;
   float chrome_scale = 1;
@@ -563,16 +566,17 @@ struct CellMetrics {
 };
 
 struct ChromeMetrics {
-  static constexpr float reference_font_size = FontConfiguration::default_size;
+  // Bar heights are specified for this terminal font size and scale with it.
+  static constexpr float design_font_size = 14;
   static constexpr float maximum_text = 4096;
-  static constexpr float logical_top_bar = 42;
-  static constexpr float logical_status_bar = 26;
+  static constexpr float logical_top_bar = 44;
+  static constexpr float logical_status_bar = 38;
   static constexpr float logical_pane_header = 32;
   static constexpr float logical_pane_gap = 8;
   static constexpr float logical_pane_border = 1;
-  static constexpr float title_ratio = 0.87F;
-  static constexpr float body_ratio = 0.87F;
-  static constexpr float small_ratio = 0.73F;
+  static constexpr float title_ratio = 1;
+  static constexpr float body_ratio = 0.93F;
+  static constexpr float small_ratio = 0.855F;
   static constexpr float sans_line_ratio = 1.3F;
   static constexpr float minimum_text = 6;
 
@@ -580,18 +584,19 @@ struct ChromeMetrics {
   float top_bar = logical_top_bar;
   float status_bar = logical_status_bar;
   float pane_header = logical_pane_header;
-  std::uint16_t title = 13;
+  std::uint16_t title = 14;
   std::uint16_t body = 13;
-  std::uint16_t small = 11;
+  std::uint16_t small = 12;
 
   inline static ChromeMetrics resolve(const Configuration &configuration, const Viewport &viewport, const CellMetrics &cells) noexcept {
     ChromeMetrics metrics;
     metrics.ratio = viewport.scale;
-    metrics.top_bar = std::round(logical_top_bar * metrics.ratio);
-    metrics.status_bar = std::round(logical_status_bar * metrics.ratio);
-    metrics.pane_header = std::round(logical_pane_header * metrics.ratio);
+    const auto base = configuration.font.size * viewport.scale * configuration.chrome_scale;
+    const auto bars = base / design_font_size;
+    metrics.top_bar = std::round(logical_top_bar * bars);
+    metrics.status_bar = std::round(logical_status_bar * bars);
+    metrics.pane_header = std::round(logical_pane_header * bars);
 
-    const auto base = reference_font_size * viewport.scale * configuration.chrome_scale;
     const auto text_size = [](float value) {
       return static_cast<std::uint16_t>(std::clamp(std::round(value), minimum_text, maximum_text));
     };
@@ -624,7 +629,7 @@ struct ChromeMetrics {
 struct WindowGeometry {
   static constexpr float sidebar_minimum = Configuration::minimum_sidebar_width;
   static constexpr float sidebar_maximum = Configuration::maximum_sidebar_width;
-  static constexpr float sidebar_gap = 8;
+  static constexpr float workbench_margin = 8;
   static constexpr float workbench_minimum_columns = 20;
 
   Rect navigation;
@@ -644,23 +649,23 @@ struct WindowGeometry {
     const auto height = static_cast<float>(viewport.height);
     const auto padding_x = std::round(configuration.padding_x * viewport.scale);
     const auto padding_y = std::round(configuration.padding_y * viewport.scale);
-    const auto gap = std::round(sidebar_gap * viewport.scale);
+    const auto margin = std::max(padding_x, std::round(workbench_margin * viewport.scale));
     const auto minimum = std::round(sidebar_minimum * viewport.scale);
-    const auto room = std::max(0.0F, width - padding_x - gap - (workbench_minimum_columns * cells.width));
+    const auto room = std::max(0.0F, width - (2 * margin) - (workbench_minimum_columns * cells.width));
     const auto maximum = std::max(minimum, std::min(std::round(sidebar_maximum * viewport.scale), room));
 
     WindowGeometry geometry;
     geometry.navigation = {.x = 0, .y = 0, .width = width, .height = chrome.top_bar};
-    geometry.status = {.x = 0, .y = height - chrome.status_bar, .width = width, .height = chrome.status_bar};
     geometry.rail = !configuration.sidebar_visible || room < minimum;
 
     auto requested = std::clamp(std::round(configuration.sidebar_width * viewport.scale), minimum, maximum);
     if (geometry.rail) {
       requested = 0;
     }
-    const auto left = requested > 0 ? requested + gap : padding_x;
-    geometry.sidebar = {.x = 0, .y = chrome.top_bar, .width = requested, .height = std::max(0.0F, height - chrome.top_bar - chrome.status_bar)};
-    geometry.terminal = {.x = left, .y = chrome.top_bar + padding_y, .width = std::max(0.0F, width - left - padding_x), .height = std::max(0.0F, height - chrome.top_bar - chrome.status_bar - padding_y * 2)};
+    const auto left = requested > 0 ? requested : margin;
+    geometry.sidebar = {.x = 0, .y = chrome.top_bar, .width = requested, .height = std::max(0.0F, height - chrome.top_bar)};
+    geometry.status = {.x = left, .y = height - chrome.status_bar, .width = std::max(0.0F, width - left), .height = chrome.status_bar};
+    geometry.terminal = {.x = left, .y = chrome.top_bar + padding_y, .width = std::max(0.0F, width - left - margin), .height = std::max(0.0F, height - chrome.top_bar - chrome.status_bar - padding_y * 2)};
 
     return geometry;
   }

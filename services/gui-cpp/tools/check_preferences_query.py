@@ -212,7 +212,7 @@ def records():
         padding_x=bits(0),
         padding_y=bits(0),
         chrome_scale=bits(1),
-        sidebar_width=bits(284),
+        sidebar_width=bits(240),
     )
     yield default
     for code in range(15):

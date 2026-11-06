@@ -512,6 +512,186 @@ private:
 export {
 namespace telar::gui {
 
+struct TabCardPose {
+  float x = 0;
+  float y = 0;
+  float rotation = 0;
+  float scale = 1;
+
+  bool operator==(const TabCardPose &) const = default;
+};
+
+struct TabCardInput {
+  std::uint64_t pane = 0;
+  bool focused = false;
+  bool attention = false;
+};
+
+struct TabCardPlacement {
+  std::uint64_t pane = 0;
+  std::size_t rank = 0;
+  TabCardPose pose;
+  bool lifted = false;
+};
+
+struct TabCardMotion {
+  static constexpr std::uint64_t duration_ns = 220'000'000;
+  static constexpr std::uint64_t lift_ns = 99'000'000;
+  static constexpr std::uint64_t settle_ns = duration_ns - lift_ns;
+  // The focused card clears the stack before it lands in front.
+  static constexpr TabCardPose lift{.x = 9.1F, .y = -5.5F, .rotation = -8, .scale = 1.06F};
+  static constexpr std::array<TabCardPose, 3> rest{{
+      {.x = 0, .y = 0, .rotation = -5, .scale = 1},
+      {.x = 7, .y = 0, .rotation = -3, .scale = 0.93F},
+      {.x = 14.3F, .y = 0, .rotation = -1, .scale = 0.83F},
+  }};
+
+  std::uint64_t pane = 0;
+  std::uint64_t used = 0;
+  std::uint64_t started = 0;
+  TabCardPose from;
+  TabCardPose to;
+  std::size_t rank = 0;
+  bool hop = false;
+  bool seen = true;
+
+  [[nodiscard]] inline static TabCardPose mix(TabCardPose start, TabCardPose end, float progress) noexcept {
+    const auto remaining = 1 - std::clamp(progress, 0.0F, 1.0F);
+    const auto eased = 1 - (remaining * remaining * remaining);
+
+    return {.x = start.x + ((end.x - start.x) * eased), .y = start.y + ((end.y - start.y) * eased), .rotation = start.rotation + ((end.rotation - start.rotation) * eased), .scale = start.scale + ((end.scale - start.scale) * eased)};
+  }
+
+  [[nodiscard]] inline std::uint64_t duration() const noexcept {
+    return hop ? duration_ns : settle_ns;
+  }
+
+  [[nodiscard]] inline bool lifted(std::uint64_t now_ns) const noexcept {
+    return hop && now_ns >= started && now_ns - started < lift_ns;
+  }
+
+  [[nodiscard]] inline TabCardPose value(std::uint64_t now_ns) const noexcept {
+    if (now_ns < started) {
+      return from;
+    }
+
+    const auto elapsed = now_ns - started;
+    if (hop) {
+      return elapsed < lift_ns ? mix(from, lift, static_cast<float>(elapsed) / static_cast<float>(lift_ns)) : mix(lift, to, static_cast<float>(elapsed - lift_ns) / static_cast<float>(settle_ns));
+    }
+
+    return mix(from, to, static_cast<float>(elapsed) / static_cast<float>(settle_ns));
+  }
+};
+
+// Remembers focus order per pane without allocating, so stacks stay stable between frames.
+class TabCardMotions {
+public:
+  static constexpr std::size_t capacity = 256;
+  static constexpr std::size_t maximum_cards = 4;
+
+  inline void begin() noexcept {
+    for (auto &motion : std::span{entries_}.first(count_)) {
+      motion.seen = false;
+    }
+  }
+
+  inline std::size_t place(std::span<const TabCardInput> panes, std::span<TabCardPlacement> placed, TabMotionFrame &frame) noexcept {
+    std::array<TabCardMotion *, capacity> ordered{};
+    std::size_t known = 0;
+    for (const auto &pane : panes) {
+      auto *motion = find(pane.pane);
+      const auto fresh = motion == nullptr;
+      if (fresh && count_ < entries_.size()) {
+        motion = &entries_[count_++];
+        *motion = {.pane = pane.pane};
+      }
+
+      if (motion == nullptr) {
+        continue;
+      }
+
+      motion->seen = true;
+      // A newly seen tab settles immediately instead of playing its whole history.
+      if (pane.focused && (fresh || motion->rank != 0)) {
+        motion->used = ++clock_;
+      }
+
+      ordered[known++] = motion;
+    }
+
+    const auto input = [&](const TabCardMotion *motion) {
+      return *std::ranges::find(panes, motion->pane, &TabCardInput::pane);
+    };
+    std::stable_sort(ordered.begin(), ordered.begin() + known, [&](const TabCardMotion *left, const TabCardMotion *right) {
+      const auto a = input(left);
+      const auto b = input(right);
+      if (a.focused != b.focused) {
+        return a.focused;
+      }
+
+      if (a.attention != b.attention) {
+        return a.attention;
+      }
+
+      return left->used != right->used ? left->used > right->used : left->pane < right->pane;
+    });
+
+    std::size_t written = 0;
+    for (std::size_t rank = 0; rank < known; ++rank) {
+      auto &motion = *ordered[rank];
+      const auto target = TabCardMotion::rest[std::min(rank, TabCardMotion::rest.size() - 1)];
+      if (motion.to != target) {
+        const auto settled = motion.to == TabCardPose{};
+        motion.from = settled ? target : motion.value(frame.now_ns);
+        motion.to = target;
+        motion.hop = !settled && rank == 0 && motion.rank != 0;
+        motion.started = settled ? 0 : frame.now_ns;
+      }
+
+      motion.rank = rank;
+      if (motion.started != 0) {
+        frame.request(motion.started, motion.duration());
+      }
+
+      if (rank < placed.size()) {
+        placed[written++] = {.pane = motion.pane, .rank = rank, .pose = motion.started == 0 ? motion.to : motion.value(frame.now_ns), .lifted = motion.lifted(frame.now_ns)};
+      }
+    }
+
+    return written;
+  }
+
+  inline void finish() noexcept {
+    std::size_t kept = 0;
+    for (std::size_t index = 0; index < count_; ++index) {
+      if (entries_[index].seen) {
+        if (kept != index) {
+          entries_[kept] = entries_[index];
+        }
+        ++kept;
+      }
+    }
+
+    count_ = kept;
+  }
+
+private:
+  [[nodiscard]] inline TabCardMotion *find(std::uint64_t pane) noexcept {
+    for (auto &motion : std::span{entries_}.first(count_)) {
+      if (motion.pane == pane) {
+        return &motion;
+      }
+    }
+
+    return nullptr;
+  }
+
+  std::array<TabCardMotion, capacity> entries_{};
+  std::size_t count_ = 0;
+  std::uint64_t clock_ = 0;
+};
+
 struct PaneMotionSlot {
   std::uint64_t id = 0;
   Rect bounds;
@@ -630,23 +810,23 @@ struct TabStripGeometry {
   static constexpr std::size_t cap_iterations = 24;
   static constexpr float pill_height = 30;
   static constexpr float pill_radius = pill_height / 2;
-  static constexpr float leading = 8;
-  static constexpr float trailing = 12;
-  static constexpr float spacing = 8;
-  static constexpr float chip_side = 20;
-  static constexpr float chip_radius = 6;
-  static constexpr float chip_alpha = 0.06F;
-  static constexpr float selected_chip_alpha = 0.1F;
+  static constexpr float leading = 14;
+  static constexpr float trailing = 14;
+  static constexpr float spacing = 12;
+  static constexpr float tile_width = 26;
+  static constexpr float tile_height = 20;
+  static constexpr float tile_radius = 6;
   static constexpr float mark_side = 14;
-  static constexpr float gap = 2;
-  static constexpr float control_gap = 8;
-  static constexpr float inactive_maximum = 220;
-  static constexpr float selected_maximum = 300;
+  static constexpr float path_gap = 6;
+  static constexpr float gap = 0;
+  // One card, then each card behind it adds a visible sliver.
+  static constexpr std::array<float, 3> chip_widths{28, 35, 42};
+  static constexpr float inactive_maximum = 320;
+  static constexpr float selected_maximum = 420;
   static constexpr float selected_share = 0.55F;
   static constexpr float caption_minimum = 56;
   static constexpr float counter_width = 36;
   static constexpr float fade_width = 20;
-  static constexpr float plus_side = 30;
 
   enum class Fit : std::uint8_t { full, truncated, compact };
 
@@ -755,12 +935,23 @@ struct TabStripGeometry {
 
     const auto &metrics = room.metrics;
     Plan result{.first = 0, .end = sizes.size(), .focus = focus, .count = sizes.size()};
+    const auto gaps = metrics.gap * static_cast<float>(sizes.size() - 1);
+    // Equal tabs keep the row still while the selection slides across it.
+    const auto equal = std::floor((room.width - gaps) / static_cast<float>(sizes.size()));
+    if (std::ranges::all_of(sizes, [&](const Measure &size) { return size.whole(metrics) <= equal; })) {
+      for (std::size_t index = 0; index < sizes.size(); ++index) {
+        result.widths[index] = equal;
+        result.fits[index] = Fit::full;
+      }
+
+      return result;
+    }
+
     naturalWidths(result, sizes, metrics);
     if (result.footprint(metrics) <= room.width) {
       return result;
     }
 
-    const auto gaps = metrics.gap * static_cast<float>(sizes.size() - 1);
     float natural = 0;
     float shortest = 0;
     for (std::size_t index = 0; index < sizes.size(); ++index) {
@@ -781,7 +972,7 @@ struct TabStripGeometry {
       // Preserve every caption before giving extra room to the focused tab.
       width = std::clamp(width, minimum, caption_room);
     }
-    result.widths[focus] = width;
+    result.widths[focus] = std::min(width, room.width);
     result.fits[focus] = width >= whole ? Fit::full : Fit::truncated;
     const auto budget = room.width - width - gaps;
     if (natural <= budget) {

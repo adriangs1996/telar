@@ -19,7 +19,6 @@ NativeRoundedRectangle {
 
     readonly property real headerInset: 8 * ratio
     readonly property real resizeWidth: 6 * ratio
-    readonly property real edgeWidth: regions.edgeWidth
 
     color: colors.sidebarBackground
     replaceBackground: true
@@ -51,8 +50,19 @@ NativeRoundedRectangle {
             height: parent.height
             text: "Activity"
             color: root.colors.chromeText
-            pixelSize: root.typography.body + root.ratio
+            pixelSize: root.typography.body
             emphasized: true
+        }
+
+        ChromeText {
+            objectName: "activityCount"
+            x: parent.width - width - root.headerInset
+            width: implicitWidth
+            height: parent.height
+            text: activityList.count
+            color: root.colors.subtext0
+            pixelSize: root.typography.small
+            elide: Text.ElideNone
         }
 
     }

@@ -17,7 +17,7 @@ NativeAgentStatus {
     NativeChromeText {
         id: measure
         text: root.statusText
-        pixelSize: root.typography.body
+        pixelSize: root.typography.small
         visible: false
     }
 
@@ -28,7 +28,7 @@ NativeAgentStatus {
         width: root.width
         height: chipHeight
         radius: root.geometry.chipRadius
-        color: Qt.alpha(root.stateColor, root.needsAttention ? 0.18 : 0.04)
+        color: Qt.alpha(root.stateColor, 0.14)
     }
 
     ChromeText {
@@ -37,8 +37,8 @@ NativeAgentStatus {
         width: Math.max(0, root.width - 2 * root.geometry.chipInset)
         height: root.height
         text: root.statusText
-        pixelSize: root.typography.body
-        color: root.needsAttention ? root.stateColor : root.colors.text
+        pixelSize: root.typography.small
+        color: root.stateColor
         elide: Text.ElideNone
     }
 }

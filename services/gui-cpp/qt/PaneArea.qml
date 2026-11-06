@@ -40,6 +40,21 @@ Item {
             readonly property bool resizing: width !== record.width || height !== record.height
             visible: width > 0 && height > 0
 
+            HoverHandler {
+                id: paneHover
+            }
+
+            ElevationShadow {
+                x: pane.record.frame.x
+                y: pane.record.frame.y
+                width: pane.frameWidth
+                height: pane.frameHeight
+                ratio: root.ratio
+                cornerRadius: pane.record.frameRadius * root.ratio
+                strength: 0.09
+                visible: pane.framed && pane.record.focused && !pane.record.fullscreen
+            }
+
             NativeRoundedRectangle {
                 objectName: "paneSurface"
                 x: pane.record.frame.x
@@ -79,39 +94,14 @@ Item {
             }
 
             NativeRoundedRectangle {
-                objectName: "paneHeaderSurface"
-                x: pane.record.frame.x
-                y: pane.record.frame.y
-                width: pane.frameWidth
-                height: Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader)
-                radius: pane.record.frameRadius * root.ratio
-                squareBottom: true
-                replaceBackground: true
-                backdropColor: root.application.colors.workbenchBackground
-                color: pane.record.focused ? root.application.colors.paneActiveHeaderBackground : root.application.colors.paneHeaderBackground
-                visible: pane.framed && !pane.record.fullscreen
-
-            }
-
-            Rectangle {
-                objectName: "paneFocusMarker"
-                x: pane.record.frame.x + pane.record.frameRadius * root.ratio
-                y: pane.record.frame.y
-                width: Math.max(0, pane.frameWidth - 2 * pane.record.frameRadius * root.ratio)
-                height: 2 * root.ratio
-                color: root.application.colors.accent
-                visible: pane.framed && pane.record.focused && !pane.record.fullscreen
-            }
-
-            NativeRoundedRectangle {
                 objectName: "paneFrame"
                 x: pane.record.frame.x
                 y: pane.record.frame.y
                 width: pane.frameWidth
                 height: pane.frameHeight
-                borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.text
-                borderAlpha: pane.record.focused ? 0.35 : 0.18
-                borderWidth: pane.record.frameLineWidth
+                borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.chromeText
+                borderAlpha: pane.record.focused ? 0.8 : 0.06
+                borderWidth: pane.record.focused ? root.ratio : pane.record.frameLineWidth
                 radius: pane.record.frameRadius * root.ratio
                 visible: pane.framed
             }
@@ -119,9 +109,12 @@ Item {
             PaneHeader {
                 id: header
 
-                x: pane.record.frame.x
+                // The band's own margin lands the tile on the terminal's first column.
+                readonly property real bandInset: Math.max(0, pane.record.content.x - pane.record.frame.x - bandMargin)
+                readonly property real bandMargin: 8 * root.ratio
+                x: pane.record.frame.x + bandInset
                 y: pane.record.frame.y
-                width: Math.max(0, pane.frameWidth - paneActions.width - 4 * root.ratio)
+                width: Math.max(0, pane.frameWidth - bandInset - (paneActions.visible ? paneActions.width + 4 * root.ratio : 0))
                 height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader) : 0
                 visible: pane.framed && !pane.record.fullscreen
                 record: pane.record.chrome
@@ -130,6 +123,7 @@ Item {
                 ratio: root.ratio
                 bandHeight: height
                 focused: pane.record.focused
+                prefixPending: root.application.prefixPending
 
                 MouseArea {
                     anchors.fill: parent
@@ -144,9 +138,7 @@ Item {
                 id: paneActions
                 x: pane.record.frame.x + pane.frameWidth - width - 6 * root.ratio
                 y: pane.record.frame.y + (header.height - height) / 2
-                width: 26 * root.ratio
-                height: width
-                visible: pane.framed && !pane.record.fullscreen && header.height >= height && header.width > 80 * root.ratio
+                visible: pane.framed && !pane.record.fullscreen && (pane.record.focused || paneHover.hovered) && header.height >= height && pane.frameWidth > width + 80 * root.ratio
                 controller: root.application
                 paneKey: pane.record.key
                 colors: root.application.colors

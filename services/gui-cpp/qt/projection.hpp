@@ -24,6 +24,7 @@ static_assert(true);
 #include "../terminal/screen.hpp"
 #include <string_view>
 #include <cmath>
+#include <QDir>
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
@@ -96,8 +97,58 @@ QVariantMap workspaceRecord(const Workspace<Memory> &workspace, bool selected) {
   return record;
 }
 
-template <Allocator Memory>
-QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, std::span<const Agent<Memory>> agents, bool selected) {
+// Paths read as the shell prompt does: the home directory is `~`.
+inline QString displayPath(std::string_view path) {
+  auto text = toQString(path);
+  const auto home = QDir::homePath();
+  if (text == home || text.startsWith(home + QLatin1Char('/'))) {
+    text.replace(0, home.size(), QStringLiteral("~"));
+  }
+
+  return text;
+}
+
+inline QVariantMap applicationMarkRecord(std::string_view application) {
+  const auto mark = ApplicationMark::forApplication(application);
+
+  return {
+      {QStringLiteral("glyph"), toQString(mark.glyph)},
+      {QStringLiteral("providerMark"), static_cast<int>(mark.provider)},
+      {QStringLiteral("tile"), toQString(mark.tile)},
+      {QStringLiteral("ink"), toQString(mark.ink)},
+  };
+}
+
+// Panes arrive as the session's owning pointers.
+template <Allocator Memory, typename Panes>
+QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<const Agent<Memory>> agents) {
+  QVariantList cards;
+  for (const auto &owned : panes) {
+    const Pane<Memory> &candidate = *owned;
+    if (!sameTab(candidate.location, tab.location)) {
+      continue;
+    }
+
+    auto card = applicationMarkRecord(tab.applicationName(&candidate));
+    card.insert(QStringLiteral("key"), QString::number(candidate.id));
+    card.insert(QStringLiteral("focused"), candidate.id == tab.focused_pane);
+    QString attention;
+    for (const auto &agent : agents) {
+      if (agent.pane_id == candidate.id && agent.pane_generation == candidate.generation && AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input) {
+        attention = QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(agent.status))]);
+        break;
+      }
+    }
+
+    card.insert(QStringLiteral("attentionColor"), attention);
+    cards.append(std::move(card));
+  }
+
+  return cards;
+}
+
+template <Allocator Memory, typename Panes>
+QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Panes &panes, std::span<const Agent<Memory>> agents, bool selected) {
   std::string_view session_title;
   if (pane != nullptr) {
     for (const auto &agent : agents) {
@@ -114,7 +165,6 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, std::spa
   }
 
   const auto application = tab.applicationName(pane);
-  const auto mark = ApplicationMark::forApplication(application);
   TabCaption::Buffer storage;
   const auto caption = TabCaption::resolve({.manual = tab.label, .application = application, .directory = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd}, .session_title = session_title}, storage);
   auto label = toQString(caption);
@@ -126,8 +176,14 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, std::spa
   record.insert(QStringLiteral("key"), QString::number(tab.location.tab_id));
   record.insert(QStringLiteral("label"), label);
   record.insert(QStringLiteral("application"), toQString(application));
-  record.insert(QStringLiteral("glyph"), toQString(mark.glyph));
-  record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
+  auto title = toQString(!tab.label.empty() ? std::string_view{tab.label} : !session_title.empty() ? session_title : application);
+  if (tab.fullscreen) {
+    title.append(toQString(TabCaption::fullscreen_suffix));
+  }
+
+  record.insert(QStringLiteral("title"), title);
+  record.insert(QStringLiteral("path"), tab.label.empty() && pane != nullptr ? displayPath(pane->cwd) : QString{});
+  record.insert(QStringLiteral("cards"), tabCards(tab, panes, agents));
   record.insert(QStringLiteral("selected"), selected);
   const auto activity = TabActivity::derive(tab, pane, agents, selected);
   record.insert(QStringLiteral("activityKind"), static_cast<int>(activity.kind));
@@ -249,8 +305,6 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   auto terminal_background = theme.background;
   terminal_background.a = surfaces.pane.a;
   colors.insert(QStringLiteral("terminalBackground"), toQColor(terminal_background));
-  colors.insert(QStringLiteral("paneHeaderBackground"), toQColor(surfaces.header));
-  colors.insert(QStringLiteral("paneActiveHeaderBackground"), toQColor(surfaces.active_header));
   colors.insert(QStringLiteral("foreground"), toQColor(theme.chromeColor(PaletteRole::text)));
   colors.insert(QStringLiteral("surface"), toQColor(theme.surface));
   colors.insert(QStringLiteral("elevated"), toQColor(theme.elevated));

@@ -69,7 +69,7 @@ export {
 namespace telar::gui {
 
 struct AgentCardGeometry {
-  static constexpr float horizontal_padding = 10;
+  static constexpr float horizontal_padding = 8;
   static constexpr float vertical_padding = 8;
   static constexpr float compact_vertical_padding = 4;
   static constexpr float task_indent = 12;
@@ -106,6 +106,10 @@ struct AgentCardGeometry {
 
   [[nodiscard]] inline float height() const noexcept {
     return (2 * small_row) + title_row + px(total_row_spacing) + (2 * px(vertical_padding));
+  }
+
+  [[nodiscard]] inline float agentHeight() const noexcept {
+    return title_row + small_row + px(title_gap) + (2 * px(vertical_padding));
   }
 
   [[nodiscard]] inline float compactHeight() const noexcept {
@@ -350,10 +354,9 @@ export {
 namespace telar::gui {
 
 struct PaneDecorationGeometry {
-  static constexpr float frame_radius = ChromeStyle::surface_radius;
+  static constexpr float frame_radius = ChromeStyle::dialog_radius;
   static constexpr float frame_line_width = 1;
-  static constexpr float frame_inset_share = 0.2F;
-  static constexpr float dim_alpha = 0;
+  static constexpr float dim_alpha = 0.28F;
   static constexpr std::size_t panel_count = 6;
 
   Rect outer;
@@ -377,14 +380,23 @@ struct PaneDecorationGeometry {
       frame.height += static_cast<float>(gap * (grid.cell_height_px - minimum_cell) / grid.scale);
     }
 
+    // Frames on the workbench edge absorb the columns' rounding, so outer margins stay even.
+    if (placement.framed && gap != 0) {
+      if (placement.bounds.right() >= area.right()) {
+        frame.width = std::max(frame.width, workbench.area.right() - frame.x);
+      }
+
+      if (placement.bounds.bottom() >= area.bottom()) {
+        frame.height = std::max(frame.height, workbench.area.bottom() - frame.y);
+      }
+    }
+
     const auto right = content.right();
     const auto bottom = content.bottom();
-    // Spend only existing chrome space; never change the terminal grid.
-    const auto inset = placement.framed && gap != 0 ? std::max(0.0F, std::min({static_cast<float>(minimum_cell / grid.scale) * frame_inset_share, (content.x - frame.x) / 2, (content.y - frame.y) / 2, (frame.right() - right) / 2, (frame.bottom() - bottom) / 2})) : 0.0F;
     return {
         .outer = outer,
         .content = content,
-        .frame = frame.inset(inset, inset),
+        .frame = frame,
         .panels = {
             Rect{.x = outer.x, .y = outer.y, .width = outer.width, .height = std::max(0.0F, content.y - outer.y)},
             Rect{.x = outer.x, .y = bottom, .width = outer.width, .height = std::max(0.0F, outer.bottom() - bottom)},

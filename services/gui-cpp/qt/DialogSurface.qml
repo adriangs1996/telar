@@ -8,25 +8,13 @@ Item {
 
     required property var colors
     property real ratio: 1
-    readonly property int shadowLayers: 3
-    readonly property real shadowStep: 4 * ratio
-    readonly property real shadowOffset: 5 * ratio
-    readonly property real shadowAlpha: 0.07
     readonly property real cornerRadius: ChromeStyle.dialogRadius * ratio
     readonly property real outlineAlpha: ChromeStyle.outlineAlpha
 
-    Repeater {
-        model: root.shadowLayers
-        delegate: NativeRoundedRectangle {
-            required property int index
-            readonly property real spread: (root.shadowLayers - index) * root.shadowStep
-            x: -spread
-            y: -spread + root.shadowOffset
-            width: root.width + spread * 2
-            height: root.height + spread * 2
-            radius: root.cornerRadius + spread
-            color: Qt.rgba(0, 0, 0, root.shadowAlpha)
-        }
+    ElevationShadow {
+        anchors.fill: parent
+        ratio: root.ratio
+        cornerRadius: root.cornerRadius
     }
 
     NativeRoundedRectangle {

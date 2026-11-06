@@ -10,12 +10,14 @@ PaneHeaderLayout {
     required property var colors
     required property var typography
     property bool focused: false
-    // Preserve program and state before numbering, context and progress.
-    readonly property bool compact: statusChip.implicitWidth > 0 && width < statusChip.implicitWidth + 4 * typography.body + (22 + 16 + 6 + 8) * ratio
-    readonly property real indexSide: compact ? 0 : 22 * ratio
+    property bool prefixPending: false
+    // Preserve program and state before the mark, context and progress.
+    readonly property bool compact: statusChip.implicitWidth > 0 && width < statusChip.implicitWidth + 4 * typography.body + (18 + 20 + 6 + 8) * ratio
+    readonly property real tileWidth: compact ? 0 : 18 * ratio
+    readonly property real contextGap: 8 * ratio
     measurements: ({
-        index: root.indexSide,
-        name: nameLabel.implicitWidth,
+        index: root.tileWidth,
+        name: nameLabel.implicitWidth + (contextLabel.text.length > 0 ? root.contextGap + contextLabel.implicitWidth : 0),
         chip: statusChip.implicitWidth,
         paused: root.record.imagesPaused ? pausedLabel.implicitWidth : 0,
         progress: root.compact ? 0 : progress.fullWidth,
@@ -23,31 +25,19 @@ PaneHeaderLayout {
         needsAttention: root.record.needsAttention ?? false
     })
 
-    NativeRoundedRectangle {
-        objectName: "paneIndexBackground"
+    ApplicationTile {
+        objectName: "paneMark"
         x: root.indexBounds.x
         y: root.indexBounds.y + (root.indexBounds.height - height) / 2
-        width: Math.min(root.indexSide, root.indexBounds.width)
-        height: width
-        radius: ChromeStyle.smallRadius * root.ratio
-        visible: root.indexSide > 0
-        color: Qt.alpha(root.focused ? root.colors.accent : root.colors.text, root.focused ? 0.16 : 0.06)
-    }
-
-    ChromeText {
-        id: indexLabel
-        objectName: "paneIndex"
-        x: root.indexBounds.x
-        y: root.indexBounds.y
-        width: Math.min(root.indexSide, root.indexBounds.width)
-        height: root.indexBounds.height
-        text: root.record.index
-        visible: root.indexSide > 0
-        emphasized: true
-        pixelSize: root.typography.body
-        color: root.focused ? root.colors.accent : root.colors.chromeText
-        horizontalAlignment: Text.AlignHCenter
-        elide: Text.ElideNone
+        width: Math.min(root.tileWidth, root.indexBounds.width)
+        height: 14 * root.ratio
+        radius: 4 * root.ratio
+        visible: root.tileWidth > 0
+        mark: root.record
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+        number: root.prefixPending ? root.record.index : ""
     }
 
     ChromeText {
@@ -55,13 +45,27 @@ PaneHeaderLayout {
         objectName: "paneProgram"
         x: root.nameBounds.x
         y: root.nameBounds.y
-        width: root.nameBounds.width
+        width: Math.min(root.nameBounds.width, implicitWidth)
         height: root.nameBounds.height
-        text: root.compact ? root.record.index + " " + root.record.program : root.record.context && width >= 4 * root.typography.body ? root.record.program + " · " + root.record.context : root.record.program
-        pixelSize: root.typography.body + 2 * root.ratio
-        color: root.colors.chromeText
-        emphasized: root.focused
-        elide: implicitWidth > width ? Text.ElideMiddle : Text.ElideNone
+        text: (root.compact && root.prefixPending ? root.record.index + " " : "") + root.record.program
+        pixelSize: root.typography.title
+        color: root.focused ? root.colors.chromeText : root.colors.text
+        emphasized: true
+        elide: Text.ElideRight
+    }
+
+    ChromeText {
+        id: contextLabel
+        objectName: "paneContext"
+        x: nameLabel.x + nameLabel.width + root.contextGap
+        y: root.nameBounds.y
+        width: Math.max(0, root.nameBounds.x + root.nameBounds.width - x)
+        height: root.nameBounds.height
+        text: root.record.context ?? ""
+        pixelSize: root.typography.small
+        color: root.colors.subtext0
+        visible: width >= 4 * root.typography.body && text.length > 0
+        elide: Text.ElideRight
     }
 
     ChromeText {

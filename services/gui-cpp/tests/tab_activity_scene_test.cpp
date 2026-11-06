@@ -323,7 +323,6 @@ private:
       QCOMPARE(layout.items()->rowCount(), 1);
       const auto entry = layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap();
       QCOMPARE(entry.value(QStringLiteral("bounds")).toRectF().y() * density, physical_top);
-      QCOMPARE(layout.plus().y() * density, physical_top);
     }
   }
 

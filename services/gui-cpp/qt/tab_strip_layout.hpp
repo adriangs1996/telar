@@ -47,7 +47,6 @@ class TabStripLayout : public QQuickItem {
   Q_PROPERTY(qreal pixelSize READ pixelSize WRITE setPixelSize NOTIFY fontChanged)
   Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY ratioChanged)
   Q_PROPERTY(bool hovered READ hovered WRITE setHovered NOTIFY hoveredChanged)
-  Q_PROPERTY(QRectF plus READ plus NOTIFY layoutChanged)
   Q_PROPERTY(QRectF stripBounds READ stripBounds NOTIFY layoutChanged)
   Q_PROPERTY(QRectF selectionBounds READ selectionBounds NOTIFY layoutChanged)
   Q_PROPERTY(QRectF dropMarker READ dropMarker NOTIFY layoutChanged)
@@ -55,6 +54,7 @@ class TabStripLayout : public QQuickItem {
   Q_PROPERTY(QString hoveredTab READ hoveredTab NOTIFY pointerHoverChanged)
   Q_PROPERTY(bool transitioning READ transitioning NOTIFY layoutChanged)
   Q_PROPERTY(QVariantMap counter READ counter NOTIFY layoutChanged)
+  Q_PROPERTY(QRectF plus READ plus WRITE setPlus NOTIFY plusChanged)
   Q_PROPERTY(QVariantMap style READ style NOTIFY ratioChanged)
 
 public:
@@ -76,7 +76,6 @@ public:
   void setRatio(qreal ratio);
   [[nodiscard]] bool hovered() const noexcept;
   void setHovered(bool hovered);
-  [[nodiscard]] QRectF plus() const noexcept;
   [[nodiscard]] QRectF stripBounds() const noexcept {
     return strip_bounds_;
   }
@@ -95,9 +94,12 @@ public:
   [[nodiscard]] std::size_t dropSlots(std::span<TabDropSlot> output) const;
   void setDrag(std::optional<TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset);
   [[nodiscard]] QVariantMap counter() const;
+  [[nodiscard]] QRectF plus() const noexcept;
+  void setPlus(const QRectF &plus);
   [[nodiscard]] QVariantMap style() const;
 
 signals:
+  void plusChanged();
   void modelChanged();
   void fontChanged();
   void ratioChanged();
@@ -121,11 +123,14 @@ private:
   void rebuild();
   void raiseDraggedSlot();
   [[nodiscard]] QRectF placeTab(std::uint64_t id, QRectF bounds, TabMotionFrame &frame);
+  [[nodiscard]] QVariantList placeCards(const QVariantMap &tab, TabMotionFrame &frame);
   [[nodiscard]] TabStripGeometry::Plan measureTabs(QList<QVariantMap> &records, std::span<TabStripGeometry::Measure> sizes, const TabStripGeometry::Room &room);
 
   QPointer<WindowAnimationClock> clock_;
   QMetaObject::Connection frame_connection_;
   TabMotions motions_;
+  TabCardMotions card_motions_;
+  QRectF plus_;
   std::optional<TabMotion> selection_motion_;
   std::optional<WorkspaceLocation> workspace_;
   std::uint64_t machine_view_ = 0;
@@ -140,7 +145,6 @@ private:
   qreal ratio_ = 1;
   bool hovered_ = false;
   QString anchor_;
-  QRectF plus_;
   QRectF strip_bounds_;
   QRectF selection_bounds_;
   QRectF drop_marker_;

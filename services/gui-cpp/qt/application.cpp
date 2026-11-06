@@ -698,7 +698,7 @@ void Application::configureWindow() {
     return;
   }
 
-  platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = static_cast<float>(ChromeMetrics::logical_top_bar * chromeRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
+  platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = displayMetrics(window_->effectiveDevicePixelRatio()).chrome.top_bar / static_cast<float>(window_->effectiveDevicePixelRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
   emit windowGeometryChanged();
 }
 
@@ -975,7 +975,7 @@ void Application::refresh() {
   QList<QVariantMap> tabs;
   for (const auto *tab : ordered_tabs) {
     const auto *pane = session().findPane(tab->focused_pane);
-    tabs.append(tabRecord(*tab, pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active));
+    tabs.append(tabRecord(*tab, pane, session().panes(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active));
   }
 
   tabs_.reconcile(std::move(tabs));

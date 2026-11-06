@@ -123,7 +123,7 @@ void independentBackgroundOpacity() {
   using Surface = BackgroundOpacity::Surface;
   const auto inherited = read({.source = R"(return {api_version=2,gui={window={background_opacity=0.75},opacity={sidebar=0.5,pane=0.25}},profiles={other={gui={window={background_opacity=1},opacity={topbar=0}}}}})", .profile = "other"});
   require(inherited.opacity.resolve(Surface::sidebar, inherited.background_opacity) == 0.5F && inherited.opacity.resolve(Surface::pane, inherited.background_opacity) == 0.25F, "profiles must preserve explicit surface opacities");
-  require(inherited.opacity.resolve(Surface::topbar, inherited.background_opacity) == 0 && inherited.opacity.resolve(Surface::workspace, inherited.background_opacity) == 1, "unconfigured regions must inherit the adopted global value, including profile changes");
+  require(inherited.opacity.resolve(Surface::topbar, inherited.background_opacity) == 0 && inherited.opacity.resolve(Surface::workspace, inherited.background_opacity) == BackgroundOpacity::sheet_opacity, "unconfigured regions must inherit the adopted global value, including profile changes");
   require(inherited.opacity.minimum(inherited.background_opacity) == 0, "the native window must allow transparency when any region needs it");
   BackgroundOpacity opaque;
   opaque.overrides.fill(1.0F);

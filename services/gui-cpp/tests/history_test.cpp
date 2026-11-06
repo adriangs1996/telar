@@ -444,8 +444,8 @@ void historyPanelPreservesTheSearchPosition() {
   const HistoryModalMetrics metrics{.viewport = {.width = 1200, .height = 800}, .cell_height = 20};
   const auto browsing = HistoryModalGeometry::measure(metrics, false);
   const auto inspecting = HistoryModalGeometry::measure(metrics, true);
-  constexpr Rect expected_bounds{.x = 28, .y = 106, .width = 1144, .height = 640};
-  constexpr Rect expected_search{.x = 28, .y = 658, .width = 1144, .height = 52};
+  constexpr Rect expected_bounds{.x = 28, .y = 94, .width = 1144, .height = 640};
+  constexpr Rect expected_search{.x = 28, .y = 646, .width = 1144, .height = 52};
   require(browsing.bounds == expected_bounds && browsing.search == expected_search, "history must sit above the status bar with its search field at the foot");
   require(inspecting.bounds == browsing.bounds && inspecting.search == browsing.search && inspecting.footer == browsing.footer, "opening details must preserve the panel and input geometry");
   require(inspecting.results.right() == inspecting.inspection.x && inspecting.inspection.right() == browsing.results.right(), "a wide inspector must share the existing results rectangle");

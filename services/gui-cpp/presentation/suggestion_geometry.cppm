@@ -377,9 +377,7 @@ namespace telar::gui {
 
 struct SidebarGeometry {
   static constexpr float margin = 8;
-  static constexpr float header_gap = 6;
   static constexpr float workspace_vertical_padding = 20;
-  static constexpr float edge_width = 1;
 
   Rect machines;
   Rect projects_header;
@@ -393,9 +391,9 @@ struct SidebarGeometry {
 
   [[nodiscard]] inline static SidebarGeometry measure(Rect area, const ChromeMetrics &chrome, std::size_t, bool machines_shown = false) noexcept {
     const auto inset = chrome.px(margin);
-    Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - edge_width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
-    const auto header = ChromeMetrics::lineHeight(chrome.body);
-    const auto gap = chrome.px(header_gap);
+    Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
+    const auto header = chrome.pane_header;
+    const auto gap = 0.0F;
     SidebarGeometry geometry;
     if (content.width <= 0 || content.height < header) {
       return geometry;

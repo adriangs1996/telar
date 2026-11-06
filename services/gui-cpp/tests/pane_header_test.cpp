@@ -186,7 +186,7 @@ class PaneHeaderTest : public QObject {
     pane.foreground = "zsh";
     pane.cwd = "/projects/telar";
     pane.title = "Test\n\tresults";
-    QCOMPARE(paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("Testresults"));
+    QCOMPARE(paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
     pane.title.clear();
     std::array<Agent<SystemAllocator>, 1> agents{Agent{memory}};
     auto &agent = agents.front();
@@ -200,14 +200,14 @@ class PaneHeaderTest : public QObject {
     QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("zsh"));
     ++agent.pane_generation;
     record = paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{agents}, 1);
-    QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("telar"));
+    QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
   }
 
   Q_SLOT static void routineStatesStayQuietAndInactiveTitlesStayReadable() {
     QQmlEngine engine;
     const ChromeMetrics chrome;
     const auto colors = themeColors(Configuration{});
-    const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}};
+    const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}, {QStringLiteral("title"), chrome.title}};
     auto record = headerRecord();
     auto item = createChrome(engine, QStringLiteral("PaneHeader"), {
                                                                        {QStringLiteral("record"), record},
@@ -217,14 +217,13 @@ class PaneHeaderTest : public QObject {
     auto *background = named(*item, QStringLiteral("paneStatusBackground"));
     const auto *program = named(*item, QStringLiteral("paneProgram"));
     QVERIFY(background != nullptr && program != nullptr);
-    QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("chromeText")).value<QColor>());
+    QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("text")).value<QColor>());
     const auto attention_alpha = background->property("color").value<QColor>().alphaF();
     record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
     record.insert(QStringLiteral("needsAttention"), false);
     QVERIFY(item->setProperty("record", record));
     const auto quiet_alpha = background->property("color").value<QColor>().alphaF();
-    QVERIFY(attention_alpha > quiet_alpha * 3);
-    QVERIFY(quiet_alpha < 0.05);
+    QCOMPARE(quiet_alpha, attention_alpha);
   }
 
   Q_SLOT static void compactHeaderKeepsTheProgramInsteadOfAnAmbiguousEllipsis() {
@@ -240,14 +239,14 @@ class PaneHeaderTest : public QObject {
     record.insert(QStringLiteral("progressText"), QString{});
     record.remove(QStringLiteral("progressSample"));
     record.insert(QStringLiteral("activityKind"), static_cast<int>(TabActivity::Kind::none));
-    auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}}});
+    auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("title"), 15}, {QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}}});
     item->setParentItem(window.contentItem());
     item->setSize({120, header_height});
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto *program = named(*item, QStringLiteral("paneProgram"));
     QVERIFY(program != nullptr);
-    QTRY_COMPARE_WITH_TIMEOUT(program->property("text").toString(), QStringLiteral("2 Pi"), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(program->property("text").toString(), QStringLiteral("Pi"), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(program->width() >= program->implicitWidth(), wait_ms);
   }
 
@@ -256,7 +255,7 @@ class PaneHeaderTest : public QObject {
     QQuickWindow window;
     window.resize(header_width, header_height);
     const ChromeMetrics chrome;
-    const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}};
+    const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}, {QStringLiteral("title"), chrome.title}};
     auto item = createChrome(engine, QStringLiteral("PaneHeader"), {
                                                                        {QStringLiteral("record"), headerRecord()},
                                                                        {QStringLiteral("colors"), themeColors(Configuration{})},
@@ -279,7 +278,7 @@ class PaneHeaderTest : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(progress->fraction() > 0 && !progress->compact(), wait_ms);
     item->setWidth(compact_header_width);
     QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
-    QCOMPARE(program->property("text").toString(), QStringLiteral("2 clang++"));
+    QCOMPARE(program->property("text").toString(), QStringLiteral("clang++"));
     item->setWidth(attention_header_width);
     QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
     item->setWidth(status->implicitWidth() + 2 * PaneHeaderGeometry::margin);

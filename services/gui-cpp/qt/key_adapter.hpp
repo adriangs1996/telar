@@ -86,6 +86,19 @@ public:
   }
 
   [[nodiscard]] static KeyChord chord(const QKeyEvent &event) {
+    // Option can change the text without changing the shortcut's base key.
+    if (event.modifiers().testFlag(Qt::AltModifier) && !event.modifiers().testFlag(Qt::GroupSwitchModifier) && event.key() >= Qt::Key_Space && event.key() <= Qt::Key_AsciiTilde) {
+      auto character = static_cast<std::uint32_t>(event.key());
+      auto flags = modifiers(event.modifiers());
+      const auto modified = (flags & (static_cast<unsigned>(Modifier::control) | static_cast<unsigned>(Modifier::super))) != 0;
+      if (character >= 'A' && character <= 'Z' && (modified || !event.modifiers().testFlag(Qt::ShiftModifier))) {
+        character += 'a' - 'A';
+      }
+      if (!modified) {
+        flags &= ~static_cast<unsigned>(Modifier::shift);
+      }
+      return {.character = KeyCharacter::pack(character), .modifiers = flags};
+    }
     const auto key = terminalKey(event);
     if (!key) {
       return {.character = std::numeric_limits<std::uint32_t>::max(), .modifiers = modifiers(event.modifiers())};

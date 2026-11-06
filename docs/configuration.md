@@ -379,7 +379,7 @@ gui = {
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
   chrome = { scale = 1 },
-  sidebar = { width = 284 },
+  sidebar = { width = 240 },
   max_fps = 60, -- omit to present at the display's refresh rate
 }
 ```
@@ -387,8 +387,8 @@ gui = {
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
 | `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts transparent: the traffic lights stay visible and share Telar's top bar, which sits at the window edge; set `true` to restore the native titlebar above it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
-| `window.background_opacity` | `1` | Background opacity, `0..1`. Below `1`, the sidebar, bars and pane headers share the window's terminal background, regardless of the theme's `panel_bg`. At `1`, panels use `panel_bg`. Text, cursor, controls, modals and cell backgrounds differing from the terminal default retain their own opacity. |
-| `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
+| `window.background_opacity` | `1` | Upper limit for background opacity, `0..1`. The window is glass by default: sidebar, bars and workspace are at most `0.78` and panes at most `0.97`. Text, cursor, controls, modals and cell backgrounds differing from the terminal default retain their own opacity. Set every surface in `gui.opacity` to `1` for an opaque window. |
+| `window.background_blur` | `20` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
 | `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |
 | `font.family` | bundled Telar Forma | Installed or bundled family name, at most 256 UTF-8 bytes, without NUL. An empty name or `Telar Forma` uses the bundled default face without requiring a system installation. `JetBrains Mono` is also bundled and can be selected explicitly. |
@@ -401,7 +401,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
-| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
+| `sidebar.width` | `240` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 

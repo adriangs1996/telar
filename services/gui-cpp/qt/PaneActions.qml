@@ -1,86 +1,76 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 import Telar.Gui
 
-ChromeButton {
+Row {
     id: root
-    objectName: "paneActionsButton"
+    objectName: "paneActions"
 
     required property GuiController controller
     required property string paneKey
+    required property var colors
     required property var typography
     property real ratio: 1
-    text: "\u22ef"
-    pixelSize: typography.body + 3 * ratio
-    Accessible.name: "Pane actions"
-    ToolTip.visible: hovered
-    ToolTip.delay: 700
-    ToolTip.text: "Pane actions"
-    onClicked: menu.open()
+    readonly property real side: 24 * ratio
+
+    spacing: 2 * ratio
 
     function execute(action) {
         controller.execute(GuiController.Action.focus_pane, paneKey);
         controller.execute(action);
     }
 
-    Menu {
-        id: menu
-        objectName: "paneActionsMenu"
-        y: root.height + 4 * root.ratio
-        x: root.width - width
-        width: 190 * root.ratio
-        padding: 5 * root.ratio
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    Repeater {
+        model: [
+            {label: "Split right", divider: "vertical", action: GuiController.Action.split_horizontal},
+            {label: "Split below", divider: "horizontal", action: GuiController.Action.split_vertical},
+            {label: "Expand pane", glyph: "", action: GuiController.Action.fullscreen},
+            {label: "Close pane", glyph: "", action: GuiController.Action.close_pane}
+        ]
 
-        background: NativeRoundedRectangle {
-            color: root.colors.surface0
-            radius: ChromeStyle.surfaceRadius * root.ratio
-            borderColor: root.colors.text
-            borderAlpha: ChromeStyle.outlineAlpha
-            borderWidth: 1 / Screen.devicePixelRatio
-        }
-
-        Repeater {
-            model: [
-                {label: "Split right", action: GuiController.Action.split_horizontal},
-                {label: "Split below", action: GuiController.Action.split_vertical},
-                {label: "Expand pane", action: GuiController.Action.fullscreen},
-                {label: "Close pane", action: GuiController.Action.close_pane}
-            ]
-
-            delegate: MenuItem {
-                id: entry
-                objectName: "paneActionEntry"
-                required property var modelData
-                text: modelData.label
-                readonly property bool destructive: modelData.action === GuiController.Action.close_pane
-                height: (destructive ? 40 : 32) * root.ratio
-                topPadding: destructive ? 8 * root.ratio : 0
-                leftPadding: 8 * root.ratio
-                onTriggered: root.execute(modelData.action)
-                contentItem: ChromeText {
-                    text: entry.text
-                    pixelSize: root.typography.body + root.ratio
-                    color: entry.destructive ? root.colors.red : root.colors.chromeText
+        delegate: ChromeButton {
+            id: action
+            required property var modelData
+            readonly property color ink: hovered ? root.colors.chromeText : root.colors.text
+            objectName: "paneAction"
+            width: root.side
+            height: root.side
+            colors: root.colors
+            pixelSize: root.typography.body
+            cornerRadius: ChromeStyle.controlRadius * root.ratio
+            contentItem: Item {
+                // Font split glyphs lose their divider at this size, so these two are drawn.
+                NativeRoundedRectangle {
+                    id: outline
+                    anchors.centerIn: parent
+                    width: 13 * root.ratio
+                    height: 11 * root.ratio
+                    radius: 2 * root.ratio
+                    color: "transparent"
+                    borderColor: action.ink
+                    borderWidth: root.ratio
+                    visible: action.modelData.divider !== undefined
                 }
+
                 Rectangle {
-                    x: 8 * root.ratio
-                    y: 2 * root.ratio
-                    width: Math.max(0, entry.width - 16 * root.ratio)
-                    height: 1 / Screen.devicePixelRatio
-                    color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
-                    visible: entry.destructive
+                    anchors.centerIn: outline
+                    width: action.modelData.divider === "vertical" ? root.ratio : outline.width
+                    height: action.modelData.divider === "vertical" ? outline.height : root.ratio
+                    color: action.ink
+                    visible: outline.visible
                 }
-                background: NativeRoundedRectangle {
-                    y: entry.topPadding
-                    height: entry.height - y
-                    color: Qt.alpha(root.colors.text, entry.highlighted ? ChromeStyle.selectionAlpha : 0)
-                    radius: ChromeStyle.controlRadius * root.ratio
+
+                ChromeIcon {
+                    anchors.fill: parent
+                    glyph: action.modelData.glyph ?? ""
+                    color: action.ink
+                    pixelSize: 14 * root.ratio
+                    visible: action.modelData.glyph !== undefined
                 }
             }
+            Accessible.name: modelData.label
+            onClicked: root.execute(modelData.action)
         }
     }
 }

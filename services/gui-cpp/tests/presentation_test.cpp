@@ -112,18 +112,20 @@ void chromeSurfacesPreserveThemeAndTransparency() {
     theme.background = background;
     theme.foreground = background.r < 0.5F ? Color::rgb(0xe0e0e0) : Color::rgb(0x202020);
     const auto surfaces = ChromeSurfaces::derive(theme, 1);
-    require(surfaces.pane == theme.chromeColor(PaletteRole::panel_bg), "pane surfaces must respect the configured panel color");
-    require(surfaces.sidebar != surfaces.pane && surfaces.header != surfaces.pane && surfaces.workbench != surfaces.pane, "light and dark themes must distinguish navigation, headers and gutters");
-    require(surfaces.active_header != surfaces.header, "focus must have a header signal independent of the border");
-    for (const auto opacity : {0.0F, 0.5F, 0.99F}) {
+    auto panel = theme.chromeColor(PaletteRole::panel_bg);
+    panel.a = BackgroundOpacity::pane_opacity;
+    require(surfaces.pane == panel, "pane surfaces must respect the configured panel color");
+    require(surfaces.sidebar == surfaces.workbench && surfaces.topbar == surfaces.workbench && surfaces.bottombar == surfaces.workbench && surfaces.workbench != surfaces.pane, "light and dark themes must distinguish navigation, headers and gutters");
+    for (const auto opacity : {0.0F, 0.5F}) {
       const auto translucent = ChromeSurfaces::derive(theme, opacity);
       require(translucent.pane.a == opacity && translucent.workbench.a == opacity && translucent.sidebar.a == opacity, "unset surface opacities must inherit the global value exactly");
-      require(translucent.header.a == opacity && translucent.active_header.a == opacity, "headers must inherit their pane opacity without stacking tints");
     }
+    const auto glass = ChromeSurfaces::derive(theme, 1);
+    require(glass.workbench.a == BackgroundOpacity::sheet_opacity && glass.pane.a == BackgroundOpacity::pane_opacity, "an unconfigured window must be glass, with legible panes");
     BackgroundOpacity overrides;
     overrides.overrides[static_cast<std::size_t>(BackgroundOpacity::Surface::pane)] = 0.25F;
     const auto independent = ChromeSurfaces::derive(theme, 1, overrides);
-    require(independent.pane.a == 0.25F && independent.header.a == 0.25F && independent.workbench.a == 1, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
+    require(independent.pane.a == 0.25F && independent.workbench.a == BackgroundOpacity::sheet_opacity, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
   }
 }
 
@@ -140,7 +142,7 @@ void paneSurfacesUseOnlyExistingChromeSpace() {
     const auto decorated = PaneDecorationGeometry::derive(placement, workbench);
     require(decorated.outer == workbench.pixels(bounds), "surface insets must not move the pane placement");
     require(decorated.content == workbench.pixels(placement.content), "rounded surfaces must preserve every terminal row and column");
-    require(decorated.frame.x > decorated.outer.x && decorated.frame.y > decorated.outer.y, "surfaces must leave an outer gutter");
+    require(decorated.frame.x == decorated.outer.x && decorated.frame.y == decorated.outer.y, "the gutter between panes is the layout gap, not an extra frame inset");
     require(decorated.frame.intersect(decorated.content) == decorated.content, "surface insets must never crop terminal content");
 
     const PaneLayout::Placement unframed{.bounds = bounds, .content = bounds};
@@ -161,15 +163,15 @@ void sidebarListsFollowTheReferenceBands() {
   const ChromeMetrics chrome;
   constexpr Rect sidebar{.width = 280, .height = 932};
   const auto geometry = SidebarGeometry::measure(sidebar, chrome, 1);
-  constexpr Rect expected_heading{.x = 8, .y = 8, .width = 263, .height = 17};
-  constexpr Rect expected_activity{.x = 8, .y = 31, .width = 263, .height = 893};
+  constexpr Rect expected_heading{.x = 8, .y = 8, .width = 264, .height = 32};
+  constexpr Rect expected_activity{.x = 8, .y = 40, .width = 264, .height = 884};
   require(geometry.projects_header.empty() && geometry.projects.empty(), "project navigation must reserve no sidebar space");
   require(geometry.activity_header == expected_heading, "activity must start at the top of the sidebar");
   require(geometry.activity == expected_activity, "activity must receive the remaining sidebar height");
   const auto crowded = SidebarGeometry::measure(sidebar, chrome, 128);
   require(crowded.activity == geometry.activity, "project count must not reduce the activity viewport");
   const auto machines = SidebarGeometry::measure(sidebar, chrome, 128, true);
-  require(machines.machines == expected_heading && machines.activity_header.y == 31 && machines.activity.y == 54, "machine switching must remain above the activity section");
+  require(machines.machines == expected_heading && machines.activity_header.y == 40 && machines.activity.y == 72, "machine switching must remain above the activity section");
   constexpr Rect short_area{.width = sidebar.width, .height = 60};
   const auto short_sidebar = SidebarGeometry::measure(short_area, chrome, 1);
   require(short_sidebar.projects.empty() && !short_sidebar.activity_header.empty(), "short sidebars must give room to activity and leave project navigation to the top bar");
@@ -215,15 +217,15 @@ void tabStripsCompressAroundTheirFocus() {
   constexpr std::size_t tab_count = 4;
   constexpr float caption_width = 100;
   std::array<Geometry::Measure, tab_count> sizes;
-  sizes.fill({.caption = caption_width, .chip = Geometry::chip_side, .status = 0});
+  sizes.fill({.caption = caption_width, .chip = Geometry::chip_widths[0], .status = 0});
   constexpr float wide_room = 1000;
   const auto wide = Geometry::arrange(sizes, 0, {.width = wide_room, .metrics = metrics});
   require(wide.first == 0 && wide.end == tab_count && wide.hidden() == 0, "a wide strip must keep every natural caption");
   for (const auto width : std::span{wide.widths}.first(tab_count)) {
-    require(width == sizes.front().whole(metrics), "natural tab widths must pack without distributing spare room");
+    require(width == wide_room / tab_count, "tabs must share the strip equally so the selection slides over a still row");
   }
 
-  constexpr float narrow_room = 180;
+  constexpr float narrow_room = 215;
   constexpr std::size_t focus = 2;
   const auto narrow = Geometry::arrange(sizes, focus, {.width = narrow_room, .metrics = metrics});
   require(narrow.first == 1 && narrow.end == 3 && narrow.shows(focus), "overflow must hide the farthest tabs while keeping the focus");

@@ -723,9 +723,9 @@ export {
 namespace telar::gui {
 
 struct PaneStatusChip {
-  static constexpr float inset = 6;
-  static constexpr float height = 16;
-  static constexpr float radius = 4;
+  static constexpr float inset = 8;
+  static constexpr float height = 20;
+  static constexpr float radius = 6;
   static constexpr std::size_t text_capacity = 32;
   using Text = BoundedText<text_capacity>;
 

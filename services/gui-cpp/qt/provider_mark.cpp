@@ -50,9 +50,9 @@ public:
   int side = 0;
 };
 
-QImage coloredMark(AgentProvider provider, int side, const QColor &color, bool telar_mark) {
+QImage coloredMark(AgentProvider provider, int side, const QColor &color, bool telar_mark, bool monochrome) {
   auto image = telar_mark ? ProviderArtwork::telar(side) : ProviderArtwork::image(provider, side);
-  if (!image.isNull() && (telar_mark || ApplicationMark{.provider = provider}.followsTheme())) {
+  if (!image.isNull() && (telar_mark || monochrome || ApplicationMark{.provider = provider}.followsTheme())) {
     QPainter painter{&image};
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
     painter.fillRect(image.rect(), color);
@@ -93,6 +93,19 @@ void ProviderMark::setProvider(int provider) {
     provider_ = value;
     dirty_ = true;
     emit providerChanged();
+    update();
+  }
+}
+
+bool ProviderMark::monochrome() const noexcept {
+  return monochrome_;
+}
+
+void ProviderMark::setMonochrome(bool monochrome) {
+  if (monochrome_ != monochrome) {
+    monochrome_ = monochrome;
+    dirty_ = true;
+    emit monochromeChanged();
     update();
   }
 }
@@ -143,7 +156,7 @@ QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   }
 
   if (dirty_ || !node->texture || node->side != side) {
-    const auto pixels = coloredMark(provider_, side, color_, telar_mark_);
+    const auto pixels = coloredMark(provider_, side, color_, telar_mark_, monochrome_);
     if (pixels.isNull()) {
       return nullptr;
     }

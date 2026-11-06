@@ -447,16 +447,20 @@ void windowGeometry() {
   configuration.chrome_scale = increased_chrome_scale;
   const auto scaled = WindowGeometry::measure(configuration, viewport, cells);
   const auto scaled_chrome = ChromeMetrics::resolve(configuration, viewport, cells);
-  require(initial.terminal == scaled.terminal && original_chrome.top_bar == scaled_chrome.top_bar && original_chrome.title < scaled_chrome.title, "chrome scale must change text without changing terminal geometry or band heights");
+  require(original_chrome.top_bar < scaled_chrome.top_bar && original_chrome.title < scaled_chrome.title, "chrome scale must scale text and bands together");
 
+  configuration.chrome_scale = 1;
+  ChromeMetrics previous;
+  previous.small = 0;
+  previous.top_bar = 0;
   for (const float terminal_size : {6.0F, 15.0F, 32.0F}) {
     configuration.font.size = terminal_size;
     const auto chrome = ChromeMetrics::resolve(configuration, viewport, cells);
-    const auto geometry = WindowGeometry::measure(configuration, viewport, cells);
-    require(chrome.ratio == scaled_chrome.ratio && chrome.top_bar == scaled_chrome.top_bar && chrome.pane_header == scaled_chrome.pane_header && chrome.title == scaled_chrome.title && chrome.small == scaled_chrome.small, "terminal font zoom must not resize navigation, panel headers or chrome text");
-    require(geometry.terminal == scaled.terminal, "terminal font zoom must preserve the workbench pixel bounds");
+    require(chrome.title == static_cast<std::uint16_t>(terminal_size) && chrome.small > previous.small && chrome.top_bar > previous.top_bar, "chrome must follow the terminal font");
+    previous = chrome;
   }
 
+  configuration.font.size = FontConfiguration::default_size;
   constexpr float horizontal_padding = 10;
   constexpr float vertical_padding = 12;
   configuration.padding_x = horizontal_padding;

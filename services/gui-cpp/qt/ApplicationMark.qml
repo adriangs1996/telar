@@ -12,6 +12,7 @@ Item {
     property color ink: colors.subtext0
     property string primaryFamily
     property string primaryStyle
+    property bool monochrome: false
 
     readonly property int provider: mark.providerMark ?? 0
     readonly property real dimmedAlpha: providerInk.dimmedAlpha
@@ -21,7 +22,8 @@ Item {
         objectName: "applicationProviderMark"
         anchors.fill: parent
         provider: root.provider
-        color: root.colors.text
+        color: root.monochrome ? root.ink : root.colors.text
+        monochrome: root.monochrome
         ratio: root.ratio
         opacity: root.dimmed ? root.dimmedAlpha : 1
         visible: root.provider !== 0

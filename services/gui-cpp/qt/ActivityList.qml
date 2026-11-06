@@ -26,7 +26,7 @@ ListView {
         required property var record
         required property int index
         readonly property real groupGap: index > 0 && record.startsProject ? root.geometry.groupGap : 0
-        readonly property real cardHeight: record.compact ? root.geometry.compactHeight : root.geometry.height
+        readonly property real cardHeight: record.compact ? root.geometry.compactHeight : record.command || record.task ? root.geometry.height : root.geometry.agentHeight
         readonly property real indentation: Math.min(root.geometry.width / 3, (record.depth ?? 0) * root.geometry.taskIndent)
         readonly property bool animate: y + height > root.contentY && y < root.contentY + root.height
 
@@ -112,7 +112,10 @@ ListView {
 
     ChromeText {
         parent: root
-        anchors.fill: parent
+        x: 8 * root.ratio
+        y: 4 * root.ratio
+        width: Math.max(0, root.width - 2 * x)
+        height: root.typography.bodyRow ?? root.typography.body * 1.3
         text: "No activity"
         color: root.colors.subtext0
         pixelSize: root.typography.body

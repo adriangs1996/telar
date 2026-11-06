@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include "telar_base/memory/allocator.hpp"
 #include <chrono>
 #include <cstdint>
@@ -27,18 +26,23 @@ auto main() -> int {
   telar::SystemAllocator allocator = {};
   telar::websock::Server server = {allocator};
 
-  const auto thread = std::jthread([&] {
-    server.serve(telar::websock::ServerOptions{
-        .bind_address = "0.0.0.0",
-        .bind_port = port,
+  try {
+    const auto thread = std::jthread([&] {
+      server.serve(telar::websock::ServerOptions{
+          .bind_address = "0.0.0.0",
+          .bind_port = port,
+      });
     });
-  });
 
-  while (!server.servingTraffic()) {
-    std::println("Waiting for server to accept traffic");
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    while (!server.servingTraffic()) {
+      std::println("Waiting for server to accept traffic");
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    std::println("Server is providing traffic");
+  } catch (...) {
+    return -1;
   }
 
-  std::println("Server is providing traffic");
   return 0;
 }

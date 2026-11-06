@@ -67,7 +67,8 @@ Item {
         width: implicitWidth
         height: parent.height
         text: root.record.text
-        color: root.ink
+        color: root.colors.chromeText
+        emphasized: true
         pixelSize: root.typography.small
         elide: Text.ElideNone
     }

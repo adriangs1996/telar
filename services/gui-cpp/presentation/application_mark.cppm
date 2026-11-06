@@ -52,6 +52,8 @@ struct ApplicationMark {
 
   AgentProvider provider = AgentProvider::unknown;
   std::string_view glyph = "\uea85";
+  std::string_view tile = "#2b2a3a";
+  std::string_view ink = "#5fb095";
 
   [[nodiscard]] inline bool followsTheme() const noexcept {
     return provider == AgentProvider::codex || provider == AgentProvider::cursor || provider == AgentProvider::opencode;
@@ -70,25 +72,41 @@ struct ApplicationMark {
 
     switch (provider) {
     case AgentProvider::claude:
-      return {.provider = provider, .glyph = "\uec20"};
+      return {.provider = provider, .glyph = "\uec20", .tile = "#d97757", .ink = "#1a1627"};
     case AgentProvider::codex:
-      return {.provider = provider, .glyph = "\uea85"};
+      return {.provider = provider, .glyph = "\uea85", .tile = "#f2f1f5", .ink = "#1a1627"};
     case AgentProvider::pi:
-      return {.provider = provider, .glyph = "\U000f03ff"};
+      return {.provider = provider, .glyph = "\U000f03ff", .tile = "#e5ca93", .ink = "#1a1627"};
     case AgentProvider::cursor:
-      return {.provider = provider, .glyph = "\U000f02d8"};
+      return {.provider = provider, .glyph = "\U000f02d8", .tile = "#e5e3ee", .ink = "#1a1627"};
     case AgentProvider::opencode:
-      return {.provider = provider, .glyph = "\U000f0763"};
+      return {.provider = provider, .glyph = "\U000f0763", .tile = "#99baf8", .ink = "#1a1627"};
     default:
       break;
     }
 
-    if (name == "nvim" || name == "vim" || name == "vi") {
-      return {.provider = AgentProvider::unknown, .glyph = "\ue62b"};
-    }
-
-    if (name == "git" || name == "lazygit") {
-      return {.provider = AgentProvider::unknown, .glyph = "\ue702"};
+    struct Known {
+      std::string_view name;
+      std::string_view glyph;
+      std::string_view tile;
+      std::string_view ink;
+    };
+    // Terminal programs have no operating system icon of their own.
+    static constexpr std::array known{
+        Known{"nvim", "\ue62b", "#5fb095", "#0f1a16"}, Known{"vim", "\ue62b", "#5fb095", "#0f1a16"}, Known{"vi", "\ue62b", "#5fb095", "#0f1a16"},
+        Known{"git", "\ue702", "#f37986", "#1a1627"}, Known{"lazygit", "\ue702", "#f37986", "#1a1627"},
+        Known{"node", "\ue718", "#83cd29", "#10210a"}, Known{"npm", "\ue718", "#83cd29", "#10210a"},
+        Known{"python", "\ue73c", "#ffd43b", "#1f2d3d"}, Known{"python3", "\ue73c", "#ffd43b", "#1f2d3d"},
+        Known{"ruby", "\ue739", "#cc342d", "#ffffff"}, Known{"irb", "\ue739", "#cc342d", "#ffffff"}, Known{"bundle", "\ue739", "#cc342d", "#ffffff"},
+        Known{"docker", "\uf308", "#2496ed", "#ffffff"},
+        Known{"cargo", "\ue7a8", "#dea584", "#1a1627"},
+        Known{"go", "\ue626", "#00add8", "#08252b"},
+        Known{"bun", "B", "#fbf0df", "#1a1627"},
+    };
+    for (const auto &entry : known) {
+      if (entry.name == name) {
+        return {.provider = AgentProvider::unknown, .glyph = entry.glyph, .tile = entry.tile, .ink = entry.ink};
+      }
     }
 
     return {};
