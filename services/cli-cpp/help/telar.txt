@@ -25,6 +25,7 @@ Execution (runtime-owned, no terminal)
   repository      Prepare a clone of this repository on another machine from committed history alone
   project         Run a repository's declared setup recipe in a checkout, explicitly authorized
   file            Publish a file from standard input, or write one to standard output, byte-exact
+  clipboard       Read text or an encoded image from the runtime machine's clipboard
 
 Machines (other computers)
   machine         Save, check and set up other machines; `telar --machine LABEL COMMAND...` runs a command there

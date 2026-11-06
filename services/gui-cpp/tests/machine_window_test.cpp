@@ -535,6 +535,15 @@ class MachineWindowTest : public QObject {
     QVERIFY(!shelf_pixels.isNull());
     QVERIFY(attachmentRendererMatchesRequest(window));
     QVERIFY(captureAttachmentImage(shelf_pixels, "TELAR_GUI_TEST_ATTACHMENT_SHELF_CAPTURE"));
+    const auto pointingAreas = [](QQuickItem &root) {
+      const auto items = visualItems(root, QString{});
+
+      return std::ranges::count_if(items, [](const QQuickItem *item) {
+        return item->inherits("QQuickMouseArea") && item->cursor().shape() == Qt::PointingHandCursor;
+      });
+    };
+    QCOMPARE(pointingAreas(*shelf_view), 2);
+    QCOMPARE(pointingAreas(*modal_view), 1);
     const auto after = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
     const auto rows = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
     QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);

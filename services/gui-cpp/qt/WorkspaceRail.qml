@@ -88,6 +88,7 @@ Item {
                 id: pointer
                 anchors.fill: parent
                 hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
                 onClicked: root.selected(mark.record.key)
             }
 

@@ -39,6 +39,7 @@ Item {
         width: parent.width
         height: Math.min(parent.height, root.chipHeight)
         hoverEnabled: true
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
         Accessible.name: "Show " + root.entries.length + " hidden components"
         contentItem: Text {
             text: "+" + root.entries.length

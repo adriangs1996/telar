@@ -89,6 +89,7 @@ FocusScope {
 
             MouseArea {
                 anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
                 onClicked: root.shelf.close()
                 Accessible.name: "Close image preview"
             }

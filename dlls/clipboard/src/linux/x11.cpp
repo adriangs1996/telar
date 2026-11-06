@@ -105,8 +105,8 @@ namespace telar::clipboard::linux_backend {
       std::size_t length = 0;
     };
 
-    // Read in bounded chunks; the destination itself has no fixed size limit.
-    std::expected<property_info, read_error> readProperty(connection &state, std::vector<byte> &bytes, deadline expires) {
+    // Check the remaining budget before appending each chunk, including INCR transfers.
+    std::expected<property_info, read_error> readProperty(connection &state, std::vector<byte> &bytes, deadline expires, std::size_t maximum_bytes) {
       constexpr std::uint32_t chunk_bytes = 64 * 1024;
       constexpr std::uint32_t property_unit_bytes = 4;
       std::uint32_t offset = 0;
@@ -132,6 +132,9 @@ namespace telar::clipboard::linux_backend {
         }
 
         if (count != 0) {
+          if (static_cast<std::size_t>(count) > maximum_bytes - bytes.size()) {
+            return std::unexpected(read_error::content_too_large);
+          }
           const auto *data = static_cast<const byte *>(xcb_get_property_value(value->get()));
           bytes.insert(bytes.end(), data, data + count);
           info.length += static_cast<std::size_t>(count);
@@ -192,13 +195,13 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    std::expected<content, read_error> receive(connection &state, xcb_atom_t target, std::string_view mime_type, deadline expires) {
+    std::expected<content, read_error> receive(connection &state, xcb_atom_t target, std::string_view mime_type, deadline expires, std::size_t maximum_bytes) {
       if (auto status = convert(state, target, expires); !status) {
         return std::unexpected(status.error());
       }
 
       content result{.mime_type = mime_type, .bytes = {}};
-      auto info = readProperty(state, result.bytes, expires);
+      auto info = readProperty(state, result.bytes, expires, maximum_bytes);
       if (!info) {
         return std::unexpected(info.error());
       }
@@ -216,7 +219,7 @@ namespace telar::clipboard::linux_backend {
             return std::unexpected(status.error());
           }
 
-          info = readProperty(state, result.bytes, expires);
+          info = readProperty(state, result.bytes, expires, maximum_bytes);
           if (!info) {
             return std::unexpected(info.error());
           }
@@ -246,7 +249,7 @@ namespace telar::clipboard::linux_backend {
     }
   }
 
-  std::expected<content, read_error> readX11(deadline expires) {
+  std::expected<content, read_error> readX11(deadline expires, std::size_t maximum_bytes) {
     connection state;
     int screen_index = 0;
     state.handle = xcb_connect(nullptr, &screen_index);
@@ -297,7 +300,7 @@ namespace telar::clipboard::linux_backend {
     }
 
     std::vector<byte> available;
-    const auto info = readProperty(state, available, expires);
+    const auto info = readProperty(state, available, expires, 64 * 1024);
     if (!info || info->type != XCB_ATOM_ATOM || info->format != 32 || available.size() % sizeof(xcb_atom_t) != 0) {
       return std::unexpected(info ? read_error::read_failed : info.error());
     }
@@ -315,7 +318,7 @@ namespace telar::clipboard::linux_backend {
           continue;
         }
 
-        auto result = receive(state, *target, format.mime_type, expires);
+        auto result = receive(state, *target, format.mime_type, expires, maximum_bytes);
         if (!result) {
           return result;
         }

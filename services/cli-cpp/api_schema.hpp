@@ -77,6 +77,7 @@ inline constexpr std::array client_requests{
     NamedValue{.name = "configure_pane_desktop", .value = static_cast<std::uint64_t>(ClientTag::configure_pane_desktop)},
     NamedValue{.name = "complete_clipboard_desktop", .value = static_cast<std::uint64_t>(ClientTag::complete_clipboard_desktop)},
     NamedValue{.name = "paste_pane_clipboard", .value = static_cast<std::uint64_t>(ClientTag::paste_pane_clipboard)},
+    NamedValue{.name = "read_runtime_clipboard", .value = static_cast<std::uint64_t>(ClientTag::read_runtime_clipboard)},
 };
 
 inline constexpr std::array server_messages{
@@ -133,6 +134,7 @@ inline constexpr std::array server_messages{
     NamedValue{.name = "clipboard_desktop_request", .value = static_cast<std::uint64_t>(ServerTag::clipboard_desktop_request)},
     NamedValue{.name = "clipboard_desktop_execute", .value = static_cast<std::uint64_t>(ServerTag::clipboard_desktop_execute)},
     NamedValue{.name = "clipboard_desktop_cancel", .value = static_cast<std::uint64_t>(ServerTag::clipboard_desktop_cancel)},
+    NamedValue{.name = "runtime_clipboard_chunk", .value = static_cast<std::uint64_t>(ServerTag::runtime_clipboard_chunk)},
 };
 
 inline constexpr std::array agent_statuses{
@@ -151,6 +153,8 @@ inline constexpr std::array bounds{
     NamedValue{.name = "max_pane_text_bytes", .value = 262144},
     NamedValue{.name = "max_pane_text_input_bytes", .value = 65536},
     NamedValue{.name = "max_history_results", .value = 1000},
+    NamedValue{.name = "max_clipboard_capture_bytes", .value = runtime_clipboard_max_bytes},
+    NamedValue{.name = "max_clipboard_chunk_bytes", .value = runtime_clipboard_chunk_bytes},
 };
 
 inline void appendTable(std::string &output, std::span<const NamedValue> values, bool json) {

@@ -659,6 +659,96 @@ private:
     QVERIFY(expected < workspace_count);
   }
 
+  Q_SLOT static void railMarksShowThePointingCursor() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel workspaces;
+    ListModel agents;
+    workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
+    auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), sidebarProperties(workspaces, agents, false, 0));
+    sidebar->setParentItem(window.contentItem());
+    window.resize(fixture_rail_width, fixture_height);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
+    constexpr QPoint mark_center{25, 30};
+    QTest::mouseMove(&window, mark_center);
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
+  }
+
+  Q_SLOT static void tabsShowThePointingCursor() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    constexpr int strip_width = 300;
+    constexpr std::size_t tab_count = 2;
+    tabs.reconcile(tabRecords({.count = tab_count, .active = 0}));
+    auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, strip_width));
+    strip->setParentItem(window.contentItem());
+    window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
+    const auto firstArea = [&]() -> QQuickItem * {
+      for (auto *item : visualItems(*strip, QString{})) {
+        if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
+          return item;
+        }
+      }
+
+      return nullptr;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(firstArea() != nullptr, fixture_wait_ms);
+    const auto *area = firstArea();
+    QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
+  }
+
+  Q_SLOT static void buttonsShowThePointingCursorOnlyWhileEnabled_data() {
+    QTest::addColumn<QString>("type");
+    QTest::addColumn<QByteArray>("availability");
+    QTest::newRow("chrome") << QStringLiteral("ChromeButton") << QByteArrayLiteral("enabled");
+    QTest::newRow("form") << QStringLiteral("FormButton") << QByteArrayLiteral("interactive");
+  }
+
+  Q_SLOT static void buttonsShowThePointingCursorOnlyWhileEnabled() {
+    QFETCH(QString, type);
+    QFETCH(QByteArray, availability);
+    QQuickWindow window;
+    QQmlEngine engine;
+    const ChromeMetrics chrome;
+    constexpr qreal disabled_alpha = 0.5;
+    constexpr qreal pressed_alpha = 0.7;
+    constexpr qreal radius = 4;
+    const QVariantMap properties{
+        {QStringLiteral("colors"), themeColors(Configuration{})},
+        {QStringLiteral("pixelSize"), chrome.body},
+        {QStringLiteral("text"), QStringLiteral("Action")},
+    };
+    auto required = properties;
+    if (type == QStringLiteral("FormButton")) {
+      required.insert({
+          {QStringLiteral("radius"), radius},
+          {QStringLiteral("disabledAlpha"), disabled_alpha},
+          {QStringLiteral("pressedAlpha"), pressed_alpha},
+      });
+    }
+
+    auto button = createChrome(engine, type, required);
+    button->setParentItem(window.contentItem());
+    constexpr QSize window_size{120, 40};
+    button->setSize(window_size);
+    window.resize(window_size);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
+    constexpr QPoint inside{60, 20};
+    QTest::mouseMove(&window, inside);
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
+
+    QVERIFY(button->setProperty(availability.constData(), false));
+    constexpr QPoint moved{62, 20};
+    QTest::mouseMove(&window, moved);
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, fixture_wait_ms);
+  }
+
   Q_SLOT static void aRailClickEmitsOnlyTheWorkspaceIdentity() {
     QQuickWindow window;
     QQmlEngine engine;

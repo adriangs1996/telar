@@ -63,6 +63,7 @@ public:
 private:
   void readExact(std::span<telar::Byte> bytes) {
     while (!bytes.empty()) {
+      session().connection.write(telar::runtime::ResponseProjection{memory_, model_});
       const auto count = ::read(peer_.get(), bytes.data(), bytes.size());
       if (count < 0 && errno == EINTR) {
         continue;
@@ -77,6 +78,6 @@ private:
   telar::runtime::RuntimeModel<telar::runtime::SystemAllocator> &model_;
   std::uint64_t id_;
   telar::runtime::FileDescriptor peer_;
-  std::array<telar::Byte, 64 * 1024> payload_;
+  std::array<telar::Byte, 64 * 1024 + 1024> payload_;
   std::array<telar::Byte, 128 * 1024> decode_;
 };

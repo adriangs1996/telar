@@ -139,6 +139,7 @@ Item {
                 id: mouse
                 anchors.fill: parent
                 hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                 onPressed: event => {
                     if (event.button === Qt.LeftButton) {

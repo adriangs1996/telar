@@ -251,7 +251,7 @@ int routed(Session &session, const RoutedOptions &options, Text &output) {
   };
   const auto reply = exchangeCommand(session, command);
   if (reply.status == ClientCommandStatus::failed) {
-    std::println(__stderrp, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
+    std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
     return 1;
   }
 

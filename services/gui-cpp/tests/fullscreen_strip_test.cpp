@@ -158,6 +158,12 @@ class FullscreenStripTest final : public QObject {
     QVERIFY(focused != nullptr);
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, focused->mapToScene({focused->width() / 2, focused->height() / 2}).toPoint());
     QCOMPARE(selected.size(), 1);
+    QTest::mouseMove(&window, hidden->mapToScene({hidden->width() / 2, hidden->height() / 2}).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
+    QTest::mouseMove(&window, focused->mapToScene({focused->width() / 2, focused->height() / 2}).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, wait_ms);
+    QTest::mouseMove(&window, layout->leaveBounds().center().toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
     item->setWidth(compact_width);
     item->ensurePolished();
     QTRY_VERIFY_WITH_TIMEOUT(!layout->named() && entryFor(*item, QStringLiteral("3")) != nullptr, wait_ms);

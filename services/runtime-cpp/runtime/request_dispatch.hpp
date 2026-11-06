@@ -79,6 +79,9 @@ bool dispatchRequest(ClientTag tag, Consumer &&consume) {
   case ClientTag::complete_clipboard_desktop:
     consume.template operator()<CompleteClipboardDesktop>();
     return true;
+  case ClientTag::read_runtime_clipboard:
+    consume.template operator()<ReadRuntimeClipboard>();
+    return true;
   case ClientTag::paste_pane_clipboard:
     consume.template operator()<PastePaneClipboard>();
     return true;

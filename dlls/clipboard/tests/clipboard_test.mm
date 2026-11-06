@@ -61,6 +61,9 @@ int main() {
     check(result->mime_type == "text/plain;charset=utf-8", "text MIME type");
     check(result->bytes.size() == text_data.length && std::memcmp(result->bytes.data(), text_data.bytes, text_data.length) == 0, "UTF-8 bytes preserved");
     checkFile(*result);
+    const auto limited_text = telar::clipboard::read(text_data.length - 1);
+    check(!limited_text && limited_text.error() == telar::clipboard::read_error::content_too_large, "text byte limit enforced");
+    check(telar::clipboard::read(text_data.length).has_value(), "text at exact byte limit accepted");
 
     isolated.clear();
     check([board setString:@"" forType:NSPasteboardTypeString], "set empty text");
@@ -102,6 +105,9 @@ int main() {
       check(result->mime_type == format.mime_type, "image preferred over text with correct MIME type");
       check(result->bytes.size() == data.length && std::memcmp(result->bytes.data(), data.bytes, data.length) == 0, "encoded image preserved without conversion");
       checkFile(*result);
+      const auto limited_image = telar::clipboard::read(data.length - 1);
+      check(!limited_image && limited_image.error() == telar::clipboard::read_error::content_too_large, "image byte limit enforced");
+      check(telar::clipboard::read(data.length).has_value(), "image at exact byte limit accepted");
     }
 
     isolated.clear();

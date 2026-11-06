@@ -52,6 +52,7 @@ Rectangle {
                 id: pointer
                 anchors.fill: parent
                 hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
                 onClicked: root.shelf.open(card.modelData.id)
                 Accessible.role: Accessible.Button
                 Accessible.name: "Open image preview"
@@ -87,6 +88,7 @@ Rectangle {
                     id: closePointer
                     anchors.fill: parent
                     hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.shelf.dismiss(card.modelData.id)
                     Accessible.role: Accessible.Button
                     Accessible.name: "Remove image"

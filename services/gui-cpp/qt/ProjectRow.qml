@@ -77,6 +77,7 @@ Rectangle {
         id: pointer
         anchors.fill: parent
         hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
         onClicked: root.selected(root.record.key)
     }
 

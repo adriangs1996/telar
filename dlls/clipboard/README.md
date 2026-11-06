@@ -6,6 +6,15 @@ and encoded PNG, JPEG, or TIFF images, in that order, preferring images over alt
 Storage grows to the content size instead of using a fixed 2048-byte buffer.
 Allocation failures and clipboard changes during capture are reported as errors.
 Images retain their original encoding; reading does not decode or convert pixels.
+`read(maximum_bytes)` bounds captured bytes, defaulting to 32 MiB. Each native
+backend checks before appending to the owned buffer; oversized content returns
+`content_too_large`. Native OS APIs may still materialize their own representation.
+
+The shared `telar-clipboard` CMake target is also linked by the C++ runtime.
+See [remote clipboard reads](../../docs/clipboard.md). `cmake/library.cmake` embeds
+only the library, not this project's executable, tests or tooling targets.
+`-DTELAR_CLIPBOARD_NATIVE=OFF` builds an explicit unavailable backend without desktop
+dependencies, for headless installations.
 
 ## Build and test
 

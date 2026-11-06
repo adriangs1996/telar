@@ -89,6 +89,7 @@ FullscreenStripLayout {
                 anchors.fill: parent
                 enabled: !pane.entry.focused
                 hoverEnabled: true
+                cursorShape: enabled ? Qt.PointingHandCursor : undefined
                 onPressed: root.selected(pane.entry.key)
             }
         }
@@ -146,6 +147,7 @@ FullscreenStripLayout {
             id: leavePointer
             anchors.fill: parent
             hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
             onPressed: root.leaveFullscreen()
         }
     }

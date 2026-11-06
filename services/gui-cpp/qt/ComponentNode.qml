@@ -47,6 +47,16 @@ KeyboardAction {
         controller.activateComponent(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
     }
 
+    // A bar yields its tooltips to an open panel or pick; a panel's own nodes yield only to a pick.
+    // Called from the hover-guarded binding so that only the hovered node tracks these projections.
+    function tooltipCovered() {
+        if (controller.componentPick.open ?? false) {
+            return true;
+        }
+
+        return !(surface.open ?? false) && (controller.componentPanel.open ?? false);
+    }
+
     Accessible.role: node.clickable ? Accessible.Button : Accessible.StaticText
     Accessible.name: node.accessibleName ?? node.text
     Accessible.onPressAction: if (node.clickable) activate()
@@ -90,7 +100,6 @@ KeyboardAction {
         enabled: root.node.clickable && root.node.kind !== "button"
         identity: root.activationIdentity
         hoverEnabled: false
-        cursorShape: Qt.PointingHandCursor
         onCaptureStarted: root.forceActiveFocus(Qt.MouseFocusReason)
         onActivated: root.activate()
     }
@@ -99,8 +108,9 @@ KeyboardAction {
 
     Popup {
         id: tooltipPopup
+        objectName: "componentTooltip"
         parent: root
-        visible: hover.hovered && root.hasTooltip && (root.surface.error ?? "").length === 0
+        visible: hover.hovered && root.hasTooltip && (root.surface.error ?? "").length === 0 && !root.tooltipCovered()
         y: -height - root.gap
         width: Math.min(420 * root.ratio, root.Window.window?.width ?? 420 * root.ratio)
         padding: 12 * root.ratio

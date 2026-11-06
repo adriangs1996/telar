@@ -9,6 +9,8 @@ MouseArea {
     signal captureStarted
 
     hoverEnabled: true
+    // MouseArea.enabled does not disable the item, so a disabled area must give its cursor back.
+    cursorShape: enabled ? Qt.PointingHandCursor : undefined
     onIdentityChanged: captureValid = false
     onEnabledChanged: captureValid = false
     onVisibleChanged: captureValid = false

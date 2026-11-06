@@ -14,6 +14,8 @@ AbstractButton {
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
 
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
+
     contentItem: ChromeText {
         text: root.text
         pixelSize: root.pixelSize

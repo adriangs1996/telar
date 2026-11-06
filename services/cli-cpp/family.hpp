@@ -39,6 +39,7 @@ enum class Family : std::uint8_t {
   history,
   proxy,
   api,
+  clipboard,
   count
 };
 
@@ -46,7 +47,7 @@ enum class Family : std::uint8_t {
 inline constexpr std::array<std::string_view, static_cast<std::size_t>(Family::count)> family_names{
     "workspace", "tab", "pane", "worktree", "agent", "exec", "repository", "project", "file", "machine",
     "client", "sidebar", "workspace-list", "layout", "notification", "command", "config", "plugin",
-    "integration", "hook", "cli", "gui", "server", "runtime", "diagnostics", "history", "proxy", "api"};
+    "integration", "hook", "cli", "gui", "server", "runtime", "diagnostics", "history", "proxy", "api", "clipboard"};
 
 inline std::string_view familyName(Family family) noexcept {
   return family_names.at(static_cast<std::size_t>(family));

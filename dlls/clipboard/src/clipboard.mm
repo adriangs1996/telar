@@ -5,7 +5,10 @@
 
 namespace telar::clipboard {
   namespace {
-    content copyData(NSData *data, std::string_view mime_type) {
+    std::expected<content, read_error> copyData(NSData *data, std::string_view mime_type, std::size_t maximum_bytes) {
+      if (data.length > maximum_bytes) {
+        return std::unexpected(read_error::content_too_large);
+      }
       content result{.mime_type = mime_type, .bytes = {}};
       if (data.length != 0) {
         const auto *bytes = static_cast<const byte *>(data.bytes);
@@ -15,7 +18,7 @@ namespace telar::clipboard {
       return result;
     }
 
-    std::expected<content, read_error> capture(NSPasteboard *board) {
+    std::expected<content, read_error> capture(NSPasteboard *board, std::size_t maximum_bytes) {
       struct image_format {
         NSPasteboardType type;
         std::string_view mime_type;
@@ -39,7 +42,7 @@ namespace telar::clipboard {
           continue;
         }
 
-        return copyData(data, format.mime_type);
+        return copyData(data, format.mime_type, maximum_bytes);
       }
 
       NSString *text = [board stringForType:NSPasteboardTypeString];
@@ -52,17 +55,17 @@ namespace telar::clipboard {
         return std::unexpected(read_error::encoding_failed);
       }
 
-      return copyData(data, "text/plain;charset=utf-8");
+      return copyData(data, "text/plain;charset=utf-8", maximum_bytes);
     }
   }
 
-  std::expected<content, read_error> read() {
+  std::expected<content, read_error> read(std::size_t maximum_bytes) {
     @autoreleasepool {
       NSPasteboard *board = [NSPasteboard generalPasteboard];
       const auto revision = board.changeCount;
 
       try {
-        auto result = capture(board);
+        auto result = capture(board, maximum_bytes);
         if (board.changeCount != revision) {
           return std::unexpected(read_error::changed);
         }

@@ -2295,3 +2295,4 @@ namespace telar {
 } // namespace telar
 
 #include "telar_clipboard_protocol.hpp"
+#include "telar_runtime_clipboard.hpp"

@@ -5,31 +5,6 @@
 
 #include "clipboard.hpp"
 
-namespace {
-  const char *errorMessage(telar::clipboard::read_error error) {
-    switch (error) {
-    case telar::clipboard::read_error::no_supported_content:
-      return "Clipboard contains no supported text or image.";
-    case telar::clipboard::read_error::encoding_failed:
-      return "Could not encode clipboard text as UTF-8.";
-    case telar::clipboard::read_error::changed:
-      return "Clipboard changed while reading; try again.";
-    case telar::clipboard::read_error::allocation_failed:
-      return "Not enough memory to read the clipboard.";
-    case telar::clipboard::read_error::session_unavailable:
-      return "Cannot connect to the graphical session; check WAYLAND_DISPLAY, XDG_RUNTIME_DIR or DISPLAY.";
-    case telar::clipboard::read_error::unsupported_protocol:
-      return "The Wayland compositor does not expose wlr-data-control clipboard access.";
-    case telar::clipboard::read_error::read_failed:
-      return "Could not transfer clipboard content.";
-    case telar::clipboard::read_error::timed_out:
-      return "Clipboard transfer timed out.";
-    }
-
-    return "Unknown clipboard error.";
-  }
-}
-
 int main(int argc, char **argv) {
   const char *output_path = nullptr;
   if (argc == 2 && std::string_view(argv[1]) == "--help") {
@@ -46,7 +21,7 @@ int main(int argc, char **argv) {
 
   const auto result = telar::clipboard::read();
   if (!result) {
-    std::println(stderr, "{}", errorMessage(result.error()));
+    std::println(stderr, "{}", telar::clipboard::error_message(result.error()));
     return 1;
   }
 

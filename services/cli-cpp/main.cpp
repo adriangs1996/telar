@@ -1,5 +1,6 @@
 #include "agent.hpp"
 #include "api_schema.hpp"
+#include "runtime_clipboard.hpp"
 #include "diagnostics.hpp"
 #include "execution.hpp"
 #include "file_transfer.hpp"
@@ -58,6 +59,8 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     return runAgent(memory, pane_agents::parseAgent(options));
   case Family::exec:
     return execution::run(memory, ExecutionOptions::parse(options));
+  case Family::clipboard:
+    return runtime_clipboard::run(memory, runtime_clipboard::Options::parse(options));
   case Family::file:
     return file_transfer::run(file_transfer::Options::parse(options));
   case Family::runtime:

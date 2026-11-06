@@ -1,0 +1,37 @@
+telar clipboard get: Write the runtime machine's clipboard bytes to stdout
+
+Usage: telar clipboard get [--socket PATH]
+       telar --machine LABEL clipboard get
+
+Options:
+  --socket PATH    Address this running runtime instead of the default endpoint.
+
+Effects: captures the current clipboard once, on the runtime's machine, without
+opening a Telar window or modifying either clipboard. Never starts a runtime.
+Images are preferred over alternate text: PNG, JPEG, TIFF, then text. Encoded image
+bytes are preserved, not converted. Text has no added newline. Stdout contains only
+content; diagnostics go to stderr. A pipe or redirect is required, even for text,
+because clipboard bytes may contain terminal control sequences.
+
+The runtime must run as the graphical session's user with its environment and access
+permissions. On Linux this means WAYLAND_DISPLAY and XDG_RUNTIME_DIR for Wayland,
+or DISPLAY and, where needed, XAUTHORITY for X11. SSH alone does not supply them.
+Wayland requires wlr-data-control; unavailable sessions never fall back elsewhere.
+The source runtime needs TELAR_CLIPBOARD_NATIVE enabled at build time; static
+headless Linux distribution builds omit native clipboard support by default.
+
+At most 32 MiB per capture and one capture/transfer per runtime at a time. Reads run
+off the terminal event loop; transfer uses bounded, pull-based chunks. A transfer
+expires after 30 seconds and is discarded on disconnect. No history or checkpoints.
+Any same-account process authorized to use the runtime socket can request a read;
+this is not a permission boundary between agents running under the same account.
+
+Results: exit 0 on complete output; nonzero on unavailable/unsupported/changed
+clipboard, resource limits, timeout, disconnection or output failure. A failed
+stream may contain a partial prefix; consumers must check the command's status.
+
+Examples:
+  telar clipboard get > clipboard-content
+  telar --machine omarchy clipboard get | chafa -f kitty
+
+Use `set -o pipefail` to detect a failed producer in a shell pipeline.

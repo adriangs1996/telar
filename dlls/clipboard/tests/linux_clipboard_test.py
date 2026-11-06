@@ -75,6 +75,11 @@ def check_cases(binary, backend, environment, root):
                     os.close(master)
                     os.close(slave)
         print(f'{backend}: {mime}, {len(data)} bytes, exact stdout/file output', flush=True)
+    with selection(backend, environment, root, 'image/png', b'x' * (32 * 1024 * 1024 + 1)):
+        rejected = run(binary, environment)
+        assert rejected.returncode == 1 and not rejected.stdout and b'byte limit' in rejected.stderr, rejected.stderr
+        print(f'{backend}: oversized capture rejected before publishing bytes', flush=True)
+
     with selection(backend, environment, root, 'application/x-telar-unsupported', b'unsupported'):
         rejected = run(binary, environment)
         assert rejected.returncode == 1 and not rejected.stdout and b'no supported' in rejected.stderr

@@ -29,6 +29,7 @@
 #include "plugin_delivery.hpp"
 #include "request_dispatch.hpp"
 #include "response_projection.hpp"
+#include "runtime_clipboard_service.hpp"
 #include "telar_base/editors/kind.hpp"
 #include "workspace_git_service.hpp"
 #include "workspace_service.hpp"
@@ -51,6 +52,7 @@ public:
         listener_(options.socket),
         model_(memory, options.graphics),
         client_control_(model_),
+        runtime_clipboard_(model_),
         limits_(model_),
         admissions_(model_, poller_, limits_),
         client_layouts_(memory, model_),
@@ -91,6 +93,7 @@ public:
     poller_.watch(media_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(descents_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(metrics_.descriptor(), eventToken(EventSource::worker, 0));
+    poller_.watch(runtime_clipboard_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(workspace_git_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(worktree_detection_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(agent_files_.descriptor(), eventToken(EventSource::worker, 0));
@@ -565,6 +568,10 @@ private:
     panes_.resize(client, message);
   }
 
+  void handle(ClientSession<Memory> &client, const ReadRuntimeClipboard &message) {
+    runtime_clipboard_.read(client, message);
+  }
+
   void handle(ClientSession<Memory> &client, const CompleteClipboardDesktop &message) {
     if (auto *pane = ClipboardService{model_}.complete(client, message)) {
       panes_.flushInput(*pane);
@@ -718,6 +725,7 @@ private:
     descents_.collect();
     answerDeferredReports();
     metrics_.collect();
+    runtime_clipboard_.collect();
     workspace_git_.collect(Clock::now());
     worktree_detection_.collect();
     agent_files_.collect();
@@ -818,6 +826,7 @@ private:
   std::chrono::nanoseconds publish(Clock::time_point now) {
     TELAR_TRACE("runtime.publish");
     admissions_.expire(now);
+    runtime_clipboard_.expire(now);
     media_.collect();
     std::chrono::nanoseconds timeout = std::chrono::milliseconds{100};
     for (auto *pane : model_.panes.items()) {
@@ -969,6 +978,7 @@ private:
   LocalListener listener_;
   RuntimeModel<Memory> model_;
   ClientControl<Memory> client_control_;
+  RuntimeClipboardService<Memory> runtime_clipboard_;
   LimitService<Memory> limits_;
   ClientAdmission<Memory, Poller> admissions_;
   ClientLayouts<Memory> client_layouts_;

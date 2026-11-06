@@ -21,52 +21,9 @@ option(CLIPBOARD_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(CLIPBOARD_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(CLIPBOARD_LINUX_INTEGRATION_TESTS "Test private Sway and Xvfb clipboards" OFF)
 
+include(cmake/library.cmake)
 add_executable(clipboard main.cpp)
-target_include_directories(clipboard PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/includes")
-
-if(APPLE)
-  if(NOT DEFINED CMAKE_OBJCXX_COMPILER)
-    set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
-  endif()
-
-  enable_language(OBJCXX)
-
-  set_target_properties(
-    clipboard PROPERTIES
-    OBJCXX_STANDARD 23
-    OBJCXX_STANDARD_REQUIRED YES
-    OBJCXX_EXTENSIONS NO
-  )
-
-  find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
-
-  target_sources(clipboard PRIVATE src/clipboard.mm)
-  target_compile_options(clipboard PRIVATE
-       "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>"
-     )
-  target_link_libraries(clipboard PRIVATE "${APPKIT_FRAMEWORK}")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  enable_language(C)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(CLIPBOARD_LINUX REQUIRED IMPORTED_TARGET wayland-client xcb)
-  find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
-  set(clipboard_protocol "${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-data-control-unstable-v1.xml")
-  set(clipboard_protocol_header "${CMAKE_CURRENT_BINARY_DIR}/wlr-data-control-client-protocol.h")
-  set(clipboard_protocol_code "${CMAKE_CURRENT_BINARY_DIR}/wlr-data-control-protocol.c")
-  add_custom_command(OUTPUT "${clipboard_protocol_header}"
-    COMMAND "${WAYLAND_SCANNER}" client-header "${clipboard_protocol}" "${clipboard_protocol_header}"
-    DEPENDS "${clipboard_protocol}" VERBATIM)
-  add_custom_command(OUTPUT "${clipboard_protocol_code}"
-    COMMAND "${WAYLAND_SCANNER}" private-code "${clipboard_protocol}" "${clipboard_protocol_code}"
-    DEPENDS "${clipboard_protocol}" VERBATIM)
-  target_sources(clipboard PRIVATE
-    src/linux/clipboard.cpp src/linux/wayland.cpp src/linux/x11.cpp
-    "${clipboard_protocol_header}" "${clipboard_protocol_code}")
-  target_include_directories(clipboard PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-  target_link_libraries(clipboard PRIVATE PkgConfig::CLIPBOARD_LINUX)
-else()
-  message(FATAL_ERROR "Clipboard currently supports macOS and Linux")
-endif()
+target_link_libraries(clipboard PRIVATE telar-clipboard)
 
 if(MSVC)
   target_compile_options(clipboard PRIVATE /W4 /permissive- /Zc:__cplusplus)
@@ -74,9 +31,9 @@ if(MSVC)
     target_compile_options(clipboard PRIVATE /WX)
   endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-  target_compile_options(clipboard PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
+  target_compile_options(telar-clipboard PUBLIC -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
   if(CLIPBOARD_WARNINGS_AS_ERRORS)
-    target_compile_options(clipboard PRIVATE -Werror)
+    target_compile_options(telar-clipboard PUBLIC -Werror)
   endif()
 endif()
 
@@ -84,8 +41,8 @@ if(CLIPBOARD_SANITIZERS)
   if(MSVC OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     message(FATAL_ERROR "CLIPBOARD_SANITIZERS requires GCC or Clang with the GNU-style driver")
   endif()
-  target_compile_options(clipboard PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(clipboard PRIVATE -fsanitize=address,undefined)
+  target_compile_options(telar-clipboard PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(telar-clipboard PUBLIC -fsanitize=address,undefined)
 endif()
 
 include(CTest)
@@ -93,17 +50,16 @@ if(BUILD_TESTING)
   add_test(NAME clipboard-smoke COMMAND clipboard --help)
   set_tests_properties(clipboard-smoke PROPERTIES TIMEOUT 30)
 
-  if(APPLE)
+  if(APPLE AND TELAR_CLIPBOARD_NATIVE)
     set(clipboard_test_support "${CMAKE_CURRENT_SOURCE_DIR}/../../services/gui-cpp/tests")
     add_executable(clipboard-test
       tests/clipboard_test.mm
-      src/clipboard.mm
       "${clipboard_test_support}/platform/macos/private_clipboard.mm"
     )
     target_include_directories(clipboard-test PRIVATE includes "${clipboard_test_support}")
     set_target_properties(clipboard-test PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES OBJCXX_EXTENSIONS NO)
     target_compile_options(clipboard-test PRIVATE -fobjc-arc -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
-    target_link_libraries(clipboard-test PRIVATE "${APPKIT_FRAMEWORK}")
+    target_link_libraries(clipboard-test PRIVATE telar-clipboard)
 
     if(CLIPBOARD_WARNINGS_AS_ERRORS)
       target_compile_options(clipboard-test PRIVATE -Werror)
@@ -116,7 +72,7 @@ if(BUILD_TESTING)
 
     add_test(NAME clipboard-content COMMAND clipboard-test)
     set_tests_properties(clipboard-content PROPERTIES TIMEOUT 30)
-  elseif(CLIPBOARD_LINUX_INTEGRATION_TESTS AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  elseif(TELAR_CLIPBOARD_NATIVE AND CLIPBOARD_LINUX_INTEGRATION_TESTS AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     foreach(tool IN ITEMS sway wl-copy wl-paste xvfb-run xauth xclip)
       find_program(clipboard_test_${tool} ${tool} REQUIRED)

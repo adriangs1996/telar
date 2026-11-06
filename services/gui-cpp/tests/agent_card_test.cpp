@@ -188,6 +188,28 @@ private:
     QVERIFY(!background.front()->isVisible());
   }
 
+  Q_SLOT static void onlyEnabledCardsShowThePointingCursor() {
+    SystemAllocator memory;
+    Agent agent{memory};
+    agent.pane_id = pane_id;
+    QQuickWindow window;
+    QQmlEngine engine;
+    const auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(agentRecord(agent, {.machine = {}, .branch = {}})));
+    card->setParentItem(window.contentItem());
+    window.resize(static_cast<int>(list_width), viewport_height);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    constexpr QPoint card_center{128, 34};
+    QTest::mouseMove(&window, card_center);
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
+
+    QVERIFY(card->setProperty("record", agentRecord(agent, {.machine = {}, .branch = {}, .connected = false})));
+    QTRY_VERIFY_WITH_TIMEOUT(!card->isEnabled(), wait_ms);
+    constexpr QPoint moved_within_card{130, 34};
+    QTest::mouseMove(&window, moved_within_card);
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, wait_ms);
+  }
+
   Q_SLOT static void deliveredHoverIdentityOverridesGeometricHover() {
     SystemAllocator memory;
     Agent agent{memory};

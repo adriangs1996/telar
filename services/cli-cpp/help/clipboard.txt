@@ -1,0 +1,11 @@
+telar clipboard: Read the clipboard on the runtime's machine
+
+Usage: telar clipboard get [--socket PATH]
+       telar --machine LABEL clipboard get
+
+Commands:
+  get             Write current text or encoded image bytes to stdout
+
+A running runtime must have access to the user's graphical session. No Telar window
+is required. Reads are explicit, bounded and do not synchronize or retain history.
+`telar clipboard get --help` explains output, limits and session access.

@@ -150,6 +150,7 @@ Item {
             implicitWidth: root.overflowWidth
             height: root.rowHeight
             hoverEnabled: true
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
             Accessible.name: "Show " + root.hiddenRoots.length + " hidden components"
             contentItem: Text {
                 id: overflowLabel

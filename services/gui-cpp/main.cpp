@@ -1,15 +1,15 @@
 #include "application/dependencies.hpp"
-#include "machines/opening.hpp"
 #include "machines/failure.hpp"
+#include "machines/opening.hpp"
 #include "machines/profile_codec.hpp"
 #include "machines/profiles.hpp"
 #include "platform/host_name.hpp"
 #include "platform/profile_file.hpp"
 #include "platform/window.hpp"
 #include "qt/application.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "qt/local_runtime_endpoint.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "qt/bundled_fonts.hpp"
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFileInfo>
@@ -39,6 +39,7 @@ namespace {
 void configureParser(QCommandLineParser &parser) {
   parser.setApplicationDescription(QStringLiteral("Telar Qt Quick client"));
   parser.addHelpOption();
+
   const QCommandLineOption socket_option{QStringLiteral("socket"), QStringLiteral("Connect to an existing runtime socket"), QStringLiteral("path")};
   const QCommandLineOption smoke_option{QStringLiteral("smoke-ms"), QStringLiteral("Exit after the specified test duration"), QStringLiteral("milliseconds")};
   const QCommandLineOption screenshot_option{QStringLiteral("screenshot"), QStringLiteral("Save the window before the smoke test exits"), QStringLiteral("path")};
@@ -50,7 +51,21 @@ void configureParser(QCommandLineParser &parser) {
   const QCommandLineOption fresh_option{QStringLiteral("fresh"), QStringLiteral("Open without restoring this window's saved layout")};
   const QCommandLineOption remote_option{QStringLiteral("remote"), QStringLiteral("Show an SSH destination first and run the command there"), QStringLiteral("destination")};
   const QCommandLineOption machine_option{QStringLiteral("machine"), QStringLiteral("Show a saved machine or the local label first"), QStringLiteral("label")};
-  parser.addOptions({socket_option, smoke_option, screenshot_option, config_option, no_config_option, profile_option, theme_option, directory_option, fresh_option, remote_option, machine_option});
+
+  parser.addOptions({
+      socket_option,
+      smoke_option,
+      screenshot_option,
+      config_option,
+      no_config_option,
+      profile_option,
+      theme_option,
+      directory_option,
+      fresh_option,
+      remote_option,
+      machine_option,
+  });
+
   parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("Command to run in a newly opened pane"), QStringLiteral("[COMMAND [ARGS...]]"));
   parser.setOptionsAfterPositionalArgumentsMode(QCommandLineParser::ParseAsPositionalArguments);
 }
@@ -141,7 +156,16 @@ std::optional<QString> initialMachine(const QCommandLineParser &parser, telar::g
   const auto profiles = source ? telar::gui::MachineProfileCodec::parse(memory, telar::textView(*source)) : telar::gui::MachineProfiles{};
   const auto label = parser.value(QStringLiteral("machine")).toUtf8();
   const auto hostname = telar::gui::platform::hostName();
-  const auto destination = telar::gui::MachineOpening::saved(profiles, {label.constData(), static_cast<std::size_t>(label.size())}, {hostname.constData(), static_cast<std::size_t>(hostname.size())});
+  const auto destination = telar::gui::MachineOpening::saved(
+      profiles,
+      {
+          label.constData(),
+          static_cast<std::size_t>(label.size()),
+      },
+      {
+          hostname.constData(),
+          static_cast<std::size_t>(hostname.size()),
+      });
 
   return destination ? std::optional{QString::fromUtf8(destination->data(), static_cast<qsizetype>(destination->size()))} : std::nullopt;
 }

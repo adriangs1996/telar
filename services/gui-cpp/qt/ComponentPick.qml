@@ -144,6 +144,7 @@ Popup {
                 MouseArea {
                     anchors.fill: parent
                     hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onPositionChanged: root.selection = option.index
                     onClicked: { root.selection = option.index; root.choose(); }
                 }

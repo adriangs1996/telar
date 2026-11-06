@@ -4745,6 +4745,98 @@ return {api_version=2, client={keybindings={
     QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
   }
 
+  Q_SLOT void configuredTooltipsYieldToOpenSurfaces() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPick();
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      return {api_version=2,client={
+        bars={bottom={
+          left=t.bar.static(ui.group({on_click=t.action.open_panel('usage'),tooltip=ui.text('Bar details'),ui.label('Bar panel')})),
+          center=t.bar.tabs(),
+          right=t.bar.static(ui.group({on_click=t.action.pick('mode'),tooltip=ui.text('Pick details'),ui.label('Bar pick')})),
+        }},
+        panels={usage=t.panel({title='Usage',render=function()
+          return {ui.group({on_click=t.action.toggle_sidebar(),tooltip=ui.text('Panel details'),ui.label('Panel action')}),ui.text('Plain text')}
+        end})},
+        picks={mode=t.pick({items={'first'},on_select={'/usr/bin/true','{}'}})},
+      }}
+    )");
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(QStringLiteral("Bar panel")) != nullptr, runtime_wait_ms);
+    auto *panel_button = componentGroup(QStringLiteral("Bar panel"));
+    auto *pick_button = componentGroup(QStringLiteral("Bar pick"));
+    QVERIFY(pick_button != nullptr);
+    const auto *panel_tooltip = componentTooltip(*panel_button);
+    const auto *pick_tooltip = componentTooltip(*pick_button);
+    QVERIFY(panel_tooltip != nullptr && pick_tooltip != nullptr);
+    const auto center = [](const QQuickItem &item) {
+      return item.mapRectToScene(item.boundingRect()).center().toPoint();
+    };
+
+    QTest::mouseMove(window_, center(*panel_button));
+    QTRY_VERIFY_WITH_TIMEOUT(panel_tooltip->property("visible").toBool(), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(window_->cursor().shape(), Qt::PointingHandCursor, runtime_wait_ms);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, center(*panel_button));
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(QStringLiteral("Panel action")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(!panel_tooltip->property("visible").toBool());
+
+    client_->refreshComponentPanel();
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(!panel_tooltip->property("visible").toBool());
+
+    auto *panel_action = componentGroup(QStringLiteral("Panel action"));
+    const auto *own_tooltip = componentTooltip(*panel_action);
+    QVERIFY(own_tooltip != nullptr);
+    QTest::mouseMove(window_, center(*panel_action));
+    QTRY_VERIFY_WITH_TIMEOUT(own_tooltip->property("visible").toBool(), runtime_wait_ms);
+
+    const auto *plain_text = componentItem(QStringLiteral("text"), QStringLiteral("Plain text"));
+    QVERIFY(plain_text != nullptr);
+    QTest::mouseMove(window_, center(*plain_text));
+    QTRY_COMPARE_WITH_TIMEOUT(window_->cursor().shape(), Qt::ArrowCursor, runtime_wait_ms);
+
+    QTest::mouseMove(window_, center(*panel_button));
+    QTRY_VERIFY_WITH_TIMEOUT(!own_tooltip->property("visible").toBool(), runtime_wait_ms);
+    QVERIFY(!panel_tooltip->property("visible").toBool());
+
+    client_->closeComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(panel_tooltip->property("visible").toBool(), runtime_wait_ms);
+
+    QTest::mouseMove(window_, center(*pick_button));
+    QTRY_VERIFY_WITH_TIMEOUT(pick_tooltip->property("visible").toBool(), runtime_wait_ms);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, center(*pick_button));
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!pick_tooltip->property("visible").toBool(), runtime_wait_ms);
+
+    const auto pickRowArea = [this]() -> QQuickItem * {
+      auto *rows = window_->findChild<QQuickItem *>(QStringLiteral("configuredPickRows"));
+      if (rows == nullptr) {
+        return nullptr;
+      }
+
+      for (auto *item : test::visualItems(*rows, QString{})) {
+        if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
+          return item;
+        }
+      }
+
+      return nullptr;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(pickRowArea() != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QTest::mouseMove(window_, center(*pickRowArea()));
+    QTRY_COMPARE_WITH_TIMEOUT(window_->cursor().shape(), Qt::PointingHandCursor, runtime_wait_ms);
+  }
+
   Q_SLOT void configuredPanelKeyboardActions() {
     const auto sidebar = client_->sidebarVisible();
     const auto cleanup = qScopeGuard([this, sidebar] {
@@ -5345,6 +5437,8 @@ return {api_version=2, client={keybindings={
     popup = expression.evaluate().value<QObject *>();
     QVERIFY2(!expression.hasError(), qPrintable(expression.error().toString()));
     QVERIFY(popup != nullptr);
+    QTest::mouseMove(window_, chip->mapRectToScene(chip->boundingRect()).center().toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window_->cursor().shape(), Qt::PointingHandCursor, runtime_wait_ms);
     chip->forceActiveFocus(Qt::TabFocusReason);
     QTest::keyClick(window_, Qt::Key_Space);
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
@@ -7407,6 +7501,10 @@ return {api_version=2, client={keybindings={
     }
 
     return nullptr;
+  }
+
+  [[nodiscard]] static QObject *componentTooltip(const QQuickItem &node) {
+    return node.findChild<QObject *>(QStringLiteral("componentTooltip"), Qt::FindDirectChildrenOnly);
   }
 
   [[nodiscard]] static QQuickItem *popupCloseButton(const QObject &popup) {

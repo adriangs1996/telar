@@ -76,6 +76,7 @@ namespace telar {
     configure_pane_desktop = 0x48,
     complete_clipboard_desktop = 0x49,
     paste_pane_clipboard = 0x4a,
+    read_runtime_clipboard = 0x4b,
   };
 
   enum class ServerTag : Byte {
@@ -132,6 +133,7 @@ namespace telar {
     clipboard_desktop_request = 0xb7,
     clipboard_desktop_execute = 0xb8,
     clipboard_desktop_cancel = 0xb9,
+    runtime_clipboard_chunk = 0xba,
   };
 
   struct RequestRuntimeState {

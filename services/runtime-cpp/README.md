@@ -63,6 +63,11 @@ the privileged `traffic` helpers.
 installs the pinned compiler after verifying the platform archive's SHA-256.
 On Arch/Omarchy, the runtime build dependencies are `base-devel`, `clang`,
 `cmake`, `ninja`, `python`, `perl`, `patch`, `flex`, `bison` and `pkgconf`.
+Native clipboard support also needs `wayland` and `libxcb`, including
+`wayland-scanner`. `-DTELAR_CLIPBOARD_NATIVE=OFF` omits those desktop dependencies;
+static headless Linux distribution builds default to that setting.
+See [reading a machine's clipboard](../../docs/clipboard.md) for session access,
+`telar --machine LABEL clipboard get` and focused tests.
 
 Platform implementations live in `platform/macos` and `platform/linux`.
 `NativeEventLoop<Memory>` chooses kqueue or epoll at compile time. Linux

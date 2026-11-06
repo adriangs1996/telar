@@ -200,7 +200,7 @@ namespace telar::clipboard::linux_backend {
       return {};
     }
 
-    std::expected<content, read_error> receive(connection &state, const format &type, deadline expires) {
+    std::expected<content, read_error> receive(connection &state, const format &type, deadline expires, std::size_t maximum_bytes) {
       int pipe[2];
       if (pipe2(pipe, O_CLOEXEC) != 0) {
         return std::unexpected(read_error::read_failed);
@@ -229,6 +229,9 @@ namespace telar::clipboard::linux_backend {
 
         const auto count = ::read(reading.get(), buffer.data(), buffer.size());
         if (count > 0) {
+          if (static_cast<std::size_t>(count) > maximum_bytes - result.bytes.size()) {
+            return std::unexpected(read_error::content_too_large);
+          }
           result.bytes.insert(result.bytes.end(), buffer.begin(), buffer.begin() + count);
         } else if (count == 0) {
           break;
@@ -249,7 +252,7 @@ namespace telar::clipboard::linux_backend {
     }
   }
 
-  std::expected<content, read_error> readWayland(deadline expires) {
+  std::expected<content, read_error> readWayland(deadline expires, std::size_t maximum_bytes) {
     connection state;
     state.display = wl_display_connect(nullptr);
     if (state.display == nullptr) {
@@ -290,7 +293,7 @@ namespace telar::clipboard::linux_backend {
       }
 
       const auto revision = state.revision;
-      auto result = receive(state, formats[index], expires);
+      auto result = receive(state, formats[index], expires, maximum_bytes);
       if (!result) {
         return result;
       }

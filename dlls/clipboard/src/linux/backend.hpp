@@ -72,6 +72,6 @@ namespace telar::clipboard::linux_backend {
     }
   }
 
-  std::expected<content, read_error> readWayland(deadline expires);
-  std::expected<content, read_error> readX11(deadline expires);
+  std::expected<content, read_error> readWayland(deadline expires, std::size_t maximum_bytes);
+  std::expected<content, read_error> readX11(deadline expires, std::size_t maximum_bytes);
 }

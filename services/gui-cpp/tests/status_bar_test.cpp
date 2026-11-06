@@ -137,6 +137,32 @@ private:
     QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
   }
 
+  Q_SLOT static void diagnosticShowsThePointingCursor() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    HostMetrics metrics;
+    QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
+    auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+    bar->setParentItem(window.contentItem());
+    window.resize(bar_width, bar_height);
+    QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    const auto findArea = [&]() -> QQuickItem * {
+      for (auto *item : visualItems(*bar, QString{})) {
+        if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
+          return item;
+        }
+      }
+
+      return nullptr;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(findArea() != nullptr, wait_ms);
+    const auto *area = findArea();
+    QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
+  }
+
   Q_SLOT static void inlineMetersReserveTheirTextAndTrack_data() {
     QTest::addColumn<bool>("compact");
     QTest::addColumn<bool>("labelled");

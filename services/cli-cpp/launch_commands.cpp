@@ -52,6 +52,11 @@ int dispatchMachine(std::span<char *const> words, Dispatch dispatch) {
   SystemAllocator system;
   BudgetAllocator memory{system, memory_budget};
   const auto family = parseFamily(first);
+  // SSH uses no PTY, so the remote CLI cannot see whether this stdout is a terminal.
+  if (family == Family::clipboard && ::isatty(STDOUT_FILENO)) {
+    std::fputs("telar clipboard: pipe clipboard content to a consumer or redirect stdout to a file\n", stderr);
+    return 1;
+  }
   if (command.empty() || (!family && first != "--version" && first != "-V" && first != "--skill" && first != "plugin-worker") || family == Family::gui) {
     WindowOptions options;
     try {

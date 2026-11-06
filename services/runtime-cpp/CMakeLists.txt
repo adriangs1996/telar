@@ -16,6 +16,12 @@ set_target_properties(ghostty-vt PROPERTIES
   IMPORTED_LOCATION "${GHOSTTY_VT_LIBRARY}"
   INTERFACE_INCLUDE_DIRECTORIES "${GHOSTTY_VT_INCLUDE_DIR}")
 
+# Static headless distribution builds must not acquire desktop dependencies.
+if(TELAR_LINUX_DISTRIBUTABLE)
+  option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" OFF)
+endif()
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../dlls/clipboard/cmake/library.cmake")
+
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_INCLUDES "${GHOSTTY_VT_INCLUDE_DIR}")
 set(CMAKE_REQUIRED_LIBRARIES "${GHOSTTY_VT_LIBRARY}")
@@ -92,7 +98,7 @@ add_library(runtime-core STATIC
   terminal/cell_projection.cpp)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_NATIVE_INCLUDE_DIR}")
-target_link_libraries(runtime-core PUBLIC telar::tls)
+target_link_libraries(runtime-core PUBLIC telar::tls telar-clipboard)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
@@ -126,6 +132,7 @@ if(TELAR_RUNTIME_SANITIZERS)
   if(TELAR_RUNTIME_DISTRIBUTABLE)
     message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
   endif()
+  target_compile_options(telar-clipboard PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_compile_options(telar-lua-vm PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_compile_options(telar-platform PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_compile_options(runtime-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)

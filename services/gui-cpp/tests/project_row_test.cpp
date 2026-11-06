@@ -141,6 +141,18 @@ private:
     QCOMPARE(attention->width(), 0);
   }
 
+  Q_SLOT static void rowShowsThePointingCursor() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    const auto row = createChrome(engine, QStringLiteral("ProjectRow"), properties());
+    row->setParentItem(window.contentItem());
+    window.resize(static_cast<int>(row_width), static_cast<int>(row_height));
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    QTest::mouseMove(&window, row->mapToScene({row->width() / 2, row->height() / 2}).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
+  }
+
   Q_SLOT static void projectListBindsAndUpdatesIndependentRows() {
     QQuickWindow window;
     QQmlEngine engine;
