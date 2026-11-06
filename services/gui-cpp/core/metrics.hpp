@@ -79,7 +79,6 @@ struct ChromeMetrics {
 struct WindowGeometry {
   static constexpr float sidebar_minimum = Configuration::minimum_sidebar_width;
   static constexpr float sidebar_maximum = Configuration::maximum_sidebar_width;
-  static constexpr float sidebar_rail = 52;
   static constexpr float sidebar_gap = 8;
   static constexpr float workbench_minimum_columns = 20;
 
@@ -104,7 +103,6 @@ struct WindowGeometry {
     const auto minimum = std::round(sidebar_minimum * viewport.scale);
     const auto room = std::max(0.0F, width - padding_x - gap - (workbench_minimum_columns * cells.width));
     const auto maximum = std::max(minimum, std::min(std::round(sidebar_maximum * viewport.scale), room));
-    const auto rail_width = std::round(sidebar_rail * viewport.scale);
 
     WindowGeometry geometry;
     geometry.navigation = {.x = 0, .y = 0, .width = width, .height = chrome.top_bar};
@@ -113,7 +111,7 @@ struct WindowGeometry {
 
     auto requested = std::clamp(std::round(configuration.sidebar_width * viewport.scale), minimum, maximum);
     if (geometry.rail) {
-      requested = room >= rail_width ? rail_width : 0;
+      requested = 0;
     }
     const auto left = requested > 0 ? requested + gap : padding_x;
     geometry.sidebar = {.x = 0, .y = chrome.top_bar, .width = requested, .height = std::max(0.0F, height - chrome.top_bar - chrome.status_bar)};

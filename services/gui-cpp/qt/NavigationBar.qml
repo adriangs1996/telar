@@ -8,6 +8,7 @@ Rectangle {
     required property var typography
     required property var workspace
     required property var tabModel
+    property var workspaceModel: null
     required property real controlsInset
     required property real workbenchLeft
     property var controller: null
@@ -16,6 +17,8 @@ Rectangle {
     property bool rail: false
     property bool prefixPending: false
     signal sidebarToggled()
+    signal workspaceSelected(string key)
+    signal workspacePickerRequested()
     signal tabSelected(string key)
     signal tabClosed(string key)
     signal tabRenamed()
@@ -25,6 +28,7 @@ Rectangle {
     readonly property real toggleSide: 28 * ratio
     readonly property real controlGap: 8 * ratio
     readonly property real contextMaximum: 160 * ratio
+    readonly property real tabsLeft: rail ? identity.x + identity.width + controlGap : Math.max(identity.x + identity.width + controlGap, workbenchLeft)
     readonly property var machineContext: controller?.machineContext ?? {}
     readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28))
 
@@ -40,7 +44,7 @@ Rectangle {
         height: width
         colors: root.colors
         pixelSize: root.typography.body
-        cornerRadius: root.controlGap
+        cornerRadius: ChromeStyle.controlRadius * root.ratio
         emphasized: !root.rail
         text: "\u2261"
         Accessible.name: "Toggle sidebar"
@@ -56,7 +60,7 @@ Rectangle {
         height: Math.min(parent.height, (root.typography.bodyRow ?? root.typography.body * 1.25) + (root.typography.smallRow ?? root.typography.small * 1.25))
         colors: root.colors
         pixelSize: root.typography.body
-        cornerRadius: 6 * root.ratio
+        cornerRadius: ChromeStyle.controlRadius * root.ratio
         Accessible.name: contextName.text + ", " + machineName.text + ", switch machine"
         onClicked: {
             if (root.controller) root.controller.execute(GuiController.Action.machine_picker);
@@ -98,11 +102,26 @@ Rectangle {
         }
     }
 
+    ProjectSwitcher {
+        id: projects
+        objectName: "projectSwitcher"
+        x: root.width - root.padding - width
+        width: Math.max(0, Math.min(preferredWidth, (root.width - root.padding - root.tabsLeft) * 0.28))
+        height: root.height
+        model: root.workspaceModel
+        selectedIndex: root.workspace.index ?? -1
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+        onSelected: key => root.workspaceSelected(key)
+        onOverflowRequested: root.workspacePickerRequested()
+    }
+
     TerminalTabs {
         controller: root.controller
         model: root.tabModel
-        x: root.rail ? identity.x + identity.width + root.controlGap : Math.max(identity.x + identity.width + root.controlGap, root.workbenchLeft)
-        width: Math.max(0, root.width - root.padding - x)
+        x: root.tabsLeft
+        width: Math.max(0, projects.x - (projects.width > 0 ? root.controlGap : 0) - x)
         height: root.height
         colors: root.colors
         typography: root.typography

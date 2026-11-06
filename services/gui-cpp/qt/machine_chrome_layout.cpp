@@ -11,6 +11,7 @@
 #include "machines/machine_token.hpp"
 #include "machines/machines.hpp"
 #include "presentation/display_metrics.hpp"
+#include "presentation/chrome_style.hpp"
 #include "presentation/machine_chrome_geometry.hpp"
 #include "presentation/machine_facts.hpp"
 #include "projection.hpp"
@@ -266,10 +267,14 @@ void MachineChromeLayout::rebuild() {
   chrome_ = controller_->displayMetrics(density_).chrome;
   fonts_ = ResidentFonts::shared(catalog_->collection());
   const auto &theme = controller_->configuration().theme;
+  auto active_background = toQColor(theme.chromeColor(PaletteRole::text));
+  auto hover_background = active_background;
+  active_background.setAlphaF(gui::ChromeStyle::selection_alpha);
+  hover_background.setAlphaF(gui::ChromeStyle::hover_alpha);
   QVariantMap style{
-      {QStringLiteral("activeBackground"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::accent)])},
-      {QStringLiteral("hoverBackground"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::surface0)])},
-      {QStringLiteral("activeText"), toQColor(theme.resolve(theme.chrome[static_cast<std::size_t>(PaletteRole::surface_dim)], theme.foreground))},
+      {QStringLiteral("activeBackground"), active_background},
+      {QStringLiteral("hoverBackground"), hover_background},
+      {QStringLiteral("activeText"), toQColor(theme.chromeColor(PaletteRole::text))},
       {QStringLiteral("attention"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
       {QStringLiteral("pixelSize"), (mode_ == Mode::segment ? chrome_.body : chrome_.small) / density_},
   };

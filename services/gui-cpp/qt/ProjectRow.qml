@@ -1,4 +1,5 @@
 import QtQuick
+import Telar.Gui
 
 Rectangle {
     id: root
@@ -13,14 +14,24 @@ Rectangle {
     readonly property real titleInset: 10 * ratio
     readonly property real iconSide: 18 * ratio
     readonly property real iconGap: 9 * ratio
-    readonly property real rowRadius: 6 * ratio
+    readonly property real rowRadius: ChromeStyle.surfaceRadius * ratio
     readonly property real attentionGap: 8 * ratio
     readonly property real textLeft: icon.x + icon.width + iconGap
     readonly property real textWidth: Math.max(0, width - rowInset - textLeft)
-    readonly property color inactiveInk: "#737373"
+    readonly property color inactiveInk: colors.subtext0
 
     radius: rowRadius
-    color: pointer.containsMouse ? colors.surface1 : "transparent"
+    color: Qt.alpha(colors.text, record.selected ? ChromeStyle.selectionAlpha : pointer.containsMouse ? ChromeStyle.hoverAlpha : 0)
+
+    NativeRoundedRectangle {
+        objectName: "projectSelectionOutline"
+        anchors.fill: parent
+        radius: root.rowRadius
+        borderColor: root.colors.text
+        borderAlpha: ChromeStyle.outlineAlpha
+        borderWidth: 1 / Screen.devicePixelRatio
+        visible: root.record.selected
+    }
 
     ChromeIcon {
         id: icon
@@ -56,7 +67,7 @@ Rectangle {
         width: Math.min(root.textWidth, implicitWidth)
         height: title.height
         text: root.record.attention ?? ""
-        color: root.record.selected ? root.colors[root.record.attentionColor ?? "overlay1"] : root.inactiveInk
+        color: root.colors[root.record.attentionColor ?? "overlay1"]
         pixelSize: root.typography.small
         elide: Text.ElideNone
         visible: text.length > 0

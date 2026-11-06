@@ -41,6 +41,7 @@ ListView {
         padding: 0
         policy: root.contentHeight > root.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
         contentItem: Rectangle {
+            radius: width / 2
             color: root.colors.overlay0
         }
         background: null

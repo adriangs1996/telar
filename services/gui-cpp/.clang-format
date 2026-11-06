@@ -9,7 +9,7 @@ AllowShortLoopsOnASingleLine: false
 AllowShortEnumsOnASingleLine: false
 InsertBraces: true
 SeparateDefinitionBlocks: Always
-NamespaceIndentation: None
+NamespaceIndentation: All
 FixNamespaceComments: false
 AllowShortLambdasOnASingleLine: None
 BinPackArguments: false

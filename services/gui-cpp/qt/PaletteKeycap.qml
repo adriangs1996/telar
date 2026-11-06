@@ -12,7 +12,7 @@ Item {
     property real ratio: 1
     readonly property real minimumHeight: 20 * ratio
     readonly property real verticalPadding: 4 * ratio
-    readonly property real cornerRadius: 4 * ratio
+    readonly property real cornerRadius: ChromeStyle.smallRadius * ratio
     readonly property real outlineAlpha: 0.2
     readonly property real textAlpha: 0.7
     readonly property real boxHeight: Math.min(height, Math.max(minimumHeight, typography.smallRow + verticalPadding))

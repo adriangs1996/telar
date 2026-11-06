@@ -141,13 +141,12 @@ struct TabStripGeometry {
 
     const auto &metrics = room.metrics;
     Plan result{.first = 0, .end = sizes.size(), .focus = focus, .count = sizes.size()};
-    const auto whole = sizes[focus].whole(metrics);
-    const auto width = std::max(sizes[focus].compact(metrics), std::min({whole, metrics.selected_maximum, room.width * selected_share}));
-    result.widths[focus] = width;
-    result.fits[focus] = width >= whole ? Fit::full : Fit::truncated;
+    naturalWidths(result, sizes, metrics);
+    if (result.footprint(metrics) <= room.width) {
+      return result;
+    }
+
     const auto gaps = metrics.gap * static_cast<float>(sizes.size() - 1);
-    const auto after_focus = room.width - width;
-    const auto budget = after_focus - gaps;
     float natural = 0;
     float shortest = 0;
     for (std::size_t index = 0; index < sizes.size(); ++index) {
@@ -159,9 +158,19 @@ struct TabStripGeometry {
       shortest += std::min(sizes[index].truncated(metrics), metrics.inactive_maximum);
     }
 
+    const auto whole = sizes[focus].whole(metrics);
+    const auto share = sizes.size() == 1 ? room.width : room.width * selected_share;
+    auto width = std::max(sizes[focus].compact(metrics), std::min({whole, metrics.selected_maximum, share}));
+    const auto minimum = std::min(sizes[focus].truncated(metrics), metrics.selected_maximum);
+    const auto caption_room = room.width - gaps - shortest;
+    if (caption_room >= minimum) {
+      // Preserve every caption before giving extra room to the focused tab.
+      width = std::clamp(width, minimum, caption_room);
+    }
+    result.widths[focus] = width;
+    result.fits[focus] = width >= whole ? Fit::full : Fit::truncated;
+    const auto budget = room.width - width - gaps;
     if (natural <= budget) {
-      naturalWidths(result, sizes, metrics);
-
       return result;
     }
 
@@ -185,10 +194,9 @@ private:
 
   static void naturalWidths(Plan &plan, std::span<const Measure> sizes, const Metrics &metrics) noexcept {
     for (std::size_t index = 0; index < sizes.size(); ++index) {
-      if (index != plan.focus) {
-        plan.widths[index] = std::min(sizes[index].whole(metrics), metrics.inactive_maximum);
-        plan.fits[index] = sizes[index].whole(metrics) <= metrics.inactive_maximum ? Fit::full : Fit::truncated;
-      }
+      const auto maximum = index == plan.focus ? metrics.selected_maximum : metrics.inactive_maximum;
+      plan.widths[index] = std::min(sizes[index].whole(metrics), maximum);
+      plan.fits[index] = sizes[index].whole(metrics) <= maximum ? Fit::full : Fit::truncated;
     }
   }
 

@@ -40,6 +40,17 @@ Item {
             readonly property bool resizing: width !== record.width || height !== record.height
             visible: width > 0 && height > 0
 
+            NativeRoundedRectangle {
+                objectName: "paneSurface"
+                x: pane.record.frame.x
+                y: pane.record.frame.y
+                width: pane.frameWidth
+                height: pane.frameHeight
+                radius: pane.record.frameRadius * root.ratio
+                color: root.application.colors.panelBackground
+                visible: pane.framed
+            }
+
             Repeater {
                 model: !pane.framed ? [] : !pane.resizing ? pane.record.panels : [
                     Qt.rect(0, 0, pane.frameWidth, pane.record.content.y),
@@ -54,7 +65,7 @@ Item {
                     y: modelData.y
                     width: modelData.width
                     height: modelData.height
-                    color: root.application.colors.panelBackground
+                    color: "transparent"
 
                     MouseArea {
                         anchors.fill: parent
@@ -72,7 +83,8 @@ Item {
                 y: pane.record.frame.y
                 width: pane.frameWidth
                 height: pane.frameHeight
-                borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.overlay0
+                borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.text
+                borderAlpha: pane.record.focused ? ChromeStyle.focusAlpha : ChromeStyle.outlineAlpha
                 borderWidth: pane.record.frameLineWidth
                 radius: pane.record.frameRadius * root.ratio
                 visible: pane.framed

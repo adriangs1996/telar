@@ -134,6 +134,7 @@ void TabStripLayout::setContext(std::uint64_t machine_view, std::optional<Worksp
   setPointerHover(std::nullopt);
   machine_view_ = machine_view;
   workspace_ = workspace;
+  anchor_.clear();
   motions_ = {};
   selection_motion_.reset();
   next_sample_ns_.reset();

@@ -153,7 +153,10 @@ private:
     QCOMPARE(title.front()->height(), qreal{17});
     QCOMPARE(detail.front()->parentItem()->y(), detail_origin_y);
     const auto colors = themeColors(Configuration{});
-    QCOMPARE(background.front()->property("color").value<QColor>(), colors.value(QStringLiteral("surface0")).value<QColor>());
+    auto selection_color = colors.value(QStringLiteral("text")).value<QColor>();
+    selection_color.setAlphaF(telar::gui::ChromeStyle::selection_alpha);
+    QCOMPARE(background.front()->property("color").value<QColor>(), selection_color);
+    QCOMPARE(background.front()->property("radius").toReal(), qreal{telar::gui::ChromeStyle::surface_radius});
     const auto signal = card->metaObject()->method(card->metaObject()->indexOfSignal("selected(QString)"));
     QVERIFY(signal.isValid());
     const QSignalSpy selected{card.get(), signal};

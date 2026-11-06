@@ -2,6 +2,7 @@
 
 #include "ancestor_geometry.hpp"
 #include "presentation/attention_fades.hpp"
+#include "presentation/chrome_style.hpp"
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>
@@ -24,6 +25,7 @@ class NativePaneAttention : public QQuickItem {
   Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
   Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY ratioChanged)
+  Q_PROPERTY(qreal radius READ radius WRITE setRadius NOTIFY radiusChanged)
   Q_PROPERTY(qreal alpha READ alpha NOTIFY alphaChanged)
 
 public:
@@ -42,6 +44,8 @@ public:
   void setColor(const QColor &color);
   [[nodiscard]] qreal ratio() const noexcept;
   void setRatio(qreal ratio);
+  [[nodiscard]] qreal radius() const noexcept;
+  void setRadius(qreal radius);
   [[nodiscard]] qreal alpha() const noexcept;
 
 signals:
@@ -49,6 +53,7 @@ signals:
   void activeChanged();
   void colorChanged();
   void ratioChanged();
+  void radiusChanged();
   void alphaChanged();
 
 protected:
@@ -68,6 +73,7 @@ private:
   std::optional<PaneAttentionKey> key_;
   QColor color_ = Qt::transparent;
   qreal ratio_ = 1;
+  qreal radius_ = gui::ChromeStyle::surface_radius;
   float alpha_ = 0;
   bool active_ = false;
   bool notification_pending_ = false;

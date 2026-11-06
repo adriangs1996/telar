@@ -16,7 +16,7 @@ Item {
     readonly property real buttonHeight: 32 * ratio
     readonly property real buttonPadding: 16 * ratio
     readonly property real buttonGap: 8 * ratio
-    readonly property real buttonRadius: 8 * ratio
+    readonly property real buttonRadius: ChromeStyle.controlRadius * ratio
     readonly property real disabledAlpha: 0.45
     readonly property real pressedAlpha: 0.75
     readonly property real hintAlpha: 0.8

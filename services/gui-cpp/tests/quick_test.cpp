@@ -800,6 +800,8 @@ private:
 
     writeTestFile(root.filePath(QStringLiteral("notes.txt")), "file");
     const auto workspaces = client_->workspaces()->rowCount();
+    const auto original_workspace = client_->workspaceContext().value(QStringLiteral("key")).toString();
+    const auto original_workspace_id = firstPane()->location.workspace.id;
     const auto cleanup = qScopeGuard([this] {
       client_->execute(Application::Action::cancel);
     });
@@ -854,6 +856,24 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rowCount(), workspaces + 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(QFileInfo{missing}.isDir(), runtime_wait_ms);
     QVERIFY2(workspace_names().contains(QStringLiteral("gamma")), qPrintable(workspace_names().join(QLatin1Char(','))));
+    // Wait for the workspace snapshot before closing its last tab.
+    QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->location.workspace.id != original_workspace_id && terminalReady(), runtime_wait_ms);
+    const auto created_workspace = client_->workspaceContext().value(QStringLiteral("key")).toString();
+    for (const auto &key : {original_workspace, created_workspace}) {
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QQuickItem *target = nullptr;
+      for (auto *mark : test::visualItems(*window_->contentItem(), QStringLiteral("projectSwitcherMark"))) {
+        if (mark->property("record").toMap().value(QStringLiteral("key")).toString() == key) {
+          target = mark;
+          break;
+        }
+      }
+      QVERIFY(target != nullptr);
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, target->mapRectToScene(target->boundingRect()).center().toPoint());
+      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceContext().value(QStringLiteral("key")).toString(), key, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    }
+    captureArtifact(QStringLiteral("project-switcher"));
     client_->execute(Application::Action::close_tab);
     QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rowCount(), workspaces, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
@@ -915,13 +935,14 @@ private:
   Q_SLOT void workspaceListVisibility() {
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QTRY_VERIFY(!client_->windowGeometry().value(QStringLiteral("rail")).toBool());
-    const auto *workspace_list = window_->findChild<QQuickItem *>(QStringLiteral("workspaceList"));
+    QVERIFY(window_->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
+    const auto *projects = window_->findChild<QQuickItem *>(QStringLiteral("projectSwitcher"));
     auto *terminal = terminalIn(window_->contentItem());
-    if (workspace_list == nullptr || terminal == nullptr) {
-      QFAIL("Required workspace list and terminal fixtures are missing");
+    if (projects == nullptr || terminal == nullptr) {
+      QFAIL("Required project switcher and terminal fixtures are missing");
     }
 
-    QTRY_VERIFY(workspace_list->isVisible());
+    QTRY_VERIFY(projects->isVisible());
     const auto focused_pane = firstPane()->id;
     const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
     QKeyEvent prefix{QEvent::KeyPress, Qt::Key_B, control};
@@ -929,12 +950,18 @@ private:
     QCoreApplication::sendEvent(terminal, &prefix);
     QCoreApplication::sendEvent(terminal, &collapse);
     QVERIFY(client_->workspaceListCollapsed());
-    QTRY_VERIFY(workspace_list->isVisible());
+    QTRY_VERIFY(projects->isVisible());
     QCOMPARE(firstPane()->id, focused_pane);
 
     client_->execute(Application::Action::toggle_workspace_list);
     QVERIFY(!client_->workspaceListCollapsed());
-    QTRY_VERIFY(workspace_list->isVisible());
+    QTRY_VERIFY(projects->isVisible());
+    client_->execute(Application::Action::toggle_sidebar);
+    QTRY_COMPARE(client_->windowGeometry().value(QStringLiteral("sidebar")).toRectF().width(), qreal{0});
+    QTRY_VERIFY(projects->isVisible());
+    QCOMPARE(firstPane()->id, focused_pane);
+    client_->execute(Application::Action::toggle_sidebar);
+
   }
 
   Q_SLOT void pointerSelection() {
@@ -1874,6 +1901,37 @@ private:
     QCOMPARE(client_->workspaceListCollapsed(), !collapsed);
     QTest::keyClick(window_, Qt::Key_S);
     QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void paneSurfacesShareTheChromeStyle() {
+    client_->execute(Application::Action::split_horizontal);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+    client_->execute(Application::Action::split_vertical);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
+    QTest::qWait(frame_settle_ms);
+    const auto surfaces = test::visualItems(*window_->contentItem(), QStringLiteral("paneSurface"));
+    const auto frames = test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame"));
+    QCOMPARE(surfaces.size(), 3);
+    QCOMPARE(frames.size(), surfaces.size());
+    for (qsizetype index = 0; index < surfaces.size(); ++index) {
+      const auto *surface = surfaces[index];
+      const auto *frame = frames[index];
+      QVERIFY(surface->isVisible());
+      QCOMPARE(surface->position(), frame->position());
+      QCOMPARE(surface->size(), frame->size());
+      QCOMPARE(surface->property("radius").toReal(), telar::gui::ChromeStyle::surface_radius * client_->chromeRatio());
+      QVERIFY(frame->property("borderAlpha").toReal() < 1);
+    }
+
+    captureArtifact(QStringLiteral("chrome-split-panes"));
+    while (client_->panes()->rowCount() > 1) {
+      const auto count = client_->panes()->rowCount();
+      const auto key = client_->panes()->data(client_->panes()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      client_->execute(Application::Action::close_pane, key);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), count - 1, runtime_wait_ms);
+    }
+
     QCOMPARE(client_->error(), QString{});
   }
 

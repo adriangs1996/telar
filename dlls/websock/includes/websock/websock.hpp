@@ -3,12 +3,23 @@
 
 namespace telar::websock {
 
-template <typename IAllocator>
-class Server {
+  template <typename IAllocator>
+  class Server final {
 
-public:
-  Server();
-};
+    IAllocator &allocator_;
+
+  public:
+    Server(IAllocator &allocator)
+        : allocator_(allocator) {};
+
+    ~Server();
+
+    // Ignore this for now;
+    Server(const Server &) = delete;
+    Server(Server &&) = delete;
+    Server &operator=(Server &&) = delete;
+    Server &operator=(const Server &) = delete;
+  };
 }
 
 #endif

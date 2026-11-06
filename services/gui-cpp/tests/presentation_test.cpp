@@ -3,6 +3,7 @@
 #include "core/metrics.hpp"
 #include "graphics/artwork_resize.hpp"
 #include "presentation/sidebar_geometry.hpp"
+#include "presentation/pane_decoration_geometry.hpp"
 #include "presentation/tab_caption.hpp"
 #include "presentation/tab_strip_geometry.hpp"
 #include "presentation/tab_motions.hpp"
@@ -82,19 +83,49 @@ void workspaceMarksPreserveTheOriginalInitial() {
   }
 }
 
+void paneSurfacesUseOnlyExistingChromeSpace() {
+  using namespace telar::gui;
+  for (const std::uint16_t scale : {1, 2, 3}) {
+    const WorkbenchGeometry workbench{
+        .area = {.width = 900.0F * scale, .height = 720.0F * scale},
+        .grid = {.cell_width_px = static_cast<std::uint16_t>(9 * scale), .cell_height_px = static_cast<std::uint16_t>(18 * scale)},
+        .layout_metrics = {},
+    };
+    const CellRectangle bounds{.width = 45, .height = 20};
+    const PaneLayout::Placement placement{.bounds = bounds, .content = bounds.inner(1), .framed = true};
+    const auto decorated = PaneDecorationGeometry::derive(placement, workbench);
+    require(decorated.outer == workbench.pixels(bounds), "surface insets must not move the pane placement");
+    require(decorated.content == workbench.pixels(placement.content), "rounded surfaces must preserve every terminal row and column");
+    require(decorated.frame.x > decorated.outer.x && decorated.frame.y > decorated.outer.y, "surfaces must leave an outer gutter");
+    require(decorated.frame.intersect(decorated.content) == decorated.content, "surface insets must never crop terminal content");
+
+    const PaneLayout::Placement unframed{.bounds = bounds, .content = bounds};
+    const auto plain = PaneDecorationGeometry::derive(unframed, workbench);
+    require(plain.frame.x == plain.outer.x && plain.frame.y == plain.outer.y, "unframed panes must not acquire decorative insets");
+    const PaneLayout::Placement cramped{.bounds = bounds, .content = bounds, .framed = true};
+    const auto tight = PaneDecorationGeometry::derive(cramped, workbench);
+    require(tight.frame.intersect(tight.content) == tight.content, "missing border space must disable decorative insets");
+    auto contiguous = workbench;
+    contiguous.layout_metrics.gap = 0;
+    const auto joined = PaneDecorationGeometry::derive(placement, contiguous);
+    require(joined.frame == joined.outer, "disabled pane gaps must not acquire decorative gutters");
+  }
+}
+
 void sidebarListsFollowTheReferenceBands() {
   using namespace telar::gui;
   const ChromeMetrics chrome;
   constexpr Rect sidebar{.width = 280, .height = 932};
   const auto geometry = SidebarGeometry::measure(sidebar, chrome, 1);
   constexpr Rect expected_heading{.x = 8, .y = 8, .width = 263, .height = 17};
-  constexpr Rect expected_projects{.x = 8, .y = 31, .width = 263, .height = 52};
-  constexpr Rect expected_activity_heading{.x = 8, .y = 89, .width = 263, .height = 17};
-  constexpr Rect expected_activity{.x = 8, .y = 112, .width = 263, .height = 812};
-  require(geometry.projects_header == expected_heading, "the project heading must keep the native inset and line box");
-  require(geometry.projects == expected_projects, "one project must reserve its name, path and vertical padding");
-  require(geometry.activity_header == expected_activity_heading, "activity must follow the project viewport with its own gap");
+  constexpr Rect expected_activity{.x = 8, .y = 31, .width = 263, .height = 893};
+  require(geometry.projects_header.empty() && geometry.projects.empty(), "project navigation must reserve no sidebar space");
+  require(geometry.activity_header == expected_heading, "activity must start at the top of the sidebar");
   require(geometry.activity == expected_activity, "activity must receive the remaining sidebar height");
+  const auto crowded = SidebarGeometry::measure(sidebar, chrome, 128);
+  require(crowded.activity == geometry.activity, "project count must not reduce the activity viewport");
+  const auto machines = SidebarGeometry::measure(sidebar, chrome, 128, true);
+  require(machines.machines == expected_heading && machines.activity_header.y == 31 && machines.activity.y == 54, "machine switching must remain above the activity section");
   constexpr Rect short_area{.width = sidebar.width, .height = 60};
   const auto short_sidebar = SidebarGeometry::measure(short_area, chrome, 1);
   require(short_sidebar.projects.empty() && !short_sidebar.activity_header.empty(), "short sidebars must give room to activity and leave project navigation to the top bar");
@@ -219,6 +250,7 @@ int main() {
     titleBoundsAndSuffix();
     sidebarColumnBounds();
     workspaceMarksPreserveTheOriginalInitial();
+    paneSurfacesUseOnlyExistingChromeSpace();
     sidebarListsFollowTheReferenceBands();
     workspaceRailKeepsTheSelectionInView();
     tabCaptionsFollowForegroundAndDirectory();

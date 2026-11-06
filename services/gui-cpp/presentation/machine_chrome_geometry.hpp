@@ -17,12 +17,10 @@ struct MachineChromeGeometry {
   static constexpr float switcher_disc = 7;
   static constexpr float switcher_padding = 8;
   static constexpr float switcher_gap = 4;
-  static constexpr float switcher_radius = 6;
   static constexpr float maximum_control = 120;
   static constexpr float segment_disc = 8;
   static constexpr float segment_padding = 10;
   static constexpr float segment_gap = 6;
-  static constexpr float segment_radius = 8;
   static constexpr float maximum_segment = 200;
   static constexpr float attention_diameter = 6;
   static constexpr float attention_gap = 6;
@@ -118,7 +116,7 @@ struct MachineChromeGeometry {
     Control result;
     result.bounds = area;
     result.label = {.x = area.x + inset, .y = area.y, .width = std::max(0.0F, area.width - (2 * inset) - (fold ? 0 : dot_space)), .height = area.height};
-    result.radius = chrome.px(segment ? segment_radius : switcher_radius);
+    result.radius = area.height / 2;
     if (fold) {
       const auto width = std::min(result.label.width, advance);
       result.label.x += std::floor((result.label.width - width) / 2);

@@ -94,6 +94,18 @@ void NativePaneAttention::setRatio(qreal ratio) {
   }
 }
 
+qreal NativePaneAttention::radius() const noexcept {
+  return radius_;
+}
+
+void NativePaneAttention::setRadius(qreal radius) {
+  if (std::isfinite(radius) && radius >= 0 && radius <= std::numeric_limits<float>::max() && radius_ != radius) {
+    radius_ = radius;
+    update();
+    emit radiusChanged();
+  }
+}
+
 qreal NativePaneAttention::alpha() const noexcept {
   return alpha_;
 }
@@ -171,7 +183,8 @@ QSGNode *NativePaneAttention::updatePaintNode(QSGNode *previous, [[maybe_unused]
   const auto physical_ratio = static_cast<float>(ratio_ * window()->effectiveDevicePixelRatio());
   const auto physical_width = static_cast<float>(width() * window()->effectiveDevicePixelRatio());
   const auto physical_height = static_cast<float>(height() * window()->effectiveDevicePixelRatio());
-  if (!std::isfinite(physical_width) || !std::isfinite(physical_height) || !std::isfinite(physical_ratio)) {
+  const auto physical_radius = radius_ * physical_ratio;
+  if (!std::isfinite(physical_width) || !std::isfinite(physical_height) || !std::isfinite(physical_ratio) || !std::isfinite(physical_radius) || physical_radius > std::numeric_limits<float>::max()) {
     const std::unique_ptr<QSGNode> retired{previous};
 
     return nullptr;
@@ -180,7 +193,7 @@ QSGNode *NativePaneAttention::updatePaintNode(QSGNode *previous, [[maybe_unused]
   const Color color{.r = color_.redF(), .g = color_.greenF(), .b = color_.blueF(), .a = color_.alphaF() * alpha_};
 
   return paintRoundedShapes<1>(*this, previous, [&](auto append, Rect area) {
-    const auto ring = PaneAttentionGeometry::derive(area, physical_ratio);
+    const auto ring = PaneAttentionGeometry::derive(area, physical_ratio, static_cast<float>(radius_));
     if (!ring.bounds.empty()) {
       append(RoundedRectanglePaint{.origin = {.x = ring.bounds.x, .y = ring.bounds.y}, .shape = RoundedRectangle::resolve({.x = ring.bounds.width, .y = ring.bounds.height}, {.border = color, .radius = ring.radius, .border_width = ring.width})});
     }

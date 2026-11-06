@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Telar.Gui
 
 Item {
     id: root
@@ -11,8 +12,8 @@ Item {
     signal selected(string key)
 
     readonly property real markSide: 20 * ratio
-    readonly property real markRadius: 5 * ratio
-    readonly property real buttonRadius: 10 * ratio
+    readonly property real markRadius: ChromeStyle.controlRadius * ratio
+    readonly property real buttonRadius: ChromeStyle.surfaceRadius * ratio
     readonly property real accentWidth: 3 * ratio
     readonly property real accentHeight: 20 * ratio
     readonly property real selectedAlpha: 0.3
@@ -38,7 +39,10 @@ Item {
             NativeRoundedRectangle {
                 anchors.fill: parent
                 radius: root.buttonRadius
-                color: mark.record.selected ? root.colors.surface1 : pointer.containsMouse ? root.colors.surface0 : "transparent"
+                color: Qt.alpha(root.colors.text, mark.record.selected ? ChromeStyle.selectionAlpha : pointer.containsMouse ? ChromeStyle.hoverAlpha : 0)
+                borderColor: root.colors.text
+                borderAlpha: ChromeStyle.outlineAlpha
+                borderWidth: mark.record.selected ? 1 / Screen.devicePixelRatio : 0
             }
 
             NativeRoundedRectangle {

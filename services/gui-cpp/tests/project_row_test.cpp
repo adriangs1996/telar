@@ -4,6 +4,7 @@
 #include "core/memory.hpp"
 #include "core/metrics.hpp"
 #include "qml_fixture.hpp"
+#include "presentation/chrome_style.hpp"
 #include "qt/list_model.hpp"
 #include "qt/project_projection.hpp"
 #include "qt/projection.hpp"
@@ -127,7 +128,8 @@ private:
     auto record = project();
     record.insert(QStringLiteral("selected"), false);
     row->setProperty("record", record);
-    QCOMPARE(attention->property("color").value<QColor>(), QColor{QStringLiteral("#737373")});
+    QCOMPARE(attention->property("color").value<QColor>(), colors.value(QStringLiteral("red")).value<QColor>());
+    QCOMPARE(title->property("color").value<QColor>(), colors.value(QStringLiteral("subtext0")).value<QColor>());
     record.insert(QStringLiteral("attention"), QString{});
     row->setProperty("record", record);
     QTRY_VERIFY_WITH_TIMEOUT(!attention->isVisible(), wait_ms);
@@ -139,6 +141,40 @@ private:
     QCOMPARE(title->width(), 0);
     QCOMPARE(detail->width(), 0);
     QCOMPARE(attention->width(), 0);
+  }
+
+  Q_SLOT static void selectionUsesANeutralSurfaceWithoutHover_data() {
+    QTest::addColumn<QColor>("ink");
+    QTest::addColumn<qreal>("ratio");
+    QTest::newRow("dark") << QColor{QStringLiteral("#aba8b6")} << qreal{1};
+    QTest::newRow("light") << QColor{QStringLiteral("#202020")} << qreal{1};
+    QTest::newRow("fractional") << QColor{QStringLiteral("#aba8b6")} << qreal{1.5};
+    QTest::newRow("double") << QColor{QStringLiteral("#202020")} << qreal{2};
+  }
+
+  Q_SLOT static void selectionUsesANeutralSurfaceWithoutHover() {
+    QFETCH(QColor, ink);
+    QFETCH(qreal, ratio);
+    QQmlEngine engine;
+    auto setup = properties();
+    auto colors = setup.value(QStringLiteral("colors")).toMap();
+    colors.insert(QStringLiteral("text"), ink);
+    setup.insert(QStringLiteral("colors"), colors);
+    setup.insert(QStringLiteral("ratio"), ratio);
+    const auto row = createChrome(engine, QStringLiteral("ProjectRow"), setup);
+    const auto *outline = row->findChild<QQuickItem *>(QStringLiteral("projectSelectionOutline"));
+    QVERIFY(outline != nullptr);
+    QVERIFY(outline->isVisible());
+    const auto selected = row->property("color").value<QColor>();
+    auto expected = ink;
+    expected.setAlphaF(telar::gui::ChromeStyle::selection_alpha);
+    QCOMPARE(selected, expected);
+    QCOMPARE(row->property("radius").toReal(), telar::gui::ChromeStyle::surface_radius * ratio);
+    auto record = project();
+    record.insert(QStringLiteral("selected"), false);
+    QVERIFY(row->setProperty("record", record));
+    QVERIFY(!outline->isVisible());
+    QCOMPARE(row->property("color").value<QColor>().alpha(), 0);
   }
 
   Q_SLOT static void rowShowsThePointingCursor() {

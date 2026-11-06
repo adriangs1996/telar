@@ -2,6 +2,7 @@
 
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
+#include "chrome_style.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -14,7 +15,7 @@ struct AgentCardGeometry {
   static constexpr float compact_vertical_padding = 4;
   static constexpr float task_indent = 12;
   static constexpr float spacing = 3;
-  static constexpr float radius = 8;
+  static constexpr float radius = ChromeStyle::surface_radius;
   static constexpr float gap = 6;
   static constexpr float mark_side = 14;
   static constexpr float project_label_gap = 4;

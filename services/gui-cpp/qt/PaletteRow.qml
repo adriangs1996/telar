@@ -21,9 +21,9 @@ Item {
     readonly property real hintGap: 12 * ratio
     readonly property real shortcutPadding: 10 * ratio
     readonly property real hintShare: 0.45
-    readonly property real cornerRadius: 6 * ratio
-    readonly property real selectionAlpha: 0.08
-    readonly property real outlineAlpha: 0.2
+    readonly property real cornerRadius: ChromeStyle.controlRadius * ratio
+    readonly property real selectionAlpha: ChromeStyle.selectionAlpha
+    readonly property real outlineAlpha: ChromeStyle.outlineAlpha
     readonly property real detailAlpha: 0.65
     readonly property bool hasIcon: record.icon.length > 0
     readonly property real iconWidth: hasIcon ? Math.min(Math.max(0, width - horizontalInset * 2), iconSide + iconGap) : 0
@@ -45,14 +45,7 @@ Item {
     NativeRoundedRectangle {
         anchors.fill: parent
         radius: root.cornerRadius
-        color: root.colors.surface0
-        visible: root.selected
-    }
-
-    NativeRoundedRectangle {
-        anchors.fill: parent
-        radius: root.cornerRadius
-        color: Qt.alpha(root.colors.accent, root.selectionAlpha)
+        color: Qt.alpha(root.colors.text, root.selectionAlpha)
         visible: root.selected
     }
 
@@ -60,8 +53,9 @@ Item {
         anchors.fill: parent
         radius: root.cornerRadius
         color: "transparent"
-        borderWidth: root.ratio
-        borderColor: Qt.alpha(root.colors.accent, root.outlineAlpha)
+        borderWidth: 1 / Screen.devicePixelRatio
+        borderColor: root.colors.text
+        borderAlpha: root.outlineAlpha
         visible: root.selected
     }
 

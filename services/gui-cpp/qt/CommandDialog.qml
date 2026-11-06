@@ -95,46 +95,9 @@ Popup {
         opacity: root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha * root.reveal
     }
 
-    background: Loader {
-        sourceComponent: root.machineMode || root.peekMode ? machineSurface : root.pathMode ? pathSurface : historySurface
-    }
-
-    Component {
-        id: machineSurface
-        Rectangle {
-            color: telar.colors.panel_bg
-            border.color: telar.colors.accent
-            border.width: 1 / Screen.devicePixelRatio
-        }
-    }
-
-    Component {
-        id: pathSurface
-        Item {
-            readonly property real cornerRadius: 8 * root.ratio
-
-            NativeRoundedRectangle {
-                anchors.fill: parent
-                color: telar.colors.surface0
-                radius: parent.cornerRadius
-            }
-
-            NativeRoundedRectangle {
-                anchors.fill: parent
-                color: "transparent"
-                borderColor: telar.colors.surface1
-                borderWidth: root.ratio
-                radius: parent.cornerRadius
-            }
-        }
-    }
-
-    Component {
-        id: historySurface
-        DialogSurface {
-            colors: telar.colors
-            ratio: root.ratio
-        }
+    background: DialogSurface {
+        colors: telar.colors
+        ratio: root.ratio
     }
 
     Connections {

@@ -33,6 +33,7 @@ Window {
         typography: root.geometry.typography
         workspace: telar.workspaceContext
         tabModel: telar.tabs
+        workspaceModel: telar.workspaces
         prefixPending: telar.prefixPending
         controlsInset: telar.windowControls
         workbenchLeft: root.geometry.terminal.x
@@ -40,6 +41,8 @@ Window {
         textScale: telar.chromeTextScale
         rail: root.geometry.rail
         onSidebarToggled: telar.execute(GuiController.Action.toggle_sidebar)
+        onWorkspaceSelected: key => telar.execute(GuiController.Action.select_workspace, key)
+        onWorkspacePickerRequested: telar.execute(GuiController.Action.goto_picker)
         onTabSelected: key => telar.execute(GuiController.Action.select_tab, key)
         onTabClosed: key => telar.execute(GuiController.Action.close_tab, key)
         onTabRenamed: telar.execute(GuiController.Action.rename_tab)
@@ -59,11 +62,9 @@ Window {
         colors: telar.colors
         typography: sidebar.regions.typography
         regions: telar.sidebarGeometry
-        workspaceModel: telar.workspaces
         agentModel: telar.agents
         preferredWidth: telar.sidebarWidth
         textScale: telar.chromeTextScale
-        onWorkspaceSelected: key => telar.execute(GuiController.Action.select_workspace, key)
         onAgentSelected: key => telar.execute(GuiController.Action.select_agent, key)
         onAgentPeekRequested: key => telar.peekActivity(key)
         onSidebarResized: requestedWidth => telar.setSidebarWidth(requestedWidth)

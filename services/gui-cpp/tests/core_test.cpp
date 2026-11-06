@@ -415,7 +415,10 @@ void windowGeometry() {
   const auto padded = WindowGeometry::measure(configuration, viewport, cells);
   require(padded.terminal.y == padded.navigation.height + vertical_padding && padded.terminal.right() == static_cast<float>(viewport.width) - horizontal_padding, "window padding must apply once in logical coordinates");
   const auto narrow = WindowGeometry::measure(configuration, {.width = 300, .height = 200, .scale = 1}, cells);
-  require(narrow.rail && narrow.sidebar.width == WindowGeometry::sidebar_rail && narrow.terminal.width > 0, "narrow windows must retain a terminal and collapse the sidebar to its rail");
+  require(narrow.rail && narrow.sidebar.width == 0 && narrow.terminal.x == horizontal_padding && narrow.terminal.width > 0, "narrow windows must hide the sidebar without reserving an empty project rail");
+  configuration.sidebar_visible = false;
+  const auto hidden = WindowGeometry::measure(configuration, viewport, cells);
+  require(hidden.sidebar.width == 0 && hidden.terminal.x == horizontal_padding, "hiding the sidebar must return its full width to the terminal");
 }
 
 }

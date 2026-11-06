@@ -3,6 +3,7 @@
 #include "application/pane_layout.hpp"
 #include "application/workbench_geometry.hpp"
 #include "core/geometry.hpp"
+#include "chrome_style.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -10,9 +11,10 @@
 namespace telar::gui {
 
 struct PaneDecorationGeometry {
-  static constexpr float frame_radius = 6;
+  static constexpr float frame_radius = ChromeStyle::surface_radius;
   static constexpr float frame_line_width = 1;
-  static constexpr float dim_alpha = 0.15F;
+  static constexpr float frame_inset_share = 0.2F;
+  static constexpr float dim_alpha = 0.08F;
   static constexpr std::size_t panel_count = 6;
 
   Rect outer;
@@ -38,10 +40,12 @@ struct PaneDecorationGeometry {
 
     const auto right = content.right();
     const auto bottom = content.bottom();
+    // Spend only existing chrome space; never change the terminal grid.
+    const auto inset = placement.framed && gap != 0 ? std::max(0.0F, std::min({static_cast<float>(minimum_cell / grid.scale) * frame_inset_share, (content.x - frame.x) / 2, (content.y - frame.y) / 2, (frame.right() - right) / 2, (frame.bottom() - bottom) / 2})) : 0.0F;
     return {
         .outer = outer,
         .content = content,
-        .frame = frame,
+        .frame = frame.inset(inset, inset),
         .panels = {
             Rect{.x = outer.x, .y = outer.y, .width = outer.width, .height = std::max(0.0F, content.y - outer.y)},
             Rect{.x = outer.x, .y = bottom, .width = outer.width, .height = std::max(0.0F, outer.bottom() - bottom)},

@@ -16,8 +16,8 @@ Item {
     property alias placeholderText: input.placeholderText
     property string inputName: ""
     readonly property real padding: 9 * ratio
-    readonly property real cornerRadius: 8 * ratio
-    readonly property real focusOutline: 1.5 * ratio
+    readonly property real cornerRadius: ChromeStyle.controlRadius * ratio
+    readonly property real focusOutline: 1 / Screen.devicePixelRatio
 
     signal edited()
     signal submitted()
@@ -37,8 +37,9 @@ Item {
         anchors.fill: parent
         color: "transparent"
         radius: root.cornerRadius
-        borderWidth: input.activeFocus ? root.focusOutline : root.ratio
-        borderColor: input.activeFocus ? root.colors.accent : root.colors.surface1
+        borderWidth: root.focusOutline
+        borderColor: input.activeFocus ? root.colors.accent : root.colors.text
+        borderAlpha: input.activeFocus ? ChromeStyle.focusAlpha : ChromeStyle.outlineAlpha
     }
 
     FormTextField {

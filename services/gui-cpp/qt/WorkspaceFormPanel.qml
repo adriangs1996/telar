@@ -32,11 +32,11 @@ Item {
     readonly property int visibleRows: Math.min(entries.length, maximumRows)
     readonly property int firstRow: Math.max(0, selection + 1 - maximumRows)
     readonly property real rowHeight: (typography.bodyRow ?? 0) + 2 * 6 * ratio
-    readonly property real rowRadius: 6 * ratio
+    readonly property real rowRadius: ChromeStyle.controlRadius * ratio
     readonly property real rowInset: 10 * ratio
     readonly property real iconGap: 8 * ratio
     readonly property real noticePadding: 10 * ratio
-    readonly property real noticeRadius: 7 * ratio
+    readonly property real noticeRadius: ChromeStyle.controlRadius * ratio
     readonly property real scrollbarWidth: 3 * ratio
     readonly property real smallRow: Math.ceil((typography.small ?? 0) * smallLeading)
 

@@ -29,8 +29,11 @@ KeyboardAction {
 
     NativeRoundedRectangle {
         anchors.fill: parent
-        color: root.primary ? root.colors.accent : (root.hovered || pointer.pressed || root.activeFocus ? root.colors.surface1 : root.colors.surface0)
+        color: root.primary ? root.colors.accent : Qt.alpha(root.colors.text, root.hovered || pointer.pressed || root.activeFocus ? ChromeStyle.selectionAlpha : ChromeStyle.hoverAlpha)
         radius: root.radius
+        borderColor: root.activeFocus ? root.colors.accent : root.colors.text
+        borderAlpha: root.activeFocus ? ChromeStyle.focusAlpha : ChromeStyle.outlineAlpha
+        borderWidth: !root.primary && (!root.quiet || root.activeFocus) ? 1 / Screen.devicePixelRatio : 0
         visible: !root.quiet || root.hovered || pointer.pressed || root.activeFocus
     }
 

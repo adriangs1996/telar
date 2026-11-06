@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Controls
+import Telar.Gui
 
 AbstractButton {
     id: root
 
     required property var colors
     required property real pixelSize
-    property real cornerRadius: 8
+    property real cornerRadius: ChromeStyle.controlRadius
     property bool emphasized: false
     property bool pointerHovered: hovered
 
@@ -25,8 +26,11 @@ AbstractButton {
         wholePixelCentering: true
     }
 
-    background: Rectangle {
-        color: root.pointerHovered || root.visualFocus ? root.colors.surface0 : "transparent"
+    background: NativeRoundedRectangle {
+        color: Qt.alpha(root.colors.text, root.down ? ChromeStyle.selectionAlpha : root.pointerHovered || root.visualFocus ? ChromeStyle.hoverAlpha : 0)
         radius: root.cornerRadius
+        borderColor: root.colors.accent
+        borderAlpha: ChromeStyle.focusAlpha
+        borderWidth: root.visualFocus ? 1 / Screen.devicePixelRatio : 0
     }
 }

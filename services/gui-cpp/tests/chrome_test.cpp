@@ -134,12 +134,23 @@ QList<QVariantMap> workspaceRecords(WorkspaceWindow::Selection selection) {
   return rows;
 }
 
-QVariantMap sidebarProperties(ListModel &workspaces, ListModel &agents, bool expanded, int selected) {
+QVariantMap projectSwitcherProperties(ListModel &workspaces, int width, int selected) {
+  const ChromeMetrics chrome;
+  return {
+      {QStringLiteral("width"), width},
+      {QStringLiteral("height"), chrome.top_bar},
+      {QStringLiteral("model"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&workspaces))},
+      {QStringLiteral("selectedIndex"), selected},
+      {QStringLiteral("colors"), themeColors(Configuration{})},
+      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}},
+  };
+}
+
+QVariantMap sidebarProperties(ListModel &workspaces, ListModel &agents, bool expanded, int) {
   const ChromeMetrics chrome;
   const auto width = expanded ? fixture_sidebar_width : fixture_rail_width;
   const Rect area{.width = static_cast<float>(width), .height = fixture_height};
   auto geometry = sidebarRegionsRecord(area, {.chrome = chrome}, static_cast<std::size_t>(workspaces.rowCount()));
-  geometry.insert(QStringLiteral("rail"), workspaceRailRecord(workspaces, area, {.chrome = chrome}, selected));
   const QVariantMap typography{
       {QStringLiteral("body"), chrome.body},
       {QStringLiteral("small"), chrome.small},
@@ -155,7 +166,6 @@ QVariantMap sidebarProperties(ListModel &workspaces, ListModel &agents, bool exp
       {QStringLiteral("regions"), geometry},
       {QStringLiteral("typography"), typography},
       {QStringLiteral("colors"), themeColors(Configuration{})},
-      {QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&workspaces))},
       {QStringLiteral("agentModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&agents))},
   };
 }
@@ -415,12 +425,13 @@ private:
     workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
     auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), sidebarProperties(workspaces, agents, true, 0));
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
-    const auto *projects = sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList"));
-    QVERIFY(projects != nullptr);
+    QVERIFY(sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
+    const auto *activity = sidebar->findChild<QQuickItem *>(QStringLiteral("sidebarActivity"));
+    QVERIFY(activity != nullptr);
     constexpr QPointF expected_position{8, 31};
-    constexpr QSizeF expected_size{263, 52};
-    QCOMPARE(projects->position(), expected_position);
-    QCOMPARE(projects->size(), expected_size);
+    constexpr QSizeF expected_size{263, 893};
+    QCOMPARE(activity->position(), expected_position);
+    QCOMPARE(activity->size(), expected_size);
   }
 
   Q_SLOT static void physicalSidebarRowsNeedNoApplicationController() {
@@ -447,14 +458,14 @@ private:
         {QStringLiteral("regions"), regions},
         {QStringLiteral("typography"), chromeTypographyRecord(display, configuration.font)},
         {QStringLiteral("colors"), themeColors(configuration)},
-        {QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&workspaces))},
         {QStringLiteral("agentModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&agents))},
     };
     const auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), properties);
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
-    const auto *projects = sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList"));
-    QVERIFY(projects != nullptr);
-    QCOMPARE(projects->height(), expected_workspace_height);
+    const auto *activity = sidebar->findChild<QQuickItem *>(QStringLiteral("sidebarActivity"));
+    QVERIFY(activity != nullptr);
+    QCOMPARE(activity->height(), regions.value(QStringLiteral("activity")).toRectF().height());
+    QVERIFY(sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
     const auto edge = sidebar->property("edgeWidth").toReal();
     QCOMPARE(edge * density, qreal{1});
   }
@@ -667,6 +678,88 @@ private:
     QVERIFY(!layout.transitioning());
   }
 
+  Q_SLOT static void tabsUseTheirNaturalWidthsWhenTheyFit() {
+    using Geometry = TabStripGeometry;
+    const auto metrics = Geometry::Metrics::scaled(1);
+    const std::array sizes{
+        Geometry::Measure{.caption = 180, .chip = Geometry::chip_side},
+        Geometry::Measure{.caption = 20, .chip = Geometry::chip_side},
+    };
+    const auto room = sizes[0].whole(metrics) + metrics.gap + sizes[1].whole(metrics);
+    const auto plan = Geometry::arrange(sizes, 0, {.width = room, .metrics = metrics});
+    QCOMPARE(plan.hidden(), std::size_t{0});
+    for (std::size_t index = 0; index < sizes.size(); ++index) {
+      QCOMPARE(plan.fits[index], Geometry::Fit::full);
+      QCOMPARE(plan.widths[index], sizes[index].whole(metrics));
+    }
+    const auto single = Geometry::arrange(std::span{sizes}.first(1), 0, {.width = 150, .metrics = metrics});
+    QCOMPARE(single.widths[0], 150.0F);
+    QCOMPARE(single.fits[0], Geometry::Fit::truncated);
+  }
+
+  Q_SLOT static void tabsKeepTheirCaptionsBeforeAnyTabCollapses() {
+    using Geometry = TabStripGeometry;
+    const auto metrics = Geometry::Metrics::scaled(1);
+    std::array<Geometry::Measure, 3> sizes;
+    sizes.fill({.caption = 400, .chip = Geometry::chip_side});
+    const auto minimum_room = sizes[0].truncated(metrics) * static_cast<float>(sizes.size()) + metrics.gap * static_cast<float>(sizes.size() - 1);
+    for (const auto room : {minimum_room, 350.0F}) {
+      for (std::size_t focus = 0; focus < sizes.size(); ++focus) {
+        const auto plan = Geometry::arrange(sizes, focus, {.width = room, .metrics = metrics});
+        QCOMPARE(plan.hidden(), std::size_t{0});
+        QVERIFY(plan.footprint(metrics) <= room);
+        for (std::size_t index = 0; index < sizes.size(); ++index) {
+          QVERIFY(plan.fits[index] != Geometry::Fit::compact);
+          QVERIFY(plan.widths[index] >= sizes[index].truncated(metrics));
+        }
+      }
+    }
+  }
+
+  Q_SLOT static void restoredAndSwitchedWorkspacesExpandTabsWithoutPointerMovement() {
+    QQuickWindow window;
+    ListModel tabs;
+    TabStripLayout layout{window.contentItem()};
+    QFont font{QStringLiteral("IBM Plex Sans")};
+    font.setPixelSize(13);
+    layout.setFont(font);
+    layout.setPixelSize(13);
+    layout.setContext(1, telar::WorkspaceLocation{.id = 1});
+    layout.setModel(&tabs);
+    layout.setHovered(true);
+    layout.setSize(QSizeF{180, ChromeMetrics::logical_top_bar});
+    window.resize(400, static_cast<int>(ChromeMetrics::logical_top_bar));
+    window.show();
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QList<QVariantMap> rows;
+    for (int id = 1; id <= 3; ++id) {
+      rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QString(64, QLatin1Char('W'))}, {QStringLiteral("selected"), id == 1}});
+    }
+    tabs.reconcile(rows);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QVERIFY(!layout.counter().isEmpty());
+    layout.setWidth(400);
+    QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning() && layout.items()->rowCount() == 3, fixture_wait_ms);
+    const auto record = [&](int index) {
+      return layout.items()->data(layout.items()->index(index, 0), ListModel::record_role).toMap();
+    };
+    QVERIFY(layout.counter().isEmpty());
+    for (int index = 0; index < 3; ++index) {
+      QVERIFY(!record(index).value(QStringLiteral("compact")).toBool());
+    }
+    QVERIFY(tabBounds(*layout.items(), 0).width() > tabBounds(*layout.items(), 2).width());
+    rows[0].insert(QStringLiteral("selected"), false);
+    rows[2].insert(QStringLiteral("selected"), true);
+    layout.setContext(1, telar::WorkspaceLocation{.id = 2});
+    tabs.reconcile(rows);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QVERIFY(!layout.transitioning());
+    QVERIFY(tabBounds(*layout.items(), 2).width() > tabBounds(*layout.items(), 0).width());
+    for (int index = 0; index < 3; ++index) {
+      QVERIFY(!record(index).value(QStringLiteral("compact")).toBool());
+    }
+  }
+
   Q_SLOT static void tabsPackAndKeepTheirWidthsWhileHovered() {
     QQuickWindow window;
     QQmlEngine engine;
@@ -793,38 +886,83 @@ private:
     QCOMPARE(tabBounds(*layout->items(), 0), bounds);
   }
 
-  Q_SLOT static void collapsedSidebarCreatesOnlyItsVisibleMarks() {
+  Q_SLOT static void projectSwitcherBoundsItsDelegatesAndRevealsTheSelection() {
     QQuickWindow window;
     QQmlEngine engine;
     ListModel workspaces;
-    ListModel agents;
     constexpr int workspace_count = 128;
+    constexpr int width = 180;
     workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = workspace_count - 1}));
-    const auto properties = sidebarProperties(workspaces, agents, false, workspace_count - 1);
-    auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), properties);
-    sidebar->setParentItem(window.contentItem());
-    window.resize(fixture_rail_width, fixture_height);
+    const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, width, workspace_count - 1));
+    switcher->setParentItem(window.contentItem());
+    window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
-    const auto rail = properties.value(QStringLiteral("regions")).toMap().value(QStringLiteral("rail")).toMap();
-    const auto expected = rail.value(QStringLiteral("marks")).toList().size();
-    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*sidebar, QStringLiteral("workspaceRailMark")).size(), expected, fixture_wait_ms);
-    QVERIFY(expected < workspace_count);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    const auto selected = [&]() -> QQuickItem * {
+      for (auto *mark : visualItems(*switcher, QStringLiteral("projectSwitcherMark"))) {
+        if (mark->property("record").toMap().value(QStringLiteral("selected")).toBool()) {
+          return mark;
+        }
+      }
+      return nullptr;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(selected() != nullptr, fixture_wait_ms);
+    const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+    QVERIFY(marks.size() <= 8);
+    QVERIFY(switcher->boundingRect().contains(selected()->mapRectToItem(switcher.get(), selected()->boundingRect())));
+    const auto overflow = visualItems(*switcher, QStringLiteral("projectSwitcherOverflow"));
+    QCOMPARE(overflow.size(), 1);
+    QVERIFY(overflow.front()->isVisible());
+    const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("overflowRequested()"));
+    QVERIFY(signal.isValid());
+    const QSignalSpy requested{switcher.get(), signal};
+    QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, overflow.front()->mapRectToScene(overflow.front()->boundingRect()).center().toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(requested.size(), 1, fixture_wait_ms);
+    workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = 0}));
+    QVERIFY(switcher->setProperty("selectedIndex", 0));
+    QTRY_VERIFY_WITH_TIMEOUT(selected() != nullptr && switcher->boundingRect().contains(selected()->mapRectToItem(switcher.get(), selected()->boundingRect())), fixture_wait_ms);
+    switcher->setWidth(20);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QCOMPARE(overflow.front()->width(), qreal{20});
+    QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, overflow.front()->mapRectToScene(overflow.front()->boundingRect()).center().toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(requested.size(), 2, fixture_wait_ms);
+    workspaces.reconcile({});
+    QVERIFY(switcher->setProperty("selectedIndex", -1));
+    QTRY_VERIFY_WITH_TIMEOUT(!overflow.front()->isVisible(), fixture_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(visualItems(*switcher, QStringLiteral("projectSwitcherMark")).isEmpty(), fixture_wait_ms);
   }
 
-  Q_SLOT static void railMarksShowThePointingCursor() {
+  Q_SLOT static void projectsLiveOnTheRightOfNavigationWithoutOverlappingTabs() {
     QQuickWindow window;
     QQmlEngine engine;
+    ListModel tabs;
     ListModel workspaces;
-    ListModel agents;
-    workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
-    auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), sidebarProperties(workspaces, agents, false, 0));
-    sidebar->setParentItem(window.contentItem());
-    window.resize(fixture_rail_width, fixture_height);
+    tabs.reconcile(tabRecords({.count = 4, .active = 0}));
+    workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
+    auto properties = navigationProperties(tabs, 1000);
+    properties.insert(QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&workspaces)));
+    properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("index"), 0}});
+    const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
+    navigation->setParentItem(window.contentItem());
+    window.resize(1000, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
-    constexpr QPoint mark_center{25, 30};
-    QTest::mouseMove(&window, mark_center);
-    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    auto *strip = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(strip != nullptr);
+    const auto switchers = visualItems(*navigation, QStringLiteral("projectSwitcher"));
+    QCOMPARE(switchers.size(), 1);
+    auto *switcher = switchers.front();
+    for (const bool rail : {false, true}) {
+      QVERIFY(navigation->setProperty("rail", rail));
+      QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+      const auto bounds = switcher->mapRectToItem(navigation.get(), switcher->boundingRect());
+      QCOMPARE(bounds.right(), qreal{992});
+      QVERIFY(strip->mapRectToItem(navigation.get(), strip->boundingRect()).right() < bounds.left());
+      const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+      QCOMPARE(marks.size(), 3);
+      QTest::mouseMove(&window, marks.front()->mapRectToScene(marks.front()->boundingRect()).center().toPoint());
+      QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
+    }
   }
 
   Q_SLOT static void tabsShowThePointingCursor() {
@@ -901,24 +1039,26 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, fixture_wait_ms);
   }
 
-  Q_SLOT static void aRailClickEmitsOnlyTheWorkspaceIdentity() {
+  Q_SLOT static void aProjectClickEmitsOnlyItsWorkspaceIdentity() {
     QQuickWindow window;
     QQmlEngine engine;
     ListModel workspaces;
-    ListModel agents;
-    workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
-    auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), sidebarProperties(workspaces, agents, false, 0));
-    sidebar->setParentItem(window.contentItem());
-    window.resize(fixture_rail_width, fixture_height);
-    const auto signal = sidebar->metaObject()->method(sidebar->metaObject()->indexOfSignal("workspaceSelected(QString)"));
+    workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
+    const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, 120, 0));
+    switcher->setParentItem(window.contentItem());
+    window.resize(120, static_cast<int>(ChromeMetrics::logical_top_bar));
+    const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("selected(QString)"));
     QVERIFY(signal.isValid());
-    const QSignalSpy selected{sidebar.get(), signal};
+    const QSignalSpy selected{switcher.get(), signal};
     window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
-    constexpr QPoint mark_center{25, 30};
-    QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, mark_center);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+    QCOMPARE(marks.size(), 3);
+    const auto *mark = marks.back();
+    const auto record = mark->property("record").toMap();
+    QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, mark->mapRectToScene(mark->boundingRect()).center().toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(selected.size(), 1, fixture_wait_ms);
-    QCOMPARE(selected.front().front().toString(), QStringLiteral("workspace:0"));
+    QCOMPARE(selected.front().front().toString(), record.value(QStringLiteral("key")).toString());
   }
 };
 

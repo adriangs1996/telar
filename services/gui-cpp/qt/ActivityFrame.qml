@@ -30,7 +30,7 @@ Item {
         objectName: "agentCardBackground"
         anchors.fill: parent
         radius: root.geometry.radius
-        color: root.record.selected ? root.colors.surface0 : root.hovered ? root.colors.surface1 : "transparent"
+        color: Qt.alpha(root.colors.text, root.record.selected ? ChromeStyle.selectionAlpha : ChromeStyle.hoverAlpha)
         visible: root.record.selected || root.hovered
     }
 
@@ -39,7 +39,8 @@ Item {
         anchors.fill: parent
         radius: root.geometry.radius
         borderWidth: root.outlinePhysicalWidth / root.density
-        borderColor: root.colors.surface1
+        borderColor: root.colors.text
+        borderAlpha: ChromeStyle.outlineAlpha
         visible: root.record.selected ?? false
     }
 

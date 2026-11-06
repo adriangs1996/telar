@@ -14,11 +14,11 @@ struct PaneAttentionGeometry {
   float width = 0;
   float radius = 0;
 
-  [[nodiscard]] static PaneAttentionGeometry derive(Rect physical_frame, float physical_ratio) noexcept {
+  [[nodiscard]] static PaneAttentionGeometry derive(Rect physical_frame, float physical_ratio, float logical_radius = PaneDecorationGeometry::frame_radius) noexcept {
     return {
         .bounds = physical_frame.inset(inset_pixels, inset_pixels),
         .width = line_width * physical_ratio,
-        .radius = std::max(0.0F, (PaneDecorationGeometry::frame_radius * physical_ratio) - inset_pixels),
+        .radius = std::max(0.0F, (logical_radius * physical_ratio) - inset_pixels),
     };
   }
 };

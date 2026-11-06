@@ -4,6 +4,7 @@
 #include "platform/awake_clock.hpp"
 #include "presentation/attention_fades.hpp"
 #include "presentation/frame_pacer.hpp"
+#include "presentation/pane_decoration_geometry.hpp"
 #include "qt/native_pane_attention.hpp"
 #include "qt/pane_attention_value.hpp"
 #include "qt/window_animation_clock.hpp"
@@ -107,6 +108,8 @@ std::vector<std::unique_ptr<NativePaneAttention>> createAtlas(const QQuickWindow
     item->setSize({bounds[2].toDouble() / density, bounds[3].toDouble() / density});
     item->setPosition({bounds[0].toDouble() / density, bounds[1].toDouble() / density});
     item->setRatio(record.value(QStringLiteral("ratio")).toDouble() / density);
+    // This atlas records the original six-pixel shader shape, not the current chrome style.
+    item->setRadius(6);
     item->setColor(QColor::fromRgb(record.value(QStringLiteral("rgb")).toInt()));
     items.push_back(std::move(item));
   }
@@ -290,6 +293,19 @@ private:
     window->update();
     QTRY_VERIFY_WITH_TIMEOUT(alive.isNull(), wait_ms);
     QVERIFY(!window);
+  }
+
+  Q_SLOT static void attentionRadiusFollowsPaneSurfaces() {
+    NativePaneAttention item;
+    QCOMPARE(item.radius(), qreal{telar::gui::PaneDecorationGeometry::frame_radius});
+    const QSignalSpy changes{&item, &NativePaneAttention::radiusChanged};
+    item.setRadius(4);
+    QCOMPARE(item.radius(), qreal{4});
+    QCOMPARE(changes.size(), 1);
+    item.setRadius(-1);
+    item.setRadius(qQNaN());
+    QCOMPARE(item.radius(), qreal{4});
+    QCOMPARE(changes.size(), 1);
   }
 
   Q_SLOT static void attachmentIdentityKeepsAllIntegerBits() {

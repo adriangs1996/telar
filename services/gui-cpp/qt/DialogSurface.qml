@@ -12,8 +12,8 @@ Item {
     readonly property real shadowStep: 4 * ratio
     readonly property real shadowOffset: 5 * ratio
     readonly property real shadowAlpha: 0.07
-    readonly property real cornerRadius: 12 * ratio
-    readonly property real outlineAlpha: 0.09
+    readonly property real cornerRadius: ChromeStyle.dialogRadius * ratio
+    readonly property real outlineAlpha: ChromeStyle.outlineAlpha
 
     Repeater {
         model: root.shadowLayers
@@ -39,7 +39,7 @@ Item {
         anchors.fill: parent
         color: "transparent"
         radius: root.cornerRadius
-        borderWidth: root.ratio
+        borderWidth: 1 / Screen.devicePixelRatio
         borderColor: root.colors.text
         borderAlpha: root.outlineAlpha
     }

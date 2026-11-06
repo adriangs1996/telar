@@ -35,6 +35,9 @@ MachineChromeLayout {
             background: NativeRoundedRectangle {
                 color: control.record.active ? root.style.activeBackground : control.hovered || control.visualFocus ? root.style.hoverBackground : "transparent"
                 radius: control.record.radius
+                borderColor: control.visualFocus ? root.colors.accent : root.colors.text
+                borderAlpha: control.visualFocus ? ChromeStyle.focusAlpha : ChromeStyle.outlineAlpha
+                borderWidth: control.record.active || control.visualFocus ? 1 / Screen.devicePixelRatio : 0
             }
             onClicked: root.activate(record.key)
 

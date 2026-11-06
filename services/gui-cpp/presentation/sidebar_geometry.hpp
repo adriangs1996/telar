@@ -11,7 +11,6 @@ namespace telar::gui {
 struct SidebarGeometry {
   static constexpr float margin = 8;
   static constexpr float header_gap = 6;
-  static constexpr float project_share = 0.4F;
   static constexpr float workspace_vertical_padding = 20;
   static constexpr float edge_width = 1;
 
@@ -25,7 +24,7 @@ struct SidebarGeometry {
     return ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.px(workspace_vertical_padding);
   }
 
-  [[nodiscard]] static SidebarGeometry measure(Rect area, const ChromeMetrics &chrome, std::size_t count, bool machines_shown = false) noexcept {
+  [[nodiscard]] static SidebarGeometry measure(Rect area, const ChromeMetrics &chrome, std::size_t, bool machines_shown = false) noexcept {
     const auto inset = chrome.px(margin);
     Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - edge_width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
     const auto header = ChromeMetrics::lineHeight(chrome.body);
@@ -42,27 +41,8 @@ struct SidebarGeometry {
       content.height -= header + gap;
     }
 
-    const auto total = count == 0 ? header : static_cast<float>(count) * workspaceHeight(chrome);
-    const auto project_height = std::min(total, std::max(0.0F, std::floor(content.height * project_share) - header - gap));
-    if (project_height < header) {
-      geometry.activity_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};
-      geometry.activity = {.x = content.x, .y = content.y + header + gap, .width = content.width, .height = std::max(0.0F, content.height - header - gap)};
-
-      return geometry;
-    }
-
-    constexpr float gap_count = 3;
-    auto reserved = gap * gap_count;
-    reserved += header;
-    reserved += project_height;
-    reserved += header;
-    geometry.projects_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};
-    auto cursor = header + gap;
-    geometry.projects = {.x = content.x, .y = content.y + cursor, .width = content.width, .height = project_height};
-    cursor += project_height + gap;
-    geometry.activity_header = {.x = content.x, .y = content.y + cursor, .width = content.width, .height = header};
-    cursor += header + gap;
-    geometry.activity = {.x = content.x, .y = content.y + cursor, .width = content.width, .height = std::max(0.0F, content.height - reserved)};
+    geometry.activity_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};
+    geometry.activity = {.x = content.x, .y = content.y + header + gap, .width = content.width, .height = std::max(0.0F, content.height - header - gap)};
 
     return geometry;
   }
