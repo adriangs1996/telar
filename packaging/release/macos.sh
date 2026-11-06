@@ -7,7 +7,7 @@
 #   packaging/release/sign-macos.sh STAGE             # Developer ID or ad hoc
 #   packaging/release/macos.sh package STAGE OUT_DIR
 #
-# `build` needs Homebrew's cmake, ninja and llvm, Zig 0.17 for libghostty-vt
+# `build` bootstraps the pinned repository-local C++ tools and needs Zig 0.17 for libghostty-vt
 # and Cargo for the diagram renderer. CMake builds the pinned native libraries.
 # The managed Qt builds into TELAR_QT_CACHE (default STAGE/qt-cache) once.
 #
@@ -30,21 +30,21 @@ build() {
     stage=$1
     mkdir -p "$stage"
     stage=$(cd "$stage" && pwd)
-    llvm=$(brew --prefix llvm)
-    compilers="-DCMAKE_C_COMPILER=$llvm/bin/clang -DCMAKE_CXX_COMPILER=$llvm/bin/clang++ -DCMAKE_OSX_DEPLOYMENT_TARGET=$macos_min"
+    "$root/tools/cpp" bootstrap
+    export PATH="$root/.toolchain/bin:$PATH"
 
     # GHOSTTY_VT_ROOT names an existing build of the pinned libghostty-vt;
-    # otherwise it builds here with Zig 0.17 (ZIG, default zig).
-    ghostty=${GHOSTTY_VT_ROOT:-$stage/ghostty}
+    # otherwise the shared bootstrap prepares its pinned Zig and VT cache.
+    ghostty=${GHOSTTY_VT_ROOT:-}
     if [ -z "${GHOSTTY_VT_ROOT:-}" ]; then
-        python3 "$root/services/runtime-cpp/tools/build_ghostty.py" --zig "${ZIG:-zig}" --build-dir "$stage/ghostty-build" --prefix "$ghostty"
+        ghostty=$("$root/tools/cpp" vt | tail -n 1)
     fi
 
     # TELAR_RUNTIME_DISTRIBUTABLE links the non-system libraries statically
     # and fails the build when any executable links outside the base system.
     # shellcheck disable=SC2086
     cmake -S "$root/services/runtime-cpp" -B "$stage/runtime" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-        -DTELAR_RUNTIME_DISTRIBUTABLE=ON -DBUILD_TESTING=OFF $compilers \
+        -DTELAR_RUNTIME_DISTRIBUTABLE=ON -DBUILD_TESTING=OFF -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
         -DGHOSTTY_VT_ROOT="$ghostty"
     cmake --build "$stage/runtime" --target distributable-linkage
     cmake --install "$stage/runtime" --prefix "$stage/prefix"
@@ -53,7 +53,7 @@ build() {
     install -m 755 "$stage/renderer/release/telar-diagram-renderer" "$stage/prefix/bin/telar-diagram-renderer"
 
     # shellcheck disable=SC2086
-    cmake -S "$root/services/gui-cpp" -B "$stage/gui" -G Ninja -DCMAKE_BUILD_TYPE=Release $compilers \
+    cmake -S "$root/services/gui-cpp" -B "$stage/gui" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
         -DGHOSTTY_VT_ROOT="$ghostty" -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$stage/qt-cache}"
     cmake --build "$stage/gui" --target telar-gui telar-gui-command
 

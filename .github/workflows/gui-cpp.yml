@@ -10,6 +10,12 @@ on:
       - 'dlls/telar-*/**'
       - 'cmake/**'
       - 'justfile'
+      - 'tools/check-cpp-*.py'
+      - 'tools/tests/**'
+      - 'tools/cpp'
+      - 'tools/bootstrap-cpp.py'
+      - 'tools/toolchain/**'
+      - '.github/actions/cpp-toolchain/**'
   push:
     branches: [main]
     paths:
@@ -19,6 +25,12 @@ on:
       - 'dlls/telar-*/**'
       - 'cmake/**'
       - 'justfile'
+      - 'tools/check-cpp-*.py'
+      - 'tools/tests/**'
+      - 'tools/cpp'
+      - 'tools/bootstrap-cpp.py'
+      - 'tools/toolchain/**'
+      - '.github/actions/cpp-toolchain/**'
 
 permissions:
   contents: read
@@ -33,6 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-26, ubuntu-24.04]
+        configuration: [Debug, Release]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -40,19 +53,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install macOS build dependencies without Qt
-        if: runner.os == 'macOS'
-        run: |
-          brew install cmake ninja llvm
-          echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
-          echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
-
-      - name: Install Linux build dependencies without Qt
+      - name: Install Linux desktop SDK
         if: runner.os == 'Linux'
-        run: |
-          sudo packaging/release/install-linux-deps.sh
-          echo 'CC=gcc-14' >> "$GITHUB_ENV"
-          echo 'CXX=g++-14' >> "$GITHUB_ENV"
+        run: sudo packaging/release/install-linux-deps.sh
+
+      - uses: ./.github/actions/cpp-toolchain
 
       - name: Identify the Qt build toolchain
         id: toolchain
@@ -64,22 +69,21 @@ jobs:
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .qt-cache
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('cmake/managed_toolchain.cmake', 'services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/managed_toolchain.cmake', 'services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
 
       - name: Test dependency integrity and package isolation
         run: python3 -m unittest discover -s services/gui-cpp/tools -p test_qt_dependency.py -v
 
       - name: Install Zig and build libghostty-vt
         run: |
-          packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
-          python3 services/runtime-cpp/tools/build_ghostty.py --zig "$RUNNER_TEMP/zig/zig" --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
+          echo "GHOSTTY_VT_ROOT=$(tools/cpp vt | tail -n 1)" >> "$GITHUB_ENV"
 
       - name: Configure with managed Qt
         run: |
           cmake -S services/gui-cpp -B services/gui-cpp/out -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
-            -DGHOSTTY_VT_ROOT="$RUNNER_TEMP/ghostty" -DTELAR_GUI_QT_JOBS=3
+            -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" \
+            -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT" -DTELAR_GUI_QT_JOBS=3
 
       - name: Build GUI and focused regression tests
         run: |

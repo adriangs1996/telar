@@ -51,7 +51,11 @@ def vt():
         build = ROOT / '.dependencies-cache/ghostty' / identity.hexdigest()
         prefix = build / 'install'
         os.environ['ZIG_GLOBAL_CACHE_DIR'] = str(CACHE / 'zig-cache')
-        run(sys.executable, recipe / 'tools/build_ghostty.py', '--zig', zig / 'zig', '--build-dir', build, '--prefix', prefix)
+        complete = build / '.complete'
+        if not complete.exists() or not all((prefix / path).is_file() for path in
+                                            ('lib/libghostty-vt.a', 'include/ghostty/vt.h', 'include/ghostty/wuffs-v0.4.h')):
+            run(sys.executable, recipe / 'tools/build_ghostty.py', '--zig', zig / 'zig', '--build-dir', build, '--prefix', prefix)
+            complete.write_text(identity.hexdigest() + '\n')
         return prefix
 
 

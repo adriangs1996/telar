@@ -103,17 +103,14 @@ def main():
         parser.error(f'missing managed Qt licenses: {qt_licenses}')
     binary = build / 'telar-gui'
     command_helper = build / 'telar-gui-command'
+    launcher_binary = build / 'telar-gui-launcher'
     cli = prefix / 'bin' / 'telar'
     runtime = prefix / 'bin' / 'telar-runtime'
     helper = prefix / 'bin' / 'telar-diagram-renderer'
     config_check = prefix / 'bin' / 'telar-config-check'
-    for required in (binary, command_helper, cli, runtime, helper, config_check):
+    for required in (binary, command_helper, launcher_binary, cli, runtime, helper, config_check):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
-    # A compiler given with -D and no type stays UNINITIALIZED in the cache.
-    compiler = re.search(r'^CMAKE_CXX_COMPILER:[A-Z]+=(.+)$', cache, re.M)
-    if compiler is None:
-        parser.error('cannot identify the build compiler')
     version = re.search(r'\.version\s*=\s*"([^"]+)"', (root / 'build.zig.zon').read_text()).group(1)
     contents = output / 'Contents'
     macos = contents / 'MacOS'
@@ -142,10 +139,7 @@ def main():
     launcher = macos / info['CFBundleExecutable']
     with (contents / 'Info.plist').open('wb') as stream:
         plistlib.dump(info, stream)
-    command = [compiler.group(1), '-std=c++23', '-O2', '-Wall', '-Wextra', '-Werror',
-               '-I', base, base / 'tools/macos_launcher.cpp',
-               base / 'platform/login_shell.cpp', '-Wl,-headerpad_max_install_names', '-o', launcher]
-    run(command)
+    shutil.copy2(launcher_binary, launcher)
     library = qt_prefix / 'lib'
     executables = deploy_qml(base, build, resources, contents / 'PlugIns', library, qtpaths)
     add_search_path(macos / 'telar-gui', library)

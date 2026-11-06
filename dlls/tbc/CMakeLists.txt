@@ -10,6 +10,15 @@ if(CMAKE_HOST_APPLE AND (NOT CMAKE_SYSTEM_NAME OR CMAKE_SYSTEM_NAME STREQUAL "Da
   endif()
 endif()
 
+# The official Linux LLVM development SDK exports a libstdc++ ABI. TBC has no
+# named application modules: its standalone AST tool must match that SDK rather
+# than pass standard-library objects between libstdc++ and application libc++.
+# Annotation-only subdirectory consumers retain their parent's standard library.
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(CMAKE_CXX_FLAGS "-stdlib=libstdc++" CACHE STRING "LLVM development SDK C++ ABI")
+  set(CMAKE_CXX_STANDARD_LIBRARIES "-lstdc++" CACHE STRING "LLVM development SDK C++ runtime")
+endif()
+
 project(tbc VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)

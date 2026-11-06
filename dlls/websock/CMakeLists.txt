@@ -14,7 +14,6 @@ endif()
 add_library(websock STATIC)
 add_library(telar::websock ALIAS websock)
 telar_modules(websock)
-telar_modules(websock)
 target_compile_features(websock PUBLIC cxx_std_23)
 target_link_libraries(websock PUBLIC telar::base)
 target_include_directories(websock PUBLIC

@@ -2,6 +2,11 @@ name: C++ runtime
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ['services/runtime-cpp/**', 'services/cli-cpp/**', 'dlls/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**']
+  push:
+    branches: [main]
+    paths: ['services/runtime-cpp/**', 'services/cli-cpp/**', 'dlls/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**']
 
 permissions:
   contents: read
@@ -36,26 +41,48 @@ jobs:
       - name: Install dependencies
         run: |
           test "$(uname -m)" = arm64
-          brew install cmake ninja llvm
-          ../../packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
-          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - uses: ./.github/actions/cpp-toolchain
+
+      - name: Validate public modules and editor
+        working-directory: ${{ github.workspace }}
+        run: |
+          for project in auth websock; do
+            tools/cpp configure "$project" -B ".dev/ci/$project" --config ${{ matrix.configuration }}
+            tools/cpp build "$project" -B ".dev/ci/$project" -- --parallel 3
+            tools/cpp test "$project" -B ".dev/ci/$project"
+          done
+          python3 tools/check-cpp-package.py --package websock --build .dev/ci/websock
+          python3 tools/check-cpp-modules.py
+          python3 -m unittest discover -s tools/tests -p test_cpp_bootstrap.py -v
+          tools/cpp configure base -B .dev/ci/base --config ${{ matrix.configuration }}
+          tools/cpp build base -B .dev/ci/base -- --parallel 3
+          tools/cpp test base -B .dev/ci/base
+          python3 tools/check-cpp-package.py --build .dev/ci/base
+          python3 tools/check-cpp-editor.py --build .dev/ci/base --file dlls/telar-base/tests/base_test.cpp
 
       - name: Build libghostty-vt
-        run: python3 tools/build_ghostty.py --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
+        working-directory: ${{ github.workspace }}
+        run: echo "GHOSTTY_VT_ROOT=$(tools/cpp vt | tail -n 1)" >> "$GITHUB_ENV"
 
       - name: Configure
         run: |
           cmake -S . -B out -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
-            -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
-            -DGHOSTTY_VT_ROOT="$RUNNER_TEMP/ghostty" \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" \
+            -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT" \
             -DTELAR_RUNTIME_DISTRIBUTABLE=${{ matrix.distributable }} \
             -DTELAR_RUNTIME_SANITIZERS=${{ matrix.sanitizers }}
 
       - name: Build and test
         run: |
-          cmake --build out --target telar-runtime runtime-tests tls-tests hook-tests event-loop-tests checkpoint-probe --parallel 3
+          ulimit -n 8192
+          cmake --build out --target telar-runtime telar runtime-tests tls-tests hook-tests event-loop-tests checkpoint-probe --parallel 3
           ctest --test-dir out --output-on-failure -R '^(runtime-tests|tls-tests|hook-tests|event-loop-tests|server-cli-tests)$'
+
+      - name: Check distributable linkage
+        if: matrix.distributable == 'ON'
+        run: cmake --build out --target distributable-linkage --parallel 3
 
       - name: Retain validation reports
         if: always()
@@ -86,23 +113,42 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y clang-18 libclang-rt-18-dev g++-14 cmake ninja-build make perl patch flex bison
-          ../../packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
-          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+          sudo apt-get install -y make perl patch flex bison g++
+
+      - uses: ./.github/actions/cpp-toolchain
+
+      - name: Validate public modules and editor
+        working-directory: ${{ github.workspace }}
+        run: |
+          for project in auth websock; do
+            tools/cpp configure "$project" -B ".dev/ci/$project" --config ${{ matrix.configuration }}
+            tools/cpp build "$project" -B ".dev/ci/$project" -- --parallel 3
+            tools/cpp test "$project" -B ".dev/ci/$project"
+          done
+          python3 tools/check-cpp-package.py --package websock --build .dev/ci/websock
+          python3 tools/check-cpp-modules.py
+          python3 -m unittest discover -s tools/tests -p test_cpp_bootstrap.py -v
+          tools/cpp configure base -B .dev/ci/base --config ${{ matrix.configuration }}
+          tools/cpp build base -B .dev/ci/base -- --parallel 3
+          tools/cpp test base -B .dev/ci/base
+          python3 tools/check-cpp-package.py --build .dev/ci/base
+          python3 tools/check-cpp-editor.py --build .dev/ci/base --file dlls/telar-base/tests/base_test.cpp
 
       - name: Build libghostty-vt
-        run: python3 tools/build_ghostty.py --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
+        working-directory: ${{ github.workspace }}
+        run: echo "GHOSTTY_VT_ROOT=$(tools/cpp vt | tail -n 1)" >> "$GITHUB_ENV"
 
       - name: Configure
         run: |
           cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
-            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" -DTELAR_CLIPBOARD_NATIVE=OFF \
             -DTELAR_RUNTIME_SANITIZERS=${{ matrix.configuration == 'Debug' && 'ON' || 'OFF' }} \
-            -DGHOSTTY_VT_ROOT="$RUNNER_TEMP/ghostty"
+            -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT"
 
       - name: Build and test
         run: |
-          cmake --build out --parallel 3 --target telar-runtime runtime-tests tls-tests \
+          ulimit -n 8192
+          cmake --build out --parallel 3 --target telar-runtime telar runtime-tests tls-tests \
             hook-tests event-loop-tests linux-platform-tests checkpoint-probe diagnostics-tests
           ctest --test-dir out --output-on-failure \
             -R '^(runtime-tests|tls-tests|hook-tests|event-loop-tests|linux-platform-tests|server-cli-tests|diagnostics-tests)$'

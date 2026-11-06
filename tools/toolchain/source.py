@@ -65,6 +65,7 @@ def build(manifest, cache, prepare, root, jobs):
     if platform.system() == 'Linux':
         options += ['-DLLVM_ENABLE_RUNTIMES=compiler-rt;libunwind;libcxxabi;libcxx',
                     '-DLIBCXX_ENABLE_SHARED=OFF', '-DLIBCXXABI_ENABLE_SHARED=OFF',
+                    '-DLIBCXX_STATICALLY_LINK_ABI_IN_STATIC_LIBRARY=ON',
                     '-DLIBUNWIND_ENABLE_SHARED=OFF', '-DLIBCXXABI_USE_LLVM_UNWINDER=ON',
                     '-DLIBCXX_HAS_MUSL_LIBC=' + ('ON' if list(Path('/lib').glob('ld-musl-*')) else 'OFF')]
     run(prefix / 'bin/cmake', '-S', sources['llvm'] / 'llvm', '-B', prefix / 'llvm-build', '-G', 'Ninja', *options)

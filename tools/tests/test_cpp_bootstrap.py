@@ -5,6 +5,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / 'bootstrap-cpp.py'
@@ -30,6 +31,18 @@ def archive(name='package/bin/tool', link=None):
 
 
 class BootstrapIntegrity(unittest.TestCase):
+    def test_flat_zip_preserves_the_executable_after_publication(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, 'w') as package:
+            package.writestr('ninja', b'verified executable')
+        data = output.getvalue()
+        pin = {'url': 'https://example.invalid/ninja.zip', 'sha256': hashlib.sha256(data).hexdigest()}
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(bootstrap.urllib.request, 'urlopen', return_value=io.BytesIO(data)):
+                target = bootstrap.prepare('ninja', pin, Path(directory))
+            self.assertEqual((target / 'ninja').read_bytes(), b'verified executable')
+            self.assertTrue((target / 'ninja').stat().st_mode & 0o111)
+
     def prepare(self, directory, data, digest=None):
         pin = {'url': 'https://example.invalid/tool.tar.gz',
                'sha256': digest or hashlib.sha256(data).hexdigest()}

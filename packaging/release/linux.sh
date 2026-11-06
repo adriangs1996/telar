@@ -13,8 +13,8 @@
 # build when a library outside that set, or a glibc or libstdc++ newer than
 # the floors below, sneaks in. Ubuntu 24.04's headers turn strtol into
 # __isoc23_strtol, a glibc 2.38 symbol, and Qt needs GLIBCXX_3.4.32 (GCC 13).
-# libghostty-vt needs Zig 0.17 (ZIG_GHOSTTY, default zig), or GHOSTTY_VT_ROOT
-# naming an existing build.
+# The shared bootstrap prepares the pinned Zig and libghostty-vt, or
+# GHOSTTY_VT_ROOT can name an existing verified build.
 set -eu
 
 out=$1
@@ -43,15 +43,15 @@ if [ ! -d "$work/$name-headless/bin" ]; then
     exit 1
 fi
 
-ghostty=${GHOSTTY_VT_ROOT:-$work/ghostty}
+ghostty=${GHOSTTY_VT_ROOT:-}
 if [ -z "${GHOSTTY_VT_ROOT:-}" ]; then
-    python3 "$root/services/runtime-cpp/tools/build_ghostty.py" --zig "${ZIG_GHOSTTY:-zig}" --build-dir "$work/ghostty-build" --prefix "$ghostty"
+    ghostty=$("$root/tools/cpp" vt | tail -n 1)
 fi
 
-CC=${CC:-gcc-14} CXX=${CXX:-g++-14} cmake -S "$root/services/gui-cpp" -B "$work/gui" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGHOSTTY_VT_ROOT="$ghostty" \
+"$root/tools/cpp" exec -- cmake -S "$root/services/gui-cpp" -B "$work/gui" -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGHOSTTY_VT_ROOT="$ghostty" \
     -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$root/.qt-cache}" -DTELAR_GUI_QT_JOBS="$(nproc)"
-cmake --build "$work/gui" --target telar-gui telar-gui-command
+"$root/tools/cpp" exec -- cmake --build "$work/gui" --target telar-gui telar-gui-command
 python3 "$root/services/gui-cpp/tools/package_linux.py" --build "$work/gui" --headless "$work/$name-headless" --output "$work/$name"
 
 find "$work/$name/bin" "$work/$name/lib" "$work/$name/plugins" "$work/$name/qml" -type f -name 'telar-gui*' -o -type f -name '*.so*' >"$work/elf"

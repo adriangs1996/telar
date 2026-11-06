@@ -71,7 +71,9 @@ def prepare(tool, artifact, cache):
         content = children[0] if len(children) == 1 and children[0].is_dir() else unpacked
         if destination.exists():
             shutil.rmtree(destination)
-        shutil.copytree(content, destination, symlinks=True)
+        # Both directories are on the cache filesystem. Publish by renaming;
+        # copying an LLVM SDK would duplicate gigabytes and thousands of files.
+        content.rename(destination)
         (destination / '.complete').write_text(digest + '\n')
     return destination
 
@@ -157,8 +159,21 @@ def main():
         if platform.system() == 'Linux':
             with toolchain.open('a') as output:
                 output.write('set(CMAKE_CXX_FLAGS_INIT "-stdlib=libc++")\n')
+                # Static libc++ needs its ABI archive too; do not let the driver
+                # silently select a distribution's dynamic C++ ABI runtime.
+                triple = subprocess.check_output([str(llvm_bin / 'clang'), '-print-target-triple'], text=True).strip()
+                libraries = []
+                for name in ('libc++.a', 'libc++abi.a'):
+                    candidates = list((llvm_bin.parent / 'lib').rglob(name))
+                    preferred = [path for path in candidates if triple in str(path)]
+                    candidates = preferred or candidates
+                    if len(candidates) != 1:
+                        raise RuntimeError(f'Expected one pinned {name} for {triple}; use --from-source')
+                    libraries.append(candidates[0])
                 for kind in ('EXE', 'SHARED', 'MODULE'):
-                    output.write(f'set(CMAKE_{kind}_LINKER_FLAGS_INIT "-static-libstdc++")\n')
+                    output.write(f'set(CMAKE_{kind}_LINKER_FLAGS_INIT "-nostdlib++")\n')
+                archives = ' '.join('\\"' + str(path) + '\\"' for path in libraries)
+                output.write(f'set(CMAKE_CXX_STANDARD_LIBRARIES_INIT "{archives} -lm")\n')
         if source_build and platform.system() == 'Linux':
             # Every native application dependency is compiled without distro GCC
             # LTO; libc++ and its unwind/compiler runtimes come from this release.
