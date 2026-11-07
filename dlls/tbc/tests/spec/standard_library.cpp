@@ -540,3 +540,30 @@ std::vector<std::string_view> insertedRangeParameter(const std::string &text) {
 }
 
 // END CASE
+
+// CASE: std.ranges_find_local
+// PAIR: std.ranges_find
+// SOURCE: services/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// STATUS: implemented
+// CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
+// SCENARIO: The searched character is a temporary of the call; the iterator into the live local array stays valid.
+std::size_t rangesFindLocal(const std::array<char, 16> &input) {
+  std::array<char, 16> name = input;
+  const auto end = std::ranges::find(name, '\0');
+  return std::string_view{name.data(), end}.size();
+}
+
+// END CASE
+
+// CASE: std.ranges_find_escape
+// PAIR: std.ranges_find
+// SOURCE: services/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// STATUS: implemented
+// CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
+// SCENARIO: The iterator points into a local array that dies when the function returns.
+const char *rangesFindEscape() {
+  std::array<char, 16> name{};
+  return std::ranges::find(name, '\0'); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE

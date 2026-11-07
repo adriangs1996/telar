@@ -1672,6 +1672,10 @@ namespace tbc_lint {
             return storage(operation->getArg(0), current);
           }
         }
+        // A member pointer selects one field of its object, which lies in that object's storage.
+        if (const auto *operation = llvm::dyn_cast<clang::BinaryOperator>(expression); operation != nullptr && operation->isPtrMemOp()) {
+          return operation->getOpcode() == clang::BO_PtrMemD ? reference(operation->getLHS(), current) : value(operation->getLHS(), current);
+        }
 
         if (const auto *call = llvm::dyn_cast<clang::CallExpr>(expression)) {
           const auto *callee = call->getDirectCallee();
@@ -1862,6 +1866,9 @@ namespace tbc_lint {
           }
 
           return ownedBy(localStorage(ref->getDecl()));
+        }
+        if (const auto *operation = llvm::dyn_cast<clang::BinaryOperator>(expression); operation != nullptr && operation->isPtrMemOp()) {
+          return designates ? value(expression, current) : ownedBy(reference(expression, current));
         }
         if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(expression)) {
           const auto *field = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
@@ -2326,11 +2333,17 @@ namespace tbc_lint {
         if (matched) {
           return result;
         }
+        // A range that yields the result supplies it, so a value of its element type, like the one
+        // std::ranges::find searches for, is not where the iterator points.
+        bool ranged = false;
+        for (unsigned index = offset; index < call.getNumArgs(); ++index) {
+          ranged = ranged || yields(*call.getArg(index), call.getType());
+        }
         for (unsigned index = offset; index < call.getNumArgs(); ++index) {
           const auto *argument = call.getArg(index);
           if (pointerLike(argument->getType())) {
             result.merge(value(argument, current));
-          } else if (call.getType()->isPointerType() && sameType(call.getType()->getPointeeType(), argument->getType())) {
+          } else if (!ranged && call.getType()->isPointerType() && sameType(call.getType()->getPointeeType(), argument->getType())) {
             result.merge(reference(argument, current));
           } else if (yields(*argument, call.getType())) {
             result.merge(storage(argument, current));
@@ -2444,6 +2457,13 @@ namespace tbc_lint {
             }
           }
           return containsViews(expression->getType()) ? readPlace(ref->getDecl(), current) : loans{};
+        }
+        // Which field a member pointer selects is not known, so its object's contents stand in for it.
+        if (const auto *operation = llvm::dyn_cast<clang::BinaryOperator>(expression); operation != nullptr && operation->isPtrMemOp()) {
+          if (!containsViews(operation->getType())) {
+            return {};
+          }
+          return operation->getOpcode() == clang::BO_PtrMemD ? value(operation->getLHS(), current) : pointeeContents(*operation, operation->getLHS(), true, current);
         }
         if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(expression)) {
           const auto *field = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
@@ -3246,6 +3266,32 @@ namespace tbc_lint {
       return;
     }
     auto &cache = implementation_->cache;
+    // Calls reach definitions the matcher never visits: bodies imported from a module and the
+    // instantiations of its templates. Unanalyzed, each would be an opaque call without a summary.
+    // The order grows while it is walked, so discovery is transitive.
+    const auto &sources = context.getSourceManager();
+    for (std::size_t index = 0; index < cache.order.size(); ++index) {
+      const auto &graph = *cache.functions.find(cache.order[index])->second->graph;
+      for (const auto *block : graph) {
+        for (const auto &element : *block) {
+          const auto statement = element.getAs<clang::CFGStmt>();
+          if (!statement) {
+            continue;
+          }
+          const clang::FunctionDecl *callee = nullptr;
+          if (const auto *call = llvm::dyn_cast<clang::CallExpr>(statement->getStmt())) {
+            callee = call->getDirectCallee();
+          } else if (const auto *construct = llvm::dyn_cast<clang::CXXConstructExpr>(statement->getStmt())) {
+            callee = construct->getConstructor();
+          }
+          const auto *definition = callee != nullptr ? callee->getDefinition() : nullptr;
+          if (definition != nullptr && !cache.functions.contains(definition->getCanonicalDecl()) && !sources.isInSystemHeader(sources.getExpansionLoc(definition->getLocation()))) {
+            analyze(*definition, context);
+          }
+        }
+      }
+    }
+
     llvm::SmallVector<const clang::FunctionDecl *, 32> work;
     for (const auto *key : llvm::reverse(cache.order)) {
       work.push_back(key);

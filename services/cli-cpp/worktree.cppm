@@ -109,7 +109,8 @@ Catalog catalog(Memory &memory, const char *socket) {
 
 inline std::string managedPath(std::string_view identity) {
   const ProcessEnvironment environment;
-  const auto home = environment.lookup("HOME");
+  // A later lookup may overwrite the storage an earlier one returned.
+  const std::string home{environment.lookup("HOME")};
   if (home.empty()) {
     throw std::runtime_error{"HomeDirectoryUnavailable"};
   }
@@ -1360,11 +1361,11 @@ private:
   }
 
   inline std::optional<std::uint64_t> attributedPane() {
-    const auto id_text = ::getenv("TELAR_PANE_ID"), generation_text = ::getenv("TELAR_PANE_GENERATION");
-    if (!id_text || !generation_text) {
-      return std::nullopt;
-    }
-    const auto id = maybeUnsigned(id_text), generation = maybeUnsigned(generation_text);
+    // Each value is parsed before the next getenv, which may overwrite the storage it returned.
+    const auto *id_text = ::getenv("TELAR_PANE_ID");
+    const auto id = id_text ? maybeUnsigned(id_text) : std::nullopt;
+    const auto *generation_text = ::getenv("TELAR_PANE_GENERATION");
+    const auto generation = generation_text ? maybeUnsigned(generation_text) : std::nullopt;
     if (!id || !generation || *id == 0 || *generation == 0) {
       return std::nullopt;
     }

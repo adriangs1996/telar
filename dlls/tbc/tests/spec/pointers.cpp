@@ -546,3 +546,40 @@ void pointerParameterReadLive(std::string &text) {
 }
 
 // END CASE
+
+namespace pointers {
+  struct labeled {
+    std::string text;
+  };
+
+  template <auto Member, typename Message>
+  decltype(auto) memberValue(Message &message) {
+    return (message.*Member);
+  }
+}
+
+// CASE: pointer.member_pointer_field
+// PAIR: pointer.member_pointer
+// SOURCE: dlls/telar-client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
+// STATUS: implemented
+// CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
+// SCENARIO: The selected field of a live caller object is observed in place; accept.
+void memberPointerField(pointers::labeled &record) {
+  const auto &text = pointers::memberValue<&pointers::labeled::text>(record);
+  pointers::observe(text);
+}
+
+// END CASE
+
+// CASE: pointer.member_pointer_escape
+// PAIR: pointer.member_pointer
+// SOURCE: dlls/telar-client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
+// STATUS: implemented
+// CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
+// SCENARIO: The selected string belongs to a local object that dies when the function returns.
+std::string_view memberPointerEscape() {
+  pointers::labeled record{.text = "abc"};
+  return record.*(&pointers::labeled::text); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE

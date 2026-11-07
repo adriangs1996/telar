@@ -639,7 +639,8 @@ inline AgentSnapshotEntry resolve(const AgentSnapshot &snapshot, std::string_vie
 inline std::optional<std::uint64_t> senderPane(const Options &options, std::uint64_t target) {
   const ProcessEnvironment environment;
   const auto id = maybeUnsigned(environment.lookup("TELAR_PANE_ID"));
-  const auto own = environment.lookup("TELAR_SOCKET_PATH");
+  // A later lookup may overwrite the storage an earlier one returned.
+  const std::string own{environment.lookup("TELAR_SOCKET_PATH")};
   if (!id || *id == target || own.empty()) {
     return std::nullopt;
   }
