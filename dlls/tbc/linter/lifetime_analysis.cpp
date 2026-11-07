@@ -313,7 +313,9 @@ namespace tbc_lint {
       }
 
       bool merge(llvm::ArrayRef<origin> incoming) {
-        const bool hashed = values.size() * incoming.size() > values.size() + incoming.size();
+        // The set grows while the incoming borrows are compared, so even an empty one is matched
+        // quadratically against many of them.
+        const bool hashed = incoming.size() > 4 && values.size() + incoming.size() > 16;
         llvm::DenseMap<llvm::hash_code, llvm::SmallVector<unsigned, 1>> index;
         if (hashed) {
           for (unsigned position = 0; position < values.size(); ++position) {
@@ -349,6 +351,12 @@ namespace tbc_lint {
           }
 
           if (bucket != nullptr) {
+            // One borrow held at many positions is held inside their common prefix, as soon as it is,
+            // so that a single large merge does not compare it against all of them.
+            if (widenInto(*bucket, value, covered)) {
+              changed = true;
+              continue;
+            }
             bucket->push_back(static_cast<unsigned>(values.size()));
           }
           values.push_back(value);
@@ -364,12 +372,180 @@ namespace tbc_lint {
           }
           values = std::move(kept);
         }
+        // Widening reads the whole set, so it runs again only once the set has doubled.
+        if (changed && values.size() > widen_at) {
+          widenHeld();
+          widen_at = std::max(widen_from, 2 * values.size());
+        }
 
         return changed;
       }
 
       bool merge(const loans &other) {
         return merge(llvm::ArrayRef<origin>(other.values));
+      }
+
+    private:
+      // Past these sizes, one borrow held at many positions of an object is held somewhere inside
+      // their common prefix. The positions of a deep object graph multiply with the parts of an input
+      // its borrows stand for; coarsening only where a borrow lands in many of them bounds the sets
+      // and keeps ordinary code exact. A coarser position covers the finer ones, so it is sound.
+      static constexpr std::size_t widen_from = 64;
+      static constexpr std::size_t held_positions = 4;
+      std::size_t widen_at = widen_from;
+
+      // Widens the live positions of a borrow in a bucket, together with an incoming one, into the first
+      // of them once there are more than the threshold. The others become covered by it.
+      bool widenInto(llvm::ArrayRef<unsigned> bucket, const origin &value, llvm::BitVector &covered) {
+        llvm::SmallVector<unsigned, 8> same;
+        for (const auto position : bucket) {
+          if (!covered.test(position) && sameBorrow(values[position], value)) {
+            same.push_back(position);
+          }
+        }
+        if (same.size() < held_positions) {
+          return false;
+        }
+        auto &kept = values[same.front()];
+        const auto keep = [&](const field_path &held) {
+          const auto common = std::ranges::mismatch(kept.held, held).in1 - kept.held.begin();
+          kept.held.truncate(static_cast<std::size_t>(common));
+        };
+        keep(value.held);
+        for (const auto position : llvm::drop_begin(same)) {
+          keep(values[position].held);
+          covered.set(position);
+        }
+        widenTo(kept.held);
+        return true;
+      }
+
+      void widenHeld() {
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<unsigned, 4>> groups;
+        for (unsigned position = 0; position < values.size(); ++position) {
+          groups[borrowHash(values[position])].push_back(position);
+        }
+        llvm::BitVector dropped(static_cast<unsigned>(values.size()));
+        llvm::SmallVector<unsigned, 8> same;
+        for (const auto &group : groups) {
+          if (group.second.size() <= held_positions) {
+            continue;
+          }
+          // Equal hashes can still be different borrows.
+          same.clear();
+          for (const auto position : group.second) {
+            if (sameBorrow(values[position], values[group.second.front()])) {
+              same.push_back(position);
+            }
+          }
+          if (same.size() <= held_positions) {
+            continue;
+          }
+          auto &kept = values[same.front()];
+          for (const auto position : llvm::drop_begin(same)) {
+            const auto &held = values[position].held;
+            const auto common = std::ranges::mismatch(kept.held, held).in1 - kept.held.begin();
+            kept.held.truncate(static_cast<std::size_t>(common));
+            dropped.set(position);
+          }
+          widenTo(kept.held);
+        }
+        widenParts(dropped);
+        if (dropped.none()) {
+          return;
+        }
+        llvm::SmallVector<origin, 2> kept;
+        for (unsigned position = 0; position < values.size(); ++position) {
+          if (!dropped.test(position)) {
+            kept.push_back(std::move(values[position]));
+          }
+        }
+        values = std::move(kept);
+      }
+
+      // Borrows that stand for many fields of one object an input designates stand for any field of
+      // it instead: the parts share their steps up to the last dereference and differ in the fields
+      // after it. A dereference cannot follow a cut, so parts reached through different pointers stay
+      // apart. The coarser part contains the finer ones, so it is sound.
+      void widenParts(llvm::BitVector &dropped) {
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<unsigned, 4>> groups;
+        for (unsigned position = 0; position < values.size(); ++position) {
+          const auto &value = values[position];
+          if (!dropped.test(position) && objectSteps(value.select) < value.select.size()) {
+            groups[partHash(value)].push_back(position);
+          }
+        }
+        llvm::SmallVector<unsigned, 8> same;
+        for (const auto &group : groups) {
+          if (group.second.size() <= held_positions) {
+            continue;
+          }
+          same.clear();
+          for (const auto position : group.second) {
+            if (samePart(values[position], values[group.second.front()])) {
+              same.push_back(position);
+            }
+          }
+          if (same.size() <= held_positions) {
+            continue;
+          }
+          auto &kept = values[same.front()];
+          bool held_differs = false;
+          for (const auto position : llvm::drop_begin(same)) {
+            const auto &held = values[position].held;
+            held_differs = held_differs || held != kept.held;
+            const auto common = std::ranges::mismatch(kept.held, held).in1 - kept.held.begin();
+            kept.held.truncate(static_cast<std::size_t>(common));
+            dropped.set(position);
+          }
+          if (held_differs) {
+            widenTo(kept.held);
+          }
+          kept.select.truncate(objectSteps(kept.select));
+          kept.select.push_back({.field = nullptr});
+        }
+      }
+
+      // The steps of a part up to and including its last dereference, which reach the object the
+      // remaining fields select from.
+      static std::size_t objectSteps(const field_path &select) {
+        for (auto index = select.size(); index > 0; --index) {
+          if (select[index - 1].dereference) {
+            return index;
+          }
+        }
+        return 0;
+      }
+
+      // Every field of a borrow but where it is held and the fields its part selects in one object.
+      static bool samePart(const origin &left, const origin &right) {
+        const auto steps = objectSteps(left.select);
+        return steps == objectSteps(right.select) && std::equal(left.select.begin(), left.select.begin() + static_cast<std::ptrdiff_t>(steps), right.select.begin()) && left.kind == right.kind && left.storage == right.storage && left.path == right.path && left.variable == right.variable && left.expression == right.expression && left.region == right.region && left.invalidated == right.invalidated && left.full_expression == right.full_expression && left.borrow_site == right.borrow_site;
+      }
+
+      static llvm::hash_code partHash(const origin &value) {
+        auto select = llvm::hash_value(objectSteps(value.select));
+        for (std::size_t index = 0; index < objectSteps(value.select); ++index) {
+          select = llvm::hash_combine(select, value.select[index].field, value.select[index].dereference);
+        }
+        auto path = llvm::hash_value(value.path.size());
+        for (const auto &step : value.path) {
+          path = llvm::hash_combine(path, step.field, std::to_underlying(step.level));
+        }
+        return llvm::hash_combine(std::to_underlying(value.kind), std::to_underlying(value.storage), path, select, value.variable, value.expression, value.region, value.invalidated, value.full_expression, value.borrow_site.getRawEncoding());
+      }
+
+      // Ends a position with a step that stands for any field below it, within the position bound.
+      static void widenTo(field_path &held) {
+        if (!held.empty() && cut(held.back())) {
+          return;
+        }
+        const auto fields = static_cast<std::size_t>(std::ranges::count_if(held, [](const projection &step) { return !step.dereference; }));
+        if (fields >= std::to_underlying(path_bound::held)) {
+          const auto last = llvm::find_if(llvm::reverse(held), [](const projection &step) { return !step.dereference; });
+          held.truncate(static_cast<std::size_t>(std::distance(last, held.rend())) - 1U);
+        }
+        held.push_back({.field = nullptr});
       }
     };
 
@@ -521,10 +697,11 @@ namespace tbc_lint {
 
     // The borrows among designations whose place can be an object of a type.
     loans ofType(const loans &designations, clang::QualType type) {
+      // No borrow of a set covers another, so neither does one of its subsets.
       loans result;
       for (const auto &designation : designations.values) {
         if (compatible(type, placeType(designation))) {
-          result.add(designation);
+          result.values.push_back(designation);
         }
       }
       return result;
@@ -1124,6 +1301,35 @@ namespace tbc_lint {
       llvm::SmallPtrSet<const clang::ValueDecl *, 4> by_reference_;
       bool reporting_ = false;
       bool collecting_ = false;
+      // What each receiver held when the call being resolved began; null outside such a call.
+      llvm::DenseMap<std::pair<const clang::Expr *, const state *>, loans> *receiver_contents_ = nullptr;
+
+      // While one call's effects are resolved, each receiver's contents, which every receiver field of
+      // the summary selects from, are read once, as they were at the call. The outermost scope owns them.
+      class receiver_reads {
+      public:
+        explicit receiver_reads(function_analysis &analysis)
+            : analysis_(analysis),
+              owner_(analysis.receiver_contents_ == nullptr) {
+          if (owner_) {
+            analysis_.receiver_contents_ = &contents_;
+          }
+        }
+
+        ~receiver_reads() {
+          if (owner_) {
+            analysis_.receiver_contents_ = nullptr;
+          }
+        }
+
+        receiver_reads(const receiver_reads &) = delete;
+        receiver_reads &operator=(const receiver_reads &) = delete;
+
+      private:
+        function_analysis &analysis_;
+        bool owner_;
+        llvm::DenseMap<std::pair<const clang::Expr *, const state *>, loans> contents_;
+      };
 
       const clang::Stmt *fullExpression(const clang::Stmt *statement) const {
         auto node = clang::DynTypedNode::create(*statement);
@@ -1826,7 +2032,18 @@ namespace tbc_lint {
         if (capturedReceiver(callee, &field)) {
           return selected(referencedContents(capturedThis(callee, object, current), current), field);
         }
-        return llvm::isa<clang::CXXThisExpr>(clean(&object)) ? current.get(&field) : selected(receiverContents(object, current), field);
+        if (llvm::isa<clang::CXXThisExpr>(clean(&object))) {
+          return current.get(&field);
+        }
+        if (receiver_contents_ == nullptr) {
+          return selected(receiverContents(object, current), field);
+        }
+        const auto key = std::make_pair(&object, &current);
+        auto found = receiver_contents_->find(key);
+        if (found == receiver_contents_->end()) {
+          found = receiver_contents_->try_emplace(key, receiverContents(object, current)).first;
+        }
+        return selected(found->second, field);
       }
 
       // What a closure's captured `this` designates: the captured pointer's object, or the copy of `*this`
@@ -2066,6 +2283,17 @@ namespace tbc_lint {
         return source.kind == origin_kind::parameter ? value(&argument, current) : reference(&argument, current);
       }
 
+      // What a call reads of one input: what the input stands for, and what each leading part of it,
+      // up to a dereference, designates. The parts of one input that a summary names share their
+      // leading steps, so each is read once.
+      struct input_reads {
+        explicit input_reads(std::optional<loans> input)
+            : actual(std::move(input)) {}
+
+        std::optional<loans> actual;
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<std::pair<field_path, loans>, 1>> designated;
+      };
+
       // The part of an actual input that a summary's borrow stands for, through the objects it designates.
       loans selectedAlong(loans actual, const field_path &select, const state &current) {
         field_path fields;
@@ -2078,6 +2306,35 @@ namespace tbc_lint {
           fields.clear();
         }
         return selected(actual, fields);
+      }
+
+      loans selectedAlong(input_reads &reads, const loans &input, const field_path &select, const state &current) {
+        const loans *actual = &input;
+        field_path fields;
+        for (std::size_t index = 0; index < select.size(); ++index) {
+          if (!select[index].dereference) {
+            fields.push_back(select[index]);
+            continue;
+          }
+          const field_path prefix(select.begin(), select.begin() + static_cast<std::ptrdiff_t>(index) + 1);
+          const auto key = pathHash(prefix);
+          const auto matches = [&](const auto &entry) { return entry.first == prefix; };
+          if (llvm::none_of(reads.designated[key], matches)) {
+            auto designated = referencedContents(selected(*actual, fields), current);
+            reads.designated[key].emplace_back(prefix, std::move(designated));
+          }
+          actual = &llvm::find_if(reads.designated[key], matches)->second;
+          fields.clear();
+        }
+        return selected(*actual, fields);
+      }
+
+      static llvm::hash_code pathHash(const field_path &path) {
+        auto hash = llvm::hash_value(path.size());
+        for (const auto &step : path) {
+          hash = llvm::hash_combine(hash, step.field, std::to_underlying(step.level), step.dereference);
+        }
+        return hash;
       }
 
       using field_writes = llvm::SmallVector<std::pair<const clang::FieldDecl *, loans>, 4>;
@@ -2190,9 +2447,9 @@ namespace tbc_lint {
         }
       }
 
-      // What a summary's symbolic input stands for at a call, through the part of it the borrow selects,
-      // before the borrow's place inside it is located. Nothing for an argument the call does not pass.
-      std::optional<loans> actualFor(const origin &source, const clang::CallExpr &call, const state &current) {
+      // What a summary's symbolic input stands for at a call, before the part a borrow selects. Nothing
+      // for an argument the call does not pass.
+      std::optional<loans> actualInputFor(const origin &source, const clang::CallExpr &call, const state &current) {
         loans actual;
         if (parameterOrigin(source)) {
           const auto index = llvm::cast<clang::ParmVarDecl>(source.variable)->getFunctionScopeIndex() + argumentOffset(call);
@@ -2218,80 +2475,93 @@ namespace tbc_lint {
         } else {
           actual.add({.kind = origin_kind::unknown, .expression = &call});
         }
-        if (!source.select.empty()) {
-          actual = selectedAlong(actual, source.select, current);
-        }
         return actual;
       }
 
       loans instantiate(const loans &symbolic, const clang::CallExpr &call, const state &current) {
-        loans result;
-        // Borrows of one part of one input share what that part stands for at this call.
-        llvm::SmallVector<std::pair<const origin *, std::optional<loans>>, 8> resolved;
+        const receiver_reads reads(*this);
+        // Each input is read once, and borrows of one part of one input share what that part stands for.
+        llvm::SmallVector<std::tuple<origin_kind, const clang::ValueDecl *, input_reads>, 4> inputs;
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<std::pair<const origin *, std::optional<loans>>, 1>> resolved;
+        llvm::SmallVector<origin, 8> incoming;
         for (const auto &source : symbolic.values) {
           // Static storage and the environment are the same places at every call.
           if (source.kind == origin_kind::static_storage || source.kind == origin_kind::environment || source.kind == origin_kind::unknown) {
-            result.add(source);
+            incoming.push_back(source);
             continue;
           }
+          const auto key = llvm::hash_combine(std::to_underlying(source.kind), source.variable, pathHash(source.select));
           const auto same = [&](const auto &entry) { return entry.first->kind == source.kind && entry.first->variable == source.variable && entry.first->select == source.select; };
-          auto found = std::ranges::find_if(resolved, same);
-          if (found == resolved.end()) {
-            resolved.emplace_back(&source, actualFor(source, call, current));
-            found = std::prev(resolved.end());
+          if (llvm::none_of(resolved[key], same)) {
+            auto input = llvm::find_if(inputs, [&](const auto &entry) { return std::get<0>(entry) == source.kind && std::get<1>(entry) == source.variable; });
+            if (input == inputs.end()) {
+              inputs.emplace_back(source.kind, source.variable, input_reads(actualInputFor(source, call, current)));
+              input = std::prev(inputs.end());
+            }
+            auto &read = std::get<2>(*input);
+            auto actual = read.actual && !source.select.empty() ? std::optional<loans>(selectedAlong(read, *read.actual, source.select, current)) : read.actual;
+            resolved[key].emplace_back(&source, std::move(actual));
           }
-          if (!found->second) {
+          const auto &found = *llvm::find_if(resolved[key], same);
+          if (!found.second) {
             continue;
           }
-          auto actual = *found->second;
-          for (auto &borrow : actual.values) {
+          for (auto borrow : found.second->values) {
             locate(borrow, source);
             if (source.invalidated != nullptr) {
               borrow.invalidated = source.invalidated;
             }
+            incoming.push_back(std::move(borrow));
           }
-          result.merge(actual);
         }
 
+        loans result;
+        result.merge(incoming);
         return result;
       }
 
       loans referencedContents(const loans &binding, const state &current) {
-        loans result;
         // Borrows of one place, which differ only in where they are held, share what it holds.
-        llvm::SmallVector<std::tuple<const origin *, field_path>, 4> visited;
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<std::pair<const origin *, field_path>, 1>> visited;
         const auto first = [&](const origin &source, field_path at) {
-          const auto same = [&](const auto &entry) { return std::get<0>(entry)->kind == source.kind && std::get<0>(entry)->variable == source.variable && std::get<0>(entry)->select == source.select && std::get<0>(entry)->storage == source.storage && std::get<1>(entry) == at; };
-          if (std::ranges::any_of(visited, same)) {
+          auto &bucket = visited[llvm::hash_combine(std::to_underlying(source.kind), source.variable, pathHash(source.select), std::to_underlying(source.storage), pathHash(at))];
+          const auto same = [&](const auto &entry) { return entry.first->kind == source.kind && entry.first->variable == source.variable && entry.first->select == source.select && entry.first->storage == source.storage && entry.second == at; };
+          if (llvm::any_of(bucket, same)) {
             return false;
           }
-          visited.emplace_back(&source, std::move(at));
+          bucket.emplace_back(&source, std::move(at));
           return true;
         };
+        // What each place holds is gathered first and merged once, so the result is not indexed again
+        // for every place.
+        llvm::SmallVector<origin, 8> incoming;
+        const auto gather = [&](const loans &contents) { incoming.append(contents.values.begin(), contents.values.end()); };
         for (const auto &source : binding.values) {
           // An extended temporary is identified by its expression; its variable only bounds its lifetime.
           const bool extended_temporary = source.kind == origin_kind::local && llvm::isa_and_nonnull<clang::MaterializeTemporaryExpr>(source.expression);
           if (source.kind == origin_kind::unknown) {
-            result.add(source);
+            incoming.push_back(source);
           } else if (standsForInput(source)) {
             if (first(source, source.path)) {
-              result.merge(designatedContents(source, current));
+              gather(designatedContents(source, current));
             }
           } else if (source.variable != nullptr && !extended_temporary) {
             if (first(source, inlineFields(source.path))) {
-              result.merge(selected(readPlace(source.variable, current), inlineFields(source.path)));
+              gather(selected(readPlace(source.variable, current), inlineFields(source.path)));
             }
           } else if (source.expression != nullptr) {
-            result.merge(value(source.expression, current));
+            gather(value(source.expression, current));
           } else if (source.kind == origin_kind::receiver) {
             if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_)) {
               for (const auto *field : method->getParent()->fields()) {
-                result.merge(current.get(field));
+                gather(current.get(field));
               }
             }
           }
         }
 
+        loans result;
+        result.merge(incoming);
         return result;
       }
 
@@ -2870,27 +3140,66 @@ namespace tbc_lint {
         }
       }
 
+      // A place an operation invalidates, and the levels of a range below the object there.
+      struct invalidation {
+        object_place target;
+        storage_range range = owned_storage;
+      };
+
+      static llvm::hash_code placeHash(const invalidation &place) {
+        const auto &target = place.target;
+        return llvm::hash_combine(target.variable, std::to_underlying(target.level), target.designated, pathHash(target.path), pathHash(target.select), std::to_underlying(place.range.first), std::to_underlying(place.range.last));
+      }
+
       // Invalidates the levels of a range below an object, which lies at a place inside its variable.
       void invalidate(const object_place &target, const clang::Stmt *trigger, state &current, bool destroyed = false, storage_range range = owned_storage) {
-        const auto *owner = target.variable;
-        if (owner == nullptr || trigger == nullptr) {
+        const invalidation place{.target = target, .range = range};
+        invalidateAll(llvm::ArrayRef<invalidation>(place), trigger, current, destroyed);
+      }
+
+      // Invalidates every place one operation reaches in a single pass over the state, matching each
+      // borrow against the places inside its own variable.
+      void invalidateAll(llvm::ArrayRef<invalidation> places, const clang::Stmt *trigger, state &current, bool destroyed = false) {
+        if (trigger == nullptr) {
           return;
         }
-        if (!destroyed && (llvm::isa<clang::ParmVarDecl>(owner) || llvm::isa<clang::FieldDecl>(owner) || by_reference_.contains(owner) || (llvm::isa<clang::VarDecl>(owner) && llvm::cast<clang::VarDecl>(owner)->hasGlobalStorage()))) {
-          summary_.invalidate(target, range);
+        llvm::SmallDenseMap<const clang::ValueDecl *, llvm::SmallVector<const invalidation *, 2>, 4> owners;
+        // Many of a callee's places land on the same actual place.
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<const invalidation *, 1>> seen;
+        for (const auto &place : places) {
+          const auto *owner = place.target.variable;
+          if (owner == nullptr) {
+            continue;
+          }
+          auto &same = seen[placeHash(place)];
+          if (llvm::any_of(same, [&](const invalidation *earlier) { return earlier->target == place.target && earlier->range.first == place.range.first && earlier->range.last == place.range.last; })) {
+            continue;
+          }
+          same.push_back(&place);
+          if (!destroyed && (llvm::isa<clang::ParmVarDecl>(owner) || llvm::isa<clang::FieldDecl>(owner) || by_reference_.contains(owner) || (llvm::isa<clang::VarDecl>(owner) && llvm::cast<clang::VarDecl>(owner)->hasGlobalStorage()))) {
+            summary_.invalidate(place.target, place.range);
+          }
+          owners[owner].push_back(&place);
         }
-        const auto levels = range.inside(target.level);
+        if (owners.empty()) {
+          return;
+        }
         // A place an input designates is reached only through the same part of that input.
-        const auto reaches = [&](const origin &source) {
+        const auto reaches = [](const origin &source, const invalidation &place) {
+          const auto &target = place.target;
           if (standsForInput(source) != target.designated || (target.designated && !sameDesignation(source.select, target.select))) {
             return false;
           }
-          return levels.contains(source.storage) && within(source.path, target);
+          return place.range.inside(target.level).contains(source.storage) && within(source.path, target);
         };
         for (auto *map : {&current.values, &current.references, &current.designated}) {
           for (auto &entry : *map) {
             for (auto &source : entry.second.values) {
-              if (source.variable == owner && source.invalidated == nullptr && (destroyed || reaches(source))) {
+              if (source.invalidated != nullptr) {
+                continue;
+              }
+              const auto found = owners.find(source.variable);
+              if (found != owners.end() && (destroyed || llvm::any_of(found->second, [&](const invalidation *place) { return reaches(source, *place); }))) {
                 source.invalidated = trigger;
               }
             }
@@ -2937,6 +3246,7 @@ namespace tbc_lint {
           return;
         }
         // Summaries describe the result in terms of entry state, so read it before this call's writes.
+        const receiver_reads reads(*this);
         call_results_.erase(&call);
         auto result = callResult(call, current);
         call_results_[&call] = std::move(result);
@@ -3115,6 +3425,9 @@ namespace tbc_lint {
         if (known == nullptr) {
           return;
         }
+        const receiver_reads reads(*this);
+        // The call's places are found in the state it was entered with, then invalidated together.
+        llvm::SmallVector<invalidation, 8> places;
         // Many places lie in the same part of one input, which the call resolves once.
         llvm::SmallVector<std::tuple<const clang::ValueDecl *, field_path, loans>, 4> designations;
         const auto designated = [&](const object_place &target) -> const loans & {
@@ -3132,7 +3445,7 @@ namespace tbc_lint {
           if (target.designated) {
             for (const auto &designation : designated(target).values) {
               if (const auto place = placeWithin(designation, target)) {
-                invalidate(*place, &call, current, false, range);
+                places.push_back({.target = *place, .range = range});
               }
             }
             continue;
@@ -3144,7 +3457,7 @@ namespace tbc_lint {
               continue;
             }
             for (const auto &actual : invalidationTargets(*call.getArg(index), current)) {
-              invalidate(rebased(actual, target), &call, current, false, range);
+              places.push_back({.target = rebased(actual, target), .range = range});
             }
           } else if (const auto *field = llvm::dyn_cast<clang::FieldDecl>(target.variable)) {
             const auto *object = receiver(call);
@@ -3154,20 +3467,21 @@ namespace tbc_lint {
             if (capturedReceiver(*call.getDirectCallee(), field)) {
               for (const auto &actual : capturedThis(*call.getDirectCallee(), *object, current).values) {
                 if (const auto place = placeWithin(actual, receiverPlace(target))) {
-                  invalidate(*place, &call, current, false, range);
+                  places.push_back({.target = *place, .range = range});
                 }
               }
             } else if (llvm::isa<clang::CXXThisExpr>(clean(object))) {
-              invalidate(target, &call, current, false, range);
+              places.push_back({.target = target, .range = range});
             } else {
               for (const auto &actual : invalidationTargets(*object, current)) {
-                invalidate(rebased(actual, receiverPlace(target)), &call, current, false, range);
+                places.push_back({.target = rebased(actual, receiverPlace(target)), .range = range});
               }
             }
           } else {
-            invalidate(target, &call, current, false, range);
+            places.push_back({.target = target, .range = range});
           }
         }
+        invalidateAll(places, &call, current);
       }
 
       // What a callee's input holds at a call: the argument for a parameter, or what the receiver holds at
@@ -3462,8 +3776,10 @@ namespace tbc_lint {
     // instantiations of its templates. Unanalyzed, each would be an opaque call without a summary.
     // The order grows while it is walked, so discovery is transitive.
     const auto &sources = context.getSourceManager();
+    llvm::DenseMap<const clang::FunctionDecl *, llvm::SmallVector<const clang::FunctionDecl *, 4>> calls;
     for (std::size_t index = 0; index < cache.order.size(); ++index) {
-      const auto &graph = *cache.functions.find(cache.order[index])->second->graph;
+      const auto *caller = cache.order[index];
+      const auto &graph = *cache.functions.find(caller)->second->graph;
       for (const auto *block : graph) {
         for (const auto &element : *block) {
           const auto statement = element.getAs<clang::CFGStmt>();
@@ -3480,12 +3796,40 @@ namespace tbc_lint {
           if (definition != nullptr && !cache.functions.contains(definition->getCanonicalDecl()) && !sources.isInSystemHeader(sources.getExpansionLoc(definition->getLocation()))) {
             analyze(*definition, context);
           }
+          if (definition != nullptr && cache.functions.contains(definition->getCanonicalDecl())) {
+            calls[caller].push_back(definition->getCanonicalDecl());
+          }
         }
       }
     }
 
+    // Callees first: a caller analyzed after the summaries it reads is rarely requeued, and every
+    // requeue repeats its whole analysis. A cycle is entered at an arbitrary member.
+    llvm::SmallVector<const clang::FunctionDecl *, 32> postorder;
+    llvm::DenseSet<const clang::FunctionDecl *> seen;
+    llvm::SmallVector<std::pair<const clang::FunctionDecl *, unsigned>, 32> path;
+    for (const auto *root : cache.order) {
+      if (!seen.insert(root).second) {
+        continue;
+      }
+      path.emplace_back(root, 0U);
+      while (!path.empty()) {
+        const auto [node, next] = path.back();
+        const auto found = calls.find(node);
+        if (found != calls.end() && next < found->second.size()) {
+          ++path.back().second;
+          if (const auto *callee = found->second[next]; seen.insert(callee).second) {
+            path.emplace_back(callee, 0U);
+          }
+          continue;
+        }
+        postorder.push_back(node);
+        path.pop_back();
+      }
+    }
+
     llvm::SmallVector<const clang::FunctionDecl *, 32> work;
-    for (const auto *key : llvm::reverse(cache.order)) {
+    for (const auto *key : llvm::reverse(postorder)) {
       work.push_back(key);
       cache.functions.find(key)->second->queued = true;
     }

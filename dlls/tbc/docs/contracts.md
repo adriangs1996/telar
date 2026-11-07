@@ -423,7 +423,10 @@ has deliberate limits:
   apart. A function that retains an argument on one path retains it for every
   call, whatever value selects that path: a queue that copies a reply unless a
   shared owner is supplied must copy and retain in separate functions. A shared
-  owner retained beside a view does not keep the view's referent alive.
+  owner retained beside a view does not keep the view's referent alive. In a large
+  set of borrows, one borrow held at many positions of an object is held at their
+  common prefix instead, which bounds what deep object graphs produce; a coarser
+  position only makes later writes to those fields keep the borrow.
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
   protocols still require further analysis or audited models.

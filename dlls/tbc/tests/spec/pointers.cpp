@@ -621,6 +621,7 @@ bool cFunctionArgument() {
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: A column read through a function pointer is a library row, not a view of the statement handle; accept.
 using column_text = const unsigned char *(*)(void *statement, int column);
+
 bool functionPointerResource(column_text text, void *statement) {
   const auto *bytes = text(statement, 0);
   return bytes != nullptr && bytes[0] != 0;

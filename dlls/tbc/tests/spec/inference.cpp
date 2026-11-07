@@ -1,10 +1,10 @@
 #include "tbc/view.hpp"
 
 #include <cstdlib>
-#include <memory>
-#include <stdexcept>
 #include <dirent.h>
 #include <initializer_list>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1052,11 +1052,15 @@ void inferredOpaqueReceiverRetained() {
 namespace inferred {
   class pinned_buffer {
   public:
-    pinned_buffer() : cursor_(storage_.data()) {}
+    pinned_buffer()
+        : cursor_(storage_.data()) {}
+
     pinned_buffer(const pinned_buffer &) = delete;
     pinned_buffer &operator=(const pinned_buffer &) = delete;
 
-    [[nodiscard]] char front() const { return *cursor_; }
+    [[nodiscard]] char front() const {
+      return *cursor_;
+    }
 
   private:
     std::string storage_{"abc"};
@@ -1080,9 +1084,12 @@ char inferredSelfBorrowPinned() {
 namespace inferred {
   class relocatable_buffer {
   public:
-    relocatable_buffer() : cursor_(storage_.data()) {} // expected-error [tbc-dangling-borrow]
+    relocatable_buffer()
+        : cursor_(storage_.data()) {} // expected-error [tbc-dangling-borrow]
 
-    [[nodiscard]] char front() const { return *cursor_; }
+    [[nodiscard]] char front() const {
+      return *cursor_;
+    }
 
   private:
     std::string storage_{"abc"};
@@ -1112,15 +1119,19 @@ namespace inferred {
       }
       stream_ = ::opendir(path);
     }
+
     directory_stream(const directory_stream &) = delete;
     directory_stream &operator=(const directory_stream &) = delete;
+
     ~directory_stream() {
       if (stream_ != nullptr) {
         ::closedir(stream_);
       }
     }
 
-    [[nodiscard]] const dirent *next() { return ::readdir(stream_); }
+    [[nodiscard]] const dirent *next() {
+      return ::readdir(stream_);
+    }
 
   private:
     DIR *stream_ = nullptr;
@@ -1175,7 +1186,8 @@ namespace inferred {
 
   class owned_text {
   public:
-    owned_text() : text_(nullptr, &releaseText) {}
+    owned_text()
+        : text_(nullptr, &releaseText) {}
 
   private:
     std::unique_ptr<char, decltype(&releaseText)> text_;
@@ -1198,7 +1210,8 @@ void inferredFunctionAddress() {
 namespace inferred {
   class counted_text {
   public:
-    counted_text() : count_(&storage_) {} // expected-error [tbc-dangling-borrow]
+    counted_text()
+        : count_(&storage_) {} // expected-error [tbc-dangling-borrow]
 
   private:
     int storage_ = 0;
@@ -1252,9 +1265,12 @@ namespace inferred {
   template <typename Memory>
   class allocating_storage {
   public:
-    explicit allocating_storage(Memory &memory) noexcept : memory_(&memory) {}
+    explicit allocating_storage(Memory &memory) noexcept
+        : memory_(&memory) {}
 
-    [[nodiscard]] Memory &memory() const { return *memory_; }
+    [[nodiscard]] Memory &memory() const {
+      return *memory_;
+    }
 
   private:
     Memory *memory_;
@@ -1268,7 +1284,8 @@ namespace inferred {
 
   class named_view : public allocating_storage<const std::string> {
   public:
-    explicit named_view(const std::string &name) : allocating_storage(name) {}
+    explicit named_view(const std::string &name)
+        : allocating_storage(name) {}
   };
 }
 
