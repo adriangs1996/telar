@@ -100,7 +100,7 @@ add_library(runtime-core STATIC
   terminal/cell_projection.cpp)
 telar_modules(runtime-core)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_NATIVE_INCLUDE_DIR}")
+target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_NATIVE_INCLUDE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../dlls/tbc/include")
 target_link_libraries(runtime-core PUBLIC telar::tls telar-clipboard)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")

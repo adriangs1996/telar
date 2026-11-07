@@ -41,6 +41,7 @@ namespace tbc_lint {
       contract,
       ambiguous,
       missing,
+      relocated_self,
     };
 
     // How deep a borrow reaches into a variable: the variable itself, the storage it owns, such as a
@@ -870,8 +871,23 @@ namespace tbc_lint {
       if (const auto *constant = llvm::dyn_cast<clang::ConstantExpr>(expression)) {
         return clean(constant->getSubExpr());
       }
+      // A structured binding names the part of the decomposed object its binding expression selects.
+      if (const auto *reference = llvm::dyn_cast<clang::DeclRefExpr>(expression)) {
+        if (const auto *binding = llvm::dyn_cast<clang::BindingDecl>(reference->getDecl()); binding != nullptr && binding->getBinding() != nullptr) {
+          return clean(binding->getBinding());
+        }
+      }
 
       return expression;
+    }
+
+    // An inheriting constructor runs the base constructor it names on the same arguments.
+    const clang::CXXConstructorDecl *constructorOf(const clang::CXXConstructExpr &construction) {
+      const auto *constructor = construction.getConstructor();
+      while (constructor != nullptr && constructor->isInheritingConstructor()) {
+        constructor = constructor->getInheritedConstructor().getConstructor();
+      }
+      return constructor;
     }
 
     const clang::ValueDecl *place(const clang::Expr *expression) {
@@ -1031,6 +1047,7 @@ namespace tbc_lint {
             escape(summary_.writes[key]);
           }
         }
+        checkSelfBorrows();
         // Objects an input designates belong to the caller. Writes into them never replace, so what an
         // object held on entry, held back where it was, tells the caller nothing.
         for (const auto &[input, written] : exit.designated) {
@@ -1047,6 +1064,55 @@ namespace tbc_lint {
       }
 
     private:
+      // A constructor that stores a borrow of the new object in one of its fields makes the object
+      // borrow itself. That borrow stays valid only while the object keeps its address: a copy or a
+      // move leaves it pointing at the source. As Rust admits self-references only behind `Pin`, such
+      // a type must be neither copyable nor movable.
+      void checkSelfBorrows() {
+        const auto *constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function_);
+        if (!reporting_ || constructor == nullptr || !relocatable(*constructor->getParent())) {
+          return;
+        }
+        for (const auto &[key, written] : summary_.writes) {
+          const auto *field = llvm::dyn_cast<clang::FieldDecl>(key);
+          if (field == nullptr) {
+            continue;
+          }
+          for (const auto &source : written.values) {
+            if (source.kind == origin_kind::receiver) {
+              report(issue::relocated_self, initializerLocation(*constructor, *field), &source);
+            }
+          }
+        }
+      }
+
+      [[nodiscard]] static clang::SourceLocation initializerLocation(const clang::CXXConstructorDecl &constructor, const clang::FieldDecl &field) {
+        for (const auto *initializer : constructor.inits()) {
+          if (initializer->isWritten() && initializer->getMember() == &field) {
+            return initializer->getSourceLocation();
+          }
+        }
+        return constructor.getLocation();
+      }
+
+      // Whether an object of the record can be copied or moved into another one.
+      [[nodiscard]] static bool relocatable(const clang::CXXRecordDecl &record) {
+        const bool declared_move = record.hasUserDeclaredMoveConstructor() || record.hasUserDeclaredMoveAssignment();
+        if ((record.needsImplicitCopyConstructor() && !declared_move && !record.defaultedCopyConstructorIsDeleted()) || (record.needsImplicitMoveConstructor() && !record.defaultedMoveConstructorIsDeleted())) {
+          return true;
+        }
+        for (const auto *method : record.methods()) {
+          const auto *constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(method);
+          const bool special = constructor != nullptr ? constructor->isCopyOrMoveConstructor() : method->isCopyAssignmentOperator() || method->isMoveAssignmentOperator();
+          if (special && !method->isDeleted()) {
+            return true;
+          }
+        }
+        // An implicit assignment is deleted for a reference or a const member; other causes need Sema.
+        const bool implicit_assignment = (record.needsImplicitCopyAssignment() && !declared_move) || record.needsImplicitMoveAssignment();
+        return implicit_assignment && llvm::none_of(record.fields(), [](const auto *field) { return field->getType()->isReferenceType() || field->getType().isConstQualified(); });
+      }
+
       const clang::FunctionDecl &function_;
       clang::ASTContext &context_;
       bool errors_;
@@ -1138,6 +1204,9 @@ namespace tbc_lint {
           break;
         case issue::missing:
           id = diagnostics.getCustomDiagID(severity, "borrow-sensitive call to %0 has no supported lifetime summary [tbc-missing-contract]");
+          break;
+        case issue::relocated_self:
+          id = diagnostics.getCustomDiagID(severity, "object keeps a borrow of itself but can be copied or moved [tbc-dangling-borrow]");
           break;
         }
         {
@@ -1287,7 +1356,8 @@ namespace tbc_lint {
             initial.references[parameter].add({.kind = origin_kind::parameter_storage, .storage = storage_kind::object, .variable = parameter});
           }
         }
-        if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_)) {
+        // A constructor's fields hold nothing on entry: its initializers give them their first values.
+        if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && !llvm::isa<clang::CXXConstructorDecl>(method)) {
           for (const auto *field : method->getParent()->fields()) {
             if (containsViews(field->getType())) {
               const auto annotation = viewAnnotation(field->getType(), context_);
@@ -1609,8 +1679,11 @@ namespace tbc_lint {
           } else {
             result.add({.kind = origin_kind::static_storage, .storage = storage_kind::object, .variable = variable});
           }
-        } else if (variable != nullptr) {
+        } else if (llvm::isa_and_nonnull<clang::FieldDecl, clang::IndirectFieldDecl>(variable)) {
           result.add({.kind = origin_kind::receiver, .storage = storage_kind::object, .variable = variable});
+        } else if (variable != nullptr) {
+          // A function, or a template parameter object: storage that outlives every program object.
+          result.add({.kind = origin_kind::static_storage, .storage = storage_kind::object, .variable = variable});
         }
 
         return result;
@@ -1649,7 +1722,6 @@ namespace tbc_lint {
           if (variable != nullptr && variable->getType()->isReferenceType()) {
             return current.getReference(variable);
           }
-
           return localStorage(ref->getDecl());
         }
         if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(expression)) {
@@ -2008,28 +2080,21 @@ namespace tbc_lint {
         return selected(actual, fields);
       }
 
-      loans constructionResult(const clang::CXXConstructExpr &construction, const state &current) {
-        const auto *constructor = construction.getConstructor();
-        const auto *known = knownDeclaration(constructor);
-        loans result;
-        for (const auto &base : constructor->getParent()->bases()) {
-          if (containsViews(base.getType())) {
-            result.add({.kind = origin_kind::unknown, .expression = &construction});
-            return result;
-          }
-        }
+      using field_writes = llvm::SmallVector<std::pair<const clang::FieldDecl *, loans>, 4>;
+
+      // What one construction writes to each field of the new object, its bases' fields included, or
+      // nothing when its constructor has no summary.
+      std::optional<field_writes> constructedFields(const clang::CXXConstructExpr &construction, const state &current) {
+        const auto *known = knownDeclaration(constructorOf(construction));
         if (known == nullptr) {
-          result.add({.kind = origin_kind::unknown, .expression = &construction});
-          return result;
+          return std::nullopt;
         }
+        field_writes result;
         for (const auto &write : known->summary.writes) {
-          // What a constructor writes to one of its fields is held at that field of the new object.
           const auto *field = llvm::dyn_cast<clang::FieldDecl>(write.first);
           if (field == nullptr) {
             continue;
           }
-          field_path at;
-          appendField(at, *field, storage_kind::object);
           loans written;
           for (const auto &source : write.second.values) {
             loans actual;
@@ -2040,6 +2105,10 @@ namespace tbc_lint {
               }
             } else if (source.kind == origin_kind::static_storage || source.kind == origin_kind::environment) {
               written.add(source);
+              continue;
+            } else if (source.kind == origin_kind::receiver) {
+              // A borrow of the new object itself lives exactly as long as the object; its constructor
+              // reports a type that could carry it away by a copy or a move.
               continue;
             } else {
               actual.add({.kind = origin_kind::unknown, .expression = &construction});
@@ -2052,9 +2121,73 @@ namespace tbc_lint {
             }
             written.merge(actual);
           }
+          result.emplace_back(field, std::move(written));
+        }
+        return result;
+      }
+
+      loans constructionResult(const clang::CXXConstructExpr &construction, const state &current) {
+        loans result;
+        const auto fields = constructedFields(construction, current);
+        if (!fields) {
+          if (!declaredRetention(construction, current, result)) {
+            result.add({.kind = origin_kind::unknown, .expression = &construction});
+          }
+          return result;
+        }
+        // What a constructor writes to one of its fields is held at that field of the new object.
+        for (const auto &[field, written] : *fields) {
+          field_path at;
+          appendField(at, *field, storage_kind::object);
           result.merge(heldAt(written, at));
         }
         return result;
+      }
+
+      // A constructor without a visible body retains what its signature promises: every argument whose
+      // parameter shares a region with a field of the class, as a mutating method does. Fails when no
+      // field of the class carries a region, so that the signature promises nothing.
+      bool declaredRetention(const clang::CXXConstructExpr &construction, const state &current, loans &retained) {
+        const auto *constructor = constructorOf(construction);
+        if (constructor == nullptr || llvm::none_of(constructor->getParent()->fields(), [&](const auto *field) { return viewAnnotation(field->getType(), context_).region != nullptr; })) {
+          return false;
+        }
+        for (unsigned index = 0; index < constructor->getNumParams() && index < construction.getNumArgs(); ++index) {
+          const auto *parameter = constructor->getParamDecl(index);
+          const auto region = parameterAnnotation(*parameter, context_).region;
+          if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*constructor, region)) {
+            retained.merge(storage(construction.getArg(index), current));
+          }
+        }
+        retained = unplaced(retained);
+        return true;
+      }
+
+      // A base or delegated construction inside a constructor writes the fields of the object under
+      // construction, which an unsummarized one leaves unknown.
+      void initializeSubobject(const clang::CXXCtorInitializer &initializer, state &current) {
+        const auto *construction = llvm::dyn_cast<clang::CXXConstructExpr>(clean(initializer.getInit()));
+        const auto fields = construction != nullptr ? constructedFields(*construction, current) : std::nullopt;
+        if (fields) {
+          for (const auto &[field, written] : *fields) {
+            current.values[field] = written;
+            current.written.insert(field);
+          }
+          return;
+        }
+        const auto *record = initializer.isBaseInitializer() ? initializer.getBaseClass()->getAsCXXRecordDecl() : llvm::cast<clang::CXXMethodDecl>(function_).getParent();
+        if (record == nullptr || !record->hasDefinition()) {
+          return;
+        }
+        llvm::SmallVector<const clang::FieldDecl *, 8> members;
+        recordFields(*record->getDefinition(), members);
+        for (const auto *field : members) {
+          if (containsViews(field->getType())) {
+            current.values[field] = {};
+            current.values[field].add({.kind = origin_kind::unknown, .expression = initializer.getInit()});
+            current.written.insert(field);
+          }
+        }
       }
 
       // What a summary's symbolic input stands for at a call, through the part of it the borrow selects,
@@ -3221,6 +3354,8 @@ namespace tbc_lint {
               if (transfersAllocation(field->getType())) {
                 transferOwnership(movedFrom(initializer->getInit()), {field}, storage_kind::data, current);
               }
+            } else if (initializer->isBaseInitializer() || initializer->isDelegatingInitializer()) {
+              initializeSubobject(*initializer, current);
             }
           }
           if (const auto lifetime = element.getAs<clang::CFGLifetimeEnds>()) {
@@ -3339,7 +3474,7 @@ namespace tbc_lint {
           if (const auto *call = llvm::dyn_cast<clang::CallExpr>(statement->getStmt())) {
             callee = call->getDirectCallee();
           } else if (const auto *construct = llvm::dyn_cast<clang::CXXConstructExpr>(statement->getStmt())) {
-            callee = construct->getConstructor();
+            callee = constructorOf(*construct);
           }
           const auto *definition = callee != nullptr ? callee->getDefinition() : nullptr;
           if (definition != nullptr && !cache.functions.contains(definition->getCanonicalDecl()) && !sources.isInSystemHeader(sources.getExpansionLoc(definition->getLocation()))) {

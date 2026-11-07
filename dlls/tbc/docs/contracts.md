@@ -298,9 +298,56 @@ parameter in the region, whatever it returns. Retention accumulates across
 calls: every retained source must outlive the receiver's later uses. With a
 visible body, inferred writes can refine that retention.
 
+A constructor is a mutating method too. Without a visible body, the new object
+retains every argument whose parameter shares a region with a field, so a
+prepared statement can state that it borrows its database, as Rust's
+`Statement<'conn>` does:
+
+```cpp
+class statement {
+public:
+  statement(tbc::view<database &, tbc::lt::a> owner, std::string_view sql);
+
+private:
+  tbc::view<sqlite3_stmt *, tbc::lt::a> handle_ = nullptr;
+};
+```
+
+A body-less constructor of a class whose fields carry no region promises
+nothing, and using what it builds is `tbc-missing-contract`.
+
 A field label only matters to methods of its own class. On an aggregate without
 such methods it has no effect; the checker infers the field's dependencies from
 the code that initializes it.
+
+## Constructors
+
+A constructor's fields hold nothing on entry; its initializers and body give
+them their first values. A path that throws constructs no object, so what the
+fields held there is not part of the result. A base initializer, a delegating
+initializer, and an inheriting constructor (`using base::base`) write the
+fields as the constructor they run does.
+
+An object whose constructor stores a borrow of the object itself, such as a
+pointer to a sibling field or an allocator reference to a member arena, is valid
+only while the object keeps its address. A copy or a move leaves the borrow
+pointing at the source. As Rust admits self-references only behind `Pin`, such a
+type must be neither copyable nor movable; otherwise the initializer that takes
+the borrow is a `tbc-dangling-borrow`:
+
+```cpp
+class buffer {
+public:
+  buffer() : cursor_(storage_.data()) {} // tbc-dangling-borrow unless copies and moves are deleted
+
+private:
+  std::string storage_;
+  const char *cursor_;
+};
+```
+
+A function's address is static storage, not a borrow of the object that keeps
+it, as a `std::unique_ptr` with a function deleter does.
 
 ## Elision and unavailable bodies
 
@@ -379,8 +426,7 @@ has deliberate limits:
   owner retained beside a view does not keep the view's referent alive.
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
-  protocols still require further analysis or audited models. Borrowed base
-  constructor state is not inferred.
+  protocols still require further analysis or audited models.
 - Mutable global borrowed state, exception-unwinding analysis, virtual/indirect
   dispatch, and conflicting redeclaration contracts are not comprehensively
   checked. Unsupported result dependencies may produce `tbc-missing-contract`.

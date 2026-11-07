@@ -1,5 +1,6 @@
 module;
 #include "telar_platform/trace_macro.hpp"
+#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -74,7 +75,8 @@ private:
 
 class Statement {
 public:
-  explicit Statement(Database &database, std::string_view sql);
+  // A prepared statement must be finalized before its database closes.
+  explicit Statement(tbc::view<Database &, tbc::lt::a> database, std::string_view sql);
   ~Statement();
   Statement(const Statement &) = delete;
   Statement &operator=(const Statement &) = delete;
@@ -91,7 +93,7 @@ public:
   bool isNull(int column) const noexcept;
 
 private:
-  sqlite3_stmt *statement_ = nullptr;
+  tbc::view<sqlite3_stmt *, tbc::lt::a> statement_ = nullptr;
 };
 
 class Transaction {

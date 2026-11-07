@@ -1,5 +1,6 @@
 module;
 #include "telar_platform/trace_macro.hpp"
+#include "tbc/view.hpp"
 #include <cstddef>
 #include <new>
 
@@ -220,7 +221,8 @@ public:
   IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
 
 private:
-  static ProcessArguments readArguments(pid_t process, std::span<char> buffer) noexcept;
+  // The arguments view the caller's buffer.
+  static tbc::view<ProcessArguments, tbc::lt::a> readArguments(pid_t process, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
   static FixedText<4096> executable(pid_t process) noexcept;
   static std::size_t groupMembers(pid_t group, std::span<pid_t> members) noexcept;
   IdentifiedProcess identifyProcess(pid_t process) const noexcept;

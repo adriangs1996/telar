@@ -136,3 +136,48 @@ contracts::static_text contracts::formatName(std::string_view requested) {
 }
 
 // END CASE
+
+// CASE: contract.opaque_constructor_escape
+// PAIR: contract.opaque_constructor
+// SOURCE: services/runtime-cpp/history/store.cppm :: Statement
+// STATUS: implemented
+// CONTRACT: A constructor without a visible body retains every argument whose parameter shares a region with a field of its class.
+// SCENARIO: A prepared statement retains its local database and is returned; reject.
+namespace contracts {
+  struct handle {};
+
+  class database {
+  public:
+    database();
+    database(const database &) = delete;
+    database &operator=(const database &) = delete;
+  };
+
+  class statement {
+  public:
+    statement(tbc::view<database &, tbc::lt::a> owner, std::string_view sql);
+    statement(statement &&) noexcept;
+
+  private:
+    tbc::view<handle *, tbc::lt::a> handle_ = nullptr;
+  };
+}
+
+contracts::statement opaqueConstructorEscape() {
+  contracts::database owner;
+  return contracts::statement{owner, "SELECT 1"}; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: contract.opaque_constructor_retained
+// PAIR: contract.opaque_constructor
+// SOURCE: services/runtime-cpp/history/store.cppm :: Statement
+// STATUS: implemented
+// CONTRACT: A constructor without a visible body retains every argument whose parameter shares a region with a field of its class.
+// SCENARIO: The statement borrows the caller's database and its temporary query text is not retained; accept.
+contracts::statement opaqueConstructorRetained(contracts::database &owner) {
+  return contracts::statement{owner, std::string{"SELECT 1"}};
+}
+
+// END CASE

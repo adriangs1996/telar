@@ -1,6 +1,9 @@
 #include "tbc/view.hpp"
 
 #include <cstdlib>
+#include <memory>
+#include <stdexcept>
+#include <dirent.h>
 #include <initializer_list>
 #include <string>
 #include <string_view>
@@ -1036,6 +1039,279 @@ void inferredOpaqueReceiverRetained() {
   holder.hold(first);
   static_cast<void>(holder.probe(second));
   inferred::observe(holder.read());
+}
+
+// END CASE
+
+// CASE: inference.self_borrow_pinned
+// PAIR: inference.self_borrow
+// SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: Command::environment_
+// STATUS: implemented
+// CONTRACT: An object may borrow its own fields when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
+// SCENARIO: A field keeps a pointer to a sibling field of a non-copyable, non-movable object; accept.
+namespace inferred {
+  class pinned_buffer {
+  public:
+    pinned_buffer() : cursor_(storage_.data()) {}
+    pinned_buffer(const pinned_buffer &) = delete;
+    pinned_buffer &operator=(const pinned_buffer &) = delete;
+
+    [[nodiscard]] char front() const { return *cursor_; }
+
+  private:
+    std::string storage_{"abc"};
+    const char *cursor_;
+  };
+}
+
+char inferredSelfBorrowPinned() {
+  const inferred::pinned_buffer buffer;
+  return buffer.front();
+}
+
+// END CASE
+
+// CASE: inference.self_borrow_relocatable
+// PAIR: inference.self_borrow
+// SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: Command::environment_
+// STATUS: implemented
+// CONTRACT: An object may borrow its own fields when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
+// SCENARIO: A copy of the object would keep pointing into the source's field; reject at the initializer that takes the borrow.
+namespace inferred {
+  class relocatable_buffer {
+  public:
+    relocatable_buffer() : cursor_(storage_.data()) {} // expected-error [tbc-dangling-borrow]
+
+    [[nodiscard]] char front() const { return *cursor_; }
+
+  private:
+    std::string storage_{"abc"};
+    const char *cursor_;
+  };
+}
+
+char inferredSelfBorrowRelocatable() {
+  const inferred::relocatable_buffer buffer;
+  return buffer.front();
+}
+
+// END CASE
+
+// CASE: inference.constructor_unwinding
+// PAIR: inference.constructor_entry
+// SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// STATUS: implemented
+// CONTRACT: A constructor's fields hold nothing before it initializes them; a path that throws constructs no object.
+// SCENARIO: A pointer field is set from a C function after a branch that throws; the object is used afterwards; accept.
+namespace inferred {
+  class directory_stream {
+  public:
+    explicit directory_stream(const char *path) {
+      if (path == nullptr) {
+        throw std::invalid_argument{"path"};
+      }
+      stream_ = ::opendir(path);
+    }
+    directory_stream(const directory_stream &) = delete;
+    directory_stream &operator=(const directory_stream &) = delete;
+    ~directory_stream() {
+      if (stream_ != nullptr) {
+        ::closedir(stream_);
+      }
+    }
+
+    [[nodiscard]] const dirent *next() { return ::readdir(stream_); }
+
+  private:
+    DIR *stream_ = nullptr;
+  };
+}
+
+bool inferredConstructorUnwinding() {
+  inferred::directory_stream directory{"/tmp"};
+  return directory.next() != nullptr;
+}
+
+// END CASE
+
+// CASE: inference.constructor_unwinding_escape
+// PAIR: inference.constructor_entry
+// SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// STATUS: implemented
+// CONTRACT: A constructor's fields hold nothing before it initializes them; a path that throws constructs no object.
+// SCENARIO: A field set after a throwing branch still carries its argument's borrow out of the function.
+namespace inferred {
+  class checked_view {
+  public:
+    explicit checked_view(std::string_view text) {
+      if (text.empty()) {
+        throw std::invalid_argument{"text"};
+      }
+      text_ = text;
+    }
+
+  private:
+    std::string_view text_;
+  };
+}
+
+inferred::checked_view inferredConstructorUnwindingEscape() {
+  const auto source = std::string{"abc"};
+  return inferred::checked_view{source}; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: inference.function_address
+// PAIR: inference.function_address
+// SOURCE: services/runtime-cpp/redirect/socket_owners.cppm :: LocalAddresses
+// STATUS: implemented
+// CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
+// SCENARIO: A copyable owner keeps a deleter function pointer; accept.
+namespace inferred {
+  void releaseText(char *text) {
+    std::free(text);
+  }
+
+  class owned_text {
+  public:
+    owned_text() : text_(nullptr, &releaseText) {}
+
+  private:
+    std::unique_ptr<char, decltype(&releaseText)> text_;
+  };
+}
+
+void inferredFunctionAddress() {
+  const inferred::owned_text text;
+  static_cast<void>(text);
+}
+
+// END CASE
+
+// CASE: inference.function_address_object
+// PAIR: inference.function_address
+// SOURCE: services/runtime-cpp/redirect/socket_owners.cppm :: LocalAddresses
+// STATUS: implemented
+// CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
+// SCENARIO: A copyable owner keeps the address of its own field instead; reject.
+namespace inferred {
+  class counted_text {
+  public:
+    counted_text() : count_(&storage_) {} // expected-error [tbc-dangling-borrow]
+
+  private:
+    int storage_ = 0;
+    int *count_;
+  };
+}
+
+void inferredFunctionAddressObject() {
+  const inferred::counted_text text;
+  static_cast<void>(text);
+}
+
+// END CASE
+
+// CASE: inference.binding_escape
+// PAIR: inference.binding
+// SOURCE: services/runtime-cpp/traffic/capture_analysis.cppm :: structured binding over a flow map entry
+// STATUS: implemented
+// CONTRACT: A structured binding names the part of the object its declaration decomposes.
+// SCENARIO: A view of a binding into a local pair is returned; reject.
+std::string_view inferredBindingEscape() {
+  const auto row = std::pair<std::string, int>{"abc", 1};
+  const auto &[text, count] = row;
+  static_cast<void>(count);
+  return text; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: inference.binding_retained
+// PAIR: inference.binding
+// SOURCE: services/runtime-cpp/traffic/capture_analysis.cppm :: structured binding over a flow map entry
+// STATUS: implemented
+// CONTRACT: A structured binding names the part of the object its declaration decomposes.
+// SCENARIO: A view of a binding into the caller's pair is returned; accept.
+std::string_view inferredBindingRetained(const std::pair<std::string, int> &row) {
+  const auto &[text, count] = row;
+  static_cast<void>(count);
+  return text;
+}
+
+// END CASE
+
+// CASE: inference.inherited_constructor_retained
+// PAIR: inference.base_construction
+// SOURCE: dlls/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// STATUS: implemented
+// CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
+// SCENARIO: An object built through an inherited constructor keeps a pointer to the caller's allocator; accept.
+namespace inferred {
+  template <typename Memory>
+  class allocating_storage {
+  public:
+    explicit allocating_storage(Memory &memory) noexcept : memory_(&memory) {}
+
+    [[nodiscard]] Memory &memory() const { return *memory_; }
+
+  private:
+    Memory *memory_;
+  };
+
+  template <typename Memory>
+  class allocating_copy : public allocating_storage<Memory> {
+  public:
+    using allocating_storage<Memory>::allocating_storage;
+  };
+
+  class named_view : public allocating_storage<const std::string> {
+  public:
+    explicit named_view(const std::string &name) : allocating_storage(name) {}
+  };
+}
+
+inferred::allocating_copy<std::string> inferredInheritedConstructorRetained(std::string &memory) {
+  return inferred::allocating_copy<std::string>{memory};
+}
+
+// END CASE
+
+// CASE: inference.inherited_constructor_escape
+// PAIR: inference.base_construction
+// SOURCE: dlls/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// STATUS: implemented
+// CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
+// SCENARIO: An object built through an inherited constructor keeps a pointer to a local and is returned.
+inferred::allocating_copy<std::string> inferredInheritedConstructorEscape() {
+  auto memory = std::string{"arena"};
+  return inferred::allocating_copy<std::string>{memory}; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: inference.base_initializer_escape
+// PAIR: inference.base_construction
+// SOURCE: dlls/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// STATUS: implemented
+// CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
+// SCENARIO: A derived constructor passes a local through its base initializer and the object is returned.
+inferred::named_view inferredBaseInitializerEscape() {
+  const auto name = std::string{"plugin"};
+  return inferred::named_view{name}; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: inference.base_initializer_retained
+// PAIR: inference.base_construction
+// SOURCE: dlls/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// STATUS: implemented
+// CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
+// SCENARIO: A derived constructor passes the caller's string through its base initializer; accept.
+inferred::named_view inferredBaseInitializerRetained(const std::string &name) {
+  return inferred::named_view{name};
 }
 
 // END CASE
