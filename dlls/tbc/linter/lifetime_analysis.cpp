@@ -2168,6 +2168,9 @@ namespace tbc_lint {
         }
         const auto *callee = call.getDirectCallee();
         if (callee == nullptr) {
+          if (call.getType()->isPointerType() && call.getCallee()->getType()->isFunctionPointerType()) {
+            return pointeeArguments(call, current);
+          }
           loans result;
           if (containsViews(call.getType()) || call.isGLValue()) {
             result.add({.kind = origin_kind::unknown, .expression = &call});
@@ -2184,6 +2187,9 @@ namespace tbc_lint {
           loans result;
           result.add({.kind = origin_kind::environment, .expression = &call});
           return result;
+        }
+        if (call.getType()->isPointerType() && foreignFunction(*callee)) {
+          return pointeeArguments(call, current);
         }
         if (callee->getQualifiedNameAsString() == "std::move" || callee->getQualifiedNameAsString() == "std::forward") {
           return call.getNumArgs() == 0 ? loans{} : reference(call.getArg(0), current);
@@ -2347,6 +2353,28 @@ namespace tbc_lint {
             result.merge(reference(argument, current));
           } else if (yields(*argument, call.getType())) {
             result.merge(storage(argument, current));
+          }
+        }
+        return result;
+      }
+
+      // A C library function: declared by the system, with no body to analyze.
+      [[nodiscard]] bool foreignFunction(const clang::FunctionDecl &callee) const {
+        const auto &sources = context_.getSourceManager();
+        return !callee.hasBody() && !llvm::isa<clang::CXXMethodDecl>(callee) && sources.isInSystemHeader(sources.getExpansionLoc(callee.getLocation()));
+      }
+
+      // A pointer from a C function or a function pointer is, like a raw pointer from Rust's FFI, not
+      // borrow-checked, unless it can point into an argument of its own pointee type, as strchr,
+      // memchr or fgets do. Otherwise it names a resource of its own: a DIR, a mapping, a library row.
+      loans pointeeArguments(const clang::CallExpr &call, const state &current) {
+        loans result;
+        const auto pointee = call.getType()->getPointeeType().getCanonicalType().getUnqualifiedType();
+        for (unsigned index = argumentOffset(call); index < call.getNumArgs(); ++index) {
+          // The argument as converted to its parameter, so memchr's const void * matches its void * result.
+          const auto argument = call.getArg(index)->getType();
+          if (argument->isPointerType() && argument->getPointeeType().getCanonicalType().getUnqualifiedType() == pointee) {
+            result.merge(value(call.getArg(index), current));
           }
         }
         return result;
@@ -2594,6 +2622,34 @@ namespace tbc_lint {
           result.add({.kind = origin_kind::unknown, .expression = expression});
         }
         return result;
+      }
+
+      // Reading or writing through a pointer needs a live pointee wherever the access appears, not
+      // only where a borrow flows on: a condition or an arithmetic read can dangle too. The CFG lists
+      // only block-level expressions, so each full expression is searched once, from its root.
+      void checkPointerAccesses(const clang::Stmt &node, const state &current) {
+        if (llvm::isa<clang::Expr>(node)) {
+          const auto parents = context_.getParents(clang::DynTypedNode::create(node));
+          const auto *parent = parents.empty() ? nullptr : parents[0].get<clang::Stmt>();
+          if (parent == nullptr || llvm::isa<clang::Expr>(parent) || llvm::isa<clang::DeclStmt>(parent) || llvm::isa<clang::ReturnStmt>(parent)) {
+            return;
+          }
+        }
+        llvm::SmallVector<const clang::Stmt *, 16> pending{&node};
+        while (!pending.empty()) {
+          const auto *next = pending.pop_back_val();
+          if (next == nullptr || llvm::isa<clang::LambdaExpr>(next)) {
+            continue;
+          }
+          if (const auto *access = llvm::dyn_cast<clang::Expr>(next)) {
+            if (const auto *pointer = dereferencedPointer(access); pointer != nullptr && pointer->getType()->isPointerType()) {
+              checkUse(value(pointer, current), *access);
+            }
+          }
+          for (const auto *child : next->children()) {
+            pending.push_back(child);
+          }
+        }
       }
 
       void checkUse(const loans &borrow, const clang::Stmt &use) {
@@ -3181,6 +3237,7 @@ namespace tbc_lint {
             continue;
           }
           const auto *node = statement->getStmt();
+          checkPointerAccesses(*node, current);
           if (const auto *declaration = llvm::dyn_cast<clang::DeclStmt>(node)) {
             for (const auto *entry : declaration->decls()) {
               const auto *variable = llvm::dyn_cast<clang::VarDecl>(entry);

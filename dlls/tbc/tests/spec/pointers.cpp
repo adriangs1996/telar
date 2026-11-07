@@ -1,4 +1,6 @@
 #include <array>
+#include <cstring>
+#include <dirent.h>
 #include <span>
 #include <string>
 #include <string_view>
@@ -580,6 +582,80 @@ void memberPointerField(pointers::labeled &record) {
 std::string_view memberPointerEscape() {
   pointers::labeled record{.text = "abc"};
   return record.*(&pointers::labeled::text); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: pointer.c_function_resource
+// PAIR: pointer.c_function
+// SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// STATUS: implemented
+// CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
+// SCENARIO: The directory stream does not point into its temporary path; accept.
+void cFunctionResource() {
+  DIR *directory = ::opendir(std::string{"/tmp"}.c_str());
+  if (directory != nullptr) {
+    ::closedir(directory);
+  }
+}
+
+// END CASE
+
+// CASE: pointer.c_function_argument
+// PAIR: pointer.c_function
+// SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// STATUS: implemented
+// CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
+// SCENARIO: strchr points into its temporary string, which dies before the result is read through.
+bool cFunctionArgument() {
+  const char *found = ::strchr(std::string{"abc"}.c_str(), 'b'); // expected-error [tbc-dangling-borrow]
+  return found != nullptr && *found == 'b';
+}
+
+// END CASE
+
+// CASE: pointer.function_pointer_resource
+// PAIR: pointer.c_function
+// SOURCE: services/cli-cpp/tab.cppm :: sqlite3_column_text through a loaded symbol
+// STATUS: implemented
+// CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
+// SCENARIO: A column read through a function pointer is a library row, not a view of the statement handle; accept.
+using column_text = const unsigned char *(*)(void *statement, int column);
+bool functionPointerResource(column_text text, void *statement) {
+  const auto *bytes = text(statement, 0);
+  return bytes != nullptr && bytes[0] != 0;
+}
+
+// END CASE
+
+// CASE: pointer.read_live_pointee
+// PAIR: pointer.read_through
+// SOURCE: services/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// STATUS: implemented
+// CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
+// SCENARIO: The caller's string outlives the read in the condition; accept.
+bool readLivePointee(const std::string &source) {
+  const char *text = source.c_str();
+  if (*text == 'a') {
+    return true;
+  }
+  return false;
+}
+
+// END CASE
+
+// CASE: pointer.read_dead_pointee
+// PAIR: pointer.read_through
+// SOURCE: services/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// STATUS: implemented
+// CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
+// SCENARIO: The temporary string dies with its declaration, before the condition reads through the pointer.
+bool readDeadPointee() {
+  const char *text = std::string{"abc"}.c_str(); // expected-error [tbc-dangling-borrow]
+  if (*text == 'a') {
+    return true;
+  }
+  return false;
 }
 
 // END CASE
