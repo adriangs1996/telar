@@ -67,7 +67,7 @@ namespace telar::gui::qt {
 
 namespace {
 
-std::string_view bytes(const QByteArray &text) {
+std::string_view paletteBytes(const QByteArray &text) {
   return {text.constData(), static_cast<std::size_t>(text.size())};
 }
 
@@ -162,7 +162,7 @@ void Application::searchPalette(const QString &text) {
   }
 
   const auto before_bytes = palette_query_.toUtf8();
-  const auto before = PaletteQuery::parse(bytes(before_bytes));
+  const auto before = PaletteQuery::parse(paletteBytes(before_bytes));
   const auto measured = Utf16Prefix::fit(QStringView{text}, PaletteQuery::maximum_bytes, utf16Encoding());
   palette_query_ = text.first(static_cast<qsizetype>(measured.units));
   if (!palette_query_.isValidUtf16()) {
@@ -171,7 +171,7 @@ void Application::searchPalette(const QString &text) {
 
   palette_selection_ = 0;
   const auto current_bytes = palette_query_.toUtf8();
-  const auto current = PaletteQuery::parse(bytes(current_bytes));
+  const auto current = PaletteQuery::parse(paletteBytes(current_bytes));
   if (current.mode == PaletteMode::suggest && (before.mode != PaletteMode::suggest || before.text != current.text)) {
     session().invalidateSuggestion();
   }
@@ -200,7 +200,7 @@ void Application::movePalette(int delta) {
 void Application::setPaletteMode(int mode) {
   const auto prefix = PaletteQuery::prefix(static_cast<char>(mode));
   const auto current = palette_query_.toUtf8();
-  if (dialog_ != QLatin1StringView("palette") || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(bytes(current)).mode == *prefix) {
+  if (dialog_ != QLatin1StringView("palette") || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
     return;
   }
 
@@ -256,7 +256,7 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
 
 bool Application::updatePaletteResults() {
   const auto text = palette_query_.toUtf8();
-  const auto query = PaletteQuery::parse(bytes(text));
+  const auto query = PaletteQuery::parse(paletteBytes(text));
   if (query.mode == PaletteMode::machines) {
     return updateMachinePickerResults(query.text);
   }
@@ -269,7 +269,7 @@ bool Application::updatePaletteResults() {
     for (const auto &entry : palette_commands_) {
       const auto command = entry.toMap();
       const auto label = command.value(QStringLiteral("label")).toString().toUtf8();
-      matches.add(command.value(QStringLiteral("action")).value<Action>(), bytes(label), query.text);
+      matches.add(command.value(QStringLiteral("action")).value<Action>(), paletteBytes(label), query.text);
     }
   }
 
@@ -369,7 +369,7 @@ QVariantMap Application::paletteRecord(const PaletteTarget &target, bool queried
 
 QVariantMap Application::paletteState() const {
   const auto text = palette_query_.toUtf8();
-  const auto query = PaletteQuery::parse(bytes(text));
+  const auto query = PaletteQuery::parse(paletteBytes(text));
   const auto selected = static_cast<qsizetype>(palette_selection_);
 
   return {
@@ -392,7 +392,7 @@ QVariantMap Application::paletteGeometry() const {
   const auto display = displayMetrics(density);
   const Rect viewport{.width = static_cast<float>(display.viewport.width), .height = static_cast<float>(display.viewport.height)};
   const auto text = palette_query_.toUtf8();
-  const auto query = PaletteQuery::parse(bytes(text));
+  const auto query = PaletteQuery::parse(paletteBytes(text));
   const auto geometry = PaletteGeometry::measure(viewport, display.chrome, {.pick_rows = std::nullopt, .suggest = query.mode == PaletteMode::suggest});
   const auto local = [&](Rect area) {
     area.x -= geometry.bounds.x;

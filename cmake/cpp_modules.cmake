@@ -27,6 +27,21 @@ if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_VERSION VERS
   message(FATAL_ERROR "Telar requires LLVM Clang 23.1.5 or newer. Use the pinned tools/bootstrap-cpp.py toolchain (AppleClang cannot scan these modules).")
 endif()
 
+# Clang reads every transitively imported BMI into its heap, so one translation
+# unit commonly peaks at 3-5 GiB. Scheduling by core count alone drives smaller
+# machines into swap, which costs far more than the lost parallelism.
+cmake_host_system_information(RESULT telar_memory_mib QUERY TOTAL_PHYSICAL_MEMORY)
+cmake_host_system_information(RESULT telar_core_count QUERY NUMBER_OF_LOGICAL_CORES)
+math(EXPR telar_default_compile_jobs "${telar_memory_mib} / 4096")
+if(telar_default_compile_jobs GREATER telar_core_count)
+  set(telar_default_compile_jobs ${telar_core_count})
+elseif(telar_default_compile_jobs LESS 1)
+  set(telar_default_compile_jobs 1)
+endif()
+set(TELAR_COMPILE_JOBS ${telar_default_compile_jobs} CACHE STRING "Parallel compilations in one build")
+set_property(GLOBAL PROPERTY JOB_POOLS telar_compile=${TELAR_COMPILE_JOBS})
+set(CMAKE_JOB_POOL_COMPILE telar_compile)
+
 add_compile_definitions(TELAR_DEBUG=$<CONFIG:Debug>
   TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_DIAGNOSTICS}>>)
 if(TELAR_SANITIZERS)

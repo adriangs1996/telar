@@ -64,7 +64,7 @@ QString actionName(HistoryCardAction action) {
   return {};
 }
 
-std::string_view bytes(const QByteArray &text) noexcept {
+std::string_view metaBytes(const QByteArray &text) noexcept {
   return {text.constData(), static_cast<std::size_t>(text.size())};
 }
 
@@ -115,10 +115,10 @@ void HistoryMetaLayout::prepareLabels() {
   const auto age = record.value(QStringLiteral("age")).toString().toUtf8();
   const auto style = input_.value(QStringLiteral("macStyle")).toBool() ? HistoryKeyStyle::mac : HistoryKeyStyle::pc;
   const HistoryFactData data{
-      .directory = bytes(directory),
-      .provider = bytes(provider),
-      .duration = bytes(duration),
-      .age = bytes(age),
+      .directory = metaBytes(directory),
+      .provider = metaBytes(provider),
+      .duration = metaBytes(duration),
+      .age = metaBytes(age),
       .exit_code = record.contains(QStringLiteral("exitCode")) ? std::optional{record.value(QStringLiteral("exitCode")).toInt()} : std::nullopt,
       .status = static_cast<HistoryStatus>(record.value(QStringLiteral("status")).toInt()),
       .key_style = style,

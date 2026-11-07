@@ -55,7 +55,7 @@ namespace telar::gui::qt {
 
 namespace {
 
-QString string(std::string_view value) {
+QString fieldString(std::string_view value) {
   return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
 }
 
@@ -145,7 +145,7 @@ void NativeFormField::setMaximumBytes(int capacity) {
 }
 
 int NativeFormField::utf16Position(std::string_view text, std::size_t offset) {
-  return static_cast<int>(string(text.substr(0, std::min(offset, text.size()))).size());
+  return static_cast<int>(fieldString(text.substr(0, std::min(offset, text.size()))).size());
 }
 
 std::size_t NativeFormField::bytePosition(const QString &text, int offset) {
@@ -174,7 +174,7 @@ int NativeFormField::selectionEnd() const {
 }
 
 QString NativeFormField::selectedText() const {
-  return string(editor_.selected());
+  return fieldString(editor_.selected());
 }
 
 void NativeFormField::select(int start, int end) {
@@ -234,7 +234,7 @@ void NativeFormField::insertText(const QString &text) {
 }
 
 void NativeFormField::publish(bool edited) {
-  const auto value = string(editor_.text());
+  const auto value = fieldString(editor_.text());
   const auto changed = text_ != value;
   text_ = value;
   updateInputContext();
@@ -341,7 +341,7 @@ void NativeFormField::updatePolish() {
       return QRectF{area.x / density_, area.y / density_, area.width / density_, area.height / density_};
     };
     const auto underline = geometry_.underline(cellTextColumns(view.text));
-    layout_ = {{QStringLiteral("available"), true}, {QStringLiteral("text"), string(view.text)}, {QStringLiteral("grid"), grid_}, {QStringLiteral("content"), logical(geometry_.content)}, {QStringLiteral("caret"), logical(geometry_.caret(view.cursor))}, {QStringLiteral("selection"), logical(view.selection ? geometry_.selection(*view.selection) : Rect{})}, {QStringLiteral("underline"), logical(underline)}, {QStringLiteral("composing"), !composition_.isEmpty()}};
+    layout_ = {{QStringLiteral("available"), true}, {QStringLiteral("text"), fieldString(view.text)}, {QStringLiteral("grid"), grid_}, {QStringLiteral("content"), logical(geometry_.content)}, {QStringLiteral("caret"), logical(geometry_.caret(view.cursor))}, {QStringLiteral("selection"), logical(view.selection ? geometry_.selection(*view.selection) : Rect{})}, {QStringLiteral("underline"), logical(underline)}, {QStringLiteral("composing"), !composition_.isEmpty()}};
   } catch (const std::exception &) {
     layout_ = emptyLayout(grid_);
   }

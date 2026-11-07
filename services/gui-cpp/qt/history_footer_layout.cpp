@@ -65,7 +65,7 @@ QString actionName(HistoryFooterAction action) {
   return {};
 }
 
-QString label(std::string_view text) {
+QString footerLabel(std::string_view text) {
   return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
 }
 
@@ -123,13 +123,13 @@ void HistoryFooterLayout::prepareLabels() {
   footer_ = HistoryFooter::resolve(options);
   choice_ = {.index = static_cast<std::size_t>(std::max(0, state.value(QStringLiteral("selection")).toInt())), .revision = state.value(QStringLiteral("revision")).toString().toULongLong()};
 
-  range_ = label(HistoryFooter::range(options).view());
+  range_ = footerLabel(HistoryFooter::range(options).view());
   hints_.clear();
   for (std::size_t index = 0; index < footer_.count; ++index) {
     const auto hint = footer_.hints[index];
     hints_.append(QVariantMap{
-        {QStringLiteral("key"), label(hint.key)},
-        {QStringLiteral("word"), label(hint.word)},
+        {QStringLiteral("key"), footerLabel(hint.key)},
+        {QStringLiteral("word"), footerLabel(hint.word)},
         {QStringLiteral("action"), actionName(hint.action)},
     });
   }

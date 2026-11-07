@@ -71,7 +71,7 @@ import telar.gui.presentation.notification_stack;
 namespace telar::gui::qt {
 namespace {
 
-QRectF logical(Rect bounds, qreal density) {
+QRectF logicalBounds(Rect bounds, qreal density) {
   return {bounds.x / density, bounds.y / density, bounds.width / density, bounds.height / density};
 }
 
@@ -286,7 +286,7 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
   const NotificationCardGeometry geometry{.bounds = {.width = content.width, .height = content.height}, .metrics = metrics_};
   QVariantList body;
   for (std::size_t index = 0; index < content.body.count(); ++index) {
-    body.append(QVariantMap{{QStringLiteral("text"), toQString(content.body.line(index))}, {QStringLiteral("bounds"), logical(geometry.body(index), density_)}});
+    body.append(QVariantMap{{QStringLiteral("text"), toQString(content.body.line(index))}, {QStringLiteral("bounds"), logicalBounds(geometry.body(index), density_)}});
   }
 
   auto action = NotificationActionLabel::target(item.target.kind);
@@ -301,7 +301,7 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
   QVariantList shadows;
   for (std::size_t layer = 0; layer < NotificationMetrics::shadow_layers; ++layer) {
     const auto spread = metrics_.px(static_cast<float>(NotificationMetrics::shadow_layers - layer) * NotificationMetrics::shadow_spread);
-    shadows.append(QVariantMap{{QStringLiteral("bounds"), logical({.x = -spread, .y = -spread + metrics_.px(NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (metrics_.px(NotificationMetrics::radius) + spread) / density_}});
+    shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (metrics_.px(NotificationMetrics::radius) + spread) / density_}});
   }
 
   const auto action_bounds = geometry.action();
@@ -312,12 +312,12 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
   return {
       {QStringLiteral("key"), controller_->notificationIdentity(item.id)},
       {QStringLiteral("title"), toQString(item.title.view())},
-      {QStringLiteral("titleBounds"), logical(geometry.title(), density_)},
+      {QStringLiteral("titleBounds"), logicalBounds(geometry.title(), density_)},
       {QStringLiteral("body"), body},
       {QStringLiteral("action"), toQString(action)},
-      {QStringLiteral("actionBounds"), logical(action_bounds, density_)},
-      {QStringLiteral("iconBounds"), logical(geometry.icon(), density_)},
-      {QStringLiteral("closeBounds"), logical(geometry.close(), density_)},
+      {QStringLiteral("actionBounds"), logicalBounds(action_bounds, density_)},
+      {QStringLiteral("iconBounds"), logicalBounds(geometry.icon(), density_)},
+      {QStringLiteral("closeBounds"), logicalBounds(geometry.close(), density_)},
       {QStringLiteral("symbol"), symbol(item.level)},
       {QStringLiteral("accent"), accent(item.level)},
       {QStringLiteral("shadows"), shadows},
@@ -346,7 +346,7 @@ void NotificationLayout::rebuild() {
   chrome_ = display.chrome;
   metrics_ = {.ratio = chrome_.ratio, .title_row = ChromeMetrics::lineHeight(chrome_.title), .body_row = ChromeMetrics::lineHeight(chrome_.body), .small_row = ChromeMetrics::lineHeight(chrome_.small)};
   const auto physical_host = controller_->notificationHost(display);
-  const auto host = logical(physical_host, density_);
+  const auto host = logicalBounds(physical_host, density_);
   const QVariantMap style{
       {QStringLiteral("radius"), metrics_.px(NotificationMetrics::radius) / density_},
       {QStringLiteral("iconRadius"), metrics_.px(NotificationMetrics::icon_radius) / density_},
@@ -382,8 +382,8 @@ void NotificationLayout::rebuild() {
     underline.x -= placement.bounds.x;
     underline.y -= placement.bounds.y;
     auto record = cached.record;
-    record.insert(QStringLiteral("underlineBounds"), logical(underline, density_));
-    record.insert(QStringLiteral("bounds"), logical(placement.bounds, density_));
+    record.insert(QStringLiteral("underlineBounds"), logicalBounds(underline, density_));
+    record.insert(QStringLiteral("bounds"), logicalBounds(placement.bounds, density_));
     record.insert(QStringLiteral("opacity"), placement.opacity);
     record.insert(QStringLiteral("enabled"), item.phase != NotificationItem::Phase::exiting);
     records.append(record);

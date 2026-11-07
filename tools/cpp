@@ -65,6 +65,23 @@ def vt():
         return prefix
 
 
+def lock_build(directory):
+    """Serialize builds of one tree until this process and its children exit.
+
+    Two Ninja processes sharing a tree corrupt its deps log. Ninja keeps the bad
+    record when it recovers, so every later build of the tree starts from nothing.
+    """
+    if not directory.is_dir():
+        return
+    lock = os.open(directory / '.telar-build-lock', os.O_CREAT | os.O_WRONLY, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f'Waiting for another build of {directory}', file=sys.stderr, flush=True)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    os.set_inheritable(lock, True)
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'exec':
         extra = sys.argv[2:]
@@ -73,6 +90,8 @@ def main():
         if not extra:
             raise SystemExit('Use tools/cpp exec -- COMMAND ARG...')
         toolchain()
+        if extra[:2] == ['cmake', '--build'] and len(extra) > 2:
+            lock_build(Path(extra[2]))
         os.execvp(extra[0], extra)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('bootstrap', 'vt', 'configure', 'build', 'test', 'exec'))
@@ -112,8 +131,18 @@ def main():
             options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))
         if args.headless:
             options += ['-DTELAR_CLIPBOARD_NATIVE=OFF', '-DTELAR_GUI_NATIVE=OFF']
-        run('cmake', '-S', source, '-B', build, '-G', 'Ninja', *options, *extra)
+        command = ['cmake', '-S', str(source), '-B', str(build), '-G', 'Ninja', *options, *extra]
+        # Ninja already regenerates a configured tree when its CMake inputs change,
+        # so only a changed command line or toolchain has to run CMake here.
+        identity = hashlib.sha256('\0'.join(command).encode() + chain.read_bytes()).hexdigest()
+        stamp = build / '.telar-configure'
+        if (build / 'build.ninja').exists() and stamp.exists() and stamp.read_text() == identity:
+            return
+        stamp.unlink(missing_ok=True)
+        run(*command)
+        stamp.write_text(identity)
     elif args.command == 'build':
+        lock_build(build)
         run('cmake', '--build', build, *extra)
     else:
         run('ctest', '--test-dir', build, '--output-on-failure', *extra)

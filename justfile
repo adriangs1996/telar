@@ -10,6 +10,8 @@ cli := runtime_dir / "out/telar"
 dev_telar := dev_dir / "bin/telar"
 gui := gui_dir / "out/telar-gui"
 renderer := renderer_dir / "target/release/telar-diagram-renderer"
+# Optimized app builds never run tests, and each GUI test executable adds a QML import scan to configure.
+no_tests := "-DBUILD_TESTING=OFF"
 # All C++ projects use the repository-local pinned toolchain.
 
 # Show the available commands.
@@ -26,12 +28,12 @@ build: runtime-build gui-build
 
 # Build the runtime, using out/Debug by default.
 [working-directory: "services/runtime-cpp"]
-runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type)
+runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-runtime telar
 
 # Build the GUI, using out/Debug by default.
 [working-directory: "services/gui-cpp"]
-gui-build directory="out" build_type="Debug": (gui-configure directory build_type)
+gui-build directory="out" build_type="Debug": (gui-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-gui telar-gui-command
 
 # Build the standalone C++ auth daemon without the runtime or GUI dependencies.
@@ -161,7 +163,7 @@ gui-lint: (gui-configure "out" "Debug")
 
 # Package a Release Telar C++ Preview.app, install it under APPS and link its `telar` into BIN.
 [macos]
-install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release") (gui-configure "out-release" "Release")
+install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" no_tests) (gui-configure "out-release" "Release" no_tests)
     #!/usr/bin/env bash
     set -euo pipefail
     stage="{{ dev_dir }}/stage"
