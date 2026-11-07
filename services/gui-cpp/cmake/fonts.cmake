@@ -1,13 +1,8 @@
 include(FetchContent)
 
-file(READ "${TELAR_ROOT}/build.zig.zon" gui_dependency_manifest)
-string(REGEX MATCH "[.]freetype[ \t\r\n]*=[ \t\r\n]*[.][{][ \t\r\n]*[.]url[ \t\r\n]*=[ \t\r\n]*\"([^\"]+)\"" gui_freetype_dependency "${gui_dependency_manifest}")
-if(NOT gui_freetype_dependency)
-  message(FATAL_ERROR "The FreeType dependency is missing from build.zig.zon")
-endif()
-
+# Upstream archives; each hash pins the exact contents.
 FetchContent_Declare(telar_freetype
-  URL "${CMAKE_MATCH_1}"
+  URL "https://github.com/freetype/freetype/archive/refs/tags/VER-2-13-2.tar.gz"
   URL_HASH SHA256=427201f5d5151670d05c1f5b45bef5dda1f2e7dd971ef54f0feaaa7ffd2ab90c
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   SOURCE_SUBDIR telar-source-only)
@@ -44,16 +39,11 @@ if(TELAR_GUI_SANITIZERS)
   target_compile_options(gui-freetype PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 endif()
 
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/build.zig.zon" "${TELAR_ROOT}/build/freetype.zig")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/build/freetype.zig")
 install(FILES "${telar_freetype_SOURCE_DIR}/docs/FTL.TXT" DESTINATION share/licenses/telar-gui RENAME freetype.txt)
 
-string(REGEX MATCH "[.]harfbuzz[ \t\r\n]*=[ \t\r\n]*[.][{][ \t\r\n]*[.]url[ \t\r\n]*=[ \t\r\n]*\"([^\"]+)\"" gui_harfbuzz_dependency "${gui_dependency_manifest}")
-if(NOT gui_harfbuzz_dependency)
-  message(FATAL_ERROR "The HarfBuzz dependency is missing from build.zig.zon")
-endif()
-
 FetchContent_Declare(telar_harfbuzz
-  URL "${CMAKE_MATCH_1}"
+  URL "https://github.com/harfbuzz/harfbuzz/releases/download/11.0.0/harfbuzz-11.0.0.tar.xz"
   URL_HASH SHA256=f16351bafe214725fe2c1d5b59f0d93e49905a4b247899fb90d70cff953a2b9b
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   SOURCE_SUBDIR telar-source-only)
