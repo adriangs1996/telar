@@ -18,6 +18,10 @@ namespace tbc {
     struct c : detail::region_tag {};
 
     struct d : detail::region_tag {};
+
+    // Storage that outlives every caller: string literals and objects with static storage
+    // duration. Only results take it; the referent never depends on an argument or receiver.
+    struct static_storage : detail::region_tag {};
   }
 
   namespace detail {

@@ -2194,6 +2194,10 @@ namespace tbc_lint {
         }
 
         const auto result_annotation = returnAnnotation(*callee, context_);
+        // A static result's referent outlives every caller and borrows from none of the inputs.
+        if (staticRegion(result_annotation.region)) {
+          return {};
+        }
         if (result_annotation.region == nullptr) {
           if (const auto *known = knownFunction(call)) {
             return instantiate(known->summary.returned, call, current);
@@ -2591,6 +2595,11 @@ namespace tbc_lint {
       }
 
       [[nodiscard]] bool allowed(const origin &source, annotation output) const {
+        // Callers do not check what they pass, so not even a labeled input can supply a static result,
+        // and the environment can be replaced while its storage is still in use.
+        if (staticRegion(output.region)) {
+          return source.kind == origin_kind::static_storage;
+        }
         if (source.kind == origin_kind::receiver || source.kind == origin_kind::receiver_region) {
           if (output.region != nullptr) {
             return source.kind == origin_kind::receiver_region && source.region == output.region;

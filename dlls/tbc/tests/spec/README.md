@@ -32,12 +32,12 @@ comparison. Notes are permitted but their wording and locations are not yet part
 of the assertion. There is no message-substring match that can accidentally
 accept a different rule's warning.
 
-The corpus contains **243 cases in 117 groups**: 125 accepted and 118 rejected
-examples. There are 196 implemented regressions and 47 explicitly pending
+The corpus contains **246 cases in 118 groups**: 127 accepted and 119 rejected
+examples. There are 199 implemented regressions and 47 explicitly pending
 requirements. The original 58 cases are supplemented by 59 inference cases,
 28 pointer and lambda cases, 35 standard-library cases, 12 third-party library
 cases, 43 storage-place cases, 2 system-macro cases, 2 elided-contract cases,
-and 4 retention-path cases.
+4 retention-path cases, and 3 static-result cases.
 A passing pending positive case does not establish support for its contract.
 
 ## Source inventory
@@ -58,7 +58,7 @@ A passing pending positive case does not establish support for its contract.
 | `gui_fonts.cpp` | 7 | `fonts/face.hpp/.cpp`: a foreign font face retains its font bytes; `shape` resets the HarfBuzz buffer and exposes glyph arrays; `rasterize` reuses the FreeType glyph slot. Copying values differs from retaining those views. Distinct faces have distinct scratch resources. |
 | `gui_history.cpp` | 4 | `history/page_storage.hpp`: decoded text is copied into owned strings; compatible row-vector swaps transfer allocation ownership rather than destroying elements. A view follows the transferred storage's new owner. |
 | `callbacks.cpp` | 7 | GUI machine-profile workers use owning request fields; runtime `OwnedPathQuery::assign` copies root/query text. Compare retained captures with synchronous layout callbacks and context-bounded queued invocation in `qt/window_images.cpp`. A lifetime guard for one context does not protect unrelated captures. |
-| `contracts.cpp` | 6 | Contrast a result tied to region `a` with an independent `b` input, and a function allowed to return either of two `a` inputs. Check an out-of-line method's elided result against its receiver. Retain the modeled/unmodeled call-boundary requirements. |
+| `contracts.cpp` | 9 | Contrast a result tied to region `a` with an independent `b` input, and a function allowed to return either of two `a` inputs. Check an out-of-line method's elided result against its receiver. A `static_storage` result outlives a dying argument at the call site, and its definition may return only literals or static objects. Retain the modeled/unmodeled call-boundary requirements. |
 | `control_flow.cpp` | 8 | Conditional ByteQueue growth and allocator cleanup during exceptions motivate CFG-sensitive checks. One invalidating path is enough if it reaches a use; an early return or an owned copy can remove the conflict. `PtyResponseQueue::append` and `Reply::publish`: one retaining path is enough too, whatever value selects it, while separate copying and retaining functions are checked apart. An owner retained beside a view keeps alive only the object it owns. |
 | `access_validity.cpp` | 4 | Glyph bitmap row slicing and allocator null checks motivate bounds/nullability requirements in addition to borrow lifetimes. Unproven bounds are not a claim that every runtime index is actually invalid. |
 

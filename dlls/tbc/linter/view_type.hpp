@@ -67,6 +67,11 @@ namespace tbc_lint {
     return *selected;
   }
 
+  inline bool staticRegion(const clang::Type *region) {
+    const auto *record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
+    return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::static_storage";
+  }
+
   inline annotation returnAnnotation(const clang::FunctionDecl &function, const clang::ASTContext &context) {
     return viewAnnotation(contractDeclaration(function, context).getReturnType(), context);
   }

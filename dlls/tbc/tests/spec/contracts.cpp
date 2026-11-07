@@ -88,3 +88,51 @@ tbc::view<const std::string &> contracts::session::pick(const std::string &other
 }
 
 // END CASE
+
+namespace contracts {
+  using static_text = tbc::view<std::string_view, tbc::lt::static_storage>;
+
+  static_text formatName(std::string_view requested);
+
+  constexpr std::string_view png_name = "image/png";
+}
+
+// CASE: contract.static_result_caller
+// PAIR: contract.static_result
+// SOURCE: dlls/clipboard/includes/clipboard.hpp :: read / content::mime_type
+// STATUS: implemented
+// CONTRACT: A static result borrows storage that outlives every caller, never an argument.
+// SCENARIO: The declaration has no visible body; its result stays valid after the temporary argument dies.
+void staticResultCaller() {
+  const auto name = contracts::formatName(std::string{"image/png"});
+  spec::observe(name);
+}
+
+// END CASE
+
+// CASE: contract.static_result_definition
+// PAIR: contract.static_result
+// SOURCE: dlls/clipboard/src/linux/backend.hpp :: formats
+// STATUS: implemented
+// CONTRACT: A static result may come from a string literal or an object with static storage duration.
+// SCENARIO: Both returns name storage that no caller can outlive; accept.
+contracts::static_text staticResultDefinition(bool literal) {
+  if (literal) {
+    return "text/plain";
+  }
+  return contracts::png_name;
+}
+
+// END CASE
+
+// CASE: contract.static_result_parameter
+// PAIR: contract.static_result
+// SOURCE: dlls/clipboard/src/clipboard.mm :: copyData
+// STATUS: implemented
+// CONTRACT: A static result may come from a string literal or an object with static storage duration.
+// SCENARIO: Returning the caller's view would let it dangle once the caller's storage dies.
+contracts::static_text contracts::formatName(std::string_view requested) {
+  return requested; // expected-error [tbc-contract-violation]
+}
+
+// END CASE

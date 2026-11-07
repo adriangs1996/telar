@@ -51,11 +51,12 @@ namespace {
 
   TEST(Lexer, ValidatesEveryEscapeAndPreservesItsSourceSpelling) {
     constexpr auto escapes = std::to_array<std::string_view>({R"(\n)", R"(\t)", R"(\r)", R"(\f)", R"(\b)", R"(\\)", R"(\')", R"(\")"});
-    ebnf::parsing_ring_buffer buffer;
 
     for (const auto quote : {'\'', '"'}) {
       for (const auto escape : escapes) {
         const auto source = std::string(1, quote) + std::string(escape) + quote;
+        // Its tokens borrow this iteration's source, which dies before the next one.
+        ebnf::parsing_ring_buffer buffer;
         SCOPED_TRACE(source);
         const auto count = ebnf::Lexer{}.tokenizeSourceIntoBuffer(source, buffer, buffer.size());
 

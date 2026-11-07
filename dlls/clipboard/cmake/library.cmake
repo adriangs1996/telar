@@ -6,7 +6,8 @@ option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" 
 set(clipboard_source_dir "${CMAKE_CURRENT_LIST_DIR}/..")
 add_library(telar-clipboard STATIC)
 target_compile_features(telar-clipboard PUBLIC cxx_std_23)
-target_include_directories(telar-clipboard PUBLIC "${clipboard_source_dir}/includes")
+# The header-only tbc annotations state the API's lifetime contracts.
+target_include_directories(telar-clipboard PUBLIC "${clipboard_source_dir}/includes" "${clipboard_source_dir}/../tbc/include")
 if(NOT TELAR_CLIPBOARD_NATIVE)
   target_sources(telar-clipboard PRIVATE "${clipboard_source_dir}/src/unavailable.cpp")
 elseif(APPLE)

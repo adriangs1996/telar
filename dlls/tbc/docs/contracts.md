@@ -159,6 +159,22 @@ and `lt::d` are predefined. `tbc::lifetime<tag>` permits descriptive labels.
 Distinct labels do not imply an outlives relationship; explicit outlives bounds
 are not supported.
 
+`lt::static_storage` is the one fixed region: storage that outlives every caller,
+like Rust's `'static`. A result labeled with it depends on no argument or receiver,
+so callers keep it after their inputs die. Its definition may return only string
+literals and objects with static storage duration. Even an input labeled
+`static_storage` cannot supply it, because callers are not checked for what they
+pass; the environment cannot either, because `setenv` can replace it.
+
+```cpp
+struct content {
+  std::string_view mime_type;
+  std::vector<std::byte> bytes;
+};
+
+tbc::view<std::expected<content, read_error>, tbc::lt::static_storage> read();
+```
+
 A contract can be written once on the declaration:
 
 ```cpp
