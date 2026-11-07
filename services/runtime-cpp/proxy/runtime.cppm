@@ -1,45 +1,25 @@
 module;
+#include <errno.h>
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
-#include <memory>
 #include <new>
-#include <string>
-#include <vector>
 #include <unistd.h>
 
 #include <cstdint>
-#include <string_view>
-#include <concepts>
-#include <span>
 
-#include <chrono>
 #include <cstring>
 #include <cstddef>
-#include <array>
 #include <brotli/decode.h>
-#include <optional>
-#include <utility>
-#include <initializer_list>
 #include <zlib.h>
 #include <zstd.h>
-#include <stdexcept>
-#include <algorithm>
-#include <atomic>
 #include <cassert>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
 
-#include <limits>
 
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
 #include <cerrno>
-#endif
-#if (defined(__linux__))
-#include <exception>
 #endif
 #if (defined(__linux__))
 #include <climits>
@@ -60,7 +40,6 @@ module;
 #include <sys/syscall.h>
 #endif
 
-#include <bit>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -72,7 +51,6 @@ module;
 #include <nghttp2/nghttp2.h>
 
 #include <brotli/encode.h>
-#include <charconv>
 
 #include <arpa/inet.h>
 
@@ -90,20 +68,17 @@ module;
 #include <linux/fs.h>
 #endif
 
-#include <variant>
 #include <pthread.h>
 
 
 #include <sys/types.h>
 
-#include <bitset>
 
 #include <poll.h>
 
 #include <openssl/sha.h>
 #include <dirent.h>
 
-#include <thread>
 
 #if (defined(__APPLE__))
 #include <CoreFoundation/CoreFoundation.h>
@@ -121,6 +96,8 @@ module;
 #include <sys/resource.h>
 
 export module telar.runtime.proxy.runtime;
+
+import std;
 
 export import telar.runtime.exchange_capture.exchange;
 export import telar.runtime.exchange_capture.pipeline;

@@ -1,38 +1,21 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
-#include <limits>
 
-#include <string_view>
 #include "placeholder_diacritics.hpp"
-#include <array>
-#include <optional>
 
 #include <cstddef>
 
-#include <numbers>
 
 export module telar.gui.graphics.placeholder;
+
+import std;
 
 export import telar.gui.core.metrics;
 

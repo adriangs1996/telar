@@ -1,53 +1,33 @@
 module;
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <vector>
-#include <bit>
-#include <chrono>
-#include <utility>
-#include <mutex>
 #include <new>
 
-#include <stdexcept>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <string_view>
 #include "help_texts.hpp"
-#include <span>
-#include <string>
 
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <exception>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <variant>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <concepts>
-#include <charconv>
 #include <csignal>
 #include <dirent.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
 
 export module telar.cli.server;
+
+import std;
 
 export import telar.cli.output;
 

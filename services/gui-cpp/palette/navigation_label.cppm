@@ -1,31 +1,15 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <vector>
 
-#include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
-#include <algorithm>
 
-#include <variant>
 
-#include <span>
-#include <utility>
 
 export module telar.gui.palette.navigation_label;
+
+import std;
 
 export import telar.gui.core.unicode_scalar;
 export import telar.gui.text.json_unsigned_integer;

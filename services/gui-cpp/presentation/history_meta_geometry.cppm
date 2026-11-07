@@ -1,34 +1,19 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
+#include <stdlib.h>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include <chrono>
 
-#include <bit>
-#include <stdexcept>
 #include <ghostty/vt/unicode.h>
-#include <limits>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
 
-#include <span>
 
 export module telar.gui.presentation.history_meta_geometry;
+
+import std;
 
 export import telar.gui.core.metrics;
 

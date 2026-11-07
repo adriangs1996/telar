@@ -1,17 +1,7 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <exception>
 #include <ghostty/vt.h>
-#include <source_location>
-#include <chrono>
-#include <concepts>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
-#include <bit>
 #include <unistd.h>
 #include <cerrno>
 #include <limits.h>
@@ -23,31 +13,21 @@ module;
 
 #include <cstring>
 
-#include <array>
 
-#include <charconv>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <tuple>
 
-#include <variant>
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <algorithm>
-#include <utility>
-#include <stdexcept>
-#include <optional>
-#include <limits>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
 #include <cassert>
 
 export module telar.runtime.terminal.text_reader;
+
+import std;
 
 export import telar.runtime.diagnostics.runtime_counters;
 

@@ -1,24 +1,11 @@
 module;
-#include <chrono>
-#include <utility>
 #include <cstddef>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <variant>
-#include <bit>
 #include <stdlib.h>
 
-#include <string_view>
-#include <array>
-#include <concepts>
 #include <cstdlib>
 
-#include <stdexcept>
 #include <cerrno>
-#include <exception>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <limits.h>
@@ -30,40 +17,16 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <cstdint>
-#include <span>
-#include <algorithm>
-#include <optional>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include "integration_assets.hpp"
 #include <cstring>
 
-#include <limits>
-#include <type_traits>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <charconv>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
 export module telar.cli.integration.settings;
+
+import std;
 
 export import telar.config;
 export import telar.platform;

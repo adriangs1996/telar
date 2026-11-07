@@ -1,56 +1,35 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <type_traits>
-#include <string>
-#include <vector>
-#include <mutex>
 #include <new>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <array>
-#include <span>
 #include <sys/types.h>
-#include <chrono>
 #include <cstdint>
-#include <bit>
-#include <concepts>
-#include <stdexcept>
-#include <variant>
 #include <cassert>
 #include <cstring>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
-#include <algorithm>
-#include <optional>
-#include <utility>
-#include <charconv>
-#include <limits>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
 #include <unistd.h>
 #include "cell_layout.hpp"
-#include <tuple>
-#include <memory>
 #include <limits.h>
 #include <csignal>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <system_error>
 
 #include <poll.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
 export module telar.runtime.runtime.delivery.client_delivery;
+
+import std;
 
 export import telar.runtime.model.client_layouts;
 

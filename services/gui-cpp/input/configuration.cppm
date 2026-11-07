@@ -1,30 +1,14 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <utility>
-#include <algorithm>
 #include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
 
-#include <charconv>
-#include <limits>
 
 export module telar.gui.input.configuration;
+
+import std;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;

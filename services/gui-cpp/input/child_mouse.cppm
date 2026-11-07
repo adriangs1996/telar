@@ -1,35 +1,18 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <optional>
 
 #include <cstddef>
-#include <array>
-#include <string_view>
-#include <utility>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <span>
-#include <variant>
 
-#include <limits>
 
-#include <ranges>
 
 export module telar.gui.input.child_mouse;
+
+import std;
 
 export import telar.gui.core.metrics;
 

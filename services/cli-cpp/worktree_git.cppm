@@ -1,34 +1,16 @@
 module;
 #include <stdlib.h>
-#include <utility>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <bit>
 
-#include <algorithm>
-#include <stdexcept>
-#include <string>
-#include <string_view>
 
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <type_traits>
 #include <cerrno>
-#include <exception>
-#include <charconv>
 #include <unistd.h>
-#include <format>
 #include <cassert>
 #include <cstring>
 #include <cstddef>
 #include <sys/types.h>
 #include <limits.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
 
@@ -37,35 +19,22 @@ module;
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <variant>
 #include <cstdio>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <concepts>
 #include <csignal>
 #include <dirent.h>
 #include <spawn.h>
-#include <thread>
-#include <filesystem>
 #include <pwd.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#include <vector>
 
 export module telar.cli.worktree_git;
+
+import std;
 
 export import telar.cli.command_limit;
 

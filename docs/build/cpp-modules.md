@@ -100,8 +100,17 @@ los proveedores e importadores. Debug activa `TELAR_DEBUG` y `TELAR_DIAGNOSTICS`
 Release puede activar `TELAR_DIAGNOSTICS`. `TELAR_SANITIZERS` instrumenta todo el
 grafo C/C++ propio. Los nombres antiguos de opciones sanitizer siguen aceptándose.
 Cada variante necesita su directorio de build; las macros del importador no
-reconfiguran un BMI. No se usa `import std`: las dependencias estándar pertenecen
-al fragmento global y proceden de la biblioteca estándar seleccionada.
+reconfiguran un BMI.
+
+Las unidades de módulo importan la biblioteca estándar con `import std;`
+(`CMAKE_CXX_MODULE_STD`; el bootstrap fija el valor experimental de CMake para su
+versión). En el fragmento global solo quedan las cabeceras C y sus envoltorios
+(`<cerrno>`, `<cstdio>`…), `<new>` y `<version>`: macros como `errno`, `assert` o
+`INT_MAX` y el `operator new` de colocación no viajan por un módulo. Una cabecera
+estándar textual en cada fragmento global se serializaba en cada BMI y cada
+importador la volvía a fusionar: un build Debug limpio del runtime bajó de 171 s
+a 26 s. Los módulos dueño de cabeceras siguen incluyéndolas textualmente, porque
+esas cabeceras también las usan Objective-C++ y Qt.
 
 ### Fronteras textuales restantes
 
@@ -158,7 +167,7 @@ Zig conserva la versión exigida por la receta fijada de Ghostty.
 
 | Origen | Responsabilidad |
 | --- | --- |
-| SDK macOS | Xcode/Command Line Tools, linker, frameworks nativos y libc++ del SDK |
+| SDK macOS | Xcode/Command Line Tools, linker y frameworks nativos |
 | SDK Linux | Python 3.9+, Git, make, compilador inicial, Perl, patch, flex, bison y herramientas de empaquetado |
 | `tools/cpp bootstrap` | LLVM, CMake, Ninja y Just aislados en `.toolchain/` |
 | `tools/cpp vt` | Zig verificado, checkout fijado de Ghostty y VT en caché privada |
@@ -173,12 +182,16 @@ La lista reproducible para Ubuntu 24.04 está en
 [requisitos oficiales de Qt para Linux](https://doc.qt.io/qt-6/linux-requirements.html).
 El perfil headless desactiva clipboard nativo y GUI; no requiere ese SDK gráfico.
 
-En macOS se usan las cabeceras libc++ del mismo SDK que la biblioteca del sistema,
-con LLVM fijado como compilador. Usar las cabeceras libc++ del tarball LLVM con el
-runtime Apple produjo símbolos ABI ausentes al enlazar Qt y se corrigió en el
-toolchain generado. Linux selecciona libc++ del toolchain y enlaza explícitamente sus archivos
-estáticos `libc++.a` y `libc++abi.a`, según la
-[configuración de runtime de LLVM](https://libcxx.llvm.org/VendorDocumentation.html). En musl y hosts sin binario oficial compatible, el bootstrap compila
+macOS y Linux compilan contra libc++ del toolchain y enlazan explícitamente sus
+archivos estáticos `libc++.a` y `libc++abi.a`, según la
+[configuración de runtime de LLVM](https://libcxx.llvm.org/VendorDocumentation.html).
+`import std` necesita el módulo `std` que corresponde a esas cabeceras; el SDK de
+Apple no lo incluye y trae otra versión de libc++. Mezclar cabeceras del tarball
+con el runtime de Apple dejaba símbolos ABI sin resolver al enlazar Qt, por eso
+el runtime también es el del toolchain. En macOS, libSystem carga además la libc++
+del sistema: los archivos se cargan con `-load_hidden` para que dyld no fusione
+los `operator new`/`delete` débiles de la copia estática con los del sistema; sin
+eso, la asignación tipada aborta antes de que libc++ se inicialice. En musl y hosts sin binario oficial compatible, el bootstrap compila
 LLVM/libc++ desde los archivos verificados; reutiliza la receta OpenSSL existente
 para HTTPS de CMake. Esa ruta necesita un SDK C/C++ inicial. El script Alpine de
 release lo prepara. No se ha ejecutado esa ruta en esta máquina macOS ARM64.

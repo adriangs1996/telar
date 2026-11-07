@@ -1,37 +1,20 @@
 module;
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <optional>
-#include <string>
-#include <variant>
-#include <vector>
-#include <algorithm>
-#include <bit>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
 #include <cstdint>
-#include <string_view>
 
-#include <chrono>
-#include <concepts>
-#include <array>
 
-#include <atomic>
-#include <exception>
 #include <cstddef>
 #include "telar_base/diagnostics/config.hpp"
 
 #include <cstring>
 #include <sqlite3.h>
-#include <stdexcept>
 
 export module telar.runtime.history.event;
+
+import std;
 
 export import telar.runtime.command_capture.tracker;
 

@@ -1,45 +1,23 @@
 module;
-#include <utility>
-#include <memory>
-#include <mutex>
 #include <stdlib.h>
 
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <stdexcept>
 #include <cerrno>
-#include <exception>
-#include <span>
 #include <unistd.h>
-#include <array>
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
-#include <string>
 #include <sys/wait.h>
-#include <thread>
-#include <vector>
-#include <algorithm>
-#include <limits>
-#include <type_traits>
 #include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <sys/stat.h>
 #include <cstddef>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
-#include <bit>
 #include <new>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -47,93 +25,25 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <filesystem>
 #include <sys/file.h>
-#include <variant>
 #include <sys/un.h>
 #include <openssl/sha.h>
-#include <map>
-#include <set>
 
-#include <iostream>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <cctype>
-#include <functional>
 
 #include <sys/socket.h>
 #include <sys/time.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#include <sstream>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include "help_texts.hpp"
 #include "machine_assets.hpp"
-#include <fstream>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
 export module telar.cli.machine;
+
+import std;
 
 export import telar.cli.machine_ssh;
 

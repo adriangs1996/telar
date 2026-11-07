@@ -1,29 +1,18 @@
 module;
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
-#include <concepts>
 #include <cstdint>
-#include <span>
-#include <string_view>
 
-#include <limits>
-#include <optional>
-#include <algorithm>
 
 #include <cstring>
 #include <cstddef>
 #include <nghttp2/nghttp2.h>
 
-#include <array>
 
 export module telar.runtime.http2.direction_observer;
+
+import std;
 
 export import telar.runtime.http1.head;
 export import telar.base.text;

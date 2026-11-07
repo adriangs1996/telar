@@ -1,39 +1,20 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include <chrono>
 
-#include <initializer_list>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <limits>
-#include <bit>
 #include <ghostty/vt/unicode.h>
-#include <span>
 
-#include <variant>
 
 export module telar.gui.presentation.history_inspection_geometry;
+
+import std;
 
 export import telar.gui.core.metrics;
 

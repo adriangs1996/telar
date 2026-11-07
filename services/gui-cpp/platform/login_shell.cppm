@@ -1,13 +1,11 @@
 module;
 
-#include <string_view>
 
 
-#include <span>
-#include <string>
-#include <vector>
 
 export module telar.gui.platform.login_shell;
+
+import std;
 
 
 // Interface: platform/external_links.cppm

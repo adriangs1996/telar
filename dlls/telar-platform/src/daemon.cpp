@@ -1,21 +1,12 @@
 module;
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <utility>
 #include <cstddef>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <unistd.h>
 
 #include "telar_platform/process_environment.h"
 
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
@@ -24,14 +15,8 @@ module;
 #if (!(defined(__APPLE__)))
 #include <unistd.h>
 #endif
-#include <string_view>
-#include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <concepts>
-#include <span>
-#include <stdexcept>
-#include <charconv>
 #include <sys/un.h>
 #include <csignal>
 #include <dirent.h>
@@ -39,6 +24,8 @@ module;
 #include <sys/wait.h>
 
 module telar.platform;
+
+import std;
 
 
 

@@ -1,33 +1,17 @@
 module;
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <string_view>
 
-#include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <limits>
-#include <stdexcept>
 
-#include <concepts>
-#include <numbers>
 
-#include <utility>
 
 export module telar.gui.presentation.display_metrics;
+
+import std;
 
 export import telar.gui.core.metrics;
 

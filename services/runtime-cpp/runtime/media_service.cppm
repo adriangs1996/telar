@@ -1,81 +1,38 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <string>
-#include <vector>
-#include <mutex>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <chrono>
 #include <cstdint>
-#include <concepts>
-#include <string_view>
-#include <array>
-#include <atomic>
-#include <exception>
 #include <cstddef>
 #include "telar_base/diagnostics/config.hpp"
 #include <cerrno>
-#include <condition_variable>
-#include <optional>
 #include <pthread.h>
-#include <algorithm>
-#include <limits>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cassert>
-#include <type_traits>
-#include <variant>
 #include <limits.h>
 #include <poll.h>
 #include <sys/wait.h>
-#include <charconv>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include <sqlite3.h>
-#include <bit>
-#include <unordered_set>
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
 
-#include <stdexcept>
 
-#include <utility>
 #include <cstdio>
 #include <cstdlib>
 #include <sys/mman.h>
 #include "cell_layout.hpp"
-#include <tuple>
-#include <memory>
 #include <csignal>
 #include <sys/uio.h>
-#include <system_error>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #include <climits>
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #endif
 #if (defined(__linux__))
 #include <sched.h>
@@ -86,13 +43,13 @@ module;
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#endif
 #include <new>
 
 #include <dirent.h>
 
 export module telar.runtime.runtime.media_service;
+
+import std;
 
 export import telar.runtime.history.event;
 export import telar.runtime.platform.request_worker;

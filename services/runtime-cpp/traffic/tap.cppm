@@ -1,51 +1,30 @@
 module;
 #include <cstdlib>
 #include <stdlib.h>
-#include <limits>
-#include <concepts>
 #include <new>
-#include <vector>
 #include <cstdio>
-#include <variant>
 
-#include <optional>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <cstdint>
-#include <string_view>
 #include <sys/stat.h>
 #include <sys/un.h>
-#include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <span>
-#include <stdexcept>
-#include <chrono>
-#include <bit>
 #include <csignal>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <utility>
 #include <pcap/pcap.h>
 #include <arpa/inet.h>
-#include <string>
-#include <unordered_map>
-#include <charconv>
 #include <limits.h>
-#include <memory>
-#include <mutex>
-#include <condition_variable>
-#include <type_traits>
 #include <poll.h>
-#include <thread>
 
 export module telar.runtime.traffic.tap;
+
+import std;
 
 export import telar.runtime.traffic.control_backend;
 import telar.base.diagnostics;

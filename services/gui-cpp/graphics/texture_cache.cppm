@@ -1,39 +1,21 @@
 module;
 #include <cstring>
-#include <memory>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
 #include <cstddef>
 
-#include <atomic>
 #include <cstdint>
-#include <limits>
 
-#include <algorithm>
-#include <array>
-#include <concepts>
-#include <optional>
-#include <span>
 
-#include <exception>
 
-#include <string_view>
-#include <tuple>
-#include <utility>
 
 #include <cmath>
-#include <type_traits>
 
 export module telar.gui.graphics.texture_cache;
+
+import std;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;

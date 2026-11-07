@@ -1,45 +1,25 @@
 module;
-#include <vector>
 #include <stdlib.h>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <sys/mman.h>
 
 #include <cstdint>
-#include <limits>
-#include <span>
-#include <stdexcept>
-#include <string_view>
 
 #include "config_bootstrap.hpp"
-#include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstdio>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <chrono>
 #include <cstring>
 #include <cmath>
-#include <initializer_list>
-#include <optional>
-#include <string>
 #include <cstddef>
-#include <concepts>
-#include <bit>
-#include <utility>
 #include <limits.h>
 #include <sys/stat.h>
-#include <exception>
-#include <charconv>
 #include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
-#include <filesystem>
 
-#if (defined(__APPLE__))
-#endif
 #if (defined(__APPLE__))
 #include <sys/socket.h>
 #endif
@@ -47,55 +27,13 @@ module;
 #include <sys/types.h>
 #endif
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <csignal>
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
 #include <poll.h>
 #endif
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <sys/un.h>
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__)) && (defined(__APPLE__))
 #include <net/if.h>
@@ -105,8 +43,6 @@ module;
 #endif
 #if (defined(__APPLE__)) && (defined(__APPLE__))
 #include <netinet6/in6_var.h>
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__)) && (defined(__APPLE__))
 #include <sys/ioctl.h>
@@ -121,17 +57,7 @@ module;
 #include <sys/sys_domain.h>
 #endif
 #if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
 #include <arpa/inet.h>
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
 #endif
 #if (defined(__APPLE__)) && (!(defined(__APPLE__)))
 #include <linux/if_ether.h>
@@ -143,8 +69,6 @@ module;
 #include <net/if.h>
 #endif
 #if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
 #include <sys/ioctl.h>
 #endif
 #if (defined(__APPLE__)) && (!(defined(__APPLE__)))
@@ -154,22 +78,13 @@ module;
 #include <arpa/inet.h>
 #endif
 #if (defined(__APPLE__))
-#include <memory>
-#endif
-#if (defined(__APPLE__))
 #include <pcap/pcap.h>
 #endif
 #if (defined(__APPLE__))
 #include <sys/ioctl.h>
 #endif
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <netinet/in.h>
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
 #include <ifaddrs.h>
@@ -177,32 +92,17 @@ module;
 #if (defined(__APPLE__))
 #include <net/if.h>
 #endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
 #if (defined(__APPLE__)) && (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
 #if (defined(__APPLE__)) && (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__APPLE__)) && (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #if (defined(__APPLE__))
 #include <cstdlib>
 #endif
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <sys/file.h>
-#endif
-#if (defined(__APPLE__))
-#include <thread>
 #endif
 #if (defined(__APPLE__))
 #include <sys/sockio.h>
@@ -211,20 +111,10 @@ module;
 #include <netinet/tcp.h>
 #endif
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <net/if_dl.h>
 #endif
 #if (defined(__APPLE__))
 #include <net/route.h>
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
 #include <sys/uio.h>
@@ -248,34 +138,19 @@ module;
 #include <libproc.h>
 #endif
 #if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
 #include <dirent.h>
 #endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
-#include <format>
 #include <ghostty/vt/unicode.h>
 #include <arpa/inet.h>
 #include <cstdlib>
 #include <sqlite3.h>
-#include <atomic>
-#include <memory>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
 #include <cassert>
 #include <poll.h>
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <climits>
 #include <csignal>
-#include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -292,22 +167,6 @@ module;
 #if (defined(__APPLE__))
 #include <Security/Security.h>
 #endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #if (!(defined(__APPLE__)))
 #include <openssl/err.h>
 #endif
@@ -317,21 +176,13 @@ module;
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <sys/un.h>
-#include <bitset>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <variant>
 #include <netdb.h>
 #include <brotli/encode.h>
 #include <nghttp2/nghttp2.h>
@@ -345,18 +196,6 @@ module;
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #include <sched.h>
 #endif
 #if (defined(__linux__))
@@ -365,163 +204,18 @@ module;
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#endif
 #include <spawn.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
 #include "telar_base/diagnostics/config.hpp"
-#include <unordered_set>
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
 #if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
 #include <mach/mach.h>
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
 #include <sys/mman.h>
 #endif
 #if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
 #include "cell_layout.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <tuple>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <system_error>
 #endif
 #include <sys/file.h>
 #include <new>
@@ -531,194 +225,15 @@ module;
 #if (defined(__APPLE__))
 #include <libproc.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <pcap/pcap.h>
-#include <unordered_map>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
 
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__APPLE__)) && (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__APPLE__)) && (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__)) && (!(defined(__APPLE__)))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
 export module telar.runtime.cli.server;
+
+import std;
 
 export import telar.config;
 

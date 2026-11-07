@@ -1,34 +1,18 @@
 module;
-#include <chrono>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cstring>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
-#include <bit>
 
 #include <cstddef>
 #include <cstdint>
 
-#include <optional>
 
-#include <algorithm>
-#include <span>
-#include <stdexcept>
-#include <string_view>
 
-#include <array>
-#include <limits>
-#include <utility>
-#include <variant>
 
 export module telar.gui.history.browser;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

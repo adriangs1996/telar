@@ -1,44 +1,26 @@
 module;
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstddef>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
-#include <type_traits>
-#include <variant>
-#include <bit>
 
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 
-#include <array>
-#include <chrono>
 #include <cstring>
 #include <ctime>
-#include <stdexcept>
-#include <string_view>
 
-#include <exception>
-#include <charconv>
 #include <cstdint>
-#include <optional>
-#include <span>
 
-#include <algorithm>
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
 
 #include <cmath>
-#include <initializer_list>
-#include <string>
 
 export module telar.lua;
+
+import std;
 
 export import telar.base.text;
 import telar.base.diagnostics;

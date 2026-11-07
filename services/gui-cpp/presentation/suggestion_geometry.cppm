@@ -1,29 +1,15 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include <chrono>
 
-#include <span>
-#include <stdexcept>
 
 export module telar.gui.presentation.suggestion_geometry;
+
+import std;
 
 export import telar.gui.core.metrics;
 

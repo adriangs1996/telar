@@ -1,36 +1,18 @@
 module;
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <exception>
 #include <cstdio>
-#include <bit>
 
-#include <concepts>
 #include <cstddef>
-#include <stdexcept>
-#include <type_traits>
 
-#include <array>
-#include <span>
-#include <variant>
-#include <optional>
 
 #include <cstdint>
-#include <charconv>
 #include <cstring>
-#include <string_view>
-#include <system_error>
-#include <utility>
 
-#include <algorithm>
-#include <chrono>
-#include <limits>
 
 export module telar.gui.transport.runtime_link;
+
+import std;
 
 export import telar.client;
 

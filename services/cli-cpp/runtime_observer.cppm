@@ -1,31 +1,12 @@
 module;
 #include <stdlib.h>
-#include <chrono>
-#include <utility>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
 #include <cstdio>
-#include <bit>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
 #include <cerrno>
-#include <exception>
-#include <charconv>
-#include <string>
 #include <unistd.h>
 #include <cstddef>
-#include <variant>
-#include <format>
 
 #include <cstring>
 #include <sys/socket.h>
@@ -35,10 +16,11 @@ module;
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <concepts>
 #include <cstdlib>
 
 export module telar.cli.runtime_observer;
+
+import std;
 
 export import telar.cli.command_limit;
 export import telar.client;

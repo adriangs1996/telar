@@ -1,29 +1,15 @@
 module;
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <string_view>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
-#include <stdexcept>
 
-#include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <span>
 
-#include <optional>
-#include <variant>
-#include <concepts>
-#include <utility>
 
 export module telar.gui.graphics.pauses;
+
+import std;
 
 export import telar.gui.application.sound_playback;
 import telar.base.diagnostics;

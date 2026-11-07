@@ -1,36 +1,21 @@
 module;
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
 #include <cstdint>
 
-#include <array>
 #include <cstddef>
-#include <span>
-#include <stdexcept>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <string_view>
-#include <system_error>
 
-#include <algorithm>
 
-#include <bit>
-#include <limits>
 
-#include <optional>
 #include <ghostty/vt/unicode.h>
 #include <cmath>
 
 export module telar.gui.text.json_unsigned_integer;
+
+import std;
 
 export import telar.base.text;
 

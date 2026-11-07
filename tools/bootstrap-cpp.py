@@ -16,6 +16,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / 'tools/toolchain/manifest.json'
+# `import std` is still experimental in CMake; each release accepts only its own gate value.
+IMPORT_STD_GATES = {'4.4.5': 'f35a9ac6-8463-4d38-8eec-5d6008153e7d'}
 
 
 def sha256(path):
@@ -150,31 +152,40 @@ def main():
         if platform.system() == 'Darwin':
             sdk = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], text=True).strip()
             sdk_build = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-build-version'], text=True).strip()
-            headers = Path(sdk) / 'usr/include/c++/v1'
-            if not (headers / 'version').exists():
-                raise RuntimeError('The macOS SDK must provide libc++ headers')
             with toolchain.open('a') as output:
                 output.write(f'set(CMAKE_OSX_SYSROOT "{sdk}" CACHE PATH "System SDK")\n')
-                for language in ('CXX', 'OBJCXX'):
-                    output.write(f'set(CMAKE_{language}_FLAGS_INIT "-nostdinc++ -isystem \\"{headers}\\"")\n')
-        if platform.system() == 'Linux':
-            with toolchain.open('a') as output:
-                output.write('set(CMAKE_CXX_FLAGS_INIT "-stdlib=libc++")\n')
-                # Static libc++ needs its ABI archive too; do not let the driver
-                # silently select a distribution's dynamic C++ ABI runtime.
-                triple = subprocess.check_output([str(llvm_bin / 'clang'), '-print-target-triple'], text=True).strip()
-                libraries = []
-                for name in ('libc++.a', 'libc++abi.a'):
-                    candidates = list((llvm_bin.parent / 'lib').rglob(name))
-                    preferred = [path for path in candidates if triple in str(path)]
-                    candidates = preferred or candidates
-                    if len(candidates) != 1:
-                        raise RuntimeError(f'Expected one pinned {name} for {triple}; use --from-source')
-                    libraries.append(candidates[0])
-                for kind in ('EXE', 'SHARED', 'MODULE'):
-                    output.write(f'set(CMAKE_{kind}_LINKER_FLAGS_INIT "-nostdlib++")\n')
-                archives = ' '.join('\\"' + str(path) + '\\"' for path in libraries)
-                output.write(f'set(CMAKE_CXX_STANDARD_LIBRARIES_INIT "{archives} -lm")\n')
+        # Every platform compiles against this release's libc++ and links it
+        # statically: `import std` needs the std module that matches the headers,
+        # and the SDK ships neither that module nor the same libc++ version.
+        gate = IMPORT_STD_GATES.get(manifest['versions']['cmake'])
+        if gate is None:
+            raise RuntimeError(f"Record CMake {manifest['versions']['cmake']}'s CMAKE_EXPERIMENTAL_CXX_IMPORT_STD gate")
+        with toolchain.open('a') as output:
+            output.write(f'set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "{gate}")\n')
+            for language in ('CXX', 'OBJCXX'):
+                output.write(f'set(CMAKE_{language}_FLAGS_INIT "-stdlib=libc++")\n')
+            # Static libc++ needs its ABI archive too; do not let the driver
+            # silently select the system's or a distribution's dynamic C++ runtime.
+            triple = subprocess.check_output([str(llvm_bin / 'clang'), '-print-target-triple'], text=True).strip()
+            libraries = []
+            for name in ('libc++.a', 'libc++abi.a'):
+                candidates = list((llvm_bin.parent / 'lib').rglob(name))
+                preferred = [path for path in candidates if triple in str(path)]
+                candidates = preferred or candidates
+                if len(candidates) != 1:
+                    raise RuntimeError(f'Expected one pinned {name} for {triple}; use --from-source')
+                libraries.append(candidates[0])
+            for kind in ('EXE', 'SHARED', 'MODULE'):
+                output.write(f'set(CMAKE_{kind}_LINKER_FLAGS_INIT "-nostdlib++")\n')
+            if platform.system() == 'Darwin':
+                # libSystem loads the system libc++ too. Exported weak operator
+                # new/delete from a static copy would be coalesced with it by dyld,
+                # and typed allocation then aborts before libc++ initializes.
+                archives = ' '.join('\\"-Wl,-load_hidden,' + str(path) + '\\"' for path in libraries)
+            else:
+                archives = ' '.join('\\"' + str(path) + '\\"' for path in libraries) + ' -lm'
+            for language in ('CXX', 'OBJCXX'):
+                output.write(f'set(CMAKE_{language}_STANDARD_LIBRARIES_INIT "{archives}")\n')
         if source_build and platform.system() == 'Linux':
             # Every native application dependency is compiled without distro GCC
             # LTO; libc++ and its unwind/compiler runtimes come from this release.

@@ -2,17 +2,11 @@ module;
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <stdexcept>
-#include <algorithm>
 #include <cmath>
-#include <array>
-#include <limits>
-#include <optional>
-#include <bit>
-#include <string_view>
 
 module telar.gui.terminal.glyphs.curve_cache;
+
+import std;
 
 import telar.gui.terminal.font_grid;
 

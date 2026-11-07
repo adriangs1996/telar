@@ -1,31 +1,15 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <string_view>
-#include <system_error>
-#include <span>
-#include <optional>
 
-#include <algorithm>
 
-#include <utility>
 
 export module telar.gui.machines.picker;
+
+import std;
 
 export import telar.gui.machines.discovery;
 

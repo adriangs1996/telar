@@ -1,37 +1,16 @@
 module;
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <compare>
 
-#include <concepts>
 #include <cstdint>
-#include <optional>
-#include <algorithm>
 #include <cstddef>
-#include <limits>
-#include <string_view>
-#include <array>
-#include <span>
-#include <stdexcept>
-#include <charconv>
 #include <cstring>
-#include <system_error>
-#include <atomic>
-#include <exception>
-#include <utility>
-#include <variant>
-#include <chrono>
-#include <bit>
-#include <tuple>
 #include <cmath>
-#include <memory>
 
 export module telar.gui.application.session;
+
+import std;
 
 export import telar.gui.application.host_effects;
 export import telar.gui.application.workspace_replica;

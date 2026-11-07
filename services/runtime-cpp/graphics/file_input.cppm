@@ -1,8 +1,4 @@
 module;
-#include <concepts>
-#include <limits>
-#include <optional>
-#include <string_view>
 #include <unistd.h>
 #include <cerrno>
 #include <fcntl.h>
@@ -11,32 +7,18 @@ module;
 #include <cstdio>
 #include <cstdlib>
 #include <sys/mman.h>
-#include <atomic>
-#include <mutex>
-#include <chrono>
-#include <memory>
 #include <new>
-#include <string>
-#include <vector>
-#include <exception>
-#include <type_traits>
-#include <bit>
-#include <stdexcept>
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
-#include <algorithm>
-#include <charconv>
 
-#include <utility>
 
-#include <array>
 #include <cstring>
-#include <variant>
 
 export module telar.runtime.graphics.file_input;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

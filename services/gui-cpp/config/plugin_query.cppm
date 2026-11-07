@@ -1,41 +1,21 @@
 module;
-#include <chrono>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
 #include <cstdint>
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
-#include <variant>
 
-#include <optional>
-#include <string_view>
-#include <utility>
-#include <bit>
 
-#include <charconv>
 #include <cmath>
-#include <concepts>
 #include <cstring>
-#include <functional>
-#include <limits>
-#include <system_error>
-#include <type_traits>
 #include <cinttypes>
 #include <cstdio>
 
-#include <exception>
 #include <limits.h>
 
 export module telar.gui.config.plugin_query;
+
+import std;
 
 export import telar.gui.input.key_encoder;
 

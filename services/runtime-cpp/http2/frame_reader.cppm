@@ -4,13 +4,11 @@ module;
 #include <cstdint>
 
 
-#include <algorithm>
-#include <array>
-#include <concepts>
 #include <cstring>
-#include <span>
 
 export module telar.runtime.http2.frame_reader;
+
+import std;
 
 
 // Interface: http2/frame.cppm

@@ -1,36 +1,21 @@
 module;
-#include <concepts>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <vector>
 
-#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <array>
-#include <optional>
 #include <pcap/pcap.h>
 
-#include <algorithm>
 #include <arpa/inet.h>
 
-#include <chrono>
 
-#include <string>
 
-#include <unordered_map>
 
 export module telar.runtime.traffic.capture_analysis;
+
+import std;
 
 export import telar.runtime.traffic.control_protocol;
 

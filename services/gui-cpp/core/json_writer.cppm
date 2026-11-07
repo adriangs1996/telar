@@ -1,33 +1,16 @@
 module;
-#include <exception>
-#include <memory>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
 #include <cmath>
-#include <concepts>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
-#include <algorithm>
-#include <charconv>
 #include <cstring>
-#include <functional>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <type_traits>
-#include <utility>
 
 export module telar.gui.core.json_writer;
+
+import std;
 
 import telar.base.text;
 import telar.client.protocol;

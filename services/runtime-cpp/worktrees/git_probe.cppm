@@ -1,44 +1,26 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 
-#include <array>
-#include <optional>
-#include <string_view>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <span>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
 #include <sys/types.h>
 #include <limits.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
-#include <charconv>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <algorithm>
 
 export module telar.runtime.worktrees.git_probe;
+
+import std;
 
 export import telar.runtime.platform.git_status;
 export import telar.platform;

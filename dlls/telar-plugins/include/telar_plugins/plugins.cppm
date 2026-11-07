@@ -1,33 +1,16 @@
 module;
 #include <cstring>
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <utility>
-#include <mutex>
 #include <new>
 #include <stdlib.h>
 
 #include <cstddef>
 #include <cstdint>
 
-#include <exception>
-#include <charconv>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <array>
 
-#include <algorithm>
 
-#include <stdexcept>
 
 #include <limits.h>
 
-#include <chrono>
 
 #include <cerrno>
 #include <dirent.h>
@@ -37,8 +20,6 @@ module;
 #include "telar_platform/open_directory.h"
 #include <unistd.h>
 
-#include <concepts>
-#include <limits>
 
 #include <openssl/sha.h>
 
@@ -49,18 +30,12 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <cstdlib>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
 export module telar.plugins;
+
+import std;
 
 export import telar.base.text;
 

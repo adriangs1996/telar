@@ -1,36 +1,19 @@
 module;
-#include <concepts>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 
-#include <string_view>
-#include <optional>
-#include <span>
 
-#include <bit>
 
-#include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstring>
-#include <array>
-#include <stdexcept>
 
 export module telar.runtime.plugins.protocol;
+
+import std;
 
 export import telar.plugins;
 

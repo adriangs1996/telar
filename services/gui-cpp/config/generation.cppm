@@ -1,50 +1,29 @@
 module;
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
-#include <type_traits>
 
 #include <cstdint>
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
-#include <variant>
-#include <string_view>
 #include <cinttypes>
 #include <cstdio>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <chrono>
 #include <cstring>
 #include <cmath>
-#include <initializer_list>
-#include <optional>
-#include <string>
-#include <limits>
 
-#include <utility>
-#include <bit>
-#include <concepts>
 
-#include <charconv>
-#include <system_error>
 
 #include "gui_config_bootstrap.hpp"
 
 #include <limits.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
-#include <format>
 #include <ghostty/vt/unicode.h>
-#include <exception>
 
 export module telar.gui.config.generation;
+
+import std;
 
 export import telar.gui.config.plugin_query;
 export import telar.config;

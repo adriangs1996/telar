@@ -1,43 +1,25 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
-#include <memory>
 #include <new>
-#include <string>
-#include <vector>
 #include <unistd.h>
 
-#include <chrono>
-#include <concepts>
 #include <cstdint>
 
-#include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <span>
-#include <array>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <bit>
-#include <limits>
 
 #include <pthread.h>
 #include <brotli/decode.h>
-#include <utility>
-#include <initializer_list>
 #include <zlib.h>
 #include <zstd.h>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
 
 #include <cerrno>
-#include <exception>
 
 export module telar.runtime.exchange_capture.pipeline;
+
+import std;
 
 export import telar.runtime.exchange_capture.exchange;
 export import telar.base.memory;

@@ -973,6 +973,21 @@ if(TELAR_GUI_NATIVE)
   target_include_directories(gui-quick PUBLIC qt)
   target_sources(gui-quick PRIVATE qt/bundled_fonts.cpp qt/terminal_font.cpp platform/runtime_endpoint.cpp platform/login_shell.cpp)
   target_link_libraries(gui-quick PUBLIC gui-core gui-config gui-platform gui-keyboard gui-fonts gui-machine-profiles Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
+  # Most of a gui-quick compilation parses the same Qt headers again; the ones
+  # that at least two in five Qt adapters include are parsed once per build.
+  option(TELAR_GUI_PRECOMPILED_HEADERS "Precompile the Qt headers shared by gui-quick sources" ON)
+  if(TELAR_GUI_PRECOMPILED_HEADERS)
+    target_precompile_headers(gui-quick PRIVATE
+      <QByteArray> <QColor> <QDir> <QFont> <QFutureWatcher> <QHash> <QIODevice> <QImage>
+      <QKeyEvent> <QList> <QMetaObject> <QMouseEvent> <QObject> <QPointF> <QPointer>
+      <QQuickItem> <QQuickWindow> <QRectF> <QSizeF> <QString> <QStringList> <QThread>
+      <QTimer> <QVariant> <QVariantMap> <QWindow> <QtQml/qqmlregistration.h>)
+    # Module units import std; a prefix with the textual standard library would
+    # declare its names twice.
+    get_target_property(gui_quick_sources gui-quick SOURCES)
+    list(FILTER gui_quick_sources EXCLUDE REGEX "^qt/")
+    set_source_files_properties(${gui_quick_sources} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+  endif()
   set(TELAR_GUI_LINK_HOST_HEADER "" CACHE FILEPATH "Header selecting a compile-time external link host")
   if(TELAR_GUI_LINK_HOST_HEADER)
     get_filename_component(gui_link_host_header "${TELAR_GUI_LINK_HOST_HEADER}" ABSOLUTE)

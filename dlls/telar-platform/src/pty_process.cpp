@@ -1,24 +1,10 @@
 module;
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <memory>
-#include <span>
-#include <string_view>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
-#include <utility>
 
-#include <optional>
 #include <sys/types.h>
-#include <array>
 #if (defined(__APPLE__))
 #include <libproc.h>
 #endif
@@ -33,8 +19,6 @@ module;
 #endif
 #include <unistd.h>
 #include <cerrno>
-#include <exception>
-#include <algorithm>
 #include <csignal>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -48,6 +32,8 @@ module;
 #endif
 
 module telar.platform;
+
+import std;
 
 
 

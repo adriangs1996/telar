@@ -1,34 +1,18 @@
 module;
-#include <array>
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <vector>
-#include <bit>
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
 #include <cstdint>
-#include <string_view>
 
 #include <cstddef>
 
-#include <variant>
 
-#include <algorithm>
-#include <optional>
-#include <stdexcept>
 
 export module telar.gui.peek.screen;
+
+import std;
 
 export import telar.gui.suggestions.state;
 

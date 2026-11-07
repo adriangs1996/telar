@@ -1,17 +1,8 @@
 module;
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <utility>
-#include <mutex>
 #include <new>
 #include <stdlib.h>
 #include <sys/mman.h>
 
-#include <array>
 #if (defined(__APPLE__))
 #include <libproc.h>
 #endif
@@ -27,9 +18,7 @@ module;
 #include <unistd.h>
 
 #include <cerrno>
-#include <exception>
 
-#include <optional>
 #include <sys/types.h>
 
 #include "telar_platform/process_environment.h"
@@ -37,13 +26,9 @@ module;
 #include <cstddef>
 #include <cstring>
 #include <limits.h>
-#include <string_view>
 
 #include <cassert>
 #include <cstdint>
-#include <span>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
 
@@ -55,15 +40,11 @@ module;
 #include <unistd.h>
 #endif
 
-#include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include <concepts>
 
-#include <stdexcept>
 
-#include <charconv>
 #include <sys/un.h>
 
 #include <csignal>
@@ -78,7 +59,6 @@ module;
 #endif
 
 #include <cstdio>
-#include <limits>
 
 #include <sys/socket.h>
 
@@ -107,6 +87,8 @@ module;
 #endif
 
 export module telar.platform;
+
+import std;
 
 export import telar.base.memory;
 

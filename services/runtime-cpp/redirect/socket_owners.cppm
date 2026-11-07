@@ -1,52 +1,32 @@
 module;
-#include <concepts>
-#include <type_traits>
 #include <cstdio>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <variant>
-#include <bit>
 #include <stdlib.h>
 
-#include <stdexcept>
-#include <string_view>
 #include <cstdint>
 #include <cstring>
 #include <netinet/in.h>
-#include <optional>
 #include <sys/socket.h>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <array>
 #include <cstddef>
-#include <charconv>
 #include <cerrno>
-#include <exception>
 #include <ifaddrs.h>
-#include <memory>
 #include <net/if.h>
 
 #include <csignal>
 #include <netinet/tcp.h>
 #include <sys/types.h>
 #include <limits.h>
-#include <chrono>
 #include <poll.h>
 
-#include <span>
 #include <net/if_dl.h>
 #include <net/route.h>
 
-#include <limits>
 #include <unistd.h>
 
 #if defined(__APPLE__)
 
-#include <utility>
 #include <netinet/in_pcb.h>
 #include <netinet/tcp_fsm.h>
 #include <netinet/tcp_var.h>
@@ -65,14 +45,6 @@ module;
 #include <libproc.h>
 #endif
 #if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #include <fcntl.h>
 #endif
 #if (!(defined(__APPLE__)))
@@ -84,28 +56,13 @@ module;
 
 #if defined(__APPLE__)
 
-#include <bit>
 #include <sys/stat.h>
 #include <sys/un.h>
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
 #if (defined(__APPLE__))
 #include <net/if_utun.h>
 #endif
 #if (defined(__APPLE__))
 #include <netinet6/in6_var.h>
-#endif
-#if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
 #include <sys/ioctl.h>
@@ -114,19 +71,7 @@ module;
 #include <sys/kern_control.h>
 #endif
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #if (!(defined(__APPLE__)))
 #include <fcntl.h>
@@ -136,10 +81,6 @@ module;
 #endif
 #if (!(defined(__APPLE__)))
 #include <linux/if_tun.h>
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #if (!(defined(__APPLE__)))
 #include <sys/ioctl.h>
@@ -157,17 +98,12 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <cstdlib>
 #include <sys/file.h>
-#include <thread>
 #include <sys/sockio.h>
 #include <sys/uio.h>
 #if (defined(__APPLE__))
 #include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #if (!(defined(__APPLE__)))
 #include <dirent.h>
@@ -179,6 +115,8 @@ module;
 #endif
 
 export module telar.runtime.redirect.socket_owners;
+
+import std;
 
 export import telar.runtime.redirect.pf_rules;
 export import telar.runtime.redirect.ingress;

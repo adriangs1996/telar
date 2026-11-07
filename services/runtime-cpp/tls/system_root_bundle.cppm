@@ -1,32 +1,20 @@
 module;
-#include <algorithm>
-#include <chrono>
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstddef>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <span>
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <fcntl.h>
 #include <limits.h>
-#include <optional>
-#include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
 
 export module telar.runtime.tls.system_root_bundle;
+
+import std;
 
 export import telar.base.memory;
 export import telar.platform;

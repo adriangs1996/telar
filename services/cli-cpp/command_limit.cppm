@@ -2,37 +2,19 @@ module;
 #include <cstddef>
 #include <cstdlib>
 #include <stdlib.h>
-#include <chrono>
-#include <utility>
-#include <concepts>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
 #include <cstring>
 #include <cstdio>
-#include <variant>
-#include <bit>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
 
 #include <cerrno>
-#include <exception>
-#include <charconv>
-#include <string>
 #include <unistd.h>
 
-#include <format>
 
 export module telar.cli.command_limit;
+
+import std;
 
 export import telar.cli.output;
 export import telar.platform;

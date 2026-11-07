@@ -1,27 +1,11 @@
 module;
 #include <stdlib.h>
-#include <utility>
-#include <mutex>
 #include <new>
-#include <vector>
-#include <bit>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
 #include <cerrno>
-#include <exception>
-#include <charconv>
-#include <string>
 #include <unistd.h>
 
-#include <format>
 #include <cstdio>
 #include <fcntl.h>
 #if (defined(__linux__) && !defined(__GLIBC__))
@@ -30,9 +14,6 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <filesystem>
 #include <sys/stat.h>
 #if (defined(__linux__))
 #include <sys/syscall.h>
@@ -43,57 +24,24 @@ module;
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <variant>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 #include <limits.h>
-#include <concepts>
 #include <cstdlib>
 #include <ctime>
 #include <dirent.h>
-#include <memory>
 
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <csignal>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
 
-#include <chrono>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 
 export module telar.cli.history;
+
+import std;
 
 export import telar.cli.command_limit;
 

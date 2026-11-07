@@ -1,28 +1,10 @@
 module;
-#include <concepts>
 #include <cstddef>
-#include <exception>
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
-#include <utility>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
-#include <charconv>
 #include <cstdio>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -30,6 +12,8 @@ module;
 #include <sys/socket.h>
 
 module telar.runtime.platform.process_probe;
+
+import std;
 
 import telar.runtime.platform.launch_program;
 import telar.base.diagnostics;

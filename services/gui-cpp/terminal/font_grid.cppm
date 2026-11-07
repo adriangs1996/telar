@@ -1,36 +1,18 @@
 module;
-#include <compare>
-#include <tuple>
-#include <utility>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cstring>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <span>
 
-#include <concepts>
-#include <limits>
-#include <string_view>
 
-#include <chrono>
 #include <cmath>
-#include <stdexcept>
 
 export module telar.gui.terminal.font_grid;
+
+import std;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;

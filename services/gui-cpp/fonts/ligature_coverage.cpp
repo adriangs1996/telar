@@ -1,22 +1,15 @@
 module;
 
 #include <cstdint>
-#include <array>
 #include <cstddef>
 #include <freetype/freetype.h>
 #include <hb.h>
-#include <memory>
-#include <string_view>
-#include <bit>
-#include <optional>
-#include <stdexcept>
-#include <algorithm>
-#include <exception>
 #include <freetype/tttables.h>
 #include <hb-ot.h>
-#include <limits>
 
 module telar.gui.fonts.face;
+
+import std;
 
 import telar.gui.core.unicode_scalar;
 

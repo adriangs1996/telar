@@ -15,26 +15,23 @@ module;
 
 
 #include <cstddef>
-#include <span>
 #include "font.h"
-#include <algorithm>
 #include <cstring>
-#include <memory>
 
 
 #endif
 
 
-#include <optional>
 #include <sys/stat.h>
 
 
 #include <cmath>
 
 
-#include <span>
 
 export module telar.gui.platform.private_file_stamp;
+
+import std;
 
 #if defined(__linux__)
 

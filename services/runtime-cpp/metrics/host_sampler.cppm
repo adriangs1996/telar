@@ -1,19 +1,12 @@
 module;
-#include <chrono>
-#include <array>
-#include <charconv>
-#include <stdexcept>
-#include <string_view>
 
-#include <concepts>
 #include <cstdint>
-#include <optional>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <algorithm>
-#include <limits>
 
 export module telar.runtime.metrics.host_sampler;
+
+import std;
 
 export import telar.runtime.diagnostics.runtime_counters;
 import telar.base.diagnostics;

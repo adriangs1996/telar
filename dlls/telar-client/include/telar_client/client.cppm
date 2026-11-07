@@ -1,38 +1,18 @@
 module;
 #include "telar_client/codecs/telar_annotations.hpp"
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 
-#include <array>
 #include <cstddef>
-#include <span>
-#include <variant>
 
 #include <cstdint>
 
-#include <stdexcept>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <string_view>
-#include <system_error>
 
-#include <algorithm>
 
-#include <bit>
-#include <limits>
 
-#include <optional>
 
-#include <exception>
 #include <new>
 
 #include <cerrno>
@@ -42,6 +22,8 @@ module;
 #include <unistd.h>
 
 export module telar.client;
+
+import std;
 
 export import telar.base.text;
 import telar.base.diagnostics;

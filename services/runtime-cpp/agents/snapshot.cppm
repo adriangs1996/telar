@@ -1,59 +1,38 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <type_traits>
-#include <string>
-#include <vector>
-#include <mutex>
 #include <new>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 
-#include <algorithm>
 
-#include <array>
-#include <string_view>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cstddef>
-#include <stdexcept>
 
-#include <exception>
 
 #include <sqlite3.h>
-#include <charconv>
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <bit>
-#include <concepts>
-#include <variant>
 #include <cassert>
-#include <utility>
 #include <cstdio>
 #include <cstdlib>
 #include <sys/mman.h>
-#include <atomic>
 #include "cell_layout.hpp"
-#include <tuple>
-#include <memory>
 #include <limits.h>
 #include <csignal>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <system_error>
 
 export module telar.runtime.agents.snapshot;
+
+import std;
 
 export import telar.config;
 

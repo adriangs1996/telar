@@ -1,30 +1,14 @@
 module;
-#include <algorithm>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <array>
-#include <utility>
-#include <concepts>
 #include <cstddef>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cstring>
-#include <exception>
-#include <span>
-#include <string_view>
-#include <type_traits>
 #include <cstdio>
-#include <optional>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 
 export module telar.runtime.persistence.launch_record;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

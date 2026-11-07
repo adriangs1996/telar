@@ -1,33 +1,17 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <variant>
 
-#include <algorithm>
 #include <cstddef>
-#include <filesystem>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <vector>
 
-#include <array>
 #include <cstdint>
 #include <cstring>
-#include <span>
 
-#include <charconv>
-#include <concepts>
-#include <stdexcept>
-#include <optional>
 
-#include <bit>
 #include <ghostty/vt/unicode.h>
 
 export module telar.gui.paths.label;
+
+import std;
 
 export import telar.gui.input.key_encoder;
 

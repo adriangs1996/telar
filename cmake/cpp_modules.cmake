@@ -7,6 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# Module units import std: a textual standard library in every global module
+# fragment is serialized into each BMI and merged again by every importer.
+set(CMAKE_CXX_MODULE_STD ON)
+if(NOT "23" IN_LIST CMAKE_CXX_COMPILER_IMPORT_STD)
+  message(FATAL_ERROR "This toolchain cannot provide import std for C++23; configure through tools/cpp so the pinned libc++ and CMake's import std gate are selected")
+endif()
 foreach(legacy IN ITEMS TELAR_RUNTIME_DIAGNOSTICS)
   if(${legacy})
     set(TELAR_DIAGNOSTICS ON CACHE BOOL "Build-wide diagnostics variant" FORCE)

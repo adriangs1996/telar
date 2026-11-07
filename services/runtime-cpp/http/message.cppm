@@ -1,38 +1,22 @@
 module;
-#include <algorithm>
-#include <chrono>
-#include <concepts>
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <optional>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>
-#include <array>
-#include <memory>
-#include <stdexcept>
 #include <zstd.h>
 
-#include <bit>
 
-#include <limits>
-#include <charconv>
 
 export module telar.runtime.http.message;
+
+import std;
 
 export import telar.runtime.exchange_capture.producer;
 export import telar.base.text;

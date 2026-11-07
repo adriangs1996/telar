@@ -1,8 +1,9 @@
 module;
 
-#include <string_view>
 
 export module telar.base.editors;
+
+import std;
 
 
 // Interface: telar_base/editors/kind.cppm

@@ -1,24 +1,9 @@
 module;
-#include <concepts>
+#include <stdlib.h>
 #include <cstddef>
-#include <exception>
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cstdio>
@@ -29,6 +14,8 @@ module;
 #include <sys/un.h>
 
 module telar.runtime.platform.process_probe;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.client.protocol;

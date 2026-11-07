@@ -1,29 +1,16 @@
 module;
-#include <utility>
-#include <limits>
-#include <concepts>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <stdlib.h>
-#include <type_traits>
 
 #include <cerrno>
-#include <exception>
 #include <cstdio>
 #include <net/if.h>
-#include <stdexcept>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <fcntl.h>
-#include <span>
-#include <string_view>
 
 #include <limits.h>
 #include <sys/stat.h>
@@ -39,36 +26,21 @@ module;
 #include <cstdint>
 #include <unistd.h>
 #include <cstdlib>
-#include <chrono>
-#include <optional>
 #include <sys/file.h>
-#include <thread>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
 #include <arpa/inet.h>
-#include <memory>
 #include <pcap/pcap.h>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <cstring>
 #include <netinet/in.h>
-#include <charconv>
 #include <net/if_dl.h>
 #include <net/route.h>
 #include <poll.h>
 
 export module telar.runtime.redirect.record;
+
+import std;
 
 export import telar.platform;
 

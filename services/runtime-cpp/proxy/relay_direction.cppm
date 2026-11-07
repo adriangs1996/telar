@@ -1,33 +1,18 @@
 module;
-#include <chrono>
-#include <limits>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
 #include <cstdint>
 #include <cstring>
 #include <netinet/in.h>
-#include <optional>
 #include <sys/socket.h>
 
 #include <cerrno>
 #include <netdb.h>
-#include <span>
 
 #include <pthread.h>
-#include <exception>
-#include <array>
-#include <string_view>
-#include <algorithm>
 #include <arpa/inet.h>
 #include <cstddef>
-#include <concepts>
-#include <type_traits>
-#include <utility>
 
 #include <csignal>
 #include <netinet/tcp.h>
@@ -35,6 +20,8 @@ module;
 #include <unistd.h>
 
 export module telar.runtime.proxy.relay_direction;
+
+import std;
 
 export import telar.platform;
 export import telar.runtime.platform.signals;

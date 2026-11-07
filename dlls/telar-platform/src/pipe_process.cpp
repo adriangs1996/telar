@@ -1,28 +1,12 @@
 module;
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <memory>
-#include <span>
-#include <string_view>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <algorithm>
-#include <bit>
-#include <stdexcept>
 #include <unistd.h>
-#include <utility>
 
-#include <optional>
 #include <sys/types.h>
-#include <array>
 #include <cerrno>
-#include <exception>
 #include <csignal>
 #include <sys/socket.h>
 #include <cstdlib>
@@ -32,6 +16,8 @@ module;
 #include <sys/wait.h>
 
 module telar.platform;
+
+import std;
 
 
 

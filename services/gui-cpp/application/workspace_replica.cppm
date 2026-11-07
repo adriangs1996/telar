@@ -1,39 +1,20 @@
 module;
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
 #include <cmath>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
 #include <cstdint>
 
-#include <algorithm>
 #include <cstddef>
-#include <limits>
-#include <string_view>
 
-#include <array>
-#include <optional>
-#include <span>
-#include <stdexcept>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
 
-#include <atomic>
-#include <exception>
-#include <utility>
-#include <variant>
 
 export module telar.gui.application.workspace_replica;
+
+import std;
 
 export import telar.gui.core.unicode_scalar;
 

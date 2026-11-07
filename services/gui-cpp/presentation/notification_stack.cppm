@@ -1,40 +1,21 @@
 module;
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <array>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 
-#include <algorithm>
 #include <cstdint>
-#include <limits>
-#include <bit>
-#include <optional>
 #include <ghostty/vt/unicode.h>
 #include <cmath>
 
-#include <chrono>
 
-#include <span>
 
-#include <atomic>
-#include <exception>
-#include <utility>
-#include <variant>
 
 export module telar.gui.presentation.notification_stack;
+
+import std;
 
 export import telar.gui.text.json_unsigned_integer;
 

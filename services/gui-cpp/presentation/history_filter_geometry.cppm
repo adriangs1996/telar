@@ -1,36 +1,18 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
 
-#include <algorithm>
 #include <cmath>
-#include <chrono>
 
-#include <span>
 
 export module telar.gui.presentation.history_filter_geometry;
+
+import std;
 
 export import telar.gui.core.metrics;
 export import telar.gui.text.json_unsigned_integer;

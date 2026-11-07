@@ -1,51 +1,32 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <exception>
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <vector>
-#include <bit>
-#include <mutex>
 #include <new>
 #include <unistd.h>
 #include <cerrno>
 #include <limits.h>
 #include <sys/stat.h>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <chrono>
 #include <cstdint>
-#include <concepts>
 
-#include <algorithm>
-#include <array>
-#include <optional>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <charconv>
 #include <cstring>
-#include <limits>
-#include <utility>
 
-#include <span>
 
-#include <variant>
 #include <cstddef>
-#include <stdexcept>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
 #include "cell_layout.hpp"
 #include <cassert>
 
 export module telar.runtime.command_capture.tracker;
+
+import std;
 
 export import telar.platform;
 

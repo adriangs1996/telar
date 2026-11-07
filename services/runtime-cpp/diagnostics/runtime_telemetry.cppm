@@ -1,254 +1,48 @@
 module;
-#include <type_traits>
-#include <string>
-#include <vector>
-#include <mutex>
 #include <new>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <atomic>
-#include <exception>
 #include <cstddef>
 #include <cstdint>
 #include "telar_base/diagnostics/config.hpp"
 
-#include <limits>
-#include <optional>
-#include <string_view>
 
 #include <cstring>
 #include <cerrno>
 #include <dirent.h>
 #include <fcntl.h>
-#include <algorithm>
-#include <array>
 #include <csignal>
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
 
-#include <concepts>
-#include <condition_variable>
 #include <pthread.h>
 
 #if (defined(__APPLE__))
 #include <mach/mach.h>
 #endif
 #if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#include <charconv>
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#include <span>
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #include <unistd.h>
 #endif
 
-#include <span>
 #include <sys/types.h>
-#include <chrono>
-#include <bit>
-#include <stdexcept>
-#include <variant>
 #include <cassert>
-#include <utility>
-#include <charconv>
 #include <cstdlib>
 #include <sys/mman.h>
 #include <unistd.h>
 #include "cell_layout.hpp"
-#include <tuple>
-#include <memory>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <system_error>
 
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
 #if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
 #include <mach/mach.h>
 #endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
 
 export module telar.runtime.diagnostics.runtime_telemetry;
+
+import std;
 
 export import telar.runtime.history.event;
 

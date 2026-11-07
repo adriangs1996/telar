@@ -1,45 +1,30 @@
 module;
-#include <concepts>
-#include <type_traits>
 #include <cstdio>
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <stdlib.h>
-#include <stdexcept>
 
-#include <optional>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cerrno>
-#include <exception>
 #include <csignal>
-#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <array>
-#include <algorithm>
 #include <poll.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 
-#include <limits>
 
-#include <chrono>
 #include <net/if.h>
 #include <pcap/pcap.h>
 #include <pthread.h>
 
-#include <memory>
 
 export module telar.runtime.traffic.capture;
+
+import std;
 
 export import telar.platform;
 export import telar.runtime.traffic.control_protocol;

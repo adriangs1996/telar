@@ -1,39 +1,18 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
 #include <cstdlib>
 #include <new>
 #include <stdlib.h>
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <concepts>
 
-#include <span>
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <charconv>
-#include <optional>
-#include <string_view>
-#include <stdexcept>
-#include <algorithm>
-#include <atomic>
-#include <memory>
 #include <cstring>
-#include <utility>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
 #include <cassert>
-#include <bit>
 #include <poll.h>
 #include <sys/uio.h>
 #include <unistd.h>
@@ -41,13 +20,14 @@ module;
 #include <climits>
 #include <csignal>
 #include <cstdio>
-#include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 
 export module telar.runtime.plugins.service;
+
+import std;
 
 export import telar.runtime.plugins.protocol;
 

@@ -1,39 +1,26 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <utility>
-#include <limits>
 #include <new>
-#include <string>
-#include <vector>
 #include <stdlib.h>
 
 #include <cerrno>
-#include <exception>
 #include <csignal>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <string_view>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <array>
 #include <cstddef>
-#include <optional>
 #include <cstdint>
-#include <span>
 
 #include <openssl/ssl.h>
 
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
 #include <cstring>
 #include <openssl/crypto.h>
-#include <stdexcept>
 #include <ctime>
 
-#include <concepts>
 #include <cassert>
 #include <fcntl.h>
 #include <limits.h>
@@ -50,25 +37,12 @@ module;
 #endif
 #include <unistd.h>
 #include <cstdlib>
-#include <chrono>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <atomic>
-#include <mutex>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
 export module telar.runtime.tls.interception;
+
+import std;
 
 export import telar.runtime.proxy.relay_direction;
 export import telar.config;

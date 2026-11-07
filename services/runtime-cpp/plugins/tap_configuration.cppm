@@ -1,54 +1,35 @@
 module;
-#include <type_traits>
-#include <variant>
-#include <vector>
-#include <mutex>
 #include <new>
 
-#include <string_view>
-#include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstdio>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <chrono>
 #include <cstring>
-#include <stdexcept>
 #include <cmath>
-#include <initializer_list>
-#include <optional>
-#include <string>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <span>
-#include <concepts>
-#include <bit>
 
 #include <cerrno>
-#include <exception>
 #include <dirent.h>
 #include <fcntl.h>
 #include <cstdlib>
 #include <limits.h>
 #include <sys/stat.h>
 #include "telar_platform/open_directory.h"
-#include <charconv>
 #include <unistd.h>
 #include <openssl/sha.h>
 
 #include <poll.h>
 #include <sys/uio.h>
-#include <utility>
 
-#include <atomic>
-#include <memory>
 
 #include <cassert>
 
 export module telar.runtime.plugins.tap_configuration;
+
+import std;
 
 export import telar.config;
 export import telar.plugins;

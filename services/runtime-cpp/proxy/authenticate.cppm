@@ -1,32 +1,16 @@
 module;
 #include <stdlib.h>
-#include <chrono>
-#include <limits>
-#include <utility>
-#include <concepts>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
 #include <cstddef>
 #include <cstring>
-#include <string_view>
-#include <algorithm>
-#include <array>
-#include <charconv>
 #include <cstdint>
 #include <cstdlib>
-#include <optional>
-#include <span>
 
 #include <arpa/inet.h>
 
-#include <variant>
 
 #include <cerrno>
-#include <exception>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -43,6 +27,8 @@ module;
 #include <unistd.h>
 
 export module telar.runtime.proxy.authenticate;
+
+import std;
 
 export import telar.base.memory;
 export import telar.base.text;

@@ -1,43 +1,24 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <utility>
-#include <atomic>
-#include <mutex>
-#include <chrono>
-#include <concepts>
 #include <cstddef>
-#include <memory>
 #include <new>
-#include <string>
-#include <vector>
 #include <unistd.h>
 #include <stdlib.h>
 #include <ghostty/vt.h>
-#include <exception>
-#include <source_location>
-#include <charconv>
-#include <stdexcept>
-#include <type_traits>
-#include <variant>
-#include <bit>
 
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <limits>
-#include <optional>
 #include <cstring>
-#include <span>
-#include <string_view>
 #include <sys/mman.h>
 
-#include <algorithm>
 #include <cstdint>
 
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.graphics.prepared_images;
+
+import std;
 
 export import telar.platform;
 

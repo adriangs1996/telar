@@ -1,17 +1,12 @@
 module;
 
 #include <tbc/view.hpp>
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <utility>
-#include <vector>
 
 export module telar.ebnf.parser;
+
+import std;
 
 export import telar.ebnf.lexer;
 

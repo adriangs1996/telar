@@ -1,40 +1,23 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 #include <stdlib.h>
-#include <limits>
-#include <utility>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
-#include <variant>
-#include <bit>
 
-#include <exception>
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
-#include <string_view>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <array>
 #include <cstddef>
-#include <optional>
 
 #include <cstring>
 #include <cstdint>
-#include <span>
 
-#include <chrono>
 #include <cstdlib>
 #include <ctime>
 
 #include <openssl/crypto.h>
-#include <stdexcept>
 
 #include <cerrno>
 #include <fcntl.h>
@@ -52,57 +35,21 @@ module;
 #endif
 #include <unistd.h>
 
-#include <concepts>
 
 #include "telar_platform/process_environment.h"
 
-#include <charconv>
 #include <spawn.h>
 #include <sys/wait.h>
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 
 export module telar.tls;
+
+import std;
 
 export import telar.config;
 

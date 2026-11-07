@@ -1,32 +1,16 @@
 module;
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <compare>
-#include <tuple>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include <chrono>
-#include <limits>
-#include <stdexcept>
 
-#include <bit>
 #include <ghostty/vt/unicode.h>
-#include <concepts>
 
 export module telar.gui.presentation.form_field_geometry;
+
+import std;
 
 export import telar.gui.core.metrics;
 export import telar.gui.terminal.font_grid;

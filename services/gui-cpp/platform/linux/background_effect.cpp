@@ -19,14 +19,13 @@ module;
 #include <QtCore/qlogging.h>
 #include <QtCore/qstringliteral.h>
 #include <QtGui/qguiapplication_platform.h>
-#include <algorithm>
 #include <cstdint>
-#include <memory>
-#include <tuple>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 
 module telar.gui.platform.private_file_stamp;
+
+import std;
 
 
 // Qt generates its core protocol header from a wayland.xml newer than many

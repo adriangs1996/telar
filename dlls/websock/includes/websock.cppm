@@ -1,26 +1,15 @@
 module;
-#include <algorithm>
-#include <limits>
-#include <array>
-#include <utility>
-#include <concepts>
 #include <cstddef>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
 
-#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <netinet/in.h>
-#include <stdexcept>
-#include <string>
-#include <string_view>
 #include <sys/socket.h>
-#include <thread>
 
 export module telar.websock;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

@@ -31,7 +31,8 @@ def main():
             raise RuntimeError('Invalid or duplicate module ownership: ' + source)
         name = match[1]
         dependencies = re.findall(r'^(?:export )?import ([\w.:]+);', text, re.M)
-        graph[name] = {name.split(':')[0] + item if item.startswith(':') else item for item in dependencies}
+        # The toolchain's libc++ provides std.
+        graph[name] = {name.split(':')[0] + item if item.startswith(':') else item for item in dependencies} - {'std'}
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
     visited, active = set(), []
@@ -101,11 +102,28 @@ def check_header_owners(owners, units):
     for unit in units:
         if unit in owners:
             continue
-        for spelling in INCLUDE_RE.findall(global_fragment((ROOT / unit).read_text())):
+        fragment = global_fragment((ROOT / unit).read_text())
+        for spelling in INCLUDE_RE.findall(fragment):
             header = resolve(unit, spelling)
             if header in owner_of:
                 raise RuntimeError(f'{unit} includes {header}; import the module of {owner_of[header]} instead')
+        for header in STANDARD_RE.findall(fragment):
+            if header in CPP_STANDARD_HEADERS:
+                raise RuntimeError(f'{unit} includes <{header}>; import std instead')
     return len(owner_of)
+
+
+STANDARD_RE = re.compile(r'^\s*#\s*include\s+<([\w]+)>', re.M)
+# C++ library headers reach module units through `import std`. C headers, their
+# <c...> wrappers, <new> and <version> stay textual for macros and placement new.
+CPP_STANDARD_HEADERS = set('''algorithm any array atomic barrier bit bitset charconv chrono compare complex
+concepts condition_variable coroutine deque exception execution expected filesystem flat_map flat_set
+format forward_list fstream functional future generator initializer_list iomanip ios iosfwd iostream
+istream iterator latch limits list locale map mdspan memory memory_resource mutex numbers numeric
+optional ostream print queue random ranges ratio regex scoped_allocator semaphore set shared_mutex
+source_location span spanstream sstream stack stacktrace stdexcept stdfloat stop_token streambuf
+string string_view syncstream system_error thread tuple type_traits typeindex typeinfo unordered_map
+unordered_set utility valarray variant vector'''.split())
 
 
 if __name__ == '__main__':

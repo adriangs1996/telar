@@ -1,46 +1,30 @@
 module;
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
 #include <cstring>
-#include <type_traits>
 #include <cstdio>
 
 #include <cstdint>
 
 #include "clipboard_image_source.hpp"
-#include <algorithm>
-#include <array>
 #include <cerrno>
-#include <chrono>
 #include <cstddef>
 #include <poll.h>
-#include <span>
-#include <stdexcept>
 #include <time.h>
 #include <unistd.h>
 
-#include <atomic>
-#include <optional>
 
 #include <sys/stat.h>
 
 #include <sys/param.h>
 
-#include <exception>
 #include <fcntl.h>
 #include <limits.h>
-#include <stop_token>
-#include <string_view>
 
-#include <string>
 
 export module telar.gui.platform.profile_file;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.client.protocol;

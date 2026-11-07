@@ -1,36 +1,20 @@
 module;
-#include <memory>
-#include <string_view>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <optional>
-#include <string>
-#include <vector>
 #include <unistd.h>
-#include <utility>
-#include <algorithm>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <array>
 #include <cstddef>
-#include <span>
-#include <variant>
 #include <cerrno>
-#include <exception>
-#include <chrono>
 
-#include <concepts>
-#include <stdexcept>
 
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <bit>
 
 export module telar.runtime.transport.connection;
+
+import std;
 
 export import telar.client;
 export import telar.platform;

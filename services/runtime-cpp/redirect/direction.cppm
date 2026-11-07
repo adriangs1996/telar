@@ -1,9 +1,9 @@
 module;
 
-#include <stdexcept>
-#include <string_view>
 
 export module telar.runtime.redirect.direction;
+
+import std;
 
 import telar.client.protocol;
 

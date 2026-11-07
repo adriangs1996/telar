@@ -1,20 +1,15 @@
 module;
 
-#include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <algorithm>
 #include <ghostty/vt/unicode.h>
 
 
 #include <cstring>
-#include <limits>
 
 export module telar.gui.text.bounded_editor;
+
+import std;
 
 export import telar.gui.core.unicode_scalar;
 

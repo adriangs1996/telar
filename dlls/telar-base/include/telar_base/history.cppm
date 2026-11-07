@@ -1,11 +1,10 @@
 module;
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <string_view>
 
 export module telar.base.history;
+
+import std;
 
 
 // Interface: telar_base/history/search_policy.cppm

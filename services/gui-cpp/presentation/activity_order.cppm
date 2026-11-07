@@ -1,39 +1,18 @@
 module;
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
 #include <cstdint>
-#include <atomic>
-#include <limits>
-#include <exception>
-#include <algorithm>
-#include <array>
-#include <concepts>
-#include <utility>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
-#include <string_view>
-#include <stdexcept>
-#include <tuple>
 
-#include <compare>
 
-#include <charconv>
 #include <cstring>
-#include <system_error>
 #include <cmath>
 
 export module telar.gui.presentation.activity_order;
+
+import std;
 
 export import telar.gui.presentation.application_mark;
 export import telar.gui.application.workspace_replica;

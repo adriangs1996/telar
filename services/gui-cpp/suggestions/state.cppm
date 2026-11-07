@@ -1,27 +1,14 @@
 module;
-#include <array>
 #include <cstring>
-#include <stdexcept>
-#include <concepts>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <optional>
-#include <string>
-#include <variant>
-#include <vector>
-#include <algorithm>
-#include <bit>
 
 #include <cstddef>
 
 #include <cstdint>
-#include <string_view>
 
 export module telar.gui.suggestions.state;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

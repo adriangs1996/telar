@@ -1,23 +1,11 @@
 module;
-#include <concepts>
-#include <exception>
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <vector>
-#include <bit>
 #include <unistd.h>
-#include <mutex>
 #include <new>
 #include <cerrno>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
 
 #include <cstdio>
 #include <cstdlib>
@@ -25,25 +13,18 @@ module;
 #include <limits.h>
 #include <sys/stat.h>
 
-#include <chrono>
 #include <cstdint>
 
 #include <cstring>
-#include <variant>
 #include <cstddef>
-#include <span>
-#include <utility>
-#include <stdexcept>
-#include <charconv>
-#include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include <limits>
 #include <sys/mman.h>
-#include <atomic>
 #include "cell_layout.hpp"
 #include <cassert>
 
 export module telar.runtime.agents.screen_inference;
+
+import std;
 
 export import telar.runtime.agents.session_host;
 

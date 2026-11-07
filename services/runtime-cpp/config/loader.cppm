@@ -1,47 +1,28 @@
 module;
-#include <memory>
-#include <mutex>
 #include <new>
-#include <vector>
-#include <type_traits>
-#include <variant>
-#include <bit>
 
 #include "config_bootstrap.hpp"
-#include <algorithm>
-#include <string_view>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <array>
-#include <chrono>
 #include <cstring>
-#include <stdexcept>
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
 #include <cinttypes>
 #include <cmath>
-#include <initializer_list>
-#include <optional>
-#include <string>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <span>
-#include <concepts>
-#include <format>
-#include <utility>
 #include <ghostty/vt/unicode.h>
 #include <arpa/inet.h>
-#include <exception>
-#include <charconv>
 #include <cerrno>
 #include <cstdlib>
 #include <fcntl.h>
 #include <unistd.h>
 
 export module telar.runtime.config.loader;
+
+import std;
 
 export import telar.config;
 export import telar.lua;

@@ -1,39 +1,21 @@
 module;
-#include <limits>
-#include <charconv>
 #include <cassert>
-#include <memory>
-#include <mutex>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
 #include <new>
-#include <string>
-#include <vector>
-#include <exception>
 #include <ghostty/vt.h>
-#include <source_location>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
 
-#include <algorithm>
-#include <chrono>
-#include <optional>
 
 #include <cstddef>
 #include <cstring>
-#include <array>
 #include <cstdint>
-#include <span>
-#include <string_view>
 
-#include <stdexcept>
 
 #include "cell_layout.hpp"
 
 export module telar.runtime.terminal.osc_scanner;
+
+import std;
 
 export import telar.base.memory;
 import telar.base.diagnostics;

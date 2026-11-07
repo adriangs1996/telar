@@ -1,47 +1,28 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <ghostty/vt.h>
-#include <source_location>
-#include <type_traits>
 #include <unistd.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 
-#include <algorithm>
 #include <cstdint>
-#include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include <array>
 
 #include <cstring>
-#include <variant>
 #include <cstddef>
-#include <span>
-#include <utility>
-#include <stdexcept>
-#include <charconv>
-#include <limits>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
 
-#include <concepts>
 #include <cassert>
-#include <bit>
-#include <exception>
 #include <cerrno>
-#include <chrono>
 
 export module telar.runtime.graphics.synchronizer;
+
+import std;
 
 export import telar.runtime.graphics.prepared_images;
 

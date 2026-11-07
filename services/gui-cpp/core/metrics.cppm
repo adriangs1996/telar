@@ -1,32 +1,18 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <vector>
-#include <bit>
-#include <stdexcept>
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
 
 #include <cstdint>
 
-#include <variant>
 
-#include <chrono>
 
 #include <cmath>
 
 export module telar.gui.core.metrics;
+
+import std;
 
 export import telar.base.text;
 import telar.base.diagnostics;

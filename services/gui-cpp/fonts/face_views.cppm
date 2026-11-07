@@ -1,31 +1,16 @@
 module;
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <utility>
 
-#include <array>
-#include <string_view>
-#include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <limits>
-#include <stdexcept>
 #include <hb.h>
-#include <span>
 
 export module telar.gui.fonts.face:views;
+
+import std;
 
 export import telar.gui.terminal.font_grid;
 

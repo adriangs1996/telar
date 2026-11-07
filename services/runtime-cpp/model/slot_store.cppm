@@ -1,36 +1,19 @@
 module;
-#include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <string_view>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
 #include <sys/mman.h>
-#include <utility>
-#include <atomic>
-#include <mutex>
-#include <chrono>
 #include <cstdlib>
 #include <new>
 
-#include <algorithm>
-#include <array>
 
-#include <optional>
 
 #include <cstdint>
 
-#include <limits>
-#include <span>
 
 export module telar.runtime.model.slot_store;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

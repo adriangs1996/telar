@@ -1,35 +1,17 @@
 module;
-#include <compare>
-#include <tuple>
-#include <limits>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cstring>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 #include <cmath>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <utility>
 
-#include <algorithm>
 #include <cstddef>
-#include <span>
-#include <chrono>
 
 export module telar.gui.input.copy_pointer;
+
+import std;
 
 export import telar.gui.terminal.font_grid;
 import telar.base.diagnostics;

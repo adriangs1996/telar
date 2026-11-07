@@ -1,38 +1,21 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
 #include <cstdint>
 
-#include <algorithm>
-#include <limits>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
 
-#include <charconv>
-#include <string_view>
 
-#include <memory>
-#include <stdexcept>
 
-#include <chrono>
-#include <utility>
 
 #include <cmath>
 
 export module telar.gui.application.sound_playback;
+
+import std;
 
 export import telar.gui.core.unicode_scalar;
 

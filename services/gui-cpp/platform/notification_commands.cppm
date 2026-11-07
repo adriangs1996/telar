@@ -1,28 +1,10 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <optional>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 #include <unistd.h>
-#include <utility>
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <span>
-#include <string_view>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
 
 #include <sys/un.h>
 
@@ -31,6 +13,8 @@ module;
 #include <climits>
 
 export module telar.gui.platform.notification_commands;
+
+import std;
 
 export import telar.gui.application.host_effects;
 

@@ -1,39 +1,19 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <compare>
-#include <tuple>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 #include <cmath>
 
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 
-#include <array>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <span>
 
-#include <optional>
-#include <utility>
 
-#include <algorithm>
 
 export module telar.gui.links.path_expansion;
+
+import std;
 
 export import telar.base.editors;
 export import telar.gui.text.json_unsigned_integer;

@@ -1,43 +1,25 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 #include <cstddef>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <stdexcept>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <exception>
 #include <sqlite3.h>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
-#include <atomic>
 
-#include <bit>
 
-#include <concepts>
 
 #include <cassert>
 
-#include <unordered_set>
 
 export module telar.runtime.history.store;
+
+import std;
 
 export import telar.client;
 

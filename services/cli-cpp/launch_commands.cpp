@@ -1,20 +1,8 @@
 module;
-#include <utility>
-#include <memory>
-#include <mutex>
 #include <stdlib.h>
 
-#include <span>
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
 #include <cerrno>
-#include <exception>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
@@ -23,27 +11,17 @@ module;
 #if (!(defined(__APPLE__)))
 #include <unistd.h>
 #endif
-#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "help_texts.hpp"
 #include <fcntl.h>
-#include <filesystem>
-#include <iostream>
-#include <vector>
-#include <chrono>
 #include <cstdio>
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
 #include <cstddef>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
-#include <bit>
 #include <new>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -51,26 +29,20 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <sys/file.h>
-#include <variant>
 #include <sys/un.h>
 #include <openssl/sha.h>
-#include <map>
-#include <set>
 #include <cctype>
-#include <functional>
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <sstream>
 #include "machine_assets.hpp"
-#include <fstream>
 #include <csignal>
 #include <dirent.h>
 #include <pwd.h>
 
 module telar.cli.window;
+
+import std;
 
 import telar.cli.plugin;
 import telar.cli.server;

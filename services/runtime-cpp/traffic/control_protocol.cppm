@@ -1,34 +1,19 @@
 module;
-#include <concepts>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <algorithm>
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
-#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <array>
-#include <optional>
 
-#include <stdexcept>
 
-#include <memory>
 #include <pcap/pcap.h>
 
-#include <chrono>
 
 export module telar.runtime.traffic.control_protocol;
+
+import std;
 
 export import telar.runtime.plugins.protocol;
 export import telar.runtime.http.message;

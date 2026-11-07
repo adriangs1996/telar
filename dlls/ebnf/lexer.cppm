@@ -1,17 +1,12 @@
 module;
 
 #include <tbc/view.hpp>
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <utility>
-#include <vector>
 
 export module telar.ebnf.lexer;
+
+import std;
 
 
 // Interface: lexer.cppm

@@ -1,33 +1,16 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
 
-#include <concepts>
 #include <cstdint>
-#include <optional>
 
-#include <algorithm>
-#include <limits>
-#include <stdexcept>
-#include <utility>
-#include <string_view>
 
-#include <array>
-#include <charconv>
 #include <cstddef>
 #include <cstring>
-#include <system_error>
 
-#include <span>
-#include <variant>
-#include <chrono>
 
 export module telar.gui.application.host_effects;
+
+import std;
 
 export import telar.gui.presentation.display_metrics;
 

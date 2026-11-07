@@ -6,6 +6,8 @@ module;
 
 module telar.gui.platform.login_shell;
 
+import std;
+
 
 
 namespace telar::gui::platform {

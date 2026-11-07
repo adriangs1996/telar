@@ -1,35 +1,17 @@
 module;
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
-#include <algorithm>
-#include <string_view>
 
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
-#include <span>
-#include <optional>
 
-#include <exception>
-#include <bit>
-#include <limits>
 #include <new>
 
 export module telar.gui.machines.profile_store;
+
+import std;
 
 export import telar.gui.machines.discovery;
 

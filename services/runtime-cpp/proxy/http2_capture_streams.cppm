@@ -1,53 +1,33 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 #include <stdlib.h>
-#include <memory>
 #include <new>
-#include <string>
-#include <vector>
 
-#include <concepts>
 #include <cstdint>
-#include <span>
-#include <algorithm>
 #include <cstring>
-#include <string_view>
 #include <cerrno>
-#include <exception>
 #include <csignal>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 #include <cstddef>
-#include <array>
 
-#include <chrono>
 
-#include <atomic>
 
-#include <optional>
 #include <arpa/inet.h>
-#include <charconv>
 #include <cstdlib>
-#include <variant>
 #include <pthread.h>
 #include <netdb.h>
-#include <type_traits>
-#include <utility>
 
 #include <brotli/decode.h>
-#include <initializer_list>
 #include <zlib.h>
 #include <zstd.h>
-#include <stdexcept>
 #include <cassert>
-#include <condition_variable>
-#include <mutex>
-#include <limits>
-#include <bit>
 
 export module telar.runtime.proxy.http2_capture_streams;
+
+import std;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.proxy.relay_direction;

@@ -1,42 +1,26 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <utility>
-#include <concepts>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <vector>
-#include <bit>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
 #include <cerrno>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
 
-#include <array>
 #include <cstring>
-#include <optional>
-#include <span>
-#include <string_view>
 #include <unistd.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <variant>
-#include <stdexcept>
 
 export module telar.cli.hooks.session;
+
+import std;
 
 export import telar.platform;
 

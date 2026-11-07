@@ -1,33 +1,15 @@
 module;
-#include <exception>
-#include <memory>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
 
-#include <algorithm>
-#include <limits>
-#include <optional>
-#include <chrono>
-#include <charconv>
 #include <cmath>
-#include <concepts>
 #include <cstring>
-#include <functional>
-#include <span>
-#include <system_error>
-#include <type_traits>
 
 export module telar.gui.config.gui_query;
+
+import std;
 
 export import telar.gui.application.host_effects;
 export import telar.gui.core.metrics;

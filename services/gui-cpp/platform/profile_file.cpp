@@ -1,39 +1,19 @@
 module;
-#include <limits>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
 
 #include <cstddef>
 #include <sys/param.h>
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <cstdint>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <optional>
-#include <stdexcept>
-#include <stop_token>
-#include <string_view>
-#include <span>
-#include <algorithm>
 #include <unistd.h>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
-#include <chrono>
-#include <semaphore>
 #include <sys/file.h>
 #include <sys/types.h>
-#include <utility>
 #if (defined(__APPLE__))
 #include <sys/stdio.h>
 #endif
@@ -43,10 +23,10 @@ module;
 #if (!(defined(__APPLE__)))
 #include <cstdio>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
 
 module telar.gui.platform.profile_file;
+
+import std;
 
 
 import telar.gui.platform.private_file_stamp;

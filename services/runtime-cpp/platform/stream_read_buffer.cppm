@@ -1,23 +1,19 @@
 module;
 
-#include <concepts>
 #include <cstdint>
-#include <span>
 
 
-#include <algorithm>
 #include <cstring>
-#include <string_view>
 
 
-#include <optional>
 
 
 #include <cstddef>
-#include <array>
 #include <cassert>
 
 export module telar.runtime.platform.stream_read_buffer;
+
+import std;
 
 export import telar.runtime.metrics.host_sampler;
 

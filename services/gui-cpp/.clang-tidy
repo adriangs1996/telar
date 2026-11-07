@@ -1,8 +1,13 @@
 # include-cleaner currently diagnoses implicit primary-module imports as missing headers.
+# clang-tidy 23.1.5 crashes (SIGSEGV) in unchecked-optional-access and
+# static-initialization-cycle on module units that import std or see one
+# declaration through several BMIs; re-enable both once the pinned LLVM fixes it.
 InheritParentConfig: false
 Checks: >-
   *,
   -misc-include-cleaner,
+  -bugprone-unchecked-optional-access,
+  -misc-static-initialization-cycle,
   -abseil-*,
   -altera-*,
   -android-*,

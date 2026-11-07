@@ -1,30 +1,18 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 
-#include <algorithm>
-#include <optional>
-#include <string_view>
 
-#include <span>
-#include <variant>
 #include <cstring>
 
-#include <charconv>
-#include <concepts>
-#include <system_error>
 
 #include <sys/un.h>
 
 export module telar.gui.machines.discovery;
+
+import std;
 
 export import telar.client;
 

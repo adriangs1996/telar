@@ -3,14 +3,13 @@ module;
 #include <cstddef>
 
 
-#include <string_view>
-#include <limits>
-#include <optional>
 
 
 #include <cstdint>
 
 export module telar.runtime.http1.head;
+
+import std;
 
 export import telar.base.text;
 

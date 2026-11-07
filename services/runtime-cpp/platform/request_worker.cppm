@@ -1,43 +1,25 @@
 module;
-#include <utility>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cstdio>
-#include <bit>
-#include <stdexcept>
 
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <cstdint>
 
-#include <atomic>
 
-#include <concepts>
-#include <condition_variable>
-#include <optional>
 #include <pthread.h>
 
 #include <cassert>
-#include <type_traits>
 
 #include <cstddef>
-#include <algorithm>
-#include <string_view>
-#include <chrono>
-#include <limits>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include "telar_base/diagnostics/config.hpp"
-#include <variant>
 
 export module telar.runtime.platform.request_worker;
+
+import std;
 
 export import telar.runtime.platform.signals;
 

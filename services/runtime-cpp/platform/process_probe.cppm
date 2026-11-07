@@ -1,33 +1,15 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 #include <cstddef>
-#include <exception>
-#include <memory>
-#include <type_traits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
-#include <utility>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <cstring>
 
-#include <span>
 #include <sys/types.h>
 
 #include <unistd.h>
 
-#include <concepts>
 
 #include <cstdio>
 #include <cstdlib>
@@ -36,6 +18,8 @@ module;
 #include <sys/stat.h>
 
 export module telar.runtime.platform.process_probe;
+
+import std;
 
 export import telar.runtime.agents.session_host;
 export import telar.config;

@@ -1,42 +1,23 @@
 module;
-#include <compare>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cstring>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
 
-#include <algorithm>
 #include <cstddef>
-#include <utility>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <span>
 
-#include <stdexcept>
-#include <tuple>
 
-#include <chrono>
 
-#include <initializer_list>
 
 #include <cmath>
 
-#include <bit>
-#include <string_view>
 
-#include <concepts>
-#include <limits>
 
 export module telar.gui.terminal.copy_mode;
+
+import std;
 
 export import telar.gui.terminal.font_grid;
 

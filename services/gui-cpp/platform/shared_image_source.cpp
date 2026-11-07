@@ -1,33 +1,19 @@
 module;
-#include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <optional>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
 #include <cerrno>
 #include <limits.h>
 
 #include <cstdint>
-#include <span>
-#include <string_view>
-#include <algorithm>
-#include <array>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <utility>
 
 module telar.gui.platform.profile_file;
+
+import std;
 
 
 

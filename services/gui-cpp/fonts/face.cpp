@@ -1,29 +1,13 @@
 module;
-#include <concepts>
-#include <exception>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <array>
 #include <freetype/freetype.h>
 #include <hb.h>
-#include <memory>
-#include <string_view>
 #include "../platform/font.h"
-#include <algorithm>
 #include <cstring>
-#include <optional>
-#include <chrono>
 #include <cmath>
-#include <limits>
-#include <stdexcept>
-#include <type_traits>
 #include <freetype/ftimage.h>
 #include <freetype/ftmm.h>
 #include <freetype/ftoutln.h>
@@ -31,9 +15,10 @@ module;
 #include <freetype/ftsynth.h>
 #include <freetype/fttypes.h>
 #include <hb-ft.h>
-#include <utility>
 
 module telar.gui.fonts.face;
+
+import std;
 
 
 

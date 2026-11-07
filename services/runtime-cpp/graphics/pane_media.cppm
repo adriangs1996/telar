@@ -1,51 +1,32 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <concepts>
 #include <unistd.h>
 #include <cerrno>
 #include <limits.h>
 #include <sys/stat.h>
-#include <exception>
 #include <ghostty/vt.h>
-#include <source_location>
-#include <chrono>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <cassert>
-#include <type_traits>
-#include <bit>
 #include <stdlib.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <algorithm>
-#include <array>
 
 #include <cstring>
 
-#include <limits>
 
-#include <stdexcept>
-#include <charconv>
-#include <optional>
 #include "telar_base/diagnostics/config.hpp"
 
-#include <utility>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
 
-#include <atomic>
 
-#include <variant>
 
 export module telar.runtime.graphics.pane_media;
+
+import std;
 
 export import telar.runtime.graphics.file_input;
 

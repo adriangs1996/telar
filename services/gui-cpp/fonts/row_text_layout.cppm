@@ -1,37 +1,21 @@
 module;
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <exception>
 #include <cstdio>
-#include <variant>
 
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <utility>
-#include <array>
-#include <bit>
-#include <stdexcept>
-#include <string_view>
-#include <algorithm>
 #include <ghostty/vt/unicode.h>
 
-#include <span>
 #include <freetype/freetype.h>
 #include <hb.h>
-#include <memory>
 #include "../platform/font.h"
 #include <cstring>
-#include <chrono>
 #include <cmath>
-#include <limits>
-#include <type_traits>
 
 export module telar.gui.fonts.row_text_layout;
+
+import std;
 
 export import telar.gui.fonts.face;
 export import telar.gui.text.bounded_editor;

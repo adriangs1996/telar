@@ -1,53 +1,32 @@
 module;
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <array>
-#include <span>
 #include <sys/types.h>
-#include <chrono>
 #include <cstdint>
-#include <bit>
-#include <concepts>
-#include <stdexcept>
-#include <variant>
 #include <cassert>
 #include <cstring>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
-#include <algorithm>
-#include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include <utility>
-#include <charconv>
-#include <limits>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
 #include <unistd.h>
 #include "cell_layout.hpp"
-#include <tuple>
 
-#include <memory>
 #include <limits.h>
 #include <csignal>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <system_error>
 
 export module telar.runtime.model.client_layouts;
+
+import std;
 
 export import telar.runtime.agents.description_generator;
 export import telar.runtime.graphics.synchronizer;

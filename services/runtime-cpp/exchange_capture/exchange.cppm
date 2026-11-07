@@ -1,34 +1,20 @@
 module;
-#include <limits>
-#include <utility>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
-#include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 
 #include <cstring>
 #include <cstdint>
-#include <span>
 
-#include <string_view>
 
-#include <array>
-#include <stdexcept>
-#include <optional>
-#include <chrono>
 
-#include <initializer_list>
 
-#include <concepts>
 
 export module telar.runtime.exchange_capture.exchange;
+
+import std;
 
 export import telar.base.memory;
 

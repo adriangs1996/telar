@@ -1,47 +1,25 @@
 module;
-#include <algorithm>
-#include <utility>
+#include <time.h>
+#include <signal.h>
 #include <cstddef>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <cstdio>
 #include <fcntl.h>
 #include <limits.h>
-#include <limits>
 #include <unistd.h>
 
-#include <chrono>
-#include <concepts>
 #include <cstdint>
-#include <span>
 #if (defined(__APPLE__))
 #include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#include <algorithm>
-#endif
-#if (defined(__linux__))
-#include <atomic>
 #endif
 #if (defined(__linux__))
 #include <climits>
 #endif
 #if (defined(__linux__))
 #include <csignal>
-#endif
-#if (defined(__linux__))
 #endif
 #if (defined(__linux__))
 #include <sched.h>
@@ -52,13 +30,10 @@ module;
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#endif
 
 #if defined(__linux__)
 
 #include <cstdlib>
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
@@ -69,38 +44,17 @@ module;
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
-#include <memory>
 
 #endif
 
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
 #if (defined(__APPLE__))
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 #if (defined(__APPLE__))
 #include <Security/Security.h>
 #endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#include <memory>
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #if (!(defined(__APPLE__)))
 #include <cstdlib>
-#endif
-#if (!(defined(__APPLE__)))
-#include <memory>
 #endif
 #if (!(defined(__APPLE__)))
 #include <openssl/err.h>
@@ -111,12 +65,10 @@ module;
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
 export module telar.runtime.platform.system_certificates;
+
+import std;
 
 export import telar.platform;
 import telar.base.diagnostics;

@@ -1,37 +1,21 @@
 module;
 #include <cstdlib>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <exception>
-#include <type_traits>
 #include <cstdio>
 
-#include <concepts>
 #include <cstdint>
-#include <span>
-#include <string_view>
 
-#include <algorithm>
 #include <cstring>
 #include <cstddef>
-#include <limits>
-#include <optional>
-#include <array>
 
-#include <utility>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>
-#include <memory>
-#include <stdexcept>
 #include <zstd.h>
-#include <bit>
-#include <charconv>
-#include <chrono>
 
 export module telar.runtime.http1.intercepted_relay;
+
+import std;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.http1.head;

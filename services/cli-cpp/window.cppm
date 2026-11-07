@@ -1,36 +1,19 @@
 module;
-#include <chrono>
-#include <utility>
-#include <concepts>
 #include <cstddef>
-#include <memory>
-#include <mutex>
 #include <new>
 #include <cstring>
-#include <variant>
-#include <bit>
 
-#include <span>
 
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <array>
 #include <cstdio>
-#include <string>
-#include <vector>
 
-#include <algorithm>
-#include <limits>
-#include <stdexcept>
-#include <type_traits>
 
-#include <exception>
-#include <charconv>
 #include <cmath>
 #include <cstdlib>
 
 export module telar.cli.window;
+
+import std;
 
 export import telar.cli.output;
 

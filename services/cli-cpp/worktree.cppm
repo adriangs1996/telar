@@ -1,44 +1,25 @@
 module;
-#include <memory>
-#include <mutex>
 #include <stdlib.h>
 
-#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
-#include <span>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <variant>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#include <string_view>
-#include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <concepts>
-#include <stdexcept>
-#include <charconv>
 #include <csignal>
 #include <dirent.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
-#include <limits>
-#include <optional>
-#include <type_traits>
-#include <string>
-#include <format>
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -46,93 +27,30 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <filesystem>
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
 #include <cassert>
 #include <sys/types.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <climits>
 #include <dlfcn.h>
-#include <utility>
 #include <openssl/sha.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 #include <sys/file.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 #include <signal.h>
-#include <vector>
-#include <system_error>
-#include <bit>
 #include <new>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 #include <pwd.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <cmath>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__))
-#endif
 
 export module telar.cli.worktree;
+
+import std;
 
 export import telar.cli.history;
 export import telar.cli.worktree_git;

@@ -1,47 +1,28 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <algorithm>
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 #include <unistd.h>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <span>
 
-#include <atomic>
 
-#include <string_view>
 #include <cassert>
 #include <cstring>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
 #include <sys/types.h>
 #include <limits.h>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
-#include <charconv>
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <unordered_set>
 
 export module telar.runtime.paths.query_task;
+
+import std;
 
 export import telar.runtime.platform.git_status;
 

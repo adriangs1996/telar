@@ -1,35 +1,22 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <utility>
-#include <chrono>
 #include <cstddef>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <span>
 
-#include <concepts>
 #include <cstdint>
-#include <optional>
 #include <cerrno>
-#include <exception>
 #include <dirent.h>
 #include <fcntl.h>
-#include <algorithm>
-#include <array>
-#include <charconv>
 #include <cstdio>
 #include <cstring>
 #include <limits.h>
-#include <limits>
-#include <string_view>
 #include <sys/sysinfo.h>
 #include <unistd.h>
 
 module telar.runtime.platform.stream_read_buffer;
+
+import std;
 
 import telar.platform;
 import telar.base.diagnostics;

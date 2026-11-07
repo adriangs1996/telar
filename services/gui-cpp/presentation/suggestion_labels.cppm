@@ -1,29 +1,14 @@
 module;
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <algorithm>
 #include <cmath>
-#include <limits>
 
 export module telar.gui.presentation.suggestion_labels;
+
+import std;
 
 export import telar.gui.presentation.activity_order;
 export import telar.gui.presentation.application_mark;

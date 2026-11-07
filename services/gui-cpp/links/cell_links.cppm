@@ -1,40 +1,20 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <compare>
-#include <tuple>
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 #include <cmath>
 
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
-#include <algorithm>
-#include <limits>
-#include <optional>
 
-#include <array>
 
-#include <charconv>
 
-#include <span>
 
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
 
 export module telar.gui.links.cell_links;
+
+import std;
 
 export import telar.gui.links.path_expansion;
 

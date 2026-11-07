@@ -1,42 +1,26 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <limits>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
 #include <new>
-#include <string>
-#include <vector>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include <cstring>
 #include <cstddef>
 
 #include <cstdint>
-#include <span>
-#include <array>
 #include <brotli/decode.h>
-#include <optional>
 
-#include <utility>
 
-#include <initializer_list>
 #include <zlib.h>
 
 #include <zstd.h>
 
-#include <string_view>
-#include <stdexcept>
 
-#include <algorithm>
-#include <atomic>
 #include <cassert>
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
 
 export module telar.runtime.exchange_capture.producer;
+
+import std;
 
 export import telar.base.memory;
 

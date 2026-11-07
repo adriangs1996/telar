@@ -1,44 +1,30 @@
 module;
-#include <concepts>
 #include <cstdint>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
 
 #include "telar_platform/process_environment.h"
 
-#include <string>
-#include <span>
-#include <string_view>
-#include <vector>
-#include <array>
 #include <cstddef>
-#include <variant>
-#include <algorithm>
 #include <cctype>
 #include <cerrno>
-#include <chrono>
 #include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <filesystem>
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
-#include <stdexcept>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <thread>
 #include <unistd.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
 
 module telar.gui.platform.profile_file;
+
+import std;
 
 import telar.gui.platform.login_shell;
 import telar.client;

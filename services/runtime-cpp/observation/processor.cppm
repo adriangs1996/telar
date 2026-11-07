@@ -1,45 +1,23 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <type_traits>
-#include <string>
-#include <vector>
-#include <bit>
-#include <mutex>
 #include <new>
 #include <ghostty/vt.h>
-#include <source_location>
 #include <stdlib.h>
 #include <zlib.h>
 
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 
-#include <array>
 #include <cstring>
-#include <variant>
 #include <cstddef>
-#include <span>
-#include <algorithm>
-#include <utility>
-#include <stdexcept>
-#include <charconv>
 #include "telar_base/diagnostics/config.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
 #include "cell_layout.hpp"
 #include <cassert>
-#include <concepts>
-#include <memory>
 
 #include <cerrno>
-#include <exception>
-#include <condition_variable>
 #include <pthread.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -47,6 +25,8 @@ module;
 #include <unistd.h>
 
 export module telar.runtime.observation.processor;
+
+import std;
 
 export import telar.config;
 

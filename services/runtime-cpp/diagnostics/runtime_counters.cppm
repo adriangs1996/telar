@@ -1,29 +1,14 @@
 module;
-#include <algorithm>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <array>
-#include <charconv>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
 
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.diagnostics.runtime_counters;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.text;

@@ -1,41 +1,21 @@
 module;
-#include <memory>
-#include <vector>
-#include <bit>
-#include <utility>
-#include <mutex>
 #include <new>
 #include <stdlib.h>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <string>
-#include <concepts>
 
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <exception>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <variant>
-#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -43,46 +23,26 @@ module;
 #include <dirent.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
-#include <chrono>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <poll.h>
-#include <format>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <openssl/sha.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <filesystem>
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
 #include <cmath>
 
 export module telar.cli.project_setup;
+
+import std;
 
 export import telar.cli.command_limit;
 export import telar.cli.plugin;

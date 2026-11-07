@@ -5,6 +5,8 @@ module;
 
 module telar.gui.platform.private_file_stamp;
 
+import std;
+
 
 
 namespace telar::gui::platform {

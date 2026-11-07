@@ -1,40 +1,19 @@
 module;
-#include <memory>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <charconv>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <chrono>
 #include <cstring>
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
 #include <cinttypes>
 #include <cmath>
-#include <initializer_list>
-#include <string>
 #include <cstddef>
-#include <concepts>
-#include <format>
-#include <utility>
 #include <ghostty/vt/unicode.h>
 #include <arpa/inet.h>
-#include <exception>
 #include <cstdlib>
 #include <cerrno>
 #include <fcntl.h>
@@ -42,9 +21,10 @@ module;
 #include <unistd.h>
 #include <dirent.h>
 #include "window_config_bootstrap.hpp"
-#include <filesystem>
 
 module telar.cli.tab;
+
+import std;
 
 import telar.config;
 import telar.lua;

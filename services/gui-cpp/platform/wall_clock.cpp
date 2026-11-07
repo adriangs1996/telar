@@ -1,11 +1,11 @@
 module;
 
 #include <cstdint>
-#include <algorithm>
-#include <chrono>
 #include <ctime>
 
 module telar.gui.platform.notification_commands;
+
+import std;
 
 import telar.gui.core.unicode_scalar;
 

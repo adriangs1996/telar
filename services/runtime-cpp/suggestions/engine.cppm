@@ -1,41 +1,23 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <algorithm>
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 #include <unistd.h>
 
-#include <exception>
-#include <charconv>
 #include <cstdint>
-#include <optional>
-#include <span>
-#include <string_view>
 #include <cassert>
 #include <cstring>
 #include <cstddef>
 #include <cerrno>
 #include <sys/types.h>
-#include <array>
 #include <limits.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
 
 export module telar.runtime.suggestions.engine;
+
+import std;
 
 export import telar.runtime.transport.connection;
 export import telar.base.text;

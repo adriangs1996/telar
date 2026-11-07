@@ -1,36 +1,20 @@
 module;
-#include <algorithm>
-#include <chrono>
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 #include <unistd.h>
 
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <span>
 #include <cstddef>
 #include <cerrno>
-#include <exception>
-#include <optional>
 #include <sys/types.h>
-#include <array>
 #include <limits.h>
-#include <string_view>
 
 export module telar.runtime.execution.execution;
+
+import std;
 
 export import telar.base.memory;
 export import telar.platform;

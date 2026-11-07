@@ -3,21 +3,15 @@ module;
 #include <cstdint>
 
 
-#include <algorithm>
-#include <limits>
 
 
-#include <concepts>
 
 
-#include <array>
-#include <bit>
 #include <cstddef>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
 
 export module telar.gui.core.unicode_scalar;
+
+import std;
 
 
 // Interface: core/calendar_sample.cppm

@@ -1,36 +1,18 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <stdexcept>
-#include <compare>
-#include <tuple>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstddef>
-#include <string_view>
-#include <limits>
-#include <optional>
-#include <array>
 
-#include <utility>
 
-#include <span>
 
 export module telar.gui.links.link_hover;
+
+import std;
 
 export import telar.gui.core.metrics;
 export import telar.gui.links.cell_links;

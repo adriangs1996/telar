@@ -1,47 +1,27 @@
 module;
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
 #include <unistd.h>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <utility>
-#include <algorithm>
 #include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
 
 #include <lua.h>
 
-#include <variant>
-#include <exception>
-#include <charconv>
 #include <limits.h>
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <bit>
 
 #include <cmath>
-#include <concepts>
 #include <cstring>
-#include <functional>
-#include <limits>
-#include <system_error>
-#include <type_traits>
-#include <chrono>
 #include <arpa/inet.h>
 #include <cinttypes>
 #include <cstdio>
 
 export module telar.gui.config.plugin_effects;
+
+import std;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;

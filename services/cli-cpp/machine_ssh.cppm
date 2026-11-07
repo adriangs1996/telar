@@ -1,20 +1,8 @@
 module;
 #include <stdlib.h>
-#include <utility>
-#include <memory>
-#include <mutex>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
 #include <cerrno>
-#include <exception>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
@@ -23,34 +11,20 @@ module;
 #if (!(defined(__APPLE__)))
 #include <unistd.h>
 #endif
-#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <filesystem>
-#include <iostream>
-#include <vector>
 
 #include "telar_platform/process_environment.h"
 
-#include <chrono>
 #include <cstdio>
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <cstddef>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
-#include <bit>
 #include <new>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -58,46 +32,14 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <sys/file.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <variant>
 #include <sys/un.h>
 #include <openssl/sha.h>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <cctype>
-#include <set>
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <csignal>
@@ -105,6 +47,8 @@ module;
 #include <pwd.h>
 
 export module telar.cli.machine_ssh;
+
+import std;
 
 export import telar.cli.command_limit;
 export import telar.cli.plugin;

@@ -1,43 +1,26 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <concepts>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <limits>
-#include <string>
-#include <variant>
-#include <vector>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 #include <unistd.h>
 
 #include <cstddef>
 #include <cstring>
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <stdexcept>
 
-#include <algorithm>
-#include <chrono>
 
 #include <cassert>
-#include <exception>
 #include <cerrno>
 #include <sys/types.h>
 #include <limits.h>
-#include <atomic>
 #include <poll.h>
 #include <sys/wait.h>
 
-#include <bit>
 
 export module telar.runtime.agents.description_generator;
+
+import std;
 
 export import telar.runtime.terminal.osc_scanner;
 export import telar.base.memory;

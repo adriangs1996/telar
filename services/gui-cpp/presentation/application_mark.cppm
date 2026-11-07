@@ -1,29 +1,16 @@
 module;
-#include <concepts>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
 
 #include <cstdint>
 
-#include <string_view>
-#include <array>
 
-#include <algorithm>
-#include <limits>
-#include <optional>
 
-#include <bit>
 #include <cstddef>
-#include <stdexcept>
 #include <cstring>
 
 export module telar.gui.presentation.application_mark;
+
+import std;
 
 export import telar.config;
 

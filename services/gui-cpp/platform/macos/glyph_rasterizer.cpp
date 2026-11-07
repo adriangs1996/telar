@@ -2,15 +2,13 @@ module;
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
 #include "../font.h"
-#include <algorithm>
 #include <cstring>
-#include <memory>
 #include "glyph_rasterizer.h"
-#include <stdexcept>
 
 module telar.gui.platform.private_file_stamp;
+
+import std;
 
 import telar.gui.fonts.face;
 

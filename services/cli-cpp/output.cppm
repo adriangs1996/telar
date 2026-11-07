@@ -1,34 +1,17 @@
 module;
-#include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <span>
-#include <type_traits>
-#include <limits>
-#include <variant>
-#include <vector>
-#include <algorithm>
-#include <bit>
-#include <chrono>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <optional>
-#include <stdexcept>
-#include <string>
-#include <string_view>
 
-#include <array>
 #include <cstdint>
 
-#include <charconv>
 #include <cstdio>
 
 export module telar.cli.output;
+
+import std;
 
 import telar.base.diagnostics;
 import telar.base.memory;

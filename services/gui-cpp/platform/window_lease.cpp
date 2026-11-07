@@ -1,27 +1,20 @@
 module;
-#include <utility>
 
-#include <array>
 #include <climits>
 #include <cstdint>
-#include <string_view>
 #include <cerrno>
-#include <exception>
-#include <algorithm>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <charconv>
 #include <cstdlib>
 #include <cstring>
-#include <span>
-#include <stdexcept>
 #include <sys/file.h>
 #include <sys/types.h>
-#include <system_error>
 #include <unistd.h>
 
 module telar.gui.platform.notification_commands;
+
+import std;
 
 import telar.platform;
 

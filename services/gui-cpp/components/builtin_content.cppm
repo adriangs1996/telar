@@ -1,41 +1,21 @@
 module;
-#include <exception>
-#include <memory>
-#include <type_traits>
-#include <vector>
-#include <bit>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include <utility>
 #include <cstddef>
-#include <variant>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <algorithm>
-#include <limits>
-#include <span>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <initializer_list>
-#include <string>
 #include <cinttypes>
 
-#include <tuple>
 
 export module telar.gui.components.builtin_content;
+
+import std;
 
 export import telar.gui.components.configuration;
 

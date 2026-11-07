@@ -34,14 +34,19 @@ execute_process(
   COMMAND "${gui_clang_tidy}" --verify-config "--config-file=${gui_directory}/.clang-tidy"
   COMMAND_ERROR_IS_FATAL ANY)
 
+get_filename_component(gui_build_directory "${GUI_BUILD_DIRECTORY}" ABSOLUTE)
+include("${gui_directory}/../../cmake/lint_prepare.cmake")
+telar_lint_prepare("${gui_build_directory}" "/services/gui-cpp/.*\\.(cpp|cppm|mm)$" "/services/gui-cpp/out[^/]*/"
+  "${GUI_LINT_JOBS}" gui_patterns)
+
 execute_process(
   COMMAND "${gui_run_clang_tidy}"
     -clang-tidy-binary "${gui_clang_tidy}"
     -config-file "${gui_directory}/.clang-tidy"
-    -p "${GUI_BUILD_DIRECTORY}"
+    -p "${gui_build_directory}"
     -j "${GUI_LINT_JOBS}"
-    -export-fixes "${GUI_BUILD_DIRECTORY}/clang-tidy.yaml"
+    -export-fixes "${gui_build_directory}/clang-tidy.yaml"
     -quiet
-    "/services/gui-cpp/(?!out[^/]*/).*\\.(cpp|cppm|mm)$"
+    ${gui_patterns}
   WORKING_DIRECTORY "${gui_directory}"
   COMMAND_ERROR_IS_FATAL ANY)

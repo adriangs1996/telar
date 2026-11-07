@@ -1,42 +1,24 @@
 module;
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
-#include <atomic>
 
-#include <concepts>
-#include <stdexcept>
-#include <variant>
 #include <cassert>
-#include <bit>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
 
-#include <charconv>
 #include <limits.h>
 #include <poll.h>
 #include <sys/wait.h>
 
 export module telar.runtime.runtime.background_executor;
+
+import std;
 
 export import telar.runtime.platform.process_probe;
 export import telar.runtime.worktrees.git_probe;

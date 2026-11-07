@@ -1,34 +1,17 @@
 module;
-#include <algorithm>
-#include <concepts>
 #include <cstddef>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <variant>
-#include <vector>
-#include <bit>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
 #include <new>
 
-#include <string_view>
-#include <array>
-#include <span>
-#include <stdexcept>
 
-#include <exception>
-#include <charconv>
 #include <cstdint>
-#include <optional>
 
-#include <chrono>
-#include <limits>
 #include <cstring>
 
 export module telar.cli.hooks.command;
+
+import std;
 
 export import telar.config;
 

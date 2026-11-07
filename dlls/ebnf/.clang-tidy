@@ -1,8 +1,11 @@
+# clang-tidy 23.1.5 crashes (SIGSEGV) in unchecked-optional-access on module
+# units that import std; re-enable it once the pinned LLVM fixes it.
 InheritParentConfig: false
 Checks: >-
   -*,
   clang-analyzer-*,
   bugprone-*,
+  -bugprone-unchecked-optional-access,
   performance-*,
   portability-*,
   modernize-*,

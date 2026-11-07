@@ -1,58 +1,36 @@
 module;
-#include <memory>
-#include <vector>
-#include <bit>
 #include <stdlib.h>
-#include <chrono>
-#include <mutex>
 #include <new>
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <charconv>
 
 #include <cerrno>
-#include <exception>
-#include <string>
 #include <unistd.h>
-#include <format>
 #include <climits>
 #include <dlfcn.h>
-#include <filesystem>
-#include <utility>
 
 #include <cstddef>
 #include <cstring>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <variant>
 #include <cstdio>
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <concepts>
 #include <csignal>
 #include <dirent.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
 #include <pwd.h>
 
 export module telar.cli.tab;
+
+import std;
 
 export import telar.cli.window;
 

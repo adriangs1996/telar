@@ -1,44 +1,26 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
-#include <atomic>
 #include <cassert>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
 #include <limits.h>
 #include <poll.h>
 #include <sys/wait.h>
-#include <charconv>
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 export module telar.runtime.editors.remote_editor;
+
+import std;
 
 export import telar.runtime.runtime.background_executor;
 export import telar.runtime.transport.connection;

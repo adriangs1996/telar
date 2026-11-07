@@ -1,29 +1,18 @@
 module;
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <array>
 #include <cstddef>
-#include <limits>
-#include <span>
-#include <stdexcept>
 
 
-#include <bit>
-#include <optional>
-#include <string_view>
 
 
-#include <initializer_list>
 
 
-#include <concepts>
-#include <functional>
-#include <type_traits>
-#include <utility>
 
 export module telar.gui.terminal.glyphs.curve_cache;
+
+import std;
 
 export import telar.gui.core.metrics;
 

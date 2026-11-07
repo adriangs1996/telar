@@ -1,30 +1,16 @@
 module;
-#include <concepts>
 #include <cstring>
-#include <exception>
-#include <memory>
-#include <type_traits>
 #include <cstdio>
-#include <string>
-#include <vector>
-#include <bit>
-#include <stdexcept>
 
-#include <algorithm>
 #include <cstdint>
-#include <limits>
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
 
-#include <string_view>
-#include <chrono>
 
 #include <cmath>
 
 export module telar.gui.presentation.frame_pacer;
+
+import std;
 
 export import telar.gui.application.sound_playback;
 

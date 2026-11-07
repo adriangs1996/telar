@@ -1,42 +1,22 @@
 module;
-#include <limits>
-#include <utility>
-#include <concepts>
 #include <cstdlib>
-#include <memory>
-#include <mutex>
 #include <new>
-#include <string>
-#include <vector>
-#include <type_traits>
 #include <cstdio>
-#include <variant>
-#include <bit>
-#include <stdexcept>
 
-#include <array>
-#include <optional>
-#include <string_view>
 
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <span>
-#include <exception>
 #include <cstddef>
 #include <cerrno>
 #include <sys/types.h>
 #include <limits.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
-#include <charconv>
 
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <algorithm>
 
 #if defined(__linux__)
 
@@ -62,20 +42,6 @@ module;
 #endif
 
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <net/if.h>
 #endif
 #if (defined(__APPLE__))
@@ -83,8 +49,6 @@ module;
 #endif
 #if (defined(__APPLE__))
 #include <netinet6/in6_var.h>
-#endif
-#if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
 #include <sys/ioctl.h>
@@ -99,17 +63,7 @@ module;
 #include <sys/sys_domain.h>
 #endif
 #if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #include <arpa/inet.h>
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #if (!(defined(__APPLE__)))
 #include <linux/if_ether.h>
@@ -121,8 +75,6 @@ module;
 #include <net/if.h>
 #endif
 #if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #include <sys/ioctl.h>
 #endif
 #if (!(defined(__APPLE__)))
@@ -130,6 +82,8 @@ module;
 #endif
 
 export module telar.runtime.platform.git_status;
+
+import std;
 
 export import telar.platform;
 import telar.base.diagnostics;

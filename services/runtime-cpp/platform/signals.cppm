@@ -1,12 +1,12 @@
 module;
 
 #include <unistd.h>
-#include <array>
-#include <atomic>
 #include <cerrno>
 #include <cstdint>
 
 export module telar.runtime.platform.signals;
+
+import std;
 
 import telar.platform;
 import telar.platform.primitives;

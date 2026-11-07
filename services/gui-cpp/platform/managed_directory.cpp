@@ -1,20 +1,16 @@
 module;
 #include <unistd.h>
-#include <utility>
 
-#include <string_view>
 #include <cstddef>
 #include <sys/param.h>
 #include <cerrno>
-#include <exception>
-#include <algorithm>
-#include <array>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <stdexcept>
 
 module telar.gui.platform.login_shell;
+
+import std;
 
 import telar.gui.platform.profile_file;
 import telar.platform;
