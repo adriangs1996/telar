@@ -832,6 +832,470 @@ private:
 export {
 namespace telar::gui {
 
+// Interface: config/element_reader.cppm
+// Turns what a slot function returned into elements. It runs on the Lua thread; actions are
+// resolved as they are read and functions are handed to `callback`, so the result needs no VM.
+template <Allocator Memory, typename Action, typename Callback>
+class ElementReader {
+public:
+  using Element = components::Element;
+  using Kind = components::ElementKind;
+  using Value = runtime::lua::Value;
+
+  inline ElementReader(RenderedElements<Memory> &output, const Action &action, const Callback &callback) noexcept
+      : output_(output),
+        action_(action),
+        callback_(callback) {}
+
+  inline void read(const Value &root) {
+    if (root.is(LUA_TTABLE) && !root.field("ui").present()) {
+      Element row;
+      const auto index = append(root, row);
+      children(root, index, 1);
+
+      return;
+    }
+
+    element(root, Element::none, 0);
+  }
+
+private:
+  inline void element(const Value &value, std::uint32_t parent, unsigned depth) {
+    if (!value.present()) {
+      return;
+    }
+
+    if (depth > Element::maximum_depth) {
+      value.fail("nests elements deeper than 32 levels");
+    }
+
+    if (value.is(LUA_TSTRING)) {
+      Element label;
+      label.kind = Kind::label;
+      label.parent = parent;
+      label.text = text(value);
+      static_cast<void>(append(value, label));
+
+      return;
+    }
+
+    if (!value.is(LUA_TTABLE)) {
+      value.fail("must be text, an element or a list of elements");
+    }
+
+    if (!value.field("ui").present()) {
+      // A list inside a container flattens into it.
+      children(value, parent, depth + 1);
+
+      return;
+    }
+
+    const auto name = value.field("ui").string();
+    const auto *const found = std::ranges::find(components::element_kind_names, name);
+    if (found == components::element_kind_names.end()) {
+      value.field("ui").fail("names an unknown element");
+    }
+
+    Element result;
+    result.kind = static_cast<Kind>(found - components::element_kind_names.begin());
+    result.parent = parent;
+    fields(value, result);
+    const auto index = append(value, result);
+    if (result.kind == Kind::row || result.kind == Kind::column || result.kind == Kind::stack) {
+      children(value, index, depth + 1);
+    }
+  }
+
+  inline void children(const Value &value, std::uint32_t parent, unsigned depth) {
+    const auto count = value.listLength();
+    for (std::size_t index = 0; index < count; ++index) {
+      element(value.element(static_cast<lua_Integer>(index) + 1), parent, depth);
+    }
+  }
+
+  inline std::uint32_t append(const Value &value, const Element &element) {
+    if (output_.elements.size() == Element::maximum_elements) {
+      value.fail("exceeds 4096 elements");
+    }
+
+    output_.elements.push_back(element);
+
+    return static_cast<std::uint32_t>(output_.elements.size() - 1);
+  }
+
+  static constexpr std::array<std::string_view, 27> layout_fields{"ui", "id", "width", "height", "min_width", "max_width", "min_height", "max_height", "grow", "align_self", "x", "y", "rotation", "scale", "opacity", "z", "background", "border", "radius", "padding", "shadow", "clip", "on_click", "url", "tooltip", "hover", "transition"};
+
+  inline void fields(const Value &value, Element &element) {
+    switch (element.kind) {
+    case Kind::row:
+    case Kind::column:
+    case Kind::stack:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"gap", "align", "justify"})}, true);
+      element.gap = length(value.field("gap"), 0);
+      element.align = choice(value.field("align"), {"start", "center", "end", "stretch"}, 0);
+      element.justify = choice(value.field("justify"), {"start", "center", "end", "between"}, 0);
+      break;
+    case Kind::spacer:
+      value.onlyFields(std::span<const std::string_view>{layout_fields});
+      element.grow = 1;
+      break;
+    case Kind::label:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"text", "size", "bold", "italic", "color", "tone", "max_lines"})});
+      element.text = text(value.field("text"));
+      typography(value, element);
+      element.max_lines = static_cast<std::uint8_t>(value.field("max_lines").boundedInteger(1, 1, 64));
+      break;
+    case Kind::icon:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name", "glyph", "size", "color", "tone"})});
+      element.named = value.field("name").present();
+      element.text = text(element.named ? value.field("name") : value.field("glyph"));
+      if (element.text.length == 0) {
+        value.fail("requires an icon name or a glyph");
+      }
+      typography(value, element);
+      break;
+    case Kind::mark:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name"})});
+      runtime::config::uiMark(value.field("name"));
+      element.text = text(value.field("name"));
+      break;
+    case Kind::badge:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"text", "tone", "color", "size"})});
+      element.text = text(value.field("text"));
+      typography(value, element);
+      break;
+    case Kind::tile:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"program", "size"})});
+      element.text = text(value.field("program"));
+      element.size = length(value.field("size"), 0);
+      break;
+    case Kind::canvas:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"ops", "label"})});
+      element.text = text(value.field("label"));
+      canvas(value.field("ops"), element);
+      break;
+    case Kind::builtin: {
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name"})});
+      const auto name = value.field("name").string();
+      if (std::ranges::find(components::builtin_names, name) == components::builtin_names.end()) {
+        value.field("name").fail("names an unknown built-in piece");
+      }
+
+      element.text = text(value.field("name"));
+    } break;
+    case Kind::elapsed:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"since", "size", "bold", "color", "tone"})});
+      element.since = value.field("since").integer();
+      typography(value, element);
+      break;
+    case Kind::clock:
+      value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"format", "size", "bold", "color", "tone"})});
+      element.text = value.field("format").present() ? text(value.field("format")) : store("%H:%M", value);
+      typography(value, element);
+      break;
+    }
+
+    box(value, element);
+  }
+
+  inline void box(const Value &value, Element &element) {
+    if (const auto id = value.field("id"); id.present()) {
+      element.key = text(id);
+    }
+
+    element.width = length(value.field("width"), -1);
+    element.height = length(value.field("height"), -1);
+    element.min_width = length(value.field("min_width"), 0);
+    element.max_width = length(value.field("max_width"), -1);
+    element.min_height = length(value.field("min_height"), 0);
+    element.max_height = length(value.field("max_height"), -1);
+    element.grow = static_cast<float>(value.field("grow").boundedNumber(element.grow, 0, 1000));
+    if (const auto align = value.field("align_self"); align.present()) {
+      element.align_self = choice(align, {"start", "center", "end", "stretch"}, 0);
+    }
+
+    element.x = offset(value.field("x"));
+    element.y = offset(value.field("y"));
+    element.rotation = static_cast<float>(value.field("rotation").boundedNumber(0, -3600, 3600));
+    element.scale = static_cast<float>(value.field("scale").boundedNumber(1, 0, 16));
+    element.opacity = static_cast<float>(value.field("opacity").boundedNumber(1, 0, 1));
+    element.z = static_cast<std::int16_t>(std::lround(value.field("z").boundedNumber(0, -1000, 1000)));
+    element.background = color(value.field("background"));
+    element.radius = length(value.field("radius"), 0);
+    element.shadow = value.field("shadow").boolean(false);
+    element.clip = value.field("clip").boolean(false);
+    padding(value.field("padding"), element);
+    if (const auto border = value.field("border"); border.present()) {
+      if (border.is(LUA_TTABLE)) {
+        border.onlyFields({"color", "width"});
+        element.border = color(border.field("color"));
+        element.border_width = length(border.field("width"), 1);
+      } else {
+        element.border = color(border);
+        element.border_width = 1;
+      }
+    }
+
+    if (const auto hover = value.field("hover"); hover.present()) {
+      hover.onlyFields({"background"});
+      element.hover = color(hover.field("background"));
+    }
+
+    if (const auto transition = value.field("transition"); transition.present()) {
+      if (transition.is(LUA_TTABLE)) {
+        transition.onlyFields({"duration", "easing"});
+        element.transition_ms = static_cast<std::uint16_t>(transition.field("duration").boundedInteger(220, 0, 10000));
+        element.easing = choice(transition.field("easing"), {"ease_out", "linear", "ease_in_out"}, 0);
+      } else {
+        element.transition_ms = static_cast<std::uint16_t>(transition.boundedInteger(220, 0, 10000));
+      }
+    }
+
+    if (const auto tooltip = value.field("tooltip"); tooltip.present()) {
+      element.tooltip = text(tooltip);
+    }
+
+    if (const auto url = value.field("url"); url.present()) {
+      const auto link = url.string();
+      constexpr std::size_t maximum_url_bytes = 1024;
+      if (link.size() > maximum_url_bytes || link.contains(' ') || (!link.starts_with("https://") && !link.starts_with("http://"))) {
+        url.fail("must be an http or https address");
+      }
+
+      element.url = text(url);
+    }
+
+    if (const auto click = value.field("on_click"); click.present()) {
+      if (click.is(LUA_TFUNCTION)) {
+        element.callback = callback_(click);
+      } else if (auto resolved = action_(click)) {
+        if (output_.bindings.size() == Element::maximum_actions) {
+          click.fail("exceeds 1024 click actions");
+        }
+
+        element.action = static_cast<std::uint32_t>(output_.bindings.size());
+        output_.bindings.push_back(resolved->action);
+        output_.actions.add(std::move(*resolved));
+      }
+    }
+  }
+
+  inline void typography(const Value &value, Element &element) {
+    if (const auto size = value.field("size"); size.present()) {
+      if (size.is(LUA_TSTRING)) {
+        element.size_role = choice(size, {"title", "body", "small"}, 1);
+      } else {
+        element.size = static_cast<float>(size.boundedNumber(0, 1, 256));
+      }
+    }
+
+    element.bold = value.field("bold").boolean(false);
+    element.italic = value.field("italic").boolean(false);
+    element.color = color(value.field("color"));
+    element.tone = components::ValueReader::tone(value.field("tone"));
+  }
+
+  inline void padding(const Value &value, Element &element) {
+    if (!value.present()) {
+      return;
+    }
+
+    if (!value.is(LUA_TTABLE)) {
+      element.padding.fill(length(value, 0));
+
+      return;
+    }
+
+    // CSS order: {all}, {vertical, horizontal} or {top, right, bottom, left}.
+    const auto count = value.listLength();
+    std::array<float, 4> sides{};
+    for (std::size_t index = 0; index < std::min<std::size_t>(count, 4); ++index) {
+      sides[index] = length(value.element(static_cast<lua_Integer>(index) + 1), 0);
+    }
+
+    if (count == 1) {
+      element.padding.fill(sides[0]);
+    } else if (count == 2) {
+      element.padding = {sides[1], sides[0], sides[1], sides[0]};
+    } else if (count == 4) {
+      element.padding = {sides[3], sides[0], sides[1], sides[2]};
+    } else {
+      value.fail("must hold one, two or four lengths");
+    }
+  }
+
+  inline void canvas(const Value &ops, Element &element) {
+    struct Shape {
+      std::string_view name;
+      std::uint8_t numbers;
+      bool text;
+      bool color;
+    };
+    // Matches ElementCanvas::Operation, in order.
+    constexpr std::array<Shape, 21> shapes{{
+        {"move", 2, false, false}, {"line", 2, false, false}, {"curve", 6, false, false}, {"quad", 4, false, false},
+        {"arc", 5, false, false}, {"rect", 4, false, false}, {"round_rect", 5, false, false}, {"circle", 3, false, false},
+        {"path", 0, true, false}, {"close", 0, false, false}, {"fill", 0, false, true}, {"stroke", 1, false, true},
+        {"width", 1, false, false}, {"cap", 0, true, false}, {"join", 0, true, false}, {"alpha", 1, false, false},
+        {"translate", 2, false, false}, {"rotate", 1, false, false}, {"scale", 2, false, false}, {"save", 0, false, false},
+        {"restore", 0, false, false},
+    }};
+    element.steps_offset = static_cast<std::uint32_t>(output_.steps.size());
+    const auto count = ops.present() ? ops.listLength() : 0;
+    for (std::size_t index = 0; index < count; ++index) {
+      if (output_.steps.size() == Element::maximum_steps) {
+        ops.fail("exceeds 4096 canvas operations");
+      }
+
+      const auto op = ops.element(static_cast<lua_Integer>(index) + 1);
+      const auto name = op.element(1).string();
+      const auto *const shape = std::ranges::find(shapes, name, &Shape::name);
+      if (shape == shapes.end()) {
+        op.fail("names an unknown canvas operation");
+      }
+
+      components::CanvasStep step;
+      step.op = static_cast<std::uint8_t>(shape - shapes.begin());
+      lua_Integer next = 2;
+      if (shape->text) {
+        step.text = text(op.element(next++));
+      }
+
+      if (shape->color) {
+        step.color = color(op.element(next++));
+      }
+
+      const auto available = op.listLength() - static_cast<std::size_t>(next - 1);
+      step.count = static_cast<std::uint8_t>(std::min<std::size_t>(available, shape->numbers));
+      if ((step.count < shape->numbers && shape->name != "stroke" && shape->name != "scale") || available > shape->numbers) {
+        op.fail("has the wrong number of values");
+      }
+
+      for (std::uint8_t number = 0; number < step.count; ++number) {
+        step.values[number] = static_cast<float>(op.element(next++).boundedNumber(0, -1e6, 1e6));
+      }
+
+      output_.steps.push_back(step);
+    }
+
+    element.steps_count = static_cast<std::uint32_t>(output_.steps.size()) - element.steps_offset;
+  }
+
+  inline components::ElementColor color(const Value &value) const {
+    components::ElementColor result;
+    if (!value.present()) {
+      return result;
+    }
+
+    if (const auto index = value.asInteger()) {
+      if (*index < 0 || *index > std::numeric_limits<std::uint8_t>::max()) {
+        value.fail("is outside the color index range");
+      }
+
+      result.value = CellColor{.kind = CellColor::Kind::indexed, .channels = {static_cast<std::uint8_t>(*index), 0, 0}};
+
+      return result;
+    }
+
+    auto name = value.string();
+    constexpr std::size_t rgba_length = std::string_view{"#RRGGBBAA"}.size();
+    if (name.size() == rgba_length && name.front() == '#') {
+      unsigned alpha = 0;
+      const auto parsed = std::from_chars(name.data() + rgba_length - 2, name.data() + rgba_length, alpha, 16);
+      if (parsed.ec != std::errc{} || parsed.ptr != name.data() + rgba_length) {
+        value.fail("is not a supported color");
+      }
+
+      result.alpha = static_cast<std::uint8_t>(alpha);
+      name.remove_suffix(2);
+    }
+
+    result.value = ColorName::parse(name);
+    if (!result.value) {
+      value.fail("is not a supported color");
+    }
+
+    return result;
+  }
+
+  inline static float length(const Value &value, float fallback) {
+    return static_cast<float>(value.boundedNumber(fallback, 0, 100000));
+  }
+
+  inline static float offset(const Value &value) {
+    return static_cast<float>(value.boundedNumber(0, -100000, 100000));
+  }
+
+  inline static std::uint8_t choice(const Value &value, std::initializer_list<std::string_view> names, std::uint8_t fallback) {
+    if (!value.present()) {
+      return fallback;
+    }
+
+    const auto name = value.string();
+    const auto *const found = std::ranges::find(names, name);
+    if (found == names.end()) {
+      value.fail("names an unknown option");
+    }
+
+    return static_cast<std::uint8_t>(found - names.begin());
+  }
+
+  struct Fields {
+    std::array<std::string_view, 40> names{};
+    std::size_t count = 0;
+
+    // NOLINTNEXTLINE(google-explicit-constructor): reads like the field lists it joins.
+    operator std::span<const std::string_view>() const noexcept {
+      return std::span{names}.first(count);
+    }
+  };
+
+  inline static Fields combined(std::span<const std::string_view> base, std::initializer_list<std::string_view> extra) {
+    Fields result;
+    for (const auto name : base) {
+      result.names[result.count++] = name;
+    }
+
+    for (const auto name : extra) {
+      result.names[result.count++] = name;
+    }
+
+    return result;
+  }
+
+  inline components::ElementText text(const Value &value) {
+    if (!value.present()) {
+      return {};
+    }
+
+    return store(value.string(), value);
+  }
+
+  inline components::ElementText store(std::string_view text, const Value &value) {
+    validateUtf8(text);
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_control = 0x7f;
+    if (std::ranges::any_of(text, [](unsigned char byte) {
+          return (byte < first_printable && byte != '\n') || byte == delete_control;
+        })) {
+      value.fail("holds control characters");
+    }
+
+    if (text.size() > Element::maximum_text_bytes - output_.text.size()) {
+      value.fail("exceeds 256 KiB of element text");
+    }
+
+    const components::ElementText range{.offset = static_cast<std::uint32_t>(output_.text.size()), .length = static_cast<std::uint32_t>(text.size())};
+    output_.text.append(text);
+
+    return range;
+  }
+
+  RenderedElements<Memory> &output_;
+  const Action &action_;
+  const Callback &callback_;
+};
+
 struct ConfigurationSourceText {
   std::string_view source;
   std::string_view directory;
@@ -844,7 +1308,8 @@ template <Allocator Memory>
 class ConfigurationGeneration {
 public:
   inline explicit ConfigurationGeneration(Memory &memory, ConfigurationSourceText source)
-      : machine_(memory),
+      : memory_(memory),
+        machine_(memory),
         runtime_(makeOwned<runtime::config::RuntimeValues<Memory>>(memory, memory)),
         components_(makeOwned<components::Configuration>(memory, *machine_.state())),
         descriptions_(memory),
@@ -894,6 +1359,172 @@ public:
     components_->closePanel();
   }
 
+  // The members below until configuredAction run on the Lua thread: they read or run the VM.
+  [[nodiscard]] inline Owned<RenderedContent<components::BarContent::capacity, Memory>, Memory> renderedBar(components::Position position, const components::Context &context) {
+    renderBar(position, context);
+
+    return copied(components_->bar(position));
+  }
+
+  [[nodiscard]] inline Owned<RenderedContent<components::PanelContent::capacity, Memory>, Memory> renderedPanel(std::size_t index, const components::Context &context) {
+    renderPanel(index, context);
+
+    return copied(components_->panel());
+  }
+
+  template <components::Capacity Bounds>
+  [[nodiscard]] inline Owned<RenderedContent<Bounds, Memory>, Memory> copied(const components::Content<Bounds> &content) const {
+    auto result = makeOwned<RenderedContent<Bounds, Memory>>(memory_, memory_);
+    result->content = content;
+    for (const auto &node : content.nodes()) {
+      if (const auto action = content.action(node)) {
+        result->actions.add(resolve(*action));
+      }
+    }
+
+    return result;
+  }
+
+  [[nodiscard]] inline ResolvedAction resolve(BindingAction action) const {
+    ResolvedAction result{.action = action};
+    if (action.kind == BindingActionKind::extended) {
+      result.description = extendedAction(action);
+    } else if (action.kind == BindingActionKind::command_tab) {
+      if (const auto command = commandTab(action)) {
+        result.command.emplace(*command);
+      }
+    }
+
+    return result;
+  }
+
+  [[nodiscard]] inline Owned<ResolvedEffects<Memory>, Memory> invokeResolved(BindingAction action, BindingContext context) {
+    auto result = makeOwned<ResolvedEffects<Memory>>(memory_, memory_);
+    result->effects = invoke(action, context);
+    for (const auto effect : std::span{result->effects.actions}.first(result->effects.length)) {
+      if (effect.kind == BindingActionKind::extended || effect.kind == BindingActionKind::command_tab) {
+        result->actions.add(resolve(effect));
+      }
+    }
+
+    return result;
+  }
+
+  // Calls a slot's function with the context and the item, a JSON document, and reads the
+  // element tree it returns. The instance keeps the `on_click` functions of its last render.
+  [[nodiscard]] inline Owned<RenderedElements<Memory>, Memory> renderElements(components::Slot slot, std::uint64_t instance, const components::Context &context, std::string_view item) {
+    const auto reference = components_->definitions().slot(slot);
+    if (reference == LUA_NOREF) {
+      throw std::invalid_argument{"Slot has no render function"};
+    }
+
+    auto result = makeOwned<RenderedElements<Memory>>(memory_, memory_);
+    Vector<int, Memory> handlers{AllocatorRef<int, Memory>{memory_}};
+    const auto release = [&] {
+      for (const auto handler : handlers) {
+        luaL_unref(machine_.state(), LUA_REGISTRYINDEX, handler);
+      }
+    };
+    client_state_.commands.beginRender();
+    try {
+      lua_settop(machine_.state(), 0);
+      machine_.resetBudget(lua_call_instructions, lua_call_deadline);
+      components::Invocation invocation{reference, context, nullptr, item};
+      machine_.invoke(&components::Invocation::invoke, &invocation, 1);
+      const runtime::lua::Value root{machine_.state(), -1, "element"};
+      const auto action = [&](const runtime::lua::Value &value) {
+        return elementAction(value, static_cast<std::uint32_t>(result->bindings.size()));
+      };
+      const auto callback = [&](const runtime::lua::Value &value) {
+        if (handlers.size() == components::Element::maximum_actions) {
+          value.fail("exceeds 1024 click functions");
+        }
+
+        value.pushCopy();
+        handlers.push_back(luaL_ref(machine_.state(), LUA_REGISTRYINDEX));
+
+        return static_cast<std::uint32_t>(handlers.size() - 1);
+      };
+      ElementReader<Memory, decltype(action), decltype(callback)>{*result, action, callback}.read(root);
+    } catch (...) {
+      release();
+      client_state_.commands.endRender();
+      lua_settop(machine_.state(), 0);
+
+      throw;
+    }
+
+    client_state_.commands.endRender();
+    lua_settop(machine_.state(), 0);
+    result->callbacks = static_cast<std::uint32_t>(handlers.size());
+    auto &kept = handlersOf(instance);
+    std::swap(kept.references, handlers);
+    release();
+
+    return result;
+  }
+
+  // Runs one `on_click` function of the instance's last render and resolves what it returns.
+  [[nodiscard]] inline Owned<ResolvedEffects<Memory>, Memory> invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context &context, std::string_view item) {
+    const auto found = std::ranges::find(element_handlers_, instance, &ElementHandlers::instance);
+    if (found == element_handlers_.end() || callback >= found->references.size()) {
+      throw std::invalid_argument{"That element changed before its click arrived"};
+    }
+
+    lua_settop(machine_.state(), 0);
+    machine_.resetBudget(lua_call_instructions, lua_call_deadline);
+    for (const auto reference : std::span{transient_references_}.first(transient_count_)) {
+      luaL_unref(machine_.state(), LUA_REGISTRYINDEX, reference);
+    }
+
+    transient_count_ = 0;
+    components::Invocation invocation{found->references[callback], context, nullptr, item};
+    machine_.invoke(&components::Invocation::invoke, &invocation, 1);
+    auto result = makeOwned<ResolvedEffects<Memory>>(memory_, memory_);
+    const runtime::lua::Value value{machine_.state(), -1, "click result"};
+    if (value.present()) {
+      result->effects = withActions([&](const auto &reader) {
+        return effects(value, reader);
+      });
+    }
+
+    lua_settop(machine_.state(), 0);
+    for (const auto effect : std::span{result->effects.actions}.first(result->effects.length)) {
+      if (effect.kind == BindingActionKind::extended || effect.kind == BindingActionKind::command_tab) {
+        result->actions.add(resolve(effect));
+      }
+    }
+
+    return result;
+  }
+
+  inline void forgetElements(std::uint64_t instance) noexcept {
+    const auto found = std::ranges::find(element_handlers_, instance, &ElementHandlers::instance);
+    if (found == element_handlers_.end()) {
+      return;
+    }
+
+    for (const auto reference : found->references) {
+      luaL_unref(machine_.state(), LUA_REGISTRYINDEX, reference);
+    }
+
+    element_handlers_.erase(found);
+  }
+
+  // Safe on the window thread: configured bindings are fixed when the generation loads.
+  [[nodiscard]] inline std::optional<ExtendedActionDescription> configuredAction(BindingAction action) const {
+    if (action.kind != BindingActionKind::extended || action.generation != number_) {
+      return std::nullopt;
+    }
+
+    const auto configured = std::span{input_.configured}.first(input_.length);
+    if (std::ranges::find(configured, action, &KeyBinding<BindingAction>::action) == configured.end()) {
+      return std::nullopt;
+    }
+
+    return descriptions_.at(action.parameter);
+  }
+
   inline void renderPick(std::size_t index, const components::Context &context, components::PickItems &items) {
     const auto picks = components_->definitions().picks();
     if (index >= picks.size()) {
@@ -910,8 +1541,8 @@ public:
     lua_settop(machine_.state(), 0);
     try {
       if (pick.render) {
-        constexpr std::uint64_t pick_instructions = 1'000'000;
-        constexpr std::chrono::milliseconds pick_deadline{100};
+        constexpr std::uint64_t pick_instructions = lua_call_instructions;
+        constexpr auto pick_deadline = lua_call_deadline;
         machine_.resetBudget(pick_instructions, pick_deadline);
         components::Invocation invocation{pick.reference, context, "items"};
         machine_.invoke(&components::Invocation::invoke, &invocation, 1);
@@ -1075,6 +1706,9 @@ public:
 
 private:
   static constexpr std::size_t maximum_profile_bytes = 64;
+  // Calls run on the Lua thread, so the bound only keeps a runaway loop from holding the queue.
+  static constexpr std::uint64_t lua_call_instructions = 50'000'000;
+  static constexpr std::chrono::seconds lua_call_deadline{1};
 
   template <typename Consumer>
   inline void renderComponents(const components::Source &source, const components::Context &context, const Consumer &consume) {
@@ -1087,8 +1721,8 @@ private:
     try {
       lua_settop(machine_.state(), 0);
       if (source.has_render) {
-        constexpr std::uint64_t render_instructions = 100'000;
-        constexpr std::chrono::milliseconds render_deadline{100};
+        constexpr std::uint64_t render_instructions = lua_call_instructions;
+        constexpr auto render_deadline = lua_call_deadline;
         machine_.resetBudget(render_instructions, render_deadline);
         components::Invocation invocation{source.reference, context};
         machine_.invoke(&components::Invocation::invoke, &invocation, 1);
@@ -1111,6 +1745,53 @@ private:
 
     client_state_.commands.endRender();
     lua_settop(machine_.state(), 0);
+  }
+
+  struct ElementHandlers {
+    std::uint64_t instance = 0;
+    Vector<int, Memory> references;
+  };
+
+  ElementHandlers &handlersOf(std::uint64_t instance) {
+    const auto found = std::ranges::find(element_handlers_, instance, &ElementHandlers::instance);
+    if (found != element_handlers_.end()) {
+      return *found;
+    }
+
+    element_handlers_.push_back({.instance = instance, .references = Vector<int, Memory>{AllocatorRef<int, Memory>{memory_}}});
+
+    return element_handlers_.back();
+  }
+
+  // Reads an element's `on_click` action table and resolves it at once. Its registry entry is
+  // released here, so the action carries a reference private to its element tree.
+  std::optional<ResolvedAction> elementAction(const runtime::lua::Value &value, std::uint32_t index) {
+    const auto action = withActions([&](const auto &reader) {
+      return reader.read(value);
+    });
+    lua_pop(machine_.state(), 1);
+    if (!action) {
+      return std::nullopt;
+    }
+
+    ResolvedAction resolved;
+    resolved.action = *action;
+    if (action->kind == BindingActionKind::extended) {
+      resolved.description = withDefinitions([&](const auto &definitions) {
+        return ActionDescriptionReader::read(value, definitions);
+      });
+      luaL_unref(machine_.state(), LUA_REGISTRYINDEX, action->reference);
+      constexpr int first_element_reference = -16;
+      resolved.action.reference = first_element_reference - static_cast<int>(index);
+    } else if (action->kind == BindingActionKind::command_tab) {
+      if (const auto command = commandTab(*action)) {
+        resolved.command.emplace(*command);
+      }
+    } else if (action->kind == BindingActionKind::callback || action->kind == BindingActionKind::expression) {
+      value.fail("must be an action; a function is called directly");
+    }
+
+    return resolved;
   }
 
   [[nodiscard]] std::optional<ExtendedActionDescription> extendedAction(BindingAction action) const {
@@ -1278,8 +1959,8 @@ private:
   }
 
   void invokeFunction(int reference, BindingContext context) {
-    constexpr std::uint64_t callback_instructions = 100'000;
-    constexpr std::chrono::milliseconds callback_deadline{100};
+    constexpr std::uint64_t callback_instructions = lua_call_instructions;
+    constexpr auto callback_deadline = lua_call_deadline;
     for (const auto reference : std::span{transient_references_}.first(transient_count_)) {
       luaL_unref(machine_.state(), LUA_REGISTRYINDEX, reference);
     }
@@ -1342,6 +2023,7 @@ private:
     }
   }
 
+  Memory &memory_;
   runtime::lua::Vm<Memory> machine_;
   Owned<runtime::config::RuntimeValues<Memory>, Memory> runtime_;
   Owned<components::Configuration, Memory> components_;
@@ -1357,6 +2039,7 @@ private:
   int root_reference_ = LUA_NOREF;
   std::array<int, BindingEffects::maximum_effects> transient_references_{};
   std::size_t transient_count_ = 0;
+  Vector<ElementHandlers, Memory> element_handlers_{AllocatorRef<ElementHandlers, Memory>{memory_}};
 };
 
 }

@@ -355,6 +355,115 @@ void pickRendering(Memory &memory) {
   require(items.size() == 2, "a failed pick callback must leave the VM usable");
 }
 
+template <typename Memory>
+void elementRendering(Memory &memory) {
+  constexpr auto configuration = R"(
+    local t=require('telar');local ui=t.ui
+    local clicks=0
+    return {api_version=2, client={
+      panels={details=t.panel({render=function() return ui.text('Details') end})},
+      components={
+        tab=function(ctx, tab)
+          if tab.title == 'loop' then while true do end end
+          if tab.title == 'unknown' then return ui.row({wobble=1}) end
+          if tab.title == 'builtin' then return ui.builtin('nothing') end
+          local cards={height=22}
+          for index, pane in ipairs(tab.panes) do cards[#cards+1]=ui.tile({id=pane.program, program=pane.program, x=(index-1)*7, rotation=-8, z=-2, transition={duration=180, easing='linear'}}) end
+          return ui.row({
+            width=180, padding={2, 10}, gap=6, align='center', background='#ff000080',
+            ui.stack(cards),
+            'plain ' .. clicks,
+            ui.label({text=tab.title, bold=true, grow=1, on_click=t.action.open_panel('details')}),
+            ui.icon({name='close', on_click=function() clicks=clicks+1; return t.action.toggle_sidebar() end}),
+            ui.canvas({width=16, height=16, ops={{'circle', 8, 8, 6}, {'stroke', 'accent', 2}, {'path', 'M0 0 L4 4 Z'}, {'fill', '#ffffff'}}}),
+            ui.builtin('tab_cards'),
+          })
+        end,
+      },
+    }}
+  )";
+  ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
+  require(generation.components().definitions().slot(components::Slot::tab) != LUA_NOREF && generation.components().definitions().slot(components::Slot::pane_header) == LUA_NOREF, "component slots must keep only the functions a configuration names");
+  const auto invocation = context();
+  constexpr std::uint64_t instance = 7;
+  const auto rendered = generation.renderElements(components::Slot::tab, instance, invocation, R"({"title":"Tab λ","panes":[{"program":"nvim"},{"program":"git"}]})");
+  const auto &elements = rendered->elements;
+  using Kind = components::ElementKind;
+  require(elements.size() == 9, "an element tree must keep every element in document order");
+  require(elements[0].kind == Kind::row && elements[0].width == 180 && elements[0].padding == std::array<float, 4>{10, 2, 10, 2} && elements[0].background.alpha == 0x80, "boxes must read sizes, CSS-ordered padding and colors with alpha");
+  require(elements[1].kind == Kind::stack && elements[2].kind == Kind::tile && elements[2].parent == 1 && rendered->view(elements[2].key) == "nvim" && elements[2].z == -2 && elements[2].transition_ms == 180 && elements[2].easing == 1, "stacks must hold keyed tiles with their poses and transitions");
+  require(elements[4].kind == Kind::label && rendered->view(elements[4].text) == "plain 0", "a string inside a container must become a label");
+  require(rendered->view(elements[5].text) == "Tab λ" && elements[5].bold && elements[5].grow == 1, "labels must keep the item text and their style");
+  require(elements[5].action != components::Element::none, "action tables must become element actions");
+  const auto *action = rendered->actions.find(rendered->bindings[elements[5].action]);
+  require(action != nullptr && action->description && std::holds_alternative<DefinitionActionDescription>(*action->description), "element actions must be resolved when the render finishes");
+  require(elements[6].named && elements[6].callback == 0 && rendered->callbacks == 1, "on_click functions must be kept as handlers of their instance");
+  require(elements[7].kind == Kind::canvas && elements[7].steps_count == 4 && rendered->steps[elements[7].steps_offset + 1].count == 1, "canvas operations must keep their values and optional widths");
+  require(elements[8].kind == Kind::builtin && rendered->view(elements[8].text) == "tab_cards", "built-in pieces must name a known piece");
+
+  const auto effects = generation.invokeElement(instance, 0, invocation, R"({"title":"Tab λ","panes":[]})");
+  require(effects->effects.length == 1 && effects->effects.actions[0].kind == BindingActionKind::toggle_sidebar, "a click function must return its actions");
+  const auto again = generation.renderElements(components::Slot::tab, instance, invocation, R"({"title":"Tab λ","panes":[]})");
+  require(again->view(again->elements[2].text) == "plain 1", "a click function's state must reach the next render");
+
+  for (const auto *const title : {"loop", "unknown", "builtin"}) {
+    bool rejected = false;
+    try {
+      static_cast<void>(generation.renderElements(components::Slot::tab, instance, invocation, std::string{R"({"title":")"} + title + R"(","panes":[]})"));
+    } catch (const std::exception &) {
+      rejected = true;
+    }
+
+    require(rejected, "runaway, unknown and invalid elements must fail the render");
+  }
+
+  const auto effects_after = generation.invokeElement(instance, 0, invocation, "{}");
+  require(effects_after->effects.length == 1, "a failed render must keep the handlers of the last valid one");
+  generation.forgetElements(instance);
+  bool forgotten = false;
+  try {
+    static_cast<void>(generation.invokeElement(instance, 0, invocation, "{}"));
+  } catch (const std::invalid_argument &) {
+    forgotten = true;
+  }
+
+  require(forgotten, "a forgotten instance must release its handlers");
+}
+
+// Every documented mod must load and render each slot it names.
+template <typename Memory>
+void exampleMods(Memory &memory) {
+  std::array<char, PATH_MAX> directory{};
+  require(::realpath(TELAR_GUI_EXAMPLES_DIR, directory.data()) != nullptr, "the documented examples must exist");
+  struct Sample {
+    components::Slot slot;
+    std::string_view item;
+  };
+  constexpr std::array samples{
+      Sample{components::Slot::tab, R"({"index":1,"key":"4","title":"nvim","label":"nvim","path":"~/src","application":"nvim","selected":true,"attention":true,"panes":[{"key":"1","program":"nvim","focused":false,"attention":true},{"key":"2","program":"git","focused":true,"attention":false}]})"},
+      Sample{components::Slot::pane_header, R"({"id":"2","index":1,"program":"claude","context":"~/src","focused":true,"fullscreen":false,"images_paused":false,"needs_attention":false,"progress":""})"},
+      Sample{components::Slot::agent_card, R"({"key":"a","title":"Fix","project":"telar","detail":"","provider":"Claude","status":"working","selected":false,"compact":false,"depth":0,"plan":{"done":1,"total":3,"step":"Test"}})"},
+      Sample{components::Slot::top_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
+      Sample{components::Slot::bottom_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
+  };
+  std::size_t rendered = 0;
+  for (const auto *const name : {"stack-tabs", "default-tab", "default-pane-header", "default-card", "default-top-bar", "default-bottom-bar"}) {
+    const auto source = std::string{"return {api_version=2,client={components=require('mods."} + name + "')}}";
+    ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = source, .directory = directory.data(), .profile = {}}};
+    for (const auto &sample : samples) {
+      if (generation.components().definitions().slot(sample.slot) == LUA_NOREF) {
+        continue;
+      }
+
+      const auto elements = generation.renderElements(sample.slot, 1, context(), sample.item);
+      require(!elements->elements.empty(), "an example mod must draw something for each slot it names");
+      ++rendered;
+    }
+  }
+
+  require(rendered == 6, "every example mod must name a slot");
+}
+
 }
 
 int main() {
@@ -367,6 +476,8 @@ int main() {
     footerValidation(memory);
     renderLifetime(memory);
     pickRendering(memory);
+    elementRendering(memory);
+    exampleMods(memory);
     require(memory.liveBytes() == 0, "component configuration teardown must release every injected allocation");
     std::cout << "Component configuration profiles, context, actions and render lifetime passed\n";
   } catch (const std::exception &error) {

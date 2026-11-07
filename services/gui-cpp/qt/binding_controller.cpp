@@ -143,11 +143,11 @@ bool supported(BindingActionKind kind) noexcept {
   return nativeAction(kind).has_value() || navigationDirection(kind).has_value() || kind == BindingActionKind::select_tab || kind == BindingActionKind::select_workspace || kind == BindingActionKind::select_tab_offset || kind == BindingActionKind::scroll_pane_up || kind == BindingActionKind::scroll_pane_down || kind == BindingActionKind::resize_sidebar_left || kind == BindingActionKind::resize_sidebar_right || kind == BindingActionKind::command_tab || kind == BindingActionKind::close_panel || kind == BindingActionKind::refresh_panel;
 }
 
-bool supported(const ConfigurationSource &configuration, BindingAction action) {
+bool supported(const ConfigurationSource &configuration, BindingAction action, const ConfigurationSource::Actions *resolved) {
   if (action.kind == BindingActionKind::extended) {
-    const auto definition = configuration.definitionAction(action);
+    const auto definition = configuration.definitionAction(action, resolved);
 
-    return configuration.notificationAction(action).has_value() || configuration.pluginAction(action).has_value() || definition.has_value();
+    return configuration.notificationAction(action, resolved).has_value() || configuration.pluginAction(action, resolved).has_value() || definition.has_value();
   }
 
   return supported(action.kind);
@@ -254,34 +254,31 @@ void Application::interruptBindings() {
   key_bindings_.interrupt();
 }
 
-bool Application::runBinding(BindingAction action, std::optional<NamedActionDescription> named) {
+bool Application::runBinding(BindingAction action, const ConfigurationSource::Actions *resolved) {
   try {
-    if (named) {
-      const auto *components = configuration_source_.components();
-      if (action.kind != BindingActionKind::extended || action.generation != configuration_source_.configurationGeneration() || components == nullptr || !components->contains(action)) {
-        throw std::invalid_argument{"Validated component action expired"};
-      }
+    const bool configured = action.kind == BindingActionKind::extended || action.kind == BindingActionKind::command_tab;
+    if (resolved != nullptr && ((configured && action.generation != configuration_source_.configurationGeneration()) || !resolved->contains(action) || !componentActionsLive(*resolved))) {
+      throw std::invalid_argument{"Validated component action expired"};
     }
 
     if (action.kind == BindingActionKind::expression) {
-      applyExpression(configuration_source_.expression(action, bindingContext()));
+      const auto hold = key_bindings_.hold();
+      configuration_source_.expression(action, bindingContext(), [this, hold](LuaOutcome<InputExpression> outcome) {
+        luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
+          applyExpression(*outcome.value);
+        });
+      });
     } else if (action.kind == BindingActionKind::callback) {
-      const auto effects = configuration_source_.invoke(action, bindingContext());
-      const auto actions = std::span{effects.actions}.first(effects.length);
-      if (std::ranges::any_of(actions, [&](const auto &effect) {
-            return !supported(configuration_source_, effect);
-          })) {
-        throw std::runtime_error{"Callback returned an action not yet available in the C++ GUI"};
-      }
-
-      for (const auto effect : actions) {
-        executeBinding(effect);
-      }
+      const auto hold = key_bindings_.hold();
+      configuration_source_.invoke(action, bindingContext(), [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
+        luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
+          applyEffects(**outcome.value);
+        });
+      });
     } else {
-      executeBinding(action, named);
+      executeBinding(action, resolved);
+      refresh();
     }
-
-    refresh();
 
     return true;
   } catch (const std::exception &error) {
@@ -291,7 +288,38 @@ bool Application::runBinding(BindingAction action, std::optional<NamedActionDesc
   }
 }
 
-void Application::executeBinding(BindingAction action, std::optional<NamedActionDescription> named) {
+void Application::applyEffects(const ResolvedEffects<ApplicationAllocator> &effects) {
+  const auto actions = std::span{effects.effects.actions}.first(effects.effects.length);
+  if (std::ranges::any_of(actions, [&](const auto &effect) {
+        return !supported(configuration_source_, effect, &effects.actions);
+      })) {
+    throw std::runtime_error{"Callback returned an action not yet available in the C++ GUI"};
+  }
+
+  for (const auto effect : actions) {
+    executeBinding(effect, &effects.actions);
+  }
+}
+
+// Releases keys typed while the Lua thread ran the binding, after applying its result.
+void Application::luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString &error, const std::function<void()> &apply) {
+  try {
+    if (!stale) {
+      if (!error.isEmpty()) {
+        throw std::runtime_error{error.toStdString()};
+      }
+
+      apply();
+      refresh();
+    }
+  } catch (const std::exception &failure) {
+    fail(failure);
+  }
+
+  key_bindings_.release(hold);
+}
+
+void Application::executeBinding(BindingAction action, const ConfigurationSource::Actions *resolved) {
   pending_activity_.reset();
   if (action.kind != BindingActionKind::copy_mode) {
     leaveKeyboardCopyMode();
@@ -331,7 +359,7 @@ void Application::executeBinding(BindingAction action, std::optional<NamedAction
     setSidebarWidth(sidebarWidth() + change);
   } break;
   case BindingActionKind::command_tab:
-    executeCommandTab(action);
+    executeCommandTab(action, resolved);
     break;
   case BindingActionKind::close_panel:
     closeComponentPanel();
@@ -340,10 +368,10 @@ void Application::executeBinding(BindingAction action, std::optional<NamedAction
     refreshComponentPanel();
     break;
   case BindingActionKind::extended:
-    if (const auto resolved = named ? named : configuration_source_.namedAction(action)) {
-      executeNamedAction(*resolved);
+    if (const auto named = configuration_source_.namedAction(action, resolved)) {
+      executeNamedAction(*named);
     } else {
-      executeNotificationBinding(action);
+      executeNotificationBinding(action, resolved);
     }
     break;
   default:
@@ -363,8 +391,8 @@ void Application::executeNamedAction(const NamedActionDescription &named) {
   }
 }
 
-void Application::executeNotificationBinding(BindingAction action) {
-  const auto notification = configuration_source_.notificationAction(action);
+void Application::executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions *resolved) {
+  const auto notification = configuration_source_.notificationAction(action, resolved);
   if (!notification) {
     throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
   }
@@ -372,8 +400,8 @@ void Application::executeNotificationBinding(BindingAction action) {
   publishNotification({.level = notification->level, .target = notification->target, .title = notification->title.view(), .message = notification->message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification->duration_ms) * NotificationInput::nanoseconds_per_millisecond});
 }
 
-void Application::executeCommandTab(BindingAction action) {
-  const auto command = configuration_source_.commandTab(action);
+void Application::executeCommandTab(BindingAction action, const ConfigurationSource::Actions *resolved) {
+  const auto command = configuration_source_.commandTab(action, resolved);
   if (!command) {
     emit notification(QStringLiteral("That command tab expired"));
   } else if (session().createCommandTab(*command) == TabCreationOutcome::busy) {

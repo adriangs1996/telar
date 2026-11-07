@@ -113,18 +113,34 @@ struct Context {
 
 class Invocation {
 public:
-  inline explicit Invocation(int reference, const Context &context, const char *field = "render") noexcept
+  // `field` names the function inside the referenced table; without it the reference is the
+  // function. `item`, a JSON document, becomes the call's second argument.
+  inline explicit Invocation(int reference, const Context &context, const char *field = "render", std::optional<std::string_view> item = std::nullopt) noexcept
       : reference_(reference),
         context_(context),
-        field_(field) {}
+        field_(field),
+        item_(item) {}
 
   inline static int invoke(lua_State *state) {
     const auto &invocation = *static_cast<const Invocation *>(lua_touserdata(state, 1));
     lua_rawgeti(state, LUA_REGISTRYINDEX, invocation.reference_);
-    lua_getfield(state, -1, invocation.field_);
-    lua_remove(state, -2);
+    if (invocation.field_ != nullptr) {
+      lua_getfield(state, -1, invocation.field_);
+      lua_remove(state, -2);
+    }
+
     invocation.pushContext(state);
-    lua_call(state, 1, 1);
+    if (invocation.item_) {
+      lua_getglobal(state, "telar");
+      lua_getfield(state, -1, "json");
+      lua_getfield(state, -1, "decode");
+      lua_pushlstring(state, invocation.item_->data(), invocation.item_->size());
+      lua_call(state, 1, 1);
+      lua_replace(state, -3);
+      lua_pop(state, 1);
+    }
+
+    lua_call(state, invocation.item_ ? 2 : 1, 1);
 
     return 1;
   }
@@ -207,6 +223,7 @@ private:
   int reference_;
   const Context &context_;
   const char *field_;
+  std::optional<std::string_view> item_;
 };
 
 }
@@ -686,6 +703,242 @@ public:
 private:
   std::array<Match, PickItems::maximum_items> matches_{};
   std::size_t count_ = 0;
+};
+
+}
+}
+
+// Interface: components/rendered_content.cppm
+export {
+namespace telar::gui {
+
+// A command tab that outlives the Lua thread's registry row it was read from.
+class CommandTabCopy {
+public:
+  using View = runtime::config::CommandTabView;
+
+  inline explicit CommandTabCopy(const View &view) {
+    std::size_t used = 0;
+    const auto store = [&](std::string_view text) {
+      if (text.size() > bytes_.size() - used) {
+        throw std::length_error{"Command tab exceeds its byte capacity"};
+      }
+
+      std::ranges::copy(text, bytes_.begin() + static_cast<std::ptrdiff_t>(used));
+      used += text.size();
+
+      return static_cast<std::uint16_t>(text.size());
+    };
+    count_ = view.count;
+    for (std::size_t index = 0; index < view.count; ++index) {
+      lengths_[index] = store(view.arguments[index]);
+    }
+
+    label_ = store(view.configured_label);
+  }
+
+  [[nodiscard]] inline View view() const noexcept {
+    View result;
+    result.count = count_;
+    std::size_t offset = 0;
+    for (std::size_t index = 0; index < count_; ++index) {
+      result.arguments[index] = {bytes_.data() + offset, lengths_[index]};
+      offset += lengths_[index];
+    }
+
+    result.configured_label = {bytes_.data() + offset, label_};
+
+    return result;
+  }
+
+private:
+  std::array<char, View::maximum_argument_bytes + View::maximum_label_bytes> bytes_{};
+  std::array<std::uint16_t, View::maximum_arguments> lengths_{};
+  std::size_t count_ = 0;
+  std::uint16_t label_ = 0;
+};
+
+// What an action produced by Lua means, read on the Lua thread so the window never reads the VM.
+struct ResolvedAction {
+  BindingAction action;
+  std::optional<ExtendedActionDescription> description = std::nullopt;
+  std::optional<CommandTabCopy> command = std::nullopt;
+};
+
+template <Allocator Memory>
+class ResolvedActions {
+public:
+  inline explicit ResolvedActions(Memory &memory)
+      : entries_(AllocatorRef<ResolvedAction, Memory>{memory}) {}
+
+  inline void add(ResolvedAction entry) {
+    if (find(entry.action) == nullptr) {
+      entries_.push_back(std::move(entry));
+    }
+  }
+
+  [[nodiscard]] inline const ResolvedAction *find(BindingAction action) const noexcept {
+    const auto found = std::ranges::find(entries_, action, &ResolvedAction::action);
+
+    return found == entries_.end() ? nullptr : &*found;
+  }
+
+  [[nodiscard]] inline bool contains(BindingAction action) const noexcept {
+    return find(action) != nullptr;
+  }
+
+private:
+  Vector<ResolvedAction, Memory> entries_;
+};
+
+template <components::Capacity Bounds, Allocator Memory>
+struct RenderedContent {
+  inline explicit RenderedContent(Memory &memory)
+      : actions(memory) {}
+
+  components::Content<Bounds> content;
+  ResolvedActions<Memory> actions;
+};
+
+template <Allocator Memory>
+struct ResolvedEffects {
+  inline explicit ResolvedEffects(Memory &memory)
+      : actions(memory) {}
+
+  BindingEffects effects;
+  ResolvedActions<Memory> actions;
+};
+
+}
+}
+
+// Interface: components/elements.cppm
+export {
+namespace telar::gui::components {
+
+// What a mod draws: a tree of layout boxes, text, marks, native pieces and canvases.
+enum class ElementKind : std::uint8_t {
+  row,
+  column,
+  stack,
+  spacer,
+  label,
+  icon,
+  mark,
+  badge,
+  tile,
+  canvas,
+  builtin,
+  elapsed,
+  clock,
+};
+
+inline constexpr std::array element_kind_names{"row", "column", "stack", "spacer", "label", "icon", "mark", "badge", "tile", "canvas", "builtin", "elapsed", "clock"};
+
+struct ElementText {
+  std::uint32_t offset = 0;
+  std::uint32_t length = 0;
+};
+
+struct ElementColor {
+  std::optional<ColorName::Value> value = std::nullopt;
+  std::uint8_t alpha = std::numeric_limits<std::uint8_t>::max();
+};
+
+struct Element {
+  static constexpr std::uint32_t none = std::numeric_limits<std::uint32_t>::max();
+  static constexpr std::size_t maximum_elements = 4096;
+  static constexpr std::size_t maximum_text_bytes = std::size_t{256} * 1024;
+  static constexpr std::size_t maximum_steps = 4096;
+  static constexpr std::size_t maximum_actions = 1024;
+  static constexpr unsigned maximum_depth = 32;
+
+  ElementKind kind = ElementKind::row;
+  std::uint32_t parent = none;
+  ElementText text;
+  ElementText key;
+  ElementText tooltip;
+  ElementText url;
+  // Left, top, right and bottom, in logical pixels like every length below.
+  std::array<float, 4> padding{};
+  float gap = 0;
+  float width = -1;
+  float height = -1;
+  float min_width = 0;
+  float max_width = -1;
+  float min_height = 0;
+  float max_height = -1;
+  float grow = 0;
+  float x = 0;
+  float y = 0;
+  float rotation = 0;
+  float scale = 1;
+  float opacity = 1;
+  float radius = 0;
+  float border_width = 0;
+  float size = 0;
+  std::uint16_t transition_ms = 0;
+  std::int16_t z = 0;
+  ElementColor background;
+  ElementColor border;
+  ElementColor color;
+  ElementColor hover;
+  Tone tone = Tone::neutral;
+  std::uint8_t align = 0;
+  std::uint8_t justify = 0;
+  std::optional<std::uint8_t> align_self = std::nullopt;
+  std::uint8_t easing = 0;
+  std::uint8_t size_role = 1;
+  std::uint8_t max_lines = 1;
+  bool bold = false;
+  bool italic = false;
+  bool clip = false;
+  bool shadow = false;
+  // An icon given by name rather than by glyph.
+  bool named = false;
+  std::uint32_t action = none;
+  std::uint32_t callback = none;
+  std::uint32_t steps_offset = 0;
+  std::uint32_t steps_count = 0;
+  std::int64_t since = 0;
+};
+
+struct CanvasStep {
+  std::uint8_t op = 0;
+  std::uint8_t count = 0;
+  std::array<float, 6> values{};
+  ElementColor color;
+  ElementText text;
+};
+
+}
+}
+
+// Interface: components/rendered_elements.cppm
+export {
+namespace telar::gui {
+
+template <Allocator Memory>
+struct RenderedElements {
+  inline explicit RenderedElements(Memory &memory)
+      : elements(AllocatorRef<components::Element, Memory>{memory}),
+        text(AllocatorRef<char, Memory>{memory}),
+        steps(AllocatorRef<components::CanvasStep, Memory>{memory}),
+        bindings(AllocatorRef<BindingAction, Memory>{memory}),
+        actions(memory) {}
+
+  [[nodiscard]] inline std::string_view view(components::ElementText range) const noexcept {
+    return range.length == 0 || range.offset > text.size() || range.length > text.size() - range.offset ? std::string_view{} : std::string_view{text.data() + range.offset, range.length};
+  }
+
+  Vector<components::Element, Memory> elements;
+  String<Memory> text;
+  Vector<components::CanvasStep, Memory> steps;
+  // Element `action` indices name these; `actions` holds what each one means.
+  Vector<BindingAction, Memory> bindings;
+  ResolvedActions<Memory> actions;
+  // Lua handlers this render registered for `on_click` functions, by element `callback`.
+  std::uint32_t callbacks = 0;
 };
 
 }

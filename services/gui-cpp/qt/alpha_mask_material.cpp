@@ -43,7 +43,8 @@ public:
   MaskShader(AlphaMaskSampling sampling, AlphaMaskBlend blend) {
     setShaderFileName(VertexStage, QStringLiteral(":/telar/shaders/alpha_mask.vert.qsb"));
     const auto prefix = blend == AlphaMaskBlend::straight ? QStringLiteral(":/telar/shaders/straight/") : QStringLiteral(":/telar/shaders/");
-    setShaderFileName(FragmentStage, prefix + (sampling == AlphaMaskSampling::stable_nearest ? QStringLiteral("nearest_alpha_mask.frag.qsb") : QStringLiteral("alpha_mask.frag.qsb")));
+    const auto fragment = sampling == AlphaMaskSampling::stable_nearest ? QStringLiteral("nearest_alpha_mask.frag.qsb") : sampling == AlphaMaskSampling::filtered ? QStringLiteral("filtered_alpha_mask.frag.qsb") : QStringLiteral("alpha_mask.frag.qsb");
+    setShaderFileName(FragmentStage, prefix + fragment);
     if (blend == AlphaMaskBlend::straight) {
       setFlag(UpdatesGraphicsPipelineState);
     }
@@ -125,7 +126,7 @@ AlphaMaskMaterial::AlphaMaskMaterial(QSGTexture &texture, Color foreground, Alph
 }
 
 QSGMaterialType *AlphaMaskMaterial::type() const {
-  constexpr std::size_t sampling_modes = 2;
+  constexpr std::size_t sampling_modes = 3;
   constexpr std::size_t blend_modes = 2;
   static std::array<QSGMaterialType, sampling_modes * blend_modes> material_types;
 

@@ -148,8 +148,10 @@ QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   }
 
   const auto scale = window()->effectiveDevicePixelRatio();
-  const auto physical_ratio = static_cast<float>(ratio_ * scale);
-  const auto wanted = std::round(ApplicationMark::atlas_cell_side * physical_ratio);
+  // Rasterized at twice the size it is drawn, with mipmaps, so a reduced, rotated or
+  // scaled mark stays smooth.
+  constexpr qreal supersample = 2;
+  const auto wanted = static_cast<float>(std::round(std::max(width(), height()) * scale * supersample));
   const auto side = static_cast<int>(std::clamp(wanted, static_cast<float>(ApplicationMark::minimum_cell), static_cast<float>(ApplicationMark::maximum_cell)));
   if (!node) {
     node = std::make_unique<ProviderNode>();
@@ -161,11 +163,12 @@ QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
       return nullptr;
     }
 
-    std::unique_ptr<QSGTexture> texture{window()->createTextureFromImage(pixels)};
+    std::unique_ptr<QSGTexture> texture{window()->createTextureFromImage(pixels, QQuickWindow::TextureHasMipmaps)};
     if (!texture) {
       return nullptr;
     }
 
+    texture->setMipmapFiltering(QSGTexture::Linear);
     node->image.setTexture(texture.get());
     node->texture = std::move(texture);
     node->image.setFiltering(QSGTexture::Linear);

@@ -18,6 +18,7 @@ static_assert(true);
 #include "history_loading_layout.hpp"
 #include "history_selection_layout.hpp"
 #include "modal_reveal_layout.hpp"
+#include "element_layout.hpp"
 #include "pane_motion_layout.hpp"
 #include "tab_strip_layout.hpp"
 #include "native_agent_status.hpp"

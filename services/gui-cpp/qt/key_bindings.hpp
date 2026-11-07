@@ -20,6 +20,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include <QElapsedTimer>
 #include <QKeyEvent>
+#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QQuickItem>
@@ -53,6 +54,11 @@ public:
   [[nodiscard]] std::uint64_t nowNanoseconds() const noexcept;
   [[nodiscard]] bool prefixPending() const noexcept;
   [[nodiscard]] ModeHints modeHints() const noexcept;
+  // Keys typed while a Lua binding runs on the Lua thread wait for its result, so a key
+  // never reaches a pane the binding was about to leave.
+  using Hold = std::uint64_t;
+  [[nodiscard]] Hold hold();
+  void release(Hold hold);
 
   bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -92,6 +98,7 @@ private:
   void deliver(const RoutedKey &event);
   void schedule();
   void expire();
+  void drain();
 
   Application &application_;
   Router router_;
@@ -101,6 +108,10 @@ private:
   std::array<Recipient, BindingLimits::physical_keys> recipients_{};
   bool delivering_ = false;
   bool prefix_shown_ = false;
+  QList<RoutedKey> held_;
+  QTimer hold_timeout_;
+  std::size_t holds_ = 0;
+  Hold hold_epoch_ = 0;
 };
 
 }

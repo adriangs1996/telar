@@ -709,6 +709,7 @@ if(BUILD_TESTING)
   add_test(NAME gui-config COMMAND gui-config-test)
   add_executable(gui-component-config-test tests/component_configuration_test.cpp)
   target_link_libraries(gui-component-config-test PRIVATE gui-config)
+  target_compile_definitions(gui-component-config-test PRIVATE TELAR_GUI_EXAMPLES_DIR="${TELAR_ROOT}/docs/examples")
   add_test(NAME gui-component-config COMMAND gui-component-config-test)
   set_tests_properties(gui-component-config PROPERTIES TIMEOUT 30)
   add_dependencies(gui-lint gui-component-config-test)
@@ -984,7 +985,7 @@ if(TELAR_GUI_NATIVE)
   endif()
 
   target_sources(gui-quick PRIVATE qt/attachment_controller.cpp qt/plugin_controller.cpp)
-  target_sources(gui-quick PRIVATE qt/component_controller.cpp qt/pick_controller.cpp)
+  target_sources(gui-quick PRIVATE qt/component_controller.cpp qt/pick_controller.cpp qt/element_controller.cpp qt/element_slots.cpp qt/element_slots.hpp)
   target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
   target_sources(gui-quick PRIVATE qt/history_controller.cpp qt/history_pointer.cpp qt/tab_drag_controller.cpp qt/binding_controller.cpp qt/key_bindings.cpp qt/copy_controller.cpp qt/link_controller.cpp)
   target_sources(gui-quick PRIVATE qt/palette_controller.cpp qt/path_picker_controller.cpp qt/path_picker_projection.cpp qt/suggestion_controller.cpp qt/workspace_form_controller.cpp)
@@ -1038,7 +1039,7 @@ if(TELAR_GUI_NATIVE)
     PREFIX "/telar/shaders"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/qt/shaders"
     BATCHABLE
-    FILES qt/shaders/alpha_mask.vert qt/shaders/alpha_mask.frag qt/shaders/nearest_alpha_mask.frag qt/shaders/tab_caption.frag)
+    FILES qt/shaders/alpha_mask.vert qt/shaders/alpha_mask.frag qt/shaders/nearest_alpha_mask.frag qt/shaders/filtered_alpha_mask.frag qt/shaders/tab_caption.frag)
 
   qt_add_shaders(gui-quick gui-shape-shaders
     PREFIX "/telar/shaders"
@@ -1052,8 +1053,8 @@ if(TELAR_GUI_NATIVE)
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/qt/shaders"
     BATCHABLE
     DEFINES TELAR_STRAIGHT_ALPHA=1
-    OUTPUTS straight/alpha_mask.frag.qsb straight/nearest_alpha_mask.frag.qsb
-    FILES qt/shaders/alpha_mask.frag qt/shaders/nearest_alpha_mask.frag)
+    OUTPUTS straight/alpha_mask.frag.qsb straight/nearest_alpha_mask.frag.qsb straight/filtered_alpha_mask.frag.qsb
+    FILES qt/shaders/alpha_mask.frag qt/shaders/nearest_alpha_mask.frag qt/shaders/filtered_alpha_mask.frag)
 
   set_source_files_properties(qt/ComponentFit.js PROPERTIES QT_QML_SKIP_QMLDIR_ENTRY TRUE)
 
@@ -1061,8 +1062,8 @@ if(TELAR_GUI_NATIVE)
     URI Telar.Gui
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
-    SOURCES qt/attachment_image.cpp qt/attachment_image.hpp qt/attachment_shelf.cpp qt/attachment_shelf.hpp qt/native_agent_status.cpp qt/native_agent_status.hpp qt/native_rounded_rectangle.cpp qt/native_rounded_rectangle.hpp qt/application.cpp qt/application.hpp qt/runtime_connection.cpp qt/runtime_connection.hpp qt/terminal_item.cpp qt/terminal_item.hpp qt/configuration_source.cpp qt/configuration_source.hpp qt/graphics_scene.cpp qt/graphics_scene.hpp qt/tab_strip_layout.cpp qt/tab_strip_layout.hpp qt/provider_mark.cpp qt/provider_mark.hpp qt/native_chrome_text.cpp qt/native_chrome_text.hpp qt/native_chrome_icon.cpp qt/native_chrome_icon.hpp qt/native_cell_text.cpp qt/native_cell_text.hpp qt/native_mode_layout.cpp qt/native_mode_layout.hpp
-    QML_FILES qt/ComponentFit.js qt/ComponentPick.qml qt/ComponentBranch.qml qt/ComponentNode.qml qt/ComponentTree.qml qt/ComponentOverflow.qml qt/ComponentSlot.qml qt/ComponentPanel.qml qt/AttachmentShelf.qml qt/AttachmentModal.qml qt/PeekPanel.qml qt/LinkStatus.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/PromptPanel.qml qt/PromptField.qml qt/PromptActions.qml qt/WorkspaceFormPanel.qml qt/FormTextField.qml qt/KeyboardAction.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneActions.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/ApplicationTile.qml qt/ElevationShadow.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/ProjectSwitcher.qml qt/WorkspaceRail.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml)
+    SOURCES qt/attachment_image.cpp qt/attachment_image.hpp qt/attachment_shelf.cpp qt/attachment_shelf.hpp qt/native_agent_status.cpp qt/native_agent_status.hpp qt/native_rounded_rectangle.cpp qt/native_rounded_rectangle.hpp qt/application.cpp qt/application.hpp qt/runtime_connection.cpp qt/runtime_connection.hpp qt/terminal_item.cpp qt/terminal_item.hpp qt/configuration_source.cpp qt/configuration_source.hpp qt/lua_host.cpp qt/lua_host.hpp qt/element_layout.cpp qt/element_layout.hpp qt/element_canvas.cpp qt/element_canvas.hpp qt/graphics_scene.cpp qt/graphics_scene.hpp qt/tab_strip_layout.cpp qt/tab_strip_layout.hpp qt/provider_mark.cpp qt/provider_mark.hpp qt/native_chrome_text.cpp qt/native_chrome_text.hpp qt/native_chrome_icon.cpp qt/native_chrome_icon.hpp qt/native_cell_text.cpp qt/native_cell_text.hpp qt/native_mode_layout.cpp qt/native_mode_layout.hpp
+    QML_FILES qt/ComponentFit.js qt/Elements.js qt/ElementNode.qml qt/ElementHost.qml qt/ComponentPick.qml qt/ComponentBranch.qml qt/ComponentNode.qml qt/ComponentTree.qml qt/ComponentOverflow.qml qt/ComponentSlot.qml qt/ComponentPanel.qml qt/AttachmentShelf.qml qt/AttachmentModal.qml qt/PeekPanel.qml qt/LinkStatus.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/PromptPanel.qml qt/PromptField.qml qt/PromptActions.qml qt/WorkspaceFormPanel.qml qt/FormTextField.qml qt/KeyboardAction.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneActions.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/ApplicationTile.qml qt/ElevationShadow.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/ProjectSwitcher.qml qt/WorkspaceRail.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml)
 
   qt_add_executable(telar-gui main.cpp)
   if(APPLE)

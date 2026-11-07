@@ -182,27 +182,32 @@ struct ComponentActions {
   struct Action {
     BindingAction action;
     NamedActionDescription destination;
+    std::shared_ptr<const qt::ComponentSlotState::Panel> rendered;
   };
 
   [[nodiscard]] static std::optional<Action> retain(const qt::Application &application) {
-    const auto *configuration = application.configuration_source_.components();
-    if (configuration == nullptr || configuration->panel().nodes().empty()) {
+    const auto &rendered = application.component_surfaces_.panel.panel;
+    if (!rendered || rendered->content.nodes().empty()) {
       return std::nullopt;
     }
 
-    const auto &content = configuration->panel();
+    const auto &content = rendered->content;
     const auto action = content.action(content.nodes().front());
     if (!action) {
       return std::nullopt;
     }
 
-    const auto destination = application.configuration_source_.namedAction(*action);
+    const auto destination = application.configuration_source_.namedAction(*action, &rendered->actions);
 
-    return destination ? std::optional{Action{.action = *action, .destination = *destination}} : std::nullopt;
+    return destination ? std::optional{Action{.action = *action, .destination = *destination, .rendered = rendered}} : std::nullopt;
   }
 
   static bool run(qt::Application &application, const Action &action) {
-    return application.runBinding(action.action, action.destination);
+    return application.runBinding(action.action, &action.rendered->actions);
+  }
+
+  [[nodiscard]] static bool luaIdle(const qt::Application &application) {
+    return application.configuration_source_.luaIdle();
   }
 
   [[nodiscard]] static bool pluginIdle(const qt::Application &application) {
@@ -1824,6 +1829,12 @@ private:
     QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
   }
 
+  // Lua bindings run on the Lua thread; wait until their results have been applied.
+  void settleLua() {
+    QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::luaIdle(*client_), runtime_wait_ms);
+    QCoreApplication::processEvents();
+  }
+
   Q_SLOT void configuredBindings() {
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -1865,6 +1876,7 @@ private:
     QVERIFY(client_->prefixPending());
     QTest::keyPress(window_, Qt::Key_S);
     QVERIFY(!client_->prefixPending());
+    settleLua();
     QCOMPARE(client_->error(), QString{});
     QVERIFY2(client_->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(client_->dialog()).arg(static_cast<int>(client_->copyModeActive()))));
     QKeyEvent repeated{QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), true};
@@ -1875,6 +1887,7 @@ private:
     QVERIFY(client_->prefixPending());
     QTest::keyClick(window_, Qt::Key_S);
     QVERIFY(!client_->prefixPending());
+    settleLua();
     QCOMPARE(client_->sidebarVisible(), visible);
 
     QTest::keyClick(window_, Qt::Key_A, control);
@@ -1902,6 +1915,7 @@ private:
     QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("GUI_BINDING_PASTE")), runtime_wait_ms);
     client_->input(pane->id, "printf '");
     QTest::keyClick(window_, Qt::Key_K, Qt::AltModifier);
+    settleLua();
     client_->input(pane->id, "\\n'\r");
     QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("\nGUI_BINDING_KEYS ")), runtime_wait_ms);
     QTest::qWait(frame_settle_ms);
@@ -1958,56 +1972,31 @@ private:
       QVERIFY(surface->isVisible());
       QCOMPARE(surface->position(), frame->position());
       QCOMPARE(surface->size(), frame->size());
-      QCOMPARE(surface->property("radius").toReal(), telar::gui::ChromeStyle::surface_radius * client_->chromeRatio());
-      QVERIFY(frame->property("borderAlpha").toReal() < 1);
+      // A pane surface and its frame share one radius, the pane decoration's.
+      QCOMPARE(surface->property("radius").toReal(), frame->property("radius").toReal());
+      QCOMPARE(frame->property("radius").toReal(), telar::gui::PaneDecorationGeometry::frame_radius * client_->chromeRatio());
     }
 
-    const auto headers = test::visualItems(*window_->contentItem(), QStringLiteral("paneHeaderSurface"));
-    const auto markers = test::visualItems(*window_->contentItem(), QStringLiteral("paneFocusMarker"));
-    QCOMPARE(headers.size(), surfaces.size());
-    QCOMPARE(std::ranges::count_if(markers, [](const auto *marker) {
-               return marker->isVisible();
+    // Focus is a full accent frame on one pane; the others keep a faint hairline.
+    QCOMPARE(std::ranges::count_if(frames, [](const auto *frame) {
+               return frame->property("borderAlpha").toReal() > 0.5;
              }),
              1);
-    for (const auto *header : headers) {
-      QVERIFY(header->height() >= ChromeMetrics::logical_pane_header - 2);
-    }
     captureArtifact(QStringLiteral("chrome-split-panes"));
 
-    const auto buttons = test::visualItems(*window_->contentItem(), QStringLiteral("paneActionsButton"));
-    QCOMPARE(buttons.size(), surfaces.size());
-    auto *button = buttons.front();
-    auto *menu = button->findChild<QObject *>(QStringLiteral("paneActionsMenu"));
-    QVERIFY(menu != nullptr);
-    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene(button->boundingRect().center()).toPoint());
-    QTRY_VERIFY_WITH_TIMEOUT(menu->property("visible").toBool(), runtime_wait_ms);
-    auto *menu_content = menu->property("contentItem").value<QQuickItem *>();
-    QVERIFY(menu_content != nullptr);
-    const auto entries = test::visualItems(*menu_content, QStringLiteral("paneActionEntry"));
-    QCOMPARE(entries.size(), 4);
-    captureArtifact(QStringLiteral("chrome-pane-actions"));
-    const auto menu_window_size = window_->size();
-    const auto restore_menu_size = qScopeGuard([this, menu_window_size] { window_->resize(menu_window_size); });
-    window_->resize(1600, menu_window_size.height());
-    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-    if (!menu->property("visible").toBool()) {
-      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene(button->boundingRect().center()).toPoint());
-    }
-    QTRY_VERIFY_WITH_TIMEOUT(menu->property("visible").toBool(), runtime_wait_ms);
-    captureArtifact(QStringLiteral("chrome-pane-actions-wide"));
-    window_->resize(menu_window_size);
-    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-    if (!menu->property("visible").toBool()) {
-      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene(button->boundingRect().center()).toPoint());
-    }
-    QTRY_VERIFY_WITH_TIMEOUT(menu->property("visible").toBool(), runtime_wait_ms);
-    const auto split = std::ranges::find_if(entries, [](const auto *entry) {
-      return entry->property("text").toString() == QLatin1StringView("Split right");
+    // The focused pane offers its four actions as visible buttons.
+    auto actions = test::visualItems(*window_->contentItem(), QStringLiteral("paneAction"));
+    actions.removeIf([](const QQuickItem *action) {
+      return !action->isVisible();
     });
-    QVERIFY(split != entries.end());
+    QCOMPARE(actions.size(), 4);
+    captureArtifact(QStringLiteral("chrome-pane-actions"));
+    const auto split = std::ranges::find_if(actions, [](const auto *action) {
+      return action->property("modelData").toMap().value(QStringLiteral("label")).toString() == QLatin1StringView("Split right");
+    });
+    QVERIFY(split != actions.end());
     QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, (*split)->mapToScene((*split)->boundingRect().center()).toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 4, runtime_wait_ms);
-    QTRY_VERIFY_WITH_TIMEOUT(!menu->property("visible").toBool(), runtime_wait_ms);
     while (client_->panes()->rowCount() > 1) {
       const auto count = client_->panes()->rowCount();
       const auto key = client_->panes()->data(client_->panes()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
@@ -4439,7 +4428,9 @@ return {api_version=2, client={keybindings={
     verify({window_->width() - 2.0, navigation.bottom() - 2}, 0.2);
     verify({sidebar.right() - 2, sidebar.bottom() - 2}, 0.4);
     verify({window_->width() - 2.0, status.bottom() - 2}, 0.6);
-    verify({sidebar.right() + 4, sidebar.bottom() - 2}, 0.8);
+    // The sidebar runs the full height and the bottom bar starts at its right edge,
+    // so the workspace shows just above the bottom bar.
+    verify({sidebar.right() + 4, status.top() - 2}, 0.8);
     const auto backgrounds = test::visualItems(*window_->contentItem(), QStringLiteral("paneTerminalBackground"));
     QVERIFY(!backgrounds.isEmpty());
     for (const auto *background : backgrounds) {
@@ -4602,10 +4593,13 @@ return {api_version=2, client={keybindings={
     title_report.start(runtime_.program(), {QStringLiteral("agent"), QStringLiteral("report-title"), QString::number(source_id), QStringLiteral("Visual state check"), QStringLiteral("--socket"), socket_});
     QVERIFY(title_report.waitForFinished(runtime_wait_ms));
     QCOMPARE(title_report.exitCode(), 0);
+    // The header names the program and, beside it, what the agent reports.
     const auto captions = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneProgram"));
+    const auto contexts = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneContext"));
     QCOMPARE(captions.size(), 1);
-    const auto fixed_caption = QStringLiteral("gui-quick-test · Visual state check");
-    QTRY_COMPARE_WITH_TIMEOUT(captions.front()->property("text").toString(), fixed_caption, runtime_wait_ms);
+    QCOMPARE(contexts.size(), 1);
+    QTRY_COMPARE_WITH_TIMEOUT(captions.front()->property("text").toString(), QStringLiteral("gui-quick-test"), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"), runtime_wait_ms);
     const auto rings = [&] {
       return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("paneAttentionRing"));
     };
@@ -4630,7 +4624,7 @@ return {api_version=2, client={keybindings={
     QCOMPARE(statuses.size(), 1);
     client_->input(source_id, "ready\r");
     QTRY_COMPARE_WITH_TIMEOUT(statuses.front()->property("statusText").toString(), QStringLiteral("ready"), runtime_wait_ms);
-    QCOMPARE(captions.front()->property("text").toString(), fixed_caption);
+    QCOMPARE(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"));
     QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     captureArtifact(QStringLiteral("ready-unfocused"));
@@ -4646,7 +4640,7 @@ return {api_version=2, client={keybindings={
     captureArtifact(QStringLiteral("ready-unfocused-wide"));
     client_->input(source_id, "question\r");
     QTRY_COMPARE_WITH_TIMEOUT(statuses.front()->property("statusText").toString(), QStringLiteral("question"), runtime_wait_ms);
-    QCOMPARE(captions.front()->property("text").toString(), fixed_caption);
+    QCOMPARE(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"));
     QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
     captureArtifact(QStringLiteral("question-unfocused-wide"));
@@ -5329,7 +5323,8 @@ return {api_version=2, client={keybindings={
     QVERIFY(saved.action == mutated.action);
     QVERIFY(std::holds_alternative<PluginActionDescription>(saved.destination));
     QVERIFY(std::holds_alternative<PluginActionDescription>(mutated.destination));
-    QVERIFY(std::get<PluginActionDescription>(saved.destination).action != std::get<PluginActionDescription>(mutated.destination).action);
+    // The Lua thread resolves an action once, when its render finishes; mutating the table later changes nothing.
+    QVERIFY(std::get<PluginActionDescription>(saved.destination).action == std::get<PluginActionDescription>(mutated.destination).action);
     QVERIFY(test::ComponentActions::run(*client_, saved));
     QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
     QCOMPARE(client_->sidebarVisible(), !sidebar);
@@ -5429,7 +5424,7 @@ return {api_version=2, client={keybindings={
     QVERIFY(validated_definition.action == current_definition.action);
     QVERIFY(std::holds_alternative<DefinitionActionDescription>(validated_definition.destination));
     QVERIFY(std::holds_alternative<DefinitionActionDescription>(current_definition.destination));
-    QVERIFY(std::get<DefinitionActionDescription>(validated_definition.destination).index != std::get<DefinitionActionDescription>(current_definition.destination).index);
+    QVERIFY(std::get<DefinitionActionDescription>(validated_definition.destination).index == std::get<DefinitionActionDescription>(current_definition.destination).index);
     QVERIFY(test::ComponentActions::run(*client_, validated_definition));
     QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Validated target")) != nullptr, runtime_wait_ms);
@@ -5773,7 +5768,10 @@ return {api_version=2, client={keybindings={
     const auto ratio = metrics->property("ratio").toReal();
     const auto full_width = metrics->implicitWidth();
     constexpr qreal bar_spacing = 40;
-    const auto narrow_width = qCeil(label->implicitWidth() + (bar_spacing * ratio) + (full_width / 2));
+    // The bottom bar starts right of the full-height sidebar, and each slot sits in a capsule.
+    constexpr qreal capsule_padding = 48;
+    const auto bar_left = client_->windowGeometry().value(QStringLiteral("status")).toRectF().x();
+    const auto narrow_width = qCeil(bar_left + label->implicitWidth() + ((bar_spacing + capsule_padding) * ratio) + (full_width / 2));
     QVERIFY(narrow_width >= window_->minimumWidth());
     window_->resize(narrow_width, original_size.height());
     QTRY_VERIFY_WITH_TIMEOUT(metrics->width() < full_width, runtime_wait_ms);
@@ -7401,7 +7399,8 @@ return {api_version=2, client={keybindings={
     QVERIFY(group != nullptr);
     group->forceActiveFocus(Qt::TabFocusReason);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-    const auto labels = test::visualItems(*target->parentItem(), QStringLiteral("paneProgram"));
+    // The header sits beside the terminal's viewport, inside the pane.
+    const auto labels = test::visualItems(*target->parentItem()->parentItem(), QStringLiteral("paneProgram"));
     QCOMPARE(labels.size(), 1);
     const auto *label = labels.front();
     QVERIFY(label->isVisible() && label->width() > 0);
@@ -7524,8 +7523,10 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Space);
     }
 
+    // The button runs the action it was rendered with: the Lua thread resolved it then, so
+    // mutating the table afterwards cannot redirect a click on what is already on screen.
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
-    QCOMPARE(client_->sidebarVisible(), sidebar);
     QCOMPARE(client_->workspaceListCollapsed(), collapsed);
     QCOMPARE(client_->error(), QString{});
     client_->refreshComponentPanel();
@@ -7536,8 +7537,10 @@ return {api_version=2, client={keybindings={
     QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
-    QCOMPARE(client_->sidebarVisible(), sidebar);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
     QCOMPARE(client_->error(), QString{});
+    client_->execute(Application::Action::toggle_sidebar);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), sidebar, runtime_wait_ms);
   }
 
   void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {
@@ -7634,11 +7637,12 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Space);
     }
 
-    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"));
+    // The rendered button keeps the destination it was resolved with; only a new render
+    // picks up the mutated table.
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
     QCOMPARE(client_->error(), QString{});
-    client_->refreshComponentPanel();
-    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"), runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     const auto *fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable target"));

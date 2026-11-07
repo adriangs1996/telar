@@ -53,9 +53,12 @@ Item {
         visible: (root.record.depth ?? 0) > 0
     }
 
+    // Above the card's pointer area: a mod element with its own click takes it first,
+    // while the default pieces accept no clicks and let the card select itself.
     Item {
         id: cardContent
         anchors.fill: parent
+        z: 1
     }
 
     MouseArea {

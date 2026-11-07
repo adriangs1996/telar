@@ -28,8 +28,12 @@ static_assert(true);
 #include <limits.h>
 #include <charconv>
 #include "telar_client/codecs/telar_value_codec.hpp"
+#include <QByteArray>
+#include <QList>
 #include <QMap>
 #include <QString>
+#include <QStringList>
+#include <utility>
 
 #pragma once
 
@@ -37,6 +41,7 @@ static_assert(true);
 #include "core/memory.hpp"
 
 
+import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;
 import telar.gui.core.metrics;
 import telar.gui.platform.profile_file;
@@ -92,6 +97,9 @@ struct ConfigurationPreparation {
     failed,
   };
 
+  using BarRender = Owned<RenderedContent<components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+  using CommandArguments = QMap<std::pair<int, QByteArray>, QList<QByteArray>>;
+
   explicit ConfigurationPreparation(ApplicationAllocator &memory);
   ~ConfigurationPreparation();
   ConfigurationPreparation(const ConfigurationPreparation &) = delete;
@@ -104,6 +112,10 @@ struct ConfigurationPreparation {
   Configuration configuration;
   std::optional<ThemeValues> locked_theme;
   Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
+  // Read before the Lua thread owns the VM: the window keeps these instead of reading it.
+  Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
+  std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars{};
+  CommandArguments arguments;
   std::optional<PluginPackages> plugins;
   runtime::plugins::TrustStore trust;
   QString directory;
@@ -118,9 +130,11 @@ class ConfigurationLoader {
 public:
   [[nodiscard]] static PreparedConfiguration prepare(ApplicationAllocator &memory, const ConfigurationReloadRequest &request);
   static void trackModules(const ConfigurationGeneration<ApplicationAllocator> &generation, const QString &root, ConfigurationWatch::Modules &modules);
+  static void trackModuleNames(const QStringList &names, const QString &root, ConfigurationWatch::Modules &modules);
 
 private:
   static void load(ApplicationAllocator &memory, const ConfigurationReloadRequest &request, ConfigurationPreparation &result);
+  static void snapshot(ApplicationAllocator &memory, const ConfigurationGeneration<ApplicationAllocator> &generation, ConfigurationPreparation &result);
 };
 
 }

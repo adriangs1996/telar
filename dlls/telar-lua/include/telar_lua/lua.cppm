@@ -9,6 +9,7 @@ module;
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <ctime>
 #include <stdexcept>
 #include <string_view>
 
@@ -64,8 +65,8 @@ private:
 };
 
 struct Limits {
-  std::size_t memory = 16 * 1024 * 1024;
-  std::uint64_t instructions = 1'000'000;
+  std::size_t memory = std::size_t{256} * 1024 * 1024;
+  std::uint64_t instructions = 50'000'000;
   std::chrono::nanoseconds deadline = std::chrono::seconds{2};
 };
 
@@ -226,7 +227,74 @@ private:
       lua_setglobal(state, name);
     }
 
+    // Only the clock: the standard os library also spawns processes and reads the environment.
+    constexpr std::array clock{
+        luaL_Reg{"time", &osTime},
+        luaL_Reg{"clock", &osClock},
+        luaL_Reg{"date", &osDate},
+    };
+    lua_createtable(state, 0, static_cast<int>(clock.size()));
+    for (const auto &function : clock) {
+      lua_pushcfunction(state, function.func);
+      lua_setfield(state, -2, function.name);
+    }
+
+    lua_setglobal(state, "os");
+
     return 0;
+  }
+
+  inline static int osTime(lua_State *state) {
+    if (!lua_isnoneornil(state, 1)) {
+      return luaL_error(state, "os.time accepts no arguments");
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(std::time(nullptr)));
+
+    return 1;
+  }
+
+  inline static int osClock(lua_State *state) {
+    lua_pushnumber(state, static_cast<lua_Number>(std::clock()) / static_cast<lua_Number>(CLOCKS_PER_SEC));
+
+    return 1;
+  }
+
+  inline static int osDate(lua_State *state) {
+    constexpr std::string_view allowed{"aAbBcdDeFHIjmMnpRSTuUVwWxXyYzZ%"};
+    constexpr std::size_t maximum_format_bytes = 64;
+    constexpr std::size_t maximum_output_bytes = 256;
+    std::size_t size = 0;
+    const char *bytes = luaL_optlstring(state, 1, "%c", &size);
+    std::string_view format{bytes, size};
+    const auto when = static_cast<std::time_t>(luaL_optinteger(state, 2, static_cast<lua_Integer>(std::time(nullptr))));
+    const bool utc = format.starts_with('!');
+    if (utc) {
+      format.remove_prefix(1);
+    }
+
+    if (format.size() > maximum_format_bytes) {
+      return luaL_error(state, "os.date format exceeds 64 bytes");
+    }
+
+    for (std::size_t index = 0; index < format.size(); ++index) {
+      if (format[index] == '%' && (++index == format.size() || !allowed.contains(format[index]))) {
+        return luaL_error(state, "os.date format uses an unsupported conversion");
+      }
+    }
+
+    std::tm calendar{};
+    if ((utc ? ::gmtime_r(&when, &calendar) : ::localtime_r(&when, &calendar)) == nullptr) {
+      return luaL_error(state, "os.date time is out of range");
+    }
+
+    std::array<char, maximum_format_bytes + 1> pattern{};
+    std::ranges::copy(format, pattern.begin());
+    std::array<char, maximum_output_bytes> output{};
+    const auto written = format.empty() ? 0 : std::strftime(output.data(), output.size(), pattern.data(), &calendar);
+    lua_pushlstring(state, output.data(), written);
+
+    return 1;
   }
 
   Memory &memory_;
@@ -374,7 +442,8 @@ class LocalModules {
 public:
   inline explicit LocalModules(lua_State *state, std::string_view directory) {
     directory_.assign(directory);
-    lua_createtable(state, 0, domain == ModuleDomain::configuration ? module_limit : 16);
+    constexpr int expected_modules = 16;
+    lua_createtable(state, 0, expected_modules);
     cache_ = luaL_ref(state, LUA_REGISTRYINDEX);
     lua_pushlightuserdata(state, this);
     lua_pushcclosure(state, &require, 1);
@@ -456,7 +525,7 @@ private:
 
     const auto directory = modules.directory_.view();
     std::array<char, PATH_MAX> path;
-    if (directory.size() + name.size() + sizeof("/.lua") > path.size()) {
+    if (directory.size() + name.size() + sizeof("/init.lua") > path.size()) {
       return raise(state, "Local module path is too long", "module path too long");
     }
 
@@ -464,9 +533,19 @@ private:
     path[directory.size()] = '/';
     auto *suffix = path.data() + directory.size() + 1;
     std::transform(name.begin(), name.end(), suffix, [](char byte) { return byte == '.' ? '/' : byte; });
-    std::memcpy(suffix + name.size(), ".lua", sizeof(".lua"));
     std::array<char, PATH_MAX> canonical;
-    if (::realpath(path.data(), canonical.data()) == nullptr) {
+    // A folder module, such as mods/tabs/init.lua, answers to the folder's name.
+    bool found = false;
+    for (const std::string_view ending : {std::string_view{".lua"}, std::string_view{"/init.lua"}}) {
+      std::memcpy(suffix + name.size(), ending.data(), ending.size());
+      suffix[name.size() + ending.size()] = '\0';
+      if (::realpath(path.data(), canonical.data()) != nullptr) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
       return raise(state, "Cannot resolve local configuration module", "cannot resolve local module");
     }
 
@@ -498,7 +577,7 @@ private:
     return 1;
   }
 
-  static constexpr int module_limit = 64;
+  static constexpr int module_limit = 1024;
   FixedText<PATH_MAX> directory_;
   int cache_ = LUA_NOREF;
   int loaded_ = 0;
@@ -619,6 +698,10 @@ public:
   }
 
   inline void onlyFields(std::initializer_list<std::string_view> allowed, bool allow_children = false) const {
+    onlyFields(std::span<const std::string_view>{allowed.begin(), allowed.size()}, allow_children);
+  }
+
+  inline void onlyFields(std::span<const std::string_view> allowed, bool allow_children = false) const {
     require(LUA_TTABLE, "must be a table");
     const auto children = allow_children ? lua_rawlen(state_, index_) : 0;
     lua_pushnil(state_);

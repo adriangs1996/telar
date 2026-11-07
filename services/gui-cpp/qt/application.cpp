@@ -179,6 +179,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   initializeMachineProfiles();
   initializeAttachments();
   initializeComponents();
+  initializeElements();
   initializePicks();
   key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
 
@@ -934,6 +935,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
 
 void Application::refresh() {
   synchronizeTabStrip();
+  element_slots_.begin();
   QList<QVariantMap> workspaces;
   const auto *active = session().activeTab();
   QVariantMap workspace_context;
@@ -975,7 +977,12 @@ void Application::refresh() {
   QList<QVariantMap> tabs;
   for (const auto *tab : ordered_tabs) {
     const auto *pane = session().findPane(tab->focused_pane);
-    tabs.append(tabRecord(*tab, pane, session().panes(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active));
+    auto record = tabRecord(*tab, pane, session().panes(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active);
+    if (element_slots_.active()) {
+      record.insert(QStringLiteral("elements"), elementsFor({components::Slot::tab, components::Slot::tab_cards, components::Slot::tab_title, components::Slot::tab_path, components::Slot::tab_activity}, record.value(QStringLiteral("key")).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
+    }
+
+    tabs.append(std::move(record));
   }
 
   tabs_.reconcile(std::move(tabs));
@@ -984,6 +991,8 @@ void Application::refresh() {
   refreshHistory();
   refreshPanes();
   refreshPalette();
+  refreshElementBars();
+  element_slots_.finish();
   if (dialog_ == QLatin1StringView("paths")) {
     emit pathPickerGeometryChanged();
   }
@@ -1039,7 +1048,12 @@ void Application::refreshPanes() {
       if (tab->fullscreen) {
         record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
       }
-      record.insert(QStringLiteral("chrome"), paneChromeRecord(*pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id)));
+      auto chrome = paneChromeRecord(*pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id));
+      if (element_slots_.active()) {
+          chrome.insert(QStringLiteral("elements"), elementsFor({components::Slot::pane_header, components::Slot::pane_mark, components::Slot::pane_program, components::Slot::pane_context, components::Slot::pane_status, components::Slot::pane_progress, components::Slot::pane_actions}, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
+      }
+
+      record.insert(QStringLiteral("chrome"), std::move(chrome));
       panes.append(std::move(record));
     }
 

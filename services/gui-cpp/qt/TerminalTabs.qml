@@ -44,7 +44,11 @@ Item {
     }
 
     Component.onCompleted: {
-        if (root.controller) root.controller.registerTabStrip(layout);
+        if (root.controller && root.visible) root.controller.registerTabStrip(layout);
+    }
+    // A mod may place its own strip; the visible one owns dragging.
+    onVisibleChanged: {
+        if (root.controller && root.visible) root.controller.registerTabStrip(layout);
     }
 
     NativeRoundedRectangle {
@@ -108,6 +112,10 @@ Item {
             readonly property string tabKey: source.key
             readonly property bool pointed: root.controller ? layout.hoveredTab === tabKey : mouse.containsMouse
             readonly property bool lit: source.selected || pointed
+            // Mod content for this tab and its pieces, by slot name.
+            readonly property var elements: source.elements ?? ({})
+            readonly property bool drawn: elements.tab !== undefined
+            readonly property var builtins: ({tab_cards: cardsPiece, tab_title: titlePiece, tab_path: pathPiece, tab_activity: activityPiece})
 
             x: layout.x + record.bounds.x
             y: record.bounds.y
@@ -129,7 +137,7 @@ Item {
             }
 
             Repeater {
-                model: tab.record.cards.length
+                model: tab.drawn || tab.elements.tab_cards ? 0 : tab.record.cards.length
 
                 delegate: ApplicationTile {
                     required property int index
@@ -168,7 +176,7 @@ Item {
                 pixelSize: root.captionSize
                 color: tab.source.selected ? root.colors.chromeText : root.colors.text
                 emphasized: true
-                visible: !tab.record.compact
+                visible: !tab.record.compact && !tab.drawn && !tab.elements.tab_title
                 elide: Text.ElideRight
             }
 
@@ -181,7 +189,7 @@ Item {
                 text: tab.source.path ?? ""
                 pixelSize: root.captionSize
                 color: root.colors.subtext0
-                visible: !tab.record.compact && width > 0 && text.length > 0
+                visible: !tab.record.compact && !tab.drawn && !tab.elements.tab_path && width > 0 && text.length > 0
                 elide: Text.ElideNone
                 fadeWidth: implicitWidth > width ? layout.style.fadeWidth : 0
             }
@@ -195,6 +203,7 @@ Item {
                 ratio: root.ratio
                 record: tab.source
                 color: root.colors[tab.source.activityColor ?? "teal"]
+                visible: !tab.drawn && !tab.elements.tab_activity
             }
 
             MouseArea {
@@ -215,6 +224,106 @@ Item {
                     }
                 }
                 onDoubleClicked: root.renamed()
+            }
+
+            // A mod tab or piece sits above the pill's own pointer area, so its clicks win.
+            ElementHost {
+                objectName: "tabElements"
+                anchors.fill: parent
+                visible: tab.drawn
+                content: tab.elements.tab ?? null
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                controller: root.controller
+                builtins: tab.builtins
+            }
+
+            Repeater {
+                model: tab.drawn ? [] : [
+                    {slot: "tab_cards", bounds: tab.record.chip},
+                    {slot: "tab_title", bounds: Qt.rect(tab.record.caption.x, tab.record.caption.y, tab.record.caption.width, tab.record.caption.height)},
+                    {slot: "tab_path", bounds: Qt.rect(tab.record.caption.x, tab.record.caption.y, tab.record.caption.width, tab.record.caption.height)},
+                    {slot: "tab_activity", bounds: tab.record.status},
+                ].filter(piece => tab.elements[piece.slot] !== undefined && !(piece.slot === "tab_path" && tab.elements.tab_title !== undefined))
+
+                delegate: ElementHost {
+                    required property var modelData
+                    x: modelData.bounds.x
+                    y: modelData.bounds.y
+                    width: modelData.bounds.width
+                    height: modelData.bounds.height
+                    content: tab.elements[modelData.slot]
+                    colors: root.colors
+                    typography: root.typography
+                    ratio: root.ratio
+                    controller: root.controller
+                    builtins: tab.builtins
+                }
+            }
+
+            Component {
+                id: cardsPiece
+                Item {
+                    implicitWidth: tab.record.chip.width
+                    implicitHeight: tab.record.chip.height
+
+                    Repeater {
+                        model: tab.record.cards.length
+                        delegate: ApplicationTile {
+                            required property int index
+                            readonly property var card: tab.record.cards[index] ?? ({})
+                            readonly property real rank: card.rank ?? 0
+                            x: card.x ?? 0
+                            y: (tab.record.chip.height - height) / 2 + (card.y ?? 0)
+                            z: card.layer ?? 0
+                            width: layout.style.tileWidth
+                            height: layout.style.tileHeight
+                            rotation: card.rotation ?? 0
+                            scale: card.scale ?? 1
+                            radius: layout.style.tileRadius
+                            visible: rank < 3
+                            mark: card
+                            attentionColor: rank > 0 ? (card.attentionColor ?? "") : ""
+                            colors: root.colors
+                            typography: root.typography
+                            ratio: root.ratio
+                            borderColor: "#0a0810"
+                            borderAlpha: 0.72
+                            borderWidth: root.ratio
+                        }
+                    }
+                }
+            }
+
+            Component {
+                id: titlePiece
+                ChromeText {
+                    text: tab.source.title ?? tab.source.label
+                    pixelSize: root.captionSize
+                    color: tab.source.selected ? root.colors.chromeText : root.colors.text
+                    emphasized: true
+                }
+            }
+
+            Component {
+                id: pathPiece
+                ChromeText {
+                    text: tab.source.path ?? ""
+                    pixelSize: root.captionSize
+                    color: root.colors.subtext0
+                }
+            }
+
+            Component {
+                id: activityPiece
+                NativeTabActivity {
+                    implicitWidth: tab.record.status.width
+                    implicitHeight: tab.record.status.height
+                    ratio: root.ratio
+                    record: tab.source
+                    color: root.colors[tab.source.activityColor ?? "teal"]
+                }
             }
 
             Accessible.role: Accessible.PageTab

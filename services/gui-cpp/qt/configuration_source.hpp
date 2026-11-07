@@ -48,8 +48,10 @@ static_assert(true);
 #include <sys/stat.h>
 #include <bit>
 #include <functional>
+#include <memory>
 #include <type_traits>
 #include "configuration_loader.hpp"
+#include "lua_host.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 
 #include <QByteArray>
@@ -83,10 +85,22 @@ class ConfigurationGeneration;
 
 namespace telar::gui::qt {
 
+// Owns the client configuration. Its Lua VM lives on the Lua thread: everything here that
+// runs Lua is asynchronous, and everything synchronous reads data fixed at load or copied
+// out of a Lua result.
 class ConfigurationSource final : public QObject {
   Q_OBJECT
 
 public:
+  using BarRender = ConfigurationPreparation::BarRender;
+  using PanelRender = Owned<RenderedContent<components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+  using PickRender = Owned<components::PickItems, ApplicationAllocator>;
+  using Effects = Owned<ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
+  using Actions = ResolvedActions<ApplicationAllocator>;
+  using ElementsRender = Owned<RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
+  template <typename Value>
+  using Done = std::function<void(LuaOutcome<Value>)>;
+
   explicit ConfigurationSource(ApplicationAllocator &memory, QObject *parent = nullptr);
   ~ConfigurationSource() override;
   ConfigurationSource(const ConfigurationSource &) = delete;
@@ -101,23 +115,29 @@ public:
   [[nodiscard]] QString error() const;
   [[nodiscard]] const InputConfiguration &input() const noexcept;
   [[nodiscard]] const BindingMap<BindingAction> &keymap() const noexcept;
-  BindingEffects invoke(BindingAction action, BindingContext context);
-  InputExpression expression(BindingAction action, BindingContext context);
-  [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action) const;
-  [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const;
-  [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action) const;
-  [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action) const;
-  [[nodiscard]] const components::Configuration *components() const noexcept;
-  void renderBar(components::Position position, const components::Context &context);
-  void renderPanel(std::size_t index, const components::Context &context);
-  void renderPick(std::size_t index, const components::Context &context, components::PickItems &items);
-  void closePanel() noexcept;
+  void invoke(BindingAction action, BindingContext context, Done<Effects> done);
+  void expression(BindingAction action, BindingContext context, Done<InputExpression> done);
+  [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action, const Actions *resolved = nullptr) const;
+  [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action, const Actions *resolved = nullptr) const;
+  [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action, const Actions *resolved = nullptr) const;
+  [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action, const Actions *resolved = nullptr) const;
+  [[nodiscard]] const components::Definitions *definitions() const noexcept;
+  [[nodiscard]] const RenderedContent<components::BarContent::capacity, ApplicationAllocator> *fixedBar(components::Position position) const noexcept;
+  void renderBar(components::Position position, const components::Context &context, Done<BarRender> done);
+  void renderPanel(std::size_t index, const components::Context &context, Done<PanelRender> done);
+  void renderPick(std::size_t index, const components::Context &context, Done<PickRender> done);
+  void closePanel();
+  void renderElements(components::Slot slot, std::uint64_t instance, const components::Context &context, const QByteArray &item, Done<ElementsRender> done);
+  void invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context &context, const QByteArray &item, Done<Effects> done);
+  void forgetElements(std::uint64_t instance);
   [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char *field) const;
   [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState &view = {});
   [[nodiscard]] PluginPage queryPlugins(const ClientCommand &request);
   void setPluginEnabled(const ClientCommand &request, bool enabled);
   [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
-  [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action) const;
+  // No Lua call is queued or running, so every result has been delivered.
+  [[nodiscard]] bool luaIdle() const noexcept;
+  [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action, const Actions *resolved = nullptr) const;
   [[nodiscard]] PluginInvocation pluginInvocation(const ClientCommand &request, BindingContext context) const;
   [[nodiscard]] PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
   void authorizePlugin(const PluginInvocation &invocation, const PluginEffects &effects) const;
@@ -128,7 +148,14 @@ signals:
   void failed();
 
 private:
-  void trackModules();
+  using Generation = ConfigurationGeneration<ApplicationAllocator>;
+
+  // Runs `work` with the current generation on the Lua thread and marks results that
+  // arrive after that generation was replaced.
+  template <typename Value, typename Work>
+  void run(Work work, Done<Value> done);
+  [[nodiscard]] std::optional<ExtendedActionDescription> extendedAction(BindingAction action, const Actions *resolved) const;
+  void retire();
   [[nodiscard]] ConfigurationReloadRequest request(bool force);
   void schedule(bool force);
   void complete();
@@ -147,7 +174,10 @@ private:
   std::optional<ThemeValues> locked_theme_;
   InputConfiguration default_input_;
   BindingMap<BindingAction> default_keymap_;
-  Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation_;
+  Owned<Generation, ApplicationAllocator> generation_;
+  Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands_;
+  std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars_{};
+  ConfigurationPreparation::CommandArguments arguments_;
   std::optional<PluginPackages> plugins_;
   PluginOverrides plugin_overrides_;
   runtime::plugins::TrustStore trust_;
@@ -168,6 +198,8 @@ private:
   bool pending_poll_ = false;
   QFutureWatcher<PreparedConfiguration> task_;
   std::array<char, ConfigurationQuery::capacity> query_buffer_{};
+  // Declared last so it stops, finishing its current call, before the generation it runs dies.
+  LuaHost lua_;
 };
 
 }

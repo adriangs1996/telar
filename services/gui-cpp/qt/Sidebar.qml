@@ -75,6 +75,7 @@ NativeRoundedRectangle {
         width: root.regions.activity.width
         height: root.regions.activity.height
         model: root.expanded ? root.agentModel : null
+        controller: root.controller
         hoverIdentity: root.controller?.activityHover ?? ""
         semanticHover: typeof root.controller?.hoverActivity === "function"
         colors: root.colors

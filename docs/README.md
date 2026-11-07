@@ -13,6 +13,7 @@ agent, a plugin or a proxy to use Telar as a terminal.
 | Keep work on an SSH host | [Remote machines](remote.md) |
 | Search and reuse a command | [Command history](usage.md#find-previous-commands) |
 | Install a plugin | [Plugins](plugins.md#try-the-example-plugin) |
+| Draw part of the window with Lua | [Mods](mods.md) |
 | Move between Neovim splits and Telar panes | [Neovim integration](../integrations/nvim/README.md) |
 | Show images in a pane | [Terminal images](kitty-graphics.md#display-an-image) |
 | Inspect application network traffic | [Optional TLS proxy](proxy-tls.md#try-the-proxy) |

@@ -125,8 +125,17 @@ void measure() {
     throw std::runtime_error{"The configuration benchmark failed to adopt its generation"};
   }
 
-  const auto effects = source.invoke(source.input().configured[0].action, {});
-  if (effects.length != 1 || effects.actions[0].kind != BindingActionKind::toggle_sidebar) {
+  // The callback runs on the Lua thread; wait for its result like a binding does.
+  std::optional<BindingEffects> effects;
+  source.invoke(source.input().configured[0].action, {}, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
+    if (outcome.value) {
+      effects = (*outcome.value)->effects;
+    }
+
+    loop.quit();
+  });
+  loop.exec();
+  if (!effects || effects->length != 1 || effects->actions[0].kind != BindingActionKind::toggle_sidebar) {
     throw std::runtime_error{"The configuration benchmark changed its callback result"};
   }
 

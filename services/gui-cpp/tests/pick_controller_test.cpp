@@ -50,6 +50,7 @@ static_assert(true);
 #include <format>
 #include <ghostty/vt/unicode.h>
 #include <exception>
+#include "../qt/lua_host.hpp"
 #include "../qt/pick_controller.hpp"
 #include "../qt/surface_command.hpp"
 #include <QByteArray>
@@ -146,17 +147,30 @@ struct Host {
 
 template <typename Memory>
 struct Source {
+  Memory &memory;
   ConfigurationGeneration<Memory> generation;
 
   Source(Memory &memory, std::string_view script)
-      : generation(memory, ConfigurationSourceText{.source = script, .directory = {}, .profile = {}}) {}
+      : memory(memory),
+        generation(memory, ConfigurationSourceText{.source = script, .directory = {}, .profile = {}}) {}
 
-  [[nodiscard]] const components::Configuration *components() const noexcept {
-    return &generation.components();
+  [[nodiscard]] const components::Definitions *definitions() const noexcept {
+    return &generation.components().definitions();
   }
 
-  void renderPick(std::size_t index, const components::Context &context, components::PickItems &items) {
-    generation.renderPick(index, context, items);
+  // Answers at once, as the Lua thread would after its queue drains.
+  template <typename Done>
+  void renderPick(std::size_t index, const components::Context &context, Done done) {
+    LuaOutcome<Owned<components::PickItems, Memory>> outcome;
+    try {
+      auto items = makeOwned<components::PickItems>(memory);
+      generation.renderPick(index, context, *items);
+      outcome.value.emplace(std::move(items));
+    } catch (const std::exception &error) {
+      outcome.error = QString::fromUtf8(error.what());
+    }
+
+    done(std::move(outcome));
   }
 
   [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char *field) const {

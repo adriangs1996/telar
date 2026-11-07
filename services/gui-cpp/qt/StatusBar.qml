@@ -26,6 +26,8 @@ NativeRoundedRectangle {
     readonly property real contentWidth: Math.max(0, width - margin - trailingMargin)
     readonly property real metricsWidth: Math.max(0, contentWidth - (tlsChip.visible ? tlsChip.width + badgeGap : 0))
     readonly property real density: Screen.devicePixelRatio
+    // A mod's bottom bar replaces the components; mode, TLS and diagnostics stay native.
+    readonly property var drawn: controller?.elementBars?.bottom_bar ?? null
 
     color: colors.bottombarBackground
     replaceBackground: true
@@ -50,7 +52,7 @@ NativeRoundedRectangle {
         Item {
             id: components
             anchors.fill: parent
-            visible: root.mode.kind === 0 && root.controller !== null
+            visible: root.mode.kind === 0 && root.controller !== null && root.drawn === null
             readonly property var slots: root.controller?.componentBars ?? ({})
             readonly property real gap: 24 * root.ratio
             readonly property var fitted: ComponentFit.allocate([
@@ -161,6 +163,58 @@ NativeRoundedRectangle {
                 x: components.width - width
                 width: components.fitted.overflowWidth
                 height: parent.height
+            }
+        }
+
+        ElementHost {
+            objectName: "bottomBarElements"
+            anchors.fill: parent
+            visible: root.mode.kind === 0 && root.drawn !== null
+            content: root.drawn
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            controller: root.controller
+            builtins: ({metrics: metricsPiece, bar_left: leftPiece, bar_center: centerPiece, bar_right: rightPiece})
+        }
+
+        component BarPiece: ComponentSlot {
+            implicitHeight: root.capsuleHeight
+            controller: root.controller
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+        }
+
+        Component {
+            id: metricsPiece
+            MetricsGroup {
+                implicitHeight: root.capsuleHeight
+                metrics: root.metrics
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+            }
+        }
+
+        Component {
+            id: leftPiece
+            BarPiece {
+                surface: components.slots.left ?? ({kind: "empty"})
+            }
+        }
+
+        Component {
+            id: centerPiece
+            BarPiece {
+                surface: components.slots.center ?? ({kind: "empty"})
+            }
+        }
+
+        Component {
+            id: rightPiece
+            BarPiece {
+                surface: components.slots.right ?? ({kind: "empty"})
             }
         }
 

@@ -29,6 +29,8 @@ Item {
 
             required property var record
             readonly property bool framed: record.framed
+            readonly property var elements: record.chrome?.elements ?? ({})
+            readonly property bool drawnHeader: elements.pane_header !== undefined
             x: record.visualBounds.x
             y: record.visualBounds.y
             width: record.visualBounds.width
@@ -116,8 +118,9 @@ Item {
                 y: pane.record.frame.y
                 width: Math.max(0, pane.frameWidth - bandInset - (paneActions.visible ? paneActions.width + 4 * root.ratio : 0))
                 height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader) : 0
-                visible: pane.framed && !pane.record.fullscreen
+                visible: pane.framed && !pane.record.fullscreen && !pane.drawnHeader
                 record: pane.record.chrome
+                controller: root.application
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
                 ratio: root.ratio
@@ -138,12 +141,54 @@ Item {
                 id: paneActions
                 x: pane.record.frame.x + pane.frameWidth - width - 6 * root.ratio
                 y: pane.record.frame.y + (header.height - height) / 2
-                visible: pane.framed && !pane.record.fullscreen && (pane.record.focused || paneHover.hovered) && header.height >= height && pane.frameWidth > width + 80 * root.ratio
+                visible: pane.framed && !pane.record.fullscreen && !pane.drawnHeader && !pane.elements.pane_actions && (pane.record.focused || paneHover.hovered) && header.height >= height && pane.frameWidth > width + 80 * root.ratio
                 controller: root.application
                 paneKey: pane.record.key
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
                 ratio: root.ratio
+            }
+
+            // A mod's whole header, or only its actions, in place of the QML ones.
+            ElementHost {
+                objectName: "paneHeaderElements"
+                x: header.x
+                y: header.y
+                width: Math.max(0, pane.frameWidth - header.bandInset - 4 * root.ratio)
+                height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - pane.record.frame.y, root.application.windowGeometry.paneHeader) : 0
+                visible: pane.drawnHeader && pane.framed && !pane.record.fullscreen
+                content: pane.elements.pane_header ?? null
+                colors: root.application.colors
+                typography: root.application.windowGeometry.typography
+                ratio: root.ratio
+                controller: root.application
+                builtins: Object.assign({pane_actions: actionsPiece}, header.builtins)
+            }
+
+            ElementHost {
+                objectName: "paneActionsElements"
+                x: pane.record.frame.x + pane.frameWidth - width - 6 * root.ratio
+                y: pane.record.frame.y + (header.height - height) / 2
+                width: implicitWidth
+                height: Math.min(implicitHeight, header.height)
+                visible: !pane.drawnHeader && pane.elements.pane_actions !== undefined && pane.framed && !pane.record.fullscreen
+                content: pane.elements.pane_actions ?? null
+                colors: root.application.colors
+                typography: root.application.windowGeometry.typography
+                ratio: root.ratio
+                controller: root.application
+                builtins: ({pane_actions: actionsPiece})
+            }
+
+            Component {
+                id: actionsPiece
+                PaneActions {
+                    controller: root.application
+                    paneKey: pane.record.key
+                    colors: root.application.colors
+                    typography: root.application.windowGeometry.typography
+                    ratio: root.ratio
+                }
             }
 
             Item {

@@ -82,6 +82,15 @@ for kind, key in pairs({
 	actions = false,
 	button = false,
 	divider = false,
+	-- Elements a component slot may return, besides the ones above.
+	row = false,
+	column = false,
+	stack = false,
+	spacer = false,
+	tile = "program",
+	canvas = false,
+	builtin = "name",
+	elapsed = "since",
 }) do
 	local component_kind = kind
 	local shorthand = key or nil

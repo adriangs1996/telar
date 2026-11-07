@@ -2719,6 +2719,14 @@ using RetainedClientValidationState = BasicClientValidationState<RetainedCommand
 export {
 namespace telar::runtime::config {
 
+// Interface pieces a configuration may draw with Lua, under `client.components`.
+inline constexpr std::array<std::string_view, 19> component_slots{
+    "top_bar", "bottom_bar", "tab", "pane_header", "agent_card",
+    "tab_cards", "tab_title", "tab_path", "tab_activity",
+    "pane_mark", "pane_program", "pane_context", "pane_status", "pane_progress", "pane_actions",
+    "agent_mark", "agent_title", "agent_project", "agent_status",
+};
+
 class ClientValidator {
 public:
   template <CommandTabStore Commands>
@@ -2727,7 +2735,7 @@ public:
       return;
     }
 
-    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history"});
+    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components"});
     const auto prefix = client.field("prefix");
     if (prefix.present()) {
       state.keymap.setPrefix(KeyChordValidator::parse(prefix));
@@ -2746,9 +2754,27 @@ public:
     const BasicActionValidator actions{definitions, limits, state.commands};
     BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
     BarsValidator{actions, limits}.validate(client.field("bars"));
+    components(client.field("components"));
   }
 
 private:
+  inline static void components(const lua::Value &value) {
+    if (!value.present()) {
+      return;
+    }
+
+    value.eachField([](std::string_view name, const lua::Value &entry) {
+      if (std::ranges::find(component_slots, name) == component_slots.end()) {
+        const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
+        entry.fail(message.c_str());
+      }
+
+      if (!entry.is(LUA_TFUNCTION)) {
+        entry.fail("must be a function from the context and the item to an element");
+      }
+    });
+  }
+
   inline static void printableText(const lua::Value &value, std::size_t maximum, bool allow_empty) {
     if (!value.present()) {
       return;

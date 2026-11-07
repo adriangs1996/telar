@@ -69,6 +69,13 @@ KeyBindings::KeyBindings(Application &application)
   clock_.start();
   timeout_.setSingleShot(true);
   connect(&timeout_, &QTimer::timeout, this, &KeyBindings::expire);
+  hold_timeout_.setSingleShot(true);
+  // A slow binding must not swallow typing: past the limit, held keys go out in order.
+  connect(&hold_timeout_, &QTimer::timeout, this, [this] {
+    ++hold_epoch_;
+    holds_ = 0;
+    drain();
+  });
 }
 
 void KeyBindings::setWindow(QQuickWindow &window) {
@@ -161,6 +168,15 @@ bool KeyBindings::route(QKeyEvent &event, QQuickItem &recipient, bool captures) 
   }
 
   if (event.type() == QEvent::KeyRelease && event.isAutoRepeat()) {
+    return true;
+  }
+
+  if (holds_ > 0) {
+    constexpr qsizetype maximum_held_keys = 64;
+    if (held_.size() < maximum_held_keys) {
+      held_.append(capture(event, recipient));
+    }
+
     return true;
   }
 
@@ -321,6 +337,45 @@ void KeyBindings::expire() {
   }
 }
 
+KeyBindings::Hold KeyBindings::hold() {
+  constexpr std::chrono::milliseconds hold_limit{250};
+  if (holds_++ == 0) {
+    hold_timeout_.start(hold_limit);
+  }
+
+  return hold_epoch_;
+}
+
+void KeyBindings::release(Hold hold) {
+  if (hold != hold_epoch_ || holds_ == 0 || --holds_ != 0) {
+    return;
+  }
+
+  hold_timeout_.stop();
+  drain();
+}
+
+void KeyBindings::drain() {
+  auto pending = std::exchange(held_, {});
+  for (qsizetype index = 0; index < pending.size(); ++index) {
+    if (holds_ > 0) {
+      // A held key started another Lua binding: the rest wait for that one too.
+      held_ = pending.mid(index) + held_;
+      return;
+    }
+
+    const auto &key = pending[index];
+    if (key.recipient == nullptr) {
+      continue;
+    }
+
+    QKeyEvent event{key.phase == KeyPhase::release ? QEvent::KeyRelease : QEvent::KeyPress, key.key, key.modifiers, key.scan, key.native_key, key.native_modifiers, key.text, key.phase == KeyPhase::repeat};
+    if (!route(event, *key.recipient)) {
+      deliver(key);
+    }
+  }
+}
+
 void KeyBindings::interrupt() {
   static_cast<void>(apply(router_.interrupt()));
   schedule();
@@ -339,6 +394,7 @@ bool KeyBindings::eventFilter(QObject *watched, QEvent *event) {
   if (event->type() == QEvent::WindowDeactivate) {
     router_.clear();
     recipients_.fill({});
+    held_.clear();
     schedule();
   }
 

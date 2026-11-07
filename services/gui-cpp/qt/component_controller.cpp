@@ -45,6 +45,7 @@ static_assert(true);
 #include <string>
 #include <cinttypes>
 #include <tuple>
+#include <type_traits>
 #include "configuration_source.hpp"
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
@@ -99,12 +100,12 @@ ComponentSlotState &surfaceState(ComponentSurfaceState &state, std::size_t index
   return panel ? state.panel : state.bars.at(index);
 }
 
-const components::Source &surfaceSource(const components::Configuration &configuration, std::size_t index, bool panel) {
+const components::Source &surfaceSource(const components::Definitions &definitions, std::size_t index, bool panel) {
   if (!panel) {
-    return configuration.definitions().source(static_cast<components::Position>(index));
+    return definitions.source(static_cast<components::Position>(index));
   }
 
-  const auto panels = configuration.definitions().panels();
+  const auto panels = definitions.panels();
   if (index >= panels.size()) {
     throw std::out_of_range{"Panel is no longer configured"};
   }
@@ -216,13 +217,14 @@ void Application::resetComponents() {
   configuration_source_.closePanel();
   component_surfaces_ = {};
   component_surfaces_.generation = configuration_source_.configurationGeneration();
-  const auto *configuration = configuration_source_.components();
-  if (configuration != nullptr) {
+  component_surfaces_.epoch = ++next_component_revision_;
+  const auto *definitions = configuration_source_.definitions();
+  if (definitions != nullptr) {
     for (std::size_t index = 0; index < component_surfaces_.bars.size(); ++index) {
       auto &state = component_surfaces_.bars[index];
       state.revision = ++next_component_revision_;
       state.identity = state.revision;
-      const auto kind = configuration->definitions().source(static_cast<components::Position>(index)).kind;
+      const auto kind = definitions->source(static_cast<components::Position>(index)).kind;
       if (kind == components::SourceKind::fixed || components::builtinSource(kind)) {
         projectComponentSource(index, false);
       }
@@ -234,35 +236,67 @@ void Application::resetComponents() {
 }
 
 void Application::projectComponentSource(std::size_t index, bool panel) {
-  const auto *configuration = configuration_source_.components();
-  if (configuration == nullptr) {
+  const auto *definitions = configuration_source_.definitions();
+  if (definitions == nullptr) {
     return;
   }
 
   auto &state = surfaceState(component_surfaces_, index, panel);
   const auto time = componentContext().time;
-  const auto resolve = [this](BindingAction action) -> std::optional<NamedActionDescription> {
-    try {
-      return configuration_source_.namedAction(action);
-    } catch (const std::exception &) {
-      // Mutated or invalid action tables retain their opaque lease and fail on activation.
-      return std::nullopt;
-    }
-  };
-  if (panel) {
-    state.nodes = componentRecords(configuration->panel(), configuration_source_.configuration().theme, time, resolve);
-    state.clock_next = nextClock(configuration->panel());
-  } else if (const auto kind = configuration->definitions().source(static_cast<components::Position>(index)).kind; components::builtinSource(kind)) {
-    const auto content = components::builtinContent(kind);
-    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time, resolve);
-    state.clock_next = Clock::time_point::max();
-  } else {
-    const auto &content = configuration->bar(static_cast<components::Position>(index));
-    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time, resolve);
+  const auto &theme = configuration_source_.configuration().theme;
+  const auto project = [&](const auto &content, const ConfigurationSource::Actions &actions) {
+    const auto resolve = [&](BindingAction action) {
+      return configuration_source_.namedAction(action, &actions);
+    };
+    state.nodes = componentRecords(content, theme, time, resolve);
     state.clock_next = nextClock(content);
+  };
+  const auto kind = panel ? components::SourceKind::dynamic : definitions->source(static_cast<components::Position>(index)).kind;
+  if (panel) {
+    if (state.panel) {
+      project(state.panel->content, state.panel->actions);
+    } else {
+      state.nodes.clear();
+      state.clock_next = Clock::time_point::max();
+    }
+  } else if (components::builtinSource(kind)) {
+    const ConfigurationSource::Actions none{memory_};
+    state.nodes = componentRecords(components::builtinContent(kind), theme, time, [&](BindingAction action) {
+      return configuration_source_.namedAction(action, &none);
+    });
+    state.clock_next = Clock::time_point::max();
+  } else if (const auto *content = componentBar(index)) {
+    project(content->content, content->actions);
+  } else {
+    state.nodes.clear();
+    state.clock_next = Clock::time_point::max();
   }
 
   state.revision = ++next_component_revision_;
+}
+
+const ComponentSlotState::Bar *Application::componentBar(std::size_t index) const {
+  const auto *definitions = configuration_source_.definitions();
+  const auto position = static_cast<components::Position>(index);
+  if (definitions != nullptr && definitions->source(position).kind == components::SourceKind::fixed) {
+    return configuration_source_.fixedBar(position);
+  }
+
+  return component_surfaces_.bars.at(index).bar.get();
+}
+
+// An action is still valid only while the content that offered it is on screen.
+bool Application::componentActionsLive(const ConfigurationSource::Actions &actions) const {
+  for (std::size_t index = 0; index < component_surfaces_.bars.size(); ++index) {
+    const auto *bar = componentBar(index);
+    if (bar != nullptr && &bar->actions == &actions) {
+      return true;
+    }
+  }
+
+  const auto &panel = component_surfaces_.panel.panel;
+
+  return (panel && &panel->actions == &actions) || element_slots_.owns(actions);
 }
 
 void Application::projectComponents() {
@@ -284,14 +318,14 @@ bool Application::componentCommandCurrent(std::uint64_t generation, MachineClien
 }
 
 void Application::renderComponentSource(std::size_t index, bool panel) {
-  const auto *configuration = configuration_source_.components();
-  if (configuration == nullptr) {
+  const auto *definitions = configuration_source_.definitions();
+  if (definitions == nullptr) {
     return;
   }
 
-  const auto &source = surfaceSource(*configuration, index, panel);
+  const auto &source = surfaceSource(*definitions, index, panel);
   auto &state = surfaceState(component_surfaces_, index, panel);
-  if (source.kind == components::SourceKind::command && component_command_.active()) {
+  if (state.rendering || (source.kind == components::SourceKind::command && component_command_.active())) {
     return;
   }
 
@@ -325,16 +359,48 @@ void Application::renderComponentSource(std::size_t index, bool panel) {
   emit componentsChanged();
 }
 
-void Application::applyComponentRender(std::size_t index, bool panel, const components::Context &context) {
-  if (panel) {
-    configuration_source_.renderPanel(index, context);
-    component_surfaces_.last_render = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
-  } else {
-    configuration_source_.renderBar(static_cast<components::Position>(index), context);
-  }
+// The render runs on the Lua thread; its result replaces the surface only if nothing that
+// owned the surface changed meanwhile.
+void Application::applyComponentRender(std::size_t index, bool panel, const components::Context &context, bool truncated) {
+  auto &state = surfaceState(component_surfaces_, index, panel);
+  const auto epoch = component_surfaces_.epoch;
+  const auto identity = component_surfaces_.panel_identity;
+  const auto finish = [this, index, panel, epoch, identity, truncated](auto outcome) {
+    const bool same_panel = !panel || (component_surfaces_.open_panel == index && component_surfaces_.panel_identity == identity);
+    if (epoch != component_surfaces_.epoch || !same_panel) {
+      return;
+    }
 
-  surfaceState(component_surfaces_, index, panel).error.clear();
-  projectComponentSource(index, panel);
+    auto &current = surfaceState(component_surfaces_, index, panel);
+    current.rendering = false;
+    if (outcome.stale) {
+      return;
+    }
+
+    if (!outcome.value) {
+      current.error = outcome.error;
+    } else {
+      if constexpr (std::is_same_v<decltype(*outcome.value), ConfigurationSource::PanelRender &>) {
+        current.panel = std::shared_ptr<const ComponentSlotState::Panel>{std::move(*outcome.value)};
+        component_surfaces_.last_render = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
+      } else {
+        current.bar = std::shared_ptr<const ComponentSlotState::Bar>{std::move(*outcome.value)};
+      }
+
+      current.error = truncated ? QStringLiteral("Command output exceeded its limit; showing what fits") : QString{};
+      projectComponentSource(index, panel);
+    }
+
+    emit componentsChanged();
+    component_timer_.start(std::chrono::milliseconds{0});
+  };
+
+  state.rendering = true;
+  if (panel) {
+    configuration_source_.renderPanel(index, context, finish);
+  } else {
+    configuration_source_.renderBar(static_cast<components::Position>(index), context, finish);
+  }
 }
 
 void Application::componentCommandFinished(const ComponentCommandOwner &owner, SurfaceCommandResult result) {
@@ -352,12 +418,10 @@ void Application::componentCommandFinished(const ComponentCommandOwner &owner, S
     } else {
       auto context = componentContext();
       context.output = std::string_view{result.output.constData(), static_cast<std::size_t>(result.output.size())};
-      applyComponentRender(owner.index, owner.panel, context);
-      if (result.truncated) {
-        state.error = QStringLiteral("Command output exceeded its limit; showing what fits");
-      }
+      applyComponentRender(owner.index, owner.panel, context, result.truncated);
     }
   } catch (const std::exception &error) {
+    state.rendering = false;
     state.error = toQString(error.what());
   }
 
@@ -367,8 +431,8 @@ void Application::componentCommandFinished(const ComponentCommandOwner &owner, S
 }
 
 void Application::tickComponents() {
-  const auto *configuration = configuration_source_.components();
-  if (configuration == nullptr) {
+  const auto *definitions = configuration_source_.definitions();
+  if (definitions == nullptr) {
     return;
   }
 
@@ -376,14 +440,14 @@ void Application::tickComponents() {
   bool rendered = false;
   const auto tick = [&](std::size_t index, bool panel) {
     const auto &state = surfaceState(component_surfaces_, index, panel);
-    const auto &source = surfaceSource(*configuration, index, panel);
+    const auto &source = surfaceSource(*definitions, index, panel);
     if (state.clock_next <= now) {
       projectComponentSource(index, panel);
       emit componentsChanged();
     }
 
     const bool live = source.kind == components::SourceKind::dynamic || source.kind == components::SourceKind::command;
-    if (!rendered && live && state.next <= now && (source.kind != components::SourceKind::command || !component_command_.active())) {
+    if (!rendered && live && !state.rendering && state.next <= now && (source.kind != components::SourceKind::command || !component_command_.active())) {
       rendered = true;
       renderComponentSource(index, panel);
     }
@@ -400,18 +464,18 @@ void Application::tickComponents() {
 }
 
 void Application::armComponents() {
-  const auto *configuration = configuration_source_.components();
-  if (configuration == nullptr) {
+  const auto *definitions = configuration_source_.definitions();
+  if (definitions == nullptr) {
     return;
   }
 
   auto next = Clock::time_point::max();
   const auto consider = [&](std::size_t index, bool panel) {
     const auto &state = surfaceState(component_surfaces_, index, panel);
-    const auto &source = surfaceSource(*configuration, index, panel);
+    const auto &source = surfaceSource(*definitions, index, panel);
     next = std::min(next, state.clock_next);
     const bool live = source.kind == components::SourceKind::dynamic || source.kind == components::SourceKind::command;
-    if (live && (source.kind != components::SourceKind::command || !component_command_.active())) {
+    if (live && !state.rendering && (source.kind != components::SourceKind::command || !component_command_.active())) {
       next = std::min(next, state.next);
     }
   };
@@ -433,8 +497,8 @@ QVariantMap Application::componentBars() const {
   constexpr std::array names{"left", "center", "right", "top", "footerLeft", "footerCenter", "footerRight"};
   constexpr std::array kinds{"empty", "tabs", "metrics", "machines", "content", "content", "content"};
   const components::Definitions defaults;
-  const auto *configuration = configuration_source_.components();
-  const auto &definitions = configuration == nullptr ? defaults : configuration->definitions();
+  const auto *configured = configuration_source_.definitions();
+  const auto &definitions = configured == nullptr ? defaults : *configured;
   QVariantMap result;
   for (std::size_t index = 0; index < names.size(); ++index) {
     const auto &state = component_surfaces_.bars[index];
@@ -453,12 +517,12 @@ QVariantMap Application::componentBars() const {
 }
 
 QVariantMap Application::componentPanel() const {
-  const auto *configuration = configuration_source_.components();
-  if (!component_surfaces_.open_panel || configuration == nullptr || *component_surfaces_.open_panel >= configuration->definitions().panels().size()) {
+  const auto *definitions = configuration_source_.definitions();
+  if (!component_surfaces_.open_panel || definitions == nullptr || *component_surfaces_.open_panel >= definitions->panels().size()) {
     return {{QStringLiteral("open"), false}};
   }
 
-  const auto &definition = configuration->definitions().panels()[*component_surfaces_.open_panel];
+  const auto &definition = definitions->panels()[*component_surfaces_.open_panel];
   const auto &state = component_surfaces_.panel;
 
   return {
@@ -477,8 +541,8 @@ QVariantMap Application::componentPanel() const {
 }
 
 void Application::toggleComponentPanel(std::size_t index) {
-  const auto *configuration = configuration_source_.components();
-  if (configuration == nullptr || index >= configuration->definitions().panels().size()) {
+  const auto *definitions = configuration_source_.definitions();
+  if (definitions == nullptr || index >= definitions->panels().size()) {
     return;
   }
 
@@ -524,8 +588,7 @@ void Application::activateComponent(int source, int node, const QString &generat
 
   const auto index = static_cast<std::size_t>(source);
   const bool panel = index == ComponentSurfaceState::bar_slots;
-  const auto *configuration = configuration_source_.components();
-  if (configuration == nullptr || index > ComponentSurfaceState::bar_slots || (panel && !component_surfaces_.open_panel)) {
+  if (configuration_source_.definitions() == nullptr || index > ComponentSurfaceState::bar_slots || (panel && !component_surfaces_.open_panel)) {
     return;
   }
 
@@ -534,24 +597,25 @@ void Application::activateComponent(int source, int node, const QString &generat
     return;
   }
 
-  const auto activate = [&](const auto &content) {
-    if (static_cast<std::size_t>(node) >= content.nodes().size() || node >= state.nodes.size()) {
+  const auto activate = [&](const auto *rendered) {
+    if (rendered == nullptr || static_cast<std::size_t>(node) >= rendered->content.nodes().size() || node >= state.nodes.size()) {
       return;
     }
 
+    const auto &content = rendered->content;
     const auto &item = content.nodes()[static_cast<std::size_t>(node)];
-    activateComponentAction(content.action(item), content.text(item.url), state.nodes.at(node).toMap().value(QStringLiteral("actionIdentity")).toString(), anchor);
+    activateComponentAction(content.action(item), content.text(item.url), state.nodes.at(node).toMap().value(QStringLiteral("actionIdentity")).toString(), anchor, rendered->actions);
   };
   if (panel) {
-    activate(configuration->panel());
+    activate(state.panel.get());
   } else {
-    activate(configuration->bar(static_cast<components::Position>(index)));
+    activate(componentBar(index));
   }
 }
 
-void Application::activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor) {
+void Application::activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor, const ConfigurationSource::Actions &resolved) {
   try {
-    const auto named = action && action->kind == BindingActionKind::extended ? configuration_source_.namedAction(*action) : std::nullopt;
+    const auto named = action && action->kind == BindingActionKind::extended ? configuration_source_.namedAction(*action, &resolved) : std::nullopt;
     if (identity != componentActionIdentity(action, url, named)) {
       return;
     }
@@ -561,7 +625,7 @@ void Application::activateComponentAction(std::optional<BindingAction> action, s
       const auto restore = qScopeGuard([&] {
         component_action_anchor_ = previous;
       });
-      static_cast<void>(runBinding(*action, named));
+      static_cast<void>(runBinding(*action, &resolved));
     } else if (!url.empty()) {
       if (const auto target = LinkTarget::fromUri(url)) {
         static_cast<void>(openLink(*target));

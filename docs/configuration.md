@@ -584,6 +584,9 @@ Diagnostics name the entry and the field, for example
 
 ## Bars
 
+To draw the bars, the tabs, the pane headers or the activity cards with your
+own Lua, see [Mods](mods.md); `client.components` names those slots.
+
 `client.bars` declares three bottom slots, a `top.right` slot and the sidebar
 footer row. The shared configuration requires exactly one `telar.bar.tabs()`
 source in `bottom`.
@@ -1340,22 +1343,29 @@ Lua API.
 ## Environment and reload
 
 The configuration VM exposes base, coroutine, math, string, table, and UTF-8
-libraries. It does not expose `io`, `os`, `debug`, native modules, dynamic code
-loading, or mutable metatables. `require("telar")` returns the API and local
-module names resolve only beneath the directory containing `config.lua`.
+libraries, and an `os` table holding only `os.time()`, `os.clock()` and
+`os.date(format, time)`. It does not expose `io`, the rest of `os`, `debug`,
+native modules, dynamic code loading, or mutable metatables. `require("telar")`
+returns the API and local module names resolve only beneath the directory
+containing `config.lua`: `require("mods.tabs")` loads `mods/tabs.lua`, or
+`mods/tabs/init.lua` when that file does not exist. A configuration may load
+1024 local modules.
 
-Evaluating the configuration may use 16 MiB of Lua memory and one million Lua
-instructions; a key callback and a bar or panel render may use 100,000
-instructions, and a pick's `items` function, which runs once when the pick
-opens, one million. Pattern matching,
+The client runs Lua on its own thread, never on the window's. A slow render or
+key callback delays other Lua work but not drawing or typing. Keys typed while
+a key callback runs wait for its result, so they reach the pane the callback
+leaves focused; after 250 ms they are delivered in order anyway.
+
+Evaluating the configuration may use 256 MiB of Lua memory and 50 million Lua
+instructions; a key callback, a bar or panel render and a pick's `items`
+function may each use 50 million instructions. Pattern matching,
 `string.find` and `table.sort` count their steps as instructions, so one
 backtracking search or large sort spends the same budget. The instruction
 count is the budget, so whether a file loads does not depend on how busy the
-machine is. A wall-clock deadline of 2 s for the file and 100 ms for a
-callback or render (1 s for a render in a debug build) is checked between
-instructions and those steps; it stops a run of
+machine is. A wall-clock deadline of 2 s for the file and 1 s for a callback
+or render is checked between instructions and those steps; it stops a run of
 costly instructions, such as repeated `string.rep` over megabytes, but not a
-single other call, which the memory limit bounds to about 25 ms.
+single other call, which the memory limit bounds.
 
 The client watches the main file, loaded local modules, configured plugin
 trees, and the trust store. A change builds a complete replacement generation.

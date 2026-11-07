@@ -67,6 +67,7 @@ static_assert(true);
 #include <QFuture>
 #include <QGuiApplication>
 #include <QList>
+#include <QStringList>
 #include <QPointer>
 #include <QStyleHints>
 #include <QtConcurrentRun>
@@ -119,7 +120,8 @@ ConfigurationSource::ConfigurationSource(ApplicationAllocator &memory, QObject *
       memory_(memory),
       fonts_(memory),
       default_keymap_(default_input_.compile()),
-      generation_(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
+      generation_(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
+      commands_(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {
   debounce_.setSingleShot(true);
   constexpr int reload_debounce_ms = 100;
   debounce_.setInterval(reload_debounce_ms);
@@ -153,42 +155,159 @@ ConfigurationSource::~ConfigurationSource() {
   }
 }
 
+namespace {
+
+// A render context whose borrowed text is copied so it can cross to the Lua thread.
+struct ContextCopy {
+  explicit ContextCopy(const components::Context &source)
+      : context(source),
+        output(source.output ? QByteArray{source.output->data(), static_cast<qsizetype>(source.output->size())} : QByteArray{}),
+        pane_title(source.pane_title.data(), static_cast<qsizetype>(source.pane_title.size())),
+        has_output(source.output.has_value()) {}
+
+  [[nodiscard]] components::Context view() const {
+    auto result = context;
+    result.output = has_output ? std::optional{std::string_view{output.constData(), static_cast<std::size_t>(output.size())}} : std::nullopt;
+    result.pane_title = {pane_title.constData(), static_cast<std::size_t>(pane_title.size())};
+
+    return result;
+  }
+
+  components::Context context;
+  QByteArray output;
+  QByteArray pane_title;
+  bool has_output = false;
+};
+
+}
+
+namespace {
+
+// A Lua result with the modules its call required, read in the same job so a file edited
+// right after the call is already watched.
+template <typename Value>
+struct TrackedResult {
+  std::optional<Value> value;
+  QString error;
+  QStringList modules;
+};
+
+template <typename Generation>
+QStringList loadedModules(const Generation &generation, std::size_t known) {
+  QStringList names;
+  if (generation.localModuleCount() != known) {
+    generation.visitLocalModules([&](std::string_view name) {
+      names.append(QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size())));
+    });
+  }
+
+  return names;
+}
+
+}
+
+template <typename Value, typename Work>
+void ConfigurationSource::run(Work work, Done<Value> done) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  auto *generation = generation_.get();
+  const auto number = generation->number();
+  const auto known = static_cast<std::size_t>(watch_.modules.size());
+  lua_.post([generation, known, work = std::move(work)]() mutable {
+    TrackedResult<Value> result;
+    try {
+      result.value.emplace(work(*generation));
+    } catch (const std::exception &error) {
+      result.error = QString::fromUtf8(error.what());
+    }
+
+    result.modules = loadedModules(*generation, known);
+
+    return result;
+  }, [this, number, done = std::move(done)](LuaOutcome<TrackedResult<Value>> tracked) {
+    LuaOutcome<Value> outcome;
+    outcome.stale = configurationGeneration() != number;
+    if (tracked.value) {
+      outcome.value = std::move(tracked.value->value);
+      outcome.error = std::move(tracked.value->error);
+      if (!outcome.stale) {
+        ConfigurationLoader::trackModuleNames(tracked.value->modules, module_root_, watch_.modules);
+      }
+    } else {
+      outcome.error = std::move(tracked.error);
+    }
+
+    done(std::move(outcome));
+  });
+}
+
 const InputConfiguration &ConfigurationSource::input() const noexcept {
   return generation_ ? generation_->input() : default_input_;
 }
 
-const components::Configuration *ConfigurationSource::components() const noexcept {
-  return generation_ ? &generation_->components() : nullptr;
+const components::Definitions *ConfigurationSource::definitions() const noexcept {
+  return generation_ ? &generation_->components().definitions() : nullptr;
 }
 
-void ConfigurationSource::renderBar(components::Position position, const components::Context &context) {
-  if (!generation_) {
-    throw std::runtime_error{"ConfigurationNotLoaded"};
-  }
+const RenderedContent<components::BarContent::capacity, ApplicationAllocator> *ConfigurationSource::fixedBar(components::Position position) const noexcept {
+  const auto &bar = fixed_bars_.at(static_cast<std::size_t>(position));
 
-  generation_->renderBar(position, context);
+  return bar ? bar->get() : nullptr;
 }
 
-void ConfigurationSource::renderPanel(std::size_t index, const components::Context &context) {
-  if (!generation_) {
-    throw std::runtime_error{"ConfigurationNotLoaded"};
-  }
-
-  generation_->renderPanel(index, context);
+void ConfigurationSource::renderBar(components::Position position, const components::Context &context, Done<BarRender> done) {
+  run<BarRender>([position, context = ContextCopy{context}](Generation &generation) {
+    return generation.renderedBar(position, context.view());
+  }, std::move(done));
 }
 
-void ConfigurationSource::closePanel() noexcept {
+void ConfigurationSource::renderPanel(std::size_t index, const components::Context &context, Done<PanelRender> done) {
+  run<PanelRender>([index, context = ContextCopy{context}](Generation &generation) {
+    return generation.renderedPanel(index, context.view());
+  }, std::move(done));
+}
+
+void ConfigurationSource::closePanel() {
   if (generation_) {
-    generation_->closePanel();
+    run<bool>([](Generation &generation) {
+      generation.closePanel();
+
+      return true;
+    }, [](LuaOutcome<bool>) {});
   }
 }
 
-void ConfigurationSource::renderPick(std::size_t index, const components::Context &context, components::PickItems &items) {
-  if (!generation_) {
-    throw std::runtime_error{"ConfigurationNotLoaded"};
-  }
+void ConfigurationSource::renderElements(components::Slot slot, std::uint64_t instance, const components::Context &context, const QByteArray &item, Done<ElementsRender> done) {
+  run<ElementsRender>([slot, instance, item, context = ContextCopy{context}](Generation &generation) {
+    return generation.renderElements(slot, instance, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
+  }, std::move(done));
+}
 
-  generation_->renderPick(index, context, items);
+void ConfigurationSource::invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context &context, const QByteArray &item, Done<Effects> done) {
+  run<Effects>([instance, callback, item, context = ContextCopy{context}](Generation &generation) {
+    return generation.invokeElement(instance, callback, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
+  }, std::move(done));
+}
+
+void ConfigurationSource::forgetElements(std::uint64_t instance) {
+  if (generation_) {
+    run<bool>([instance](Generation &generation) {
+      generation.forgetElements(instance);
+
+      return true;
+    }, [](LuaOutcome<bool>) {});
+  }
+}
+
+void ConfigurationSource::renderPick(std::size_t index, const components::Context &context, Done<PickRender> done) {
+  run<PickRender>([this, index, context = ContextCopy{context}](Generation &generation) {
+    auto items = makeOwned<components::PickItems>(memory_);
+    generation.renderPick(index, context.view(), *items);
+
+    return items;
+  }, std::move(done));
 }
 
 QList<QByteArray> ConfigurationSource::commandArguments(int reference, const char *field) const {
@@ -196,28 +315,65 @@ QList<QByteArray> ConfigurationSource::commandArguments(int reference, const cha
     throw std::runtime_error{"ConfigurationNotLoaded"};
   }
 
-  QList<QByteArray> result;
-  generation_->visitArguments(reference, field, [&](std::string_view argument) {
-    result.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
-  });
+  const auto found = arguments_.constFind({reference, QByteArray{field}});
+  if (found == arguments_.cend()) {
+    throw std::invalid_argument{"Command is no longer configured"};
+  }
 
-  return result;
+  return *found;
 }
 
-std::optional<DefinitionActionDescription> ConfigurationSource::definitionAction(BindingAction action) const {
-  return generation_ ? generation_->definitionAction(action) : std::nullopt;
+std::optional<ExtendedActionDescription> ConfigurationSource::extendedAction(BindingAction action, const Actions *resolved) const {
+  if (!generation_ || action.kind != BindingActionKind::extended) {
+    return std::nullopt;
+  }
+
+  if (auto configured = generation_->configuredAction(action)) {
+    return configured;
+  }
+
+  const auto *entry = resolved == nullptr ? nullptr : resolved->find(action);
+
+  return entry == nullptr ? std::nullopt : entry->description;
 }
 
-std::optional<NamedActionDescription> ConfigurationSource::namedAction(BindingAction action) const {
-  return generation_ ? generation_->namedAction(action) : std::nullopt;
+std::optional<DefinitionActionDescription> ConfigurationSource::definitionAction(BindingAction action, const Actions *resolved) const {
+  const auto description = extendedAction(action, resolved);
+  const auto *definition = description ? std::get_if<DefinitionActionDescription>(&*description) : nullptr;
+
+  return definition == nullptr ? std::nullopt : std::optional{*definition};
+}
+
+std::optional<NamedActionDescription> ConfigurationSource::namedAction(BindingAction action, const Actions *resolved) const {
+  const auto description = extendedAction(action, resolved);
+  if (!description) {
+    return std::nullopt;
+  }
+
+  if (const auto *definition = std::get_if<DefinitionActionDescription>(&*description)) {
+    return *definition;
+  }
+
+  if (const auto *plugin = std::get_if<PluginActionDescription>(&*description)) {
+    return *plugin;
+  }
+
+  return std::nullopt;
+}
+
+bool ConfigurationSource::luaIdle() const noexcept {
+  return lua_.idle();
 }
 
 std::uint64_t ConfigurationSource::configurationGeneration() const noexcept {
   return generation_ ? generation_->number() : 0;
 }
 
-std::optional<PluginActionDescription> ConfigurationSource::pluginAction(BindingAction action) const {
-  return generation_ ? generation_->pluginAction(action) : std::nullopt;
+std::optional<PluginActionDescription> ConfigurationSource::pluginAction(BindingAction action, const Actions *resolved) const {
+  const auto description = extendedAction(action, resolved);
+  const auto *plugin = description ? std::get_if<PluginActionDescription>(&*description) : nullptr;
+
+  return plugin == nullptr ? std::nullopt : std::optional{*plugin};
 }
 
 PluginInvocation ConfigurationSource::pluginInvocation(const ClientCommand &request, BindingContext context) const {
@@ -280,52 +436,51 @@ const BindingMap<BindingAction> &ConfigurationSource::keymap() const noexcept {
   return generation_ ? generation_->keymap() : default_keymap_;
 }
 
-BindingEffects ConfigurationSource::invoke(BindingAction action, BindingContext context) {
-  if (!generation_) {
-    throw std::runtime_error{"ConfigurationNotLoaded"};
-  }
-
-  try {
-    const auto effects = generation_->invoke(action, context);
-    trackModules();
-
-    return effects;
-  } catch (...) {
-    trackModules();
-    throw;
-  }
+void ConfigurationSource::invoke(BindingAction action, BindingContext context, Done<Effects> done) {
+  run<Effects>([action, context](Generation &generation) {
+    return generation.invokeResolved(action, context);
+  }, std::move(done));
 }
 
-InputExpression ConfigurationSource::expression(BindingAction action, BindingContext context) {
-  if (!generation_) {
-    throw std::runtime_error{"ConfigurationNotLoaded"};
-  }
-
-  try {
-    auto expression = generation_->expression(action, context);
-    trackModules();
-
-    return expression;
-  } catch (...) {
-    trackModules();
-    throw;
-  }
+void ConfigurationSource::expression(BindingAction action, BindingContext context, Done<InputExpression> done) {
+  run<InputExpression>([action, context](Generation &generation) {
+    return generation.expression(action, context);
+  }, std::move(done));
 }
 
-std::optional<runtime::config::CommandTabView> ConfigurationSource::commandTab(BindingAction action) const {
+std::optional<runtime::config::CommandTabView> ConfigurationSource::commandTab(BindingAction action, const Actions *resolved) const {
   if (!generation_) {
     throw std::runtime_error{"ConfigurationNotLoaded"};
   }
 
-  return generation_->commandTab(action);
+  if (action.generation != generation_->number() || action.kind != BindingActionKind::command_tab) {
+    throw std::invalid_argument{"Command belongs to an obsolete configuration or a different binding kind"};
+  }
+
+  const auto reference = commandTabReference(action);
+  if (!reference) {
+    return std::nullopt;
+  }
+
+  // Configured rows never change; rows a render added travel with that render's result.
+  if (reference->epoch == 0) {
+    return commands_ ? commands_->load(*reference) : std::nullopt;
+  }
+
+  const auto *entry = resolved == nullptr ? nullptr : resolved->find(action);
+
+  return entry == nullptr || !entry->command ? std::nullopt : std::optional{entry->command->view()};
 }
 
-std::optional<NotificationActionDescription> ConfigurationSource::notificationAction(BindingAction action) const {
+std::optional<NotificationActionDescription> ConfigurationSource::notificationAction(BindingAction action, const Actions *resolved) const {
   if (!generation_) {
     throw std::runtime_error{"ConfigurationNotLoaded"};
   }
 
-  return generation_->notificationAction(action);
+  const auto description = extendedAction(action, resolved);
+  const auto *notification = description ? std::get_if<NotificationActionDescription>(&*description) : nullptr;
+
+  return notification == nullptr ? std::nullopt : std::optional{*notification};
 }
 
 void ConfigurationSource::open(const ConfigurationSelection &selection) {
@@ -401,7 +556,7 @@ std::string_view ConfigurationSource::query(ConfigurationQuery query, const Clie
       throw std::runtime_error{"BindingNotFound"};
     }
 
-    return BindingQuery::write(generation_->input(), static_cast<std::size_t>(query.index), generation_->actionDescriptions(), generation_->commandTabs(), query_buffer_);
+    return BindingQuery::write(generation_->input(), static_cast<std::size_t>(query.index), generation_->actionDescriptions(), *commands_, query_buffer_);
   case ConfigurationQuery::Section::runtime:
     return RuntimeQuery::write(generation_->runtimeValues(), query_buffer_);
   case ConfigurationQuery::Section::gui:
@@ -460,10 +615,16 @@ void ConfigurationSource::poll() {
   }
 }
 
-void ConfigurationSource::trackModules() {
-  if (generation_ && generation_->localModuleCount() != static_cast<std::size_t>(watch_.modules.size())) {
-    ConfigurationLoader::trackModules(*generation_, module_root_, watch_.modules);
+// The previous VM dies on the Lua thread after every call already queued for it.
+void ConfigurationSource::retire() {
+  if (!generation_) {
+    return;
   }
+
+  std::shared_ptr<Generation> previous{std::move(generation_)};
+  lua_.post([previous = std::move(previous)]() mutable {
+    previous.reset();
+  }, [](LuaOutcome<void>) {});
 }
 
 ConfigurationReloadRequest ConfigurationSource::request(bool force) {
@@ -550,7 +711,11 @@ void ConfigurationSource::adopt(PreparedConfiguration result) {
   configuration_ = std::move(result->configuration);
   locked_theme_ = result->locked_theme;
   configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
+  retire();
   generation_ = std::move(result->generation);
+  commands_ = std::move(result->commands);
+  fixed_bars_ = std::move(result->fixed_bars);
+  arguments_ = std::move(result->arguments);
   plugins_ = std::move(result->plugins);
   trust_ = result->trust;
   if (generation_) {

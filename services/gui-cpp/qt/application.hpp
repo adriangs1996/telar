@@ -24,6 +24,7 @@ static_assert(true);
 #include "../core/memory.hpp"
 #include <variant>
 #include "configuration_source.hpp"
+#include "element_slots.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
@@ -80,6 +81,8 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
 #include <exception>
+
+#include <functional>
 
 #pragma once
 
@@ -174,6 +177,8 @@ class Application final : public QObject {
   Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
   Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
   Q_PROPERTY(QVariantMap componentBars READ componentBars NOTIFY componentsChanged)
+  // Mod content for the top and bottom bars, by slot name; empty while QML draws them.
+  Q_PROPERTY(QVariantMap elementBars READ elementBars NOTIFY stateChanged)
   Q_PROPERTY(QVariantMap componentPanel READ componentPanel NOTIFY componentsChanged)
   Q_PROPERTY(QVariantMap componentPick READ componentPick NOTIFY pickChanged)
   Q_PROPERTY(QString error READ error NOTIFY stateChanged)
@@ -440,6 +445,9 @@ public:
   [[nodiscard]] QVariantMap componentBars() const;
   [[nodiscard]] QVariantMap componentPanel() const;
   Q_INVOKABLE void activateComponent(int source, int node, const QString &generation, const QString &revision, const QPointF &anchor);
+  // A click on a mod element: runs its action, URL or Lua function.
+  Q_INVOKABLE void activateElement(const QString &slot, const QString &key, const QString &revision, int element);
+  [[nodiscard]] QVariantMap elementBars() const;
   Q_INVOKABLE void closeComponentPanel();
   Q_INVOKABLE void refreshComponentPanel();
   [[nodiscard]] QVariantMap componentPick() const;
@@ -497,11 +505,14 @@ private:
 
   [[nodiscard]] BindingContext bindingContext() const;
   [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
-  bool runBinding(BindingAction action, std::optional<NamedActionDescription> named = std::nullopt);
-  void executeBinding(BindingAction action, std::optional<NamedActionDescription> named = std::nullopt);
+  // `resolved` describes actions a Lua render or callback returned; configured bindings need none.
+  bool runBinding(BindingAction action, const ConfigurationSource::Actions *resolved = nullptr);
+  void executeBinding(BindingAction action, const ConfigurationSource::Actions *resolved = nullptr);
+  void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString &error, const std::function<void()> &apply);
+  void applyEffects(const ResolvedEffects<ApplicationAllocator> &effects);
   void executeNamedAction(const NamedActionDescription &named);
-  void executeCommandTab(BindingAction action);
-  void executeNotificationBinding(BindingAction action);
+  void executeCommandTab(BindingAction action, const ConfigurationSource::Actions *resolved);
+  void executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions *resolved);
   void initializeComponents();
   void resetComponents();
   void tickComponents();
@@ -509,9 +520,15 @@ private:
   void projectComponentSource(std::size_t index, bool panel);
   void armComponents();
   void renderComponentSource(std::size_t index, bool panel);
-  void applyComponentRender(std::size_t index, bool panel, const components::Context &context);
+  void applyComponentRender(std::size_t index, bool panel, const components::Context &context, bool truncated = false);
   void componentCommandFinished(const ComponentCommandOwner &owner, SurfaceCommandResult result);
-  void activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor);
+  [[nodiscard]] const ComponentSlotState::Bar *componentBar(std::size_t index) const;
+  [[nodiscard]] bool componentActionsLive(const ConfigurationSource::Actions &actions) const;
+  void initializeElements();
+  // The mod content a record carries for its slots, keyed by slot name.
+  [[nodiscard]] QVariantMap elementsFor(std::initializer_list<components::Slot> pieces, const QString &key, const QVariantMap &item);
+  void refreshElementBars();
+  void activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor, const ConfigurationSource::Actions &resolved);
   void toggleComponentPanel(std::size_t index);
   [[nodiscard]] components::Context componentContext() const;
   [[nodiscard]] bool componentCommandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const;
@@ -808,6 +825,8 @@ private:
   PickController<Application, ApplicationAllocator, ConfigurationSource> pick_controller_;
   QPointer<QQuickItem> component_pick_return_focus_;
   ComponentSurfaceState component_surfaces_;
+  ElementSlots element_slots_{configuration_source_, [this] { return componentContext(); }, this};
+  QVariantMap element_bars_;
   QTimer component_timer_;
   SurfaceCommand component_command_;
   std::optional<ComponentCommandOwner> component_command_owner_;

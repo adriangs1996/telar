@@ -433,6 +433,15 @@ TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap> &records, 
     const auto stacked = std::min(static_cast<std::size_t>(std::max<qsizetype>(record.value(QStringLiteral("cards")).toList().size(), 1)), Geometry::chip_widths.size());
     const auto caption = captionAdvance(title) + (path.isEmpty() ? 0 : (Geometry::path_gap * ratio) + captionAdvance(path));
     sizes[slot] = {.caption = caption, .chip = Geometry::chip_widths[stacked - 1] * ratio, .status = status_width};
+    // A mod tab that sets a root width takes exactly that width.
+    const auto drawn = record.value(QStringLiteral("elements")).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("nodes")).toList();
+    if (!drawn.isEmpty()) {
+      const auto width = drawn.front().toMap().value(QStringLiteral("width")).toFloat();
+      if (width >= 0) {
+        const auto metrics = Geometry::Metrics::scaled(ratio);
+        sizes[slot] = {.caption = std::max(0.0F, (width * ratio) - metrics.leading - metrics.spacing - metrics.trailing), .chip = 0, .status = 0};
+      }
+    }
     if (record.value(QStringLiteral("selected")).toBool()) {
       active = slot;
     }

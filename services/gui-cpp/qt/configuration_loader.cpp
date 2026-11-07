@@ -89,7 +89,8 @@ std::optional<platform::FileStamp> fileStamp(const QString &path) {
 }
 
 ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator &memory)
-    : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
+    : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
+      commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {
 }
 
 ConfigurationPreparation::~ConfigurationPreparation() = default;
@@ -170,6 +171,7 @@ void ConfigurationLoader::load(ApplicationAllocator &memory, const Configuration
     });
     result.configuration = result.generation->configuration();
     trackModules(*result.generation, result.directory, result.modules);
+    snapshot(memory, *result.generation, result);
   }
 
   if (!request.selection.theme.isEmpty()) {
@@ -179,18 +181,64 @@ void ConfigurationLoader::load(ApplicationAllocator &memory, const Configuration
   }
 }
 
+void ConfigurationLoader::snapshot(ApplicationAllocator &memory, const ConfigurationGeneration<ApplicationAllocator> &generation, ConfigurationPreparation &result) {
+  result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
+  const auto store = [&](int reference, const char *field) {
+    QList<QByteArray> arguments;
+    generation.visitArguments(reference, field, [&](std::string_view argument) {
+      arguments.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
+    });
+    result.arguments.insert({reference, QByteArray{field}}, std::move(arguments));
+  };
+  const auto &definitions = generation.components().definitions();
+  for (std::size_t index = 0; index < components::Definitions::positions; ++index) {
+    const auto position = static_cast<components::Position>(index);
+    const auto &source = definitions.source(position);
+    if (source.kind == components::SourceKind::fixed) {
+      result.fixed_bars.at(index).emplace(generation.copied(generation.components().bar(position)));
+    } else if (source.kind == components::SourceKind::command) {
+      store(source.reference, "command");
+    }
+  }
+
+  for (const auto &panel : definitions.panels()) {
+    if (panel.source.kind == components::SourceKind::command) {
+      store(panel.source.reference, "command");
+    }
+  }
+
+  for (const auto &pick : definitions.picks()) {
+    store(pick.reference, "on_select");
+    if (pick.command) {
+      store(pick.reference, "command");
+    }
+  }
+}
+
 void ConfigurationLoader::trackModules(const ConfigurationGeneration<ApplicationAllocator> &generation, const QString &root, ConfigurationWatch::Modules &modules) {
+  QStringList names;
   generation.visitLocalModules([&](std::string_view name) {
-    const auto key = toQString(name);
+    names.append(toQString(name));
+  });
+  trackModuleNames(names, root, modules);
+}
+
+void ConfigurationLoader::trackModuleNames(const QStringList &names, const QString &root, ConfigurationWatch::Modules &modules) {
+  const QDir directory{root};
+  for (const auto &key : names) {
     if (modules.contains(key)) {
-      return;
+      continue;
     }
 
     auto relative = key;
     relative.replace(QLatin1Char('.'), QLatin1Char('/'));
-    const auto path = QFileInfo{QDir{root}.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
+    auto path = QFileInfo{directory.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
+    if (path.isEmpty()) {
+      path = QFileInfo{directory.filePath(relative + QLatin1StringView{"/init.lua"})}.canonicalFilePath();
+    }
+
     modules.insert(key, {.path = path, .stamp = fileStamp(path)});
-  });
+  }
 }
 
 }

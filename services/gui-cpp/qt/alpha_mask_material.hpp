@@ -26,6 +26,8 @@ namespace telar::gui::qt {
 enum class AlphaMaskSampling : unsigned char {
   standard,
   stable_nearest,
+  // Box-filters the texels under each screen pixel: for oversampled or transformed icons.
+  filtered,
 };
 
 enum class AlphaMaskBlend : unsigned char {

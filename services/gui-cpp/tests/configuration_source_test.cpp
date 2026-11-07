@@ -55,6 +55,7 @@ static_assert(true);
 #include "../qt/configuration_source.hpp"
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileDevice>
 #include <QGuiApplication>
@@ -90,6 +91,28 @@ import telar.base.text;
 import telar.plugins;
 
 
+
+
+namespace telar::gui::qt {
+
+// Waits for the Lua thread, as a binding does before it applies its effects.
+inline BindingEffects invokeNow(ConfigurationSource &source, BindingAction action, BindingContext context) {
+  std::optional<LuaOutcome<ConfigurationSource::Effects>> result;
+  source.invoke(action, context, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
+    result.emplace(std::move(outcome));
+  });
+  while (!result) {
+    QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
+  }
+
+  if (!result->value) {
+    throw std::runtime_error{result->error.toStdString()};
+  }
+
+  return (*result->value)->effects;
+}
+
+}
 
 namespace {
 
@@ -296,7 +319,7 @@ private:
     fixture.open(source);
     QCOMPARE(source.error(), QString{});
     const auto action = [&] {
-      const auto &bar = source.components()->bar(components::Position::bottom_left);
+      const auto &bar = source.fixedBar(components::Position::bottom_left)->content;
       const auto retained = bar.action(bar.nodes().front());
       if (!retained) {
         throw std::runtime_error{"Static bar did not retain its action"};
@@ -305,7 +328,7 @@ private:
       return *retained;
     };
     const auto plugin_action = [&] {
-      const auto retained = source.pluginAction(action());
+      const auto retained = source.pluginAction(action(), &source.fixedBar(components::Position::bottom_left)->actions);
       if (!retained) {
         throw std::runtime_error{"Static bar action is not a plugin action"};
       }
@@ -486,7 +509,7 @@ private:
     const ConfigurationQuery query{.section = ConfigurationQuery::Section::theme};
     const std::string before{source.query(query)};
     const auto callback = source.input().configured.front().action;
-    QCOMPARE(source.invoke(callback, {}).actions.front().parameter, 0);
+    QCOMPARE(invokeNow(source, callback, {}).actions.front().parameter, 0);
     const QSignalSpy configuration_changes{&source, &ConfigurationSource::changed};
     const QSignalSpy theme_changes{&source, &ConfigurationSource::themeChanged};
     AppearanceFixture::set(Qt::ColorScheme::Light);
@@ -496,7 +519,7 @@ private:
     AppearanceFixture::set(Qt::ColorScheme::Light);
     QCOMPARE(theme_changes.count(), 1);
     QCOMPARE(source.query(query), std::string_view{before});
-    QCOMPARE(source.invoke(callback, {}).actions.front().parameter, 1);
+    QCOMPARE(invokeNow(source, callback, {}).actions.front().parameter, 1);
     AppearanceFixture::set(Qt::ColorScheme::Dark);
     QCOMPARE(source.configuration().theme, themeByName("terminal"));
     QCOMPARE(theme_changes.count(), 2);
@@ -667,6 +690,33 @@ private:
     QVERIFY(!source.configuration().sidebar_visible);
   }
 
+  Q_SLOT static void runawayRenderLeavesTheWindowResponsive() {
+    const QTemporaryDir directory;
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeFile(path, "local t=require('telar');return {api_version=2,client={bars={bottom={left=t.bar.dynamic({render=function() while true do end end}),center=t.bar.tabs()}}}}");
+    ApplicationAllocator memory;
+    ConfigurationSource source{memory};
+    source.open({.path = path, .profile = QString{}, .theme = QString{}});
+    QCOMPARE(source.error(), QString{});
+    std::optional<LuaOutcome<ConfigurationSource::BarRender>> result;
+    QElapsedTimer clock;
+    clock.start();
+    source.renderBar(components::Position::bottom_left, {}, [&](LuaOutcome<ConfigurationSource::BarRender> outcome) {
+      result.emplace(std::move(outcome));
+    });
+    constexpr qint64 posting_ms = 50;
+    QVERIFY(clock.elapsed() < posting_ms);
+    bool ticked = false;
+    QTimer::singleShot(1, [&] {
+      ticked = true;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(ticked, 1000);
+    QVERIFY(!result.has_value());
+    QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), 5000);
+    QVERIFY(!result->value);
+    QVERIFY(result->error.contains(QStringLiteral("budget")));
+  }
+
   Q_SLOT static void modulesLoadedByCallbacksRemainWatched() {
     const QTemporaryDir directory;
     QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
@@ -678,13 +728,13 @@ private:
     ConfigurationSource source{memory};
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
-    const auto first = source.invoke(source.input().configured[0].action, {});
+    const auto first = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(first.actions[0].kind, BindingActionKind::toggle_sidebar);
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     writeFile(dependency, fullscreen_module);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
-    const auto second = source.invoke(source.input().configured[0].action, {});
+    const auto second = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(second.actions[0].kind, BindingActionKind::toggle_pane_fullscreen);
   }
 
@@ -699,12 +749,12 @@ private:
     ConfigurationSource source{memory};
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
-    QVERIFY_THROWS_EXCEPTION(std::exception, static_cast<void>(source.invoke(source.input().configured[0].action, {})));
+    QVERIFY_THROWS_EXCEPTION(std::exception, static_cast<void>(invokeNow(source, source.input().configured[0].action, {})));
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     writeFile(dependency, toggle_module);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
-    const auto effects = source.invoke(source.input().configured[0].action, {});
+    const auto effects = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(effects.actions[0].kind, BindingActionKind::toggle_sidebar);
   }
 
@@ -716,16 +766,16 @@ private:
     ConfigurationSource source{memory};
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
-    const auto first = source.invoke(source.input().configured[0].action, {});
+    const auto first = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(first.actions[0].parameter, std::uint64_t{0});
     writeFile(directory.filePath(QStringLiteral("unused.lua")), "return {}");
     source.poll();
-    const auto second = source.invoke(source.input().configured[0].action, {});
+    const auto second = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(second.actions[0].parameter, std::uint64_t{1});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     source.requestReload();
     QTRY_COMPARE(changes.count(), 1);
-    const auto reset = source.invoke(source.input().configured[0].action, {});
+    const auto reset = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(reset.actions[0].parameter, std::uint64_t{0});
   }
 
@@ -832,14 +882,14 @@ private:
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     PausedThreadPool pool;
     source.poll();
-    const auto effects = source.invoke(source.input().configured[0].action, {});
+    const auto effects = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(effects.actions[0].kind, BindingActionKind::toggle_sidebar);
     pool.finish();
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     writeFile(dependency, fullscreen_module);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
-    const auto updated = source.invoke(source.input().configured[0].action, {});
+    const auto updated = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(updated.actions[0].kind, BindingActionKind::toggle_pane_fullscreen);
   }
 
@@ -851,20 +901,20 @@ private:
     ConfigurationSource source{memory};
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     const auto action = source.input().configured[0].action;
-    const auto first = source.invoke(action, {});
+    const auto first = invokeNow(source, action, {});
     QCOMPARE(first.actions[0].parameter, std::uint64_t{0});
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
     writeFile(path, "invalid configuration");
     source.poll();
     QTRY_COMPARE(failures.count(), 1);
-    const auto retained = source.invoke(action, {});
+    const auto retained = invokeNow(source, action, {});
     QCOMPARE(retained.actions[0].parameter, std::uint64_t{1});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     writeFile(path, stateful_configuration);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
-    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(source.invoke(action, {})));
-    const auto replacement = source.invoke(source.input().configured[0].action, {});
+    QVERIFY_THROWS_EXCEPTION(std::exception, static_cast<void>(invokeNow(source, action, {})));
+    const auto replacement = invokeNow(source, source.input().configured[0].action, {});
     QCOMPARE(replacement.actions[0].parameter, std::uint64_t{0});
   }
 

@@ -151,6 +151,8 @@ void Application::refreshAgents() {
   const auto view = session().viewVersion();
   const ActivitySelection selection{.slot = machines_.active(), .tabs = view.active_tab, .panes = view.panes};
   if (versions == activity_versions_ && activity_selection_ == selection) {
+    // The cards stay as they are, and so do the mod instances drawing them.
+    element_slots_.retain({components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status});
     return;
   }
 
@@ -186,6 +188,10 @@ void Application::refreshAgents() {
     const AgentRecordContext context{.machine = version->label.view(), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
     auto record = activityRecord(source.session, entry, context, slot == machines_.active());
     record.insert(QStringLiteral("key"), identity);
+    if (element_slots_.active()) {
+      record.insert(QStringLiteral("elements"), elementsFor({components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status}, identity, ElementSlots::agentItem(record)));
+    }
+
     records.append(std::move(record));
     targets.push_back({.identity = identity, .target = target});
   }

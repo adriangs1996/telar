@@ -92,7 +92,8 @@ public:
   IconMesh(QList<IconQuad> glyphs, Color foreground)
       : glyphs_(std::move(glyphs)),
         geometry_(alphaMaskAttributes(), static_cast<int>(static_cast<std::size_t>(glyphs_.size()) * alpha_mask_triangle_vertices)),
-        material_(*glyphs_.front().mask->texture, foreground, AlphaMaskSampling::stable_nearest) {
+        // Icons are rasterized oversampled and may be rotated or scaled, so they filter.
+        material_(*glyphs_.front().mask->texture, foreground, AlphaMaskSampling::filtered) {
     geometry_.setDrawingMode(QSGGeometry::DrawTriangles);
     setGeometry(&geometry_);
     setMaterial(&material_);

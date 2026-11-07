@@ -10,6 +10,7 @@ ListView {
     required property var geometry
     property real ratio: 1
     property real textScale: 1
+    property var controller: null
     property string hoverIdentity: ""
     property bool semanticHover: false
     signal selected(string key)
@@ -47,6 +48,7 @@ ListView {
             AgentCard {
                 id: agent
                 objectName: "agentCard"
+                controller: root.controller
                 record: entry.record
                 geometry: root.geometry
                 colors: root.colors

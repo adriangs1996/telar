@@ -1160,6 +1160,43 @@ enum class SourceKind : std::uint8_t {
   command,
 };
 
+// The interface pieces a mod may draw, under `client.components`.
+enum class Slot : std::uint8_t {
+  top_bar,
+  bottom_bar,
+  tab,
+  pane_header,
+  agent_card,
+  tab_cards,
+  tab_title,
+  tab_path,
+  tab_activity,
+  pane_mark,
+  pane_program,
+  pane_context,
+  pane_status,
+  pane_progress,
+  pane_actions,
+  agent_mark,
+  agent_title,
+  agent_project,
+  agent_status,
+  count,
+};
+
+inline constexpr const auto &slot_names = runtime::config::component_slots;
+static_assert(slot_names.size() == static_cast<std::size_t>(Slot::count) && slot_names[static_cast<std::size_t>(Slot::agent_status)] == "agent_status");
+
+// Native pieces `ui.builtin` can place: every slot plus parts of the two bars.
+inline constexpr std::array<std::string_view, 27> builtin_names{
+    "tab", "pane_header", "agent_card",
+    "tab_cards", "tab_title", "tab_path", "tab_activity",
+    "pane_mark", "pane_program", "pane_context", "pane_status", "pane_progress", "pane_actions",
+    "agent_mark", "agent_title", "agent_project", "agent_status",
+    "sidebar_toggle", "workspace_identity", "project_switcher", "tabs", "palette_button", "new_tab",
+    "metrics", "bar_left", "bar_center", "bar_right",
+};
+
 struct Source {
   static constexpr std::chrono::milliseconds default_interval{1000};
   static constexpr std::chrono::milliseconds default_timeout{2000};
@@ -1255,6 +1292,7 @@ public:
     }
 
     bars(state, client.field("bars"));
+    slots(state, client.field("components"));
     named(client.field("panels"), panel_count_, [&](std::string_view name, const runtime::lua::Value &value, std::size_t index) {
       auto &panel = panels_[index];
       panel.heading.read(name, value);
@@ -1277,6 +1315,17 @@ public:
 
   [[nodiscard]] inline const Source &source(Position position) const {
     return sources_.at(static_cast<std::size_t>(position));
+  }
+
+  // A registry reference to the slot's render function, or LUA_NOREF when QML draws it.
+  [[nodiscard]] inline int slot(Slot slot) const noexcept {
+    return slots_[static_cast<std::size_t>(slot)];
+  }
+
+  [[nodiscard]] inline bool drawsAny() const noexcept {
+    return std::ranges::any_of(slots_, [](int reference) {
+      return reference != LUA_NOREF;
+    });
   }
 
   [[nodiscard]] inline std::span<const Panel> panels() const noexcept {
@@ -1316,6 +1365,32 @@ private:
     }
   }
 
+  inline void slots(lua_State &state, const runtime::lua::Value &value) {
+    if (!value.present()) {
+      return;
+    }
+
+    value.eachField([&](std::string_view name, const runtime::lua::Value &entry) {
+      const auto *const found = std::ranges::find(slot_names, name);
+      if (found == slot_names.end()) {
+        const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
+        entry.fail(message.c_str());
+      }
+
+      if (!entry.is(LUA_TFUNCTION)) {
+        entry.fail("must be a function from the context and the item to an element");
+      }
+
+      auto &reference = slots_[static_cast<std::size_t>(found - slot_names.begin())];
+      if (reference != LUA_NOREF) {
+        luaL_unref(&state, LUA_REGISTRYINDEX, reference);
+      }
+
+      entry.pushCopy();
+      reference = luaL_ref(&state, LUA_REGISTRYINDEX);
+    });
+  }
+
   template <typename Read>
   inline static void named(const runtime::lua::Value &value, std::size_t &count, const Read &read) {
     if (!value.present()) {
@@ -1346,6 +1421,12 @@ private:
   std::array<Pick, maximum_definitions> picks_{};
   std::size_t panel_count_ = 0;
   std::size_t pick_count_ = 0;
+  std::array<int, static_cast<std::size_t>(Slot::count)> slots_ = [] {
+    std::array<int, static_cast<std::size_t>(Slot::count)> result{};
+    result.fill(LUA_NOREF);
+
+    return result;
+  }();
 };
 
 }

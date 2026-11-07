@@ -129,8 +129,10 @@ QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<cons
       continue;
     }
 
-    auto card = applicationMarkRecord(tab.applicationName(&candidate));
+    const auto program = tab.applicationName(&candidate);
+    auto card = applicationMarkRecord(program);
     card.insert(QStringLiteral("key"), QString::number(candidate.id));
+    card.insert(QStringLiteral("program"), toQString(program));
     card.insert(QStringLiteral("focused"), candidate.id == tab.focused_pane);
     QString attention;
     for (const auto &agent : agents) {

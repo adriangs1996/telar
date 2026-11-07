@@ -89,14 +89,14 @@ public:
   }
 
   void open(std::size_t index) {
-    const components::Configuration *configuration = source_.components();
-    if (configuration == nullptr || index >= configuration->definitions().picks().size()) {
+    const components::Definitions *definitions = source_.definitions();
+    if (definitions == nullptr || index >= definitions->picks().size()) {
       throw std::invalid_argument{"Pick is no longer configured"};
     }
 
     close();
     items_ = makeOwned<components::PickItems>(memory_);
-    const auto &definition = configuration->definitions().picks()[index];
+    const auto &definition = definitions->picks()[index];
     title_ = text(definition.heading.title.view());
     placeholder_ = QStringLiteral("Filter choices…");
     owner_ = host_.pickOwner();
@@ -154,7 +154,7 @@ public:
       return;
     }
 
-    const auto &definition = source_.components()->definitions().picks()[*index_];
+    const auto &definition = source_.definitions()->picks()[*index_];
     const auto selected = items_->at(matches[static_cast<std::size_t>(row)].index);
     SurfaceCommandRequest request;
     request.arguments = source_.commandArguments(definition.reference, "on_select");
@@ -213,7 +213,7 @@ private:
 
     pending_ = false;
     try {
-      const auto &definition = source_.components()->definitions().picks()[*index_];
+      const auto &definition = source_.definitions()->picks()[*index_];
       SurfaceCommandRequest request;
       request.arguments = source_.commandArguments(definition.reference, "command");
       request.timeout = definition.timeout;
@@ -248,16 +248,28 @@ private:
 
     try {
       auto context = host_.pickContext();
-      const auto &definition = source_.components()->definitions().picks()[*index_];
+      const auto &definition = source_.definitions()->picks()[*index_];
       if (definition.command) {
         context.output = std::string_view{output.constData(), static_cast<std::size_t>(output.size())};
       }
 
-      source_.renderPick(*index_, context, *items_);
-      project();
-      error_.clear();
-      loading_ = false;
-      host_.pickChanged();
+      // The items arrive from the Lua thread; a pick reopened meanwhile ignores them.
+      source_.renderPick(*index_, context, [this, identity = identity_](auto outcome) {
+        if (!isOpen() || identity != identity_ || outcome.stale) {
+          return;
+        }
+
+        if (!outcome.value) {
+          fail(outcome.error);
+          return;
+        }
+
+        items_ = std::move(*outcome.value);
+        project();
+        error_.clear();
+        loading_ = false;
+        host_.pickChanged();
+      });
     } catch (const std::exception &error) {
       fail(QString::fromUtf8(error.what()));
     }
