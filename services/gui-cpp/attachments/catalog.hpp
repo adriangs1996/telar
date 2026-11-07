@@ -1,5 +1,6 @@
 #pragma once
 
+#include "attachments/capture.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
 #include "attachments/marker_screen.hpp"
@@ -36,14 +37,6 @@ struct AttachmentSnapshot {
   std::array<AttachmentItem, AttachmentLimits::maximum_items> items{};
   std::size_t count = 0;
   std::optional<std::uint64_t> modal;
-};
-
-template <Allocator Memory>
-struct AttachmentCapture {
-  ClipboardCaptureRequest request;
-  SensitiveBytes<Memory> png;
-  std::uint32_t width = 0;
-  std::uint32_t height = 0;
 };
 
 // Delivery owns presentation resources. A retired slot remains charged until

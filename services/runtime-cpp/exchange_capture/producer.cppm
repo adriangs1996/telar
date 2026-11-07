@@ -1,10 +1,16 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <limits>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <new>
+#include <string>
+#include <vector>
 
 #define ZSTD_STATIC_LINKING_ONLY
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstddef>
-
 
 #include <cstdint>
 #include <span>
@@ -12,21 +18,15 @@ module;
 #include <brotli/decode.h>
 #include <optional>
 
-
 #include <utility>
-
 
 #include <initializer_list>
 #include <zlib.h>
 
-
 #include <zstd.h>
 
-
 #include <string_view>
-#include "telar_platform/trace.hpp"
 #include <stdexcept>
-
 
 #include <algorithm>
 #include <atomic>
@@ -45,6 +45,8 @@ export import telar.runtime.exchange_capture.exchange;
 
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: exchange_capture/decoder_memory.cppm
 export {

@@ -1,4 +1,12 @@
 module;
+#include <stdexcept>
+#include <limits>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <variant>
 
 #include <cstdint>
 #include <cstring>
@@ -11,11 +19,6 @@ module;
 #include <array>
 #include <cstddef>
 #include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
-
-
-#include "telar_platform/file_descriptor.hpp"
-
 
 #if (defined(__APPLE__))
 #endif
@@ -87,11 +90,9 @@ module;
 #if (!(defined(__APPLE__)))
 #include <sys/uio.h>
 #endif
-#include "telar_client/codecs/telar_wire.hpp"
 #include <memory>
 #include <pcap/pcap.h>
 #include <sys/ioctl.h>
-
 
 #include <bit>
 #include <cerrno>
@@ -99,7 +100,6 @@ module;
 #include <csignal>
 #include <netinet/tcp.h>
 #include <sys/uio.h>
-
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -111,15 +111,12 @@ module;
 #include <poll.h>
 #include <thread>
 
-
 #include <pthread.h>
 #include <netdb.h>
 #include <span>
-#include "telar_platform/trace.hpp"
 #include <concepts>
 #include <type_traits>
 #include <utility>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdio>
 
 export module telar.runtime.redirect.ingress;
@@ -140,6 +137,9 @@ export import telar.runtime.platform.launch_program;
 
 
 export import telar.client;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: redirect/target.cppm
 export {

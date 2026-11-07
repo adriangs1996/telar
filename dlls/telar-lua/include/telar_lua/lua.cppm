@@ -1,11 +1,21 @@
 module;
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
+#include <type_traits>
+#include <variant>
+#include <bit>
 
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -13,21 +23,16 @@ module;
 #include <stdexcept>
 #include <string_view>
 
-
 #include <exception>
 #include <charconv>
 #include <cstdint>
 #include <optional>
 #include <span>
-#include "telar_client/codecs/telar_value_codec.hpp"
 
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
-
 
 #include <cmath>
 #include <initializer_list>
@@ -36,6 +41,9 @@ module;
 export module telar.lua;
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
 
 // Interface: telar_lua/api.cppm
 export {

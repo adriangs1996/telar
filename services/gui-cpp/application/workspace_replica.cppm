@@ -1,39 +1,37 @@
 module;
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <bit>
+#include <cmath>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/serializers/telar_messages.hpp"
 #include <cstdint>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <limits>
 #include <string_view>
-
 
 #include <array>
 #include <optional>
 #include <span>
 #include <stdexcept>
 
-
 #include <charconv>
 #include <concepts>
 #include <cstring>
 #include <system_error>
 
-
-#include "../core/terminal_size.hpp"
-#include "../core/memory.hpp"
 #include <atomic>
 #include <exception>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include <utility>
 #include <variant>
-#include "../terminal/screen.hpp"
 
 export module telar.gui.application.workspace_replica;
 
@@ -46,6 +44,10 @@ export import telar.gui.text.json_unsigned_integer;
 export import telar.gui.graphics.texture_cache;
 export import telar.gui.application.sound_playback;
 export import telar.gui.presentation.application_mark;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: application/agent_status_change.cppm
 export {

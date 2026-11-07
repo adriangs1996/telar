@@ -1,7 +1,23 @@
 module;
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <span>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <algorithm>
+#include <bit>
+#include <stdexcept>
+#include <unistd.h>
+#include <utility>
 
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <optional>
 #include <sys/types.h>
 #include <array>

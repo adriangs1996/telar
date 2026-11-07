@@ -1,23 +1,28 @@
 module;
+#include <chrono>
+#include <utility>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <variant>
+#include <bit>
+#include <stdlib.h>
 
-#include "telar_base/memory/allocator.hpp"
 #include <string_view>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <concepts>
 #include <cstdlib>
 
-
 #include <stdexcept>
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <unistd.h>
-#include "telar_platform/random_bytes.hpp"
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -32,7 +37,6 @@ module;
 #include <algorithm>
 #include <optional>
 
-
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
@@ -41,7 +45,6 @@ module;
 #endif
 #include "integration_assets.hpp"
 #include <cstring>
-
 
 #include <limits>
 #include <type_traits>
@@ -52,7 +55,6 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 #include <charconv>
-
 
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
@@ -74,6 +76,9 @@ export import telar.cli.tab;
 
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: integration/provider.cppm
 export {

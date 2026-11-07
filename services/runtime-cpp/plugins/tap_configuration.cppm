@@ -1,13 +1,15 @@
 module;
+#include <type_traits>
+#include <variant>
+#include <vector>
+#include <mutex>
+#include <new>
 
-#include "telar_base/text/utf8.hpp"
 #include <string_view>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <cinttypes>
 #include <cstdio>
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -23,34 +25,26 @@ module;
 #include <limits>
 #include <span>
 #include <concepts>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <bit>
-
 
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <dirent.h>
 #include <fcntl.h>
 #include <cstdlib>
 #include <limits.h>
 #include <sys/stat.h>
 #include "telar_platform/open_directory.h"
-#include "telar_base/memory/fixed_text.hpp"
 #include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <unistd.h>
 #include <openssl/sha.h>
-
 
 #include <poll.h>
 #include <sys/uio.h>
 #include <utility>
 
-
 #include <atomic>
 #include <memory>
-
 
 #include <cassert>
 
@@ -67,6 +61,9 @@ export import telar.runtime.platform.stream_read_buffer;
 
 
 export import telar.runtime.exchange_capture.exchange;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: plugins/action_encoder.cppm
 export {

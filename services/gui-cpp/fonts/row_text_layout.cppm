@@ -1,4 +1,12 @@
 module;
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <exception>
+#include <cstdio>
+#include <variant>
 
 #include <concepts>
 #include <cstddef>
@@ -12,24 +20,16 @@ module;
 #include <algorithm>
 #include <ghostty/vt/unicode.h>
 
-
-#include "../core/memory.hpp"
 #include <span>
 #include <freetype/freetype.h>
 #include <hb.h>
 #include <memory>
 #include "../platform/font.h"
 #include <cstring>
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 #include <cmath>
 #include <limits>
 #include <type_traits>
-
-
-#include "../terminal/screen.hpp"
 
 export module telar.gui.fonts.row_text_layout;
 
@@ -48,6 +48,10 @@ export import telar.gui.core.metrics;
 
 export import telar.gui.core.json_writer;
 export import telar.gui.terminal.copy_mode;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: fonts/font_runs.cppm
 export {

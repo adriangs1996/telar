@@ -1,4 +1,11 @@
 module;
+#include <memory>
+#include <vector>
+#include <bit>
+#include <utility>
+#include <mutex>
+#include <new>
+#include <stdlib.h>
 
 #include <algorithm>
 #include <array>
@@ -9,10 +16,8 @@ module;
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <string>
 #include <concepts>
-
 
 #include <cerrno>
 #include <cstddef>
@@ -22,11 +27,7 @@ module;
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/random_bytes.hpp"
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
@@ -36,7 +37,6 @@ module;
 #endif
 #if (!(defined(__APPLE__)))
 #endif
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <csignal>
@@ -46,12 +46,10 @@ module;
 #include <thread>
 #include <chrono>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
-
 
 #if (defined(__APPLE__))
 #endif
@@ -60,19 +58,16 @@ module;
 #include <poll.h>
 #include <format>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
 #include <openssl/sha.h>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
-#include "telar_client/serializers/telar_messages.hpp"
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -85,7 +80,6 @@ module;
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#include "telar_base/text/utf8.hpp"
 #include <cmath>
 
 export module telar.cli.project_setup;
@@ -101,6 +95,9 @@ export import telar.cli.output;
 
 
 export import telar.cli.history;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: pane_agent_options.cppm
 export {

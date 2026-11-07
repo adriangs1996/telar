@@ -1,6 +1,21 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <compare>
+#include <tuple>
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <cmath>
 
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -8,25 +23,11 @@ module;
 #include <limits>
 #include <optional>
 
-
 #include <array>
-
-
-#include "telar_base/memory/fixed_text.hpp"
-
-
-#include "../terminal/cell_position.hpp"
-
 
 #include <charconv>
 
-
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "../terminal/screen.hpp"
 #include <span>
-
 
 #include <concepts>
 #include <cstring>
@@ -42,6 +43,11 @@ export import telar.base.text;
 
 
 export import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: links/uri_view.cppm
 export {

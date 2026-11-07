@@ -1,7 +1,10 @@
 module;
+#include "telar_base/diagnostics/timing.hpp"
+#include <cstring>
+#include <stdexcept>
+#include <string_view>
 
 #include "telar_base/diagnostics/limit_reach.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -9,6 +12,18 @@ module;
 #include <span>
 
 export module telar.base.diagnostics;
+
+import telar.base.memory;
+
+// Owned textual headers stay in this global module fragment only; importers
+// reach their names through these declarations instead of including them.
+export namespace telar {
+using telar::LimitReach;
+using telar::TimedScope;
+using telar::Timing;
+using telar::accumulate;
+}
+
 
 
 // Interface: telar_base/diagnostics/limit_ledger.cppm

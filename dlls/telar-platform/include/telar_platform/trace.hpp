@@ -85,13 +85,6 @@ template <Allocator Memory>
 Session(Memory &memory, const char *path) -> Session<Memory>;
 
 }
-
-#define TELAR_TRACE_JOIN_(left, right) left##right
-#define TELAR_TRACE_JOIN(left, right) TELAR_TRACE_JOIN_(left, right)
-#define TELAR_TRACE(name)                                                         \
-  const ::telar::runtime::trace::Scope TELAR_TRACE_JOIN(telar_trace_, __LINE__) { \
-    ::telar::runtime::trace::literal(name)                                        \
-  }
-#else
-#define TELAR_TRACE(name) static_cast<void>(0)
 #endif
+
+#include "telar_platform/trace_macro.hpp"

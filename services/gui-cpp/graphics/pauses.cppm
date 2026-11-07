@@ -1,4 +1,14 @@
 module;
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <bit>
+#include <stdexcept>
 
 #include <algorithm>
 #include <array>
@@ -8,8 +18,6 @@ module;
 #include <limits>
 #include <span>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
 #include <variant>
 #include <concepts>
@@ -18,6 +26,8 @@ module;
 export module telar.gui.graphics.pauses;
 
 export import telar.gui.application.sound_playback;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: graphics/artwork_resize.cppm
 export {

@@ -59,7 +59,7 @@ static_assert(true);
 
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.capture_analysis;
-import telar.runtime.proxy.application_relay;
+import telar.runtime.proxy.runtime;
 
 using namespace telar;
 using namespace telar::runtime;

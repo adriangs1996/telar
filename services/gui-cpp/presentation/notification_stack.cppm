@@ -1,6 +1,13 @@
 module;
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/serializers/telar_messages.hpp"
 #include <array>
 #include <charconv>
 #include <concepts>
@@ -10,10 +17,6 @@ module;
 #include <string_view>
 #include <system_error>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -22,24 +25,14 @@ module;
 #include <ghostty/vt/unicode.h>
 #include <cmath>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "../core/terminal_size.hpp"
-
 
 #include <span>
 
-
-#include "../core/memory.hpp"
 #include <atomic>
 #include <exception>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include <utility>
 #include <variant>
-#include "../terminal/screen.hpp"
 
 export module telar.gui.presentation.notification_stack;
 
@@ -50,6 +43,10 @@ export import telar.gui.application.workspace_replica;
 
 
 export import telar.gui.core.metrics;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: presentation/agent_card_labels.cppm
 export {

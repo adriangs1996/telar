@@ -1,12 +1,18 @@
 module;
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
+#include <cstring>
+#include <type_traits>
+#include <cstdio>
 
 #include <cstdint>
 
-
-#include "../attachments/secure_erase.hpp"
-#include "../attachments/sensitive_bytes.hpp"
-#include "../attachments/types.hpp"
-#include "../core/memory.hpp"
 #include "clipboard_image_source.hpp"
 #include <algorithm>
 #include <array>
@@ -19,30 +25,28 @@ module;
 #include <time.h>
 #include <unistd.h>
 
-
 #include <atomic>
 #include <optional>
 
-
 #include <sys/stat.h>
-
 
 #include <sys/param.h>
 
-
-#include "telar_client/codecs/telar_wire.hpp"
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <fcntl.h>
 #include <limits.h>
 #include <stop_token>
 #include <string_view>
 
-
 #include <string>
 
 export module telar.gui.platform.profile_file;
+
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.attachments.catalog;
+import telar.gui.core.primitives;
+import telar.platform.primitives;
 
 // This class completes the forward declaration in the Objective-C++ ABI.
 

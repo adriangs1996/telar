@@ -5,7 +5,6 @@ static_assert(true);
 
 
 #include "check.hpp"
-#include "socket_pair.hpp"
 #include <cerrno>
 #include <exception>
 #include "telar_platform/file_descriptor.hpp"
@@ -171,6 +170,7 @@ static_assert(true);
 
 
 
+#include "socket_pair.hpp"
 import telar.platform;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;

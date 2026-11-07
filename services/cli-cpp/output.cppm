@@ -1,23 +1,39 @@
 module;
+#include <concepts>
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <limits>
+#include <variant>
+#include <vector>
+#include <algorithm>
+#include <bit>
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
-
 #include <array>
 #include <cstdint>
-
-
-#include "telar_base/memory/allocator.hpp"
-
 
 #include <charconv>
 #include <cstdio>
 
 export module telar.cli.output;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
 
 
 // Interface: failure.cppm

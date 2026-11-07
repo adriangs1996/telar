@@ -1,27 +1,26 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 
-
 #include <algorithm>
 #include <optional>
 #include <string_view>
 
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <span>
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cstring>
-
 
 #include <charconv>
 #include <concepts>
 #include <system_error>
-
 
 #include <sys/un.h>
 
@@ -34,6 +33,8 @@ export import telar.gui.text.json_unsigned_integer;
 
 
 export import telar.gui.platform.notification_commands;
+import telar.base.memory;
+import telar.client.protocol;
 
 // Interface: machines/failure.cppm
 export {

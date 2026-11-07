@@ -1,30 +1,32 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
 #include <stdexcept>
 #include <system_error>
 
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-
-
 #include <algorithm>
 #include <cmath>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "../core/terminal_size.hpp"
-
 
 #include <span>
 
@@ -38,6 +40,10 @@ export import telar.gui.history.browser;
 
 
 export import telar.gui.machines.picker;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: presentation/bar_metrics.cppm
 export {

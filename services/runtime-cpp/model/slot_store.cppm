@@ -1,27 +1,44 @@
 module;
-
-#include "telar_client/serializers/telar_protocol.hpp"
-
+#include <concepts>
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
+#include <sys/mman.h>
+#include <utility>
+#include <atomic>
+#include <mutex>
+#include <chrono>
+#include <cstdlib>
+#include <new>
 
 #include <algorithm>
 #include <array>
 
-
 #include <optional>
-
 
 #include <cstdint>
 
-
-#include "../graphics/media_budget.hpp"
-#include "telar_config/graphics/limits.hpp"
-
-
-#include "telar_base/memory/allocator.hpp"
 #include <limits>
 #include <span>
 
 export module telar.runtime.model.slot_store;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.graphics.kitty;
 
 
 // Interface: model/client_role.cppm

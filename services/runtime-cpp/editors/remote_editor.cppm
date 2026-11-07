@@ -1,29 +1,35 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
 
-#include "telar_platform/trace.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <optional>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include <atomic>
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <exception>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <limits.h>
 #include <poll.h>
 #include <sys/wait.h>
@@ -38,6 +44,9 @@ export import telar.runtime.runtime.background_executor;
 export import telar.runtime.transport.connection;
 export import telar.base.editors;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: editors/remote_editor.cppm
 export {

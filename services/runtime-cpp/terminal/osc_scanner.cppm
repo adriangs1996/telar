@@ -1,9 +1,26 @@
 module;
+#include <limits>
+#include <charconv>
+#include <cassert>
+#include <memory>
+#include <mutex>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <new>
+#include <string>
+#include <vector>
+#include <exception>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
 
 #include <algorithm>
 #include <chrono>
 #include <optional>
-
 
 #include <cstddef>
 #include <cstring>
@@ -12,19 +29,18 @@ module;
 #include <span>
 #include <string_view>
 
-
-#include "pty_response_queue.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
 
-
 #include "cell_layout.hpp"
-#include "ghostty_handle.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 
 export module telar.runtime.terminal.osc_scanner;
 
 export import telar.base.memory;
+import telar.base.diagnostics;
+import telar.base.text;
+import telar.client.protocol;
+import telar.runtime.diagnostics.line;
+import telar.runtime.terminal.control;
 
 // Interface: terminal/frame_pacer.cppm
 export {

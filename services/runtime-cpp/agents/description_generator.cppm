@@ -1,4 +1,18 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <concepts>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <unistd.h>
 
 #include <cstddef>
 #include <cstring>
@@ -8,28 +22,18 @@ module;
 #include <span>
 #include <string_view>
 #include <stdexcept>
-#include "telar_client/serializers/telar_protocol.hpp"
 
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <chrono>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <exception>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <sys/types.h>
 #include <limits.h>
 #include <atomic>
 #include <poll.h>
 #include <sys/wait.h>
-#include "telar_platform/trace.hpp"
-
 
 #include <bit>
 
@@ -43,6 +47,9 @@ export import telar.platform;
 
 
 export import telar.runtime.platform.process_probe;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: agents/description_capture.cppm
 export {

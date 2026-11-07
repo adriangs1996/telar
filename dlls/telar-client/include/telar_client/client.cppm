@@ -1,24 +1,23 @@
 module;
+#include "telar_client/codecs/telar_annotations.hpp"
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
 
 #include <array>
 #include <cstddef>
 #include <span>
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-
-
-#include "telar_client/codecs/telar_codec.hpp"
-
-
-#include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-
 
 #include <cstdint>
 
-
 #include <stdexcept>
-
 
 #include <charconv>
 #include <concepts>
@@ -26,34 +25,15 @@ module;
 #include <string_view>
 #include <system_error>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-
-
 #include <algorithm>
-
-
-#include "telar_base/memory/allocator.hpp"
-
 
 #include <bit>
 #include <limits>
 
-
 #include <optional>
-
 
 #include <exception>
 #include <new>
-
-
-#include "telar_client/serializers/telar_protocol.hpp"
-
-
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-
 
 #include <cerrno>
 #include <sys/socket.h>
@@ -64,6 +44,15 @@ module;
 export module telar.client;
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+
+// The connection reports request failures with it; the rest of the protocol
+// stays with telar.client.protocol.
+export namespace telar::runtime {
+using telar::runtime::RequestError;
+}
 
 // Interface: telar_client/serializers/telar_handshake.cppm
 export {
@@ -1597,32 +1586,6 @@ private:
 
     return command;
   }
-};
-
-}
-}
-
-// Interface: telar_client/request_error.cppm
-export {
-namespace telar::runtime {
-
-class RequestError final : public std::exception {
-public:
-  inline explicit RequestError(FailureCode code, const char *message) noexcept
-      : code_(code),
-        message_(message) {}
-
-  inline FailureCode code() const noexcept {
-    return code_;
-  }
-
-  inline const char *what() const noexcept override {
-    return message_;
-  }
-
-private:
-  FailureCode code_;
-  const char *message_;
 };
 
 }

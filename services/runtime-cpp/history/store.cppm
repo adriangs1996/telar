@@ -1,37 +1,39 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <cstddef>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <stdexcept>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <exception>
 #include <sqlite3.h>
-
 
 #include <algorithm>
 #include <array>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <optional>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include <atomic>
-#include "telar_base/diagnostics/limit_reach.hpp"
-#include "telar_platform/trace.hpp"
-
 
 #include <bit>
 
-
 #include <concepts>
-#include "telar_base/memory/allocator.hpp"
-
 
 #include <cassert>
-
 
 #include <unordered_set>
 
@@ -56,6 +58,8 @@ export import telar.runtime.transport.connection;
 
 export import telar.base.history;
 export import telar.config;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: history/database.cppm
 export {

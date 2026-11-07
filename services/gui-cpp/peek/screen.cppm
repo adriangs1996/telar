@@ -1,18 +1,29 @@
 module;
+#include <array>
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <vector>
+#include <bit>
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <cstdint>
 #include <string_view>
 
-
 #include <cstddef>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <variant>
 
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <optional>
 #include <stdexcept>
@@ -23,6 +34,10 @@ export import telar.gui.suggestions.state;
 
 
 export import telar.gui.palette.navigation_label;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: peek/command.cppm
 export {

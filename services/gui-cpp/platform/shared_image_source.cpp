@@ -1,11 +1,24 @@
 module;
+#include <concepts>
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
+#include <cerrno>
+#include <limits.h>
 
-#include "telar_platform/file_descriptor.hpp"
 #include <cstdint>
 #include <span>
 #include <string_view>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <algorithm>
 #include <array>
 #include <fcntl.h>

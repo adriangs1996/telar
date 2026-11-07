@@ -1,4 +1,15 @@
 module;
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <chrono>
+#include <utility>
+#include <mutex>
+#include <new>
+#include <stdlib.h>
 
 #include <algorithm>
 #include <array>
@@ -9,19 +20,14 @@ module;
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <concepts>
 #include <cstdlib>
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <unistd.h>
-#include "telar_platform/random_bytes.hpp"
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -44,6 +50,9 @@ module telar.cli.tab;
 
 import telar.cli.integration.settings;
 import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 
 namespace telar::runtime::cli {

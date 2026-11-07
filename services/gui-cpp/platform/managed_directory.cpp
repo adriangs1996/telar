@@ -1,11 +1,12 @@
 module;
+#include <unistd.h>
+#include <utility>
 
 #include <string_view>
 #include <cstddef>
 #include <sys/param.h>
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <array>
 #include <fcntl.h>
@@ -17,6 +18,7 @@ module telar.gui.platform.login_shell;
 
 import telar.gui.platform.profile_file;
 import telar.platform;
+import telar.platform.primitives;
 
 
 namespace telar::gui::platform {

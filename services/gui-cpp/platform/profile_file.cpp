@@ -1,13 +1,18 @@
 module;
+#include <limits>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
 
-#include "../core/memory.hpp"
 #include <cstddef>
 #include <sys/param.h>
-#include "telar_client/codecs/telar_wire.hpp"
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstdint>
 #include <fcntl.h>
@@ -47,6 +52,10 @@ module telar.gui.platform.profile_file;
 import telar.gui.platform.private_file_stamp;
 import telar.platform;
 import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.platform.primitives;
 
 
 #ifdef __APPLE__

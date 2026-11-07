@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "socket_pair.hpp"
 #include <concepts>
 #include <cstdint>
 #include <span>
@@ -58,6 +57,7 @@ static_assert(true);
 
 
 
+#include "socket_pair.hpp"
 import telar.runtime.tls.interception;
 
 using namespace telar;

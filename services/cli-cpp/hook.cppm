@@ -1,6 +1,16 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <utility>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <bit>
+#include <stdlib.h>
 
-#include "telar_base/memory/allocator.hpp"
 #include <exception>
 #include <charconv>
 #include <cstdint>
@@ -8,48 +18,32 @@ module;
 #include <span>
 #include <string_view>
 #include <cerrno>
-#include "telar_platform/trace.hpp"
 #include <unistd.h>
 
-
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <algorithm>
 
-
 #include <concepts>
 #include <limits>
-
 
 #include <dirent.h>
 #include <cstdlib>
 #include <openssl/md5.h>
 
-
 #include <chrono>
-
 
 #include <cstddef>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <stdexcept>
 
-
-#include "telar_platform/random_bytes.hpp"
 #include <cassert>
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <sys/types.h>
 #include <atomic>
 #include <poll.h>
@@ -68,6 +62,9 @@ export import telar.base.text;
 
 
 export import telar.base.memory;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: hooks/input.cppm
 export {

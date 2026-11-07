@@ -1,8 +1,16 @@
 module;
+#include <concepts>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <vector>
 
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
@@ -13,16 +21,12 @@ module;
 #include <optional>
 #include <pcap/pcap.h>
 
-
 #include <algorithm>
 #include <arpa/inet.h>
 
-
 #include <chrono>
 
-
 #include <string>
-
 
 #include <unordered_map>
 
@@ -32,6 +36,8 @@ export import telar.runtime.traffic.control_protocol;
 
 
 export import telar.base.memory;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: traffic/network_packet.cppm
 export {

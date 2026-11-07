@@ -1,33 +1,31 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "../core/terminal_size.hpp"
-
 
 #include <bit>
 #include <stdexcept>
 #include <ghostty/vt/unicode.h>
 #include <limits>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
 #include <system_error>
 
-
-#include "telar_base/text/utf8.hpp"
 #include <span>
 
 export module telar.gui.presentation.history_meta_geometry;
@@ -41,6 +39,10 @@ export import telar.gui.text.bounded_editor;
 export import telar.gui.presentation.history_filter_geometry;
 
 export import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: presentation/history_row_geometry.cppm
 export {

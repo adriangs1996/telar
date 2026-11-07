@@ -1,19 +1,21 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <bit>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
-
 
 #include <cstddef>
 #include <array>
 #include <string_view>
 #include <utility>
-
 
 #include <charconv>
 #include <concepts>
@@ -23,12 +25,7 @@ module;
 #include <span>
 #include <variant>
 
-
-#include "wheel_accumulator.hpp"
-
-
 #include <limits>
-
 
 #include <ranges>
 
@@ -45,6 +42,9 @@ export import telar.gui.presentation.history_meta_geometry;
 
 
 export import telar.gui.presentation.frame_pacer;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: input/child_mouse.cppm
 export {

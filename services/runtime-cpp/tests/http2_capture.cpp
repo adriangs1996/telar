@@ -43,7 +43,7 @@ static_assert(true);
 
 
 
-import telar.runtime.proxy.application_relay;
+import telar.runtime.proxy.runtime;
 import telar.runtime.http2.direction_observer;
 import telar.runtime.proxy.relay_direction;
 

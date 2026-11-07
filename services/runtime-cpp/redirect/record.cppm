@@ -1,15 +1,22 @@
 module;
+#include <utility>
+#include <limits>
+#include <concepts>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <stdlib.h>
+#include <type_traits>
 
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <cstdio>
 #include <net/if.h>
 #include <stdexcept>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
-
 
 #include <algorithm>
 #include <array>
@@ -18,11 +25,8 @@ module;
 #include <span>
 #include <string_view>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_platform/random_bytes.hpp"
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -40,7 +44,6 @@ module;
 #include <sys/file.h>
 #include <thread>
 
-
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
@@ -48,13 +51,9 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 
-
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <arpa/inet.h>
 #include <memory>
 #include <pcap/pcap.h>
-
 
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
@@ -75,6 +74,9 @@ export import telar.platform;
 
 
 export import telar.runtime.redirect.pf_rules;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: redirect/log_interface.cppm
 export {

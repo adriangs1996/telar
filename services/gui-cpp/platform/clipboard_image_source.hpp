@@ -1,7 +1,7 @@
 #pragma once
 
 #include "application/dependencies.hpp"
-#include "attachments/catalog.hpp"
+#include "attachments/capture.hpp"
 #include "attachments/types.hpp"
 #include <cstdint>
 #include <exception>

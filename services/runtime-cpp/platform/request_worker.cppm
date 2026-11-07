@@ -1,34 +1,35 @@
 module;
+#include <utility>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cstdio>
+#include <bit>
+#include <stdexcept>
 
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <cstdint>
 
-
 #include <atomic>
-
 
 #include <concepts>
 #include <condition_variable>
 #include <optional>
 #include <pthread.h>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <type_traits>
 
-
 #include <cstddef>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <limits>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <span>
 #include <sys/types.h>
@@ -37,6 +38,8 @@ module;
 #include <variant>
 
 export module telar.runtime.platform.request_worker;
+
+export import telar.runtime.platform.signals;
 
 export import telar.platform;
 
@@ -49,80 +52,9 @@ export import telar.runtime.transport.connection;
 
 export import telar.base.text;
 export import telar.client;
-
-// Interface: platform/completion_signal.cppm
-export {
-namespace telar::runtime {
-
-class CompletionSignal {
-public:
-  inline CompletionSignal() {
-    int descriptors[2];
-    if (::pipe(descriptors) != 0) {
-      throw SystemError{"Create completion pipe"};
-    }
-    reader_ = FileDescriptor{descriptors[0]};
-    writer_ = FileDescriptor{descriptors[1]};
-    setCloseOnExec(reader_.get());
-    setCloseOnExec(writer_.get());
-    setNonblocking(reader_.get());
-    setNonblocking(writer_.get());
-  }
-
-  inline void notify() noexcept {
-    const std::uint8_t byte = 1;
-    while (::write(writer_.get(), &byte, sizeof(byte)) < 0 && errno == EINTR) {
-    }
-  }
-
-  inline void drain() noexcept {
-    std::array<std::uint8_t, 64> bytes;
-    while (::read(reader_.get(), bytes.data(), bytes.size()) > 0) {
-    }
-  }
-
-  inline bool consume() noexcept {
-    std::uint8_t byte;
-    ssize_t count;
-    do {
-      count = ::read(reader_.get(), &byte, sizeof(byte));
-    } while (count < 0 && errno == EINTR);
-    return count == sizeof(byte);
-  }
-
-  inline int descriptor() const noexcept {
-    return reader_.get();
-  }
-
-private:
-  FileDescriptor reader_;
-  FileDescriptor writer_;
-};
-
-}
-}
-
-// Interface: platform/cancellation_signal.cppm
-export {
-namespace telar::runtime {
-
-class CancellationSignal {
-public:
-  inline void request() noexcept {
-    requested_.store(true, std::memory_order_relaxed);
-    wake_.notify();
-  }
-
-  inline bool requested() const noexcept { return requested_.load(std::memory_order_relaxed); }
-  inline int descriptor() const noexcept { return wake_.descriptor(); }
-
-private:
-  CompletionSignal wake_;
-  std::atomic<bool> requested_{false};
-};
-
-}
-}
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: platform/observation_worker.cppm
 export {

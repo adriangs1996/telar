@@ -1,39 +1,36 @@
 module;
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <bit>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <cstdint>
 
-
 #include <algorithm>
 #include <limits>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
 #include <variant>
 
-
-#include "../core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
 #include <charconv>
 #include <string_view>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <memory>
 #include <stdexcept>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 #include <utility>
 
-
 #include <cmath>
-#include "../core/terminal_size.hpp"
 
 export module telar.gui.application.sound_playback;
 
@@ -44,6 +41,10 @@ export import telar.base.text;
 
 
 export import telar.gui.core.metrics;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: application/pane_bottom_reservation.cppm
 export {

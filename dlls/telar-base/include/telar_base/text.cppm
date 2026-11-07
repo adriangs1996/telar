@@ -1,37 +1,65 @@
 module;
+#include "telar_base/program_identity.hpp"
+#include "telar_base/text/base64.hpp"
+#include <chrono>
+#include <utility>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
 #include <string_view>
-
 
 #include <concepts>
 #include <limits>
 #include <optional>
 
-
 #include <initializer_list>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <cstdint>
 #include <span>
 
-
 #include <algorithm>
-
 
 #include <exception>
 
-
 #include <charconv>
-
 
 #include <array>
 #include <stdexcept>
 
-
 #include "telar_base/text/utf8.hpp"
 
 export module telar.base.text;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+
+// Owned textual headers stay in this global module fragment only; importers
+// reach their names through these declarations instead of including them.
+export namespace telar {
+using telar::Utf8Validation;
+using telar::inspectUtf8;
+}
+export namespace telar::runtime {
+using telar::runtime::utf8Prefix;
+}
+export namespace telar::runtime::base64 {
+using telar::runtime::base64::Padding;
+using telar::runtime::base64::alphabet;
+using telar::runtime::base64::decode;
+using telar::runtime::base64::encode;
+using telar::runtime::base64::encoded_pairs;
+}
+export namespace telar::runtime::control {
+using telar::runtime::control::program_name;
+using telar::runtime::control::program_version;
+using telar::runtime::control::terminfo_name;
+}
+
 
 
 // Interface: telar_base/text/ascii.cppm

@@ -1,4 +1,11 @@
 module;
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <unistd.h>
 
 #include <array>
 #include <cstdint>
@@ -10,27 +17,17 @@ module;
 #include <span>
 #include <stdexcept>
 #include <tuple>
-#include "telar_base/memory/fixed_text.hpp"
-
 
 #include <lua.h>
 
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <variant>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <exception>
 #include <charconv>
 #include <limits.h>
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <bit>
-
 
 #include <cmath>
 #include <concepts>
@@ -41,12 +38,8 @@ module;
 #include <type_traits>
 #include <chrono>
 #include <arpa/inet.h>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include <cinttypes>
 #include <cstdio>
-#include "telar_config/terminal/control/policy.hpp"
 
 export module telar.gui.config.plugin_effects;
 
@@ -61,6 +54,10 @@ export import telar.plugins;
 
 
 export import telar.gui.core.json_writer;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.platform.primitives;
 
 // Interface: config/callback.cppm
 export {

@@ -1,4 +1,13 @@
 module;
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <concepts>
 #include <cstddef>
@@ -6,13 +15,9 @@ module;
 #include <optional>
 #include <utility>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <string_view>
 #include <algorithm>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 #include <cmath>
 #include <limits>

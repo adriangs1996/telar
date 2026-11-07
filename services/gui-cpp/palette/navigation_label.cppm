@@ -1,4 +1,11 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <vector>
 
 #include <array>
 #include <bit>
@@ -13,10 +20,7 @@ module;
 #include <system_error>
 #include <algorithm>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <variant>
-
 
 #include <span>
 #include <utility>
@@ -28,6 +32,8 @@ export import telar.gui.text.json_unsigned_integer;
 
 
 export import telar.base.history;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: palette/navigation_label.cppm
 export {

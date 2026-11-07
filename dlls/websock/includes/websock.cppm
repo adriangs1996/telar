@@ -1,6 +1,15 @@
 module;
+#include <algorithm>
+#include <limits>
+#include <array>
+#include <utility>
+#include <concepts>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
 
-#include "telar_base/memory/allocator.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -12,6 +21,9 @@ module;
 #include <thread>
 
 export module telar.websock;
+
+import telar.base.diagnostics;
+import telar.base.memory;
 
 // Interface: includes/websock/websock.cppm
 export {

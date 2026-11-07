@@ -1,17 +1,20 @@
 module;
+#include <exception>
+#include <memory>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <cmath>
 #include <concepts>
-
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 
-
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include <algorithm>
 #include <charconv>
 #include <cstring>
@@ -25,6 +28,9 @@ module;
 #include <utility>
 
 export module telar.gui.core.json_writer;
+
+import telar.base.text;
+import telar.client.protocol;
 
 
 // Interface: core/cosine.cppm

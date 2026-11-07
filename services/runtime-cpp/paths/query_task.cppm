@@ -1,39 +1,45 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <algorithm>
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
+#include <unistd.h>
 
-#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <atomic>
-
 
 #include <string_view>
 #include <cassert>
 #include <cstring>
 #include <exception>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <sys/types.h>
 #include <limits.h>
 #include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
 #include <charconv>
-#include "telar_platform/trace.hpp"
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unordered_set>
-
-
-#include "telar_base/memory/fixed_text.hpp"
 
 export module telar.runtime.paths.query_task;
 
@@ -41,6 +47,9 @@ export import telar.runtime.platform.git_status;
 
 
 export import telar.runtime.transport.connection;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: paths/fuzzy_match.cppm
 export {

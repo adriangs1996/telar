@@ -1,6 +1,11 @@
 module;
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
+#include <type_traits>
 
-#include "../core/memory.hpp"
 #include <cstdint>
 #include <algorithm>
 #include <array>
@@ -8,15 +13,10 @@ module;
 #include <span>
 #include <stdexcept>
 #include <tuple>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <variant>
-#include "telar_base/text/utf8.hpp"
 #include <string_view>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cinttypes>
 #include <cstdio>
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -28,30 +28,18 @@ module;
 #include <string>
 #include <limits>
 
-
 #include <utility>
 #include <bit>
 #include <concepts>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
-
-
 #include <charconv>
 #include <system_error>
 
-
-#include "telar_client/serializers/telar_frame.hpp"
-
-
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include "gui_config_bootstrap.hpp"
 
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_config/graphics/limits.hpp"
 #include <arpa/inet.h>
-#include "telar_config/terminal/control/policy.hpp"
 #include <format>
 #include <ghostty/vt/unicode.h>
 #include <exception>
@@ -82,6 +70,9 @@ export import telar.gui.core.metrics;
 export import telar.gui.config.plugin_effects;
 export import telar.gui.components.configuration;
 export import telar.gui.components.builtin_content;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: config/action_description_reader.cppm
 export {

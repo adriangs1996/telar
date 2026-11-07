@@ -1,6 +1,8 @@
 module;
+#include <memory>
+#include <mutex>
+#include <stdlib.h>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cerrno>
 #include <cstddef>
@@ -12,9 +14,7 @@ module;
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
@@ -23,8 +23,6 @@ module;
 #if (!(defined(__APPLE__)))
 #endif
 #include <string_view>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -36,12 +34,10 @@ module;
 #include <spawn.h>
 #include <sys/wait.h>
 #include <thread>
-#include "telar_platform/random_bytes.hpp"
 #include <limits>
 #include <optional>
 #include <type_traits>
 #include <string>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <format>
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
@@ -57,7 +53,6 @@ module;
 #include <sys/syscall.h>
 #endif
 #include <cassert>
-#include "telar_base/program_identity.hpp"
 #include <sys/types.h>
 #include <atomic>
 #include <chrono>
@@ -66,7 +61,6 @@ module;
 #include <dlfcn.h>
 #include <utility>
 #include <openssl/sha.h>
-
 
 #if (defined(__APPLE__))
 #endif
@@ -81,7 +75,6 @@ module;
 #if (defined(__linux__))
 #endif
 #include <sys/file.h>
-
 
 #if (defined(__APPLE__))
 #endif
@@ -99,11 +92,7 @@ module;
 #include <vector>
 #include <system_error>
 #include <bit>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <new>
-#include "telar_base/text/utf8.hpp"
-
 
 #if (defined(__APPLE__))
 #endif
@@ -119,19 +108,16 @@ module;
 #endif
 #include <pwd.h>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
-
 
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
 #include <cmath>
-
 
 #if (defined(__APPLE__))
 #endif
@@ -161,6 +147,9 @@ export import telar.platform;
 
 export import telar.cli.machine_ssh;
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: repository_discovery.cppm
 export {

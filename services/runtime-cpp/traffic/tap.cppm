@@ -1,13 +1,19 @@
 module;
+#include <cstdlib>
+#include <stdlib.h>
+#include <limits>
+#include <concepts>
+#include <new>
+#include <vector>
+#include <cstdio>
+#include <variant>
 
-#include "telar_platform/random_bytes.hpp"
 #include <optional>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <cstdint>
 #include <string_view>
@@ -17,13 +23,10 @@ module;
 #include <atomic>
 #include <cassert>
 #include <cstddef>
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <span>
 #include <stdexcept>
 #include <chrono>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
 #include <csignal>
 #include <netinet/in.h>
@@ -33,9 +36,7 @@ module;
 #include <arpa/inet.h>
 #include <string>
 #include <unordered_map>
-#include "telar_base/memory/fixed_text.hpp"
 #include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <limits.h>
 #include <memory>
 #include <mutex>
@@ -47,6 +48,9 @@ module;
 export module telar.runtime.traffic.tap;
 
 export import telar.runtime.traffic.control_backend;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: traffic/tap.cppm
 export {

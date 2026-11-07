@@ -1,40 +1,38 @@
 module;
+#include <compare>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cstring>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
 
 #include <algorithm>
 #include <cstddef>
 #include <utility>
 
-
-#include "cell_position.hpp"
-#include "screen.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
-#include "telar_client/serializers/telar_protocol.hpp"
-
 
 #include <stdexcept>
 #include <tuple>
 
-
 #include <chrono>
-#include "telar_client/codecs/telar_value_codec.hpp"
-
 
 #include <initializer_list>
 
-
 #include <cmath>
-
 
 #include <bit>
 #include <string_view>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
-#include "../core/memory.hpp"
 #include <concepts>
 #include <limits>
 
@@ -54,6 +52,10 @@ export import telar.gui.core.unicode_scalar;
 
 export import telar.gui.core.metrics;
 export import telar.gui.fonts.face;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: terminal/selection.cppm
 export {

@@ -1,26 +1,28 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <string>
+#include <vector>
+#include <mutex>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <stdlib.h>
+#include <zlib.h>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <chrono>
 #include <cstdint>
 #include <concepts>
 #include <string_view>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <array>
-#include "../diagnostics/timing.hpp"
 #include <atomic>
 #include <exception>
 #include <cstddef>
 #include "telar_base/diagnostics/config.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
 #include <condition_variable>
 #include <optional>
 #include <pthread.h>
 #include <algorithm>
 #include <limits>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <span>
 #include <sys/types.h>
@@ -28,19 +30,14 @@ module;
 #include <cassert>
 #include <type_traits>
 #include <variant>
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <limits.h>
 #include <poll.h>
 #include <sys/wait.h>
 #include <charconv>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "telar_platform/trace.hpp"
-
 
 #include <sqlite3.h>
-#include "telar_base/diagnostics/limit_reach.hpp"
 #include <bit>
 #include <unordered_set>
 #if (TELAR_DIAGNOSTICS)
@@ -52,37 +49,14 @@ module;
 #if (TELAR_DIAGNOSTICS)
 #endif
 
-
 #include <stdexcept>
 
-
-#include "../diagnostics/line.hpp"
-#include "../graphics/kitty_framing.hpp"
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <utility>
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "../graphics/temporary_path.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <sys/mman.h>
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
 #include <tuple>
-#include "../terminal/control/engine.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "../terminal/graphics_cursor.hpp"
 #include <memory>
 #include <csignal>
 #include <sys/uio.h>
@@ -115,8 +89,6 @@ module;
 #if (defined(__linux__))
 #endif
 #include <new>
-#include "telar_config/terminal/control/policy.hpp"
-
 
 #include <dirent.h>
 
@@ -130,6 +102,11 @@ export import telar.runtime.worktrees.git_probe;
 export import telar.runtime.history.store;
 export import telar.runtime.runtime.background_executor;
 export import telar.platform;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 #if (TELAR_DIAGNOSTICS)
 export import telar.runtime.diagnostics.operation;
 #endif

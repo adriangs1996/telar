@@ -1,15 +1,32 @@
 module;
+#include <array>
+#include <cstring>
+#include <stdexcept>
+#include <concepts>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+#include <algorithm>
+#include <bit>
 
 #include <cstddef>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdint>
 #include <string_view>
 
 export module telar.gui.suggestions.state;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
 
 
 // Interface: suggestions/limits.cppm

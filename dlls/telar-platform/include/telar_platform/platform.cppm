@@ -1,4 +1,15 @@
 module;
+#include <memory>
+#include <type_traits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <utility>
+#include <mutex>
+#include <new>
+#include <stdlib.h>
+#include <sys/mman.h>
 
 #include <array>
 #if (defined(__APPLE__))
@@ -15,27 +26,18 @@ module;
 #endif
 #include <unistd.h>
 
-
 #include <cerrno>
 #include <exception>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <optional>
 #include <sys/types.h>
 
-
 #include "telar_platform/process_environment.h"
 
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <limits.h>
 #include <string_view>
-
 
 #include <cassert>
 #include <cstdint>
@@ -45,7 +47,6 @@ module;
 #include <poll.h>
 #include <sys/wait.h>
 
-
 #include <cstdlib>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
@@ -54,26 +55,20 @@ module;
 #include <unistd.h>
 #endif
 
-
 #include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
 
-
 #include <concepts>
 
-
 #include <stdexcept>
-
 
 #include <charconv>
 #include <sys/un.h>
 
-
 #include <csignal>
 #include <dirent.h>
 #include <spawn.h>
-
 
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
@@ -82,15 +77,10 @@ module;
 #include <unistd.h>
 #endif
 
-
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <limits>
 
-
 #include <sys/socket.h>
-
 
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -102,12 +92,9 @@ module;
 #include <unistd.h>
 #endif
 
-
 #include <openssl/sha.h>
 
-
 #include <pthread.h>
-
 
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -124,7 +111,10 @@ export module telar.platform;
 export import telar.base.memory;
 
 
-export import telar.client;
+import telar.client.protocol;
+export import telar.base.text;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: telar_platform/child_descriptors.cppm
 export {

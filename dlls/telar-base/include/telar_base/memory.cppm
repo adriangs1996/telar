@@ -1,13 +1,12 @@
 module;
+#include "telar_base/memory/fixed_text.hpp"
 
 #include "telar_base/memory/allocator.hpp"
 #include <cstdint>
 #include <span>
 
-
 #include <cassert>
 #include <cstring>
-
 
 #include <algorithm>
 #include <array>
@@ -19,14 +18,43 @@ module;
 #include <type_traits>
 #include <utility>
 
-
 #include <stdexcept>
 #include <string_view>
-
 
 #include <bit>
 
 export module telar.base.memory;
+
+// Owned textual headers stay in this global module fragment only; importers
+// reach their names through these declarations instead of including them.
+export namespace telar {
+using telar::AllocationDeleter;
+using telar::AllocationPath;
+using telar::AllocationStatistics;
+using telar::AllocationTotals;
+using telar::Allocator;
+using telar::AllocatorRef;
+using telar::BudgetAllocator;
+using telar::ConcurrentAllocator;
+using telar::Owned;
+using telar::String;
+using telar::SynchronizedAllocator;
+using telar::SystemAllocator;
+using telar::Vector;
+using telar::makeOwned;
+}
+export namespace telar::runtime {
+using telar::runtime::FixedText;
+}
+#if TELAR_DIAGNOSTICS
+export namespace telar {
+using telar::AllocationScope;
+using telar::TerminalAllocationScope;
+using telar::current_allocation_path;
+using telar::terminal_allocation;
+}
+#endif
+
 
 
 // Interface: telar_base/memory/buffer_allocator.cppm

@@ -1,4 +1,9 @@
 module;
+#include <exception>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
 
 #include <array>
 #include <bit>
@@ -14,18 +19,13 @@ module;
 #include "../platform/font.h"
 #include <algorithm>
 #include <cstring>
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 #include <cmath>
 #include <limits>
 #include <type_traits>
 
-
 #include <concepts>
 #include <utility>
-
 
 #include <functional>
 
@@ -36,6 +36,9 @@ export import telar.gui.fonts.face;
 
 
 export import telar.gui.core.json_writer;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
 
 // Interface: fonts/font_coverage.cppm
 export {

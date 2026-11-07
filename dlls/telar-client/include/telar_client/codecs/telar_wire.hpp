@@ -19,13 +19,7 @@
 #define KILO_BYTES(x) x * 1024
 #define MEGA_BYTES(x) KILO_BYTES(x) * 1024
 
-#if defined(__clang__)
-#define _throw(ExceptionType) __attribute__((annotate("throws:" #ExceptionType)))
-#else
-#define _throw(ExceptionType)
-#endif
-
-#define _changes
+#include "telar_client/codecs/telar_annotations.hpp"
 
 namespace telar {
 

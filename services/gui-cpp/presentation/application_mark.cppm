@@ -1,19 +1,22 @@
 module;
+#include <concepts>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
 
 #include <cstdint>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <string_view>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
-
 
 #include <algorithm>
 #include <limits>
 #include <optional>
-
 
 #include <bit>
 #include <cstddef>
@@ -26,6 +29,8 @@ export import telar.config;
 
 
 export import telar.gui.core.unicode_scalar;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: presentation/activity_card.cppm
 export {

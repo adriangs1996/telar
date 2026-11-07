@@ -1,10 +1,24 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <compare>
+#include <tuple>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <cmath>
 
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
-
 
 #include <array>
 #include <charconv>
@@ -14,25 +28,20 @@ module;
 #include <system_error>
 #include <span>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
 #include <utility>
 
-
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
 #include <algorithm>
 
 export module telar.gui.links.path_expansion;
 
 export import telar.base.editors;
 export import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: links/link_text.cppm
 export {

@@ -1,4 +1,14 @@
 module;
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <array>
 #include <cstdint>
@@ -11,11 +21,6 @@ module;
 #include <stdexcept>
 #include <tuple>
 
-
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-
-
 #include <charconv>
 #include <limits>
 
@@ -25,6 +30,7 @@ export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
 
 export import telar.gui.config.gui_query;
+import telar.client.protocol;
 
 // Interface: input/configuration.cppm
 export {

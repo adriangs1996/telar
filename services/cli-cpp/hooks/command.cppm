@@ -1,22 +1,28 @@
 module;
+#include <algorithm>
+#include <concepts>
+#include <cstddef>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <string_view>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <span>
 #include <stdexcept>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <exception>
 #include <charconv>
 #include <cstdint>
 #include <optional>
-
-
-#include "telar_base/memory/fixed_text.hpp"
-
 
 #include <chrono>
 #include <limits>
@@ -28,6 +34,8 @@ export import telar.config;
 
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: hook_options.cppm
 export {

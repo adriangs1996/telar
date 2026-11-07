@@ -1,10 +1,17 @@
 module;
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
 
 #include <concepts>
 #include <cstdint>
 #include <span>
 #include <string_view>
-
 
 #include <algorithm>
 #include <cstring>
@@ -13,8 +20,6 @@ module;
 #include <optional>
 #include <array>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <utility>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
@@ -22,7 +27,6 @@ module;
 #include <memory>
 #include <stdexcept>
 #include <zstd.h>
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
 #include <charconv>
 #include <chrono>
@@ -37,6 +41,8 @@ export import telar.base.memory;
 
 export import telar.runtime.http.message;
 export import telar.runtime.traffic.control_protocol;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: http1/observer.cppm
 export {

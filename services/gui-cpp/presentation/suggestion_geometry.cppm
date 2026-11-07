@@ -1,18 +1,24 @@
 module;
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "../core/terminal_size.hpp"
-
 
 #include <span>
 #include <stdexcept>
@@ -23,6 +29,10 @@ export import telar.gui.core.metrics;
 
 
 export import telar.gui.machines.discovery;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: presentation/link_status_geometry.cppm
 export {

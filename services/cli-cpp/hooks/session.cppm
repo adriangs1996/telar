@@ -1,15 +1,25 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <utility>
+#include <concepts>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <vector>
+#include <bit>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstring>
 #include <optional>
@@ -17,19 +27,14 @@ module;
 #include <string_view>
 #include <unistd.h>
 
-
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
-#include "telar_platform/trace.hpp"
 
 export module telar.cli.hooks.session;
 
@@ -37,6 +42,9 @@ export import telar.platform;
 
 
 export import telar.cli.runtime_observer;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: hooks/codex_subagents.cppm
 export {

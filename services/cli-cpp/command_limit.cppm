@@ -1,4 +1,18 @@
 module;
+#include <cstddef>
+#include <cstdlib>
+#include <stdlib.h>
+#include <chrono>
+#include <utility>
+#include <concepts>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
+#include <cstring>
+#include <cstdio>
+#include <variant>
+#include <bit>
 
 #include <algorithm>
 #include <array>
@@ -10,24 +24,21 @@ module;
 #include <string_view>
 #include <type_traits>
 
-
-#include "telar_platform/random_bytes.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
 #include <cerrno>
 #include <exception>
 #include <charconv>
 #include <string>
 #include <unistd.h>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <format>
 
 export module telar.cli.command_limit;
 
 export import telar.cli.output;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: arguments.cppm
 export {

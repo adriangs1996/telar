@@ -1,7 +1,8 @@
 module;
+#include <new>
+#include <vector>
+#include <stdlib.h>
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <exception>
 #include <charconv>
 #include <cstdint>
@@ -10,30 +11,22 @@ module;
 #include <string_view>
 #include <array>
 #include <stdexcept>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <limits.h>
 #include <atomic>
 #include <memory>
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
 #include <cstring>
 #include <utility>
-#include "telar_platform/file_descriptor.hpp"
 
-
-#include "telar_platform/random_bytes.hpp"
 #include <cerrno>
 #include <chrono>
 #include <arpa/inet.h>
 #include <mutex>
 
-
 #include <cassert>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <pcap/pcap.h>
-
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -50,14 +43,12 @@ module;
 #include <poll.h>
 #include <thread>
 
-
 #include <concepts>
 #include <pthread.h>
 #include <limits>
 #include <brotli/decode.h>
 #include <initializer_list>
 #include <zlib.h>
-#include "telar_platform/trace.hpp"
 #include <zstd.h>
 #if (defined(__APPLE__))
 #include <CoreFoundation/CoreFoundation.h>
@@ -98,8 +89,6 @@ module;
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <cstdlib>
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <bitset>
 #include <openssl/sha.h>
 #include <cstdio>
@@ -112,7 +101,6 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 #include <dirent.h>
-#include "telar_base/text/base64.hpp"
 #include <variant>
 #include <netdb.h>
 #include <brotli/encode.h>
@@ -152,7 +140,6 @@ module;
 #endif
 #include <spawn.h>
 #include <sys/wait.h>
-#include "telar_base/text/utf8.hpp"
 #include <sys/resource.h>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -196,6 +183,9 @@ export import telar.runtime.traffic.capture_analysis;
 export import telar.runtime.proxy.runtime;
 export import telar.runtime.redirect.socket_owners;
 export import telar.runtime.redirect.ingress;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: traffic/control_access.cppm
 export {

@@ -1,13 +1,19 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <cinttypes>
 #include <cstdio>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -20,42 +26,26 @@ module;
 #include <optional>
 #include <string>
 
-
-#include "telar_base/text/utf8.hpp"
-
-
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 
-
 #include <span>
-
 
 #include <concepts>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-
-
 #include <ghostty/vt/unicode.h>
-
 
 #include <format>
 
-
 #include <utility>
 
-
 #include "telar_config/terminal/control/policy.hpp"
-
 
 #include <limits.h>
 #include <sys/stat.h>
 
-
 #include <arpa/inet.h>
-
 
 #include "telar_config/graphics/limits.hpp"
 
@@ -71,6 +61,20 @@ export import telar.platform;
 
 
 export import telar.plugins;
+import telar.base.diagnostics;
+import telar.client.protocol;
+
+// Owned textual headers stay in this global module fragment only; importers
+// reach their names through these declarations instead of including them.
+export namespace telar::runtime {
+using telar::runtime::GraphicsLimits;
+}
+export namespace telar::runtime::control {
+using telar::runtime::control::Access;
+using telar::runtime::control::ColorFormat;
+using telar::runtime::control::Policy;
+}
+
 
 // Interface: telar_config/limit_notices.cppm
 export {

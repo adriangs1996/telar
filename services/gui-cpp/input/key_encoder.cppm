@@ -1,4 +1,11 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
 
 #include <cstdint>
 #include <algorithm>
@@ -8,18 +15,14 @@ module;
 #include <stdexcept>
 #include <tuple>
 
-
 #include <bit>
 #include <optional>
 #include <string_view>
 
-
-#include "telar_client/serializers/telar_frame.hpp"
 #include <charconv>
 #include <limits>
 #include <system_error>
 #include <utility>
-
 
 #include <concepts>
 #include <cstring>
@@ -33,6 +36,8 @@ export import telar.gui.core.unicode_scalar;
 
 
 export import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: input/binding.cppm
 export {

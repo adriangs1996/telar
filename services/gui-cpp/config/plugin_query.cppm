@@ -1,6 +1,12 @@
 module;
+#include <chrono>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
-#include "../core/memory.hpp"
 #include <cstdint>
 #include <algorithm>
 #include <array>
@@ -8,19 +14,13 @@ module;
 #include <span>
 #include <stdexcept>
 #include <tuple>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <variant>
-
 
 #include <optional>
 #include <string_view>
 #include <utility>
 #include <bit>
 
-
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include <charconv>
 #include <cmath>
 #include <concepts>
@@ -29,12 +29,9 @@ module;
 #include <limits>
 #include <system_error>
 #include <type_traits>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cinttypes>
 #include <cstdio>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <exception>
 #include <limits.h>
 
@@ -57,6 +54,9 @@ export import telar.gui.config.gui_query;
 
 
 export import telar.plugins;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: config/action_descriptions.cppm
 export {

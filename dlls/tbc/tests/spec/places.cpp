@@ -413,7 +413,7 @@ void placeRebuiltViews() {
 
 // CASE: place.owned_sibling_mutation
 // PAIR: place.owned_sibling
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: Http2EndpointConnection::streams_
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object owned through a pointer leaves borrows of its other fields valid.
 // SCENARIO: The request method is read after the response headers of the same stream are cleared; accept.
@@ -428,7 +428,7 @@ void placeOwnedSiblingMutation(std::vector<std::unique_ptr<places::stream>> &str
 
 // CASE: place.owned_field_mutation
 // PAIR: place.owned_sibling
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: Http2EndpointConnection::streams_
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: Reassigning the field a view borrows invalidates the view.
 // SCENARIO: The request method is read after it is reassigned.
@@ -443,7 +443,7 @@ void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>> &strea
 
 // CASE: place.returned_half_mutation
 // PAIR: place.returned_half
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: Http2EndpointConnection::Endpoint::half
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
 // CONTRACT: A reference returned to a field keeps that field's place, so mutating it leaves sibling fields valid.
 // SCENARIO: The request method is read after the headers of whichever half is selected are cleared; accept.
@@ -458,7 +458,7 @@ void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>> &str
 
 // CASE: place.returned_half_headers
 // PAIR: place.returned_half
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: Http2EndpointConnection::Endpoint::half
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
 // CONTRACT: Either field a returned reference can designate may be the one that is mutated.
 // SCENARIO: A request header is read after the headers of whichever half is selected are cleared.
@@ -473,7 +473,7 @@ void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>> &stre
 
 // CASE: place.callee_sibling_mutation
 // PAIR: place.callee_field
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: Http2EndpointConnection::streams_
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: A callee that mutates one field of its argument leaves the argument's other fields valid.
 // SCENARIO: The request method is read after a helper clears the response headers; accept.
@@ -488,7 +488,7 @@ void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>> &st
 
 // CASE: place.callee_field_mutation
 // PAIR: place.callee_field
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: Http2EndpointConnection::streams_
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: A callee that mutates a field of its argument invalidates borrows of that field.
 // SCENARIO: A response header is read after a helper clears the response headers.

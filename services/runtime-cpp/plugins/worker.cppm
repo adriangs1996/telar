@@ -1,4 +1,12 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <limits>
+#include <cstdlib>
+#include <new>
+#include <string>
+#include <vector>
+#include <variant>
+#include <stdlib.h>
 
 #include <concepts>
 #include <cstdint>
@@ -9,48 +17,34 @@ module;
 #include <algorithm>
 #include <cassert>
 #include <atomic>
-#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
 #include <string_view>
 #include <optional>
 #include <chrono>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
 #include <utility>
 #include <cerrno>
 #include <exception>
 
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <limits.h>
 #include <memory>
 
-
-#include "telar_platform/file_descriptor.hpp"
 #include <condition_variable>
 #include <mutex>
 #include <type_traits>
-
 
 #include <sys/types.h>
 #include <climits>
 #include <poll.h>
 
-
 #include <sys/uio.h>
 #include <unistd.h>
-#include "telar_platform/trace.hpp"
 #include <csignal>
 #include <cstdio>
 #include <thread>
 
-
-#include "telar_platform/random_bytes.hpp"
 #include <arpa/inet.h>
-
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -78,6 +72,9 @@ export import telar.runtime.traffic.control_protocol;
 
 
 export import telar.runtime.proxy.relay_direction;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: plugins/frame_channel.cppm
 export {

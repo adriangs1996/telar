@@ -428,7 +428,7 @@ std::string_view pointerReferenceFieldDead() {
 
 // CASE: pointer.nested_reference_wrapper
 // PAIR: pointer.nested_reference
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: ApplicationRelay::advance
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
 // SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
@@ -442,7 +442,7 @@ void pointerNestedReferenceWrapper(pointers::buffer &source, pointers::relay &ou
 
 // CASE: pointer.nested_reference_dead
 // PAIR: pointer.nested_reference
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: ApplicationRelay::advance
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
 // SCENARIO: The relay keeps a pointer into a local buffer past its lifetime.
@@ -487,7 +487,7 @@ void pointerAggregateReferenceRead(std::string &text) {
 
 // CASE: pointer.parameter_write_dead
 // PAIR: pointer.parameter_write_through
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: FlowGate::write
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: FlowGate::write
 // STATUS: implemented
 // CONTRACT: A write through a pointer parameter lands in the object the argument designates.
 // SCENARIO: The record behind the pointer keeps a view of a string that dies before it is read.
@@ -505,7 +505,7 @@ void pointerParameterWriteDead() {
 
 // CASE: pointer.parameter_write_live
 // PAIR: pointer.parameter_write_through
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: FlowGate::write
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: FlowGate::write
 // STATUS: implemented
 // CONTRACT: A write through a pointer parameter lands in the object the argument designates.
 // SCENARIO: The record behind the pointer is read while the string lives; accept.
@@ -521,7 +521,7 @@ void pointerParameterWriteLive() {
 
 // CASE: pointer.parameter_read_invalidated
 // PAIR: pointer.parameter_read_through
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: FlowStream::write
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: FlowStream::write
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The record's view is invalidated before the callee reads it through the pointer.
@@ -535,7 +535,7 @@ void pointerParameterReadInvalidated(std::string &text) {
 
 // CASE: pointer.parameter_read_live
 // PAIR: pointer.parameter_read_through
-// SOURCE: services/runtime-cpp/proxy/application_relay.cppm :: FlowStream::write
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: FlowStream::write
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The callee reads the record before the string is cleared; accept.

@@ -1,4 +1,15 @@
 module;
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <utility>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <unistd.h>
 
 #include "telar_platform/process_environment.h"
 
@@ -14,8 +25,6 @@ module;
 #include <unistd.h>
 #endif
 #include <string_view>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check module ownership, import cycles and the documented textual boundaries."""
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -51,7 +52,60 @@ def main():
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
             raise RuntimeError('Missing migrated definition owner: ' + source)
-    print(f'{len(graph)} module interfaces, acyclic imports, {len(headers)} justified textual boundaries')
+    owned = check_header_owners(inventory['header_owners'], owned_units(owned))
+    print(f'{len(graph)} module interfaces, acyclic imports, {len(headers)} justified textual boundaries, '
+          f'{owned} headers reached only through their owner module')
+
+
+INCLUDE_ROOTS = [str(path.relative_to(ROOT)) for path in sorted(ROOT.glob('dlls/*/include*'))]
+INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.M)
+
+
+def resolve(including, spelling):
+    service = re.match(r'services/[^/]+', including)
+    for base in [str(Path(including).parent)] + ([service[0]] if service else []) + INCLUDE_ROOTS:
+        candidate = os.path.normpath(os.path.join(base, spelling))
+        if (ROOT / candidate).is_file():
+            return candidate
+    return None
+
+
+def global_fragment(text):
+    match = re.search(r'^(?:export )?module [\w.:]+;', text, re.M) if text.startswith('module;') else None
+    return text[:match.start()] if match else ''
+
+
+def owned_units(files):
+    return sorted(name for name in files if name.endswith(('.cppm', '.cpp'))
+                  and not re.search(r'/(tests|tools)/', name) and global_fragment((ROOT / name).read_text()))
+
+
+def check_header_owners(owners, units):
+    """A header an owner module re-exports stays out of every other global fragment.
+
+    Each module that includes it textually would carry its own copy of the header's
+    declarations, and importers would merge those copies again.
+    """
+    owner_of = {}
+    for owner, owned in owners.items():
+        reached, pending = set(), [resolve(owner, s) for s in INCLUDE_RE.findall(global_fragment((ROOT / owner).read_text()))]
+        while pending:
+            header = pending.pop()
+            if header and header not in reached:
+                reached.add(header)
+                pending += [resolve(header, s) for s in INCLUDE_RE.findall((ROOT / header).read_text())]
+        for header in owned:
+            if header not in reached:
+                raise RuntimeError(f'{owner} owns {header} but does not include it')
+            owner_of[header] = owner
+    for unit in units:
+        if unit in owners:
+            continue
+        for spelling in INCLUDE_RE.findall(global_fragment((ROOT / unit).read_text())):
+            header = resolve(unit, spelling)
+            if header in owner_of:
+                raise RuntimeError(f'{unit} includes {header}; import the module of {owner_of[header]} instead')
+    return len(owner_of)
 
 
 if __name__ == '__main__':

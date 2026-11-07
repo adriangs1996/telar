@@ -1,9 +1,19 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <chrono>
+#include <array>
+#include <utility>
+#include <cstddef>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <span>
 
 #include <concepts>
 #include <cstdint>
 #include <optional>
-#include "telar_platform/trace.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
@@ -15,6 +25,9 @@ module;
 #include <unistd.h>
 
 module telar.runtime.platform.stream_read_buffer;
+
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 
 

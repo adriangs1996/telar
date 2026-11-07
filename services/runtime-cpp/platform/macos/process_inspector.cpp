@@ -1,15 +1,22 @@
 module;
+#include <concepts>
+#include <cstddef>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <optional>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <span>
 #include <sys/types.h>
@@ -22,6 +29,9 @@ module;
 #include <sys/un.h>
 
 module telar.runtime.platform.process_probe;
+
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 
 

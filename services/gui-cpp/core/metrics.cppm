@@ -1,4 +1,16 @@
 module;
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <vector>
+#include <bit>
+#include <stdexcept>
 
 #include <algorithm>
 #include <array>
@@ -6,27 +18,21 @@ module;
 #include <optional>
 #include <string_view>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
 #include <cstdint>
-
 
 #include <variant>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 
-
 #include <cmath>
-
-
-#include "terminal_size.hpp"
 
 export module telar.gui.core.metrics;
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: core/background_opacity.cppm
 export {

@@ -1,22 +1,30 @@
 module;
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
 
 #include <array>
 #include <optional>
 #include <string_view>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <span>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <exception>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <sys/types.h>
 #include <limits.h>
 #include <atomic>
@@ -25,16 +33,12 @@ module;
 #include <sys/wait.h>
 #include <charconv>
 
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <algorithm>
 
-
 #if defined(__linux__)
-
 
 #include <arpa/inet.h>
 #include <linux/if_ether.h>
@@ -43,11 +47,9 @@ module;
 #include <sys/ioctl.h>
 #include <sys/uio.h>
 
-
 #endif
 
 #if defined(__APPLE__)
-
 
 #include <net/if.h>
 #include <net/if_utun.h>
@@ -57,9 +59,7 @@ module;
 #include <sys/socket.h>
 #include <sys/sys_domain.h>
 
-
 #endif
-
 
 #if (defined(__APPLE__))
 #endif
@@ -132,6 +132,9 @@ module;
 export module telar.runtime.platform.git_status;
 
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 
 #if defined(__linux__)

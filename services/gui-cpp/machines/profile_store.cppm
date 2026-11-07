@@ -1,32 +1,33 @@
 module;
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <algorithm>
 #include <string_view>
-
 
 #include <charconv>
 #include <concepts>
 #include <cstring>
 #include <system_error>
 #include <span>
-#include "telar_base/memory/fixed_text.hpp"
 #include <optional>
 
-
-#include "../core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <exception>
 #include <bit>
 #include <limits>
 #include <new>
-
-
-#include "telar_client/codecs/telar_wire.hpp"
 
 export module telar.gui.machines.profile_store;
 
@@ -35,6 +36,10 @@ export import telar.gui.machines.discovery;
 
 export import telar.base.text;
 export import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: machines/field_rules.cppm
 export {

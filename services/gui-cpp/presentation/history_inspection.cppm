@@ -1,12 +1,20 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
@@ -16,20 +24,13 @@ module;
 #include <chrono>
 #include <limits>
 
-
 #include <bit>
-#include "telar_client/codecs/telar_value_codec.hpp"
 
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <ghostty/vt/unicode.h>
 #include <span>
 
-
 #include <utility>
 #include <tuple>
-
 
 #include <cmath>
 
@@ -48,6 +49,9 @@ export import telar.gui.text.bounded_editor;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: presentation/history_labels.cppm
 export {

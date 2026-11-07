@@ -1,8 +1,22 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <algorithm>
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
+#include <unistd.h>
 
-#include "telar_platform/trace.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <exception>
 #include <charconv>
 #include <cstdint>
@@ -12,10 +26,7 @@ module;
 #include <cassert>
 #include <cstring>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <sys/types.h>
 #include <array>
 #include <limits.h>
@@ -29,6 +40,9 @@ export module telar.runtime.suggestions.engine;
 export import telar.runtime.transport.connection;
 export import telar.base.text;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: suggestions/engine.cppm
 export {

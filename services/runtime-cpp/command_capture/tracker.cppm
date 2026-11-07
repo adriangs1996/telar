@@ -1,61 +1,49 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <string>
+#include <vector>
+#include <bit>
+#include <mutex>
+#include <new>
+#include <unistd.h>
+#include <cerrno>
+#include <limits.h>
+#include <sys/stat.h>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <stdlib.h>
+#include <zlib.h>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <chrono>
 #include <cstdint>
 #include <concepts>
-
 
 #include <algorithm>
 #include <array>
 #include <optional>
 
-
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <charconv>
 #include <cstring>
 #include <limits>
 #include <utility>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <span>
 
-
-#include "telar_platform/trace.hpp"
-#include "../graphics/kitty_framing.hpp"
 #include <variant>
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
 #include <cstddef>
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
 #include <stdexcept>
-#include "../graphics/temporary_path.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <string_view>
 #include <sys/mman.h>
 #include <atomic>
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
-#include "../terminal/control/engine.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "../terminal/graphics_cursor.hpp"
 #include <cassert>
-#include "telar_base/text/utf8.hpp"
 
 export module telar.runtime.command_capture.tracker;
 
@@ -66,6 +54,13 @@ export import telar.runtime.diagnostics.runtime_counters;
 
 
 export import telar.runtime.terminal.text_reader;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 // Interface: command_capture/command.cppm
 export {

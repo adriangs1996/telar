@@ -1,10 +1,10 @@
 module;
+#include <utility>
 
 #include <array>
 #include <climits>
 #include <cstdint>
 #include <string_view>
-#include "telar_platform/file_descriptor.hpp"
 #include <cerrno>
 #include <exception>
 #include <algorithm>

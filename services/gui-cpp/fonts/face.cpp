@@ -1,4 +1,11 @@
 module;
+#include <concepts>
+#include <exception>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <cstddef>
 #include <cstdint>
@@ -11,16 +18,12 @@ module;
 #include "../platform/font.h"
 #include <algorithm>
 #include <cstring>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <optional>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <freetype/ftimage.h>
 #include <freetype/ftmm.h>
 #include <freetype/ftoutln.h>
@@ -37,6 +40,8 @@ module telar.gui.fonts.face;
 
 import telar.gui.terminal.font_grid;
 import telar.gui.terminal.copy_mode;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 #include "platform/font.h"
 

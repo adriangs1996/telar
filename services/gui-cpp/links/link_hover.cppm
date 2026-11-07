@@ -1,26 +1,33 @@
 module;
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
+#include <compare>
+#include <tuple>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cstddef>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
 #include <limits>
 #include <optional>
 #include <array>
-#include "../terminal/cell_position.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-
 
 #include <utility>
 
-
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "../terminal/screen.hpp"
 #include <span>
 
 export module telar.gui.links.link_hover;
@@ -33,6 +40,11 @@ export import telar.gui.core.unicode_scalar;
 
 
 export import telar.gui.links.path_expansion;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: links/link_hit.cppm
 export {

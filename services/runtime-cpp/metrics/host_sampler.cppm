@@ -1,11 +1,14 @@
 module;
+#include <chrono>
+#include <array>
+#include <charconv>
+#include <stdexcept>
+#include <string_view>
 
 #include <concepts>
 #include <cstdint>
 #include <optional>
 
-
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <algorithm>
 #include <limits>
@@ -13,6 +16,8 @@ module;
 export module telar.runtime.metrics.host_sampler;
 
 export import telar.runtime.diagnostics.runtime_counters;
+import telar.base.diagnostics;
+import telar.runtime.diagnostics.line;
 
 // Interface: metrics/host_sample.cppm
 export {

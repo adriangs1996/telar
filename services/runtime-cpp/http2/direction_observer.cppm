@@ -1,21 +1,25 @@
 module;
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
 #include <concepts>
 #include <cstdint>
 #include <span>
 #include <string_view>
 
-
 #include <limits>
 #include <optional>
 #include <algorithm>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstddef>
 #include <nghttp2/nghttp2.h>
-
 
 #include <array>
 
@@ -29,6 +33,7 @@ export import telar.base.memory;
 
 
 export import telar.runtime.http2.frame_reader;
+import telar.base.diagnostics;
 
 // Interface: http2/event.cppm
 export {

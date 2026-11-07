@@ -1,33 +1,40 @@
 module;
+#include <chrono>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cstring>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
+#include <bit>
 
 #include <cstddef>
 #include <cstdint>
 
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
 
-
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
 #include <algorithm>
 #include <span>
 #include <stdexcept>
 #include <string_view>
 
-
-#include "telar_client/codecs/telar_wire.hpp"
-
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <array>
 #include <limits>
 #include <utility>
 #include <variant>
 
 export module telar.gui.history.browser;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 
 // Interface: history/choice.cppm

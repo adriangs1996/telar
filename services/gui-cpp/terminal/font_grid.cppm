@@ -1,8 +1,20 @@
 module;
+#include <compare>
+#include <tuple>
+#include <utility>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cstring>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
 
-#include "cell_position.hpp"
-#include "screen.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -10,15 +22,10 @@ module;
 #include <optional>
 #include <span>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <concepts>
 #include <limits>
 #include <string_view>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <cmath>
 #include <stdexcept>
@@ -26,6 +33,11 @@ module;
 export module telar.gui.terminal.font_grid;
 
 export import telar.gui.core.metrics;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: terminal/copy_grid.cppm
 export {

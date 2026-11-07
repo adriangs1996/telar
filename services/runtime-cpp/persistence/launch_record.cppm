@@ -1,9 +1,35 @@
 module;
-
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <array>
+#include <utility>
+#include <concepts>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cstring>
+#include <exception>
+#include <span>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <optional>
+#include <variant>
+#include <bit>
+#include <stdexcept>
 
 export module telar.runtime.persistence.launch_record;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
 
 
 // Interface: persistence/launch_record.cppm

@@ -1,22 +1,34 @@
 module;
+#include <algorithm>
+#include <limits>
+#include <array>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <charconv>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
 
-#include "telar_base/memory/allocator.hpp"
 #include <atomic>
 #include <chrono>
 #include <sys/stat.h>
 
-
-#include "line.hpp"
-
-
-#include "timing.hpp"
 #include <exception>
-
 
 #include <cstddef>
 #include <cstdint>
 
 export module telar.runtime.diagnostics.operation;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.runtime.diagnostics.line;
 
 
 // Interface: diagnostics/file_storage.cppm

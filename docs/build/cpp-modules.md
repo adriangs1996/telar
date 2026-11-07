@@ -124,6 +124,25 @@ El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
 - Fixtures y utilidades de tests: includes locales, macros de aserción y fixtures
   de compilación deliberadamente válida o inválida. No son APIs de aplicación.
 
+### Un módulo dueño por header textual
+
+Un header textual que llega a un fragmento global tiene un único módulo dueño,
+listado en `header_owners` de [modules.json](modules.json). Solo el dueño lo
+incluye en su fragmento global y reexporta sus nombres con
+`export namespace … { using …; }`. El resto de unidades de módulo importa el
+dueño y mantiene en su fragmento global únicamente headers estándar, de sistema,
+de terceros y de macros (`telar_base/diagnostics/config.hpp`,
+`telar_platform/trace_macro.hpp`, `telar_client/codecs/telar_annotations.hpp`).
+
+Cada copia textual de un header en un fragmento global se serializa en el BMI de
+ese módulo, y cada importador vuelve a fusionar las copias. Con un concepto como
+`ConcurrentAllocator` repetido en casi cien BMIs, restringir un template con él
+llegó a costar 8 s y 23 MB de BMI en un módulo de 30 líneas (`traffic.tap`).
+`python3 tools/check-cpp-modules.py` rechaza un fragmento global que incluya un
+header con dueño. Los headers solo de dueño (`telar.client.protocol`,
+`telar.platform.primitives`, `telar.runtime.terminal.control`, …) no contienen
+código propio: son el punto de entrada de esos headers para los módulos.
+
 Los generadores de bindings, temas, paleta y tablas gráficas producen fragmentos
 `.inc` de datos dentro de sus módulos propietarios. El código vendorizado conserva
 sus headers y lenguaje. El auth daemon solo contiene un `main` vacío: no tiene

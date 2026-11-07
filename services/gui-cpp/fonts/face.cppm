@@ -1,9 +1,15 @@
 module;
+#include <concepts>
+#include <exception>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <cstddef>
 #include <cstdint>
 #include <span>
-
 
 #include <array>
 #include <freetype/freetype.h>
@@ -11,16 +17,11 @@ module;
 #include <memory>
 #include <string_view>
 
-
 #include "../platform/font.h"
 #include <algorithm>
 #include <cstring>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
 #include <optional>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -30,6 +31,9 @@ module;
 export module telar.gui.fonts.face;
 
 export import telar.gui.terminal.font_grid;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
 export import :views;
 
 // Interface: fonts/glyph_bitmap_view.cppm

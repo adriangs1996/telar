@@ -1,10 +1,15 @@
 module;
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
+#include <type_traits>
+#include <variant>
+#include <bit>
 
 #include "config_bootstrap.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <string_view>
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -15,8 +20,6 @@ module;
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cinttypes>
 #include <cmath>
 #include <initializer_list>
@@ -30,14 +33,10 @@ module;
 #include <format>
 #include <utility>
 #include <ghostty/vt/unicode.h>
-#include "telar_config/terminal/control/policy.hpp"
 #include <arpa/inet.h>
-#include "telar_config/graphics/limits.hpp"
 #include <exception>
 #include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
 #include <cstdlib>
 #include <fcntl.h>
 #include <unistd.h>
@@ -47,6 +46,9 @@ export module telar.runtime.config.loader;
 export import telar.config;
 export import telar.lua;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: config/loader.cppm
 export {

@@ -1,6 +1,14 @@
 module;
+#include <stdlib.h>
+#include <chrono>
+#include <utility>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <vector>
+#include <cstdio>
+#include <bit>
 
-#include "telar_platform/random_bytes.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -10,8 +18,6 @@ module;
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
 #include <cerrno>
 #include <exception>
 #include <charconv>
@@ -19,18 +25,13 @@ module;
 #include <unistd.h>
 #include <cstddef>
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <format>
-
 
 #include <cstring>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 
-
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -44,6 +45,9 @@ export import telar.client;
 
 
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: runtime_event_output.cppm
 export {

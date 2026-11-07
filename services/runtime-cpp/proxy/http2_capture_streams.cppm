@@ -1,4 +1,10 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <stdlib.h>
+#include <memory>
+#include <new>
+#include <string>
+#include <vector>
 
 #include <concepts>
 #include <cstdint>
@@ -10,35 +16,25 @@ module;
 #include <exception>
 #include <csignal>
 #include <sys/socket.h>
-#include "telar_platform/file_descriptor.hpp"
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 #include <cstddef>
 #include <array>
 
-
 #include <chrono>
 
-
 #include <atomic>
-
 
 #include <optional>
 #include <arpa/inet.h>
 #include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/random_bytes.hpp"
 #include <cstdlib>
-#include "telar_base/text/base64.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <variant>
 #include <pthread.h>
 #include <netdb.h>
-#include "telar_platform/trace.hpp"
 #include <type_traits>
 #include <utility>
-
 
 #include <brotli/decode.h>
 #include <initializer_list>
@@ -73,6 +69,8 @@ export import telar.runtime.exchange_capture.pipeline;
 export import telar.runtime.exchange_capture.producer;
 export import telar.runtime.http1.head;
 export import telar.runtime.http2.frame_reader;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: proxy/connect_head.cppm
 export {

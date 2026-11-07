@@ -1,7 +1,16 @@
 module;
+#include <algorithm>
+#include <limits>
+#include <utility>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <unistd.h>
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <chrono>
 #include <concepts>
@@ -48,6 +57,8 @@ module;
 module telar.runtime.platform.system_certificates;
 
 import telar.platform;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 
 namespace telar::runtime {

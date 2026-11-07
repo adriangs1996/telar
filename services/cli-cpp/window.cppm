@@ -1,8 +1,16 @@
 module;
+#include <chrono>
+#include <utility>
+#include <concepts>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <cstring>
+#include <variant>
+#include <bit>
 
-#include "telar_base/memory/allocator.hpp"
 #include <span>
-
 
 #include <cstdint>
 #include <optional>
@@ -12,13 +20,10 @@ module;
 #include <string>
 #include <vector>
 
-
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
-#include "telar_client/serializers/telar_protocol.hpp"
-
 
 #include <exception>
 #include <charconv>
@@ -38,6 +43,8 @@ export import telar.base.text;
 
 export import telar.cli.command_limit;
 export import telar.plugins;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: launch_commands.cppm
 export {

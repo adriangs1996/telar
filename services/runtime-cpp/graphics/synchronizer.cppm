@@ -1,39 +1,32 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <type_traits>
+#include <unistd.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <stdlib.h>
 
-#include "../diagnostics/line.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 
-
-#include "kitty_framing.hpp"
 #include <cstring>
 #include <variant>
-#include "media_budget.hpp"
-#include "kitty_control.hpp"
 #include <cstddef>
 #include <span>
-#include "child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <utility>
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
-#include "temporary_path.hpp"
 #include <charconv>
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/trace.hpp"
 #include <limits>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
@@ -41,14 +34,10 @@ module;
 #include <sys/mman.h>
 #include <atomic>
 
-
 #include <concepts>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <cassert>
 #include <bit>
 #include <exception>
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cerrno>
 #include <chrono>
 
@@ -62,6 +51,13 @@ export import telar.runtime.graphics.pane_media;
 
 export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.transport.connection;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 // Interface: graphics/credit.cppm
 export {

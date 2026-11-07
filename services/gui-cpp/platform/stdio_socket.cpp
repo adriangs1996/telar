@@ -1,6 +1,6 @@
 module;
+#include <utility>
 
-#include "telar_platform/file_descriptor.hpp"
 #include <cerrno>
 #include <exception>
 #include <array>

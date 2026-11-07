@@ -1,23 +1,31 @@
 module;
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+#include <algorithm>
+#include <bit>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <cstdint>
 #include <string_view>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <chrono>
 #include <concepts>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <array>
 
-
-#include "../diagnostics/timing.hpp"
 #include <atomic>
 #include <exception>
 #include <cstddef>
 #include "telar_base/diagnostics/config.hpp"
-
 
 #include <cstring>
 #include <sqlite3.h>
@@ -32,6 +40,9 @@ export import telar.runtime.transport.connection;
 
 
 export import telar.runtime.diagnostics.operation;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.runtime.diagnostics.line;
 
 // Interface: history/launch_failure.cppm
 export {

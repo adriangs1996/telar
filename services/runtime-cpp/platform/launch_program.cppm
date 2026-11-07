@@ -1,13 +1,12 @@
 module;
+#include <unistd.h>
+#include <utility>
 
 #include <span>
 #include <string_view>
 
-
 #if defined(__linux__)
 
-
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <charconv>
 #include <cstdint>
@@ -18,17 +17,16 @@ module;
 #include <sys/stat.h>
 #include <unistd.h>
 
-
 #endif
 
-
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <cstdint>
 #include <sys/stat.h>
 #include <sys/un.h>
 
 export module telar.runtime.platform.launch_program;
+
+import telar.platform.primitives;
 
 #if defined(__linux__)
 

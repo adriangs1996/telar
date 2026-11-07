@@ -1,12 +1,19 @@
 module;
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
@@ -15,11 +22,6 @@ module;
 #include <algorithm>
 #include <cmath>
 #include <limits>
-
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 
 export module telar.gui.presentation.suggestion_labels;
 
@@ -31,6 +33,8 @@ export import telar.gui.core.unicode_scalar;
 
 
 export import telar.gui.suggestions.state;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: presentation/agent_animation.cppm
 export {

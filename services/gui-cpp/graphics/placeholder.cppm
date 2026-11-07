@@ -1,29 +1,36 @@
 module;
+#include <concepts>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_messages.hpp"
-
 
 #include <limits>
 
-
 #include <string_view>
 #include "placeholder_diacritics.hpp"
-#include "../terminal/screen.hpp"
 #include <array>
 #include <optional>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
 #include <cstddef>
 
-
 #include <numbers>
-
-
-#include "telar_client/serializers/telar_protocol.hpp"
 
 export module telar.gui.graphics.placeholder;
 
@@ -34,6 +41,10 @@ export import telar.gui.core.json_writer;
 
 
 export import telar.gui.presentation.activity_order;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: graphics/source_rect.cppm
 export {

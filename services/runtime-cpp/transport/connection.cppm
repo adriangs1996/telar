@@ -1,25 +1,29 @@
 module;
+#include <memory>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <string>
+#include <vector>
+#include <unistd.h>
+#include <utility>
+#include <algorithm>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
-#include "telar_client/codecs/telar_codec.hpp"
 #include <array>
 #include <cstddef>
 #include <span>
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <chrono>
 
-
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <concepts>
 #include <stdexcept>
-
-
-#include "telar_client/serializers/telar_messages.hpp"
-
 
 #include <cassert>
 #include <cstdint>
@@ -33,6 +37,9 @@ export import telar.platform;
 
 
 export import telar.base.memory;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: transport/client_handshake.cppm
 export {

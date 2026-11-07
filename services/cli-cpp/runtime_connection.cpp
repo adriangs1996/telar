@@ -1,6 +1,17 @@
 module;
+#include <concepts>
+#include <memory>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <bit>
+#include <stdexcept>
+#include <utility>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cerrno>
 #include <cstddef>
@@ -12,10 +23,7 @@ module;
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <optional>
 #include <sys/types.h>
 #include <csignal>
@@ -24,6 +32,9 @@ module;
 module telar.cli.runtime_observer;
 
 import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 
 namespace telar::runtime::cli {

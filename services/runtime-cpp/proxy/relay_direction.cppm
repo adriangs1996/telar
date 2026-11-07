@@ -1,4 +1,12 @@
 module;
+#include <chrono>
+#include <limits>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
 #include <cstdint>
 #include <cstring>
@@ -6,41 +14,37 @@ module;
 #include <optional>
 #include <sys/socket.h>
 
-
 #include <cerrno>
 #include <netdb.h>
 #include <span>
 
-
 #include <pthread.h>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <string_view>
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cstddef>
-#include "telar_platform/trace.hpp"
 #include <concepts>
 #include <type_traits>
 #include <utility>
 
-
 #include <csignal>
 #include <netinet/tcp.h>
-
 
 #include <unistd.h>
 
 export module telar.runtime.proxy.relay_direction;
 
 export import telar.platform;
-export import telar.runtime.platform.request_worker;
+export import telar.runtime.platform.signals;
 
 export import telar.config;
 
 
 export import telar.runtime.platform.stream_read_buffer;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: proxy/network_address.cppm
 export {

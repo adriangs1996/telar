@@ -1,4 +1,22 @@
 module;
+#include <compare>
+#include <tuple>
+#include <limits>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cstring>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
+#include <cmath>
 
 #include <array>
 #include <cstdint>
@@ -6,10 +24,6 @@ module;
 #include <string_view>
 #include <utility>
 
-
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <span>
@@ -18,6 +32,11 @@ module;
 export module telar.gui.input.copy_pointer;
 
 export import telar.gui.terminal.font_grid;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: input/action.cppm
 export {

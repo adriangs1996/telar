@@ -1,12 +1,23 @@
 module;
+#include <chrono>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <compare>
+#include <cstring>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
 
-#include "types.hpp"
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
 
-
-#include "marker_removal.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -14,18 +25,21 @@ module;
 #include <tuple>
 #include <bit>
 #include <string_view>
-#include "telar_client/serializers/telar_frame.hpp"
 #include <charconv>
 #include <limits>
 #include <system_error>
 #include <utility>
-
 
 #include <cmath>
 
 export module telar.gui.attachments.marker_input;
 
 export import telar.gui.input.key_encoder;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.attachments.catalog;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: attachments/capture_state.cppm
 export {

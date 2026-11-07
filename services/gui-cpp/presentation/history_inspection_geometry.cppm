@@ -1,25 +1,26 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "../core/terminal_size.hpp"
-
 
 #include <initializer_list>
 
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
@@ -27,10 +28,8 @@ module;
 #include <system_error>
 #include <limits>
 #include <bit>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <ghostty/vt/unicode.h>
 #include <span>
-
 
 #include <variant>
 
@@ -44,6 +43,9 @@ export import telar.gui.presentation.history_filter_geometry;
 
 
 export import telar.gui.application.sound_playback;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: presentation/chrome_style.cppm
 export {

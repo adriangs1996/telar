@@ -1,33 +1,34 @@
 module;
+#include <cstring>
+#include <memory>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <cstddef>
-
 
 #include <atomic>
 #include <cstdint>
 #include <limits>
 
-
-#include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>
 #include <concepts>
 #include <optional>
 #include <span>
 
-
 #include <exception>
 
-
-#include "telar_client/serializers/telar_messages.hpp"
 #include <string_view>
 #include <tuple>
 #include <utility>
-
-
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-
 
 #include <cmath>
 #include <type_traits>
@@ -35,6 +36,11 @@ module;
 export module telar.gui.graphics.texture_cache;
 
 export import telar.gui.core.metrics;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.config;
+import telar.gui.core.primitives;
 
 // Interface: graphics/image_draw_budget.cppm
 export {

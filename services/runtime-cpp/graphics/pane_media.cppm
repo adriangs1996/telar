@@ -1,55 +1,47 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <concepts>
+#include <unistd.h>
+#include <cerrno>
+#include <limits.h>
+#include <sys/stat.h>
+#include <exception>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <cassert>
+#include <type_traits>
+#include <bit>
+#include <stdlib.h>
 
-#include "kitty_control.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <algorithm>
 #include <array>
 
-
-#include "child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
-
-
 #include <cstring>
 
-
-#include "../terminal/ghostty_handle.hpp"
-#include "kitty_framing.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include <limits>
 
-
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
-#include "temporary_path.hpp"
 #include <charconv>
-#include "../diagnostics/line.hpp"
-#include "../terminal/ghostty_allocator.hpp"
 #include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_platform/trace.hpp"
 
-
-#include "media_budget.hpp"
 #include <utility>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <string_view>
 #include <sys/mman.h>
 
-
 #include <atomic>
-
 
 #include <variant>
 
@@ -64,6 +56,13 @@ export import telar.runtime.graphics.prepared_images;
 
 export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.diagnostics.operation;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 // Interface: graphics/atomic_frame_filter.cppm
 export {

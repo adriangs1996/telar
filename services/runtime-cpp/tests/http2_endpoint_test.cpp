@@ -43,7 +43,7 @@ static_assert(true);
 
 
 
-import telar.runtime.proxy.application_relay;
+import telar.runtime.proxy.runtime;
 import telar.runtime.traffic.control_backend;
 
 using namespace telar;

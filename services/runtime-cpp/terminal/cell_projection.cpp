@@ -1,13 +1,38 @@
 module;
+#include <exception>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <utility>
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <concepts>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <span>
+#include <string_view>
+#include <type_traits>
+#include <cstdio>
+#include <optional>
+#include <variant>
+#include <bit>
+#include <stdexcept>
 
-#include "ghostty_handle.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
 #include <cstring>
 #include <array>
 
 module telar.runtime.terminal.text_reader;
+
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.runtime.terminal.control;
 
 
 

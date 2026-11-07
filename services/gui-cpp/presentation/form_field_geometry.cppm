@@ -1,27 +1,30 @@
 module;
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <compare>
+#include <tuple>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "../core/terminal_size.hpp"
 #include <limits>
 #include <stdexcept>
-
 
 #include <bit>
 #include <ghostty/vt/unicode.h>
 #include <concepts>
-
-
-#include "../terminal/cell_position.hpp"
 
 export module telar.gui.presentation.form_field_geometry;
 
@@ -34,6 +37,11 @@ export import telar.base.text;
 
 
 export import telar.gui.core.unicode_scalar;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: presentation/form_field_geometry.cppm
 export {

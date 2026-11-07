@@ -1,6 +1,15 @@
 module;
+#include <stdlib.h>
+#include <chrono>
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
-#include "telar_platform/random_bytes.hpp"
 #include <cstddef>
 #include <cstring>
 #include <string_view>
@@ -12,20 +21,12 @@ module;
 #include <optional>
 #include <span>
 
-
-#include "telar_base/text/base64.hpp"
-
-
 #include <arpa/inet.h>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <variant>
-
 
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -51,6 +52,8 @@ export import telar.config;
 
 
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: proxy/secret.cppm
 export {

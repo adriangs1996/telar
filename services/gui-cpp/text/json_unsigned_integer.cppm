@@ -1,13 +1,19 @@
 module;
+#include <chrono>
+#include <utility>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
 #include <cstdint>
-
 
 #include <array>
 #include <cstddef>
 #include <span>
 #include <stdexcept>
-
 
 #include <charconv>
 #include <concepts>
@@ -15,14 +21,10 @@ module;
 #include <string_view>
 #include <system_error>
 
-
-#include "../core/memory.hpp"
 #include <algorithm>
-
 
 #include <bit>
 #include <limits>
-
 
 #include <optional>
 #include <ghostty/vt/unicode.h>
@@ -34,6 +36,9 @@ export import telar.base.text;
 
 
 export import telar.gui.text.bounded_editor;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.gui.core.primitives;
 
 // Interface: text/number_radix.cppm
 export {

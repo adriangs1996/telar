@@ -1,28 +1,30 @@
 module;
+#include <limits>
+#include <utility>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
 #include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
 
-
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstdint>
 #include <span>
 
-
 #include <string_view>
-
 
 #include <array>
 #include <stdexcept>
 #include <optional>
 #include <chrono>
 
-
 #include <initializer_list>
-
 
 #include <concepts>
 
@@ -33,6 +35,7 @@ export import telar.base.memory;
 
 export import telar.base.text;
 export import telar.config;
+import telar.base.diagnostics;
 
 // Interface: exchange_capture/quota.cppm
 export {

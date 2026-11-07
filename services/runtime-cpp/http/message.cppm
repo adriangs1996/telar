@@ -1,7 +1,17 @@
 module;
+#include <algorithm>
+#include <chrono>
+#include <concepts>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <exception>
+#include <type_traits>
+#include <cstdio>
 
 #define ZSTD_STATIC_LINKING_ONLY
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
@@ -17,10 +27,7 @@ module;
 #include <stdexcept>
 #include <zstd.h>
 
-
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
-
 
 #include <limits>
 #include <charconv>
@@ -38,6 +45,8 @@ export import telar.runtime.plugins.protocol;
 
 
 export import telar.runtime.http1.head;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: http/content_codec.cppm
 export {

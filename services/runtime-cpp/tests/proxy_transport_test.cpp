@@ -75,10 +75,8 @@ static_assert(true);
 
 
 import telar.runtime.proxy.http2_capture_streams;
-import telar.runtime.proxy.application_relay;
 import telar.runtime.proxy.runtime;
 import telar.runtime.proxy.relay_direction;
-import telar.runtime.proxy.http1_capture;
 
 using namespace telar;
 using namespace telar::runtime;

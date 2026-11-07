@@ -1,7 +1,16 @@
 module;
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <vector>
+#include <bit>
+#include <chrono>
+#include <utility>
+#include <mutex>
+#include <new>
 
 #include <stdexcept>
-
 
 #include <array>
 #include <cstdint>
@@ -11,8 +20,6 @@ module;
 #include <span>
 #include <string>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
@@ -21,9 +28,7 @@ module;
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
@@ -31,8 +36,6 @@ module;
 #endif
 #if (!(defined(__APPLE__)))
 #endif
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -51,6 +54,9 @@ export import telar.cli.output;
 
 export import telar.cli.runtime_observer;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: command_error.cppm
 export {

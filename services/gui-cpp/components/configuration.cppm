@@ -1,29 +1,29 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <vector>
+#include <bit>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <string_view>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <variant>
 #include <utility>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
 #include <stdexcept>
 #include <system_error>
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <limits>
 #include <span>
 
-
-#include "telar_client/codecs/telar_value_codec.hpp"
-
-
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -33,10 +33,7 @@ module;
 #include <initializer_list>
 #include <string>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cinttypes>
-#include "telar_base/text/utf8.hpp"
 
 export module telar.gui.components.configuration;
 
@@ -50,6 +47,8 @@ export import telar.lua;
 
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: components/node.cppm
 export {

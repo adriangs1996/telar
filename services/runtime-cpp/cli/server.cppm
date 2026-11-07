@@ -1,4 +1,9 @@
 module;
+#include <vector>
+#include <stdlib.h>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <sys/mman.h>
 
 #include <cstdint>
 #include <limits>
@@ -6,15 +11,11 @@ module;
 #include <stdexcept>
 #include <string_view>
 
-
 #include "config_bootstrap.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <cinttypes>
 #include <cstdio>
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -26,21 +27,16 @@ module;
 #include <string>
 #include <cstddef>
 #include <concepts>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <bit>
 #include <utility>
-#include "telar_base/memory/fixed_text.hpp"
 #include <limits.h>
 #include <sys/stat.h>
 #include <exception>
 #include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <unistd.h>
 #include <filesystem>
-
 
 #if (defined(__APPLE__))
 #endif
@@ -60,7 +56,6 @@ module;
 #include <csignal>
 #endif
 #if (defined(__APPLE__))
-#include "telar_client/codecs/telar_wire.hpp"
 #endif
 #if (defined(__APPLE__))
 #endif
@@ -187,7 +182,6 @@ module;
 #if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
-#include "telar_platform/random_bytes.hpp"
 #endif
 #if (defined(__APPLE__))
 #endif
@@ -217,7 +211,6 @@ module;
 #include <netinet/tcp.h>
 #endif
 #if (defined(__APPLE__))
-#include "telar_base/program_identity.hpp"
 #endif
 #if (defined(__APPLE__))
 #endif
@@ -266,14 +259,10 @@ module;
 #if (!(defined(__APPLE__)))
 #endif
 
-
 #include <format>
 #include <ghostty/vt/unicode.h>
-#include "telar_config/terminal/control/policy.hpp"
 #include <arpa/inet.h>
-#include "telar_config/graphics/limits.hpp"
 #include <cstdlib>
-#include "../graphics/png_decoder.hpp"
 #include <sqlite3.h>
 #include <atomic>
 #include <memory>
@@ -281,18 +270,15 @@ module;
 #include <mutex>
 #include <type_traits>
 #include <cassert>
-#include "telar_client/codecs/telar_wire.hpp"
 #include <poll.h>
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <climits>
-#include "telar_platform/trace.hpp"
 #include <csignal>
 #include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include "telar_platform/random_bytes.hpp"
 #include <dirent.h>
 #include "telar_platform/open_directory.h"
 #include <openssl/sha.h>
@@ -336,7 +322,6 @@ module;
 #if (!(defined(__APPLE__)))
 #endif
 #include <sys/un.h>
-#include "telar_base/program_identity.hpp"
 #include <bitset>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -346,7 +331,6 @@ module;
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
-#include "telar_base/text/base64.hpp"
 #include <variant>
 #include <netdb.h>
 #include <brotli/encode.h>
@@ -386,9 +370,7 @@ module;
 #include <spawn.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-#include "../diagnostics/timing.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/diagnostics/limit_reach.hpp"
 #include <unordered_set>
 #if (TELAR_DIAGNOSTICS)
 #endif
@@ -399,10 +381,8 @@ module;
 #if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "../diagnostics/line.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "telar_base/memory/allocation_statistics.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
 #include <mach/mach.h>
@@ -450,59 +430,6 @@ module;
 #if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "telar_client/codecs/telar_codec.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "telar_client/serializers/telar_serializer.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../terminal/ghostty_allocator.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../terminal/ghostty_handle.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../graphics/kitty_framing.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../graphics/media_budget.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../graphics/kitty_control.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../graphics/child_file.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../terminal/control/classification.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../terminal/control/parser.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../terminal/pty_response_queue.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include "../graphics/temporary_path.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS)
 #endif
@@ -515,7 +442,46 @@ module;
 #if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "telar_platform/mapped_region.hpp"
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
+#endif
+#if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
 #endif
@@ -529,7 +495,6 @@ module;
 #include <sys/mman.h>
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "telar_client/serializers/telar_frame.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS)
 #include "cell_layout.hpp"
@@ -540,12 +505,10 @@ module;
 #if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "../terminal/control/engine.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS)
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "../terminal/graphics_cursor.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS)
 #endif
@@ -563,7 +526,6 @@ module;
 #include <sys/file.h>
 #include <new>
 #include <termios.h>
-#include "../terminal/control/clipboard.hpp"
 #include <ifaddrs.h>
 #include <net/if.h>
 #if (defined(__APPLE__))
@@ -582,7 +544,6 @@ module;
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-
 
 #if (defined(__APPLE__)) && (defined(__APPLE__))
 #endif
@@ -765,6 +726,11 @@ export import telar.config;
 export import telar.runtime.plugins.tap_configuration;
 export import telar.lua;
 export import telar.platform;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 
 #if (defined(__APPLE__))

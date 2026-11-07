@@ -1,4 +1,13 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <array>
 #include <cstddef>
@@ -10,13 +19,9 @@ module;
 #include <string_view>
 #include <system_error>
 #include <span>
-#include "telar_base/memory/fixed_text.hpp"
 #include <optional>
 
-
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <algorithm>
-
 
 #include <utility>
 
@@ -29,6 +34,8 @@ export import telar.gui.machines.profile_store;
 
 
 export import telar.gui.palette.navigation_label;
+import telar.base.memory;
+import telar.client.protocol;
 
 // Interface: machines/machine_row.cppm
 export {

@@ -1,15 +1,20 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <cstdlib>
+#include <memory>
+#include <new>
+#include <string>
+#include <vector>
+#include <unistd.h>
 
 #include <chrono>
 #include <concepts>
 #include <cstdint>
 
-
 #include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <span>
 #include <array>
@@ -19,22 +24,18 @@ module;
 #include <bit>
 #include <limits>
 
-
 #include <pthread.h>
 #include <brotli/decode.h>
 #include <utility>
 #include <initializer_list>
 #include <zlib.h>
-#include "telar_platform/trace.hpp"
 #include <zstd.h>
 #include <condition_variable>
 #include <mutex>
 #include <type_traits>
 
-
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 
 export module telar.runtime.exchange_capture.pipeline;
 
@@ -47,6 +48,8 @@ export import telar.runtime.exchange_capture.producer;
 
 
 export import telar.runtime.platform.request_worker;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: exchange_capture/clock.cppm
 export {

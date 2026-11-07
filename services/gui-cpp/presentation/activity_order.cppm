@@ -1,13 +1,19 @@
 module;
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <bit>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <new>
 
 #include <cstdint>
-#include "../core/terminal_size.hpp"
-#include "../core/memory.hpp"
 #include <atomic>
 #include <limits>
 #include <exception>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>
 #include <concepts>
@@ -16,18 +22,12 @@ module;
 #include <optional>
 #include <span>
 #include <variant>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "../terminal/screen.hpp"
 #include <string_view>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <stdexcept>
 #include <tuple>
 
-
 #include <compare>
 
-
-#include "telar_client/serializers/telar_cells.hpp"
 #include <charconv>
 #include <cstring>
 #include <system_error>
@@ -41,6 +41,10 @@ export import telar.gui.application.workspace_replica;
 
 export import telar.gui.core.metrics;
 export import telar.gui.text.json_unsigned_integer;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 // Interface: presentation/agent_order.cppm
 export {

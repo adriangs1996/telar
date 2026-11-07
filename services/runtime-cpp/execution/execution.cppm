@@ -1,17 +1,29 @@
 module;
+#include <algorithm>
+#include <chrono>
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
+#include <unistd.h>
 
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <span>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cerrno>
 #include <exception>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <optional>
 #include <sys/types.h>
 #include <array>
@@ -22,6 +34,9 @@ export module telar.runtime.execution.execution;
 
 export import telar.base.memory;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: execution/execution.cppm
 export {

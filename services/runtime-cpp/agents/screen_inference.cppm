@@ -1,132 +1,62 @@
 module;
+#include <concepts>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <string>
+#include <vector>
+#include <bit>
+#include <unistd.h>
+#include <mutex>
+#include <new>
+#include <cerrno>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <stdlib.h>
+#include <zlib.h>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <string_view>
 
-
-#include "telar_platform/file_descriptor.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
 
-
 #include <chrono>
 #include <cstdint>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-
-
-#include "../diagnostics/line.hpp"
-#include "telar_platform/trace.hpp"
-#include "../graphics/kitty_framing.hpp"
 #include <cstring>
 #include <variant>
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
 #include <cstddef>
 #include <span>
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <utility>
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
-#include "../graphics/temporary_path.hpp"
 #include <charconv>
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
 #include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include <limits>
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <sys/mman.h>
 #include <atomic>
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
-#include "../terminal/control/engine.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "../terminal/graphics_cursor.hpp"
 #include <cassert>
 
 export module telar.runtime.agents.screen_inference;
+
+export import telar.runtime.agents.session_host;
 
 export import telar.config;
 
 
 export import telar.runtime.terminal.text_reader;
-
-// Interface: agents/session_host.cppm
-export {
-namespace telar::runtime {
-
-enum class SessionHost {
-  unknown,
-  pane,
-  shared_server
-};
-
-inline constexpr std::string_view codex_pane_argument = "--no-daemon";
-inline constexpr std::array codex_batch_arguments{
-    "exec", "e", "review", "login", "logout", "mcp", "mcp-server", "plugin",
-    "app-server", "remote-control", "app", "completion", "update", "doctor",
-    "sandbox", "debug", "apply", "a", "queue", "archive", "delete",
-    "migrate-rollouts", "unarchive", "cloud", "exec-server", "features", "agents",
-    "help", "--help", "-h", "--version", "-V"};
-
-inline bool isCodexBatchArgument(std::string_view argument) noexcept {
-  return std::ranges::any_of(codex_batch_arguments, [argument](std::string_view candidate) { return argument == candidate; });
-}
-
-}
-}
-
-// Interface: agents/hook_settings.cppm
-export {
-namespace telar::runtime {
-
-inline bool codexHooksInstalled(const char *override_directory, const char *home) noexcept {
-  std::array<char, PATH_MAX> path;
-  int length = 0;
-  if (override_directory != nullptr && *override_directory != '\0') {
-    length = std::snprintf(path.data(), path.size(), "%s/hooks.json", override_directory);
-  } else if (home != nullptr && *home != '\0') {
-    length = std::snprintf(path.data(), path.size(), "%s/.codex/hooks.json", home);
-  } else {
-    return false;
-  }
-
-  if (length < 0 || static_cast<std::size_t>(length) >= path.size()) {
-    return false;
-  }
-
-  FileDescriptor file{::open(path.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
-  struct stat metadata;
-  if (!file || ::fstat(file.get(), &metadata) != 0 || !S_ISREG(metadata.st_mode)) {
-    return false;
-  }
-
-  constexpr std::size_t maximum_settings_bytes = 32 * 1024;
-  std::array<char, maximum_settings_bytes> bytes;
-  const auto count = ::read(file.get(), bytes.data(), bytes.size());
-  return count > 0 && std::string_view{bytes.data(), static_cast<std::size_t>(count)}.contains(" hook codex");
-}
-
-inline bool hooksInstalled(AgentProvider provider, SessionHost host) noexcept {
-  return provider == AgentProvider::codex && host == SessionHost::shared_server && codexHooksInstalled(std::getenv("CODEX_HOME"), std::getenv("HOME"));
-}
-
-}
-}
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 // Interface: agents/prompt_budget.cppm
 export {

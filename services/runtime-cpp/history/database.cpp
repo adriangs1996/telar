@@ -1,6 +1,18 @@
 module;
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <stdexcept>
+#include <utility>
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <exception>
 #include <sqlite3.h>
 #include <cerrno>
@@ -10,7 +22,6 @@ module;
 #include <limits.h>
 #include <limits>
 #include <unistd.h>
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <string_view>
 #include <sys/stat.h>
@@ -20,6 +31,8 @@ module telar.runtime.history.store;
 
 import telar.runtime.platform.system_certificates;
 import telar.platform;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 
 namespace telar::runtime {

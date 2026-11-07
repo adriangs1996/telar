@@ -1,4 +1,11 @@
 module;
+#include <exception>
+#include <memory>
+#include <cstdio>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
 
 #include <array>
 #include <cstddef>
@@ -7,16 +14,10 @@ module;
 #include <string_view>
 #include <utility>
 
-
 #include <algorithm>
 #include <limits>
-#include "telar_client/serializers/telar_cells.hpp"
 #include <optional>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include <charconv>
 #include <cmath>
 #include <concepts>
@@ -35,6 +36,8 @@ export import telar.gui.core.json_writer;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
+import telar.base.diagnostics;
+import telar.client.protocol;
 
 // Interface: config/query.cppm
 export {

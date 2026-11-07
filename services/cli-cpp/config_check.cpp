@@ -1,4 +1,10 @@
 module;
+#include <memory>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <mutex>
+#include <new>
 
 #include <algorithm>
 #include <array>
@@ -9,10 +15,7 @@ module;
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -21,7 +24,6 @@ module;
 #include <cstdio>
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_base/text/utf8.hpp"
 #include <cinttypes>
 #include <cmath>
 #include <initializer_list>
@@ -31,14 +33,10 @@ module;
 #include <format>
 #include <utility>
 #include <ghostty/vt/unicode.h>
-#include "telar_config/terminal/control/policy.hpp"
 #include <arpa/inet.h>
-#include "telar_config/graphics/limits.hpp"
 #include <exception>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cstdlib>
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <openssl/sha.h>
 #include <unistd.h>
@@ -52,6 +50,9 @@ import telar.config;
 import telar.lua;
 import telar.platform;
 import telar.plugins;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 
 namespace telar::runtime::cli {

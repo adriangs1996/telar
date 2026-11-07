@@ -1,14 +1,23 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <utility>
+#include <chrono>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <span>
 
 #include <concepts>
 #include <cstdint>
 #include <optional>
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <dirent.h>
 #include <fcntl.h>
-#include "telar_platform/trace.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -23,6 +32,8 @@ module;
 module telar.runtime.platform.stream_read_buffer;
 
 import telar.platform;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 
 namespace telar::runtime {

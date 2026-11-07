@@ -1,4 +1,14 @@
 module;
+#include <concepts>
+#include <type_traits>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <stdlib.h>
+#include <stdexcept>
 
 #include <optional>
 #include <sys/socket.h>
@@ -7,9 +17,7 @@ module;
 #include <cerrno>
 #include <exception>
 #include <csignal>
-#include "telar_client/codecs/telar_wire.hpp"
 #include <bit>
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
@@ -17,23 +25,17 @@ module;
 #include <utility>
 #include <string_view>
 #include <array>
-#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <poll.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 
-
 #include <limits>
 
-
-#include "telar_platform/random_bytes.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <net/if.h>
 #include <pcap/pcap.h>
 #include <pthread.h>
-
 
 #include <memory>
 
@@ -44,6 +46,9 @@ export import telar.runtime.traffic.control_protocol;
 
 
 export import telar.base.memory;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: traffic/connection.cppm
 export {

@@ -1,20 +1,30 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <cstdio>
+#include <variant>
+#include <bit>
+#include <stdexcept>
 
 #include <array>
 #include <optional>
 #include <string_view>
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <span>
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <exception>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <sys/types.h>
 #include <limits.h>
 #include <atomic>
@@ -22,16 +32,17 @@ module;
 #include <poll.h>
 #include <sys/wait.h>
 #include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <algorithm>
-#include "telar_platform/trace.hpp"
 
 export module telar.runtime.workspaces.git_probe;
 
 export import telar.runtime.platform.git_status;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: workspaces/git_probe.cppm
 export {

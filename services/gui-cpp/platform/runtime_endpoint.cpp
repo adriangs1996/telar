@@ -1,4 +1,11 @@
 module;
+#include <concepts>
+#include <cstdint>
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
 
 #include "telar_platform/process_environment.h"
 
@@ -9,7 +16,6 @@ module;
 #include <array>
 #include <cstddef>
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>

@@ -1,28 +1,49 @@
 module;
+#include <concepts>
+#include <limits>
+#include <optional>
+#include <string_view>
+#include <unistd.h>
+#include <cerrno>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <cstdio>
+#include <cstdlib>
+#include <sys/mman.h>
+#include <atomic>
+#include <mutex>
+#include <chrono>
+#include <memory>
+#include <new>
+#include <string>
+#include <vector>
+#include <exception>
+#include <type_traits>
+#include <bit>
+#include <stdexcept>
 
-#include "kitty_control.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>
 
-
-#include "child_file.hpp"
-#include "temporary_path.hpp"
-#include "kitty_framing.hpp"
 #include <algorithm>
 #include <charconv>
 
-
-#include "media_budget.hpp"
 #include <utility>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <cstring>
 #include <variant>
 
 export module telar.runtime.graphics.file_input;
+
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.graphics.kitty;
 
 
 // Interface: graphics/atomic_frame.cppm

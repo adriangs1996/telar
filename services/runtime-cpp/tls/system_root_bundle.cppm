@@ -1,13 +1,23 @@
 module;
+#include <algorithm>
+#include <chrono>
+#include <limits>
+#include <utility>
+#include <concepts>
+#include <cstddef>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <span>
 #include <cerrno>
 #include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <fcntl.h>
 #include <limits.h>
@@ -20,6 +30,8 @@ export module telar.runtime.tls.system_root_bundle;
 
 export import telar.base.memory;
 export import telar.platform;
+import telar.base.diagnostics;
+import telar.platform.primitives;
 
 // Interface: tls/system_root_bundle.cppm
 export {

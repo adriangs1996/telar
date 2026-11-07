@@ -1,4 +1,16 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+#include <bit>
+#include <unistd.h>
+#include <utility>
 
 #include <algorithm>
 #include <array>
@@ -6,25 +18,15 @@ module;
 #include <span>
 #include <string_view>
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
 #include <stdexcept>
 #include <system_error>
 
-
 #include <sys/un.h>
 
-
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdint>
-
-
-#include "telar_platform/file_descriptor.hpp"
-
 
 #include <climits>
 
@@ -36,6 +38,10 @@ export import telar.gui.text.json_unsigned_integer;
 
 
 export import telar.gui.core.unicode_scalar;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: platform/command_line.cppm
 export {

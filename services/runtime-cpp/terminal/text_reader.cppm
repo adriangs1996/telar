@@ -1,59 +1,50 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <exception>
+#include <ghostty/vt.h>
+#include <source_location>
+#include <chrono>
+#include <concepts>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <type_traits>
+#include <bit>
+#include <unistd.h>
+#include <cerrno>
+#include <limits.h>
+#include <sys/stat.h>
+#include <stdlib.h>
+#include <zlib.h>
 
 #include "cell_layout.hpp"
-#include "ghostty_handle.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-
 
 #include <cstring>
 
-
 #include <array>
 
-
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <charconv>
 
-
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_platform/trace.hpp"
 #include <tuple>
 
-
-#include "../graphics/kitty_framing.hpp"
 #include <variant>
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <algorithm>
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <utility>
-#include "control/classification.hpp"
-#include "control/parser.hpp"
-#include "pty_response_queue.hpp"
 #include <stdexcept>
-#include "../graphics/temporary_path.hpp"
-#include "ghostty_allocator.hpp"
 #include <optional>
-#include "telar_config/graphics/limits.hpp"
 #include <limits>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <string_view>
 #include <sys/mman.h>
 #include <atomic>
-#include "control/engine.hpp"
-#include "graphics_cursor.hpp"
 #include <cassert>
 
 export module telar.runtime.terminal.text_reader;
@@ -68,6 +59,13 @@ export import telar.runtime.graphics.prepared_images;
 
 export import telar.runtime.terminal.osc_scanner;
 export import telar.base.memory;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 // Interface: terminal/text_metadata.cppm
 export {

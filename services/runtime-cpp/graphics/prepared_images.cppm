@@ -1,31 +1,41 @@
 module;
+#include "telar_platform/trace_macro.hpp"
+#include <utility>
+#include <atomic>
+#include <mutex>
+#include <chrono>
+#include <concepts>
+#include <cstddef>
+#include <memory>
+#include <new>
+#include <string>
+#include <vector>
+#include <unistd.h>
+#include <stdlib.h>
+#include <ghostty/vt.h>
+#include <exception>
+#include <source_location>
+#include <charconv>
+#include <stdexcept>
+#include <type_traits>
+#include <variant>
+#include <bit>
 
-#include "media_budget.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <limits>
 #include <optional>
-#include "telar_platform/trace.hpp"
 #include <cstring>
 #include <span>
 #include <string_view>
 #include <sys/mman.h>
 
-
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
 #include <algorithm>
 #include <cstdint>
 
-
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 
 export module telar.runtime.graphics.prepared_images;
 
@@ -33,6 +43,12 @@ export import telar.platform;
 
 
 export import telar.runtime.diagnostics.operation;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
 
 // Interface: graphics/frozen_image.cppm
 export {

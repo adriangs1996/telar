@@ -1,6 +1,17 @@
 module;
+#include <concepts>
+#include <type_traits>
+#include <cstdio>
+#include <utility>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <variant>
+#include <bit>
+#include <stdlib.h>
 
-#include "telar_client/codecs/telar_wire.hpp"
 #include <stdexcept>
 #include <string_view>
 #include <cstdint>
@@ -13,39 +24,27 @@ module;
 #include <array>
 #include <cstddef>
 #include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
 #include <cerrno>
 #include <exception>
 #include <ifaddrs.h>
 #include <memory>
 #include <net/if.h>
 
-
 #include <csignal>
-#include "telar_platform/file_descriptor.hpp"
 #include <netinet/tcp.h>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <sys/types.h>
 #include <limits.h>
 #include <chrono>
 #include <poll.h>
 
-
 #include <span>
 #include <net/if_dl.h>
 #include <net/route.h>
 
-
 #include <limits>
-#include "telar_base/text/utf8.hpp"
 #include <unistd.h>
 
-
 #if defined(__APPLE__)
-
 
 #include <utility>
 #include <netinet/in_pcb.h>
@@ -54,17 +53,13 @@ module;
 #include <sys/socketvar.h>
 #include <sys/sysctl.h>
 
-
 #endif
 
 #if defined(__linux__)
 
-
 #include <fcntl.h>
 
-
 #endif
-
 
 #if (defined(__APPLE__))
 #include <libproc.h>
@@ -87,9 +82,7 @@ module;
 #include <cstdio>
 #endif
 
-
 #if defined(__APPLE__)
-
 
 #include <bit>
 #include <sys/stat.h>
@@ -157,7 +150,6 @@ module;
 #include <pcap/pcap.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#include "telar_platform/random_bytes.hpp"
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -184,7 +176,6 @@ module;
 #include <cstdio>
 #endif
 
-
 #endif
 
 export module telar.runtime.redirect.socket_owners;
@@ -198,6 +189,9 @@ export import telar.runtime.proxy.relay_direction;
 
 
 export import telar.runtime.platform.process_probe;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 
 #if defined(__APPLE__)

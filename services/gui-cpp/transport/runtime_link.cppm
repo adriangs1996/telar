@@ -1,21 +1,23 @@
 module;
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
+#include <exception>
+#include <cstdio>
+#include <bit>
 
-#include "../core/memory.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
 #include <type_traits>
 
-
 #include <array>
 #include <span>
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <optional>
-
 
 #include <cstdint>
 #include <charconv>
@@ -24,11 +26,7 @@ module;
 #include <system_error>
 #include <utility>
 
-
 #include <algorithm>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <chrono>
 #include <limits>
 
@@ -43,6 +41,10 @@ export import telar.gui.text.json_unsigned_integer;
 
 
 export import telar.gui.machines.picker;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 
 // Interface: transport/frame_stream.cppm
 export {

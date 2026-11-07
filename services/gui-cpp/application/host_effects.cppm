@@ -1,11 +1,15 @@
 module;
+#include <exception>
+#include <memory>
+#include <type_traits>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <bit>
 
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <concepts>
 #include <cstdint>
 #include <optional>
-
 
 #include <algorithm>
 #include <limits>
@@ -13,19 +17,14 @@ module;
 #include <utility>
 #include <string_view>
 
-
-#include "telar_base/memory/fixed_text.hpp"
 #include <array>
 #include <charconv>
 #include <cstddef>
 #include <cstring>
 #include <system_error>
 
-
 #include <span>
 #include <variant>
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
 
 export module telar.gui.application.host_effects;
@@ -40,6 +39,9 @@ export import telar.gui.presentation.frame_pacer;
 
 
 export import telar.gui.core.json_writer;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.client.protocol;
 
 // Interface: application/agent_acknowledgement.cppm
 export {

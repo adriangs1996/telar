@@ -1,6 +1,9 @@
 module;
+#include <stdlib.h>
+#include <utility>
+#include <memory>
+#include <mutex>
 
-#include "telar_platform/random_bytes.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -23,12 +26,10 @@ module;
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <filesystem>
 #include <iostream>
 #include <vector>
-
 
 #include "telar_platform/process_environment.h"
 
@@ -40,7 +41,6 @@ module;
 #include <sys/wait.h>
 #include <thread>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
@@ -50,10 +50,7 @@ module;
 #include <concepts>
 #include <cstring>
 #include <system_error>
-#include "telar_base/memory/allocator.hpp"
 #include <bit>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <new>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -64,7 +61,6 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 #include <sys/file.h>
-
 
 #if (defined(__APPLE__))
 #endif
@@ -77,26 +73,21 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
 #include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <sys/un.h>
 #include <openssl/sha.h>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
-#include "telar_base/text/utf8.hpp"
 #include <cctype>
 #include <set>
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
 #endif
 
-
 #if (defined(__APPLE__))
 #endif
 #if (!(defined(__APPLE__)))
@@ -107,10 +98,8 @@ module;
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
 #endif
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <sys/socket.h>
 #include <sys/time.h>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <csignal>
 #include <dirent.h>
 #include <pwd.h>
@@ -132,6 +121,9 @@ export import telar.cli.output;
 
 
 export import telar.base.text;
+import telar.base.diagnostics;
+import telar.client.protocol;
+import telar.platform.primitives;
 
 // Interface: config_receive.cppm
 export {

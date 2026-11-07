@@ -35,7 +35,7 @@ static_assert(true);
 
 
 import telar.runtime.http1.intercepted_relay;
-import telar.runtime.proxy.http1_capture;
+import telar.runtime.proxy.runtime;
 
 using namespace telar;
 using namespace telar::runtime;
