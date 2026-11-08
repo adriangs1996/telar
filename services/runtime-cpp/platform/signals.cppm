@@ -69,7 +69,9 @@ private:
 export {
 namespace telar::runtime {
 
-class CancellationSignal {
+// Any thread may request cancellation and any may observe it: the flag is atomic and the wake signal
+// is shared, so a reference to it stays valid whatever is done through it.
+class TBC_SHARED CancellationSignal {
 public:
   inline void request() noexcept {
     requested_.store(true, std::memory_order_relaxed);

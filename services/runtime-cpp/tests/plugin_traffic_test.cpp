@@ -133,9 +133,9 @@ return {}
     constexpr std::string_view bytes{"a\0b", 3};
     app::TrafficEvent packet{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::packet, .original_bytes = 3, .bytes = {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}}};
     const auto response = host.invokeTraffic(packet, output.bytes());
-    app::TrafficProtocol::readReply(response, *setup);
-    check(setup->changed && setup->registration_count == 1 && setup->decision_count == 0);
-    check(app::Protocol::decodeEffects(setup->effects).batch.notifications[0].title == "packet verified");
+    const auto observed = app::TrafficProtocol::readReply(response, *setup);
+    check(setup->changed && setup->registration_count == 1 && observed.decision_count == 0);
+    check(app::Protocol::decodeEffects(observed.effects).batch.notifications[0].title == "packet verified");
 
     constexpr std::string_view body{"original\0body", 13};
     HttpMessageView message{.method = "POST", .target = "/", .body = {reinterpret_cast<const Byte *>(body.data()), body.size()}};
@@ -144,9 +144,9 @@ return {}
     const auto payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
     const auto flow = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = payload});
     app::TrafficEvent request{.event_id = 2, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::http_intercept_request, .bytes = flow}};
-    app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
-    check(!setup->changed && setup->decision_count == 1);
-    app::FrameReader decision{setup->decisions[0].payload};
+    const auto decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
+    check(!setup->changed && decided.decision_count == 1);
+    app::FrameReader decision{decided.decisions[0].payload};
     decision.require(traffic::InterceptionCodec::Command::decision);
     check(decision.integer<std::uint64_t>() == 123 && decision.tag(traffic::Verdict::reject) == traffic::Verdict::replace);
     const auto edited = HttpMessageCodec::decode(decision.bytes());
@@ -160,9 +160,9 @@ return {}
     const auto h2_payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
     request.event_id = 3;
     request.event.bytes = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = h2_payload});
-    app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
-    check(setup->decision_count == 1);
-    app::FrameReader h2_decision{setup->decisions[0].payload};
+    const auto h2_decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
+    check(h2_decided.decision_count == 1);
+    app::FrameReader h2_decision{h2_decided.decisions[0].payload};
     h2_decision.require(traffic::InterceptionCodec::Command::decision);
     h2_decision.integer<std::uint64_t>();
     check(h2_decision.tag(traffic::Verdict::reject) == traffic::Verdict::replace);

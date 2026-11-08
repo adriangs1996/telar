@@ -133,7 +133,9 @@ void testResultDeliveryBound() {
   results.activate();
   const auto identity = specification("echo");
   const auto publish = [&](std::uint64_t event_id) {
-    results.publish(makeOwned<tap::Result<decltype(memory)>>(memory, identity, SensitiveAllocation{memory, 0}, tap::EffectReply{.event_id = event_id, .batch = {}}));
+    SensitiveAllocation storage{memory, 64};
+    const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
+    results.publish(makeOwned<tap::Result<decltype(memory)>>(memory, identity, std::move(storage), 0, size));
   };
   publish(1);
   publish(2);
@@ -162,7 +164,9 @@ void testConcurrentResults() {
   results.activate();
   const auto identity = specification("echo");
   const auto publish = [&](std::uint64_t event_id) {
-    results.publish(makeOwned<tap::Result<decltype(memory)>>(memory, identity, SensitiveAllocation{memory, 0}, tap::EffectReply{.event_id = event_id, .batch = {}}));
+    SensitiveAllocation storage{memory, 64};
+    const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
+    results.publish(makeOwned<tap::Result<decltype(memory)>>(memory, identity, std::move(storage), 0, size));
   };
 
   for (std::uint64_t index = 0; index <= tap::Limits::queue_depth; ++index) {

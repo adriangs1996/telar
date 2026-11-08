@@ -604,7 +604,8 @@ struct PackageChannel {
 
 // Only native runtime code can attach a package. Lua never supplies this grant
 // or opens the authenticated endpoint; each registration gets its own channel.
-class PackagePort {
+// Package workers call it from their own threads, so an implementation is synchronized.
+class TBC_SHARED PackagePort {
 public:
   virtual ~PackagePort() = default;
   virtual PackageChannel openPackage(const plugins::ServiceSpec &specification, std::uint32_t registration = 0) = 0;

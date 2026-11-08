@@ -161,7 +161,7 @@ public:
   inline void collect(Consumer &&consumer) {
     results_.collect([&](const auto &result) {
       if (result.package_index < workers_.size() && !workers_[result.package_index]->revoked() && result.authorized(workers_[result.package_index]->specification())) {
-        consumer(result.batch);
+        consumer(result.batch());
       }
     });
   }

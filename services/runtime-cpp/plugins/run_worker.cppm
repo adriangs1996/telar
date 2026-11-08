@@ -430,7 +430,8 @@ public:
     return static_cast<traffic::Selection>(mask);
   }
 
-  inline static HttpMessageView message(const lua::Value &value) {
+  // The message views strings of the Lua state, region `a`, which the caller's tables keep alive.
+  inline static tbc::view<HttpMessageView, tbc::lt::a> message(const lua::Value &value) {
     value.onlyFields({"protocol", "response", "response_to_head", "stream_id", "method", "target", "reason", "scheme", "authority", "status", "headers", "trailers", "body", "body_decoded"});
     HttpMessageView message;
     const auto protocol = value.field("protocol").string();
@@ -453,7 +454,7 @@ public:
   }
 
 private:
-  inline static std::size_t fields(const lua::Value &value, std::span<HttpMessageView::Field> fields) {
+  inline static std::size_t fields(const lua::Value &value, tbc::view<std::span<HttpMessageView::Field>, tbc::lt::a> fields) {
     const auto count = value.arraySize();
     if (count > fields.size()) { throw EncodingError{"Too many HTTP fields"}; }
     for (std::size_t index = 0; index < count; ++index) {
@@ -739,13 +740,15 @@ public:
         if (binding.callback != LUA_NOREF) { reply.registrations[reply.registration_count++] = binding.registration; }
       }
     }
-    reply.decision_count = decision_count_;
+    // The outcome views this host's buffers only while the reply is encoded.
+    TrafficOutcome outcome;
+    outcome.decision_count = decision_count_;
     for (std::size_t index = 0; index < decision_count_; ++index) {
       const auto &queued = queued_[index];
-      reply.decisions[index] = {queued.registration, decisions_.readable().subspan(queued.offset, queued.bytes)};
+      outcome.decisions[index] = {queued.registration, decisions_.readable().subspan(queued.offset, queued.bytes)};
     }
-    reply.effects = effects_.bytes().first(effect_bytes_);
-    const auto encoded = TrafficProtocol::reply(output, reply);
+    outcome.effects = effects_.bytes().first(effect_bytes_);
+    const auto encoded = TrafficProtocol::reply(output, reply, outcome);
     changed_ = false;
     return encoded;
   }
@@ -1007,10 +1010,16 @@ private:
     const TrafficEvent &event;
   };
 
+  // What a protected call was handed, which outlives the call; Lua only carries its address.
+  inline static tbc::view<void *, tbc::lt::static_storage> callContext(lua_State *state) noexcept {
+    return lua_touserdata(state, 1);
+  }
+
   inline static int invokeTrafficCallback(lua_State *state) {
-    auto &invocation = *static_cast<TrafficInvocation *>(lua_touserdata(state, 1));
+    auto &invocation = *static_cast<TrafficInvocation *>(callContext(state));
+    const auto event = invocation.event;
     std::array<char, 1024> error{};
-    try { invocation.host.traffic_->invoke(state, invocation.event); return 0; }
+    try { invocation.host.traffic_->invoke(state, event); return 0; }
     catch (const std::exception &failure) { std::snprintf(error.data(), error.size(), "%s", failure.what()); }
     return luaL_error(state, "%s", error.data());
   }
@@ -1023,8 +1032,8 @@ private:
     bool encoding_failed = false;
   };
 
-  inline static Host &context(lua_State *state) noexcept {
-    return *static_cast<Host *>(lua_touserdata(state, 1));
+  inline static tbc::view<Host &, tbc::lt::static_storage> context(lua_State *state) noexcept {
+    return *static_cast<Host *>(callContext(state));
   }
 
   inline static std::string_view errorMessage(lua_State *state) {

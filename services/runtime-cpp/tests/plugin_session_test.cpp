@@ -177,7 +177,7 @@ void testPluginSessions() {
     if (std::string_view{mode} == "callback-error") {
       check(!first);
     } else {
-      check(first && first->batch.notifications[0].title == "first");
+      check(first && first->batch().notifications[0].title == "first");
       check(first->authorized(specification));
       auto stale = specification;
       ++stale.generation;
@@ -190,7 +190,7 @@ void testPluginSessions() {
       check(session.retainedError().size() == tap::Limits::stderr_bytes);
     }
     const auto second = session.exchange(specification, 73, frame);
-    check(second && second->batch.notifications[0].title == "next" && session.processId() == process);
+    check(second && second->batch().notifications[0].title == "next" && session.processId() == process);
   }
 
   for (const auto *mode : {"closed", "oversized", "invalid", "stale", "timeout", "blocked-write"}) {

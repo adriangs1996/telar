@@ -149,24 +149,39 @@ FrameChannel(Stream &stream) -> FrameChannel<Stream>;
 export {
 namespace telar::runtime::plugins {
 
+// A worker's effects for one event. The result owns the reply's storage, memory of the allocator in
+// region `a`, and keeps where the effects lie in it; the batch is decoded from there when read.
 template <Allocator Memory>
 struct Result {
-  inline explicit Result(const ServiceSpec &specification, SensitiveAllocation<Memory> storage, EffectReply reply, bool traffic = false) noexcept
-      : package_index(specification.package_index), plugin_id(specification.plugin_id), digest(specification.digest), generation(specification.generation), event_id(reply.event_id), storage(std::move(storage)), batch(reply.batch), traffic(traffic) {}
+  inline explicit Result(const ServiceSpec &specification, tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic = false)
+      : package_index(specification.package_index), plugin_id(specification.plugin_id), digest(specification.digest), generation(specification.generation), storage(std::move(storage)), traffic(traffic), effects_offset_(effects_offset), effects_size_(effects_size) {
+    const auto effects = Protocol::decodeEffects(effectBytes());
+    event_id = effects.event_id;
+    batch_count = effects.batch.count;
+  }
+
+  // The batch views the result's storage.
+  inline EffectBatch batch() const { return Protocol::decodeEffects(effectBytes()).batch; }
 
   inline bool authorized(const ServiceSpec &specification) const noexcept {
     const bool source = traffic ? specification.traffic() : specification.allows(Capability::proxy_tap);
-    return package_index == specification.package_index && plugin_id == specification.plugin_id && digest == specification.digest && generation == specification.generation && source && (batch.count == 0 || specification.allows(Capability::notifications));
+    return package_index == specification.package_index && plugin_id == specification.plugin_id && digest == specification.digest && generation == specification.generation && source && (batch_count == 0 || specification.allows(Capability::notifications));
   }
 
   std::uint8_t package_index;
   std::uint64_t plugin_id;
   PackageDigest digest;
   std::uint64_t generation;
-  std::uint64_t event_id;
-  SensitiveAllocation<Memory> storage;
-  EffectBatch batch;
+  std::uint64_t event_id = 0;
+  std::size_t batch_count = 0;
+  tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage;
   bool traffic = false;
+
+private:
+  inline std::span<const Byte> effectBytes() const { return storage.bytes().subspan(effects_offset_, effects_size_); }
+
+  std::size_t effects_offset_;
+  std::size_t effects_size_;
 };
 
 template <Allocator Memory>
@@ -186,7 +201,8 @@ class ResultQueue {
 public:
   inline void activate() { ready_.emplace(); }
 
-  inline void publish(OwnedResult<Memory> result) noexcept {
+  // The queue keeps the results, and what they keep of the allocator: region `a`.
+  inline void publish(tbc::view<OwnedResult<Memory>, tbc::lt::a> result) noexcept {
     if (results_.publish(std::move(result))) {
       ready_->notify();
     }
@@ -208,7 +224,7 @@ public:
   inline int descriptor() const noexcept { return ready_ ? ready_->descriptor() : -1; }
 
 private:
-  DropChannel<OwnedResult<Memory>, Limits::queue_depth, ChannelPolicy::keep_oldest> results_;
+  tbc::view<DropChannel<OwnedResult<Memory>, Limits::queue_depth, ChannelPolicy::keep_oldest>, tbc::lt::a> results_;
   std::optional<CompletionSignal> ready_;
 };
 
@@ -362,15 +378,15 @@ public:
     TELAR_TRACE("plugins.workerExchange");
     auto received = request(frame, Limits::effect_bytes);
 
-    const auto bytes = received.bytes();
-    if (bytes.front() == static_cast<Byte>(FrameKind::error)) {
-      const auto failure = Protocol::decodeError(bytes);
+    if (received.bytes().front() == static_cast<Byte>(FrameKind::error)) {
+      const auto failure = Protocol::decodeError(received.bytes());
       requireEvent(event_id, failure.event_id);
       return {nullptr, AllocationDeleter<Result<Memory>, Memory>{memory_}};
     }
-    const auto reply = Protocol::decodeEffects(bytes);
-    requireEvent(event_id, reply.event_id);
-    return makeOwned<Result<Memory>>(memory_, specification, std::move(received), reply);
+    const auto size = received.bytes().size();
+    auto result = makeOwned<Result<Memory>>(memory_, specification, std::move(received), 0, size);
+    requireEvent(event_id, result->event_id);
+    return result;
   }
 
   inline SensitiveAllocation<Memory> request(std::span<const Byte> frame, std::size_t maximum_bytes) {
@@ -421,8 +437,9 @@ private:
 
   Memory &memory_;
   PipeProcess process_;
-  PipeStream<SessionIo> stream_;
-  FrameChannel<PipeStream<SessionIo>> channel_;
+  // The stream reads the process above and the channel frames the stream, so the session stays put.
+  tbc::view<PipeStream<SessionIo>, tbc::lt::self> stream_;
+  tbc::view<FrameChannel<PipeStream<SessionIo>>, tbc::lt::self> channel_;
   std::chrono::milliseconds timeout_;
   [[maybe_unused]] bool tracing_;
 };
@@ -465,11 +482,16 @@ struct TrafficDecision {
   std::span<const Byte> payload;
 };
 
+// The registrations a reply declares, which the host keeps; they own their texts.
 struct TrafficReply {
   std::uint64_t event_id = 0;
   bool changed = false;
   std::array<TrafficRegistration, TrafficLimits::registrations> registrations;
   std::size_t registration_count = 0;
+};
+
+// What a reply decides for its event, viewing the reply's bytes for as long as they live.
+struct TrafficOutcome {
   std::array<TrafficDecision, TrafficLimits::decisions> decisions;
   std::size_t decision_count = 0;
   std::span<const Byte> effects;
@@ -555,20 +577,20 @@ public:
     return writer.finish();
   }
 
-  inline static tbc::view<std::span<const Byte>, tbc::lt::a> reply(tbc::view<std::span<Byte>, tbc::lt::a> output, const TrafficReply &reply) {
-    if (reply.registration_count > reply.registrations.size() || reply.decision_count > reply.decisions.size() || (!reply.changed && reply.registration_count != 0)) { throw EncodingError{"Invalid traffic worker reply"}; }
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> reply(tbc::view<std::span<Byte>, tbc::lt::a> output, const TrafficReply &reply, const TrafficOutcome &outcome) {
+    if (reply.registration_count > reply.registrations.size() || outcome.decision_count > outcome.decisions.size() || (!reply.changed && reply.registration_count != 0)) { throw EncodingError{"Invalid traffic worker reply"}; }
     FrameWriter writer{output};
     writer.tag(FrameKind::traffic_reply);
     writer.integer(reply.event_id);
     writer.boolean(reply.changed);
     writer.integer(static_cast<Byte>(reply.registration_count));
     for (const auto &registration : std::span{reply.registrations}.first(reply.registration_count)) { write(writer, registration); }
-    writer.integer(static_cast<Byte>(reply.decision_count));
-    for (const auto &decision : std::span{reply.decisions}.first(reply.decision_count)) {
+    writer.integer(static_cast<Byte>(outcome.decision_count));
+    for (const auto &decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       writer.integer(decision.registration);
       writer.bytes(decision.payload);
     }
-    writer.bytes(reply.effects);
+    writer.bytes(outcome.effects);
     return writer.finish();
   }
 
@@ -578,8 +600,8 @@ public:
     return reply;
   }
 
-  // The reply views the input.
-  inline static void readReply(tbc::view<std::span<const Byte>, tbc::lt::a> input, tbc::view<TrafficReply &, tbc::lt::a> reply) {
+  // The registrations land in the reply; the outcome views the input.
+  inline static tbc::view<TrafficOutcome, tbc::lt::a> readReply(tbc::view<std::span<const Byte>, tbc::lt::a> input, TrafficReply &reply) {
     if (input.size() > TrafficLimits::reply_bytes) { throw EncodingError{"Traffic worker reply exceeds its bound"}; }
     FrameReader reader{input};
     reader.require(FrameKind::traffic_reply);
@@ -588,14 +610,16 @@ public:
     reply.registration_count = reader.integer<Byte>();
     if (reply.registration_count > reply.registrations.size() || (!reply.changed && reply.registration_count != 0)) { throw EncodingError{"Invalid traffic registration count"}; }
     for (auto &registration : std::span{reply.registrations}.first(reply.registration_count)) { registration = read(reader); }
-    reply.decision_count = reader.integer<Byte>();
-    if (reply.decision_count > reply.decisions.size()) { throw EncodingError{"Invalid traffic decision count"}; }
-    for (auto &decision : std::span{reply.decisions}.first(reply.decision_count)) {
+    TrafficOutcome outcome;
+    outcome.decision_count = reader.integer<Byte>();
+    if (outcome.decision_count > outcome.decisions.size()) { throw EncodingError{"Invalid traffic decision count"}; }
+    for (auto &decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       decision.registration = reader.integer<std::uint32_t>();
       decision.payload = reader.bytes();
     }
-    reply.effects = reader.bytes();
+    outcome.effects = reader.bytes();
     reader.finish();
+    return outcome;
   }
 
 private:
@@ -643,12 +667,12 @@ template <ConcurrentAllocator Memory>
 class TrafficBridge {
   using Secure = ErasingAllocator<Memory>;
   struct Connection {
-    inline explicit Connection(Secure &memory, TrafficRegistration registration, traffic::PackageChannel channel)
+    inline explicit Connection(tbc::view<Secure &, tbc::lt::a> memory, TrafficRegistration registration, traffic::PackageChannel channel)
         : registration(std::move(registration)), socket(std::move(channel.socket)), owner(channel.owner), output(memory, 2 * traffic::Limits::http_frame_bytes), registration_ack(this->registration.stage == TrafficStage::stream || this->registration.stage == TrafficStage::http) {}
     TrafficRegistration registration;
     FileDescriptor socket;
     std::uint64_t owner;
-    ByteQueue<Secure> output;
+    tbc::view<ByteQueue<Secure>, tbc::lt::a> output;
     std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
     std::size_t prefix_bytes = 0;
     std::uint64_t dropped = 0;
@@ -662,16 +686,15 @@ class TrafficBridge {
   };
 
 public:
-  inline explicit TrafficBridge(Memory &memory, const ServiceSpec &specification, traffic::PackagePort &port, Session<Memory> &session)
-      : memory_(memory), secure_(memory), specification_(specification), port_(port), reply_(makeOwned<TrafficReply>(memory)) {
-    attach(session);
-  }
+  // The bridge keeps the allocator and the port, region `a`, and its own copy of the specification. The
+  // session it talks to is the worker's, lent to each call.
+  inline explicit TrafficBridge(tbc::view<Memory &, tbc::lt::a> memory, const ServiceSpec &specification, tbc::view<traffic::PackagePort &, tbc::lt::a> port)
+      : memory_(memory), secure_(memory), specification_(specification), port_(port), reply_(makeOwned<TrafficReply>(memory)) {}
 
   inline void attach(Session<Memory> &session) {
     std::array<Byte, 1024> output;
     auto initialized = session.request(TrafficProtocol::setup(output, specification_), TrafficLimits::reply_bytes);
     apply(0, initialized.bytes());
-    session_ = &session;
     for (auto &connection : connections_) {
       if (connection && connection->registration.stage != TrafficStage::control) {
         port_.setPackageAvailable(connection->owner, true);
@@ -681,7 +704,6 @@ public:
   }
 
   inline void detach() noexcept {
-    session_ = nullptr;
     for (auto &connection : connections_) {
       if (connection && connection->registration.stage == TrafficStage::control) { connection.reset(); }
       else if (connection) { port_.setPackageAvailable(connection->owner, false); connection->notify_ready = false; }
@@ -691,9 +713,11 @@ public:
   inline std::uint64_t errors() const noexcept { return errors_; }
   inline bool transportFailed() const noexcept { return transport_failed_; }
 
+  // `session` is the worker's session, or null while it restarts.
   template <typename Consumer>
-  inline void step(int wake, const CancellationSignal &cancellation, Consumer &&consume, bool immediate = false) {
-    for (auto &connection : connections_) {
+  inline void step(Session<Memory> *session, int wake, const CancellationSignal &cancellation, Consumer &&consume, bool immediate = false) {
+    for (std::size_t index = 0; index < connections_.size(); ++index) {
+      auto &connection = connections_[index];
       if (!connection || connection->registration.stage != TrafficStage::control) { continue; }
       if (std::chrono::steady_clock::now() >= connection->deadline) { connection->error.assign("Network control deadline exceeded"); }
       if (!connection->socket && connection->error.view().empty()) {
@@ -701,22 +725,27 @@ public:
         catch (const SystemError &failure) { if (failure.code() != EAGAIN) { connection->error.assign(std::string_view{failure.what()}.substr(0, 1024)); } }
         catch (const std::exception &failure) { connection->error.assign(std::string_view{failure.what()}.substr(0, 1024)); }
       }
-      if (!connection->error.view().empty()) { dispatchControl(connection, {}, connection->error.view(), consume); return; }
+      if (!connection->error.view().empty()) {
+        const auto error = connection->error;
+        dispatchControl(session, index, {}, error.view(), consume);
+        return;
+      }
     }
-    for (auto &connection : connections_) {
+    for (std::size_t index = 0; index < connections_.size(); ++index) {
+      auto &connection = connections_[index];
       if (connection && connection->notify_ready) {
         connection->notify_ready = false;
         constexpr std::string_view reason = "worker_restarted";
         std::array<Byte, 128> output;
         const auto ready = traffic::Protocol::encode(output, {.kind = traffic::Kind::ready, .bytes = {reinterpret_cast<const Byte *>(reason.data()), reason.size()}});
-        dispatch(*connection, ready, connection->dropped, consume);
+        dispatch(session, index, ready, connection->dropped, consume);
       }
     }
     std::array<pollfd, TrafficLimits::registrations + 3> descriptors{};
     std::array<std::uint32_t, TrafficLimits::registrations> identities{};
     descriptors[0] = {wake, POLLIN, 0};
     descriptors[1] = {cancellation.descriptor(), POLLIN, 0};
-    descriptors[2] = {session_ ? session_->outputDescriptor() : -1, POLLIN, 0};
+    descriptors[2] = {session ? session->outputDescriptor() : -1, POLLIN, 0};
     for (std::size_t index = 0; index < connections_.size(); ++index) {
       const auto &connection = connections_[index];
       identities[index] = connection ? connection->registration.id : 0;
@@ -743,10 +772,12 @@ public:
           try {
             if (readiness & (POLLERR | POLLNVAL)) { throw SystemError{"Package control channel failed", EPIPE}; }
             if (readiness & POLLOUT) { write(*connection); }
-            if (readiness & (POLLIN | POLLHUP)) { frame = read(*connection); }
+            if (readiness & (POLLIN | POLLHUP)) { frame = read(memory_, *connection); }
           } catch (const std::exception &failure) { connection->error.assign(std::string_view{failure.what()}.substr(0, 1024)); }
-          if (!connection->error.view().empty()) { dispatchControl(connection, {}, connection->error.view(), consume); }
-          else if (frame) { traffic::control::Protocol::reply(frame->bytes()); dispatchControl(connection, frame->bytes(), {}, consume); }
+          if (!connection->error.view().empty()) {
+            const auto error = connection->error;
+            dispatchControl(session, index, {}, error.view(), consume);
+          } else if (frame) { traffic::control::Protocol::reply(frame->bytes()); dispatchControl(session, index, frame->bytes(), {}, consume); }
           continue;
         }
         if (readiness & (POLLERR | POLLNVAL)) { transport_failed_ = true; throw SystemError{"Package traffic channel failed", EPIPE}; }
@@ -754,46 +785,52 @@ public:
         catch (...) { transport_failed_ = true; throw; }
         if (readiness & (POLLIN | POLLHUP)) {
           std::optional<SensitiveAllocation<Memory>> frame;
-          try { frame = read(*connection); }
+          try { frame = read(memory_, *connection); }
           catch (...) { transport_failed_ = true; throw; }
           if (!frame) { continue; }
           const auto kind = traffic::Protocol::decode(frame->bytes()).kind;
           if (connection->registration_ack && kind == traffic::Kind::ready) { connection->registration_ack = false; continue; }
           if (kind == traffic::Kind::ready) { connection->ready = true; }
-          dispatch(*connection, frame->bytes(), connection->dropped, consume);
+          dispatch(session, index, frame->bytes(), connection->dropped, consume);
         }
       }
     }
   }
 
 private:
+  // A control connection is spent once its event is sent; the callback's reply may change the table.
   template <typename Consumer>
-  inline void dispatchControl(std::optional<Connection> &connection, std::span<const Byte> frame, std::string_view error, Consumer &&consume) {
-    if (!session_) { connection.reset(); return; }
+  inline void dispatchControl(Session<Memory> *session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer &&consume) {
+    auto &connection = connections_[index];
+    if (!session) { connection.reset(); return; }
     SensitiveAllocation request{memory_, frame.size() + error.size() + 128};
     const auto event_id = ++next_event_;
     const auto encoded = TrafficProtocol::controlEvent(request.bytes(), event_id, connection->registration.id, frame, error);
     connection.reset();
-    auto response = session_->request(encoded, TrafficLimits::reply_bytes);
+    auto response = session->request(encoded, TrafficLimits::reply_bytes);
     if (response.bytes().front() == static_cast<Byte>(FrameKind::error)) {
       if (Protocol::decodeError(response.bytes()).event_id != event_id) { throw EncodingError{"Stale control callback error"}; }
       ++errors_;
       return;
     }
-    apply(event_id, response.bytes());
-    publishEffects(event_id, std::move(response), consume);
+    const auto effects = apply(event_id, response.bytes()).effects;
+    publishEffects(event_id, std::move(response), effects, consume);
   }
 
+  // The result owns the reply and finds its effects again where the outcome saw them.
   template <typename Consumer>
-  inline void publishEffects(std::uint64_t event_id, SensitiveAllocation<Memory> response, Consumer &&consume) {
-    if (reply_->effects.empty()) { return; }
-    const auto effects = Protocol::decodeEffects(reply_->effects);
-    if (effects.event_id != event_id) { throw EncodingError{"Stale traffic notification"}; }
-    if (effects.batch.count != 0) { consume(std::move(response), effects); }
+  inline void publishEffects(std::uint64_t event_id, SensitiveAllocation<Memory> response, std::span<const Byte> effects, Consumer &&consume) {
+    if (effects.empty()) { return; }
+    const auto offset = static_cast<std::size_t>(effects.data() - response.bytes().data());
+    auto result = makeOwned<Result<Memory>>(memory_, specification_, std::move(response), offset, effects.size(), true);
+    if (result->event_id != event_id) { throw EncodingError{"Stale traffic notification"}; }
+    if (result->batch_count != 0) { consume(std::move(result)); }
   }
 
+  // The connection is named by its slot, as the callback's reply may change the table it lives in.
   template <typename Consumer>
-  inline void dispatch(Connection &connection, std::span<const Byte> frame, std::uint64_t dropped, Consumer &&consume) {
+  inline void dispatch(Session<Memory> *session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer &&consume) {
+    auto &connection = *connections_[index];
     const auto event = traffic::Protocol::decode(frame);
     const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
     std::optional<traffic::FlowEvent> flow;
@@ -801,23 +838,23 @@ private:
       flow = traffic::FlowCodec::decode(event.bytes);
       if (!port_.packagePending(connection.owner, flow->ticket, connection.registration.stage == TrafficStage::http)) { return; }
     }
-    if (!session_) {
+    if (!session) {
       if (control) { fail(connection, *flow); }
       else { ++dropped_observations_; }
       return;
     }
     SensitiveAllocation request{memory_, frame.size() + 64};
     const auto event_id = ++next_event_;
-    auto response = session_->request(TrafficProtocol::event(request.bytes(), event_id, connection.registration.id, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
+    auto response = session->request(TrafficProtocol::event(request.bytes(), event_id, connection.registration.id, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
     if (response.bytes().front() == static_cast<Byte>(FrameKind::error)) {
       const auto error = Protocol::decodeError(response.bytes());
       if (error.event_id != event_id) { throw EncodingError{"Stale traffic callback error"}; }
       ++errors_;
-      if (control) { fail(connection, *flow); port_.packageFailure(specification_, *flow); }
+      if (control) { fail(*connections_[index], *flow); port_.packageFailure(specification_, *flow); }
       return;
     }
-    apply(event_id, response.bytes());
-    publishEffects(event_id, std::move(response), consume);
+    const auto effects = apply(event_id, response.bytes()).effects;
+    publishEffects(event_id, std::move(response), effects, consume);
   }
 
   inline static void fail(Connection &connection, const traffic::FlowEvent &flow) {
@@ -830,8 +867,9 @@ private:
     return nullptr;
   }
 
-  inline void apply(std::uint64_t event_id, std::span<const Byte> input) {
-    TrafficProtocol::readReply(input, *reply_);
+  // What the reply decided views the input, region `a`; its registrations land in the bridge.
+  inline tbc::view<TrafficOutcome, tbc::lt::a> apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input) {
+    const auto outcome = TrafficProtocol::readReply(input, *reply_);
     if (reply_->event_id != event_id) { throw EncodingError{"Stale traffic worker reply"}; }
     const auto registrations = std::span{reply_->registrations}.first(reply_->registration_count);
     if (reply_->changed) {
@@ -872,7 +910,7 @@ private:
         }
       }
     }
-    for (const auto &decision : std::span{reply_->decisions}.first(reply_->decision_count)) {
+    for (const auto &decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       auto *connection = find(decision.registration);
       if (!connection) { continue; }
       if (connection->registration.stage != TrafficStage::stream && connection->registration.stage != TrafficStage::http) { throw EncodingError{"Only interceptors can decide traffic"}; }
@@ -887,6 +925,7 @@ private:
       else if (bytes.size() > traffic::FlowControl::chunk_bytes) { throw EncodingError{"Worker stream decision exceeds its bound"}; }
       enqueue(*connection, decision.payload);
     }
+    return outcome;
   }
 
   inline static void enqueue(Connection &connection, std::span<const Byte> frame) {
@@ -902,8 +941,8 @@ private:
     connection.output.consume(static_cast<std::size_t>(count));
   }
 
-  // A complete frame leaves the connection; it borrows only the connection's allocator.
-  inline tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> read(Connection &connection) {
+  // A complete frame leaves the connection; it borrows only the allocator.
+  inline static tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> read(tbc::view<Memory &, tbc::lt::a> memory, Connection &connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
       const auto count = ::recv(connection.socket.get(), connection.prefix.data() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
@@ -916,7 +955,7 @@ private:
       if (connection.registration.stage != TrafficStage::control) { connection.dropped = prefix.integer<std::uint64_t>(); }
       const auto maximum = connection.registration.stage == TrafficStage::control ? traffic::control::Limits::reply_bytes : connection.registration.stage == TrafficStage::http ? traffic::Limits::http_frame_bytes : traffic::Limits::frame_bytes;
       if (size == 0 || size > maximum) { throw EncodingError{"Invalid package traffic frame size"}; }
-      connection.input.emplace(memory_, size);
+      connection.input.emplace(memory, size);
       connection.received = 0;
     }
     const auto bytes = connection.input->bytes();
@@ -931,13 +970,12 @@ private:
     return frame;
   }
 
-  Memory &memory_;
-  Secure secure_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<Secure, tbc::lt::a> secure_;
   ServiceSpec specification_;
-  traffic::PackagePort &port_;
-  Session<Memory> *session_ = nullptr;
-  std::array<std::optional<Connection>, TrafficLimits::registrations> connections_;
-  Owned<TrafficReply, Memory> reply_;
+  tbc::view<traffic::PackagePort &, tbc::lt::a> port_;
+  tbc::view<std::array<std::optional<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
+  tbc::view<Owned<TrafficReply, Memory>, tbc::lt::a> reply_;
   std::uint64_t next_event_ = 0;
   std::uint64_t errors_ = 0;
   std::uint64_t dropped_observations_ = 0;
@@ -971,8 +1009,12 @@ concept WorkerClock = requires {
   { Clock::now() } noexcept -> std::same_as<typename Clock::time_point>;
 };
 
+// A package's worker thread. The proxy submits exchanges, the runtime reads metrics and the trust
+// monitor revokes it from their own threads: what they touch is atomic or a synchronized channel, and
+// the session, the bridge and the thread's state belong to its thread alone. That split is audited
+// here, so the worker is TBC_SHARED; its thread keeps `this`, so it stays where it was built.
 template <ConcurrentAllocator Memory, WorkerClock Clock = std::chrono::steady_clock>
-class Worker {
+class TBC_SHARED Worker {
 public:
   using Shared = std::shared_ptr<SharedExchange<Memory>>;
 
@@ -980,6 +1022,8 @@ public:
       : memory_(memory), specification_(bindPermissions(memory, specification)), results_(results), budget_(budget), launch_(launch), entry_(specification.entry.view(), AllocatorRef<char, Memory>{memory}), trace_path_(AllocatorRef<char, Memory>{memory}), thread_([this] { run(); }) {}
 
   inline ~Worker() { stop(); }
+  Worker(const Worker &) = delete;
+  Worker &operator=(const Worker &) = delete;
 
   inline void stop() noexcept {
     cancellation_.request();
@@ -1002,7 +1046,8 @@ public:
 
   inline bool revoked() const noexcept { return revoked_.load(std::memory_order_acquire); }
 
-  inline void submit(Shared exchange) noexcept {
+  // The worker queues the exchange, and what it keeps of the allocator: region `a`.
+  inline void submit(tbc::view<Shared, tbc::lt::a> exchange) noexcept {
     if (specification_.allows(Capability::proxy_tap) && !disabled_.load(std::memory_order_relaxed)) {
       requests_.publish(std::move(exchange));
       wake_.notify();
@@ -1050,14 +1095,14 @@ private:
         if (!session_) {
           prepareTrace();
           session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = true});
-          if (bridge_) { bridge_->attach(*session_); }
-          else { bridge_ = makeOwned<TrafficBridge<Memory>>(memory_, memory_, specification_, *launch_.traffic, *session_); }
+          if (!bridge_) { bridge_ = makeOwned<TrafficBridge<Memory>>(memory_, memory_, specification_, *launch_.traffic); }
+          bridge_->attach(*session_);
         }
         wake_.drain();
         if (auto request = requests_.tryReceive()) { process(**request); }
         if (!bridge_) { continue; }
-        bridge_->step(wake_.descriptor(), cancellation_, [&](SensitiveAllocation<Memory> storage, EffectReply reply) {
-          results_.publish(makeOwned<Result<Memory>>(memory_, specification_, std::move(storage), reply, true));
+        bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<Memory> result) {
+          results_.publish(std::move(result));
         }, requests_.metrics().queued != 0);
         callback_errors_.store(callback_errors_base_ + bridge_->errors(), std::memory_order_relaxed);
       } catch (const SystemError &error) {
@@ -1148,7 +1193,7 @@ private:
   String<Memory> entry_;
   String<Memory> trace_path_;
   [[maybe_unused]] std::uint64_t session_number_ = 0;
-  DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest> requests_;
+  tbc::view<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>, tbc::lt::a> requests_;
   CancellationSignal cancellation_;
   std::optional<Session<Memory>> session_;
   Owned<TrafficBridge<Memory>, Memory> bridge_{nullptr, AllocationDeleter<TrafficBridge<Memory>, Memory>{memory_}};
