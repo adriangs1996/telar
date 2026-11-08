@@ -106,20 +106,22 @@ QVariantMap ElementSlots::attach(components::Slot slot, const QString &key, cons
     instance.item = std::move(bytes);
     instance.dirty = true;
     if (!instance.rendering && instance.failures < failure_limit) {
-      render(instance);
+      render(id);
     }
   }
 
-  if (instance.failures >= failure_limit || !instance.rendered) {
+  // A render that finishes at once replaces the instance's nodes.
+  const auto &current = *instances_.constFind(id);
+  if (current.failures >= failure_limit || !current.rendered) {
     return {};
   }
 
   return {
       {QStringLiteral("slot"), QString::fromLatin1(components::slot_names[static_cast<std::size_t>(slot)].data(), static_cast<qsizetype>(components::slot_names[static_cast<std::size_t>(slot)].size()))},
       {QStringLiteral("key"), key},
-      {QStringLiteral("revision"), QString::number(instance.revision)},
-      {QStringLiteral("nodes"), instance.nodes},
-      {QStringLiteral("error"), instance.error},
+      {QStringLiteral("revision"), QString::number(current.revision)},
+      {QStringLiteral("nodes"), current.nodes},
+      {QStringLiteral("error"), current.error},
   };
 }
 
@@ -163,21 +165,26 @@ bool ElementSlots::owns(const ResolvedActions<ApplicationAllocator> &actions) co
 }
 
 void ElementSlots::invalidate() {
-  for (auto &instance : instances_) {
+  // A render may finish at once and change its instance, so each is found again by its id.
+  for (const auto id : instances_.keys()) {
+    auto &instance = *instances_.find(id);
     instance.dirty = true;
     if (!instance.rendering && instance.failures < failure_limit) {
-      render(instance);
+      render(id);
     }
   }
 }
 
-void ElementSlots::render(Instance &instance) {
+void ElementSlots::render(std::uint64_t id) {
+  auto &instance = *instances_.find(id);
   instance.rendering = true;
   instance.dirty = false;
-  const auto id = instance.id;
+  const auto slot = instance.slot;
+  const auto item = instance.item;
   const auto epoch = epoch_;
+  const auto context = context_();
   try {
-    source_.renderElements(instance.slot, id, context_(), instance.item, [this, id, epoch](LuaOutcome<ConfigurationSource::ElementsRender> outcome) {
+    source_.renderElements(slot, id, context, item, [this, id, epoch](LuaOutcome<ConfigurationSource::ElementsRender> outcome) {
       const auto found = instances_.find(id);
       if (epoch != epoch_ || found == instances_.end()) {
         return;
@@ -203,14 +210,16 @@ void ElementSlots::render(Instance &instance) {
       }
 
       if (current.dirty && current.failures < failure_limit) {
-        render(current);
+        render(id);
       }
 
       settle_.start();
     });
   } catch (const std::exception &error) {
-    instance.rendering = false;
-    instance.error = QString::fromUtf8(error.what());
+    if (const auto found = instances_.find(id); found != instances_.end()) {
+      found->rendering = false;
+      found->error = QString::fromUtf8(error.what());
+    }
   }
 }
 

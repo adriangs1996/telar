@@ -86,7 +86,7 @@ signals:
   void failed(const QString &message);
 
 private:
-  void render(Instance &instance);
+  void render(std::uint64_t id);
 
   ConfigurationSource &source_;
   Context context_;

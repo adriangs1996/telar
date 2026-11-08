@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -326,13 +327,14 @@ private:
 export {
 namespace telar::gui::components {
 
+// The built-in icons, whose names and glyphs are literals.
 struct Icon {
-  std::string_view name;
-  std::string_view glyph;
+  tbc::view<std::string_view, tbc::lt::static_storage> name;
+  tbc::view<std::string_view, tbc::lt::static_storage> glyph;
   AgentProvider provider = AgentProvider::unknown;
   bool telar = false;
 
-  [[nodiscard]] inline static Icon find(std::string_view name) noexcept {
+  [[nodiscard]] inline static tbc::view<Icon, tbc::lt::static_storage> find(std::string_view name) noexcept {
     const auto *const found = std::ranges::find(values, name, &Icon::name);
 
     return found == values.end() ? Icon{.name = {}, .glyph = {}} : *found;

@@ -91,15 +91,25 @@ struct ConfigurationReloadRequest {
   bool force = false;
 };
 
+// Read before the Lua thread owns the VM: the window keeps these instead of reading it.
+struct ConfigurationSnapshot {
+  using BarRender = Owned<RenderedContent<components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+  using CommandArguments = QMap<std::pair<int, QByteArray>, QList<QByteArray>>;
+
+  explicit ConfigurationSnapshot(ApplicationAllocator &memory)
+      : commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {}
+
+  Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
+  std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars{};
+  CommandArguments arguments;
+};
+
 struct ConfigurationPreparation {
   enum class State : std::uint8_t {
     unchanged,
     ready,
     failed,
   };
-
-  using BarRender = Owned<RenderedContent<components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
-  using CommandArguments = QMap<std::pair<int, QByteArray>, QList<QByteArray>>;
 
   explicit ConfigurationPreparation(ApplicationAllocator &memory);
   ~ConfigurationPreparation();
@@ -113,10 +123,7 @@ struct ConfigurationPreparation {
   Configuration configuration;
   std::optional<ThemeValues> locked_theme;
   Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
-  // Read before the Lua thread owns the VM: the window keeps these instead of reading it.
-  Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
-  std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars{};
-  CommandArguments arguments;
+  ConfigurationSnapshot snapshot;
   std::optional<PluginPackages> plugins;
   runtime::plugins::TrustStore trust;
   QString directory;
@@ -135,8 +142,9 @@ public:
   static void trackModuleNames(const QStringList &names, const QString &root, ConfigurationWatch::Modules &modules);
 
 private:
-  static void load(ApplicationAllocator &memory, const ConfigurationReloadRequest &request, ConfigurationPreparation &result);
-  static void snapshot(ApplicationAllocator &memory, const ConfigurationGeneration<ApplicationAllocator> &generation, ConfigurationPreparation &result);
+  // The preparation keeps what it allocates from memory, region `a`.
+  static void load(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationReloadRequest &request, tbc::view<ConfigurationPreparation &, tbc::lt::a> result);
+  static void snapshot(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationGeneration<ApplicationAllocator> &generation, tbc::view<ConfigurationSnapshot &, tbc::lt::a> result);
 };
 
 }

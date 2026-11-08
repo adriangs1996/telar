@@ -90,7 +90,7 @@ std::optional<platform::FileStamp> fileStamp(const QString &path) {
 
 ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator &memory)
     : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
-      commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {
+      snapshot(memory) {
 }
 
 ConfigurationPreparation::~ConfigurationPreparation() = default;
@@ -126,7 +126,7 @@ PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory,
   return result;
 }
 
-void ConfigurationLoader::load(ApplicationAllocator &memory, const ConfigurationReloadRequest &request, ConfigurationPreparation &result) {
+void ConfigurationLoader::load(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationReloadRequest &request, tbc::view<ConfigurationPreparation &, tbc::lt::a> result) {
   result.configuration.themes.base = default_theme_values;
   result.configuration.theme = projectTheme(result.configuration.themes.base);
   if (!request.selection.trust_path.isEmpty()) {
@@ -162,16 +162,18 @@ void ConfigurationLoader::load(ApplicationAllocator &memory, const Configuration
         .plugin_overrides = &request.plugin_overrides,
     };
     result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
-    result.plugins.emplace(memory, generation_source.directory, result.generation->runtimeValues().plugins.configured());
-    const PluginCatalog catalog{result.generation->number(), result.generation->runtimeValues().plugins.configured(), result.plugins->packages()};
-    result.generation->visitPluginActions([&](const PluginActionDescription &action) {
-      if (!request.plugin_overrides.disabled(action.plugin, result.generation->runtimeValues().plugins.configured())) {
+    const auto &generation = *result.generation;
+    const auto &configured = generation.runtimeValues().plugins.configured();
+    result.plugins.emplace(memory, generation_source.directory, configured);
+    const PluginCatalog catalog{generation.number(), configured, result.plugins->packages()};
+    generation.visitPluginActions([&](const PluginActionDescription &action) {
+      if (!request.plugin_overrides.disabled(action.plugin, configured)) {
         static_cast<void>(catalog.resolve(action));
       }
     });
-    result.configuration = result.generation->configuration();
-    trackModules(*result.generation, result.directory, result.modules);
-    snapshot(memory, *result.generation, result);
+    result.configuration = generation.configuration();
+    trackModules(generation, result.directory, result.modules);
+    snapshot(memory, generation, result.snapshot);
   }
 
   if (!request.selection.theme.isEmpty()) {
@@ -181,7 +183,7 @@ void ConfigurationLoader::load(ApplicationAllocator &memory, const Configuration
   }
 }
 
-void ConfigurationLoader::snapshot(ApplicationAllocator &memory, const ConfigurationGeneration<ApplicationAllocator> &generation, ConfigurationPreparation &result) {
+void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationGeneration<ApplicationAllocator> &generation, tbc::view<ConfigurationSnapshot &, tbc::lt::a> result) {
   result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
   const auto store = [&](int reference, const char *field) {
     QList<QByteArray> arguments;
@@ -195,7 +197,7 @@ void ConfigurationLoader::snapshot(ApplicationAllocator &memory, const Configura
     const auto position = static_cast<components::Position>(index);
     const auto &source = definitions.source(position);
     if (source.kind == components::SourceKind::fixed) {
-      result.fixed_bars.at(index).emplace(generation.copied(generation.components().bar(position)));
+      result.fixed_bars.at(index).emplace(generation.copied(memory, generation.components().bar(position)));
     } else if (source.kind == components::SourceKind::command) {
       store(source.reference, "command");
     }

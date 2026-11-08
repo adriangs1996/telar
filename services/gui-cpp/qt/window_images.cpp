@@ -104,24 +104,26 @@ WindowImages *WindowImages::findWindow(const QQuickWindow &window) noexcept {
   return nullptr;
 }
 
+// The scenes form an intrusive list of raw links: each scene attaches when it is built and
+// detaches before it is destroyed, so these two functions alone keep every link valid.
 void WindowImages::attach(GraphicsScene &scene) noexcept {
-  scene.next_ = first_scene_;
+  scene.next_ = tbc::raw(first_scene_);
   if (first_scene_ != nullptr) {
-    first_scene_->previous_ = &scene;
+    first_scene_->previous_ = tbc::raw(&scene);
   }
 
-  first_scene_ = &scene;
+  first_scene_ = tbc::raw(&scene);
 }
 
 void WindowImages::detach(GraphicsScene &scene) noexcept {
   if (scene.previous_ != nullptr) {
-    scene.previous_->next_ = scene.next_;
+    scene.previous_->next_ = tbc::raw(scene.next_);
   } else {
-    first_scene_ = scene.next_;
+    first_scene_ = tbc::raw(scene.next_);
   }
 
   if (scene.next_ != nullptr) {
-    scene.next_->previous_ = scene.previous_;
+    scene.next_->previous_ = tbc::raw(scene.previous_);
   }
 
   scene.previous_ = nullptr;

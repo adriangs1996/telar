@@ -276,7 +276,8 @@ void TerminalScene::synchronizeGrid(CellRectangle visible) {
   columns_ = visible.width;
 }
 
-void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::size_t row_index) {
+void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_index) {
+  auto &row = row_nodes_[static_cast<qsizetype>(row_index)];
   std::unique_ptr<QSGNode> previous{row.text_content};
   row.text_content = nullptr;
   if (previous) {
@@ -290,7 +291,8 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::s
   text_.begin(row_bounds, frame.scale, frame.bounds, std::move(previous));
   const auto cursor_column = cursorColumn(frame, row_index, columns_);
 
-  const auto grouped_text = text_.prepare(frame.screen.row(row_index).first(columns_), {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = frame.selection, .first_cell = row_index * frame.screen.columns()});
+  const auto cells = frame.screen.row(row_index).first(columns_);
+  const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = frame.selection, .first_cell = row_index * frame.screen.columns()});
   auto decorations = std::make_unique<QSGNode>();
   for (std::size_t column = 0; column < columns_; ++column) {
     const auto run = cellRun(frame, row_index, column);
@@ -303,11 +305,11 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::s
     const QPointF origin{static_cast<qreal>(column) * frame.font.cell.width(), static_cast<qreal>(row_index) * frame.font.cell.height()};
     paintRun(layers, run, frame, origin, glyphs_);
     if (grouped_text && run.visible && !run.symbol) {
-      text_.addCell(column, frame.font.faces[faceIndex(run.style)], run.foreground, glyphStyle(run.style));
+      text_.addCell(cells, column, frame.font.faces[faceIndex(run.style)], run.foreground, glyphStyle(run.style));
     }
 
     if (inline_ink) {
-      text_.appendInline(std::move(inline_ink));
+      text_.appendInline(cells, std::move(inline_ink));
     }
   }
 
@@ -323,7 +325,7 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::s
     }
   }
 
-  row.text_content = text_.append(*row.text);
+  row.text_content = text_.append(*row.text, cells);
   adoptSceneNode(*row.text, std::move(decorations));
   row.revision = frame.screen.rowRevision(row_index);
   row.appearance = frame.appearance;
@@ -348,7 +350,7 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
     auto &row = row_nodes_[index];
     const auto selection = frame.selection.within(static_cast<std::size_t>(index) * frame.screen.columns(), frame.screen.columns());
     if (glyphs_changed || bounds_ != frame.bounds || row.revision != frame.screen.rowRevision(static_cast<std::size_t>(index)) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, static_cast<std::size_t>(index), columns_)) {
-      paintRow(frame, row, static_cast<std::size_t>(index));
+      paintRow(frame, static_cast<std::size_t>(index));
     }
   }
 

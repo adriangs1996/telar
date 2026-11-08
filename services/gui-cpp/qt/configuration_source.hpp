@@ -93,7 +93,7 @@ class ConfigurationSource final : public QObject {
   Q_OBJECT
 
 public:
-  using BarRender = ConfigurationPreparation::BarRender;
+  using BarRender = ConfigurationSnapshot::BarRender;
   using PanelRender = Owned<RenderedContent<components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
   using PickRender = Owned<components::PickItems, ApplicationAllocator>;
   using Effects = Owned<ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
@@ -181,7 +181,7 @@ private:
   tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
   tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
   tbc::view<std::array<std::optional<BarRender>, components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
-  ConfigurationPreparation::CommandArguments arguments_;
+  ConfigurationSnapshot::CommandArguments arguments_;
   tbc::view<std::optional<PluginPackages>, tbc::lt::a> plugins_;
   PluginOverrides plugin_overrides_;
   runtime::plugins::TrustStore trust_;

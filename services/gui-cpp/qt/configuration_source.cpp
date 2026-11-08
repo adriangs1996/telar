@@ -713,9 +713,9 @@ void ConfigurationSource::adopt(tbc::view<PreparedConfiguration, tbc::lt::a> res
   configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
   retire();
   generation_ = std::move(result->generation);
-  commands_ = std::move(result->commands);
-  fixed_bars_ = std::move(result->fixed_bars);
-  arguments_ = std::move(result->arguments);
+  commands_ = std::move(result->snapshot.commands);
+  fixed_bars_ = std::move(result->snapshot.fixed_bars);
+  arguments_ = std::move(result->snapshot.arguments);
   plugins_ = std::move(result->plugins);
   trust_ = result->trust;
   if (generation_) {

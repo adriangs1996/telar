@@ -7,6 +7,7 @@ static_assert(true);
 #endif
 
 #include "alpha_mask.hpp"
+#include "tbc/view.hpp"
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -102,7 +103,8 @@ struct StandardGlyphRasterizers {};
 template <fonts::FontProvider FontSet, bool optical = false>
 class ChromeGlyphImages {
 public:
-  ChromeGlyphImages(QQuickWindow &window, std::shared_ptr<FontSet> fonts, [[maybe_unused]] fonts::GlyphRasterization rasterization = {})
+  // The images upload their textures through the window, region `a`.
+  ChromeGlyphImages(tbc::view<QQuickWindow &, tbc::lt::a> window, tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts, [[maybe_unused]] fonts::GlyphRasterization rasterization = {})
       : window_(window),
         fonts_(std::move(fonts)),
         software_(window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
@@ -158,7 +160,7 @@ public:
 
     std::unique_ptr<QSGTexture> texture;
     if (!software_ && !alpha.isNull()) {
-      texture = createTexture(alpha.convertToFormat(QImage::Format_RGBA8888_Premultiplied));
+      texture = createTexture(window_, alpha.convertToFormat(QImage::Format_RGBA8888_Premultiplied));
     }
 
     const auto mask = AlphaMaskRef{new AlphaMask{std::move(alpha), std::move(texture)}};
@@ -172,7 +174,10 @@ public:
     return inserted.value();
   }
 
-  [[nodiscard]] AlphaMaskRef colored(CachedGlyph &glyph, const QColor &color) {
+  // The glyph's mask in a color; each glyph keeps its last few colors.
+  [[nodiscard]] AlphaMaskRef colored(std::uint32_t index, std::uint16_t pixel_height, fonts::FontRole role, fonts::GlyphStyle style, const QColor &color) {
+    auto &window = window_;
+    auto &glyph = this->glyph(index, pixel_height, role, style);
     for (const auto &entry : glyph.colors) {
       if (entry.mask && entry.color == color) {
         return entry.mask;
@@ -186,14 +191,14 @@ public:
       painter.fillRect(image.rect(), color);
     }
 
-    auto mask = AlphaMaskRef{new AlphaMask{glyph.mask->alpha, createTexture(image)}};
+    auto mask = AlphaMaskRef{new AlphaMask{glyph.mask->alpha, createTexture(window, image)}};
     glyph.colors[glyph.next_color] = {.color = color, .mask = mask};
     glyph.next_color = (glyph.next_color + 1) % glyph.colors.size();
 
     return mask;
   }
 
-  [[nodiscard]] static std::shared_ptr<ChromeGlyphImages> shared(QQuickWindow &window, const std::shared_ptr<FontSet> &fonts, fonts::GlyphRasterization rasterization = {}) {
+  [[nodiscard]] static tbc::view<std::shared_ptr<ChromeGlyphImages>, tbc::lt::a> shared(tbc::view<QQuickWindow &, tbc::lt::a> window, tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts, fonts::GlyphRasterization rasterization = {}) {
     using Source = QPair<QQuickWindow *, const FontSet *>;
     using Key = std::conditional_t<optical, std::pair<Source, std::uint16_t>, Source>;
     thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
@@ -256,8 +261,8 @@ private:
   }
 #endif
 
-  [[nodiscard]] std::unique_ptr<QSGTexture> createTexture(const QImage &image) {
-    std::unique_ptr<QSGTexture> texture{window_.createTextureFromImage(image, QQuickWindow::TextureCanUseAtlas)};
+  [[nodiscard]] static std::unique_ptr<QSGTexture> createTexture(QQuickWindow &window, const QImage &image) {
+    std::unique_ptr<QSGTexture> texture{window.createTextureFromImage(image, QQuickWindow::TextureCanUseAtlas)};
     if (!texture) {
       throw std::runtime_error{"ChromeTextureUnavailable"};
     }
@@ -271,8 +276,8 @@ private:
   static constexpr std::uint32_t maximum_side = 2048;
   static constexpr std::size_t maximum_mask_bytes = static_cast<std::size_t>(maximum_side) * maximum_side;
 
-  QQuickWindow &window_;
-  std::shared_ptr<FontSet> fonts_;
+  tbc::view<QQuickWindow &, tbc::lt::a> window_;
+  tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts_;
   QHash<quint64, CachedGlyph> images_;
   std::size_t mask_bytes_ = 0;
   bool software_ = false;

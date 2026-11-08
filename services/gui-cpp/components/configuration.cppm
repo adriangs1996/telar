@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -694,26 +695,23 @@ class ContentReader {
 public:
   inline explicit ContentReader(lua_State &state, const Actions &actions, runtime::config::LimitNotices &limits, StagedContent &staged, Surface surface = Surface::bar)
       : state_(state),
-        actions_(actions),
-        limits_(limits),
-        staged_(staged),
-        surface_(surface) {}
+        builder_{.actions_ = actions, .limits_ = limits, .staged_ = staged, .surface_ = surface} {}
 
   // Count before retaining actions so omitted components cannot retain commands.
   template <Capacity Bounds>
   inline void read(const runtime::lua::Value &value, Content<Bounds> &output) {
-    budget_ = {};
-    demand_ = {};
-    had_children_.fill(false);
-    counting_ = true;
-    staged_.clear();
-    const Position root{.place = surface_ == Surface::bar ? Place::bar : Place::panel};
+    builder_.budget_ = {};
+    builder_.demand_ = {};
+    builder_.had_children_.fill(false);
+    builder_.counting_ = true;
+    builder_.staged_.clear();
+    const Position root{.place = builder_.surface_ == Surface::bar ? Place::bar : Place::panel};
     walk(value, root);
-    budget_.prepare();
-    counting_ = false;
+    builder_.budget_.prepare();
+    builder_.counting_ = false;
     walk(value, root);
-    output.keepFitting(staged_, &had_children_);
-    report(Bounds);
+    output.keepFitting(builder_.staged_, &builder_.had_children_);
+    builder_.report(Bounds);
   }
 
 private:
@@ -808,7 +806,7 @@ private:
     auto &frame = frames_[frame_count_ - 1];
     switch (frame.phase) {
     case Phase::visit:
-      visit(frame);
+      builder_.visit(frame);
       break;
     case Phase::list:
     case Phase::children:
@@ -843,225 +841,232 @@ private:
     return *frame.value;
   }
 
-  inline void visit(Frame &frame) {
-    const auto &value = frameValue(frame);
-    const auto position = frame.position;
-    frame.phase = Phase::done;
-    if (!value.present()) {
-      return;
+  // What the walk builds, apart from the stack whose values it reads, so a frame's value stays
+  // valid while the content changes.
+  struct Builder {
+    inline void visit(Frame &frame) {
+      const auto &value = frameValue(frame);
+      const auto position = frame.position;
+      frame.phase = Phase::done;
+      if (!value.present()) {
+        return;
+      }
+
+      if (value.is(LUA_TSTRING)) {
+        Input input;
+        input.node.priority = static_cast<std::uint8_t>(position.priority);
+        input.text = value.string();
+        const runtime::config::ComponentShape shape{.text = input.text, .priority = position.priority};
+        static_cast<void>(append(value, shape, input, position));
+
+        return;
+      }
+
+      if (!value.is(LUA_TTABLE)) {
+        value.fail("components must be text, a component or a list");
+      }
+
+      if (value.field("ui").present()) {
+        component(frame);
+
+        return;
+      }
+
+      if (value.field("text").present() || value.field("icon").present()) {
+        const auto shape = runtime::config::ComponentShapeReader::segment(value, position.priority);
+        Input input;
+        input.node.kind = shape.kind;
+        input.node.priority = static_cast<std::uint8_t>(shape.priority);
+        input.node.icon = ValueReader::icon(value.field("icon"));
+        input.node.style = ValueReader::style(value);
+        input.text = shape.text;
+        static_cast<void>(append(value, shape, input, position));
+
+        return;
+      }
+
+      if (position.depth == maximum_list_depth) {
+        value.fail("exceeds the component nesting limit");
+      }
+
+      frame.child = position;
+      ++frame.child.depth;
+      frame.count = value.arraySize();
+      frame.phase = Phase::list;
     }
 
-    if (value.is(LUA_TSTRING)) {
-      Input input;
-      input.node.priority = static_cast<std::uint8_t>(position.priority);
-      input.text = value.string();
-      const runtime::config::ComponentShape shape{.text = input.text, .priority = position.priority};
-      static_cast<void>(append(value, shape, input, position));
-
-      return;
-    }
-
-    if (!value.is(LUA_TTABLE)) {
-      value.fail("components must be text, a component or a list");
-    }
-
-    if (value.field("ui").present()) {
-      component(frame);
-
-      return;
-    }
-
-    if (value.field("text").present() || value.field("icon").present()) {
-      const auto shape = runtime::config::ComponentShapeReader::segment(value, position.priority);
+    inline void component(Frame &frame) {
+      const auto &value = frameValue(frame);
+      const auto shape = runtime::config::ComponentShapeReader::read(value, frame.position.priority, limits_);
       Input input;
       input.node.kind = shape.kind;
       input.node.priority = static_cast<std::uint8_t>(shape.priority);
-      input.node.icon = ValueReader::icon(value.field("icon"));
-      input.node.style = ValueReader::style(value);
+      input.node.tone = ValueReader::tone(value.field("tone"));
       input.text = shape.text;
-      static_cast<void>(append(value, shape, input, position));
-
-      return;
-    }
-
-    if (position.depth == maximum_list_depth) {
-      value.fail("exceeds the component nesting limit");
-    }
-
-    frame.child = position;
-    ++frame.child.depth;
-    frame.count = value.arraySize();
-    frame.phase = Phase::list;
-  }
-
-  inline void component(Frame &frame) {
-    const auto &value = frameValue(frame);
-    const auto shape = runtime::config::ComponentShapeReader::read(value, frame.position.priority, limits_);
-    Input input;
-    input.node.kind = shape.kind;
-    input.node.priority = static_cast<std::uint8_t>(shape.priority);
-    input.node.tone = ValueReader::tone(value.field("tone"));
-    input.text = shape.text;
-    input.detail = shape.detail;
-    input.url = shape.url;
-    SampleValues samples;
-    values(value, input, samples);
-    const auto node = append(value, shape, input, frame.position);
-    if (!node) {
-      return;
-    }
-
-    frame.child = {.parent = node->index, .rank = node->rank};
-    switch (shape.kind) {
-    case Kind::group:
-      frame.child.place = Place::group;
-      frame.child.priority = shape.priority;
-      frame.tooltip = true;
-      frame.count = value.listLength();
-      frame.phase = Phase::children;
-      break;
-    case Kind::actions:
-      frame.child.place = Place::buttons;
-      frame.count = value.listLength();
-      frame.phase = Phase::children;
-      break;
-    case Kind::callout:
-      frame.phase = Phase::button;
-      break;
-    default:
-      break;
-    }
-  }
-
-  inline void values(const runtime::lua::Value &value, Input &input, SampleValues &samples) {
-    switch (input.node.kind) {
-    case Kind::label:
-      input.node.style = ValueReader::style(value);
-      break;
-    case Kind::icon:
-      input.node.icon = ValueReader::icon(value.field("name"));
-      break;
-    case Kind::mark:
-      input.node.mark = ValueReader::mark(value.field("name"));
-      break;
-    case Kind::meter:
-    case Kind::meter_row:
-      input.node.value = ValueReader::fraction(value.field("value")).value_or(0);
-      input.node.marker = ValueReader::fraction(value.field("marker"));
-      break;
-    case Kind::sparkline:
-      samples = ValueReader::samples(value, limits_);
-      input.samples = std::span{samples.values}.first(samples.length);
-      break;
-    case Kind::metric:
-      input.node.metric = ValueReader::metric(value.field("name"));
-      break;
-    case Kind::group:
-      input.node.mark = ValueReader::mark(value.field("mark"));
-      [[fallthrough]];
-    case Kind::callout:
-      input.node.icon = ValueReader::icon(value.field("icon"));
-      break;
-    case Kind::button:
-      input.node.primary = value.field("primary").boolean(false);
-      break;
-    default:
-      break;
-    }
-  }
-
-  inline std::optional<Staged> append(const runtime::lua::Value &value, const runtime::config::ComponentShape &shape, Input &input, Position position) {
-    if (!allowed(shape.kind, position.place)) {
-      value.fail("contains a component unsupported in this position");
-    }
-
-    const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
-    if (counting_) {
-      budget_.count(shape, rank);
-      demand_ = demand_ + usage(shape);
-
-      return Staged{.index = 0, .rank = rank};
-    }
-
-    if (position.parent != Node::no_parent) {
-      had_children_[position.parent] = true;
-    }
-
-    if (!budget_.admit(shape, rank)) {
-      return std::nullopt;
-    }
-
-    if (shape.action_field != nullptr) {
-      const auto action = value.field(shape.action_field);
-      if (action.is(LUA_TFUNCTION)) {
-        action.fail("cannot be a callback in a component");
+      input.detail = shape.detail;
+      input.url = shape.url;
+      SampleValues samples;
+      values(value, input, samples);
+      const auto node = append(value, shape, input, frame.position);
+      if (!node) {
+        return;
       }
 
-      input.action = actions_.read(action);
-      if (!input.action) {
-        budget_.release(shape, rank);
+      frame.child = {.parent = node->index, .rank = node->rank};
+      switch (shape.kind) {
+      case Kind::group:
+        frame.child.place = Place::group;
+        frame.child.priority = shape.priority;
+        frame.tooltip = true;
+        frame.count = value.listLength();
+        frame.phase = Phase::children;
+        break;
+      case Kind::actions:
+        frame.child.place = Place::buttons;
+        frame.count = value.listLength();
+        frame.phase = Phase::children;
+        break;
+      case Kind::callout:
+        frame.phase = Phase::button;
+        break;
+      default:
+        break;
+      }
+    }
 
+    // A sparkline's input views the samples, region `a`.
+    inline void values(const runtime::lua::Value &value, tbc::view<Input &, tbc::lt::a> input, tbc::view<SampleValues &, tbc::lt::a> samples) {
+      switch (input.node.kind) {
+      case Kind::label:
+        input.node.style = ValueReader::style(value);
+        break;
+      case Kind::icon:
+        input.node.icon = ValueReader::icon(value.field("name"));
+        break;
+      case Kind::mark:
+        input.node.mark = ValueReader::mark(value.field("name"));
+        break;
+      case Kind::meter:
+      case Kind::meter_row:
+        input.node.value = ValueReader::fraction(value.field("value")).value_or(0);
+        input.node.marker = ValueReader::fraction(value.field("marker"));
+        break;
+      case Kind::sparkline:
+        samples = ValueReader::samples(value, limits_);
+        input.samples = std::span{samples.values}.first(samples.length);
+        break;
+      case Kind::metric:
+        input.node.metric = ValueReader::metric(value.field("name"));
+        break;
+      case Kind::group:
+        input.node.mark = ValueReader::mark(value.field("mark"));
+        [[fallthrough]];
+      case Kind::callout:
+        input.node.icon = ValueReader::icon(value.field("icon"));
+        break;
+      case Kind::button:
+        input.node.primary = value.field("primary").boolean(false);
+        break;
+      default:
+        break;
+      }
+    }
+
+    inline std::optional<Staged> append(const runtime::lua::Value &value, const runtime::config::ComponentShape &shape, Input &input, Position position) {
+      if (!allowed(shape.kind, position.place)) {
+        value.fail("contains a component unsupported in this position");
+      }
+
+      const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
+      if (counting_) {
+        budget_.count(shape, rank);
+        demand_ = demand_ + usage(shape);
+
+        return Staged{.index = 0, .rank = rank};
+      }
+
+      if (position.parent != Node::no_parent) {
+        had_children_[position.parent] = true;
+      }
+
+      if (!budget_.admit(shape, rank)) {
         return std::nullopt;
       }
+
+      if (shape.action_field != nullptr) {
+        const auto action = value.field(shape.action_field);
+        if (action.is(LUA_TFUNCTION)) {
+          action.fail("cannot be a callback in a component");
+        }
+
+        input.action = actions_.read(action);
+        if (!input.action) {
+          budget_.release(shape, rank);
+
+          return std::nullopt;
+        }
+      }
+
+      if (!budget_.stage(shape)) {
+        return std::nullopt;
+      }
+
+      input.node.parent = position.parent;
+      input.node.tooltip = position.place == Place::tooltip;
+
+      return Staged{.index = staged_.append(input), .rank = rank};
     }
 
-    if (!budget_.stage(shape)) {
-      return std::nullopt;
+    inline static bool allowed(Kind kind, Place place) noexcept {
+      switch (place) {
+      case Place::bar:
+        return kind <= Kind::group;
+      case Place::panel:
+        return true;
+      case Place::group:
+        return kind < Kind::group;
+      case Place::tooltip:
+        return kind != Kind::group && kind != Kind::callout && kind != Kind::actions && kind != Kind::button;
+      case Place::buttons:
+        return kind == Kind::button;
+      }
+
+      return false;
     }
 
-    input.node.parent = position.parent;
-    input.node.tooltip = position.place == Place::tooltip;
-
-    return Staged{.index = staged_.append(input), .rank = rank};
-  }
-
-  inline static bool allowed(Kind kind, Place place) noexcept {
-    switch (place) {
-    case Place::bar:
-      return kind <= Kind::group;
-    case Place::panel:
-      return true;
-    case Place::group:
-      return kind < Kind::group;
-    case Place::tooltip:
-      return kind != Kind::group && kind != Kind::callout && kind != Kind::actions && kind != Kind::button;
-    case Place::buttons:
-      return kind == Kind::button;
+    inline static runtime::config::ComponentBudget::Usage usage(const runtime::config::ComponentShape &shape) noexcept {
+      return {.nodes = 1, .text = shape.text.size() + shape.detail.size() + shape.url.size(), .actions = shape.action_field == nullptr ? 0U : 1U, .samples = shape.samples};
     }
 
-    return false;
-  }
-
-  inline static runtime::config::ComponentBudget::Usage usage(const runtime::config::ComponentShape &shape) noexcept {
-    return {.nodes = 1, .text = shape.text.size() + shape.detail.size() + shape.url.size(), .actions = shape.action_field == nullptr ? 0U : 1U, .samples = shape.samples};
-  }
-
-  inline void report(Capacity bounds) {
-    const bool panel = surface_ == Surface::panel;
-    const auto reaches = std::to_array<LimitReach>({
-        {.name = panel ? "panels.max_panel_nodes" : "bars.max_bar_nodes", .noun = "components", .value = bounds.nodes, .requested = demand_.nodes, .route = {}},
-        {.name = panel ? "panels.max_panel_text_bytes" : "bars.max_bar_text_bytes", .noun = "text bytes", .value = bounds.text, .requested = demand_.text, .route = {}},
-        {.name = panel ? "panels.max_panel_actions" : "bars.max_bar_actions", .noun = "click actions", .value = bounds.actions, .requested = demand_.actions, .route = {}},
-        {.name = panel ? "panels.max_samples" : "bars.max_samples", .noun = "sparkline samples", .value = bounds.samples, .requested = demand_.samples, .route = {}},
-    });
-    for (const auto &reach : reaches) {
-      if (reach.requested.value_or(0) > reach.value) {
-        limits_.add(reach);
+    inline void report(Capacity bounds) {
+      const bool panel = surface_ == Surface::panel;
+      const auto reaches = std::to_array<LimitReach>({
+          {.name = panel ? "panels.max_panel_nodes" : "bars.max_bar_nodes", .noun = "components", .value = bounds.nodes, .requested = demand_.nodes, .route = {}},
+          {.name = panel ? "panels.max_panel_text_bytes" : "bars.max_bar_text_bytes", .noun = "text bytes", .value = bounds.text, .requested = demand_.text, .route = {}},
+          {.name = panel ? "panels.max_panel_actions" : "bars.max_bar_actions", .noun = "click actions", .value = bounds.actions, .requested = demand_.actions, .route = {}},
+          {.name = panel ? "panels.max_samples" : "bars.max_samples", .noun = "sparkline samples", .value = bounds.samples, .requested = demand_.samples, .route = {}},
+      });
+      for (const auto &reach : reaches) {
+        if (reach.requested.value_or(0) > reach.value) {
+          limits_.add(reach);
+        }
       }
     }
-  }
+
+    const Actions &actions_;
+    runtime::config::LimitNotices &limits_;
+    StagedContent &staged_;
+    Surface surface_;
+    runtime::config::ComponentBudget budget_;
+    runtime::config::ComponentBudget::Usage demand_;
+    StagedContent::Parents had_children_{};
+    bool counting_ = true;
+  };
 
   lua_State &state_;
   std::array<Frame, maximum_frames> frames_{};
   std::size_t frame_count_ = 0;
-  const Actions &actions_;
-  runtime::config::LimitNotices &limits_;
-  StagedContent &staged_;
-  Surface surface_;
-  runtime::config::ComponentBudget budget_;
-  runtime::config::ComponentBudget::Usage demand_;
-  StagedContent::Parents had_children_{};
-  bool counting_ = true;
+  Builder builder_;
 };
 
 }

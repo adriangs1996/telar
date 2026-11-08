@@ -140,7 +140,7 @@ private:
   QQuickWindow &window_;
   QTimer timer_;
   Resources resources_;
-  Residency residency_{resources_};
+  tbc::view<Residency, tbc::lt::self> residency_{resources_};
   ImagePlacementSelection placements_;
   std::array<PlacementSourceStamp, cached_source_capacity> placement_sources_{};
   std::size_t placement_source_count_ = 0;

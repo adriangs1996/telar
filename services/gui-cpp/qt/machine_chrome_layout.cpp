@@ -209,9 +209,10 @@ void MachineChromeLayout::bindWindow() {
   invalidate();
 }
 
-float MachineChromeLayout::measure(std::string_view text, bool emphasized) {
+float MachineChromeLayout::measure(std::string_view text, bool emphasized) const {
   const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
-  catalog_->request(text, role);
+  // The window owns its catalog; this layout only observes it.
+  tbc::raw(catalog_.data())->request(text, role);
   const auto size = mode_ == Mode::segment ? chrome_.body : chrome_.small;
 
   return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts_, text, {.pixel_height = size, .preferred = role}));
@@ -442,8 +443,9 @@ void MachineChromeLayout::activate(const QString &identity) {
 
   for (const auto &source : sources_) {
     if (source && machineKey(source->token) == identity) {
-      controller_->applyInteraction([&] {
-        controller_->selectMachine(source->token);
+      const auto token = source->token;
+      controller_->applyInteraction([this, token] {
+        controller_->selectMachine(token);
       });
       return;
     }

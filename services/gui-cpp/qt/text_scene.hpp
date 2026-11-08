@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
@@ -73,18 +74,22 @@ struct TextPlacement {
 
 class TextScene {
 public:
-  explicit TextScene(QQuickWindow &window);
+  // The scene paints through the window, region `a`.
+  explicit TextScene(tbc::view<QQuickWindow &, tbc::lt::a> window);
   // The layouts allocate from memory_, so the scene keeps its address.
   TextScene(const TextScene &) = delete;
   TextScene &operator=(const TextScene &) = delete;
 
   void configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection);
   void begin(const QRectF &bounds, qreal scale, const QRectF &clip, std::unique_ptr<QSGNode> previous = {});
+  // A prepared row's cells are lent again to each call that may paint them, so the scene keeps no
+  // view of them.
   bool prepare(std::span<const CellValue> cells, fonts::RowTextRequest request);
-  void addCell(std::size_t column, const QFont &font, Color foreground, fonts::GlyphStyle style);
-  void appendInline(std::unique_ptr<QSGNode> node);
+  void addCell(std::span<const CellValue> cells, std::size_t column, const QFont &font, Color foreground, fonts::GlyphStyle style);
+  void appendInline(std::span<const CellValue> cells, std::unique_ptr<QSGNode> node);
   void add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement);
-  QSGNode *append(QSGNode &parent);
+  // The result is the text's node, now a child of the parent.
+  tbc::view<QSGNode *, tbc::lt::a> append(tbc::view<QSGNode &, tbc::lt::a> parent, std::span<const CellValue> cells = {});
 
 private:
   struct Batch {
@@ -100,20 +105,19 @@ private:
   std::unique_ptr<QSGNode> takeChunk();
   void appendChunk(std::unique_ptr<QSGNode> node);
   void paintChunk(const ChromeTextPaint &paint);
-  void flushCells();
-  void addFallbackCells(const Batch &batch);
+  void flushCells(std::span<const CellValue> cells);
+  void addFallbackCells(const Batch &batch, std::span<const CellValue> cells);
   void addQtText(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement);
 
-  QQuickWindow &window_;
+  tbc::view<QQuickWindow &, tbc::lt::a> window_;
   SystemAllocator memory_;
   fonts::TextLayout<SystemAllocator> layout_;
   fonts::RowTextLayout<SystemAllocator> row_;
-  std::span<const CellValue> row_source_;
   std::optional<Batch> batch_;
   std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
-  std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>> resident_glyphs_;
-  std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>> optical_glyphs_;
+  tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>>, tbc::lt::a> resident_glyphs_;
+  tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>>, tbc::lt::a> optical_glyphs_;
   FontGrid grid_;
   fonts::GlyphRasterization rasterization_;
   QRectF bounds_;

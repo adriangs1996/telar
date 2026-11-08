@@ -118,7 +118,7 @@ private:
   qreal switcherRecords(Rect area, QList<QVariantMap> &records);
   qreal factsRecords(Rect area, QList<QVariantMap> &records);
   [[nodiscard]] QVariantMap factRecord(const Source &source, const MachineFacts::Geometry &geometry) const;
-  [[nodiscard]] float measure(std::string_view text, bool emphasized);
+  [[nodiscard]] float measure(std::string_view text, bool emphasized) const;
   [[nodiscard]] QVariantMap controlRecord(const Source &source, Rect bounds, float advance) const;
   [[nodiscard]] QVariantMap foldRecord(Rect bounds, std::size_t count);
   [[nodiscard]] QVariantMap geometryRecord(const MachineChromeGeometry::Control &geometry) const;

@@ -68,7 +68,7 @@ import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 
-TextScene::TextScene(QQuickWindow &window)
+TextScene::TextScene(tbc::view<QQuickWindow &, tbc::lt::a> window)
     : window_(window),
       layout_(memory_),
       row_(memory_) {}
@@ -109,21 +109,20 @@ void TextScene::begin(const QRectF &bounds, qreal scale, const QRectF &clip, std
 bool TextScene::prepare(std::span<const CellValue> cells, fonts::RowTextRequest request) {
   try {
     row_.shape(*fonts_, cells, request);
-    row_source_ = cells;
     return true;
   } catch (const std::exception &) {
     return false;
   }
 }
 
-void TextScene::addCell(std::size_t column, const QFont &font, Color foreground, fonts::GlyphStyle style) {
+void TextScene::addCell(std::span<const CellValue> cells, std::size_t column, const QFont &font, Color foreground, fonts::GlyphStyle style) {
   const auto range = row_.cell(column);
   if (range.span_count == 0) {
     return;
   }
 
   if (batch_ && (batch_->foreground != foreground || batch_->style != style)) {
-    flushCells();
+    flushCells(cells);
   }
 
   if (!batch_) {
@@ -164,7 +163,7 @@ void TextScene::paintChunk(const ChromeTextPaint &paint) {
   }
 }
 
-void TextScene::flushCells() {
+void TextScene::flushCells(std::span<const CellValue> cells) {
   if (!batch_) {
     return;
   }
@@ -185,25 +184,26 @@ void TextScene::flushCells() {
   try {
     paintChunk(paint);
   } catch (const std::runtime_error &) {
-    addFallbackCells(batch);
+    addFallbackCells(batch, cells);
   }
 }
 
-void TextScene::addFallbackCells(const Batch &batch) {
+void TextScene::addFallbackCells(const Batch &batch, std::span<const CellValue> cells) {
   QTextCharFormat format;
   format.setForeground(toQColor(batch.foreground));
-  for (auto column = batch.first_column; column <= batch.last_column; ++column) {
+  const auto end = std::min(batch.last_column + 1, cells.size());
+  for (auto column = batch.first_column; column < end; ++column) {
     if (row_.cell(column).span_count == 0) {
       continue;
     }
 
     const QPointF origin{bounds_.x() + (static_cast<qreal>(column) * grid_.width / scale_), bounds_.y()};
-    addQtText(QString::fromUtf8(row_source_[column].utf8()), batch.font, format, {.origin = origin, .baseline = grid_.baseline / scale_, .style = batch.style});
+    addQtText(QString::fromUtf8(cells[column].utf8()), batch.font, format, {.origin = origin, .baseline = grid_.baseline / scale_, .style = batch.style});
   }
 }
 
-void TextScene::appendInline(std::unique_ptr<QSGNode> node) {
-  flushCells();
+void TextScene::appendInline(std::span<const CellValue> cells, std::unique_ptr<QSGNode> node) {
+  flushCells(cells);
   const auto previous = takeChunk();
   appendChunk(std::move(node));
 }
@@ -262,8 +262,8 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
   }
 }
 
-QSGNode *TextScene::append(QSGNode &parent) {
-  flushCells();
+tbc::view<QSGNode *, tbc::lt::a> TextScene::append(tbc::view<QSGNode &, tbc::lt::a> parent, std::span<const CellValue> cells) {
+  flushCells(cells);
 
   while (next_chunk_ != nullptr) {
     const auto discarded = takeChunk();

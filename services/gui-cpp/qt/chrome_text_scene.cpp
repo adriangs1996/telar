@@ -304,8 +304,7 @@ public:
   SoftwareGlyph &operator=(SoftwareGlyph &&) = delete;
 
   void paint(ChromeGlyphImages<FontSet, optical> &images, const ChromeTextPaint &paint, const TextProjection &position) {
-    auto &glyph = images.glyph(placed_.glyph.index, paint.pixel_height, placed_.role, paint.style);
-    auto colored = images.colored(glyph, paint.color);
+    auto colored = images.colored(placed_.glyph.index, paint.pixel_height, placed_.role, paint.style, paint.color);
     const auto quad = position.quad(placed_, MaskSampling::pixel_centers);
     image_.setTexture(colored->texture.get());
     colored_ = std::move(colored);
@@ -316,7 +315,7 @@ public:
 
 private:
   GlyphPlacement placed_;
-  QSGImageNode &image_;
+  tbc::view<QSGImageNode &, tbc::lt::self> image_;
   AlphaMaskRef colored_;
 };
 
@@ -408,8 +407,10 @@ private:
 
     if constexpr (retain_meshes) {
       retained_.next_mesh = 0;
-      retained_.group.clear();
-      rebuildGroups(paint, retained_.group);
+      auto group = std::move(retained_.group);
+      group.clear();
+      rebuildGroups(paint, group);
+      retained_.group = std::move(group);
       while (meshes_.size() > retained_.next_mesh) {
         const std::unique_ptr<GlyphMesh> discarded{meshes_.takeLast()};
       }
@@ -490,8 +491,9 @@ private:
   QQuickWindow &window_;
   std::shared_ptr<FontSet> fonts_;
   std::shared_ptr<ChromeGlyphImages<FontSet, retain_meshes>> images_;
-  QList<GlyphMesh *> meshes_;
-  QList<SoftwareGlyph<FontSet, retain_meshes> *> software_glyphs_;
+  // The meshes and software glyphs are this node's children.
+  tbc::view<QList<GlyphMesh *>, tbc::lt::self> meshes_;
+  tbc::view<QList<SoftwareGlyph<FontSet, retain_meshes> *>, tbc::lt::self> software_glyphs_;
   std::uint64_t revision_ = 0;
   [[no_unique_address]] std::conditional_t<retain_meshes, RetainedGlyphMeshes, TransientGlyphMeshes> retained_;
 };

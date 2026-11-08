@@ -1279,7 +1279,8 @@ struct ConfigurationSourceText {
 template <Allocator Memory>
 class ConfigurationGeneration {
 public:
-  inline explicit ConfigurationGeneration(Memory &memory, ConfigurationSourceText source)
+  // The generation allocates from memory, region `a`, and copies its source.
+  inline explicit ConfigurationGeneration(tbc::view<Memory &, tbc::lt::a> memory, ConfigurationSourceText source)
       : memory_(memory),
         machine_(memory),
         runtime_(makeOwned<runtime::config::RuntimeValues<Memory>>(memory, memory)),
@@ -1310,7 +1311,7 @@ public:
   }
 
   inline void renderBar(components::Position position, const components::Context &context) {
-    const auto &source = components_->definitions().source(position);
+    const auto source = components_->definitions().source(position);
     renderComponents(source, context, [&](const auto &value, const auto &actions) {
       components_->readBar(position, value, actions, notices_);
     });
@@ -1322,7 +1323,8 @@ public:
       throw std::invalid_argument{"Panel is no longer configured"};
     }
 
-    renderComponents(panels[index].source, context, [&](const auto &value, const auto &actions) {
+    const auto source = panels[index].source;
+    renderComponents(source, context, [&](const auto &value, const auto &actions) {
       components_->readPanel(value, actions, notices_);
     });
   }
@@ -1335,18 +1337,19 @@ public:
   [[nodiscard]] inline Owned<RenderedContent<components::BarContent::capacity, Memory>, Memory> renderedBar(components::Position position, const components::Context &context) {
     renderBar(position, context);
 
-    return copied(components_->bar(position));
+    return copied(memory_, components_->bar(position));
   }
 
   [[nodiscard]] inline Owned<RenderedContent<components::PanelContent::capacity, Memory>, Memory> renderedPanel(std::size_t index, const components::Context &context) {
     renderPanel(index, context);
 
-    return copied(components_->panel());
+    return copied(memory_, components_->panel());
   }
 
   template <components::Capacity Bounds>
-  [[nodiscard]] inline Owned<RenderedContent<Bounds, Memory>, Memory> copied(const components::Content<Bounds> &content) const {
-    auto result = makeOwned<RenderedContent<Bounds, Memory>>(memory_, memory_);
+  // The copy allocates from memory, region `b`.
+  [[nodiscard]] inline tbc::view<Owned<RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> copied(tbc::view<Memory &, tbc::lt::b> memory, const components::Content<Bounds> &content) const {
+    auto result = makeOwned<RenderedContent<Bounds, Memory>>(memory, memory);
     result->content = content;
     for (const auto &node : content.nodes()) {
       if (const auto action = content.action(node)) {
@@ -1813,7 +1816,7 @@ private:
     return std::forward<Consumer>(consume)(definitions);
   }
 
-  void readConfiguration(Memory &memory, const PluginOverrides *overrides) {
+  void readConfiguration(tbc::view<Memory &, tbc::lt::a> memory, const PluginOverrides *overrides) {
     const runtime::lua::Value root{machine_.state(), -1, "config"};
     runtime::config::SnapshotReader{memory, *runtime_}.read(root, profile_.view(), client_state_);
     validateUtf8(runtime_->history_path);
@@ -1995,14 +1998,14 @@ private:
     }
   }
 
-  Memory &memory_;
-  runtime::lua::Vm<Memory> machine_;
-  Owned<runtime::config::RuntimeValues<Memory>, Memory> runtime_;
-  Owned<components::Configuration, Memory> components_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<runtime::lua::Vm<Memory>, tbc::lt::a> machine_;
+  tbc::view<Owned<runtime::config::RuntimeValues<Memory>, Memory>, tbc::lt::a> runtime_;
+  tbc::view<Owned<components::Configuration, Memory>, tbc::lt::a> components_;
   std::optional<runtime::config::LocalModules> modules_;
   runtime::config::LimitNotices notices_;
   runtime::config::RetainedClientValidationState client_state_;
-  ActionDescriptions<Memory> descriptions_;
+  tbc::view<ActionDescriptions<Memory>, tbc::lt::a> descriptions_;
   runtime::FixedText<maximum_profile_bytes> profile_;
   Configuration configuration_;
   InputConfiguration input_;
@@ -2011,7 +2014,7 @@ private:
   int root_reference_ = LUA_NOREF;
   std::array<int, BindingEffects::maximum_effects> transient_references_{};
   std::size_t transient_count_ = 0;
-  Vector<ElementHandlers, Memory> element_handlers_{AllocatorRef<ElementHandlers, Memory>{memory_}};
+  tbc::view<Vector<ElementHandlers, Memory>, tbc::lt::a> element_handlers_{AllocatorRef<ElementHandlers, Memory>{memory_}};
 };
 
 }

@@ -100,20 +100,21 @@ private:
   };
 
   void synchronizeGrid(CellRectangle visible);
-  void paintRow(const TerminalPresentation &frame, Row &row, std::size_t row_index);
+  void paintRow(const TerminalPresentation &frame, std::size_t row_index);
   void paintCursor(const TerminalPresentation &frame);
   void paintPreedit(const TerminalPresentation &frame);
   void paintHoveredLink(const TerminalPresentation &frame);
 
   QQuickWindow &window_;
-  QSGSimpleRectNode &background_;
-  QSGTransformNode &below_background_;
-  QSGNode &cell_backgrounds_;
-  QSGTransformNode &below_text_;
-  QSGNode &rows_;
-  QSGTransformNode &above_text_;
-  QSGNode &overlay_;
-  GraphicsScene images_;
+  // The layers are this node's children, and the images draw into them.
+  tbc::view<QSGSimpleRectNode &, tbc::lt::self> background_;
+  tbc::view<QSGTransformNode &, tbc::lt::self> below_background_;
+  tbc::view<QSGNode &, tbc::lt::self> cell_backgrounds_;
+  tbc::view<QSGTransformNode &, tbc::lt::self> below_text_;
+  tbc::view<QSGNode &, tbc::lt::self> rows_;
+  tbc::view<QSGTransformNode &, tbc::lt::self> above_text_;
+  tbc::view<QSGNode &, tbc::lt::self> overlay_;
+  tbc::view<GraphicsScene, tbc::lt::self> images_;
   CellGlyphs glyphs_;
   TextScene text_;
   TextScene overlay_text_;

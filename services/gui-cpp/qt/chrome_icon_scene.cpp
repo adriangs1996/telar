@@ -136,8 +136,7 @@ public:
   SoftwareIcon &operator=(SoftwareIcon &&) = delete;
 
   void paint(IconImages &images, const ChromeIconPaint &paint, const IconProjection &position) {
-    auto &image = images.glyph(glyph_.index, paint.pixel_height, glyph_.face);
-    auto colored = images.colored(image, paint.color);
+    auto colored = images.colored(glyph_.index, paint.pixel_height, glyph_.face, {}, paint.color);
     image_.setTexture(colored->texture.get());
     mask_ = std::move(colored);
     image_.setSourceRect({0, 0, static_cast<qreal>(mask_->alpha.width()), static_cast<qreal>(mask_->alpha.height())});
@@ -146,7 +145,7 @@ public:
 
 private:
   fonts::IconGlyph glyph_;
-  QSGImageNode &image_;
+  tbc::view<QSGImageNode &, tbc::lt::self> image_;
   AlphaMaskRef mask_;
 };
 
@@ -215,8 +214,9 @@ private:
   QQuickWindow &window_;
   std::shared_ptr<const FontAsset> source_;
   std::shared_ptr<IconImages> images_;
-  QList<IconMesh *> meshes_;
-  QList<SoftwareIcon *> software_glyphs_;
+  // The meshes and software glyphs are this node's children.
+  tbc::view<QList<IconMesh *>, tbc::lt::self> meshes_;
+  tbc::view<QList<SoftwareIcon *>, tbc::lt::self> software_glyphs_;
   std::uint64_t revision_ = 0;
 };
 
