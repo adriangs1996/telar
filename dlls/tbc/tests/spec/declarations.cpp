@@ -1,5 +1,6 @@
 #include "tbc/view.hpp"
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -826,6 +827,78 @@ std::size_t declarationMutableReferent(declarations::settings &values) {
   const declarations::launch_options options{.history = values.history};
   declarations::reset(values); // expected-error [tbc-invalidated-borrow]
   return options.history.size();
+}
+
+// END CASE
+
+// CASE: declaration.raw_pointer
+// PAIR: declaration.raw_pointer
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::advance
+// STATUS: implemented
+// CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
+// SCENARIO: A connection resolves each stream of its own table through a raw pointer; accept.
+namespace declarations {
+  struct raw_half {
+    int ticket = 0;
+  };
+
+  struct raw_stream {
+    raw_half request;
+  };
+
+  class raw_connection {
+  public:
+    void advance() {
+      for (auto &slot : streams_) {
+        if (auto *current = tbc::raw(slot.get())) {
+          resolve(current->request);
+        }
+      }
+    }
+
+  private:
+    void resolve(raw_half &value) {
+      value.ticket = 0;
+    }
+
+    std::array<std::unique_ptr<raw_stream>, 4> streams_;
+  };
+}
+
+void declarationRawPointer(declarations::raw_connection &connection) {
+  connection.advance();
+}
+
+// END CASE
+
+// CASE: declaration.checked_pointer
+// PAIR: declaration.raw_pointer
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::advance
+// STATUS: implemented
+// CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
+// SCENARIO: The same connection resolves its streams through the table's own pointers; reject the overlapping argument.
+namespace declarations {
+  class checked_connection {
+  public:
+    void advance() {
+      for (auto &slot : streams_) {
+        if (slot) {
+          resolve(slot->request); // expected-error [tbc-invalidated-borrow]
+        }
+      }
+    }
+
+  private:
+    void resolve(raw_half &value) {
+      value.ticket = 0;
+    }
+
+    std::array<std::unique_ptr<raw_stream>, 4> streams_;
+  };
+}
+
+void declarationCheckedPointer(declarations::checked_connection &connection) {
+  connection.advance();
 }
 
 // END CASE

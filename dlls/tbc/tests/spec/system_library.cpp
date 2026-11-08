@@ -3,6 +3,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace third_party {
   void observe(const char *text) {
@@ -226,6 +227,61 @@ namespace third_party {
 
 void libraryProjectStreamPointer(third_party::project_decoder &decoder, std::string_view input) {
   decoder.decode(input);
+}
+
+// END CASE
+
+// CASE: library.raw_struct_value
+// PAIR: library.raw_struct
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Fields::add
+// STATUS: implemented
+// CONTRACT: A value of a C struct a system header declares holds raw pointers, as Rust's FFI structs do, so it carries no borrow of what they point at.
+// SCENARIO: A header list keeps entries pointing at names it owns and at the caller's values; accept.
+namespace third_party {
+  class field_list {
+  public:
+    void add(const std::string &name, std::string_view value) {
+      names_.push_back(name);
+      const auto &stored = names_.back();
+      fields_.push_back({reinterpret_cast<const unsigned char *>(stored.data()), reinterpret_cast<const unsigned char *>(value.data()), stored.size(), value.size()});
+    }
+
+  private:
+    std::vector<std::string> names_;
+    std::vector<codec_field> fields_;
+  };
+}
+
+void libraryRawStructValue(third_party::field_list &list, std::string_view value) {
+  list.add("content-type", value);
+}
+
+// END CASE
+
+// CASE: library.project_struct_value
+// PAIR: library.raw_struct
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Fields::add
+// STATUS: implemented
+// CONTRACT: A value of a C struct a system header declares holds raw pointers, as Rust's FFI structs do, so it carries no borrow of what they point at.
+// SCENARIO: The same entry declared by the project keeps the caller's value its declaration does not allow; reject the store.
+namespace third_party {
+  struct project_field {
+    std::string_view value;
+  };
+
+  class project_list {
+  public:
+    void add(std::string_view value) {
+      fields_.push_back({value}); // expected-error [tbc-contract-violation]
+    }
+
+  private:
+    std::vector<project_field> fields_;
+  };
+}
+
+void libraryProjectStructValue(third_party::project_list &list, std::string_view value) {
+  list.add(value);
 }
 
 // END CASE

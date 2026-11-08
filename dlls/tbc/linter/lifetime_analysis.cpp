@@ -1900,15 +1900,25 @@ namespace tbc_lint {
         }
       }
 
-      // A pointer field of a C struct a system header declares, as a codec's stream: a raw pointer that,
-      // like Rust's `*const T` in an FFI struct, carries no lifetime, so storing in it keeps no borrow.
+      // A C struct a system header declares, as a codec's stream or a header list entry: its pointers are
+      // raw, like Rust's `*const T` in an FFI struct, and carry no lifetime.
+      [[nodiscard]] bool foreignRecord(const clang::CXXRecordDecl &record) const {
+        const auto &sources = context_.getSourceManager();
+        return record.isCLike() && sources.isInSystemHeader(sources.getExpansionLoc(record.getLocation()));
+      }
+
+      [[nodiscard]] bool rawForeignRecord(clang::QualType type) const {
+        const auto *record = type.isNull() || type->isReferenceType() || type->isPointerType() ? nullptr : type->getAsCXXRecordDecl();
+        return record != nullptr && record->hasDefinition() && foreignRecord(*record);
+      }
+
+      // Storing in a pointer field of such a struct keeps no borrow.
       [[nodiscard]] bool rawForeignPointer(const field_path &fields) const {
         if (fields.empty() || fields.back().field == nullptr || !fields.back().field->getType()->isPointerType()) {
           return false;
         }
         const auto *record = llvm::dyn_cast<clang::CXXRecordDecl>(fields.back().field->getParent());
-        const auto &sources = context_.getSourceManager();
-        return record != nullptr && record->isCLike() && sources.isInSystemHeader(sources.getExpansionLoc(record->getLocation()));
+        return record != nullptr && foreignRecord(*record);
       }
 
       void store(const write_targets &where, const loans &incoming, state &current) {
@@ -2871,6 +2881,10 @@ namespace tbc_lint {
         if (call.getType()->isPointerType() && foreignFunction(*callee)) {
           return pointeeArguments(call, current);
         }
+        // `tbc::raw` makes a raw pointer, as Rust's `as *mut T` does: it carries no borrow.
+        if (rawFunction(*callee)) {
+          return {};
+        }
         if (standardFunction(callee, "move") || standardFunction(callee, "forward")) {
           return call.getNumArgs() == 0 ? loans{} : reference(call.getArg(0), current);
         }
@@ -3062,6 +3076,11 @@ namespace tbc_lint {
         return result;
       }
 
+      [[nodiscard]] static bool rawFunction(const clang::FunctionDecl &callee) {
+        const auto *pattern = callee.getTemplateInstantiationPattern();
+        return annotated(callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw"));
+      }
+
       // A C library function: declared by the system, with no body to analyze.
       [[nodiscard]] bool foreignFunction(const clang::FunctionDecl &callee) const {
         const auto &sources = context_.getSourceManager();
@@ -3204,6 +3223,10 @@ namespace tbc_lint {
       }
 
       loans value(const clang::Expr *expression, const state &current) {
+        // A C struct a system header declares holds raw pointers, as Rust's FFI structs do.
+        if (expression != nullptr && rawForeignRecord(expression->getType())) {
+          return {};
+        }
         if (expression != nullptr && expression->getType()->isPointerType()) {
           const auto *unwrapped = clean(expression);
           if (unwrapped != nullptr && unwrapped->getType()->isArrayType()) {

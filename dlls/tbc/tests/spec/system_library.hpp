@@ -13,6 +13,14 @@ typedef struct codec_stream {
   unsigned avail_out;
 } codec_stream;
 int codec_pump(codec_stream *stream);
+
+// A header list entry, as nghttp2's nghttp2_nv: raw pointers to a name and a value.
+typedef struct codec_field {
+  const unsigned char *name;
+  const unsigned char *value;
+  unsigned long name_size;
+  unsigned long value_size;
+} codec_field;
 }
 
 namespace library {

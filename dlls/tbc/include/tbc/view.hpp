@@ -54,6 +54,21 @@ namespace tbc {
 #define TBC_CONSTRUCTS
 #endif
 
+  // A raw pointer, as Rust's `pointer as *mut T`: the checker keeps no borrow through what it returns,
+  // so the code that dereferences it answers for the object being alive, as unsafe Rust does. It
+  // belongs only where foreign code already holds the object by address, such as a C library's
+  // callbacks re-entering the object that owns their state.
+#if defined(__clang__)
+#define TBC_RAW [[clang::annotate("tbc::raw")]]
+#else
+#define TBC_RAW
+#endif
+
+  template <typename type>
+  TBC_RAW constexpr type *raw(type *pointer) noexcept {
+    return pointer;
+  }
+
   // Region labels are scoped contract variables for the linter, not C++ type barriers.
   template <typename type, detail::lifetime_region region = lt::elided>
     requires(std::is_object_v<type> || std::is_reference_v<type>)

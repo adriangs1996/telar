@@ -494,10 +494,16 @@ it.
 A function's address is static storage, not a borrow of the object that keeps
 it, as a `std::unique_ptr` with a function deleter does.
 
+`tbc::raw(pointer)` makes a raw pointer, as Rust's `pointer as *mut T` does: the
+checker keeps no borrow through what it returns, so the code that dereferences
+it answers for the object being alive, as unsafe Rust does. It belongs only where
+foreign code already holds the object by address, such as a C library's
+callbacks re-entering the object that owns their state.
+
 A pointer field of a C struct that a system header declares, such as zlib's
 `z_stream::next_in`, is a raw pointer, as Rust's `*const T` in an FFI struct
-is: storing a buffer in it keeps no borrow, and the code that hands the
-buffer to the C library answers for it.
+is: storing a buffer in it keeps no borrow, nor does a value of such a struct,
+and the code that hands the buffer to the C library answers for it.
 
 A field labeled `lt::self` is the one exception: it borrows only the object that
 holds it, as an allocator reference to a sibling arena does. Its borrows never
