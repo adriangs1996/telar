@@ -141,7 +141,9 @@ uses only the callee's signature:
   the object's constness rather than by its use; every `&mut` would otherwise
   conflict, which Rust code never meets. A project function without a visible
   body, or a virtual one that is not `final`, may invalidate every input it can
-  mutate.
+  mutate. What the receiver reaches through its own reference fields it borrows
+  exclusively, as a Rust `&mut` field is: a call that mutates through one
+  invalidates every other borrow of that object, never the receiver's own.
 
 A closure is checked with the function that defines it, as Rust does, so its
 call keeps which fields it reads and mutates. So are the members the compiler
@@ -239,9 +241,10 @@ are not supported.
 `lt::static_storage` is the one fixed region: storage that outlives every caller,
 like Rust's `'static`. A result labeled with it depends on no argument or receiver,
 so callers keep it after their inputs die. Its definition may return only string
-literals and objects with static storage duration. Even an input labeled
-`static_storage` cannot supply it, because callers are not checked for what they
-pass; the environment cannot either, because `setenv` can replace it.
+literals, objects with static storage duration and inputs labeled
+`static_storage`: a call passes such an input only what outlives every caller,
+as a Rust `&'static str` parameter takes, and is rejected at the argument
+otherwise. The environment cannot supply it, because `setenv` can replace it.
 
 ```cpp
 struct content {

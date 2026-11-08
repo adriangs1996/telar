@@ -2202,10 +2202,17 @@ namespace tbc_lint {
       // What a static field receives must outlive every caller.
       void checkStatic(const loans &incoming, clang::SourceLocation where) {
         for (const auto &source : incoming.values) {
-          if (source.kind != origin_kind::static_storage && source.kind != origin_kind::unknown) {
+          if (source.kind != origin_kind::static_storage && source.kind != origin_kind::unknown && !staticInput(source)) {
             report(issue::contract, where, &source);
           }
         }
+      }
+
+      // A parameter labeled static, whose callers pass only what outlives every caller.
+      [[nodiscard]] bool staticInput(const origin &source) const {
+        const auto *parameter = parameterOrigin(source) ? llvm::dyn_cast<clang::ParmVarDecl>(source.variable) : nullptr;
+        const auto input = parameter == nullptr ? annotation{} : parameterAnnotation(*parameter, context_);
+        return input.present && staticRegion(input.region);
       }
 
       // The storage an object owns lies one level below the object's place.
@@ -3413,10 +3420,10 @@ namespace tbc_lint {
       }
 
       [[nodiscard]] bool allowed(const origin &source, annotation output) const {
-        // Callers do not check what they pass, so not even a labeled input can supply a static result,
-        // and the environment can be replaced while its storage is still in use.
+        // Callers pass a static input only what outlives every caller, so it supplies a static result, as
+        // a Rust `&'static` parameter does. The environment can be replaced while its storage is in use.
         if (staticRegion(output.region)) {
-          return source.kind == origin_kind::static_storage;
+          return source.kind == origin_kind::static_storage || staticInput(source);
         }
         if (source.kind == origin_kind::receiver || source.kind == origin_kind::receiver_region) {
           if (output.region != nullptr) {
@@ -3510,7 +3517,7 @@ namespace tbc_lint {
 
       // Invalidates every place one operation reaches in a single pass over the state, matching each
       // borrow against the places inside its own variable.
-      void invalidateAll(llvm::ArrayRef<invalidation> places, const clang::Stmt *trigger, state &current, bool destroyed = false) {
+      void invalidateAll(llvm::ArrayRef<invalidation> places, const clang::Stmt *trigger, state &current, bool destroyed = false, const clang::ValueDecl *borrower = nullptr) {
         if (trigger == nullptr) {
           return;
         }
@@ -3550,6 +3557,9 @@ namespace tbc_lint {
         };
         for (auto *map : {&current.values, &current.references, &current.designated}) {
           for (auto &entry : *map) {
+            if (entry.first == borrower) {
+              continue;
+            }
             for (auto &source : entry.second.values) {
               if (source.invalidated != nullptr) {
                 continue;
@@ -3633,6 +3643,13 @@ namespace tbc_lint {
           const auto contents = value(argument, current);
           if (summarized == nullptr || (index >= offset && index - offset >= summarized->definition->getNumParams())) {
             checkUse(contents, call);
+          }
+          // A parameter labeled static takes only what outlives every caller, as a Rust `&'static` does.
+          if (index >= offset && index - offset < callee->getNumParams()) {
+            const auto input = parameterAnnotation(*callee->getParamDecl(index - offset), context_);
+            if (input.present && staticRegion(input.region)) {
+              checkStatic(contents, argument->getExprLoc());
+            }
           }
           // A project function the checker cannot see may also read what a pointer argument designates.
           if (summarized == nullptr && !libraryFunction(*callee) && pointerLike(argument->getType())) {
@@ -3831,12 +3848,16 @@ namespace tbc_lint {
           auto contents = read.actual ? ofType(selectedAlong(read, *read.actual, target.select, current), type) : loans{};
           return std::get<2>(bucket.emplace_back(target.variable, target.select, std::move(contents)));
         };
+        // What the receiver designates through its own fields it borrows exclusively, as a Rust `&mut`
+        // field is: a call through it invalidates other borrows of those objects, not the receiver's.
+        llvm::SmallVector<invalidation, 8> borrowed_places;
         for (const auto &[target, range] : known->summary.invalidates) {
           // A place the callee's input designates lies where the same part of the actual input designates.
           if (target.designated) {
+            auto &into = llvm::isa<clang::FieldDecl>(target.variable) ? borrowed_places : places;
             for (const auto &designation : designated(target).values) {
               if (const auto place = placeWithin(designation, target)) {
-                places.push_back({.target = *place, .range = range});
+                into.push_back({.target = *place, .range = range});
               } else if (designation.kind == origin_kind::receiver && designation.variable == nullptr && target.path.empty()) {
                 // The whole object `this` designates: each of its fields.
                 if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && method->getParent()->getDefinition() != nullptr) {
@@ -3893,6 +3914,25 @@ namespace tbc_lint {
           receiverPlaces(call, *receiver_range, current, places);
         }
         invalidateAll(places, &call, current);
+        if (!borrowed_places.empty()) {
+          invalidateAll(borrowed_places, &call, current, false, receiverVariable(call));
+        }
+      }
+
+      // The variable a call's receiver is, when it is an object of its own: a local or a field of `this`
+      // held by value. A reference names another object's borrows, so it is never one.
+      [[nodiscard]] const clang::ValueDecl *receiverVariable(const clang::CallExpr &call) const {
+        const auto *object = receiver(call);
+        if (object == nullptr) {
+          return nullptr;
+        }
+        const clang::ValueDecl *variable = nullptr;
+        if (const auto *name = llvm::dyn_cast<clang::DeclRefExpr>(clean(object))) {
+          variable = llvm::dyn_cast<clang::VarDecl>(name->getDecl());
+        } else if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(clean(object)); member != nullptr && llvm::isa<clang::CXXThisExpr>(clean(member->getBase()))) {
+          variable = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
+        }
+        return variable != nullptr && !variable->getType()->isReferenceType() ? variable : nullptr;
       }
 
       // Where invalidating a call's whole receiver lands: every field of this object, or each place the

@@ -679,3 +679,93 @@ void declarationUnsharedKept(declarations::pool &memory) {
 }
 
 // END CASE
+
+// CASE: declaration.exclusive_field_call
+// PAIR: declaration.exclusive_field
+// SOURCE: services/runtime-cpp/graphics/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
+// STATUS: implemented
+// CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
+// SCENARIO: A feeder keeps a screen by reference and is fed twice, each feed growing the screen's cells; accept.
+namespace declarations {
+  struct screen {
+    std::vector<int> cells;
+    void resize(std::size_t size) { cells.resize(size); }
+  };
+
+  class feeder {
+  public:
+    explicit feeder(screen &target) : target_(target) {}
+    void feed(int value) { target_.cells.push_back(value); }
+
+  private:
+    screen &target_;
+  };
+}
+
+void declarationExclusiveFieldCall(const std::vector<int> &values) {
+  declarations::screen shown;
+  declarations::feeder input{shown};
+  for (const int value : values) {
+    input.feed(value);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.exclusive_field_alias
+// PAIR: declaration.exclusive_field
+// SOURCE: services/runtime-cpp/graphics/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
+// STATUS: implemented
+// CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
+// SCENARIO: The screen is resized directly while the feeder that keeps it is fed again; reject at the resize.
+void declarationExclusiveFieldAlias(const std::vector<int> &values) {
+  declarations::screen shown;
+  declarations::feeder input{shown};
+  for (const int value : values) {
+    if (value > 0) {
+      input.feed(value);
+    } else {
+      shown.resize(0); // expected-error [tbc-invalidated-borrow]
+    }
+  }
+}
+
+// END CASE
+
+// CASE: declaration.static_input
+// PAIR: declaration.static_input
+// SOURCE: services/runtime-cpp/proxy/http2_capture_streams.cppm :: respond (ProxyRejection::response)
+// STATUS: implemented
+// CONTRACT: A parameter labeled static_storage takes only storage that outlives every caller, which the call checks at the argument, so it supplies static fields and results, as a Rust `&'static str` parameter does.
+// SCENARIO: A reply keeps a literal it is handed and forwards another; accept.
+namespace declarations {
+  class reply {
+  public:
+    void respond(static_text text) { text_ = text; }
+    static static_text forward(static_text text) { return text; }
+    [[nodiscard]] std::size_t size() const { return text_.size(); }
+
+  private:
+    static_text text_;
+  };
+}
+
+std::size_t declarationStaticInput(declarations::reply &out) {
+  out.respond("HTTP/1.1 200 OK\r\n\r\n");
+  return out.size() + declarations::reply::forward("ok").size();
+}
+
+// END CASE
+
+// CASE: declaration.static_input_owned
+// PAIR: declaration.static_input
+// SOURCE: services/runtime-cpp/proxy/http2_capture_streams.cppm :: respond (ProxyRejection::response)
+// STATUS: implemented
+// CONTRACT: A parameter labeled static_storage takes only storage that outlives every caller, which the call checks at the argument, so it supplies static fields and results, as a Rust `&'static str` parameter does.
+// SCENARIO: The reply is handed a local string; reject at the argument.
+std::size_t declarationStaticInputOwned() {
+  const std::string text = "dynamic";
+  return declarations::reply::forward(text).size(); // expected-error [tbc-contract-violation]
+}
+
+// END CASE
