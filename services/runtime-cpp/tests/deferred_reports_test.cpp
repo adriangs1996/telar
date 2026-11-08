@@ -119,11 +119,12 @@ struct ReporterFixture {
     const auto due = reports.due(clients, model.panes, agents, now);
     for (const auto identity : due.ids()) {
       auto &client = *clients.find(identity);
-      auto payload = reports.open(client);
+      Vector<Byte, SystemAllocator> payload{AllocatorRef<Byte, SystemAllocator>{memory}};
+      reports.open(client, payload);
       if (!client.connection.closing) {
         consume(client, std::span<const Byte>{payload});
       }
-      DeferredReports<SystemAllocator, RecordedAgents>::close(client, std::move(payload));
+      DeferredReports<SystemAllocator, RecordedAgents>::close(client, payload);
     }
   }
 

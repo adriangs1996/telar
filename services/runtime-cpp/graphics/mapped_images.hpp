@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "telar_platform/mapped_region.hpp"
 #include <array>
 #include <atomic>
@@ -7,7 +8,9 @@
 
 namespace telar::runtime {
 
-class MappedImages {
+// Mappings that stand in for placeholder allocations, shared by the threads that decode and draw
+// images under its mutex. A mapping lives until its placeholder is deallocated.
+class TBC_SHARED MappedImages {
 public:
   bool adopt(const void *placeholder, MappedRegion &pixels) noexcept {
     const std::lock_guard lock{mutex_};
@@ -50,7 +53,8 @@ public:
     return {};
   }
 
-  std::span<const std::uint8_t> resolve(std::span<const std::uint8_t> bytes) const noexcept {
+  // The pixels standing in for a placeholder, which live as long as it does, or the bytes themselves.
+  tbc::view<std::span<const std::uint8_t>, tbc::lt::a> resolve(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes) const noexcept {
     if (count_.load(std::memory_order_acquire) == 0) {
       return bytes;
     }
@@ -71,7 +75,7 @@ private:
   };
 
   static constexpr std::size_t capacity = 64;
-  std::array<Entry, capacity> entries_;
+  tbc::view<std::array<Entry, capacity>, tbc::lt::a> entries_;
   mutable std::mutex mutex_;
   std::atomic<std::size_t> count_{0};
 };

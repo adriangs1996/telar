@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -194,7 +195,7 @@ private:
     members_.erase(members_.begin() + unique, members_.end());
   }
 
-  inline std::string_view decode(Member &member) {
+  inline tbc::view<std::string_view, tbc::lt::a> decode(tbc::view<Member &, tbc::lt::a> member) {
     checkUnique(member);
     if (!member.text) {
       String<Memory> decoded{AllocatorRef<char, Memory>{memory_}};

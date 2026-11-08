@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstddef>
 #include <new>
 #include <stdlib.h>
@@ -477,7 +478,7 @@ private:
   }
 
   template <typename Node>
-  inline Node *findHook(Node &entry) const noexcept {
+  inline tbc::view<Node *, tbc::lt::a> findHook(tbc::view<Node &, tbc::lt::a> entry) const noexcept {
     if (provider_.flat_hooks) {
       return isOwnCommand(entry) ? &entry : nullptr;
     }

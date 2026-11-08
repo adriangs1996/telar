@@ -651,10 +651,11 @@ RetainedStream(Memory &memory, std::size_t capacity) -> RetainedStream<Memory>;
 export {
 namespace telar::runtime {
 
+// Bytes erased on release, allocated from an allocator in region `a`.
 template <Allocator Memory>
 class SensitiveAllocation {
 public:
-  inline explicit SensitiveAllocation(Memory &memory, std::size_t size) : memory_(&memory), size_(size) {
+  inline explicit SensitiveAllocation(tbc::view<Memory &, tbc::lt::a> memory, std::size_t size) : memory_(&memory), size_(size) {
     if (size != 0) {
       storage_ = static_cast<std::uint8_t *>(memory.allocate(size, alignof(std::uint8_t)));
       if (storage_ == nullptr) {
@@ -690,7 +691,7 @@ private:
     sensitive.deallocate(storage_, size_, alignof(std::uint8_t));
   }
 
-  Memory *memory_;
+  tbc::view<Memory *, tbc::lt::a> memory_;
   std::uint8_t *storage_ = nullptr;
   std::size_t size_;
 };

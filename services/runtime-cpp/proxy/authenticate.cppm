@@ -89,7 +89,7 @@ public:
     return difference == 0;
   }
 
-  inline std::optional<std::string_view> formatHexadecimal(std::span<char> destination) const noexcept {
+  inline tbc::view<std::optional<std::string_view>, tbc::lt::a> formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept {
     if (destination.size() < hexadecimal_bytes) {
       return std::nullopt;
     }
@@ -101,7 +101,7 @@ public:
     return std::string_view{destination.data(), hexadecimal_bytes};
   }
 
-  inline std::optional<std::string_view> formatUrl(std::span<char> destination, std::uint16_t port) const noexcept {
+  inline tbc::view<std::optional<std::string_view>, tbc::lt::a> formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept {
     constexpr std::string_view prefix = "http://telar:";
     constexpr std::string_view address = "@127.0.0.1:";
     constexpr std::size_t port_digits = 5;

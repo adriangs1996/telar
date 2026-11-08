@@ -695,14 +695,20 @@ public:
   // refusal's generic description.
   template <typename Reply, typename Request>
   inline Reply exchange(Request request, bool reason = true) {
-    return translated([&] { return session_->template exchange<Reply>(request); }, reason);
+    try {
+      return session_->template exchange<Reply>(request);
+    } catch (...) {
+      rethrowTranslated(reason);
+    }
   }
 
   inline WorkspaceList catalog() {
-    return translated([&] {
+    try {
       session_->send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false});
       return session_->template receive<WorkspaceList>();
-    });
+    } catch (...) {
+      rethrowTranslated();
+    }
   }
 
   inline const char *socket() const {
@@ -735,10 +741,10 @@ private:
     }
   }
 
-  template <typename Operation>
-  inline static auto translated(Operation &&operation, bool reason = true) {
+  // Rethrows the exception being handled as the failure the command reports.
+  [[noreturn]] inline static void rethrowTranslated(bool reason = true) {
     try {
-      return operation();
+      throw;
     } catch (const ControlFailure &failure) {
       throw Failure{reason ? failure.message() : std::string_view{controlFailureDescription(failure.code())}, 1, failure.code()};
     } catch (const SocketError &) {

@@ -147,19 +147,22 @@ public:
       return;
     }
 
-    auto &agent = existing != nullptr ? *existing : ensure(pane);
+    if (existing == nullptr) {
+      existing = &ensure(pane);
+    }
+    auto &agent = *existing;
     const auto previous = agent.status;
     const auto previous_watch = agent.file_watch.revision;
-    if (agent.report(request, client.deferred_report.reportTime())) {
-      projected(agent);
-      if ((agent.status == AgentStatus::done && previous == AgentStatus::working) || (agent.status == AgentStatus::blocked && previous != AgentStatus::blocked)) {
-        sound(agent);
-      }
-    }
-
+    const bool changed = agent.report(request, client.deferred_report.reportTime());
     if (agent.file_watch.revision != previous_watch) {
       agent.file_watch.revision = ++session_watch_revision_;
       has_session_files_ = true;
+    }
+    if (changed) {
+      if (alerts(agent, previous)) {
+        sounds_.push(agent);
+      }
+      projected(agent.pane, agent.generation);
     }
 
     client.connection.send(RequestCompleted{.request_id = request.request_id});
@@ -297,7 +300,7 @@ public:
     if (auto *agent = agents_.find(request.pane_id, request.pane_generation); agent != nullptr && agent->status == AgentStatus::done) {
       agent->acknowledged = true;
       if (agent->project(wallMilliseconds())) {
-        projected(*agent);
+        projected(agent->pane, agent->generation);
       }
     }
   }
@@ -340,7 +343,7 @@ public:
                               .event = "Interrupted by telar"});
     agent->interrupt_at = now;
     agent->interrupt_revision = pane.terminal.contentRevision();
-    projected(*agent);
+    projected(agent->pane, agent->generation);
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
 
@@ -378,8 +381,38 @@ public:
       agents_.removeIf([&](const Agent &record) { return record.pane == pane.id && record.generation == pane.generation; });
       return;
     }
+    if (!identity || provider == AgentProvider::unknown) {
+      return;
+    }
 
-    observeProcess(pane, agent, identity, provider);
+    if (agent == nullptr) {
+      if (agents_.records().size() == AgentRegistry<Memory>::capacity) {
+        return;
+      }
+
+      agent = &ensure(pane);
+    }
+
+    const bool changed = agent->observeProcess(*identity, provider);
+    if (pane.restored_agent) {
+      const auto &restored = *pane.restored_agent;
+      if (restored.provider == provider) {
+        agent->setSession(restored.session.view());
+        agent->title.assign(restored.title.view());
+        agent->title_source = restored.title_source;
+        agent->in_pane = restored.in_pane;
+        agent->title_state = restored.title.view().empty() ? AgentTitleState::placeholder : AgentTitleState::ready;
+        if (!restored.title.view().empty()) {
+          agent->finishTitleCapture();
+        }
+        agents_.changed();
+      }
+
+      pane.restored_agent.reset();
+    }
+    if (changed) {
+      projected(pane.id, pane.generation);
+    }
   }
 
   inline void observeProcess(Pane<Memory> &pane, const ProcessProbeResult &observation) {
@@ -395,7 +428,7 @@ public:
 
     if (agent->setProcessContext(observation.session_host, observation.hooks_installed, observation.agent_identity)) {
       if (agent->project(wallMilliseconds())) {
-        projected(*agent);
+        projected(agent->pane, agent->generation);
       } else {
         agents_.changed();
       }
@@ -410,10 +443,10 @@ public:
 
     const auto previous = agent->status;
     if (agent->observeScreen(signal, time)) {
-      projected(*agent);
-      if ((agent->status == AgentStatus::done && previous == AgentStatus::working) || (agent->status == AgentStatus::blocked && previous != AgentStatus::blocked)) {
-        sound(*agent);
+      if (alerts(*agent, previous)) {
+        sounds_.push(*agent);
       }
+      projected(agent->pane, agent->generation);
     }
   }
 
@@ -433,9 +466,7 @@ public:
         agents_.changed();
       }
 
-      if (agent->interrupt_at) {
-        settleInterrupt(panes, focused(clients, layouts, pane->id), *pane, *agent, now);
-      }
+      const bool settled = agent->interrupt_at && settleInterrupt(panes, focused(clients, layouts, pane->id), *pane, *agent, now);
       const auto current_time = wallMilliseconds();
       agent->evidence.expire(current_time);
       if (!agent->evidence.report) {
@@ -443,8 +474,8 @@ public:
         agent->interrupt_idle_at.reset();
       }
 
-      if (agent->project(current_time)) {
-        projected(*agent);
+      if (agent->project(current_time) || settled) {
+        projected(agent->pane, agent->generation);
       }
     }
   }
@@ -457,7 +488,7 @@ public:
 
   // Sends the agent sounds reported since the last delivery to subscribed clients.
   inline void deliverSounds(ClientStore<Memory> &clients) noexcept {
-    for (const auto &notification : std::span{sounds_}.first(sound_count_)) {
+    for (const auto &notification : sounds_.queued()) {
       for (auto *client : clients.items()) {
         if (client == nullptr || !client->subscribed || client->connection.closing) {
           continue;
@@ -469,59 +500,32 @@ public:
         }
       }
     }
-    sound_count_ = 0;
+    sounds_.clear();
   }
 
 private:
-  inline void projected(Agent &agent) noexcept {
-    descriptions_.project(DescriptionQueue<Memory>::pending(agents_), agent);
-
-    agent.sequence = ++sequence_;
+  // Stamps an agent whose projection changed, named by its pane: it may queue for a description and
+  // takes the next sequence. The table lends one entry at a time, so the caller holds none across it.
+  inline void projected(std::uint64_t pane, std::uint64_t generation) noexcept {
+    const auto pending = DescriptionQueue<Memory>::pending(agents_);
+    if (auto *agent = agents_.find(pane, generation)) {
+      descriptions_.project(pending, *agent);
+      agent->sequence = ++sequence_;
+    }
     agents_.changed();
   }
 
-  inline Agent *observeProcess(Pane<Memory> &pane, Agent *agent, std::optional<ProcessIdentity> identity, AgentProvider provider) {
-    if (!identity || provider == AgentProvider::unknown) {
-      return agent;
-    }
-
-    if (agent == nullptr) {
-      if (agents_.records().size() == AgentRegistry<Memory>::capacity) {
-        return nullptr;
-      }
-
-      agent = &ensure(pane);
-    }
-
-    if (agent->observeProcess(*identity, provider)) {
-      projected(*agent);
-    }
-
-    if (pane.restored_agent) {
-      const auto &restored = *pane.restored_agent;
-      if (restored.provider == provider) {
-        agent->setSession(restored.session.view());
-        agent->title.assign(restored.title.view());
-        agent->title_source = restored.title_source;
-        agent->in_pane = restored.in_pane;
-        agent->title_state = restored.title.view().empty() ? AgentTitleState::placeholder : AgentTitleState::ready;
-        if (!restored.title.view().empty()) {
-          agent->finishTitleCapture();
-        }
-        agents_.changed();
-      }
-
-      pane.restored_agent.reset();
-    }
-
-    return agent;
+  // Whether a change of status calls for a sound.
+  inline static bool alerts(const Agent &agent, AgentStatus previous) noexcept {
+    return (agent.status == AgentStatus::done && previous == AgentStatus::working) || (agent.status == AgentStatus::blocked && previous != AgentStatus::blocked);
   }
 
-  inline void settleInterrupt(Panes &panes, bool focused, Pane<Memory> &pane, Agent &agent, std::chrono::steady_clock::time_point now) {
+  // Ends an interrupt once its pane settles; whether the agent's projection changed.
+  inline static bool settleInterrupt(Panes &panes, bool focused, Pane<Memory> &pane, Agent &agent, std::chrono::steady_clock::time_point now) {
     bool settled = false;
     if (hasIdleScreen(agent.provider)) {
       if (pane.terminal.contentRevision() <= agent.interrupt_revision || !pane.terminal.outputSettled()) {
-        return;
+        return false;
       }
       pane.terminal.refresh();
       const auto observation = AgentScreenReader{pane.terminal}.observe(agent.provider);
@@ -536,11 +540,11 @@ private:
         agent.interrupt_at = now;
         agent.interrupt_idle_at.reset();
         agent.interrupt_revision = pane.terminal.contentRevision();
-        return;
+        return false;
       }
       if (observation.status != AgentStatus::ready || observation.restored_draft) {
         agent.interrupt_idle_at.reset();
-        return;
+        return false;
       }
       if (!agent.interrupt_idle_at) {
         agent.interrupt_idle_at = now;
@@ -557,10 +561,9 @@ private:
         agent.evidence.applyScreen(AgentSignal{agent.provider, AgentStatus::ready, 94, true, true}, ObservationTime::now(), agent.status, false);
       }
 
-      if (agent.project(wallMilliseconds())) {
-        projected(agent);
-      }
+      return agent.project(wallMilliseconds());
     }
+    return false;
   }
 
   inline static Pane<Memory> &require(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) {
@@ -590,13 +593,29 @@ private:
   }
 
   // Queues an agent's sound, delivered once no client is borrowed.
-  inline void sound(const Agent &agent) noexcept {
-    if (sound_count_ < sounds_.size()) {
-      sounds_[sound_count_++] = AgentSoundNotification{.pane_id = agent.pane,
-                                                       .pane_generation = agent.generation,
-                                                       .sound = agent.status == AgentStatus::blocked ? AgentSound::needs_input : AgentSound::ready};
+  // Agent sounds queued while a client is borrowed, delivered to the subscribed clients afterwards.
+  class SoundQueue {
+  public:
+    inline void push(const Agent &agent) noexcept {
+      if (count_ < entries_.size()) {
+        entries_[count_++] = AgentSoundNotification{.pane_id = agent.pane,
+                                                     .pane_generation = agent.generation,
+                                                     .sound = agent.status == AgentStatus::blocked ? AgentSound::needs_input : AgentSound::ready};
+      }
     }
-  }
+
+    inline std::span<const AgentSoundNotification> queued() const noexcept {
+      return std::span{entries_}.first(count_);
+    }
+
+    inline void clear() noexcept {
+      count_ = 0;
+    }
+
+  private:
+    std::array<AgentSoundNotification, 32> entries_{};
+    std::size_t count_ = 0;
+  };
 
   AgentRegistry<Memory> agents_;
   DescriptionQueue<Memory> descriptions_;
@@ -605,8 +624,7 @@ private:
   std::uint64_t sequence_ = 0;
   std::uint64_t session_watch_revision_ = 0;
   bool has_session_files_ = false;
-  std::array<AgentSoundNotification, 32> sounds_{};
-  std::size_t sound_count_ = 0;
+  SoundQueue sounds_;
 };
 
 }
@@ -2071,7 +2089,7 @@ private:
   inline void handle(std::uint64_t identity, const FindPaths &message) {
     auto &client = requireClient(clients_, identity);
     if (!background_.tryPaths(client.id, message, client.connection)) {
-      submitBackground(client, message);
+      submitBackground(background_, client, message);
     }
   }
 
@@ -2106,7 +2124,7 @@ private:
     }
 
     auto &client = requireClient(clients_, identity);
-    submitBackground(client, message, context);
+    submitBackground(background_, client, message, context);
     client.editor_source = source->id;
     client.editor_generation = source->generation;
   }
@@ -2128,7 +2146,7 @@ private:
       TextReader reader{memory_, pane->terminal, 4096};
       reader.read(PaneTextSource::screen, 24);
       const auto prompt = suggestionPrompt(memory_, pane->cwd, reader.text(), message.text);
-      submitBackground(client, message, RequestContext{.prompt = prompt});
+      submitBackground(background_, client, message, RequestContext{.prompt = prompt});
     } catch (const RequestError &) {
       client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
     } catch (const std::bad_alloc &) {
@@ -2309,29 +2327,29 @@ private:
 
   inline void handle(std::uint64_t identity, const QueryHistory &message) {
     auto &client = requireClient(clients_, identity);
-    submitBackground(client, message, RequestContext{.persistent_client = client.role == ClientRole::interactive});
+    submitBackground(background_, client, message, RequestContext{.persistent_client = client.role == ClientRole::interactive});
   }
 
   inline void handle(std::uint64_t identity, const ImportHistory &message) {
     auto &client = requireClient(clients_, identity);
-    submitBackground(client, message);
+    submitBackground(background_, client, message);
     client.connection.send(RequestCompleted{.request_id = message.request_id});
   }
 
   inline void handle(std::uint64_t identity, const DeleteHistory &message) {
-    submitBackground(requireClient(clients_, identity), message);
+    submitBackground(background_, requireClient(clients_, identity), message);
   }
 
   inline void handle(std::uint64_t identity, const PruneHistory &message) {
-    submitBackground(requireClient(clients_, identity), message);
+    submitBackground(background_, requireClient(clients_, identity), message);
   }
 
   inline void handle(std::uint64_t identity, const ReadHistoryOutput &message) {
-    submitBackground(requireClient(clients_, identity), message);
+    submitBackground(background_, requireClient(clients_, identity), message);
   }
 
   inline void handle(std::uint64_t identity, const HistoryStatsQuery &message) {
-    submitBackground(requireClient(clients_, identity), message);
+    submitBackground(background_, requireClient(clients_, identity), message);
   }
 
   inline void handle(std::uint64_t identity, const ConfigureGraphics &message) {
@@ -2359,14 +2377,14 @@ private:
   }
 
   template <typename Message>
-  inline void submitBackground(ClientSession<Memory> &client, const Message &message, RequestContext context = {}) {
+  inline static void submitBackground(Background &background, const ClientSession<Memory> &client, const Message &message, RequestContext context = {}) {
     if constexpr (std::same_as<Message, OpenEditor>) {
       if (client.editor_source != 0) {
         throw RequestError{FailureCode::resource_limit, "An editor request is already pending"};
       }
     }
 
-    background_.submit(client.id, message, context);
+    background.submit(client.id, message, context);
   }
 
   inline static bool isHistoryRequest(ClientTag tag) noexcept {
@@ -2578,7 +2596,8 @@ private:
         continue;
       }
 
-      auto payload = deferred_reports_.open(*client);
+      Vector<Byte, Memory> payload{AllocatorRef<Byte, Memory>{memory_}};
+      deferred_reports_.open(*client, payload);
       Frames frames{memory_};
       client->connection.exchange(frames);
       bool answered = false;
@@ -2596,7 +2615,7 @@ private:
 
       if (auto *current = clients_.find(identity)) {
         current->connection.exchange(frames);
-        DeferredReports<Memory, Agents>::close(*current, std::move(payload));
+        DeferredReports<Memory, Agents>::close(*current, payload);
         if (answered) {
           updateWriteInterest(poller_, *current);
         }

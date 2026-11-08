@@ -73,7 +73,7 @@ public:
   inline explicit FrameChannel(Stream &stream) noexcept : stream_(stream) {}
 
   template <Allocator Memory>
-  inline std::optional<SensitiveAllocation<Memory>> receive(Memory &memory, std::size_t maximum_bytes) {
+  inline tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> receive(tbc::view<Memory &, tbc::lt::a> memory, std::size_t maximum_bytes) {
     std::array<Byte, Protocol::prefix_bytes> prefix;
     if (!readExact(prefix)) {
       return std::nullopt;
@@ -652,7 +652,7 @@ class TrafficBridge {
     std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
     std::size_t prefix_bytes = 0;
     std::uint64_t dropped = 0;
-    std::optional<SensitiveAllocation<Memory>> input;
+    tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> input;
     std::size_t received = 0;
     bool registration_ack;
     bool ready = false;
@@ -902,7 +902,8 @@ private:
     connection.output.consume(static_cast<std::size_t>(count));
   }
 
-  inline std::optional<SensitiveAllocation<Memory>> read(Connection &connection) {
+  // A complete frame leaves the connection; it borrows only the connection's allocator.
+  inline tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> read(Connection &connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
       const auto count = ::recv(connection.socket.get(), connection.prefix.data() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);

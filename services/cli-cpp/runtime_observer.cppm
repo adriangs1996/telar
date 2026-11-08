@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 #include <new>
 #include <cstdio>
@@ -376,7 +377,7 @@ public:
     client_.send(message, buffer);
   }
 
-  inline std::span<const Byte> receive(std::span<Byte> buffer) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
     return client_.receiveFrame(buffer);
   }
 

@@ -464,18 +464,19 @@ public:
     return due;
   }
 
-  // Releases a due report to be answered and hands over its payload.
-  inline Vector<Byte, Memory> open(ClientSession<Memory> &client) noexcept {
+  // Releases a due report to be answered and exchanges its payload with the caller's empty one, which
+  // must share the client's allocator, as Rust's `mem::swap`.
+  inline void open(ClientSession<Memory> &client, Vector<Byte, Memory> &payload) noexcept {
     cancel(client);
     client.deferred_report.answering = true;
     client.connection.read_paused = false;
-    return std::move(client.deferred_report.payload);
+    payload.swap(client.deferred_report.payload);
   }
 
   // Ends the answer and gives the payload's storage back to the client.
-  inline static void close(ClientSession<Memory> &client, Vector<Byte, Memory> &&payload) noexcept {
+  inline static void close(ClientSession<Memory> &client, Vector<Byte, Memory> &payload) noexcept {
     payload.clear();
-    client.deferred_report.payload = std::move(payload);
+    payload.swap(client.deferred_report.payload);
     client.deferred_report.answering = false;
   }
 

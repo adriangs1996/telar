@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <errno.h>
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
@@ -1136,7 +1137,7 @@ class Http2EndpointConnection {
     inline ~Endpoint() { close(); }
     inline void close() noexcept { if (session) { nghttp2_session_del(session); session = nullptr; } }
     inline auto stream(std::int32_t id) const noexcept -> Stream * { return static_cast<Stream *>(nghttp2_session_get_stream_user_data(session, id)); }
-    inline auto half(Stream &stream) const noexcept -> Half & { return child ? stream.request : stream.response; }
+    inline auto half(tbc::view<Stream &, tbc::lt::a> stream) const noexcept -> tbc::view<Half &, tbc::lt::a> { return child ? stream.request : stream.response; }
 
     inline static int beginHeaders(nghttp2_session *, const nghttp2_frame *frame, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
@@ -2636,7 +2637,7 @@ private:
     *end = '\0';
   }
 
-  inline std::optional<Record> recall(std::string_view name, Vector<unsigned char, Memory> &bytes) const noexcept {
+  inline tbc::view<std::optional<Record>, tbc::lt::a> recall(std::string_view name, tbc::view<Vector<unsigned char, Memory> &, tbc::lt::a> bytes) const noexcept {
     try {
       if (!readPrivateFile(directory_, name, bytes, maximum_record_bytes)) {
         return std::nullopt;

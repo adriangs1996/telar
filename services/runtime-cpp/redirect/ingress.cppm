@@ -211,7 +211,7 @@ public:
   inline int descriptor() const noexcept { return tunnel_.descriptor(); }
   inline std::string_view name() const noexcept { return tunnel_.name(); }
 
-  inline std::span<Byte> receive(std::span<Byte> bytes) {
+  inline tbc::view<std::span<Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> bytes) {
     const auto size = ::read(tunnel_.descriptor(), bytes.data(), bytes.size());
     if (size < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
       return {};

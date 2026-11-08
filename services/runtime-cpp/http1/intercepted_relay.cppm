@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 #include <cstdio>
@@ -210,7 +211,7 @@ private:
   }
 
   template <ByteStream Source>
-  inline StreamView bodyInput(Source &source, std::size_t maximum) noexcept {
+  inline tbc::view<StreamView, tbc::lt::a> bodyInput(tbc::view<Source &, tbc::lt::a> source, std::size_t maximum) noexcept {
     if constexpr (BufferedByteStream<Source>) {
       return source.peekView(maximum);
     } else {

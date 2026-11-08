@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "mapped_images.hpp"
 #include "telar_base/memory/allocator.hpp"
 
@@ -107,7 +109,7 @@ public:
     return mappings_.adopt(placeholder, pixels);
   }
 
-  std::span<const std::uint8_t> imagePixels(std::span<const std::uint8_t> bytes) const noexcept {
+  tbc::view<std::span<const std::uint8_t>, tbc::lt::a> imagePixels(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes) const noexcept {
     return mappings_.resolve(bytes);
   }
 

@@ -603,7 +603,7 @@ public:
   using Clock = std::chrono::steady_clock;
   static constexpr auto sample_interval = std::chrono::seconds{1};
 
-  inline explicit RuntimeTelemetry(std::string_view endpoint, const ProxyStatus &proxy) noexcept
+  inline explicit RuntimeTelemetry(std::string_view endpoint, ProxyStatus proxy) noexcept
       : session_(endpoint), proxy_(proxy) {}
 
   template <Allocator Memory, typename Captures, typename Background>
@@ -649,7 +649,7 @@ private:
   Clock::time_point started_ = Clock::now();
   Clock::time_point next_sample_ = started_ + sample_interval;
 #else
-  inline explicit RuntimeTelemetry(std::string_view endpoint, const ProxyStatus &) noexcept {
+  inline explicit RuntimeTelemetry(std::string_view endpoint, ProxyStatus) noexcept {
     LogSink::removeOrphans(endpoint);
   }
 #endif

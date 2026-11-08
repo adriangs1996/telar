@@ -239,7 +239,7 @@ public:
   }
 
 private:
-  inline std::optional<std::span<const std::uint8_t>> extract(const Http2FrameEvent &event, std::size_t prefix) noexcept {
+  inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> extract(tbc::view<const Http2FrameEvent &, tbc::lt::a> event, std::size_t prefix) noexcept {
     if (event.frame.has(Http2Flag::padded)) {
       ++prefix;
       if (event.offset == 0 && !event.bytes.empty()) {

@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <new>
 #include <ghostty/vt.h>
@@ -377,7 +378,8 @@ public:
         probe_(probe),
         history_(history) {}
 
-  inline Result observe(const Request &request) noexcept {
+  // The result carries the request's observers on.
+  inline tbc::view<Result, tbc::lt::a> observe(tbc::view<const Request &, tbc::lt::a> request) noexcept {
     Result result;
     typename Probe::Request process_request;
     for (const auto &entry : std::span{request.entries}.first(request.count)) {

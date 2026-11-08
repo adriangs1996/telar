@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <stdlib.h>
@@ -88,8 +89,11 @@ export import telar.runtime.workspaces.git_probe;
 export {
 namespace telar::runtime {
 
+// The workers behind history, paths, editors, suggestions and worktrees, which the runtime's services
+// and their own workers share: each queue it holds is synchronized, and what it hands a consumer lives
+// for the callback.
 template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees = WorktreeGitProbe<Memory>>
-class BackgroundPool {
+class TBC_SHARED BackgroundPool {
 public:
   inline explicit BackgroundPool(Memory &memory, History &history, Paths &paths, Editor &editor, Suggestions &suggestions)
       : path_service_(paths),

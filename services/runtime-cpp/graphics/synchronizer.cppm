@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <new>
 #include <ghostty/vt.h>
@@ -141,7 +142,8 @@ public:
 
   using Result = Request;
 
-  inline Result observe(const Request &request) noexcept {
+  // The result carries the request's media on.
+  inline tbc::view<Result, tbc::lt::a> observe(tbc::view<const Request &, tbc::lt::a> request) noexcept {
     TELAR_TRACE("media.worker");
     auto result = request;
     for (auto &entry : std::span{result.entries}.first(result.count)) {

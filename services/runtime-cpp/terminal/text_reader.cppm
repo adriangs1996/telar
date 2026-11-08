@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <new>
@@ -52,9 +53,11 @@ export {
 namespace telar::runtime {
 
 template <Allocator Memory>
+// Links and runs of the text read, which a view lends with the row flags it is given: region `a`
+// holds both, as `&'a self` and an argument of the same lifetime would.
 class TextMetadataCapture {
 public:
-  inline explicit TextMetadataCapture(Memory &memory)
+  inline explicit TextMetadataCapture(tbc::view<Memory &, tbc::lt::a> memory)
       : links_(AllocatorRef<MetadataLink, Memory>{memory}),
         runs_(AllocatorRef<MetadataRun, Memory>{memory}),
         uris_(AllocatorRef<Byte, Memory>{memory}) {
@@ -63,7 +66,7 @@ public:
     uris_.reserve(maximum_uri_bytes);
   }
 
-  inline TextMetadata view(std::span<const Byte> row_flags) const noexcept {
+  inline tbc::view<TextMetadata, tbc::lt::a> view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept {
     return TextMetadata{.status = status_,
                         .row_flags = row_flags,
                         .links = links_,
@@ -189,9 +192,9 @@ private:
   static constexpr std::size_t maximum_runs = 2048;
   static constexpr std::size_t maximum_uri_bytes = 65536;
   static constexpr std::size_t maximum_uri_length = 4096;
-  Vector<MetadataLink, Memory> links_;
-  Vector<MetadataRun, Memory> runs_;
-  Vector<Byte, Memory> uris_;
+  tbc::view<Vector<MetadataLink, Memory>, tbc::lt::a> links_;
+  tbc::view<Vector<MetadataRun, Memory>, tbc::lt::a> runs_;
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> uris_;
   std::array<Identity, maximum_links> identities_{};
   std::array<std::uint16_t, maximum_links * 2> slots_{};
   MetadataStatus status_ = MetadataStatus::complete;
@@ -770,7 +773,7 @@ public:
     resize(size);
   }
 
-  inline std::span<const Byte> encodeKey(GhosttyKey key, GhosttyMods modifiers, std::span<Byte> destination) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::a> destination) {
     GhosttyHandle<GhosttyKeyEncoder, ghostty_key_encoder_free> encoder;
     GhosttyHandle<GhosttyKeyEvent, ghostty_key_event_free> event;
     checkGhostty(ghostty_key_encoder_new(allocator_.get(), encoder.output()));
