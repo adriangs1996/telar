@@ -111,9 +111,10 @@ concept FrameOutput = requires(Output &output, std::span<const Byte> bytes, std:
 export {
 namespace telar::runtime::plugins {
 
+// Reads fields from a frame, region `a`; the bytes and text it hands out view that frame.
 class FrameReader {
 public:
-  inline explicit FrameReader(std::span<const Byte> input) noexcept : remaining_(input) {}
+  inline explicit FrameReader(tbc::view<std::span<const Byte>, tbc::lt::a> input) noexcept : remaining_(input) {}
 
   template <std::unsigned_integral Integer>
   inline Integer integer() {
@@ -141,7 +142,7 @@ public:
     }
   }
 
-  inline std::span<const Byte> bytes() {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> bytes() {
     const auto length = integer<std::uint32_t>();
     if (length > remaining_.size()) {
       throw EncodingError{"Truncated tap field"};
@@ -151,7 +152,7 @@ public:
     return value;
   }
 
-  inline std::string_view text() {
+  inline tbc::view<std::string_view, tbc::lt::a> text() {
     const auto value = bytes();
     return {reinterpret_cast<const char *>(value.data()), value.size()};
   }
@@ -163,7 +164,7 @@ public:
   }
 
 private:
-  std::span<const Byte> remaining_;
+  tbc::view<std::span<const Byte>, tbc::lt::a> remaining_;
 };
 
 }
@@ -214,9 +215,10 @@ static_assert(FrameOutput<FrameSize>);
 export {
 namespace telar::runtime::plugins {
 
+// Writes fields into a caller's buffer, region `a`, and hands back the part written.
 class FrameWriter {
 public:
-  inline explicit FrameWriter(std::span<Byte> output) noexcept : output_(output), remaining_(output) {}
+  inline explicit FrameWriter(tbc::view<std::span<Byte>, tbc::lt::a> output) noexcept : output_(output), remaining_(output) {}
 
   template <std::unsigned_integral Integer>
   inline void integer(Integer value) {
@@ -254,11 +256,11 @@ public:
     remaining_ = remaining_.subspan(value.size());
   }
 
-  inline std::span<const Byte> finish() const noexcept { return output_.first(output_.size() - remaining_.size()); }
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> finish() const noexcept { return output_.first(output_.size() - remaining_.size()); }
 
 private:
-  std::span<Byte> output_;
-  std::span<Byte> remaining_;
+  tbc::view<std::span<Byte>, tbc::lt::a> output_;
+  tbc::view<std::span<Byte>, tbc::lt::a> remaining_;
 };
 
 }
@@ -427,7 +429,7 @@ private:
     writer.timestamp(half->finished_at_ms);
   }
 
-  inline static std::optional<HalfView> readHalf(FrameReader &reader) {
+  inline static tbc::view<std::optional<HalfView>, tbc::lt::a> readHalf(FrameReader &reader) {
     if (!reader.boolean()) {
       return std::nullopt;
     }

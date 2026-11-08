@@ -260,7 +260,8 @@ public:
     writer.text(request.host);
   }
 
-  inline static Request read(plugins::FrameReader &reader) {
+  // The request views the reader's frame.
+  inline static tbc::view<Request, tbc::lt::a> read(plugins::FrameReader &reader) {
     Request request;
     request.operation = reader.tag(Operation::list);
     request.id = reader.integer<std::uint64_t>();

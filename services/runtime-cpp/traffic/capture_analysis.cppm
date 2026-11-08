@@ -75,10 +75,11 @@ public:
 export {
 namespace telar::runtime::traffic {
 
+// The addresses of an IP packet and its payload, which views the packet, region `a`.
 struct IpPayload {
   std::array<Byte, 16> source{};
   std::array<Byte, 16> destination{};
-  std::span<const Byte> bytes;
+  tbc::view<std::span<const Byte>, tbc::lt::a> bytes;
   std::size_t original_bytes = 0;
   Byte protocol = 0;
   bool ipv6 = false;
@@ -500,7 +501,7 @@ public:
     return ip ? decodePayload(*ip) : std::nullopt;
   }
 
-  inline static std::optional<TcpPacket> decodePayload(const IpPayload &ip) noexcept {
+  inline static tbc::view<std::optional<TcpPacket>, tbc::lt::a> decodePayload(const IpPayload &ip) noexcept {
     if (ip.protocol != IPPROTO_TCP) { return {}; }
     TcpPacket packet;
     packet.source.address = ip.source;

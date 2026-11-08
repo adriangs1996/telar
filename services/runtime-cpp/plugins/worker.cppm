@@ -578,7 +578,8 @@ public:
     return reply;
   }
 
-  inline static void readReply(std::span<const Byte> input, TrafficReply &reply) {
+  // The reply views the input.
+  inline static void readReply(tbc::view<std::span<const Byte>, tbc::lt::a> input, tbc::view<TrafficReply &, tbc::lt::a> reply) {
     if (input.size() > TrafficLimits::reply_bytes) { throw EncodingError{"Traffic worker reply exceeds its bound"}; }
     FrameReader reader{input};
     reader.require(FrameKind::traffic_reply);
