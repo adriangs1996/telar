@@ -387,6 +387,32 @@ namespace tbc_lint {
         return merge(llvm::ArrayRef<origin>(other.values));
       }
 
+      // The form a borrow takes at a loop head that keeps changing: held anywhere in its object, and
+      // standing for any field of the object its last dereference reaches. The form depends on the
+      // borrow alone, so a loop's borrows take few forms and its solution converges. It is coarser,
+      // so it is sound.
+      // The form a borrow takes at a loop head that keeps changing: held anywhere in its object, and
+      // standing for any field of the object its last dereference reaches. The form depends on the
+      // borrow alone, so a loop's borrows take few forms and its solution converges. It is coarser,
+      // so it is sound.
+      void coarsen() {
+        llvm::SmallVector<origin, 2> coarse;
+        coarse.reserve(values.size());
+        for (auto value : values) {
+          if (!value.held.empty()) {
+            value.held.assign(1, projection{.field = nullptr});
+          }
+          if (const auto steps = objectSteps(value.select); steps < value.select.size()) {
+            value.select.truncate(steps);
+            value.select.push_back({.field = nullptr});
+          }
+          coarse.push_back(std::move(value));
+        }
+        values.clear();
+        widen_at = widen_from;
+        merge(coarse);
+      }
+
     private:
       // Past these sizes, one borrow held at many positions of an object is held somewhere inside
       // their common prefix. The positions of a deep object graph multiply with the parts of an input
@@ -422,7 +448,7 @@ namespace tbc_lint {
         return true;
       }
 
-      void widenHeld() {
+      void widenHeld(std::size_t positions = held_positions) {
         llvm::DenseMap<llvm::hash_code, llvm::SmallVector<unsigned, 4>> groups;
         for (unsigned position = 0; position < values.size(); ++position) {
           groups[borrowHash(values[position])].push_back(position);
@@ -430,7 +456,7 @@ namespace tbc_lint {
         llvm::BitVector dropped(static_cast<unsigned>(values.size()));
         llvm::SmallVector<unsigned, 8> same;
         for (const auto &group : groups) {
-          if (group.second.size() <= held_positions) {
+          if (group.second.size() <= positions) {
             continue;
           }
           // Equal hashes can still be different borrows.
@@ -440,7 +466,7 @@ namespace tbc_lint {
               same.push_back(position);
             }
           }
-          if (same.size() <= held_positions) {
+          if (same.size() <= positions) {
             continue;
           }
           auto &kept = values[same.front()];
@@ -935,6 +961,14 @@ namespace tbc_lint {
         return found == references.end() ? loans{} : found->second;
       }
 
+      void coarsen() {
+        for (auto *map : {&values, &references, &designated}) {
+          for (auto &entry : *map) {
+            entry.second.coarsen();
+          }
+        }
+      }
+
       bool merge(const state &other) {
         bool changed = false;
         for (const auto &entry : other.values) {
@@ -1159,12 +1193,18 @@ namespace tbc_lint {
         }
       }
 
+      static constexpr unsigned widen_after = 4;
+
       function_summary run(const clang::CFG &cfg, bool diagnostics = false) {
         const auto *graph = &cfg;
         llvm::SmallVector<state, 16> inputs(graph->getNumBlockIDs());
         llvm::BitVector reached(graph->getNumBlockIDs());
         llvm::BitVector queued(graph->getNumBlockIDs());
         llvm::SmallVector<const clang::CFGBlock *, 16> work;
+        // A block whose input keeps changing heads a loop that is still growing; past a few changes, its
+        // borrows take their coarse form.
+        llvm::SmallVector<unsigned, 16> changes(graph->getNumBlockIDs());
+        llvm::BitVector coarse(graph->getNumBlockIDs());
         const auto *entry = &graph->getEntry();
         inputs[entry->getBlockID()] = initialState();
         reached.set(entry->getBlockID());
@@ -1188,12 +1228,21 @@ namespace tbc_lint {
 
             const auto id = next->getBlockID();
             bool changed = false;
-            if (test) {
-              auto refined = output;
-              refine(*test, branch, refined);
-              changed = inputs[id].merge(refined);
+            if (test || coarse[id]) {
+              auto incoming = output;
+              if (test) {
+                refine(*test, branch, incoming);
+              }
+              if (coarse[id]) {
+                incoming.coarsen();
+              }
+              changed = inputs[id].merge(incoming);
             } else {
               changed = inputs[id].merge(output);
+            }
+            if (changed && !coarse[id] && ++changes[id] > widen_after) {
+              coarse.set(id);
+              inputs[id].coarsen();
             }
             if ((!reached[id] || changed) && !queued[id]) {
               queued.set(id);
@@ -3581,17 +3630,26 @@ namespace tbc_lint {
         const receiver_reads reads(*this);
         // The call's places are found in the state it was entered with, then invalidated together.
         llvm::SmallVector<invalidation, 8> places;
-        // Many places lie in the same part of one input, which the call resolves once.
-        llvm::SmallVector<std::tuple<const clang::ValueDecl *, field_path, loans>, 4> designations;
+        // Many places lie in the same part of one input, which the call resolves once, and the parts of
+        // one input share what their leading steps designate.
+        llvm::SmallVector<std::pair<const clang::ValueDecl *, input_reads>, 4> inputs;
+        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<std::tuple<const clang::ValueDecl *, field_path, loans>, 1>> designations;
         const auto designated = [&](const object_place &target) -> const loans & {
-          const auto found = std::ranges::find_if(designations, [&](const auto &entry) { return std::get<0>(entry) == target.variable && std::get<1>(entry) == target.select; });
-          if (found != designations.end()) {
+          auto &bucket = designations[llvm::hash_combine(target.variable, pathHash(target.select))];
+          const auto found = llvm::find_if(bucket, [&](const auto &entry) { return std::get<0>(entry) == target.variable && std::get<1>(entry) == target.select; });
+          if (found != bucket.end()) {
             return std::get<2>(*found);
           }
+          auto input = llvm::find_if(inputs, [&](const auto &entry) { return entry.first == target.variable; });
+          if (input == inputs.end()) {
+            inputs.emplace_back(target.variable, input_reads(actualInput(*target.variable, call, *known, current)));
+            input = std::prev(inputs.end());
+          }
+          auto &read = input->second;
           // Only an object of the type the callee's part designates can be what it invalidated.
-          const auto actual = actualInput(*target.variable, call, *known, current);
           const auto type = designatedTypeOf(*target.variable, target.select);
-          return std::get<2>(designations.emplace_back(target.variable, target.select, actual ? ofType(selectedAlong(*actual, target.select, current), type) : loans{}));
+          auto contents = read.actual ? ofType(selectedAlong(read, *read.actual, target.select, current), type) : loans{};
+          return std::get<2>(bucket.emplace_back(target.variable, target.select, std::move(contents)));
         };
         for (const auto &[target, range] : known->summary.invalidates) {
           // A place the callee's input designates lies where the same part of the actual input designates.
