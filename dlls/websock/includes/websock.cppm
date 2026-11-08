@@ -1,9 +1,4 @@
 module;
-#include <cstddef>
-#include <new>
-
-#include <cstdint>
-#include <cstdlib>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
@@ -81,16 +76,16 @@ export {
         }
       }
 
-      [[nodiscard]] uint32_t bitsForBytes(uint8_t bytes) const {
-        constexpr uint8_t bits_in_bytes = 8;
+      [[nodiscard]] std::uint32_t bitsForBytes(std::uint8_t bytes) const {
+        constexpr std::uint8_t bits_in_bytes = 8;
         return bits_in_bytes * bytes;
       }
 
-      uint32_t parseBindAddressToInteger() {
+      std::uint32_t parseBindAddressToInteger() {
         auto string_repr = _binding_address;
         std::size_t pos = 0;
-        uint8_t index = 0;
-        uint32_t result = 0;
+        std::uint8_t index = 0;
+        std::uint32_t result = 0;
 
         if (_binding_address == "0.0.0.0") {
           return INADDR_ANY;

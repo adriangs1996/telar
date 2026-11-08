@@ -228,13 +228,14 @@ namespace telar {
 export {
 namespace telar::runtime {
 
+// A JSON value inside its text, region `b`; the values and texts it hands out view that text.
 class JsonValue {
 public:
-  inline explicit JsonValue(std::string_view bytes, unsigned maximum_depth = 32)
+  inline explicit JsonValue(tbc::view<std::string_view, tbc::lt::b> bytes, unsigned maximum_depth = 32)
       : bytes_(bytes),
         maximum_depth_(maximum_depth) {}
 
-  inline std::string_view encoded() const noexcept {
+  inline tbc::view<std::string_view, tbc::lt::b> encoded() const noexcept {
     return bytes_;
   }
 
@@ -290,7 +291,7 @@ public:
     }
   }
 
-  inline std::optional<JsonValue> field(std::string_view name) const {
+  inline tbc::view<std::optional<JsonValue>, tbc::lt::b> field(std::string_view name) const {
     auto input = bytes_;
     whitespace(input);
     take(input, '{');
@@ -386,7 +387,7 @@ public:
     }
   }
 
-  inline static JsonValue parse(std::string_view input, unsigned maximum_depth = 32) {
+  inline static tbc::view<JsonValue, tbc::lt::b> parse(tbc::view<std::string_view, tbc::lt::b> input, unsigned maximum_depth = 32) {
     whitespace(input);
     const auto original = input;
     skip(input, 0, maximum_depth);
@@ -557,7 +558,7 @@ private:
     }
   }
 
-  std::string_view bytes_;
+  tbc::view<std::string_view, tbc::lt::b> bytes_;
   unsigned maximum_depth_;
 };
 

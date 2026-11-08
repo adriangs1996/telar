@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -323,7 +324,8 @@ private:
   Memory &memory_;
   DescriptionOptions options_;
   std::atomic<bool> stopping_{false};
-  CommandOutput<Memory> output_;
+  // Watches stopping_.
+  tbc::view<CommandOutput<Memory>, tbc::lt::self> output_;
 };
 
 }

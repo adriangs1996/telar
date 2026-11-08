@@ -694,7 +694,8 @@ template <Allocator Memory>
 int waitAgent(ControlSession<Memory> &session, const Options &options, std::optional<std::uint64_t> worktree, Output<Memory> &out) {
   const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds{options.timeout};
   for (;;) {
-    const auto agent = resolve(session.template exchange<AgentSnapshot>(QueryAgents{}), options.target, worktree);
+    const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
+    const auto agent = resolve(snapshot, options.target, worktree);
     if (options.finished ? agent.status == AgentStatus::done || agent.status == AgentStatus::ready : agent.status == options.until) {
       writeOne(out, agent, options.json);
       return 0;
@@ -856,7 +857,8 @@ int executeAgent(Memory &memory, const RuntimePaths<Memory> &paths, const Option
   }
 
   if (options.action == "prompt") {
-    const auto again = resolve(session.template exchange<AgentSnapshot>(QueryAgents{}), options.target, tree);
+    const auto refreshed = session.template exchange<AgentSnapshot>(QueryAgents{});
+    const auto again = resolve(refreshed, options.target, tree);
     return promptAgent(session, options, again, out);
   }
 
@@ -1302,6 +1304,8 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
   ControlSession session{memory, paths.socket.c_str()};
   session.receiveTimeout(30);
   String<Memory> input{AllocatorRef<char, Memory>{memory}};
+  // The text to send: the option's, or what stdin gave, which lives here rather than in the options.
+  std::string_view text = options.text;
   if (options.stdin_text) {
     input.resize(max_input_bytes + 1);
     const auto count = std::fread(input.data(), 1, input.size(), stdin);
@@ -1319,7 +1323,7 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
     }
 
     // Zig passes a zero-terminated pointer to sendText, so embedded NUL ends it.
-    options.text = std::string_view{input}.substr(0, input.find('\0'));
+    text = std::string_view{input}.substr(0, input.find('\0'));
   }
 
   if (options.action == "list" || options.action == "get") {
@@ -1361,14 +1365,14 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
     const auto reply = session.template exchange<PaneText>(ReadPane{.pane_id = wanted, .pane_generation = generation, .rows = options.lines, .source = options.source});
     writeText(out, reply, options.json, false);
   } else if (options.action == "send-keys") {
-    validateBytes(options.text, max_input_bytes, false);
-    session.template exchange<RequestCompleted>(SendPaneText{.pane_id = wanted, .pane_generation = generation, .mode = PaneTextMode::raw, .text = options.text});
+    validateBytes(text, max_input_bytes, false);
+    session.template exchange<RequestCompleted>(SendPaneText{.pane_id = wanted, .pane_generation = generation, .mode = PaneTextMode::raw, .text = text});
     if (options.enter) {
       std::this_thread::sleep_for(submit_delay);
       session.template exchange<RequestCompleted>(SendPaneText{.pane_id = wanted, .pane_generation = generation, .mode = PaneTextMode::raw_enter});
     }
   } else if (options.action == "search") {
-    const auto reply = session.template exchange<PaneMatches>(SearchPane{.pane_id = wanted, .needle = options.text});
+    const auto reply = session.template exchange<PaneMatches>(SearchPane{.pane_id = wanted, .needle = text});
     if (reply.pane_id != wanted) {
       throw Failure{"unexpected reply from the runtime"};
     }

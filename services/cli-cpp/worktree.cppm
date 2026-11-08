@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cerrno>
@@ -1237,6 +1238,9 @@ public:
         git_(memory),
         output_(memory) {}
 
+  WorktreeCommand(const WorktreeCommand &) = delete;
+  WorktreeCommand &operator=(const WorktreeCommand &) = delete;
+
   inline int run() {
     using Action = WorktreeOptions::Action;
     int result = 0;
@@ -1704,7 +1708,8 @@ private:
   Memory &memory_;
   const WorktreeOptions &options_;
   Channel<Memory> catalog_channel_;
-  WorkspaceList catalog_;
+  // Views what the catalog channel decoded.
+  tbc::view<WorkspaceList, tbc::lt::self> catalog_;
   Channel<Memory> session_;
   WorktreeGit<Memory> git_;
   Output<Memory> output_;

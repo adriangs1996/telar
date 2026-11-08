@@ -277,6 +277,7 @@ public:
   inline explicit Payload(Memory &memory, AgentProvider provider, JsonValue input)
       : Payload(memory, provider, Object<Memory>{memory, input, true}) {}
 
+  // Its tools view its own fields, so it stays where it is built.
   inline explicit Payload(Memory &memory, AgentProvider provider, Object<Memory> input)
       : memory(memory), provider(provider), fields(std::move(input)), tools(memory, toolObject(fields)) {
     if (const auto tool_input = fields.value("tool_input")) {
@@ -353,6 +354,9 @@ public:
     }
   }
 
+  Payload(const Payload &) = delete;
+  Payload &operator=(const Payload &) = delete;
+
   inline std::string_view event() { return fields.text(provider == AgentProvider::pi || provider == AgentProvider::opencode ? "event" : "hook_event_name"); }
   inline std::string_view session() { return fields.text(provider == AgentProvider::cursor ? "conversation_id" : "session_id"); }
   inline bool subagent() { return !fields.optionalText("agent_id").value_or("").empty(); }
@@ -387,7 +391,7 @@ public:
   Memory &memory;
   AgentProvider provider;
   Object<Memory> fields;
-  Object<Memory> tools;
+  tbc::view<Object<Memory>, tbc::lt::self> tools;
   std::size_t running_subagents = 0;
 
 private:

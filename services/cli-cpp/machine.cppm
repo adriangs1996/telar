@@ -777,10 +777,15 @@ class ConfigSync {
           continue;
         }
 
+        // The roots are read before files are added, as adding one changes the plan.
+        std::vector<std::string> remotes;
         for (const auto &[agent, root] : local_roots_) {
           if (below(*local, root)) {
-            addFile(*local, remoteRoot(agent) + local->substr(root.size()), {*local});
+            remotes.push_back(remoteRoot(agent) + local->substr(root.size()));
           }
+        }
+        for (const auto &remote : remotes) {
+          addFile(*local, remote, {*local});
         }
       }
     }
@@ -891,12 +896,13 @@ class ConfigSync {
     return output;
   }
 
-  inline std::vector<std::string> paths(std::string_view command) const {
+  inline static std::vector<std::string> paths(std::string_view remote_home, std::string_view command) {
     std::vector<std::string> result;
+    const std::string home{remote_home};
     for (const auto token : commandTokens(command)) {
       if (token.starts_with('/')) {
         result.emplace_back(token);
-      } else if (const auto expanded = homePath(token, remote_home_)) {
+      } else if (const auto expanded = homePath(token, home)) {
         result.push_back(*expanded);
       }
     }
@@ -915,7 +921,7 @@ class ConfigSync {
       const auto formatted = file.json->format();
       commands(memory_, JsonValue::parse(formatted, config_json_depth), found);
       for (const auto &command : found) {
-        for (const auto &path : paths(command)) {
+        for (const auto &path : paths(remote_home_, command)) {
           if (!path.contains('\n') && path != "TELAR_PATHS") {
             asked.push_back(path);
           }
@@ -960,13 +966,13 @@ class ConfigSync {
     return result;
   }
 
-  inline bool commandRuns(std::string_view command, const std::set<std::string> &existing) const {
+  inline static bool commandRuns(std::string_view remote_home, const std::set<std::string, std::less<>> &staged, std::string_view command, const std::set<std::string> &existing) {
     if (command.ends_with(" hook claude") || command.ends_with(" hook codex") || command.ends_with(" hook cursor")) {
       return true;
     }
 
-    for (const auto &path : paths(command)) {
-      if (existing.contains(path) || (below(path, remote_home_) && staged(std::string_view{path}.substr(remote_home_.size() + 1)))) {
+    for (const auto &path : paths(remote_home, command)) {
+      if (existing.contains(path) || (below(path, remote_home) && staged.contains(std::string_view{path}.substr(remote_home.size() + 1)))) {
         continue;
       }
 
@@ -976,10 +982,11 @@ class ConfigSync {
     return true;
   }
 
-  inline bool keepCommands(JsonNode<Memory> &node, const std::set<std::string> &existing, const std::string &path) {
+  // Leaves out the commands whose programs the machine lacks, noting each in what is left.
+  inline static bool keepCommands(std::vector<std::string> &left, std::string_view remote_home, const std::set<std::string, std::less<>> &staged, JsonNode<Memory> &node, const std::set<std::string> &existing, const std::string &path) {
     if (node.kind() == JsonKind::object) {
-      if (const auto *command = node.find("command"); command && command->kind() == JsonKind::string && !commandRuns(command->text(), existing)) {
-        left_.push_back(path + ": left out `" + std::string{command->text()} + "`, whose program is not there");
+      if (const auto *command = node.find("command"); command && command->kind() == JsonKind::string && !commandRuns(remote_home, staged, command->text(), existing)) {
+        left.push_back(path + ": left out `" + std::string{command->text()} + "`, whose program is not there");
         return false;
       }
     }
@@ -990,7 +997,7 @@ class ConfigSync {
         auto &child = node.children()[index];
         const bool container = child.kind() == JsonKind::object || child.kind() == JsonKind::array;
         const bool recurse = container && (node.kind() == JsonKind::array || !child.children().empty());
-        if (recurse && !keepCommands(child, existing, path)) {
+        if (recurse && !keepCommands(left, remote_home, staged, child, existing, path)) {
           node.erase(index);
         } else {
           ++index;
@@ -1049,30 +1056,36 @@ public:
 
     transform(platform.target);
     const auto existing = queryPaths(destination);
+    // The files already staged, named apart from the files the commands are pruned in.
+    std::set<std::string, std::less<>> staged;
+    for (const auto &file : files_) {
+      staged.insert(file.remote);
+    }
     for (auto &file : files_) {
       if (!file.json || file.json->kind() != JsonKind::object) {
         continue;
       }
 
-      if (auto *status = file.json->find("statusLine"); status && !keepCommands(*status, existing, file.remote)) {
+      if (auto *status = file.json->find("statusLine"); status && !keepCommands(left_, remote_home_, staged, *status, existing, file.remote)) {
         file.json->remove("statusLine");
       }
 
       if (auto *hooks = file.json->find("hooks")) {
-        keepCommands(*hooks, existing, file.remote);
+        keepCommands(left_, remote_home_, staged, *hooks, existing, file.remote);
       }
     }
 
     std::string stream = "telar-config 1\n";
     for (std::size_t index = 0; index < files_.size();) {
-      auto &file = files_[index];
-      if (file.json) {
-        const auto formatted = file.json->format();
-        if (!keep(index, std::string{formatted})) {
+      if (files_[index].json) {
+        std::string formatted{files_[index].json->format()};
+        if (!keep(index, std::move(formatted))) {
           files_.erase(files_.begin() + static_cast<std::ptrdiff_t>(index));
           continue;
         }
       }
+
+      const auto &file = files_[index];
 
       stream += "file " + std::string{file.mode == 0755 ? "755" : "644"} + " " + std::to_string(file.bytes.size()) + " " + file.remote + "\n" + file.bytes + "\n";
       ++index;

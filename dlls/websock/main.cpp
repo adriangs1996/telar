@@ -3,15 +3,11 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-#include <chrono>
-#include <cstdint>
-#include <print>
-#include <thread>
-
+import std;
+import telar.base.memory;
 import telar.websock;
 
-static constexpr uint16_t port = 65432;
+static constexpr std::uint16_t port = 65432;
 
 template <typename Memory>
 concept ServerMemory = requires { typename telar::websock::Server<Memory>; };

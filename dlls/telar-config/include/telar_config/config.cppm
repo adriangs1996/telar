@@ -609,7 +609,7 @@ namespace telar::runtime::config {
 template <CommandTabStore Commands>
 class BasicActionValidator {
 public:
-  inline explicit BasicActionValidator(const ClientDefinitions &definitions, tbc::view<LimitNotices &, tbc::lt::b> limits, Commands &commands)
+  inline explicit BasicActionValidator(tbc::view<const ClientDefinitions &, tbc::lt::b> definitions, tbc::view<LimitNotices &, tbc::lt::b> limits, tbc::view<Commands &, tbc::lt::b> commands)
       : definitions_(definitions),
         limits_(limits),
         commands_(commands) {}
@@ -806,9 +806,9 @@ private:
     return utf8Prefix(text, limit.value);
   }
 
-  const ClientDefinitions &definitions_;
+  tbc::view<const ClientDefinitions &, tbc::lt::b> definitions_;
   tbc::view<LimitNotices &, tbc::lt::b> limits_;
-  Commands &commands_;
+  tbc::view<Commands &, tbc::lt::b> commands_;
 };
 
 using RetainedActionValidator = BasicActionValidator<RetainedCommandTabRegistry>;
@@ -1177,7 +1177,8 @@ namespace telar::runtime::config {
 
 class AgentReader {
 public:
-  inline explicit AgentReader(AgentManifests &manifests, LimitNotices &limits)
+  // Fills the manifests and tells the notices about limits it reaches, region `a`.
+  inline explicit AgentReader(tbc::view<AgentManifests &, tbc::lt::a> manifests, tbc::view<LimitNotices &, tbc::lt::a> limits)
       : manifests_(manifests),
         limits_(limits) {}
 
@@ -1224,7 +1225,7 @@ private:
   }
 
   template <std::size_t Capacity, std::size_t TextCapacity>
-  inline void list(const lua::Value &value, ManifestTextList<Capacity, TextCapacity> &destination, LimitReach entries_limit, LimitReach bytes_limit) {
+  inline void list(const lua::Value &value, ManifestTextList<Capacity, TextCapacity> &destination, tbc::view<LimitReach, tbc::lt::a> entries_limit, tbc::view<LimitReach, tbc::lt::a> bytes_limit) {
     if (!value.present()) {
       return;
     }
@@ -1344,8 +1345,8 @@ private:
     attachments.fail("must be none, ordered, stable_number or pasted_path");
   }
 
-  AgentManifests &manifests_;
-  LimitNotices &limits_;
+  tbc::view<AgentManifests &, tbc::lt::a> manifests_;
+  tbc::view<LimitNotices &, tbc::lt::a> limits_;
 };
 
 }
