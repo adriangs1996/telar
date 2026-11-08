@@ -13,21 +13,26 @@
 
 namespace telar::runtime::control {
 
-// All references belong to the enclosing nonmovable controller. Sequence and
-// setter views are borrowed only for this synchronous call.
+// The engine lends its state and reply to each call. Sequence and setter
+// views are borrowed only for this synchronous call.
 template <Allocator Memory>
 class ColorQueries {
 public:
+  // The engine state a query reads and the reply it writes, lent to each call.
+  struct Context {
+    VtState &state;
+    Reply<Memory> &reply;
+    const Policy &policy;
+  };
+
   void discard() noexcept {
     palette_active_ = false;
     palette_publishing_ = false;
     palette_offset_ = 0;
   }
 
-  explicit ColorQueries(VtState &state, Reply<Memory> &reply, const Policy &policy)
-      : state_(state), reply_(reply), policy_(policy) {}
 
-  bool handle(Sequence sequence, bool enabled) {
+  bool handle(Context context, Sequence sequence, bool enabled) {
     enabled_ = enabled;
     auto remaining = sequence.body();
     const auto operation = oscOperation(takeField(remaining));
@@ -36,7 +41,7 @@ public:
     }
 
     if (*operation == 21) {
-      kittyColors(remaining, sequence.terminator());
+      kittyColors(context, remaining, sequence.terminator());
       return true;
     }
     if (*operation >= 10 && *operation <= 19) {
@@ -44,10 +49,10 @@ public:
         const auto value = takeField(remaining);
         if (value == "?") {
           if (selector <= 12) {
-            traditionalColor(selector, std::nullopt, sequence.terminator());
+            traditionalColor(context, selector, std::nullopt, sequence.terminator());
           }
         } else {
-          forwardOsc(selector, value);
+          forwardOsc(context, selector, value);
         }
       }
       return true;
@@ -58,21 +63,21 @@ public:
   // The parser retains the input while blocked. Only offsets survive a call;
   // no borrowed input or state is retained across queue retries.
   template <typename Sink>
-  bool palette(Sequence sequence, bool enabled, Sink &queue) {
+  bool palette(Context context, Sequence sequence, bool enabled, Sink &queue) {
     enabled_ = enabled;
     auto body = sequence.body();
     const auto operation = oscOperation(takeField(body));
     if (!palette_active_) {
       palette_active_ = true;
       palette_offset_ = 0;
-      reply_.clear();
+      context.reply.clear();
     }
     while (true) {
       if (palette_publishing_) {
-        if (!reply_.publish(queue)) {
+        if (!context.reply.publish(queue)) {
           return false;
         }
-        reply_.clear();
+        context.reply.clear();
         palette_publishing_ = false;
       }
       auto remaining = body.substr(palette_offset_);
@@ -88,15 +93,15 @@ public:
         if (index && *index < 256 && !value.empty()) {
           if (value == "?") {
             if (*operation == 4) {
-              traditionalColor(4, *index, sequence.terminator());
+              traditionalColor(context, 4, *index, sequence.terminator());
             }
           } else {
             queue.release();
             const auto count = static_cast<std::size_t>(value.data() + value.size() - index_field.data());
-            forwardOsc(*operation, {index_field.data(), count});
+            forwardOsc(context, *operation, {index_field.data(), count});
           }
         }
-        if (reply_.size() > PtyResponseQueue::message_byte_capacity - maximum_color_reply) {
+        if (context.reply.size() > PtyResponseQueue::message_byte_capacity - maximum_color_reply) {
           break;
         }
       }
@@ -108,7 +113,7 @@ private:
   static constexpr std::size_t maximum_color_reply = 64;
   static constexpr std::size_t inline_osc_bytes = 64;
 
-  void forwardOsc(unsigned operation, std::string_view payload) {
+  void forwardOsc(Context context, unsigned operation, std::string_view payload) {
     constexpr std::string_view introducer = "\x1b]";
     constexpr std::string_view terminator = "\x1b\\";
     static_assert(introducer.size() + std::numeric_limits<unsigned>::digits10 + 2 + terminator.size() <= inline_osc_bytes);
@@ -126,16 +131,16 @@ private:
         position += payload.size();
       }
       position = std::copy(terminator.begin(), terminator.end(), position);
-      state_.write({reinterpret_cast<const std::uint8_t *>(packet.data()), static_cast<std::size_t>(position - packet.data())});
+      context.state.write({reinterpret_cast<const std::uint8_t *>(packet.data()), static_cast<std::size_t>(position - packet.data())});
       return;
     }
 
-    state_.write({reinterpret_cast<const std::uint8_t *>(packet.data()), header_size});
-    state_.write({reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size()});
-    state_.write({reinterpret_cast<const std::uint8_t *>(terminator.data()), terminator.size()});
+    context.state.write({reinterpret_cast<const std::uint8_t *>(packet.data()), header_size});
+    context.state.write({reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size()});
+    context.state.write({reinterpret_cast<const std::uint8_t *>(terminator.data()), terminator.size()});
   }
 
-  void kittyColorItem(unsigned selector, std::string_view key) {
+  void kittyColorItem(Context context, unsigned selector, std::string_view key) {
     // Supported keys are at most ten bytes (numeric selectors use <=3).
     // The longest complete item is 24 bytes, including a present RGB value.
     static_assert(std::string_view{";foreground=rgb:00/00/00"}.size() <= maximum_color_reply);
@@ -151,7 +156,7 @@ private:
     }
     *position++ = '=';
 
-    if (const auto color = state_.color(selector)) {
+    if (const auto color = context.state.color(selector)) {
       position = std::copy_n("rgb:", 4, position);
       constexpr std::string_view digits = "0123456789abcdef";
       const std::array components{color->r, color->g, color->b};
@@ -164,18 +169,18 @@ private:
       }
     }
 
-    reply_.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
+    context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
   }
 
-  void traditionalColor(unsigned operation, std::optional<unsigned> index, std::string_view terminator) {
-    if (!enabled_ || policy_.color_format == ColorFormat::none) {
+  void traditionalColor(Context context, unsigned operation, std::optional<unsigned> index, std::string_view terminator) {
+    if (!enabled_ || context.policy.color_format == ColorFormat::none) {
       return;
     }
 
     const auto selector = index.value_or(VtState::foreground + operation - 10);
-    auto color = state_.color(selector);
+    auto color = context.state.color(selector);
     if (!color && operation == 12) {
-      color = state_.color(VtState::foreground);
+      color = context.state.color(VtState::foreground);
     }
     if (!color) {
       return;
@@ -197,7 +202,7 @@ private:
     position = std::copy_n("rgb:", 4, position);
     constexpr std::string_view digits = "0123456789abcdef";
     const std::array components{color->r, color->g, color->b};
-    const bool sixteen_bit = policy_.color_format == ColorFormat::sixteen_bit;
+    const bool sixteen_bit = context.policy.color_format == ColorFormat::sixteen_bit;
     for (std::size_t component = 0; component < components.size(); ++component) {
       if (component != 0) {
         *position++ = '/';
@@ -212,7 +217,7 @@ private:
       }
     }
     position = std::copy(terminator.begin(), terminator.end(), position);
-    reply_.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
+    context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
   }
 
   static std::optional<unsigned> colorKey(std::string_view key) noexcept {
@@ -260,7 +265,7 @@ private:
     }
   }
 
-  void kittyColors(std::string_view remaining, std::string_view terminator) {
+  void kittyColors(Context context, std::string_view remaining, std::string_view terminator) {
     constexpr std::size_t maximum_kitty_color_bytes = 2048;
     if (remaining.size() > maximum_kitty_color_bytes || !validKittyColors(remaining)) {
       return;
@@ -279,33 +284,30 @@ private:
 
       const auto selector = colorKey(key);
       if (!selector) {
-        if (enabled_ && value == "?" && std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end() && reply_.size() == 0) {
-          reply_.append("\x1b]21");
+        if (enabled_ && value == "?" && std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end() && context.reply.size() == 0) {
+          context.reply.append("\x1b]21");
         }
         continue;
       }
       if (value != "?") {
-        forwardOsc(21, pair);
+        forwardOsc(context, 21, pair);
         continue;
       }
       if (!enabled_) {
         continue;
       }
 
-      if (reply_.size() == 0) {
-        reply_.append("\x1b]21");
+      if (context.reply.size() == 0) {
+        context.reply.append("\x1b]21");
       }
-      kittyColorItem(*selector, key);
+      kittyColorItem(context, *selector, key);
     }
 
-    if (reply_.size() != 0) {
-      reply_.append(terminator);
+    if (context.reply.size() != 0) {
+      context.reply.append(terminator);
     }
   }
 
-  VtState &state_;
-  Reply<Memory> &reply_;
-  const Policy &policy_;
   bool enabled_ = false;
   bool palette_active_ = false;
   bool palette_publishing_ = false;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "../diagnostics/line.hpp"
 #include <array>
 #include <cassert>
@@ -11,7 +12,9 @@
 
 namespace telar::runtime {
 
-class PtyResponseQueue {
+// Responses a terminal produces and its pane's writer drains, under one mutex. Like a Rust channel, it
+// is shared by both ends and its implementation is trusted.
+class TBC_SHARED PtyResponseQueue {
 public:
   static constexpr std::size_t message_capacity = 64;
   static constexpr std::size_t message_byte_capacity = 1024;

@@ -126,7 +126,7 @@ void channelValues(control::VtState &state, control::ColorQueries<Memory> &color
         std::array<char, 64> answer;
         const auto count = std::snprintf(answer.data(), answer.size(), "\x1b]21;0=rgb:%02x/%02x/%02x%s", sample, green, blue, suffix);
         require(count > 0 && static_cast<std::size_t>(count) < answer.size());
-        require(colors.handle(sequence("\x1b]21;0=?", ending), true));
+        require(colors.handle({state, reply, policy}, sequence("\x1b]21;0=?", ending), true));
         PtyResponseQueue queue;
         require(reply.publish(queue));
         reply.clear();
@@ -137,14 +137,14 @@ void channelValues(control::VtState &state, control::ColorQueries<Memory> &color
 }
 
 template <Allocator Memory>
-void ownedReplies(control::VtState &state, control::ColorQueries<Memory> &colors, control::Reply<Memory> &reply) {
+void ownedReplies(control::VtState &state, control::ColorQueries<Memory> &colors, control::Reply<Memory> &reply, const control::Policy &policy) {
   state.write(bytes("\x1b]4;0;#123456\x1b\\"));
   constexpr auto inline_items = (PtyResponseQueue::message_byte_capacity - std::string_view{"\x1b]21\x1b\\"}.size()) / large_item.size();
   for (const std::size_t count : {std::size_t{1}, inline_items - 1, inline_items, inline_items + 1, inline_items * 2, large_items}) {
     const auto input = request(count);
     for (const auto ending : {control::Ending::bell, control::Ending::escape}) {
       const auto suffix = ending == control::Ending::bell ? "\a" : "\x1b\\";
-      require(colors.handle(sequence(input, ending), true));
+      require(colors.handle({state, reply, policy}, sequence(input, ending), true));
       PtyResponseQueue queue;
       require(reply.publish(queue));
       reply.clear();
@@ -154,7 +154,7 @@ void ownedReplies(control::VtState &state, control::ColorQueries<Memory> &colors
 
   const auto input = request(large_items);
   const auto answer = expected(large_items, "\x1b\\");
-  require(colors.handle(sequence(input, control::Ending::escape), true));
+  require(colors.handle({state, reply, policy}, sequence(input, control::Ending::escape), true));
   PtyResponseQueue queue;
   constexpr std::string_view held = "held";
   for (std::size_t slot = 0; slot < PtyResponseQueue::message_capacity; ++slot) {
@@ -191,12 +191,12 @@ void allocationFailures(control::VtState &state) {
   {
     control::Reply reply{memory};
     control::Policy policy;
-    control::ColorQueries colors{state, reply, policy};
+    control::ColorQueries<std::remove_cvref_t<decltype(memory)>> colors;
     PtyResponseQueue queue;
     upstream.failNext();
     bool failed = false;
     try {
-      colors.handle(sequence(input, control::Ending::escape), true);
+      colors.handle({state, reply, policy}, sequence(input, control::Ending::escape), true);
     } catch (const std::bad_alloc &) {
       failed = true;
     }
@@ -204,7 +204,7 @@ void allocationFailures(control::VtState &state) {
     reply.discard();
     require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
 
-    require(colors.handle(sequence(input, control::Ending::escape), true));
+    require(colors.handle({state, reply, policy}, sequence(input, control::Ending::escape), true));
     require(reply.size() == answer.size());
     upstream.failNext();
     failed = false;
@@ -231,9 +231,9 @@ int main() {
   state.bind(terminal.handle(), nullptr, true);
   control::Reply reply{memory};
   control::Policy policy;
-  control::ColorQueries colors{state, reply, policy};
+  control::ColorQueries<std::remove_cvref_t<decltype(memory)>> colors;
   channelValues(state, colors, reply, policy);
-  ownedReplies(state, colors, reply);
+  ownedReplies(state, colors, reply, policy);
   allocationFailures(state);
   std::puts("Kitty RGB values, owned replies, queue retry and allocation failures passed");
 }

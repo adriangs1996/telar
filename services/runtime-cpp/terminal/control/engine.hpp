@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "ascii_ordinary.hpp"
 #include "capabilities.hpp"
 #include "checksum.hpp"
@@ -23,10 +25,11 @@ namespace telar::runtime::control {
 template <Allocator Memory>
 class Engine {
 public:
-  explicit Engine(Memory &memory, PtyResponseQueue &responses, bool enabled, GraphicsQueryResources resources = {})
-      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, resources), reports_(memory), colors_(state_, reply_, policy), responses_(responses), enabled_(enabled) {}
+  // What the engine keeps of its terminal, its allocator, response queue and resources included, is region `a`.
+  explicit Engine(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<PtyResponseQueue &, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {})
+      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, resources), reports_(memory), responses_(responses), enabled_(enabled) {}
 
-  void bind(GhosttyTerminal terminal, GhosttyRenderState render, bool separate_media) noexcept {
+  void bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
   }
 
@@ -164,7 +167,7 @@ public:
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == 4 || operation == 5) {
-        return colors_.palette(sequence, enabled_, responses_);
+        return colors_.palette({state_, reply_, policy}, sequence, enabled_, responses_);
       }
     }
     if (sequence.kind == Kind::dcs) {
@@ -737,7 +740,7 @@ private:
 
   void osc(Sequence sequence) {
     responses_.release();
-    if (colors_.handle(sequence, enabled_)) {
+    if (colors_.handle({state_, reply_, policy}, sequence, enabled_)) {
       return;
     }
     auto remaining = sequence.body();
@@ -788,16 +791,16 @@ private:
   static constexpr unsigned title_request = 21;
 
 
-  Parser<Memory> parser_;
-  Reply<Memory> reply_;
-  VtState state_;
-  Checksum<Memory> checksum_;
-  Clipboard<Memory> clipboard_;
-  GraphicsQueries<Memory> graphics_queries_;
-  Reports<Memory> reports_;
+  tbc::view<Parser<Memory>, tbc::lt::a> parser_;
+  tbc::view<Reply<Memory>, tbc::lt::a> reply_;
+  tbc::view<VtState, tbc::lt::a> state_;
+  tbc::view<Checksum<Memory>, tbc::lt::a> checksum_;
+  tbc::view<Clipboard<Memory>, tbc::lt::a> clipboard_;
+  tbc::view<GraphicsQueries<Memory>, tbc::lt::a> graphics_queries_;
+  tbc::view<Reports<Memory>, tbc::lt::a> reports_;
   ColorQueries<Memory> colors_;
   ClientFacts facts_;
-  PtyResponseQueue::Producer responses_;
+  tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;
   bool enabled_;
   bool closed_ = false;
   bool media_boundaries_ = false;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "telar_platform/random_bytes.hpp"
 #include "clipboard_grants.hpp"
 #include "clipboard_response.hpp"
@@ -139,17 +141,7 @@ public:
     }
     auto &pending = *pending_;
     pending.ticket = {pane, generation, pending.route.generation, pending.nonce};
-    for (std::size_t index = 0; index < pending.mime_count; ++index) {
-      pending.mime_views[index] = pending.mimes[index].view();
-    }
-    std::size_t contents = 0;
-    if (pending.transaction) {
-      for (const auto &content : pending.transaction->contents()) {
-        pending.content_views[contents++] = {content.mime, content.data};
-      }
-    } else if (pending.traditional && pending.write) {
-      pending.content_views[contents++] = {"text/plain", pending.text};
-    }
+    const auto contents = pending.prepareViews();
     return ClipboardDesktopRequest{
         .ticket = pending.ticket,
         .write = pending.write,
@@ -353,6 +345,7 @@ public:
   }
 
 private:
+  // A pending request; its views lend its own texts and contents, so it stays where it is built.
   struct Pending {
     explicit Pending(Memory &memory)
         : text(AllocatorRef<std::uint8_t, Memory>{memory}), transaction(nullptr, AllocationDeleter<ClipboardWrite<Memory>, Memory>{memory}) {
@@ -362,6 +355,25 @@ private:
       }
     }
 
+    Pending(const Pending &) = delete;
+    Pending &operator=(const Pending &) = delete;
+
+    // Points the views at the request's own texts and contents; how many contents there are.
+    std::size_t prepareViews() noexcept {
+      for (std::size_t index = 0; index < mime_count; ++index) {
+        mime_views[index] = mimes[index].view();
+      }
+      std::size_t contents = 0;
+      if (transaction) {
+        for (const auto &content : transaction->contents()) {
+          content_views[contents++] = {content.mime, content.data};
+        }
+      } else if (traditional && write) {
+        content_views[contents++] = {"text/plain", text};
+      }
+      return contents;
+    }
+
     ClipboardMetadata metadata;
     ClipboardRoute route;
     ClipboardTicket ticket;
@@ -369,8 +381,8 @@ private:
     Clock::time_point deadline = Clock::now() + request_timeout;
     std::uint64_t nonce = 0;
     std::array<FixedText<ClipboardMetadata::maximum_mime>, 4> mimes;
-    std::array<std::string_view, 4> mime_views;
-    std::array<ClipboardRepresentation, 128> content_views;
+    tbc::view<std::array<std::string_view, 4>, tbc::lt::self> mime_views;
+    tbc::view<std::array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
     std::size_t mime_count = 0;
     Vector<std::uint8_t, Memory> text;
     Owned<ClipboardWrite<Memory>, Memory> transaction;

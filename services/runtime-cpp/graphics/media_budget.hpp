@@ -12,7 +12,8 @@ struct MediaUsage {
   std::size_t bytes = 0;
 };
 
-class MediaBudget {
+// The bytes every pane's media may hold, which the panes reserve from at once under its mutex.
+class TBC_SHARED MediaBudget {
 public:
   explicit MediaBudget(std::size_t limit) noexcept
       : limit_(limit) {}
@@ -119,7 +120,7 @@ private:
   std::size_t limit_;
   MediaUsage local_usage_;
   MediaUsage &usage_;
-  MappedImages mappings_;
+  tbc::view<MappedImages, tbc::lt::a> mappings_;
 };
 
 }

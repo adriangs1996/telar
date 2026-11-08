@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "clipboard_metadata.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <optional>
@@ -19,6 +21,10 @@ public:
 
   explicit ClipboardWrite(Memory &memory, const ClipboardMetadata &metadata, std::size_t limit)
       : metadata(metadata), memory_(memory), spool_(AllocatorRef<std::uint8_t, Memory>{memory}), limit_(limit) {}
+
+  // Its contents view its own spool and names, so it stays where it is built.
+  ClipboardWrite(const ClipboardWrite &) = delete;
+  ClipboardWrite &operator=(const ClipboardWrite &) = delete;
 
   ClipboardStatus data(std::string_view mime, std::string_view encoded) {
     if (!current_ || entries_[*current_].mime.view() != mime) {
@@ -208,7 +214,7 @@ private:
   std::size_t limit_;
   std::array<Entry, maximum_mimes> entries_;
   std::array<Alias, maximum_aliases> aliases_;
-  std::array<ClipboardContentView, maximum_mimes + maximum_aliases> contents_;
+  tbc::view<std::array<ClipboardContentView, maximum_mimes + maximum_aliases>, tbc::lt::self> contents_;
   std::size_t entry_count_ = 0;
   std::size_t alias_count_ = 0;
   std::size_t content_count_ = 0;

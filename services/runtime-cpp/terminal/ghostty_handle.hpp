@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include <exception>
 #include <ghostty/vt.h>
 #include <source_location>
@@ -43,8 +44,10 @@ inline void checkGhostty(GhosttyResult result, std::source_location location = s
   }
 }
 
+// Owns a libghostty object. Its handle is a raw FFI pointer, unchecked as Rust's are: the objects that
+// keep it are destroyed before the owner releases it.
 template <typename Handle, auto Release>
-class GhosttyHandle {
+class TBC_SHARED GhosttyHandle {
 public:
   GhosttyHandle() = default;
 

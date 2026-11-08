@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <unistd.h>
 #include <cerrno>
@@ -596,7 +597,8 @@ private:
   GhosttyAllocatorBridge<Memory> allocator_;
   TerminalHandle terminal_;
   std::shared_ptr<PtyResponseQueue> responses_;
-  ResponseOutbox<Memory> response_outbox_;
+  // Keeps the queue responses_ owns.
+  tbc::view<ResponseOutbox<Memory>, tbc::lt::self> response_outbox_;
   std::size_t storage_limit_;
   GraphicsUploadLimits uploads_;
   bool response_failed_ = false;

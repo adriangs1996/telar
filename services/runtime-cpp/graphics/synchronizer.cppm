@@ -172,7 +172,8 @@ public:
     staged
   };
 
-  inline explicit GraphicsSynchronizer(GraphicsCreditBudget &budget, std::uint64_t pane, std::shared_ptr<PaneMedia<Memory>> media)
+  // The credit budget, the pane's media and the runtime's counters are region `a`.
+  inline explicit GraphicsSynchronizer(tbc::view<GraphicsCreditBudget &, tbc::lt::a> budget, std::uint64_t pane, tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media)
       : media_(std::move(media)),
         credit_(budget),
         pane_(pane) {}
@@ -215,7 +216,7 @@ public:
   }
 
 #if TELAR_DIAGNOSTICS
-  inline void bindCounters(diagnostics::GraphicsCounters &counters) noexcept {
+  inline void bindCounters(tbc::view<diagnostics::GraphicsCounters &, tbc::lt::a> counters) noexcept {
     counters_ = &counters;
   }
 #endif
@@ -485,10 +486,11 @@ private:
   static constexpr std::size_t maximum_chunk_bytes = 1024 * 1024;
   static constexpr std::size_t maximum_queue_bytes = 2 * 1024 * 1024;
   // Frozen transfers borrow this pane's allocator until their destruction.
-  std::shared_ptr<PaneMedia<Memory>> media_;
-  GraphicsCreditLedger credit_;
+  tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media_;
+  tbc::view<GraphicsCreditLedger, tbc::lt::a> credit_;
   std::uint64_t pane_;
-  std::optional<Transfer> transfer_;
+  // Keeps the media media_ owns.
+  tbc::view<std::optional<Transfer>, tbc::lt::self> transfer_;
   std::array<ImageKey, graphics_image_count * 2> known_images_{};
   std::array<GraphicsPlacement, graphics_placement_count * 2> known_placements_{};
   std::uint64_t observed_revision_ = 0;
@@ -496,7 +498,7 @@ private:
   bool shared_ = false;
   bool initialized_ = false;
 #if TELAR_DIAGNOSTICS
-  diagnostics::GraphicsCounters *counters_ = nullptr;
+  tbc::view<diagnostics::GraphicsCounters *, tbc::lt::a> counters_ = nullptr;
   std::uint64_t available_revision_ = 0;
   std::uint64_t pending_blocked_ = 0;
   std::uint64_t pending_adopted_ = 0;

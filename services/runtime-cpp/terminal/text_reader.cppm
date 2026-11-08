@@ -79,14 +79,13 @@ public:
     runs_.clear();
     uris_.clear();
     status_ = MetadataStatus::complete;
-    identities_.fill({});
-    slots_.fill(0);
+    LinkTable table;
     checkGhostty(ghostty_render_state_get(state, GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &iterator));
     std::uint32_t row = 0;
 
     while (ghostty_render_state_row_iterator_next(iterator)) {
       if ((row_flags[row] & static_cast<Byte>(RowFlag::hyperlinks)) != 0) {
-        captureRow(iterator, row * columns);
+        captureRow(table, iterator, row * columns);
       }
 
       ++row;
@@ -100,6 +99,18 @@ private:
     std::uint64_t implicit_id = 0;
 
     bool operator==(const Identity &) const = default;
+  };
+
+  static constexpr std::size_t maximum_links = 256;
+  static constexpr std::size_t maximum_runs = 2048;
+  static constexpr std::size_t maximum_uri_bytes = 65536;
+  static constexpr std::size_t maximum_uri_length = 4096;
+
+  // The links one capture has seen. Their texts view the terminal's hyperlinks, which stay put for
+  // that capture only, so the table lives in it.
+  struct LinkTable {
+    tbc::view<std::array<Identity, maximum_links>, tbc::lt::a> identities{};
+    std::array<std::uint16_t, maximum_links * 2> slots{};
   };
 
   inline static std::string_view stringView(GhosttyString value) noexcept {
@@ -117,15 +128,15 @@ private:
     return value;
   }
 
-  inline std::optional<std::uint16_t> intern(const Identity &identity) {
-    auto slot = hash(identity) % slots_.size();
-    while (slots_[slot] != 0) {
-      const auto index = static_cast<std::uint16_t>(slots_[slot] - 1);
-      if (identities_[index] == identity) {
+  inline std::optional<std::uint16_t> intern(tbc::view<LinkTable &, tbc::lt::a> table, tbc::view<const Identity &, tbc::lt::a> identity) {
+    auto slot = hash(identity) % table.slots.size();
+    while (table.slots[slot] != 0) {
+      const auto index = static_cast<std::uint16_t>(table.slots[slot] - 1);
+      if (table.identities[index] == identity) {
         return index;
       }
 
-      slot = (slot + 1) % slots_.size();
+      slot = (slot + 1) % table.slots.size();
     }
 
     if (links_.size() == maximum_links || identity.uri.size() > maximum_uri_length || identity.explicit_id.size() > maximum_uri_length || identity.uri.size() > maximum_uri_bytes - uris_.size()) {
@@ -137,12 +148,12 @@ private:
     links_.push_back(MetadataLink{.offset = static_cast<std::uint32_t>(uris_.size()),
                                   .len = static_cast<std::uint16_t>(identity.uri.size())});
     uris_.insert(uris_.end(), identity.uri.begin(), identity.uri.end());
-    identities_[index] = identity;
-    slots_[slot] = index + 1;
+    table.identities[index] = identity;
+    table.slots[slot] = index + 1;
     return index;
   }
 
-  inline void captureRow(GhosttyRenderStateRowIterator iterator, std::uint32_t row_start) {
+  inline void captureRow(LinkTable &table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start) {
     auto reference = ghosttySized<GhosttyGridRef>();
     GhosttyCellsView cells{};
     checkGhostty(ghostty_render_state_row_get(iterator, GHOSTTY_RENDER_STATE_ROW_DATA_GRID_REF, &reference));
@@ -167,7 +178,7 @@ private:
       }
 
       checkGhostty(result);
-      const auto index = intern(Identity{stringView(uri), stringView(explicit_id), implicit_id});
+      const auto index = intern(table, Identity{stringView(uri), stringView(explicit_id), implicit_id});
       if (!index) {
         continuing = false;
         continue;
@@ -188,15 +199,9 @@ private:
     }
   }
 
-  static constexpr std::size_t maximum_links = 256;
-  static constexpr std::size_t maximum_runs = 2048;
-  static constexpr std::size_t maximum_uri_bytes = 65536;
-  static constexpr std::size_t maximum_uri_length = 4096;
   tbc::view<Vector<MetadataLink, Memory>, tbc::lt::a> links_;
   tbc::view<Vector<MetadataRun, Memory>, tbc::lt::a> runs_;
   tbc::view<Vector<Byte, Memory>, tbc::lt::a> uris_;
-  std::array<Identity, maximum_links> identities_{};
-  std::array<std::uint16_t, maximum_links * 2> slots_{};
   MetadataStatus status_ = MetadataStatus::complete;
 };
 
@@ -451,10 +456,12 @@ private:
 export {
 namespace telar::runtime {
 
+// Encodes a pane's frames. Its spans view its own cell bytes, so it stays where it is built; its
+// buffers come from an allocator, and its counters from the runtime, in region `a`.
 template <Allocator Memory>
 class FrameSync {
 public:
-  inline explicit FrameSync(Memory &memory, std::uint64_t pane_id)
+  inline explicit FrameSync(tbc::view<Memory &, tbc::lt::a> memory, std::uint64_t pane_id)
       : pane_id_(pane_id),
         baseline_(AllocatorRef<ScreenCell, Memory>{memory}),
         cell_bytes_(AllocatorRef<Byte, Memory>{memory}),
@@ -466,6 +473,9 @@ public:
     metadata_bytes_.resize(maximum_metadata_bytes);
     previous_metadata_.reserve(maximum_metadata_bytes);
   }
+
+  FrameSync(const FrameSync &) = delete;
+  FrameSync &operator=(const FrameSync &) = delete;
 
   inline bool acknowledge(std::uint64_t frame_id) noexcept {
     TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_ == nullptr ? nullptr : &counters_->ack});
@@ -524,12 +534,13 @@ public:
       metadata_changed = metadata_size != previous_metadata_.size() || !std::equal(previous_metadata_.begin(), previous_metadata_.end(), metadata_bytes_.begin());
     }
     spans_.clear();
-    auto remaining = std::span<Byte>{cell_bytes_};
+    // Cell bytes written so far: spans view them, so a position rather than a view travels.
+    std::size_t written = 0;
 
     if (full) {
-      appendSpan(screen.cells, 0, remaining);
+      appendSpan(screen.cells, 0, written);
     } else {
-      appendDamage(screen, remaining);
+      appendDamage(screen, written);
       if (spans_.empty() && !metadata_changed && sameHeader(header, previous_header_)) {
         TELAR_DIAGNOSTIC(if (counters_ != nullptr) { diagnostics::accumulate(counters_->noop_frames); });
         observed_revision_ = screen.revision;
@@ -546,8 +557,8 @@ public:
     header.spans = spans_;
     if (FrameSerializer::encodedSize(header) + 1 > payload_.size()) {
       spans_.clear();
-      remaining = cell_bytes_;
-      appendSpan(screen.cells, 0, remaining);
+      written = 0;
+      appendSpan(screen.cells, 0, written);
       header.base_frame_id = 0;
       header.text_metadata = screen.metadata.view(screen.row_flags);
       header.spans = spans_;
@@ -568,9 +579,17 @@ public:
     }
 
     metadata_revision_ = screen.metadata_revision;
-    previous_header_ = header;
-    previous_header_.spans = {};
-    previous_header_.text_metadata.reset();
+    // The header without the views of this frame, which the next one is compared with.
+    previous_header_ = FrameBody{.pane_id = header.pane_id,
+                                 .frame_id = header.frame_id,
+                                 .base_frame_id = header.base_frame_id,
+                                 .cols = header.cols,
+                                 .rows = header.rows,
+                                 .cursor = header.cursor,
+                                 .mouse = header.mouse,
+                                 .input_modes = header.input_modes,
+                                 .pointer_shape = header.pointer_shape,
+                                 .scroll = header.scroll};
     observed_revision_ = screen.revision;
     outstanding_id_ = next_frame_id_++;
     snapshot_pending_ = false;
@@ -578,7 +597,7 @@ public:
   }
 
 #if TELAR_DIAGNOSTICS
-  inline void setCounters(diagnostics::FrameCounters &counters) noexcept {
+  inline void setCounters(tbc::view<diagnostics::FrameCounters &, tbc::lt::a> counters) noexcept {
     counters_ = &counters;
   }
 #endif
@@ -610,7 +629,7 @@ private:
     return fields(left) == fields(right);
   }
 
-  inline void appendDamage(const Screen<Memory> &screen, std::span<Byte> &remaining) {
+  inline void appendDamage(const Screen<Memory> &screen, std::size_t &written) {
     for (std::size_t row = 0; row < screen.rows; ++row) {
       if (screen.row_revisions[row] <= observed_revision_) {
         continue;
@@ -639,16 +658,17 @@ private:
 
       if (spans_.size() == maximum_spans) {
         spans_.clear();
-        remaining = cell_bytes_;
-        appendSpan(screen.cells, 0, remaining);
+        written = 0;
+        appendSpan(screen.cells, 0, written);
         return;
       }
 
-      appendSpan(std::span<const ScreenCell>{screen.cells}.subspan(first, end - first), first, remaining);
+      appendSpan(std::span<const ScreenCell>{screen.cells}.subspan(first, end - first), first, written);
     }
   }
 
-  inline void appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::span<Byte> &output) {
+  inline void appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t &written) {
+    auto output = std::span<Byte>{cell_bytes_}.subspan(written);
     const Byte *begin = output.data();
     const CellStyle *previous = nullptr;
 
@@ -666,6 +686,7 @@ private:
       output = output.subspan(cell.length);
       previous = &cell.style;
     }
+    written = cell_bytes_.size() - output.size();
 
     spans_.push_back(FrameSpan{
         .start = static_cast<std::uint32_t>(start),
@@ -693,15 +714,16 @@ private:
     }
   }
 
-  diagnostics::FrameCounters *counters_ = nullptr;
+  tbc::view<diagnostics::FrameCounters *, tbc::lt::a> counters_ = nullptr;
 #endif
   std::uint64_t pane_id_;
-  Vector<ScreenCell, Memory> baseline_;
-  Vector<Byte, Memory> cell_bytes_;
-  Vector<Byte, Memory> payload_;
-  Vector<FrameSpan, Memory> spans_;
-  Vector<Byte, Memory> metadata_bytes_;
-  Vector<Byte, Memory> previous_metadata_;
+  tbc::view<Vector<ScreenCell, Memory>, tbc::lt::a> baseline_;
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> cell_bytes_;
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> payload_;
+  // Views of cell_bytes_.
+  tbc::view<Vector<FrameSpan, Memory>, tbc::lt::self> spans_;
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> metadata_bytes_;
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> previous_metadata_;
   std::uint64_t metadata_revision_ = 0;
   FrameBody previous_header_{};
   std::uint64_t next_frame_id_ = 1;
@@ -1277,10 +1299,11 @@ private:
   RowIteratorHandle row_iterator_;
   RowCellsHandle row_cells_;
   std::shared_ptr<PtyResponseQueue> responses_;
-  ResponseOutbox<Memory> response_outbox_;
+  // The outbox and the engine keep the queue responses_ owns.
+  tbc::view<ResponseOutbox<Memory>, tbc::lt::self> response_outbox_;
   PaneMedia<Memory> *media_ = nullptr;
   static constexpr std::size_t control_input_limit = 128 * 1024;
-  control::Engine<Memory> control_;
+  tbc::view<control::Engine<Memory>, tbc::lt::self> control_;
   ByteQueue<Memory> pending_control_input_;
   TerminalPurpose purpose_;
   CellProjection projection_;
