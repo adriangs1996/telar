@@ -203,11 +203,34 @@ struct CaptureTruncation {
   bool total = false;
 };
 
+// The host a capture names, owned and erased like the halves that copy it, so a start outlives the
+// connection text it was taken from. A host too long to keep is remembered as such.
+class CaptureHost {
+public:
+  static constexpr std::size_t capacity = 255;
+
+  inline CaptureHost() noexcept = default;
+  template <typename Text>
+    requires std::convertible_to<const Text &, std::string_view>
+  inline CaptureHost(const Text &value) noexcept {
+    const std::string_view text{value};
+    oversized_ = text.size() > capacity;
+    text_.append(text.substr(0, capacity));
+  }
+
+  inline std::string_view view() const noexcept { return text_.view(); }
+  inline bool oversized() const noexcept { return oversized_; }
+
+private:
+  SensitiveText<capacity> text_;
+  bool oversized_ = false;
+};
+
 struct CaptureStart {
   CaptureKey key{};
   CaptureSide side = CaptureSide::request;
   CaptureProtocol protocol = CaptureProtocol::http1;
-  std::string_view host{};
+  CaptureHost host{};
   std::int64_t started_at_ms = 0;
 };
 
@@ -225,7 +248,7 @@ public:
   inline explicit CaptureHalf(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<CaptureQuota &, tbc::lt::a> quota, const ProxyCaptureLimits &limits, CaptureStart start)
       : key(start.key), side(start.side), protocol(start.protocol), started_at_ms(start.started_at_ms),
         head(memory, quota, limits.part_bytes), body(memory, quota, limits.part_bytes), maximum_bytes_(std::max(std::size_t{1}, limits.exchange_bytes / 2)) {
-    host_.append(start.host);
+    host_.append(start.host.view());
   }
 
   inline bool append(CapturePart part, std::span<const std::uint8_t> input) noexcept {
@@ -309,7 +332,7 @@ public:
   inline std::string_view target() const noexcept { return target_.view(); }
   inline std::string_view encoding() const noexcept { return encoding_.view(); }
 
-  static constexpr std::size_t maximum_host_bytes = 255;
+  static constexpr std::size_t maximum_host_bytes = CaptureHost::capacity;
   static constexpr std::size_t maximum_method_bytes = 32;
   static constexpr std::size_t maximum_target_bytes = 8 * 1024;
   static constexpr std::size_t maximum_encoding_bytes = 128;

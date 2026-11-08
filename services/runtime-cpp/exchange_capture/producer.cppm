@@ -641,7 +641,7 @@ public:
     if (!limits_.enabled) {
       return absent;
     }
-    if (context.host.size() <= CaptureHalf<Memory>::maximum_host_bytes) {
+    if (!context.host.oversized()) {
       try {
         auto half = makeOwned<CaptureHalf<Memory>>(memory_, memory_, quota_, limits_, context);
         if (context.side == CaptureSide::request) {

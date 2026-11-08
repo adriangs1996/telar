@@ -503,8 +503,8 @@ public:
   using State = Http1MessageRelay::State;
   using Time = traffic::FlowControl::Time;
 
-  inline Http1InterceptedRelay(Memory &memory, HttpRelayContext context, bool response) : memory_(memory), secure_(memory), context_(context), message_(memory, response), wire_(AllocatorRef<Byte, Secure>{secure_}) {
-    context_.event.direction = response ? traffic::Direction::inbound : traffic::Direction::outbound;
+  // The relay copies the flow's identity, so its events view the relay and not the flow.
+  inline Http1InterceptedRelay(Memory &memory, HttpRelayContext context, bool response) : memory_(memory), secure_(memory), control_(context.control), identity_(traffic::FlowIdentity::of(context.event)), direction_(response ? traffic::Direction::inbound : traffic::Direction::outbound), message_(memory, response), wire_(AllocatorRef<Byte, Secure>{secure_}) {
     parser_.reset(response);
   }
 
@@ -572,7 +572,7 @@ public:
     return hasPrefix() ? waiting_ : parser_.destinationInterest();
   }
   inline auto deadline() const noexcept -> std::optional<Time> {
-    if (ticket_) { return context_.control->httpDeadline(ticket_); }
+    if (ticket_) { return control_->httpDeadline(ticket_); }
     return mode_ == Mode::buffering ? std::optional{collect_until_} : std::nullopt;
   }
   inline auto continueBytes() const noexcept -> std::string_view { return continue_ ? continue_response.substr(continue_offset_) : std::string_view{}; }
@@ -582,7 +582,7 @@ private:
   inline bool hasPrefix() const noexcept { return write_offset_ != wire_.size(); }
 
   inline void readHead(std::string_view bytes) noexcept {
-    policy_ = context_.control ? context_.control->policy(context_.event) : traffic::HttpPolicy{};
+    policy_ = control_ ? control_->policy(identity_.event(direction_)) : traffic::HttpPolicy{};
     const bool repair = message_.response && message_.response_to_head != destination_head_;
     mode_ = policy_.enabled || repair ? Mode::buffering : Mode::streaming;
     if (mode_ == Mode::streaming) { return; }
@@ -608,9 +608,9 @@ private:
 
   inline void unavailable(std::string_view reason) noexcept {
     if (mode_ == Mode::failed || mode_ == Mode::streaming) { return; }
-    auto event = context_.event;
+    auto event = identity_.event(direction_);
     event.reason = reason;
-    if (context_.control) { context_.control->httpUnavailable(event); }
+    if (control_) { control_->httpUnavailable(event); }
     mode_ = policy_.fail_closed ? Mode::failed : Mode::streaming;
     cancel();
     if (mode_ == Mode::streaming && message_.response && message_.response_to_head != destination_head_) {
@@ -624,9 +624,9 @@ private:
       if (!message_.bodyless()) { message_.decodeBody(message_.body); }
       if (!policy_.enabled) { forward(false); return; }
       decision_.emplace(memory_, HttpMessageLimits::message_bytes);
-      auto event = context_.event;
+      auto event = identity_.event(direction_);
       event.bytes = HttpMessageCodec::encodeMessage(decision_->bytes(), message_);
-      ticket_ = context_.control->interceptHttp(event);
+      ticket_ = control_->interceptHttp(event);
       if (ticket_ == 0) { forward(false); }
       else { mode_ = Mode::waiting; }
     } catch (...) { unavailable("http_entity_unavailable"); }
@@ -634,7 +634,7 @@ private:
 
   inline void resolve() noexcept {
     if (!ticket_) { return; }
-    const auto decision = context_.control->pollHttp(ticket_, decision_->bytes());
+    const auto decision = control_->pollHttp(ticket_, decision_->bytes());
     if (decision.verdict == traffic::Verdict::pending) { return; }
     ticket_ = 0;
     if (decision.verdict == traffic::Verdict::reject) { mode_ = Mode::failed; return; }
@@ -642,9 +642,9 @@ private:
       if (decision.verdict == traffic::Verdict::replace) { HttpMessageCodec::readMessage(message_, decision_->bytes().first(decision.bytes)); }
       forward(decision.verdict == traffic::Verdict::replace);
     } catch (...) {
-      auto event = context_.event;
+      auto event = identity_.event(direction_);
       event.reason = "http_invalid_decision";
-      context_.control->httpUnavailable(event);
+      control_->httpUnavailable(event);
       mode_ = Mode::failed;
     }
   }
@@ -690,7 +690,7 @@ private:
   }
 
   inline void cancel() noexcept {
-    if (ticket_) { context_.control->cancelHttp(ticket_); ticket_ = 0; }
+    if (ticket_) { control_->cancelHttp(ticket_); ticket_ = 0; }
   }
 
   static constexpr std::size_t maximum_wire_body = HttpMessageLimits::body_bytes + Http1Head::capacity;
@@ -698,7 +698,9 @@ private:
   static constexpr std::string_view continue_response = "HTTP/1.1 100 Continue\r\n\r\n";
   Memory &memory_;
   Secure secure_;
-  HttpRelayContext context_;
+  traffic::HttpControl *control_;
+  traffic::FlowIdentity identity_;
+  traffic::Direction direction_;
   HttpMessage<Memory> message_;
   Bytes wire_;
   std::optional<SensitiveAllocation<Memory>> decision_;

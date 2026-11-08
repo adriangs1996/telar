@@ -655,6 +655,30 @@ struct FlowEvent {
   std::span<const Byte> bytes;
 };
 
+// Who a flow is, owned: what every event of it carries. A relay keeps its own copy, so its events
+// view the relay and not the flow it came from.
+struct FlowIdentity {
+  std::uint64_t id = 0;
+  Visibility visibility = Visibility::wire;
+  FlowSource source = FlowSource::proxy;
+  static constexpr std::size_t endpoint_bytes = 128;
+  FixedText<endpoint_bytes> client;
+  FixedText<endpoint_bytes> server;
+  FixedText<ProxyHostname::maximum_bytes> host;
+
+  inline static FlowIdentity of(const FlowEvent &event) noexcept {
+    FlowIdentity identity{.id = event.id, .visibility = event.visibility, .source = event.source};
+    identity.client.assign(event.client.substr(0, endpoint_bytes));
+    identity.server.assign(event.server.substr(0, endpoint_bytes));
+    identity.host.assign(event.host.substr(0, ProxyHostname::maximum_bytes));
+    return identity;
+  }
+
+  inline FlowEvent event(Direction direction = Direction::outbound) const noexcept {
+    return {.id = id, .direction = direction, .visibility = visibility, .source = source, .client = client.view(), .server = server.view(), .host = host.view()};
+  }
+};
+
 class FlowCodec {
 public:
   inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const FlowEvent &event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {

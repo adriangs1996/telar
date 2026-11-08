@@ -318,17 +318,17 @@ static void applicationDetection(SystemAllocator &memory) {
     limits.enabled = true;
     CaptureProducer captures{memory, limits};
     ProxyCounters counters;
-    ApplicationRelay relay{memory, ConnectionObservation<SystemAllocator>{counters, &captures, 31}, "fixture.test", nullptr};
+    ApplicationRelay relay{memory, ConnectionObservation<SystemAllocator>{counters, &captures, 31}, "fixture.test"};
     TestByteStream child, origin;
     child.input = "GET /plain HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
     child.read_limit = fragmented ? 1 : 65536;
     origin.visible = 0;
-    for (std::size_t round = 0; round < 1024 && origin.output != child.input; ++round) { relay.advance(child, origin, TunnelReadiness::available()); }
+    for (std::size_t round = 0; round < 1024 && origin.output != child.input; ++round) { relay.advance(child, origin, TunnelReadiness::available(), nullptr); }
     check(origin.output == child.input);
     origin.input = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n" + std::string("x\0y", 3);
     origin.visible = origin.input.size();
     origin.read_limit = fragmented ? 1 : 65536;
-    for (std::size_t round = 0; round < 1024 && child.output != origin.input; ++round) { relay.advance(child, origin, TunnelReadiness::available()); }
+    for (std::size_t round = 0; round < 1024 && child.output != origin.input; ++round) { relay.advance(child, origin, TunnelReadiness::available(), nullptr); }
     check(child.output == origin.input);
     auto request = captures.tryReceive();
     auto response = captures.tryReceive();

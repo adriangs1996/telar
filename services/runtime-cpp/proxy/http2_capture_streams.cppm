@@ -221,7 +221,8 @@ enum class ProxyCounter : std::size_t {
   count
 };
 
-class ProxyCounters {
+// Every counter is atomic, so a reference to them stays valid whatever any thread records.
+class TBC_SHARED ProxyCounters {
 public:
   static constexpr auto capacity = static_cast<std::size_t>(ProxyCounter::count);
   static constexpr std::array<std::string_view, capacity> names = {
