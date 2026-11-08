@@ -113,19 +113,18 @@ void chromeSurfacesPreserveThemeAndTransparency() {
     theme.foreground = background.r < 0.5F ? Color::rgb(0xe0e0e0) : Color::rgb(0x202020);
     const auto surfaces = ChromeSurfaces::derive(theme, 1);
     auto panel = theme.chromeColor(PaletteRole::panel_bg);
-    panel.a = BackgroundOpacity::pane_opacity;
+    panel.a = 1;
     require(surfaces.pane == panel, "pane surfaces must respect the configured panel color");
     require(surfaces.sidebar == surfaces.workbench && surfaces.topbar == surfaces.workbench && surfaces.bottombar == surfaces.workbench && surfaces.workbench != surfaces.pane, "light and dark themes must distinguish navigation, headers and gutters");
     for (const auto opacity : {0.0F, 0.5F}) {
       const auto translucent = ChromeSurfaces::derive(theme, opacity);
       require(translucent.pane.a == opacity && translucent.workbench.a == opacity && translucent.sidebar.a == opacity, "unset surface opacities must inherit the global value exactly");
     }
-    const auto glass = ChromeSurfaces::derive(theme, 1);
-    require(glass.workbench.a == BackgroundOpacity::sheet_opacity && glass.pane.a == BackgroundOpacity::pane_opacity, "an unconfigured window must be glass, with legible panes");
+    require(surfaces.workbench.a == 1 && surfaces.pane.a == 1, "an unconfigured window must be opaque");
     BackgroundOpacity overrides;
     overrides.overrides[static_cast<std::size_t>(BackgroundOpacity::Surface::pane)] = 0.25F;
     const auto independent = ChromeSurfaces::derive(theme, 1, overrides);
-    require(independent.pane.a == 0.25F && independent.workbench.a == BackgroundOpacity::sheet_opacity, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
+    require(independent.pane.a == 0.25F && independent.workbench.a == 1, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
   }
 }
 

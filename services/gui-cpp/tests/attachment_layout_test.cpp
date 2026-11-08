@@ -40,7 +40,7 @@ void reservationsRespectMinimumsAndBorderlessContent() {
   layout.setBottomReservation(PaneBottomReservation{.pane_id = first_pane});
   constexpr auto maximum_test_rows = PaneBottomReservation::shelf_rows + PaneBottomReservation::pane_minimum_rows;
   for (std::uint16_t rows = 0; rows <= maximum_test_rows; ++rows) {
-    const auto views = layout.arrange({.width = columns, .height = rows}, {});
+    const auto views = layout.arrange({.width = columns, .height = rows}, {.border = 0});
     require(views.size() == 1, "reservation must preserve the single pane");
     const auto available = rows > PaneBottomReservation::pane_minimum_rows ? rows - PaneBottomReservation::pane_minimum_rows : 0;
     const auto wanted = std::min<unsigned>(PaneBottomReservation::shelf_rows, available);

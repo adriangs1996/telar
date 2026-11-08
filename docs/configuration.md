@@ -387,7 +387,7 @@ gui = {
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
 | `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts transparent: the traffic lights stay visible and share Telar's top bar, which sits at the window edge; set `true` to restore the native titlebar above it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
-| `window.background_opacity` | `1` | Upper limit for background opacity, `0..1`. The window is glass by default: sidebar, bars and workspace are at most `0.78` and panes at most `0.97`. Text, cursor, controls, modals and cell backgrounds differing from the terminal default retain their own opacity. Set every surface in `gui.opacity` to `1` for an opaque window. |
+| `window.background_opacity` | `1` | Background opacity of every surface without a `gui.opacity` override, `0..1`. Text, cursor, controls, modals and cell backgrounds differing from the terminal default retain their own opacity. |
 | `window.background_blur` | `20` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
 | `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |
@@ -404,6 +404,27 @@ gui = {
 | `sidebar.width` | `240` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
+
+`gui.opacity` sets the background alpha of each surface, `0..1`. An override
+is the final alpha: `window.background_opacity` neither multiplies nor caps it.
+A surface without an override uses `window.background_opacity`.
+Text, icons, controls, modals and explicit application colors keep their own
+opacity.
+
+```lua
+gui = {
+  window = { background_opacity = 0.95 },
+  opacity = { sidebar = 0.6, topbar = 0.6, bottombar = 0.6, workspace = 0.5, pane = 1 },
+}
+```
+
+| Surface | Covers |
+| --- | --- |
+| `sidebar` | The native sidebar band. |
+| `topbar` | The top navigation band. |
+| `bottombar` | The status bar. |
+| `workspace` | The workbench behind and between panes. |
+| `pane` | Terminal panes and their headers. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
 It belongs to the window, outside the terminal grid; PTY pixel sizes contain
@@ -1278,10 +1299,10 @@ pane-focus actions, not arrow keys forwarded to the child.
 The client retains the tiled layout and its split ratios. Invoking the action
 again restores that geometry and spatial navigation, keeping the last selected
 pane focused. The default binding is `prefix`, then `z`. A tab with one pane
-can also enter fullscreen, including its border and label. Creating another
-pane keeps fullscreen active and focuses the new pane; closing back down to
-one pane does not exit the mode. Toggle again to leave fullscreen and restore
-borderless content when only one pane remains.
+is framed like any split pane, with rounded corners, border and header, and
+can also enter fullscreen. Creating another pane keeps fullscreen active and
+focuses the new pane; closing back down to one pane does not exit the mode.
+Toggle again to leave fullscreen.
 
 `telar.action.toggle_workspace_list()` records a collapse preference in the
 client layout (default binding `prefix`, then `w`) that the window does not

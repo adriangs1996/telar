@@ -155,10 +155,13 @@ return telar.config({
 
 	gui = {
 		window = {
-			background_opacity = 0.98,
-			background_blur = 20,
+			background_opacity = 0.80,
+			background_blur = 80,
 			titlebar = false,
 			padding = { x = 2, y = 0 },
+		},
+		opacity = {
+			pane = 0.98,
 		},
 		font = {
 			family = "Telar Forma",
@@ -283,15 +286,15 @@ return telar.config({
 			telar.bind({ "8" }, select_tab(8)),
 			telar.bind({ "9" }, select_tab(9)),
 
-			telar.bind_global({ "alt+1" }, select_workspace(1)),
-			telar.bind_global({ "alt+2" }, select_workspace(2)),
-			telar.bind_global({ "alt+3" }, select_workspace(3)),
-			telar.bind_global({ "alt+4" }, select_workspace(4)),
-			telar.bind_global({ "alt+5" }, select_workspace(5)),
-			telar.bind_global({ "alt+6" }, select_workspace(6)),
-			telar.bind_global({ "alt+7" }, select_workspace(7)),
-			telar.bind_global({ "alt+8" }, select_workspace(8)),
-			telar.bind_global({ "alt+9" }, select_workspace(9)),
+			telar.bind_global({ "ctrl+1" }, select_workspace(1)),
+			telar.bind_global({ "ctrl+2" }, select_workspace(2)),
+			telar.bind_global({ "ctrl+3" }, select_workspace(3)),
+			telar.bind_global({ "ctrl+4" }, select_workspace(4)),
+			telar.bind_global({ "ctrl+5" }, select_workspace(5)),
+			telar.bind_global({ "ctrl+6" }, select_workspace(6)),
+			telar.bind_global({ "ctrl+7" }, select_workspace(7)),
+			telar.bind_global({ "ctrl+8" }, select_workspace(8)),
+			telar.bind_global({ "ctrl+9" }, select_workspace(9)),
 
 			-- Fullscreen and resize.
 			telar.bind({ "f" }, action.toggle_pane_fullscreen()),

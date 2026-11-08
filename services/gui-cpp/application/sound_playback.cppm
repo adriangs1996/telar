@@ -115,8 +115,8 @@ public:
     CellRectangle added_content;
   };
 
-  [[nodiscard]] inline bool hasBorders(bool fullscreen, Metrics metrics) const noexcept {
-    return metrics.border != 0 && (fullscreen || count_ > 1);
+  [[nodiscard]] inline static bool hasBorders(Metrics metrics) noexcept {
+    return metrics.border != 0;
   }
 
   inline void restore(std::span<const ClientLayoutNode> nodes) {
@@ -231,7 +231,7 @@ public:
     divider_count_ = 0;
     reserved_ = {};
     if (fullscreen && contains(*fullscreen)) {
-      placements_[placement_count_++] = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = bounds.inner(metrics.border), .framed = hasBorders(true, metrics)};
+      placements_[placement_count_++] = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = bounds.inner(metrics.border), .framed = hasBorders(metrics)};
     } else if (count_ != 0) {
       arrangeNodes(bounds, metrics);
     }
@@ -572,7 +572,7 @@ private:
       const auto current = pending[--pending_count];
       const auto &node = nodes_[index];
       if (const auto *pane = std::get_if<ClientLayoutPane>(&node)) {
-        placements_[placement_count_] = {.pane_id = pane->pane_id, .bounds = current, .display_index = static_cast<std::uint16_t>(placement_count_ + 1), .content = hasBorders(false, metrics) ? metrics.content(current) : current, .framed = hasBorders(false, metrics)};
+        placements_[placement_count_] = {.pane_id = pane->pane_id, .bounds = current, .display_index = static_cast<std::uint16_t>(placement_count_ + 1), .content = hasBorders(metrics) ? metrics.content(current) : current, .framed = hasBorders(metrics)};
         ++placement_count_;
 
         continue;
@@ -1028,12 +1028,13 @@ struct WorkbenchGeometry {
 
   bool operator==(const WorkbenchGeometry &) const = default;
 
+  // A new pane opens alone in its tab, framed like any other pane.
   [[nodiscard]] inline std::optional<TerminalSize> launchSize() const noexcept {
-    return grid.fit(area.width, area.height);
+    return contentSize(layout_metrics.content(cellArea()));
   }
 
   [[nodiscard]] inline CellRectangle cellArea() const noexcept {
-    const auto size = launchSize();
+    const auto size = grid.fit(area.width, area.height);
 
     return size ? CellRectangle{.width = size->cols, .height = size->rows} : CellRectangle{};
   }

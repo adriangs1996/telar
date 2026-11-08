@@ -33,13 +33,10 @@ namespace telar::gui {
       pane
     };
     static constexpr std::array<const char *, 5> names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
-    // The window is glass by default: navigation lets the desktop through and terminals stay legible.
-    static constexpr float sheet_opacity = 0.78F;
-    static constexpr float pane_opacity = 0.97F;
     std::array<std::optional<float>, names.size()> overrides{};
 
     [[nodiscard]] inline float resolve(Surface surface, float fallback) const noexcept {
-      return overrides[static_cast<std::size_t>(surface)].value_or(std::min(fallback, surface == Surface::pane ? pane_opacity : sheet_opacity));
+      return overrides[static_cast<std::size_t>(surface)].value_or(fallback);
     }
 
     [[nodiscard]] inline float minimum(float fallback) const noexcept {

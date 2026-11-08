@@ -98,7 +98,7 @@ void splitRequestsStartAtTheirChildSize() {
   const auto parent = client.focusedPane()->size;
   client.split(ClientLayoutAxis::horizontal);
   const auto request = transport.last<CreatePane>();
-  require(request.size.cols < parent.cols && request.size.rows == parent.rows - 2, "a horizontal split must launch with its child width rather than the parent's width");
+  require(request.size.cols < parent.cols && request.size.rows == parent.rows, "a horizontal split must launch with its child width rather than the parent's width");
   require(transport.last<PaneResize>().size.cols < parent.cols, "the source PTY must receive its provisional child size before process creation");
 }
 
@@ -146,7 +146,7 @@ void gridConversionPreservesPixelsAndRejectsInvalidGeometry() {
 
 constexpr WorkbenchGeometry framed_geometry{.area = {.width = 1010, .height = 850}, .grid = {.cell_width_px = 20, .cell_height_px = 40, .scale = 2}, .layout_metrics = {.border = 1, .gap = 1}};
 
-void aRejectedSplitRestoresAnUnframedSinglePane() {
+void aRejectedSplitRestoresTheSinglePane() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -157,7 +157,7 @@ void aRejectedSplitRestoresAnUnframedSinglePane() {
   const auto request = transport.last<CreatePane>();
   deliver(client, RequestFailed{.request_id = request.request_id, .code = FailureCode::invalid_request, .message = "creation rejected"});
   const auto restored = transport.last<PaneResize>().size;
-  require(restored.cols == initial.cols && restored.rows == initial.rows, "a rejected first split must restore the entire single-pane workbench without reserving a header or border");
+  require(restored.cols == initial.cols && restored.rows == initial.rows, "a rejected first split must restore the single pane to its launch size");
 }
 
 void splitRequestsUseTheSameContentGeometryAsTheirViews() {
@@ -178,8 +178,8 @@ void splitRequestsUseTheSameContentGeometryAsTheirViews() {
     client.setWorkbenchGeometry(framed_geometry);
     openFirstPane(client, transport);
     const auto opened = transport.last<OpenPane>();
-    constexpr TerminalSize initial_size{.cols = 101, .rows = 42, .cell_width_px = framed_geometry.grid.cell_width_px, .cell_height_px = framed_geometry.grid.cell_height_px};
-    require(opened.size.cols == initial_size.cols && opened.size.rows == initial_size.rows, "first-pane launch must use the current workbench before a terminal delegate exists");
+    constexpr TerminalSize initial_size{.cols = 99, .rows = 40, .cell_width_px = framed_geometry.grid.cell_width_px, .cell_height_px = framed_geometry.grid.cell_height_px};
+    require(opened.size.cols == initial_size.cols && opened.size.rows == initial_size.rows, "first-pane launch must use the framed workbench content before a terminal delegate exists");
     const auto original_nodes = client.activeTab()->layout.nodes().size();
     const auto before = transport.sent.size();
     client.split(entry.axis);
@@ -199,6 +199,7 @@ void splitDeliveryFailuresRestoreTheSourceAndReleaseOwnership() {
     Transport transport;
     Session client{memory, transport};
     openFirstPane(client, transport);
+    const auto original = client.focusedPane()->size;
     transport.reject_create_pane = !reject_resize;
     transport.reject_next_pane_resize = reject_resize;
     bool rejected = false;
@@ -209,7 +210,7 @@ void splitDeliveryFailuresRestoreTheSourceAndReleaseOwnership() {
     }
 
     const auto restored = transport.last<PaneResize>();
-    require(rejected && restored.pane_id == 1 && restored.size.cols == default_terminal_size.cols, "failed provisional resizing or creation must restore the original source size");
+    require(rejected && restored.pane_id == 1 && restored.size.cols == original.cols, "failed provisional resizing or creation must restore the original source size");
     require(client.activeTab()->layout.nodes().size() == 1 && client.focusedPane()->id == 1, "delivery failure must leave membership and focus unchanged");
     transport.reject_create_pane = false;
     client.split(ClientLayoutAxis::vertical);
@@ -232,7 +233,7 @@ void runtimeFailureRestoresCurrentGeometryAndBusyRequestsDoNotOverlap() {
   enlarged.area.width *= 2;
   client.setWorkbenchGeometry(enlarged);
   deliver(client, RequestFailed{.request_id = request.request_id, .code = FailureCode::invalid_request, .message = "creation rejected"});
-  require(transport.last<PaneResize>().size.cols == default_terminal_size.cols * 2, "runtime rejection must restore the current workbench rather than a stale captured size");
+  require(transport.last<PaneResize>().size.cols == enlarged.launchSize()->cols, "runtime rejection must restore the current workbench rather than a stale captured size");
   client.split(ClientLayoutAxis::vertical);
   require(transport.count(ClientTag::create_pane) == 2, "runtime rejection must release the pane operation");
 }
@@ -339,7 +340,7 @@ std::size_t adoptSplitWithAllocationBudget(std::optional<std::size_t> budget) {
     memory.permit(std::nullopt);
     if (budget) {
       require(rejected && client.findPane(2) == nullptr && client.focusedPane()->id == 1 && client.activeTab()->layout.nodes().size() == 1, "a failed allocation must preserve the source and the semantic layout");
-      require(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == default_terminal_size.cols, "a failed adoption must release the new attachment and restore the source PTY");
+      require(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == client.workbenchGeometry().launchSize()->cols, "a failed adoption must release the new attachment and restore the source PTY");
     } else {
       require(!rejected && client.focusedPane()->id == 2, "a complete allocation budget must adopt and focus the new pane");
     }
@@ -416,7 +417,7 @@ int main() {
     splitRequestsStartAtTheirChildSize();
     splitRepliesWithoutAnIdentityRefreshTheRuntimeGeneration();
     gridConversionPreservesPixelsAndRejectsInvalidGeometry();
-    aRejectedSplitRestoresAnUnframedSinglePane();
+    aRejectedSplitRestoresTheSinglePane();
     splitRequestsUseTheSameContentGeometryAsTheirViews();
     splitDeliveryFailuresRestoreTheSourceAndReleaseOwnership();
     runtimeFailureRestoresCurrentGeometryAndBusyRequestsDoNotOverlap();

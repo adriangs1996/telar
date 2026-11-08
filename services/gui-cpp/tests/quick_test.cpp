@@ -707,19 +707,21 @@ private:
     }
   }
 
-  Q_SLOT void singlePaneUsesAllCompleteWorkbenchCells() {
+  Q_SLOT void singlePaneIsFramedInsideTheWorkbench() {
     const auto *terminal = terminalIn(window_->contentItem());
     QVERIFY(terminal != nullptr);
     QCOMPARE(client_->panes()->rowCount(), 1);
-    const auto fits_current_workbench = [this, terminal] {
+    const auto fits_framed_content = [this, terminal] {
       const auto bounds = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
       const auto density = window_->effectiveDevicePixelRatio();
       const auto resolved = client_->resolveFont(density);
-      const auto columns = static_cast<std::uint16_t>(std::floor(bounds.width() * density / resolved.grid.width));
-      const auto rows = static_cast<std::uint16_t>(std::floor(bounds.height() * density / resolved.grid.height));
+      constexpr std::uint16_t border_cells = 2;
+      const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * density / resolved.grid.height));
+      const auto columns = static_cast<std::uint16_t>(std::floor(bounds.width() * density / resolved.grid.width) - border_cells);
+      const auto rows = static_cast<std::uint16_t>(std::floor(bounds.height() * density / resolved.grid.height) - header_cells - 1);
       const QSizeF expected{columns * resolved.grid.width / density, rows * resolved.grid.height / density};
-      const auto bottom_right = bounds.topLeft() + QPointF{expected.width(), expected.height()};
-      if (terminal->size() != expected || terminal->mapToScene(QPointF{}) != bounds.topLeft() || terminal->mapToScene(QPointF{expected.width(), expected.height()}) != bottom_right) {
+      const QRectF placed{terminal->mapToScene(QPointF{}), expected};
+      if (terminal->size() != expected || placed.left() <= bounds.left() || placed.top() <= bounds.top() || !bounds.contains(placed)) {
         return false;
       }
 
@@ -727,7 +729,7 @@ private:
 
       return pane != nullptr && pane->screen.columns() == columns && pane->screen.rows() == rows;
     };
-    QVERIFY2(telar::gui::test::waitForGuiCondition(fits_current_workbench, runtime_wait_ms), qPrintable(QStringLiteral("window=%1x%2 terminal=%3x%4").arg(window_->width()).arg(window_->height()).arg(terminal->width()).arg(terminal->height())));
+    QVERIFY2(telar::gui::test::waitForGuiCondition(fits_framed_content, runtime_wait_ms), qPrintable(QStringLiteral("window=%1x%2 terminal=%3x%4").arg(window_->width()).arg(window_->height()).arg(terminal->width()).arg(terminal->height())));
   }
 
   Q_SLOT void tabSwitchKeepsTerminalViewport() {
@@ -4483,21 +4485,22 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::new_tab);
     QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
-    const auto *terminal = terminalIn(window_->contentItem());
-    QVERIFY(terminal != nullptr);
+    const auto bounds = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
     const auto resolved = client_->resolveFont(window_->devicePixelRatio());
     const TerminalGrid grid{.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = window_->devicePixelRatio()};
-    const auto full = grid.fit(terminal->width(), terminal->height());
+    const auto full = grid.fit(bounds.width(), bounds.height());
     QVERIFY(full.has_value());
-    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.columns(), full->cols, runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), full->rows, runtime_wait_ms);
+    constexpr std::uint16_t border_cells = 2;
+    const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * window_->devicePixelRatio() / resolved.grid.height));
+    const auto vertical_chrome = header_cells + 1;
+    const auto single_columns = full->cols - border_cells;
+    const auto single_rows = full->rows - vertical_chrome;
+    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.columns(), single_columns, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), single_rows, runtime_wait_ms);
     const auto source_id = firstPane()->id;
     client_->execute(Application::Action::split_horizontal);
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
     const auto gutter = static_cast<std::uint16_t>(client_->configuration().pane_gaps);
-    constexpr std::uint16_t border_cells = 2;
-    const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * window_->devicePixelRatio() / resolved.grid.height));
-    const auto vertical_chrome = header_cells + 1;
     const auto first_outer_columns = (full->cols - gutter) / 2;
     const auto second_outer_columns = full->cols - gutter - first_outer_columns;
     QTRY_COMPARE_WITH_TIMEOUT(client_->pane(source_id)->screen.columns(), first_outer_columns - border_cells, runtime_wait_ms);
@@ -4511,9 +4514,9 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::new_tab);
     QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 2, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != source_id, runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.columns(), full->cols, runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), full->rows, runtime_wait_ms);
-    const auto expected = QStringLiteral("GUI_WORKBENCH_SIZE %1 %2").arg(full->rows).arg(full->cols);
+    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.columns(), single_columns, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), single_rows, runtime_wait_ms);
+    const auto expected = QStringLiteral("GUI_WORKBENCH_SIZE %1 %2").arg(single_rows).arg(single_columns);
     client_->input(firstPane()->id, "printf 'GUI_WORKBENCH_SIZE '; stty size\r");
     QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen).contains(expected), qPrintable(screenText(firstPane()->screen)), runtime_wait_ms);
     QCOMPARE(firstPane()->size.cell_width_px, full->cell_width_px);

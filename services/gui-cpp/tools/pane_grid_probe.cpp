@@ -88,7 +88,7 @@ void frame() {
   auto layout = readLayout();
   const auto fullscreen_pane = fullscreen ? std::optional{focused} : std::nullopt;
   const auto placements = layout.arrange(area, metrics, fullscreen_pane);
-  probe::write(static_cast<std::uint8_t>(layout.hasBorders(fullscreen, metrics)));
+  probe::write(static_cast<std::uint8_t>(layout.hasBorders(metrics)));
   probe::write(static_cast<std::uint8_t>(placements.size()));
   for (const auto &placement : placements) {
     probe::write(placement.pane_id);

@@ -11,6 +11,7 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallVector.h>
@@ -112,7 +113,7 @@ namespace tbc_lint {
     // dereferences have their own, which leaves room for wrappers that reach a stream through
     // references.
     enum class path_bound : std::uint8_t {
-      held = 2,
+      held = 1,
       steps = 4,
       dereferences = 3,
     };
@@ -1193,7 +1194,7 @@ namespace tbc_lint {
         }
       }
 
-      static constexpr unsigned widen_after = 4;
+      static constexpr unsigned widen_after = 1u << 30;
 
       function_summary run(const clang::CFG &cfg, bool diagnostics = false) {
         const auto *graph = &cfg;
@@ -1211,8 +1212,22 @@ namespace tbc_lint {
         queued.set(entry->getBlockID());
         work.push_back(entry);
 
+        std::size_t debug_steps = 0;
+        const auto debug_size = [&](const state &s) {
+          std::size_t total = 0;
+          for (const auto *map : {&s.values, &s.references, &s.designated}) {
+            for (const auto &entry : *map) {
+              total += entry.second.values.size();
+            }
+          }
+          return total;
+        };
+        const auto debug_start = std::chrono::steady_clock::now();
         while (!work.empty()) {
           const auto *block = work.pop_back_val();
+          if (std::getenv("TBC_DEBUG") != nullptr && ++debug_steps % 500 == 0) {
+            llvm::errs() << "DEBUG " << function_.getQualifiedNameAsString() << " steps=" << debug_steps << " blocks=" << graph->getNumBlockIDs() << " size=" << debug_size(inputs[block->getBlockID()]) << " ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - debug_start).count() << "\n";
+          }
           queued.reset(block->getBlockID());
           auto output = inputs[block->getBlockID()];
           transfer(*block, output);
@@ -1249,6 +1264,42 @@ namespace tbc_lint {
               work.push_back(next);
             }
             reached.set(id);
+          }
+        }
+        if (std::getenv("TBC_DEBUG") != nullptr) {
+          const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - debug_start).count();
+          if (elapsed > 200) {
+            llvm::errs() << "DONE " << function_.getQualifiedNameAsString() << " steps=" << debug_steps << " blocks=" << graph->getNumBlockIDs() << " exit=" << debug_size(inputs[graph->getExit().getBlockID()]) << " ms=" << elapsed << "\n";
+            const auto &final_state = inputs[graph->getExit().getBlockID()];
+            const char *names[] = {"values", "references", "designated"};
+            int map_index = 0;
+            for (const auto *map : {&final_state.values, &final_state.references, &final_state.designated}) {
+              for (const auto &item : *map) {
+                if (item.second.values.size() < 50) {
+                  continue;
+                }
+                llvm::errs() << "  " << names[map_index] << " " << item.first->getName() << " n=" << item.second.values.size() << "\n";
+                llvm::DenseMap<const clang::ValueDecl *, unsigned> by_variable;
+                std::array<unsigned, 12> select_lengths{};
+                std::array<unsigned, 12> held_lengths{};
+                for (const auto &source : item.second.values) {
+                  ++by_variable[source.variable];
+                  ++select_lengths[std::min<std::size_t>(source.select.size(), 11)];
+                  ++held_lengths[std::min<std::size_t>(source.held.size(), 11)];
+                }
+                for (const auto &[variable, occurrences] : by_variable) {
+                  if (occurrences >= 20) {
+                    llvm::errs() << "    from " << (variable != nullptr ? variable->getName() : "<none>") << " " << occurrences << "\n";
+                  }
+                }
+                llvm::errs() << "    select:";
+                for (auto count : select_lengths) llvm::errs() << " " << count;
+                llvm::errs() << "\n    held:";
+                for (auto count : held_lengths) llvm::errs() << " " << count;
+                llvm::errs() << "\n";
+              }
+              ++map_index;
+            }
           }
         }
 
@@ -3434,6 +3485,24 @@ namespace tbc_lint {
       }
 
       void applyCall(const clang::CallExpr &call, state &current) {
+        const auto debug_call_start = std::chrono::steady_clock::now();
+        const auto debug_report = llvm::make_scope_exit([&] {
+          const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - debug_call_start).count();
+          if (elapsed > 300 && std::getenv("TBC_DEBUG") != nullptr && call.getDirectCallee() != nullptr) {
+            const auto *debug_known = knownFunction(call);
+            std::size_t writes = 0;
+            std::size_t designated_writes = 0;
+            if (debug_known != nullptr) {
+              for (const auto &item : debug_known->summary.writes) writes += item.second.values.size();
+              for (const auto &item : debug_known->summary.designated) designated_writes += item.second.values.size();
+            }
+            std::size_t state_size = 0;
+            for (const auto *map : {&current.values, &current.references, &current.designated}) {
+              for (const auto &item : *map) state_size += item.second.values.size();
+            }
+            llvm::errs() << "CALL " << elapsed << "ms in " << function_.getNameAsString() << " -> " << call.getDirectCallee()->getNameAsString() << " at " << call.getBeginLoc().printToString(context_.getSourceManager()) << " returned=" << (debug_known ? debug_known->summary.returned.values.size() : 0) << " writes=" << writes << " designated=" << designated_writes << " uses=" << (debug_known ? debug_known->summary.uses.values.size() : 0) << " invalidates=" << (debug_known ? debug_known->summary.invalidates.size() : 0) << " state=" << state_size << "\n";
+          }
+        });
         const auto *callee = call.getDirectCallee();
         if (callee == nullptr) {
           return;
