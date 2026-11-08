@@ -1143,6 +1143,9 @@ class Http2EndpointConnection {
 
   struct Half {
     inline Half(Local &memory, Stream &stream, bool response) : secure(memory), message(memory, response), queue(secure, wire_body_bytes), stream(stream) { message.version = HttpVersion::http2; }
+    // The queue keeps the allocator beside it, so a half stays inside its stream.
+    Half(const Half &) = delete;
+    Half &operator=(const Half &) = delete;
     Secure secure;
     HttpMessage<Local> message;
     ByteQueue<Secure> queue;
@@ -1160,8 +1163,11 @@ class Http2EndpointConnection {
     inline Stream(Local &memory, std::int32_t id) : child_id(id), request(memory, *this, false), response(memory, *this, true) {
       request.message.stream = response.message.stream = static_cast<std::uint32_t>(id);
     }
+    Stream(const Stream &) = delete;
+    Stream &operator=(const Stream &) = delete;
     std::int32_t child_id, origin_id = 0;
-    Half request, response;
+    // Each half names the stream that holds it, which stays where nghttp2 was told it is.
+    tbc::view<Half, tbc::lt::self> request, response;
     bool child_closed = false, origin_closed = false, rejected = false, original_head = false, origin_canceled_for_head = false;
   };
 
@@ -1187,13 +1193,15 @@ class Http2EndpointConnection {
       if (nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, settings.data(), child ? settings.size() - 1 : settings.size()) != 0) { close(); throw std::bad_alloc{}; }
     }
     inline ~Endpoint() { close(); }
+    Endpoint(const Endpoint &) = delete;
+    Endpoint &operator=(const Endpoint &) = delete;
     inline void close() noexcept { if (session) { nghttp2_session_del(session); session = nullptr; } }
-    inline auto stream(std::int32_t id) const noexcept -> Stream * { return static_cast<Stream *>(nghttp2_session_get_stream_user_data(session, id)); }
-    inline auto half(tbc::view<Stream &, tbc::lt::a> stream) const noexcept -> tbc::view<Half &, tbc::lt::a> { return child ? stream.request : stream.response; }
+    // nghttp2 holds each stream by address and hands it back raw, as its callbacks re-enter the connection.
+    inline auto stream(std::int32_t id) const noexcept -> tbc::view<Stream *, tbc::lt::static_storage> { return tbc::raw(static_cast<Stream *>(nghttp2_session_get_stream_user_data(session, id))); }
 
     inline static int beginHeaders(nghttp2_session *, const nghttp2_frame *frame, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
-      try { return endpoint.owner.beginHeaders(endpoint, *frame); }
+      try { return endpoint.owner.beginHeaders(endpoint.child, *frame); }
       catch (...) { return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE; }
     }
     // These signatures are fixed by nghttp2's C callback ABI.
@@ -1201,7 +1209,7 @@ class Http2EndpointConnection {
       auto &endpoint = *static_cast<Endpoint *>(context);
       auto *stream = endpoint.stream(frame->hd.stream_id);
       if (!stream || stream->rejected) { return 0; }
-      try { endpoint.owner.header(endpoint, *stream, {reinterpret_cast<const char *>(name), name_size}, {reinterpret_cast<const char *>(value), value_size}); return 0; }
+      try { endpoint.owner.header(endpoint.child, *stream, {reinterpret_cast<const char *>(name), name_size}, {reinterpret_cast<const char *>(value), value_size}); return 0; }
       catch (...) { endpoint.owner.reject(*stream, "http2_invalid_headers"); return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE; }
     }
     inline static int data(nghttp2_session *, std::uint8_t flags, std::int32_t id, const std::uint8_t *data, std::size_t size, void *context) noexcept {
@@ -1209,13 +1217,13 @@ class Http2EndpointConnection {
       if (nghttp2_session_consume_connection(endpoint.session, size) != 0) { return NGHTTP2_ERR_CALLBACK_FAILURE; }
       auto *stream = endpoint.stream(id);
       if (!stream || stream->rejected) { return 0; }
-      try { endpoint.owner.data(endpoint, *stream, {data, size}, (flags & NGHTTP2_FLAG_END_STREAM) != 0); }
+      try { endpoint.owner.data(endpoint.child, *stream, {data, size}, (flags & NGHTTP2_FLAG_END_STREAM) != 0); }
       catch (...) { endpoint.owner.reject(*stream, "http2_buffer_limit"); }
       return 0;
     }
     inline static int frame(nghttp2_session *, const nghttp2_frame *frame, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
-      try { endpoint.owner.frame(endpoint, *frame); return 0; }
+      try { endpoint.owner.frame(endpoint.child, *frame); return 0; }
       catch (...) {
         if (auto *stream = endpoint.stream(frame->hd.stream_id)) { endpoint.owner.reject(*stream, "http2_message_failed"); return 0; }
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1239,7 +1247,8 @@ class Http2EndpointConnection {
     inline static int notSent(nghttp2_session *, const nghttp2_frame *frame, int, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
       if (frame->hd.type != NGHTTP2_HEADERS) { return 0; }
-      for (auto &stream : endpoint.owner.streams_) {
+      for (auto &slot : endpoint.owner.streams_) {
+        auto *stream = tbc::raw(slot.get());
         if (!stream || (endpoint.child ? stream->child_id : stream->origin_id) != frame->hd.stream_id) { continue; }
         (endpoint.child ? stream->child_closed : stream->origin_closed) = true;
         endpoint.owner.reject(*stream, "http2_headers_not_sent");
@@ -1275,9 +1284,12 @@ class Http2EndpointConnection {
 
 public:
   inline explicit Http2EndpointConnection(Memory &memory, Capture capture, traffic::HttpControl *control, traffic::FlowEvent context) : budget_(memory, connection_bytes), memory_(budget_), secure_(memory_), capture_(std::move(capture)), control_(control), context_(context), child_(memory_, *this, true), origin_(memory_, *this, false), streams_(makeSlots(memory_)) {}
+  Http2EndpointConnection(const Http2EndpointConnection &) = delete;
+  Http2EndpointConnection &operator=(const Http2EndpointConnection &) = delete;
+
   inline ~Http2EndpointConnection() {
     closing_ = true;
-    for (auto &stream : streams_) { if (stream) { cancel(stream->request); cancel(stream->response); } }
+    for (auto &slot : streams_) { if (auto *stream = tbc::raw(slot.get())) { cancel(stream->request); cancel(stream->response); } }
     child_.close(); origin_.close();
     capture_.finish(Http2Direction::request); capture_.finish(Http2Direction::response);
   }
@@ -1288,14 +1300,15 @@ public:
     bool active = false;
     for (unsigned round = 0; round < maximum_rounds; ++round) {
       bool progress = false;
-      progress = send(child_, child, readiness.child) || progress;
-      progress = send(origin_, origin, readiness.origin) || progress;
-      progress = receive(child_, child, readiness.child) || progress;
-      progress = receive(origin_, origin, readiness.origin) || progress;
-      for (auto &stream : streams_) {
+      progress = send(true, child, readiness.child) || progress;
+      progress = send(false, origin, readiness.origin) || progress;
+      progress = receive(true, child, readiness.child) || progress;
+      progress = receive(false, origin, readiness.origin) || progress;
+      for (auto &slot : streams_) {
+        auto *stream = tbc::raw(slot.get());
         if (!stream) { continue; }
         if (!stream->rejected) { resolve(stream->request); resolve(stream->response); }
-        if (stream->child_closed && (stream->origin_closed || stream->origin_id == 0)) { stream.reset(); }
+        if (stream->child_closed && (stream->origin_closed || stream->origin_id == 0)) { slot.reset(); }
       }
       active |= progress;
       if (!progress || failed_) { break; }
@@ -1326,6 +1339,9 @@ public:
   }
 
 private:
+  // An endpoint is named by its side, so a callback that reaches the connection lends nothing of it.
+  inline auto side(bool child) noexcept -> Endpoint & { return child ? child_ : origin_; }
+  inline static auto half(bool child, tbc::view<Stream &, tbc::lt::a> stream) noexcept -> tbc::view<Half &, tbc::lt::a> { return child ? stream.request : stream.response; }
   inline auto source(Half &half) noexcept -> Endpoint & { return half.message.response ? origin_ : child_; }
   inline auto target(Half &half) noexcept -> Endpoint & { return half.message.response ? child_ : origin_; }
   inline auto sourceId(Half &half) const noexcept -> std::int32_t { return half.message.response ? half.stream.origin_id : half.stream.child_id; }
@@ -1336,36 +1352,37 @@ private:
     return event;
   }
 
-  inline int beginHeaders(Endpoint &endpoint, const nghttp2_frame &frame) {
+  inline int beginHeaders(bool child, const nghttp2_frame &frame) {
     if (frame.hd.type != NGHTTP2_HEADERS) { return 0; }
-    auto *stream = endpoint.stream(frame.hd.stream_id);
-    if (!stream && endpoint.child && frame.headers.cat == NGHTTP2_HCAT_REQUEST && !draining_) {
+    auto *stream = side(child).stream(frame.hd.stream_id);
+    if (!stream && child && frame.headers.cat == NGHTTP2_HCAT_REQUEST && !draining_) {
       for (auto &slot : streams_) {
         if (slot) { continue; }
         slot = makeOwned<Stream>(memory_, memory_, frame.hd.stream_id);
-        stream = slot.get();
-        if (nghttp2_session_set_stream_user_data(endpoint.session, frame.hd.stream_id, stream) != 0) { throw std::runtime_error{"Set HTTP/2 stream identity"}; }
+        stream = tbc::raw(slot.get());
+        if (nghttp2_session_set_stream_user_data(side(child).session, frame.hd.stream_id, stream) != 0) { throw std::runtime_error{"Set HTTP/2 stream identity"}; }
         break;
       }
     }
     if (!stream || stream->rejected) { return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE; }
-    auto &half = endpoint.half(*stream);
+    const bool head_request = stream->request.message.method == "HEAD";
+    auto &half = this->half(child, *stream);
     half.trailer_block = half.headers_complete;
     if (!half.trailer_block) {
       half.header_bytes = 0;
       half.message.headers.clear();
       half.message.status = 0;
-      if (!endpoint.child) { half.message.response_to_head = stream->request.message.method == "HEAD"; }
+      if (!child) { half.message.response_to_head = head_request; }
     }
     return 0;
   }
 
-  inline void header(Endpoint &endpoint, Stream &stream, std::string_view name, std::string_view value) {
-    auto &half = endpoint.half(stream);
+  inline void header(bool child, Stream &stream, std::string_view name, std::string_view value) {
+    auto &half = this->half(child, stream);
     if (name.size() + value.size() + 4 > HttpMessageLimits::head_bytes - half.header_bytes) { throw std::length_error{"HTTP/2 header limit"}; }
     half.header_bytes += name.size() + value.size() + 4;
-    const auto direction = endpoint.child ? Http2Direction::request : Http2Direction::response;
-    capture_.observe(direction, {.kind = endpoint.child ? Http2Event::Kind::request_header : Http2Event::Kind::response_header, .stream = static_cast<std::uint32_t>(stream.child_id), .name = name, .value = value});
+    const auto direction = child ? Http2Direction::request : Http2Direction::response;
+    capture_.observe(direction, {.kind = child ? Http2Event::Kind::request_header : Http2Event::Kind::response_header, .stream = static_cast<std::uint32_t>(stream.child_id), .name = name, .value = value});
     if (half.trailer_block) { half.message.trailers.append(name, value); return; }
     if (name == ":method") { half.message.method.assign(value); }
     else if (name == ":path") { half.message.target.assign(value); }
@@ -1380,26 +1397,26 @@ private:
     else { half.message.headers.append(name, value); }
   }
 
-  inline void frame(Endpoint &endpoint, const nghttp2_frame &frame) {
+  inline void frame(bool child, const nghttp2_frame &frame) {
     if (frame.hd.type == NGHTTP2_GOAWAY) {
       draining_ = true;
-      if (!endpoint.child) {
-        for (auto &stream : streams_) {
+      if (!child) {
+        for (auto &slot : streams_) {
+          auto *stream = tbc::raw(slot.get());
           if (stream && (stream->origin_id == 0 || stream->origin_id > frame.goaway.last_stream_id)) { reject(*stream, "http2_origin_goaway", NGHTTP2_REFUSED_STREAM); }
         }
       }
-      auto &other = endpoint.child ? origin_ : child_;
-      check(nghttp2_submit_goaway(other.session, NGHTTP2_FLAG_NONE, endpoint.child ? 0 : highest_forwarded_, frame.goaway.error_code, nullptr, 0));
+      check(nghttp2_submit_goaway(side(!child).session, NGHTTP2_FLAG_NONE, child ? 0 : highest_forwarded_, frame.goaway.error_code, nullptr, 0));
       return;
     }
-    auto *stream = endpoint.stream(frame.hd.stream_id);
+    auto *stream = side(child).stream(frame.hd.stream_id);
     if (!stream || stream->rejected || (frame.hd.type != NGHTTP2_HEADERS && frame.hd.type != NGHTTP2_DATA)) { return; }
-    auto &half = endpoint.half(*stream);
+    auto &half = this->half(child, *stream);
     if (frame.hd.type == NGHTTP2_HEADERS && !half.trailer_block) {
-      if (!endpoint.child && half.message.status < 200) { informational(half); return; }
+      if (!child && half.message.status < 200) { informational(half); return; }
       half.headers_complete = true;
       half.collect_until = std::chrono::steady_clock::now() + collection_timeout;
-      if (endpoint.child) {
+      if (child) {
         stream->original_head = half.message.method == "HEAD";
         if (half.message.authority.empty()) { if (const auto host = half.message.headers.get("host")) { half.message.authority.assign(*host); } }
       }
@@ -1413,12 +1430,12 @@ private:
           if (parsed.ec == std::errc{} && size > wire_body_bytes) { unavailable(half, "http2_body_limit"); }
         }
       }
-      const bool tunnel = endpoint.child ? half.message.method == "CONNECT" : stream->request.message.method == "CONNECT" && half.message.status >= 200 && half.message.status < 300;
+      const bool tunnel = child ? half.message.method == "CONNECT" : stream->request.message.method == "CONNECT" && half.message.status >= 200 && half.message.status < 300;
       const auto type = half.message.headers.get("content-type");
       const bool event_stream = type && asciiEqualIgnoreCase(trimText(type->substr(0, type->find(';')), " \t"), "text/event-stream");
       if (half.policy.enabled && (tunnel || event_stream)) { unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body"); }
       if (half.streaming && !stream->rejected) { forward(half, false); }
-      if (endpoint.child && half.policy.enabled && !half.streaming && !stream->rejected) {
+      if (child && half.policy.enabled && !half.streaming && !stream->rejected) {
         if (const auto expect = half.message.headers.get("expect"); expect && asciiEqualIgnoreCase(*expect, "100-continue") && !(frame.hd.flags & NGHTTP2_FLAG_END_STREAM)) {
           Fields fields{secure_}; fields.add(":status", "100");
           check(nghttp2_submit_headers(child_.session, NGHTTP2_FLAG_NONE, stream->child_id, nullptr, fields.bytes().data(), fields.bytes().size(), nullptr));
@@ -1428,16 +1445,16 @@ private:
     }
     if ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) && !stream->rejected) {
       half.ended = true;
-      capture_.observe(endpoint.child ? Http2Direction::request : Http2Direction::response, {.kind = endpoint.child ? Http2Event::Kind::request_finished : Http2Event::Kind::response_ended, .stream = static_cast<std::uint32_t>(stream->child_id), .status = half.message.status});
+      capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_finished : Http2Event::Kind::response_ended, .stream = static_cast<std::uint32_t>(stream->child_id), .status = half.message.status});
       if (half.streaming) { resume(half); }
       else { complete(half); }
     }
   }
 
-  inline void data(Endpoint &endpoint, Stream &stream, std::span<const Byte> bytes, bool end) {
-    auto &half = endpoint.half(stream);
+  inline void data(bool child, Stream &stream, std::span<const Byte> bytes, bool end) {
+    auto &half = this->half(child, stream);
     half.uncredited += bytes.size();
-    capture_.observe(endpoint.child ? Http2Direction::request : Http2Direction::response, {.kind = endpoint.child ? Http2Event::Kind::request_body : Http2Event::Kind::response_body, .stream = static_cast<std::uint32_t>(stream.child_id), .bytes = bytes});
+    capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_body : Http2Event::Kind::response_body, .stream = static_cast<std::uint32_t>(stream.child_id), .bytes = bytes});
     if (half.discard_body && half.streaming) { credit(half, bytes.size()); return; }
     if (bytes.size() > wire_body_bytes - half.queue.size()) { unavailable(half, "http2_body_limit"); }
     if (stream.rejected) { return; }
@@ -1587,28 +1604,30 @@ private:
   }
 
   template <ByteStream Source>
-  inline bool receive(Endpoint &endpoint, Source &source, SocketInterest readiness) noexcept {
-    if (endpoint.eof || !readiness.satisfies(endpoint.read_wait)) { return false; }
+  inline bool receive(bool child, Source &source, SocketInterest readiness) noexcept {
+    if (side(child).eof || !readiness.satisfies(side(child).read_wait)) { return false; }
     SensitiveBuffer<io_bytes> input;
     const auto read = source.read(input.bytes());
-    if (read.state == StreamResult::State::blocked) { endpoint.read_wait = read.waiting; return false; }
+    if (read.state == StreamResult::State::blocked) { side(child).read_wait = read.waiting; return false; }
     if (read.state == StreamResult::State::ended || read.state == StreamResult::State::failed) {
-      endpoint.eof = true;
-      if (!endpoint.child) {
+      side(child).eof = true;
+      if (!child) {
         draining_ = true;
-        endpoint.output.reset();
-        for (auto &stream : streams_) { if (stream && !stream->origin_closed) { reject(*stream, "http2_origin_closed"); } }
+        side(child).output.reset();
+        for (auto &slot : streams_) { if (auto *stream = tbc::raw(slot.get()); stream && !stream->origin_closed) { reject(*stream, "http2_origin_closed"); } }
       }
       return true;
     }
-    endpoint.read_wait = StreamReadiness::readable;
-    const auto consumed = nghttp2_session_mem_recv2(endpoint.session, input.bytes().data(), read.bytes);
+    side(child).read_wait = StreamReadiness::readable;
+    // The session calls back into this connection while it parses the input.
+    const auto consumed = nghttp2_session_mem_recv2(side(child).session, input.bytes().data(), read.bytes);
     if (consumed < 0 || static_cast<std::size_t>(consumed) != read.bytes) { fail("http2_connection_failed"); }
     return read.bytes != 0;
   }
 
   template <ByteStream Destination>
-  inline bool send(Endpoint &endpoint, Destination &destination, SocketInterest readiness) noexcept {
+  inline bool send(bool child, Destination &destination, SocketInterest readiness) noexcept {
+    auto &endpoint = side(child);
     if (endpoint.eof && !endpoint.child) { return false; }
     if (!readiness.satisfies(endpoint.write_wait)) { return false; }
     try {
@@ -1658,7 +1677,8 @@ private:
   Capture capture_;
   traffic::HttpControl *control_;
   traffic::FlowEvent context_;
-  Endpoint child_, origin_;
+  // Each endpoint's session calls back into this connection, so it stays where it was built.
+  tbc::view<Endpoint, tbc::lt::self> child_, origin_;
   std::array<Owned<Stream, Local>, maximum_streams> streams_;
   std::int32_t highest_forwarded_ = 0;
   bool failed_ = false, closing_ = false, draining_ = false;
