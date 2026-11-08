@@ -902,3 +902,191 @@ void declarationCheckedPointer(declarations::checked_connection &connection) {
 }
 
 // END CASE
+
+// CASE: declaration.template_constructor_copy
+// PAIR: declaration.template_constructor
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
+// STATUS: implemented
+// CONTRACT: A constructor template keeps by its declaration, as any constructor does: a parameter taken by value keeps a copy of what its argument holds, not the argument.
+// SCENARIO: A factory builds a relay from a moved local through a constructor template taking it by value; accept.
+namespace declarations {
+  struct tally {
+    int value = 0;
+  };
+
+  struct observer {
+    tally *target;
+  };
+
+  class template_relay {
+  public:
+    template <typename Context>
+    template_relay(tally &total, observer observed, Context context) : total_(total), observed_(observed), context_(static_cast<int>(context)) {}
+    void advance() { ++total_.value; }
+
+  private:
+    tally &total_;
+    observer observed_;
+    int context_;
+  };
+
+  class template_owner {
+  public:
+    template_owner(arena &memory, tally &total) : memory_(memory), total_(total) {}
+    template_owner(const template_owner &) = delete;
+
+    void advance() {
+      if (!relay_) {
+        observer observed{&total_};
+        relay_ = make<template_relay>(memory_, total_, std::move(observed), 3);
+      }
+      relay_->advance();
+    }
+
+  private:
+    arena &memory_;
+    tally &total_;
+    std::unique_ptr<template_relay> relay_;
+  };
+}
+
+void declarationTemplateConstructorCopy(declarations::arena &memory, declarations::tally &total) {
+  declarations::template_owner owner{memory, total};
+  owner.advance();
+}
+
+// END CASE
+
+// CASE: declaration.template_constructor_reference
+// PAIR: declaration.template_constructor
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
+// STATUS: implemented
+// CONTRACT: A constructor template keeps by its declaration, as any constructor does: a parameter taken by value keeps a copy of what its argument holds, not the argument.
+// SCENARIO: The relay's constructor template keeps the observer by reference, and the local dies before the relay is used; reject at the use.
+namespace declarations {
+  class reference_relay {
+  public:
+    template <typename Context>
+    reference_relay(const observer &observed, Context context) : observed_(observed), context_(static_cast<int>(context)) {}
+    [[nodiscard]] int advance() const { return observed_.target->value + context_; }
+
+  private:
+    const observer &observed_;
+    int context_;
+  };
+}
+
+int declarationTemplateConstructorReference(declarations::arena &memory, declarations::tally &total) {
+  std::unique_ptr<declarations::reference_relay> relay;
+  {
+    const declarations::observer observed{&total};
+    relay = declarations::make<declarations::reference_relay>(memory, observed, 3);
+  } // expected-error [tbc-invalidated-borrow]
+  return relay->advance();
+}
+
+// END CASE
+
+// CASE: declaration.static_field_result
+// PAIR: declaration.static_field_result
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: FlowGate::failureReason
+// STATUS: implemented
+// CONTRACT: What a field labeled static_storage holds outlives every caller, so it supplies a static result and may be kept anywhere, as a static input may.
+// SCENARIO: A gate keeps the literal it fails with and returns it; a transport forwards a literal to the gate it owns; accept.
+namespace declarations {
+  class failure_gate {
+  public:
+    void fail(static_text reason) { failure_ = reason; }
+    [[nodiscard]] static_text failure() const { return failure_; }
+
+  private:
+    static_text failure_;
+  };
+
+  class failure_transport {
+  public:
+    void error(static_text reason) {
+      if (gate_) {
+        gate_->fail(reason);
+      }
+    }
+
+  private:
+    std::unique_ptr<failure_gate> gate_ = std::make_unique<failure_gate>();
+  };
+}
+
+std::size_t declarationStaticFieldResult(declarations::failure_transport &transport, const declarations::failure_gate &gate) {
+  transport.error("closed");
+  return gate.failure().size();
+}
+
+// END CASE
+
+// CASE: declaration.dynamic_field_result
+// PAIR: declaration.static_field_result
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: FlowGate::failureReason
+// STATUS: implemented
+// CONTRACT: What a field labeled static_storage holds outlives every caller, so it supplies a static result and may be kept anywhere, as a static input may.
+// SCENARIO: A gate returns a field without the label as static; reject the result.
+namespace declarations {
+  class dynamic_gate {
+  public:
+    explicit dynamic_gate(std::string_view reason) : failure_(reason) {}
+    [[nodiscard]] static_text failure() const { return failure_; } // expected-error [tbc-contract-violation]
+
+  private:
+    std::string_view failure_;
+  };
+}
+
+std::size_t declarationDynamicFieldResult(const declarations::dynamic_gate &gate) {
+  return gate.failure().size();
+}
+
+// END CASE
+
+// CASE: declaration.owned_receiver_call
+// PAIR: declaration.owned_receiver
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
+// STATUS: implemented
+// CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
+// SCENARIO: An owner feeds a screen twice through the feeder its unique_ptr holds; accept.
+namespace declarations {
+  class feeding_owner {
+  public:
+    explicit feeding_owner(screen &shown) : feeder_(std::make_unique<feeder>(shown)) {}
+
+    void feed(int value) {
+      feeder_->feed(value);
+      feeder_->feed(value);
+    }
+
+  private:
+    std::unique_ptr<feeder> feeder_;
+  };
+}
+
+void declarationOwnedReceiverCall(declarations::screen &shown) {
+  declarations::feeding_owner owner{shown};
+  owner.feed(1);
+}
+
+// END CASE
+
+// CASE: declaration.owned_receiver_alias
+// PAIR: declaration.owned_receiver
+// SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
+// STATUS: pending
+// CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
+// SCENARIO: A view of the screen's cells is read after the owned feeder grows them; reject at the feed.
+std::size_t declarationOwnedReceiverAlias() {
+  declarations::screen shown;
+  shown.cells.push_back(0);
+  auto input = std::make_unique<declarations::feeder>(shown);
+  const auto *first = shown.cells.data();
+  input->feed(1); // expected-error [tbc-invalidated-borrow]
+  return static_cast<std::size_t>(*first);
+}
+
+// END CASE

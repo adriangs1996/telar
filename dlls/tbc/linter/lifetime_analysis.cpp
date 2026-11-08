@@ -1238,6 +1238,14 @@ namespace tbc_lint {
         llvm::SmallVector<const clang::CXXConstructorDecl *, 4> constructors;
         if (definition != nullptr) {
           constructors.append(definition->ctor_begin(), definition->ctor_end());
+          // A constructor template keeps by its declaration too, whatever it is instantiated with.
+          for (const auto *declaration : definition->decls()) {
+            if (const auto *generic = llvm::dyn_cast<clang::FunctionTemplateDecl>(declaration)) {
+              if (const auto *constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(generic->getTemplatedDecl())) {
+                constructors.push_back(constructor);
+              }
+            }
+          }
         }
         for (const auto *constructor : constructors) {
           if (constructor->isDeleted() || constructor->getMinRequiredArguments() > arguments.size() || (!constructor->isVariadic() && constructor->getNumParams() < arguments.size())) {
@@ -1855,7 +1863,7 @@ namespace tbc_lint {
         const auto *constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function_);
         const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(constructor->getParent()->fields(), [](const clang::FieldDecl *member) { return lifetimeField(*member); });
         for (const auto &source : incoming.values) {
-          if (source.invalidated != nullptr) {
+          if (source.invalidated != nullptr || staticInput(source)) {
             continue;
           }
           if (source.kind == origin_kind::receiver) {
@@ -2234,6 +2242,10 @@ namespace tbc_lint {
 
       // A parameter labeled static, whose callers pass only what outlives every caller.
       [[nodiscard]] bool staticInput(const origin &source) const {
+        // What a field labeled static holds outlives every caller, as what a static input is given does.
+        if (const auto *field = llvm::dyn_cast_or_null<clang::FieldDecl>(source.variable); field != nullptr && (source.kind == origin_kind::receiver || source.kind == origin_kind::receiver_region) && staticField(*field)) {
+          return true;
+        }
         const auto *parameter = parameterOrigin(source) ? llvm::dyn_cast<clang::ParmVarDecl>(source.variable) : nullptr;
         const auto input = parameter == nullptr ? annotation{} : parameterAnnotation(*parameter, context_);
         return input.present && staticRegion(input.region);
@@ -3967,6 +3979,13 @@ namespace tbc_lint {
         const auto *object = receiver(call);
         if (object == nullptr) {
           return nullptr;
+        }
+        // What a sole owner, as a unique_ptr or an optional, holds is that owner's own object.
+        if (const auto *access = llvm::dyn_cast<clang::CXXOperatorCallExpr>(clean(object)); access != nullptr && (access->getOperator() == clang::OO_Arrow || access->getOperator() == clang::OO_Star) && access->getNumArgs() != 0) {
+          const auto owner = clean(access->getArg(0))->getType();
+          if (standardType(owner, "unique_ptr") || standardType(owner, "optional")) {
+            object = access->getArg(0);
+          }
         }
         const clang::ValueDecl *variable = nullptr;
         if (const auto *name = llvm::dyn_cast<clang::DeclRefExpr>(clean(object))) {

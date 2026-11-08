@@ -386,7 +386,9 @@ tbc::view<std::string_view, tbc::lt::a> textOf(const record &input) {
 ```
 
 A field labeled `lt::static_storage` only ever holds storage that outlives every
-caller, as a Rust `&'static str` does, so its object borrows nothing through it.
+caller, as a Rust `&'static str` does, so its object borrows nothing through it,
+and what it holds supplies a static result or any other place, as a static input
+does.
 Initializing or assigning it from anything else is a `tbc-contract-violation`:
 
 ```cpp
