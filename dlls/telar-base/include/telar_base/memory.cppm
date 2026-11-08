@@ -345,9 +345,10 @@ enum class ChannelPolicy { best_effort,
                            keep_oldest,
                            keep_newest };
 
+// A bounded channel between threads, as a Rust channel is: both ends share it.
 template <typename Value, std::size_t Capacity, ChannelPolicy policy = ChannelPolicy::best_effort>
   requires std::is_nothrow_move_constructible_v<Value> && std::is_nothrow_swappable_v<Value>
-class DropChannel {
+class TBC_SHARED DropChannel {
   static_assert(Capacity != 0);
 
 public:

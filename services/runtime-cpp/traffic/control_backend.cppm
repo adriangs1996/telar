@@ -199,8 +199,10 @@ public:
 };
 
 // Each chunk snapshots registration order. A new ticket authenticates every step of the chain.
+// Decides intercepted exchanges with the hooks registered for them. Proxy threads offer exchanges and
+// the control thread decides them, at once, under its mutex.
 template <ConcurrentAllocator Memory, std::size_t maximum_bytes = FlowControl::chunk_bytes>
-class Interception {
+class TBC_SHARED Interception {
   using Secure = ErasingAllocator<Memory>;
   using Owner = std::uint64_t;
 
@@ -260,6 +262,8 @@ class Interception {
     bool delivered = false;
   };
 
+  using Registrations = std::array<std::optional<Registration>, Limits::subscribers>;
+
 public:
   inline explicit Interception(Memory &memory, CompletionSignal *completion = nullptr, CompletionSignal *requests = nullptr)
       : upstream_(memory), memory_(memory), completion_(completion ? *completion : wake_), request_signal_(requests ? *requests : requests_) {
@@ -312,7 +316,7 @@ public:
 
     for (auto &slot : pending_) {
       if (slot && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
-        advance(*slot, failure(*slot));
+        advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
       }
     }
   }
@@ -323,7 +327,7 @@ public:
     if (!entry || (!available && !entry->available)) { return; }
     entry->available = false;
     for (auto &pending : pending_) {
-      if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) { advance(*pending, failure(*pending)); }
+      if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) { advance(*pending, failure(*pending), registrations_, next_, completion_, request_signal_); }
     }
     if (available) {
       entry->route.generation = ++generation_;
@@ -402,7 +406,7 @@ public:
     for (auto &slot : pending_) {
       if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
         if (std::chrono::steady_clock::now() >= slot->deadline) {
-          advance(*slot, failure(*slot));
+          advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
           return;
         }
 
@@ -411,7 +415,7 @@ public:
           slot->replaced = true;
         }
 
-        advance(*slot, verdict);
+        advance(*slot, verdict, registrations_, next_, completion_, request_signal_);
         return;
       }
     }
@@ -427,7 +431,7 @@ public:
     for (auto &slot : pending_) {
       if (slot && slot->ticket == ticket) {
         if (slot->verdict == Verdict::pending && std::chrono::steady_clock::now() >= slot->deadline) {
-          advance(*slot, failure(*slot));
+          advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
         }
         const auto verdict = slot->verdict;
         if (verdict == Verdict::pending) {
@@ -469,7 +473,7 @@ public:
       }
 
       if (std::chrono::steady_clock::now() >= slot->deadline) {
-        advance(*slot, failure(*slot));
+        advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
         continue;
       }
 
@@ -477,10 +481,10 @@ public:
         if (consumer(slot->event())) {
           slot->delivered = true;
         } else {
-          advance(*slot, failure(*slot));
+          advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
         }
       } catch (...) {
-        advance(*slot, failure(*slot));
+        advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
       }
     }
   }
@@ -532,26 +536,37 @@ private:
     return nullptr;
   }
 
+  inline static auto registration(const Registrations &registrations, Owner owner) noexcept -> const Registration * {
+    for (const auto &slot : registrations) {
+      if (slot && slot->route.owner == owner) {
+        return &*slot;
+      }
+    }
+
+    return nullptr;
+  }
+
   inline static Verdict failure(const Pending &pending) noexcept {
     return pending.chain[pending.step].fail_closed ? Verdict::reject : Verdict::allow;
   }
 
-  inline void advance(Pending &pending, Verdict verdict) noexcept {
+  // Moves an exchange to its next hook, or settles it. The tables it reads are lent apart from it.
+  inline static void advance(Pending &pending, Verdict verdict, const Registrations &registrations, std::uint64_t &next, CompletionSignal &completion, CompletionSignal &requests) noexcept {
     for (;;) {
       if (verdict == Verdict::reject || ++pending.step == pending.routes) {
         pending.verdict = verdict == Verdict::reject ? Verdict::reject : pending.replaced ? Verdict::replace : Verdict::allow;
-        completion_.notify();
+        completion.notify();
         return;
       }
 
       const auto &route = pending.chain[pending.step];
-      const auto *entry = registration(route.owner);
+      const auto *entry = registration(registrations, route.owner);
       if (entry && entry->available && entry->route.generation == route.generation) {
-        pending.decision_ticket = ++next_;
+        pending.decision_ticket = ++next;
         pending.deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{route.timeout_ms};
         pending.delivered = false;
-        request_signal_.notify();
-        completion_.notify();
+        requests.notify();
+        completion.notify();
         return;
       }
 
@@ -563,7 +578,7 @@ private:
   Memory &upstream_;
   Secure memory_;
   std::mutex mutex_;
-  std::array<std::optional<Registration>, Limits::subscribers> registrations_;
+  Registrations registrations_;
   std::array<std::optional<Pending>, 64> pending_;
   CompletionSignal wake_;
   CompletionSignal requests_;
@@ -625,8 +640,9 @@ struct Owner {
 export {
 namespace telar::runtime::traffic {
 
+// Recording sessions proxy threads append to and clients page through, under its mutex.
 template <ConcurrentAllocator Memory, typename Clock = std::chrono::steady_clock>
-class Recordings {
+class TBC_SHARED Recordings {
   using Request = recording::Request;
   struct Entry {
     std::uint64_t cursor;
@@ -674,11 +690,13 @@ class Recordings {
   };
 
 public:
-  inline explicit Recordings(Memory &memory) noexcept : memory_(memory) { randomBytes(&next_id_, sizeof(next_id_)); }
+  // Frames it records come from its allocator, region `a`.
+  inline explicit Recordings(tbc::view<Memory &, tbc::lt::a> memory) noexcept : memory_(memory) { randomBytes(&next_id_, sizeof(next_id_)); }
 
   inline bool selects(Selection selection) const noexcept { return (interest_.load(std::memory_order_acquire) & static_cast<Byte>(selection)) != 0; }
 
-  inline std::shared_ptr<EventFrame<Memory>> record(const Event &event, std::shared_ptr<EventFrame<Memory>> shared = {}) noexcept {
+  // The frame recorded: the one given, or one allocated here.
+  inline tbc::view<std::shared_ptr<EventFrame<Memory>>, tbc::lt::a> record(const Event &event, tbc::view<std::shared_ptr<EventFrame<Memory>>, tbc::lt::a> shared = {}) noexcept {
     if (!selected(Selection::all, event.kind) || interest_.load(std::memory_order_acquire) == 0) { return shared; }
     const std::unique_lock lock{mutex_, std::try_to_lock};
     if (!lock.owns_lock()) { contention_drops_.fetch_add(1, std::memory_order_relaxed); return shared; }
@@ -717,7 +735,8 @@ public:
     refreshInterest();
   }
 
-  inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request &request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner = {}) {
+  // The page written views the output, region `b`; the recordings keep none of it.
+  inline tbc::view<std::span<const Byte>, tbc::lt::b> handle(const Request &request, tbc::view<std::span<Byte>, tbc::lt::b> output, recording::Owner owner = {}) {
     if (output.size() < recording::Protocol::page_header_bytes) { throw EncodingError{"Recording output is too small"}; }
     std::array<Byte, 8192> validation;
     plugins::FrameWriter validated{validation};
@@ -736,7 +755,7 @@ public:
         slot->expire(Clock::now());
         std::array<Byte, recording::Protocol::page_header_bytes> bytes;
         plugins::FrameWriter child{bytes};
-        recording::Protocol::header(child, describe(*slot));
+        recording::Protocol::header(child, describe(*slot, contention_drops_.load(std::memory_order_relaxed)));
         rows.bytes(child.finish());
         ++page.count;
       }
@@ -764,7 +783,7 @@ public:
     }
     session->expire(Clock::now());
     if (request.operation == recording::Operation::stop) { session->active = false; refreshInterest(); }
-    auto page = describe(*session);
+    auto page = describe(*session, contention_drops_.load(std::memory_order_relaxed));
     output = output.first(std::min(output.size(), recording::Limits::page_bytes));
     if (output.size() < recording::Protocol::page_header_bytes) { throw EncodingError{"Recording output is too small"}; }
     plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
@@ -800,11 +819,11 @@ public:
   }
 
 private:
-  inline recording::Page describe(Session &session) const noexcept {
+  inline static recording::Page describe(Session &session, std::uint64_t contention_drops) noexcept {
     return {
         .id = session.id, .active = session.active, .oldest = session.count ? session.at(0).cursor : session.next,
         .next = session.next, .end = session.next, .evicted = session.evicted, .dropped = session.dropped,
-        .contention_drops = contention_drops_.load(std::memory_order_relaxed), .bytes = session.bytes,
+        .contention_drops = contention_drops, .bytes = session.bytes,
     };
   }
 
@@ -828,8 +847,8 @@ private:
     interest_.store(mask, std::memory_order_release);
   }
 
-  Memory &memory_;
-  std::array<std::optional<Session>, recording::Limits::sessions> sessions_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<std::array<std::optional<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
   std::uint64_t next_id_;
   std::mutex mutex_;
   std::atomic<Byte> interest_{0};
@@ -843,8 +862,9 @@ private:
 export {
 namespace telar::runtime::traffic {
 
+// The traffic control service: its own thread serves clients while proxy threads report flows to it.
 template <ConcurrentAllocator Memory>
-class Service : public FlowControl, public HttpControl, public PackagePort {
+class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort {
   using SensitiveMemory = ErasingAllocator<Memory>;
   using Bytes = Vector<Byte, SensitiveMemory>;
   static constexpr std::size_t maximum_peers = Limits::subscribers * 2 + 1;
@@ -1502,7 +1522,8 @@ template <ConcurrentAllocator Memory, typename Proxy>
 class Backend {
   using Clock = std::chrono::steady_clock;
 public:
-  inline explicit Backend(Memory &memory, Proxy &proxy, traffic::Service<Memory> *capture, Configuration configuration)
+  // What it keeps of its owner, and what its replies view of it, is region `a`.
+  inline explicit Backend(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<Proxy &, tbc::lt::a> proxy, tbc::view<traffic::Service<Memory> *, tbc::lt::a> capture, tbc::view<Configuration, tbc::lt::a> configuration)
       : memory_(memory), proxy_(proxy), capture_(capture), configuration_(configuration) {}
 
   inline ~Backend() {
@@ -1634,7 +1655,7 @@ private:
     return status;
   }
 
-  inline void authorization(const Request &request, Reply &reply, std::string_view action) const {
+  inline void authorization(const Request &request, tbc::view<Reply &, tbc::lt::a> reply, tbc::view<std::string_view, tbc::lt::a> action) const {
     reply.authorization[0] = "/usr/bin/sudo";
     reply.authorization[1] = "--";
     reply.authorization[2] = configuration_.executable;
@@ -1742,14 +1763,14 @@ private:
     if (waited == child || (waited < 0 && errno == ECHILD)) { child = -1; }
   }
 
-  Memory &memory_;
-  Proxy &proxy_;
-  traffic::Service<Memory> *capture_;
-  Configuration configuration_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<Proxy &, tbc::lt::a> proxy_;
+  tbc::view<traffic::Service<Memory> *, tbc::lt::a> capture_;
+  tbc::view<Configuration, tbc::lt::a> configuration_;
   static_assert(Limits::processes == redirect::SocketOwners::maximum_processes);
   static_assert(Limits::targets == redirect::Target::maximum_targets);
-  std::optional<redirect::Selection<>> selection_;
-  std::array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes> process_arguments_;
+  tbc::view<std::optional<redirect::Selection<>>, tbc::lt::a> selection_;
+  tbc::view<std::array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes>, tbc::lt::a> process_arguments_;
   pid_t capture_child_ = -1;
   pid_t redirect_child_ = -1;
   bool capture_cancelled_ = false;
@@ -1848,7 +1869,7 @@ private:
       const auto readiness = descriptors[index + 2].revents;
       bool close = (readiness & (POLLERR | POLLNVAL)) || Clock::now() >= peer->deadline;
       try {
-        if (!close && (readiness & (POLLIN | POLLOUT | POLLHUP))) { close = advance(*peer); }
+        if (!close && (readiness & (POLLIN | POLLOUT | POLLHUP))) { close = advance(*peer, handler_, stopping_); }
       } catch (const std::exception &) { close = true; }
       if (close) { peer.reset(); }
     }
@@ -1861,7 +1882,8 @@ private:
     }
   }
 
-  inline bool advance(Peer &peer) {
+  // Moves one peer's exchange on; the handler and the stop flag are lent apart from it.
+  inline static bool advance(Peer &peer, Handler &handler, const std::atomic<bool> &stopping) {
     if (peer.reply_bytes != 0) {
       const auto count = ::send(peer.socket.get(), peer.output.bytes().data() + peer.sent, peer.reply_bytes - peer.sent, 0);
       if (count < 0 && socketWouldBlock(errno)) { return false; }
@@ -1885,7 +1907,7 @@ private:
       const auto request = Protocol::request(peer.input.bytes().subspan(Protocol::prefix_bytes, peer.expected - Protocol::prefix_bytes));
       const auto output = peer.output.bytes().subspan(Protocol::prefix_bytes);
       std::span<const Byte> reply;
-      try { reply = handler_.handle(request, output, stopping_, peer.package ? &*peer.package : nullptr); }
+      try { reply = handler.handle(request, output, stopping, peer.package ? &*peer.package : nullptr); }
       catch (const std::exception &error) {
         reply = Protocol::encode(output, Reply{.result = Result::failed, .message = std::string_view{error.what()}.substr(0, 1024)});
       }

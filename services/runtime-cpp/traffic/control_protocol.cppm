@@ -574,7 +574,7 @@ public:
 
     // Validate syntax before accepting a subscription, including before capture starts.
     if (!expression.empty()) {
-      compile(DLT_EN10MB, validation_);
+      compile(expression_.view(), DLT_EN10MB, validation_);
     }
   }
 
@@ -592,7 +592,7 @@ public:
       if (!entry) {
         entry.emplace();
         entry->link_type = event.link_type;
-        compile(static_cast<int>(event.link_type), entry->program);
+        compile(expression_.view(), static_cast<int>(event.link_type), entry->program);
         return apply(entry->program, event);
       }
     }
@@ -603,14 +603,14 @@ private:
   using Program = FilterProgram;
   using Entry = FilterEntry;
 
-  inline void compile(int link_type, Program &program) {
+  inline static void compile(std::string_view filter, int link_type, Program &program) {
     const std::unique_ptr<pcap_t, decltype(&pcap_close)> dead{pcap_open_dead(link_type, Limits::packet_bytes), &pcap_close};
     if (!dead) {
       throw std::runtime_error{"Unable to compile traffic filter for link type"};
     }
 
     std::array<char, Limits::filter_bytes + 1> expression{};
-    std::ranges::copy(expression_.view(), expression.begin());
+    std::ranges::copy(filter, expression.begin());
     if (pcap_compile(dead.get(), &program.value, expression.data(), 1, PCAP_NETMASK_UNKNOWN) < 0) {
       throw std::invalid_argument{pcap_geterr(dead.get())};
     }

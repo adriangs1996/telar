@@ -170,9 +170,9 @@ public:
         return;
       }
       drainControl();
-      for (auto &device : devices_) {
-        if (device && !drain(*device)) {
-          close(device);
+      for (std::size_t slot = 0; slot < devices_.size(); ++slot) {
+        if (devices_[slot] && !drain(slot)) {
+          close(slot);
         }
       }
     }
@@ -197,7 +197,7 @@ public:
         throw std::runtime_error{pcap_geterr(file.get())};
       }
       if (result > 0) {
-        packet(file.get(), *header, bytes, "offline", 0);
+        packet(static_cast<std::uint32_t>(pcap_datalink(file.get())), *header, bytes, "offline", 0);
       }
       drainControl();
     }
@@ -315,7 +315,7 @@ private:
           continue;
         }
 
-        close(*existing);
+        close(static_cast<std::size_t>(existing - devices_.begin()));
       }
 
       auto slot = std::ranges::find_if(devices_, [](auto &device) { return !device; });
@@ -347,40 +347,46 @@ private:
       notice(Kind::interface_open, name, {}, index);
     }
 
-    for (auto &device : devices_) {
-      if (device && !device->seen) {
-        close(device);
+    for (std::size_t slot = 0; slot < devices_.size(); ++slot) {
+      if (devices_[slot] && !devices_[slot]->seen) {
+        close(slot);
       }
     }
   }
 
-  inline bool drain(Device &device) {
+  // Reads a batch of a device's packets. The device is named by its slot: what it emits is written
+  // through the capture, so its name and handle are read out of the table first.
+  inline bool drain(std::size_t slot) {
     constexpr std::size_t batch_packets = 64;
+    auto *handle = devices_[slot]->handle.get();
+    const auto name = devices_[slot]->name;
+    const auto index = devices_[slot]->index;
+    const auto link_type = static_cast<std::uint32_t>(pcap_datalink(handle));
     for (std::size_t round = 0; round < batch_packets; ++round) {
       pcap_pkthdr *header;
       const u_char *bytes;
-      const auto result = pcap_next_ex(device.handle.get(), &header, &bytes);
+      const auto result = pcap_next_ex(handle, &header, &bytes);
       if (result == 0) {
         return true;
       }
       if (result < 0) {
-        notice(Kind::interface_error, device.name.view(), pcap_geterr(device.handle.get()), device.index);
+        notice(Kind::interface_error, name.view(), pcap_geterr(handle), index);
         return false;
       }
-      packet(device.handle.get(), *header, bytes, device.name.view(), device.index);
+      packet(link_type, *header, bytes, name.view(), index);
     }
 
     return true;
   }
 
-  inline void packet(pcap_t *handle, const pcap_pkthdr &header, const u_char *bytes, std::string_view interface, std::uint32_t index) {
+  inline void packet(std::uint32_t link_type, const pcap_pkthdr &header, const u_char *bytes, std::string_view interface, std::uint32_t index) {
     constexpr std::uint64_t micros_per_second = 1000000;
     const auto captured = std::min<std::size_t>(header.caplen, Limits::packet_bytes);
     emit(Event{
         .kind = Kind::packet,
         .timestamp_us = static_cast<std::uint64_t>(header.ts.tv_sec) * micros_per_second + static_cast<std::uint64_t>(header.ts.tv_usec),
         .interface_index = index,
-        .link_type = static_cast<std::uint32_t>(pcap_datalink(handle)),
+        .link_type = link_type,
         .original_bytes = header.len,
         .interface = interface,
         .bytes = {bytes, captured},
@@ -389,22 +395,24 @@ private:
 
   inline void statistics() {
     for (auto &device : devices_) {
-      if (device) { sample(*device); }
+      if (device) { sample(kernel_drops_, *device); }
     }
     emit(Event{.kind = Kind::statistics});
   }
 
-  inline void sample(Device &device) noexcept {
+  inline static void sample(KernelDrops &drops, Device &device) noexcept {
     pcap_stat value{};
     if (pcap_stats(device.handle.get(), &value) == 0) {
-      kernel_drops_.observe(device.drops, value.ps_drop, value.ps_ifdrop);
+      drops.observe(device.drops, value.ps_drop, value.ps_ifdrop);
     }
   }
 
-  inline void close(std::optional<Device> &device) {
-    sample(*device);
-    notice(Kind::interface_closed, device->name.view(), {}, device->index);
-    device.reset();
+  inline void close(std::size_t slot) {
+    sample(kernel_drops_, *devices_[slot]);
+    const auto name = devices_[slot]->name;
+    const auto index = devices_[slot]->index;
+    notice(Kind::interface_closed, name.view(), {}, index);
+    devices_[slot].reset();
   }
 
   ErasingAllocator<Memory> memory_;

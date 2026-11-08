@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 
 #include <unistd.h>
 #include <cerrno>
@@ -15,7 +16,8 @@ import telar.platform.primitives;
 export {
 namespace telar::runtime {
 
-class CompletionSignal {
+// A pipe one thread notifies and another drains: both ends share it.
+class TBC_SHARED CompletionSignal {
 public:
   inline CompletionSignal() {
     int descriptors[2];

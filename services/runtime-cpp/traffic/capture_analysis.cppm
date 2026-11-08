@@ -637,7 +637,8 @@ private:
       }
     }
     auto &flow = found->second;
-    auto &side = reverse == flow.reverse ? flow.outbound : flow.inbound;
+    const auto direction = reverse == flow.reverse ? Direction::outbound : Direction::inbound;
+    auto &side = direction == Direction::outbound ? flow.outbound : flow.inbound;
     flow.touched = Clock::now();
     if (packet.truncated) {
       close(found, event, "truncated_packet", emit, true);
@@ -660,20 +661,24 @@ private:
       close(found, event, "data_after_fin", emit, true);
       return;
     }
-    if (!consume(*found, side, packet, event, emit)) {
+    if (!consume(*found, direction, buffered_, memory_, packet, event, emit)) {
       close(found, event, "reassembly_limit_or_overlap", emit, true);
       return;
     }
-    if (side.fin && side.next == *side.fin && !side.closed) { ++side.next; side.closed = true; }
-    if (flow.outbound.closed && flow.inbound.closed) { close(found, event, "fin", emit, false); }
+    auto &consumed = found->second;
+    auto &settled = direction == Direction::outbound ? consumed.outbound : consumed.inbound;
+    if (settled.fin && settled.next == *settled.fin && !settled.closed) { ++settled.next; settled.closed = true; }
+    if (consumed.outbound.closed && consumed.inbound.closed) { close(found, event, "fin", emit, false); }
   }
 
   inline static std::int32_t distance(std::uint32_t a, std::uint32_t b) noexcept { return std::bit_cast<std::int32_t>(a - b); }
 
   template <typename Emit>
-  inline bool consume(Entry &entry, Side &side, const TcpPacket &packet, const Event &event, Emit emit) {
+  // Reassembles one direction of a flow; the bytes buffered over every flow and the allocator are lent
+  // apart from it.
+  inline static bool consume(tbc::view<Entry &, tbc::lt::a> entry, Direction direction, std::size_t &total_buffered, tbc::view<Secure &, tbc::lt::a> memory, const TcpPacket &packet, const Event &event, Emit emit) {
     auto &flow = entry.second;
-    const auto direction = &side == &flow.outbound ? Direction::outbound : Direction::inbound;
+    auto &side = direction == Direction::outbound ? flow.outbound : flow.inbound;
     auto sequence = packet.sequence + ((packet.flags & syn) ? 1u : 0u);
     auto bytes = packet.bytes;
     const auto behind = distance(side.next, sequence);
@@ -698,10 +703,10 @@ private:
       side.next += static_cast<std::uint32_t>(bytes.size());
       side.offset += bytes.size();
     } else if (!bytes.empty() && distance(sequence, side.next) > 0) {
-      if (side.pending.size() == 32 || flow.buffered + bytes.size() > per_flow_bytes || buffered_ + bytes.size() > total_bytes) { return false; }
-      side.pending.push_back({sequence, Bytes{bytes.begin(), bytes.end(), AllocatorRef<Byte, Secure>{memory_}}});
+      if (side.pending.size() == 32 || flow.buffered + bytes.size() > per_flow_bytes || total_buffered + bytes.size() > total_bytes) { return false; }
+      side.pending.push_back({sequence, Bytes{bytes.begin(), bytes.end(), AllocatorRef<Byte, Secure>{memory}}});
       flow.buffered += bytes.size();
-      buffered_ += bytes.size();
+      total_buffered += bytes.size();
       if (!side.gap) { side.gap = Clock::now(); }
     }
     for (std::size_t index = 0; index < side.pending.size();) {
@@ -714,7 +719,7 @@ private:
         side.next += static_cast<std::uint32_t>(ready.size());
         side.offset += ready.size();
       }
-      buffered_ -= pending.bytes.size();
+      total_buffered -= pending.bytes.size();
       flow.buffered -= pending.bytes.size();
       side.pending.erase(side.pending.begin() + index);
       index = 0;
