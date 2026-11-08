@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Telar.Gui
 
-// New workspace, as the Zig form: an optional name, a working directory with
+// New workspace: an optional name, a working directory with
 // folder suggestions, and a confirmation before creating a missing folder.
 // Tab moves from the name to the directory and there takes the selected
 // folder; Shift+Tab goes back; the arrows move through the folders.

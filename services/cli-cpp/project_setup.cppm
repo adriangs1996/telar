@@ -431,8 +431,8 @@ inline ServerOptions socketOptions(const char *socket) {
   return options;
 }
 
-// Zig's `Session.attach` (start false) or `Session.open`: a connection
-// failure ends the command as Zig's escapes to main, `error: NAME`.
+// Attaches to the runtime (start false) or opens it, starting it when none
+// listens; a connection failure ends the command with `error: NAME`.
 template <Allocator Memory>
 void connectRuntime(Memory &memory, const RuntimePaths<Memory> &paths, bool start) {
   try {
@@ -1322,7 +1322,7 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
       throw Failure{"send-keys needs text of 1 to 65536 bytes, or --stdin"};
     }
 
-    // Zig passes a zero-terminated pointer to sendText, so embedded NUL ends it.
+    // The text is sent as a zero-terminated string, so embedded NUL ends it.
     text = std::string_view{input}.substr(0, input.find('\0'));
   }
 
@@ -1462,7 +1462,7 @@ struct Options {
 };
 
 // The shared JSON parser intentionally has one generic syntax error. A recipe
-// keeps Zig's distinct EOF diagnostic when its valid prefix can be completed.
+// keeps a distinct EOF diagnostic when its valid prefix can be completed.
 template <Allocator Memory>
 const char *recipeJsonFailure(Memory &memory, std::string_view text) {
   std::string closing;

@@ -43,7 +43,7 @@ QByteArray hostName();
 
 // Interface: platform/login_shell.cppm
 export {
-// The user's login shell, the way lib/pty/login_shell.zig runs it.
+// The user's login shell and the script that runs a command through it.
 namespace telar::gui::platform::login_shell {
 // SHELL when the session names one, else the account's shell, else /bin/sh.
 std::string path();

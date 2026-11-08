@@ -310,7 +310,7 @@ void adoptedGuiAndInputQueries() {
     const auto gui = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output, false));
     const auto font = requiredJsonField(gui, "font");
     require(requiredJsonField(font, "size").encoded() == "18.25", "GUI queries must retain the selected profile's font size");
-    require(requiredJsonField(font, "line_height").encoded() == "1.100000023841858", "f32 preferences must preserve Zig's f64 JSON promotion");
+    require(requiredJsonField(font, "line_height").encoded() == "1.100000023841858", "f32 preferences must keep their f64 JSON promotion");
     require(requiredJsonField(requiredJsonField(gui, "window"), "titlebar").encoded() == "false", "native defaults must be supplied without importing a native API into the query");
     const auto cursor = requiredJsonField(gui, "cursor");
     require(requiredJsonField(cursor, "style").equals("hollow") && !requiredJsonField(cursor, "blink").boolean(), "GUI cursor queries must preserve style and blinking preferences");

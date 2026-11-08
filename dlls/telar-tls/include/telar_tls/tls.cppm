@@ -776,7 +776,7 @@ public:
   }
 
   inline FileDescriptor open() const {
-    // A path that names no directory holds no trust record, as for Zig.
+    // A path that names no directory holds no trust record.
     FileDescriptor descriptor{::open(directory_.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (!descriptor && errno != ENOENT && errno != ENOTDIR) {
       throw SystemError{"Open proxy authority directory"};

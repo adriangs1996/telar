@@ -38,5 +38,4 @@ Metal comparisons require exact pixels. Software and OpenGL allow one channel
 level per composited quad covering a pixel, including a maximum of two only
 where the two translucent quads overlap. Pixels outside all quads must remain
 exact. This records backend rounding; it does not establish full cross-platform
-visual equivalence. Remaining acceptance scope is tracked in
-[PARITY.md](../../../PARITY.md).
+visual equivalence.

@@ -2,10 +2,6 @@
 
 The C++23 client uses Qt Quick for the window, models and rendering. The runtime
 owns processes, PTYs and durable state; closing this client leaves them running.
-Current delivery scope and remaining work are in [DAILY_DRIVER.md](DAILY_DRIVER.md)
-and [PARITY.md](PARITY.md).
-Before profiling or optimizing the client, read [OPTIMIZATION.md](OPTIMIZATION.md)
-for the frozen benchmark, rejected experiments and reproduction procedure.
 
 ## Reproducible C++ modules build
 
@@ -245,8 +241,7 @@ in the output directory, preserving Qt's copyright and license identifiers, and
 records source/library hashes and build logs. It does not modify Qt or establish
 native rendering equivalence or a performance gain. The Metal inline-storage
 experiment is not retained: its native timing series was discarded for elevated
-shared-host load, so no qualified native CPU gain is established. Details are in
-[the performance report](../../docs/cpp-performance-progress.md).
+shared-host load, so no qualified native CPU gain is established.
 
 `gui-font-coverage-probe` records coverage for every codepoint value through
 U+10FFFF, including surrogates, and three out-of-range values. It repeats the

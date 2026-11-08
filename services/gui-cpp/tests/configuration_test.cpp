@@ -104,7 +104,7 @@ void historyPreferences() {
   const auto configuration = read({.source = R"(return {api_version = 2, client = {history = {show_agent_commands = true, enter = "run", match = "fts"}}, profiles = {paste = {client = {history = {enter = "paste"}}}}})", .profile = "paste"});
   require(configuration.history.show_agent_commands && !configuration.history.enter_runs && configuration.history.match_fts, "history profile fields must override independently and retain inherited choices");
   const auto defaults = read({.source = "return {api_version = 2}", .profile = {}});
-  require(!defaults.history.show_agent_commands && !defaults.history.enter_runs && !defaults.history.match_fts, "history defaults must match the Zig human-only fuzzy paste behavior");
+  require(!defaults.history.show_agent_commands && !defaults.history.enter_runs && !defaults.history.match_fts, "history defaults must keep the human-only fuzzy paste behavior");
 
   constexpr auto invalid_sources = std::to_array<std::string_view>({R"(return {api_version = 2, client = {history = {enter = "exec"}}})", R"(return {api_version = 2, client = {history = {match = "regex"}}})", R"(return {api_version = 2, client = {history = {show_agent_commands = "yes"}}})"});
   for (const auto source : invalid_sources) {
@@ -298,7 +298,7 @@ int main() {
     constexpr auto expected_preset_background = Color::rgb(0x1e1e2e);
     require(configuration.font.size == expected_font_size && configuration.sidebar_width == expected_sidebar_width && !configuration.cursor_blink && configuration.max_fps == expected_frame_cap, "profile must override only its declared preferences");
     require(configuration.font.family.view() == "JetBrains Mono", "font name must outlive the Lua VM");
-    require(configuration.theme.background == expected_preset_background, "preset must match the Zig terminal theme");
+    require(configuration.theme.background == expected_preset_background, "preset must match its terminal theme");
 
     const auto custom = read({.source = R"(return {api_version = 2, theme = {base = "shade", terminal = {background = "#123456"}, colors = {accent = "#abcdef"}}})", .profile = {}});
     constexpr auto expected_custom_background = Color::rgb(0x123456);

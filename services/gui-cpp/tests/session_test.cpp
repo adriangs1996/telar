@@ -619,7 +619,7 @@ void routedLayoutRoundtrip() {
   const auto *tab = client.activeTab();
   require(tab->focused_pane == 2 && !tab->fullscreen, "import must restore focus and fullscreen together");
   require(std::get<ClientLayoutSplit>(tab->layout.nodes().front()).ratio == original_ratio, "import must restore split fractions");
-  require(!client.configuration().sidebar_visible, "applying the tab tree must preserve the current sidebar preference, as in Zig");
+  require(!client.configuration().sidebar_visible, "applying the tab tree must preserve the current sidebar preference");
   const auto retained = transport.last<UpdateClientLayout>();
   require(retained.tabs.size() == 1 && retained.tabs.front().focused_pane == 2 && !retained.tabs.front().fullscreen, "the imported state must be retained for reconnects");
   require(client.findPane(2)->attaching && client.findPane(1)->attached, "restored visible panes must enter the existing attachment lifecycle");
@@ -716,7 +716,7 @@ void historyReplay() {
   openFirstPane(client, transport);
   client.queryHistory("recent");
   const auto query = transport.last<QueryHistory>();
-  require(query.author == HistoryAuthorFilter::human && query.match == HistoryMatch::fuzzy, "default history queries must match Zig filtering and search mode");
+  require(query.author == HistoryAuthorFilter::human && query.match == HistoryMatch::fuzzy, "default history queries must use human authors and fuzzy search");
   const std::array entries{
       HistoryEntry{.id = 1, .pane_id = 1, .command = "echo safe"},
       HistoryEntry{.id = 2, .pane_id = 1, .command = "echo partial", .command_truncated = true},

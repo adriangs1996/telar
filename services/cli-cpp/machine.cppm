@@ -300,7 +300,7 @@ bash "$installer" </dev/null
   return {.tools = {"curl", "bash"}, .script = "fetch https://cursor.com/install\nbash \"$installer\" </dev/null\n", .musl = false};
 }
 
-// `std.fmt.parseInt(u32, part, 10) catch null`, as Zig reads a Node.js version.
+// One numeric part of a Node.js version, or nullopt when it is not a u32.
 inline std::optional<std::uint32_t> maybeVersion(std::string_view part) noexcept {
   try {
     return parseInt<std::uint32_t>(part);

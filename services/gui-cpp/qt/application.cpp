@@ -900,7 +900,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
     configuration_source_.requestReload();
     reply.status = ClientCommandStatus::admitted;
     break;
-  // As Zig's name prompts: none opens over copy mode or another prompt, and
+  // Name prompts: none opens over copy mode or another prompt, and
   // copy mode does not start over a prompt.
   case ClientAction::client_open_goto:
     if (copyModeActive() || !dialog_.isEmpty()) {

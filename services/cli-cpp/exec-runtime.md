@@ -1,9 +1,6 @@
 # Execution and runtime CLI contracts
 
-The nine families in this port implement 25 commands. Twenty-one are `done`;
-`exec start`, `repository prepare`, `diagnostics limits` and `history stats`
-are `partial` for the reasons below. Their executable code and regression
-tests do not read `src/` or invoke Zig.
+The nine families below implement 25 commands.
 
 ## Interfaces for the other CLI packages
 
@@ -59,65 +56,26 @@ streams to stderr. Every invocation repeats the recipe. Its CLI grammar has no
 socket argument, so isolated tests explicitly set `TELAR_SOCKET` to their own
 socket, including in the server's environment for nested executions.
 
-## Native schema and backend differences
+## Native schema
 
 `api schema` derives the handshake identifier from `handshake::schema_id`:
 `schema_version` is `cqp00001`; `fingerprint` is the hexadecimal encoding of those
 eight bytes, `6371703030303031`. It describes the actual C++ tag enums, including
-the three native clipboard requests and three clipboard server messages. It
-does not reuse Zig's version `88` or fingerprint `6b480d`. Tag tables are checked
-against the C++ declarations by CTest. The comparison also checks every shared
-Zig tag and bound. `runtime status` reports the same native identifier.
-
-Three backend differences remain; the CLI prints each backend's actual reply:
-
-- Zig replies `starting` to a detached launch; native execution already replies
-  `running` (`services/runtime-cpp/execution/execution.hpp:34`).
-- Native output retention does not report the `executions.retained_bytes` limit.
-  Recovery offsets/output bytes agree; the difference appears in diagnostics.
-- Native history statistics sort equal counts by command, while Zig's bounded
-  selection keeps hash iteration order (`services/runtime-cpp/history/store.hpp:234`,
-  `src/backend/history/persistence/Store.zig:498`). Totals and group counts agree.
+the three native clipboard requests and three clipboard server messages. Tag
+tables are checked against the C++ declarations by CTest. `runtime status`
+reports the same native identifier.
 
 No GUI change is needed by these families. Linux-specific publication and
 dynamic-library paths have not been executed in this macOS validation.
 
-## Evidence and regression checks
-
-The behavior references below are at base commit `2c0ee1e9d`:
-
-| Family | Arguments | Execution/output reference |
-| --- | --- | --- |
-| exec | `src/cli/arguments/ExecOptions.zig:20` | `src/cli/execution.zig:13`, `:124`, `:152`, `:180` |
-| file | `src/cli/arguments/FileOptions.zig:9` | `src/cli/file_transfer.zig:10`, `:93`, `:103`, `:142` |
-| repository | `src/cli/arguments/RepositoryOptions.zig:16` | `src/cli/repository_prepare.zig:42`, `:120`; `repository_discovery.zig:17`; `repository_git.zig:28` |
-| project | `src/cli/arguments/ProjectOptions.zig:7` | `src/cli/project_setup.zig:13`, `:33` |
-| runtime/proxy watch | `src/cli/arguments/RuntimeOptions.zig:13`; `parser.zig:163` | `src/cli/runtime.zig:9`, `:69`, `:91`; `runtime_events.zig:8` |
-| diagnostics | `src/cli/arguments/DiagnosticsOptions.zig:19` | `src/cli/diagnostics.zig:24`, `:199` |
-| history | `src/cli/arguments/HistoryOptions.zig:24` | `src/cli/history.zig:25`, `:80`, `:165`, `:292`, `:405`, `:446`; `ImportParser.zig` |
-| api | `src/cli/arguments/ApiOptions.zig:6` | `src/cli/api.zig:16`, `:39`, `:59`; native handshake/tag headers |
-
-`tools/check_exec_runtime_cli.py --zig ZIG_TELAR --cpp CPP_TELAR --scratch DIR
---output REPORT.json` drives each CLI with its own runtime. It also uses typed
-fixture frames for deterministic metrics, nonempty workspace/agent snapshots,
-port warnings, filtering, stopping and resync. The validated run has 152 exact
-cases, six cases exposing the three recorded backend differences, five native
-wire outputs and three live observations. Only paths, identities, revisions and
-timestamps are normalized; backend differences remain explicit in the report.
+## Regression checks
 
 `exec-runtime-offline-tests` preserves parsing, binary file transfer, safe logs,
-schema metadata and deterministic observer outputs without Zig or a runtime.
+schema metadata and deterministic observer outputs without a runtime.
 `exec-runtime-cli-tests` runs real executions, imports, prune confirmations,
 recipes, bundle reception, closed-workspace discovery and the preparation probe.
-The full Release runtime CTest run passed 40/40, including `cli-help-tests`.
-`runtime-tests` needs a descriptor limit above 4096: the first run failed its
-existing `F_DUPFD(4096)` check with a soft limit of 2560, then passed with 8192
-set only in the test process. The second full run used that limit.
-
-The oracle was built from this worktree with Zig 0.16.0, ReleaseFast and GUI
-disabled. The host SDK required a private copy of Zig's libc++ headers with
-`INFINITY` replaced by `__builtin_inff()` in `__random/clamp_to_integral.h`, and
-an SDK libc file. No product source or installed toolchain was changed.
+`runtime-tests` needs a descriptor limit above 4096 for its `F_DUPFD(4096)`
+check; raise the soft limit (for example `ulimit -n 8192`) before running it.
 
 Common changes are `ControlFailure::message()` (owned raw refusal text), the
 optional request-buffer capacity of `ControlSession`, standard-allocator support

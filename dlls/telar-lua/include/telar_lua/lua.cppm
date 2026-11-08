@@ -601,7 +601,7 @@ public:
   Value &operator=(const Value &) = delete;
 
   // The same value under another name: a profile's tables are reported as
-  // the configuration's, as Zig's diagnostics name them.
+  // the configuration's, as diagnostics name them.
   // Another value of the same state, in region `a`; it does not view this one.
   inline tbc::view<Value, tbc::lt::a> as(std::string_view label) const {
     return Value{state_, index_, label};
@@ -776,7 +776,7 @@ private:
     lua_rawget(state_, parent.index_);
   }
 
-  // A field names its whole path, as Zig's diagnostics do: config.client.sidebar.visible.
+  // A field names its whole path in diagnostics: config.client.sidebar.visible.
   inline Value(const Value &parent, const char *name)
       : state_(parent.state_),
         index_(lua_gettop(state_) + 1),

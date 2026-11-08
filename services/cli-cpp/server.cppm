@@ -42,7 +42,7 @@ import telar.platform.primitives;
 export {
 namespace telar::runtime::cli {
 
-// Zig's uncaught execution errors use this prefix; argument errors use the
+// Uncaught execution errors use this prefix; argument errors use the
 // separate help-bearing diagnostic and machine edits have their own report.
 class CommandError : public std::runtime_error {
 public:
@@ -83,7 +83,7 @@ inline bool isHelpFlag(std::string_view word) noexcept {
   return word == "--help" || word == "-h";
 }
 
-// The help a command line asks for, as Zig's `help.find`: a leading flag asks for
+// The help a command line asks for: a leading flag asks for
 // the root, and a flag anywhere after a family, but before `--`, for that family or
 // the command its second word names. Help never starts or contacts a runtime.
 inline std::optional<HelpTopic> findHelp(std::span<char *const> words) noexcept {

@@ -1009,8 +1009,8 @@ inline std::string decode(std::string_view word) {
   return result;
 }
 
-// Zig's `SshOptions`: the options every connection to `destination` shares,
-// including the control master that keeps one SSH session per machine.
+// The options every connection to `destination` shares, including the
+// control master that keeps one SSH session per machine.
 template <Allocator Memory>
 std::vector<std::string> sshOptions(Memory &memory, std::string_view destination) {
   MachineFieldRules::destination(destination);
@@ -1073,16 +1073,15 @@ std::string remoteCommand(const MachineProfile &profile, const Words &words) {
   return command;
 }
 
-// Zig's `machine_dispatch.forward`: runs one telar command there with this
-// terminal's streams and returns its exit status.
+// Runs one telar command on the machine with this terminal's streams and
+// returns its exit status.
 template <Allocator Memory, typename Words>
 int forward(Memory &memory, const MachineProfile &profile, const Words &words) {
   return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words)));
 }
 
-// Zig's `machine_dispatch.capture` and `captureFile`: runs one telar command
-// there, reading `input` (or nothing), and returns its stdout. Its stderr
-// passes through; a failure throws `failure`.
+// Runs one telar command on the machine, reading `input` (or nothing), and
+// returns its stdout. Its stderr passes through; a failure throws `failure`.
 template <Allocator Memory, typename Words>
 std::string capture(Memory &memory, const MachineProfile &profile, const Words &words, const char *failure, int input = -1) {
   constexpr auto capture_timeout = std::chrono::seconds{900};
@@ -1095,8 +1094,7 @@ std::string capture(Memory &memory, const MachineProfile &profile, const Words &
   return result.out;
 }
 
-// Zig's `machine_dispatch.resolve`: the saved machine `label` names, or
-// nullopt for this machine's own label.
+// The saved machine `label` names, or nullopt for this machine's own label.
 template <Allocator Memory>
 std::optional<MachineProfile> resolve(Memory &memory, std::string_view label) {
   const auto profiles = load(memory, profilesPath());

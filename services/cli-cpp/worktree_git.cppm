@@ -1038,7 +1038,7 @@ public:
     return result;
   }
 
-  // Zig's merge check runs through its untrusted Git: hooks, filters and lazy
+  // The merge check runs through the untrusted Git: hooks, filters and lazy
   // fetches off. A clone that could still fetch lazily, on a Git too old to
   // switch that off, counts as not merged and asks a person.
   inline bool merged(std::string_view root, std::string_view branch) {

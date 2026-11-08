@@ -1368,16 +1368,16 @@ private:
     }
   }
 
-  // The reply to the request that started an execution says `starting`, as
-  // Zig's does before its spawning thread confirms the child; later replies
-  // report it running.
+  // The reply to the request that started an execution says `starting`,
+  // before the spawning thread confirms the child; later replies report it
+  // running.
   inline void send(ClientSession<Memory> &client, const Execution<Memory> &execution, const ExecutionRequest &request, bool started = false) {
     const auto state = started && execution.state == ExecutionState::running ? ExecutionState::starting : execution.state;
     std::array<Byte, 4096> output;
     std::array<Byte, 4096> error;
     const auto output_offset = std::max(request.stdout_offset, execution.output.retainedOffset());
     const auto error_offset = std::max(request.stderr_offset, execution.error.retainedOffset());
-    // Output older than the retained megabyte is gone; Zig reports that limit.
+    // Output older than the retained megabyte is gone; report that limit.
     if (output_offset != request.stdout_offset || error_offset != request.stderr_offset) {
       limits_.report(LimitReach{.name = "executions.retained_bytes", .noun = "bytes per stream", .value = Execution<Memory>::retained_capacity, .requested = std::max(execution.output.total(), execution.error.total())});
     }

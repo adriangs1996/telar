@@ -9,36 +9,36 @@ There are no published releases yet. Follow the [README build steps](../README.m
 and [platform dependencies](development.md#build-requirements). From the checkout:
 
 ```sh
-./zig-out/bin/telar
+just app
 ```
 
-A native window opens with your shell. The local runtime starts automatically
-when needed. On Linux the window needs a Wayland desktop and a supported Vulkan
-device. An SSH login or a build made with `-Dgui=false` can run the runtime and
+A native window opens with your shell on a development runtime whose socket
+and history live under `.dev/`. On macOS, `just install-gui` installs the
+application instead. An SSH login or a headless build can run the runtime and
 CLI, but cannot open this window. See [remote machines](remote.md).
 
 ## Put Telar on your PATH
 
-For the current shell, from the checkout:
+`just app` links the CLI it built at `.dev/bin/telar`. For the current shell,
+from the checkout:
 
 ```sh
-export PATH="$PWD/zig-out/bin:$PATH"
+export PATH="$PWD/.dev/bin:$PATH"
 telar --version
 ```
 
-This changes only that shell and its children. For a persistent command, use
-an installation location you will keep, then link its executable:
+This changes only that shell and its children. For a persistent command, link
+the executable into a directory you keep on PATH:
 
 ```sh
-./zig-out/bin/telar cli install --dir "$HOME/.local/bin"
-./zig-out/bin/telar cli status --dir "$HOME/.local/bin"
+telar cli install --dir "$HOME/.local/bin"
+telar cli status --dir "$HOME/.local/bin"
 ```
 
 Add `~/.local/bin` to your shell's PATH if it is absent. This is a symlink to
 the build, not a copy: moving or deleting the checkout breaks it. A regular
 file already named `telar` is left untouched. For a macOS app or a Linux desktop
 installation, use the [local installation guide](packaging.md#install-a-local-build).
-Keep `telar-diagram-renderer` next to the executable.
 
 ## Workspaces, tabs and panes
 

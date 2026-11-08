@@ -22,14 +22,18 @@ ssh -o BatchMode=yes dev@box true
 If batch mode fails, configure SSH keys or an authentication agent before
 continuing. Do not disable host-key verification to work around the failure.
 
-Build the same Telar commit on the host. A Linux server needs only Zig and its
-C development environment when building without a GUI:
+Build the same Telar commit on the host. A Linux server builds the runtime and
+CLI without a GUI, using the headless profile of the
+[C++ build guide](build/cpp-modules.md#comandos-completos):
 
 ```sh
-zig build -Dgui=false -Doptimize=ReleaseFast
+tools/cpp bootstrap
+tools/cpp configure runtime -B .dev/runtime-headless --config Release --headless
+tools/cpp build runtime -B .dev/runtime-headless -- --target telar telar-runtime telar-config-check
 ```
 
-Put that executable on the remote noninteractive SSH PATH, then check from
+Put `telar`, `telar-runtime` and `telar-config-check` together on the remote
+noninteractive SSH PATH, then check from
 your local shell:
 
 ```sh

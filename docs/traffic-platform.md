@@ -56,8 +56,7 @@ mistaken for two independent exchanges.
 
 The Go prototype's `-all` mode is a reference for active forwarding, not a
 complete interface capture backend. It redirects default-routed IPv4/IPv6
-through TUN and preserves more-specific LAN, loopback and VPN routes. See
-[the prototype's current behavior](proxy-service.md#current-ipv4-and-ipv6-prototype).
+through TUN and preserves more-specific LAN, loopback and VPN routes.
 
 ## Existing components
 

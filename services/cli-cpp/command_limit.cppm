@@ -25,9 +25,9 @@ import telar.platform.primitives;
 
 // Interface: arguments.cppm
 export {
-// What every command's argument parser shares, as the Zig CLI's `arguments/`
-// does. A usage error is an `std::invalid_argument` carrying the Zig error name,
-// which `main` prints with the help reference.
+// What every command's argument parser shares. A usage error is an
+// `std::invalid_argument` carrying the error name, which `main` prints with the
+// help reference.
 namespace telar::runtime::cli {
 
 using Arguments = std::span<char *const>;
@@ -41,10 +41,10 @@ enum class Sign : std::uint8_t {
   accepted,
 };
 
-// Zig's `std.fmt.parseInt` (`Sign::accepted`) or `std.fmt.parseUnsigned`
-// (`Sign::rejected`) in base 10: one optional sign, digits with inner
-// underscores, and the Zig error names `InvalidCharacter` and `Overflow`. As in
-// Zig, an unsigned integer accepts "-0" when signs are accepted.
+// A signed (`Sign::accepted`) or unsigned (`Sign::rejected`) integer in base
+// 10: one optional sign, digits with inner underscores, and the error names
+// `InvalidCharacter` and `Overflow`. An unsigned integer accepts "-0" when
+// signs are accepted.
 template <typename Integer>
 Integer parseDecimal(std::string_view text, Sign sign) {
   const bool negative = sign == Sign::accepted && text.starts_with('-');
@@ -150,8 +150,8 @@ Enum choice(std::string_view text, const char *error, const std::array<std::stri
   return static_cast<Enum>(found - names.begin());
 }
 
-// Zig's `arguments/Cursor.zig`: consumes words left to right; `take` keeps each
-// command's own missing-value error.
+// Consumes words left to right; `take` keeps each command's own missing-value
+// error.
 // Walks a command's words, region `a`; the words it hands out view them.
 class Cursor {
 public:

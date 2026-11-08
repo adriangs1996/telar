@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI wire-contract regression tests; no Zig or live user runtime required."""
+"""CLI wire-contract regression tests; no live user runtime required."""
 import argparse
 import json
 import os

@@ -78,8 +78,8 @@ if(BUILD_TESTING)
   add_test(NAME clipboard-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/clipboard_test.py" --telar "$<TARGET_FILE:telar>")
   set_tests_properties(clipboard-cli-tests PROPERTIES TIMEOUT 30)
   add_test(NAME pane-agent-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/pane_agent_test.py" --telar "$<TARGET_FILE:telar>")
-  # Expected outputs come from the Zig CLI on macOS: the window launch
-  # checks the display first on Linux, and setup reports the local platform.
+  # Expected outputs were recorded on macOS: the window launch checks the
+  # display first on Linux, and setup reports the local platform.
   if(APPLE)
     add_test(NAME machines-launch-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/machines_launch_test.py" --telar "$<TARGET_FILE:telar>")
     set_tests_properties(machines-launch-cli-tests PROPERTIES TIMEOUT 90)

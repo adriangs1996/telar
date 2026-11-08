@@ -11,8 +11,7 @@ main ref on 2026-10-29. The frozen baseline used VT dependency
 only the state bridge to the same frozen application revision, correcting
 non-query CAN semantics and versioning the extended C API. The original
 baseline artifacts remain immutable. The VT and application oracle builds
-have different purposes. No Zig Telar runtime
-is an oracle for this task.
+have different purposes.
 
 ## Source map
 
@@ -160,8 +159,7 @@ The pinned application's build requires Zig >=0.17.0; installed Zig 0.16.0 build
 the pinned production dependency but cannot compile this application revision.
 A private downloaded toolchain is verified against the official index hash.
 Preparation failures and build logs stay under `dependencies/` and are not
-reported as passing validation. Existing historical Zig comparisons in
-`performance.md` and `parity.md` do not certify this task.
+reported as passing validation.
 
 The compiler requirement is specifically the 0.17 series, not any newer Zig.
 The private 0.17.0 archive has SHA-256

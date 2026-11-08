@@ -1327,7 +1327,7 @@ enum class TrailingSpaces : bool {
 };
 
 // Plain text of `selection`. Pane reads keep the spaces a program wrote, as
-// Zig's `Screen.dumpString`; copies trim them, as `Screen.selectionString`.
+// Ghostty's `Screen.dumpString`; copies trim them, as `Screen.selectionString`.
 template <Allocator Memory>
 void formatTerminalSelection(Terminal<Memory> &terminal, const GhosttySelection &selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer) {
   auto options = ghosttySized<GhosttyFormatterTerminalOptions>();

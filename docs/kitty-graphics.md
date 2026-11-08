@@ -142,7 +142,7 @@ redraws, scrolling and scrollback move the image with them, and each client
 sizes it with its own cell metrics. Consecutive cells of one row form a run;
 the image is fitted into the placement's grid keeping its aspect ratio and
 centered, as kitty and Ghostty do, and each run draws its fragment over cell
-backgrounds and under text (`lib/kitty_protocol/unicode_placeholder.zig`).
+backgrounds and under text (`services/gui-cpp/graphics/placeholder.cppm`).
 Placeholder cells never draw a glyph, whether or not their image is there,
 and never ask for an installed font.
 

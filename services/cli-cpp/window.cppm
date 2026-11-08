@@ -236,7 +236,7 @@ namespace telar::runtime::cli {
 
 int runWindow(Family family, std::span<char *const> words);
 
-// Zig's `routed.run`: sends one window command to the client it names.
+// Sends one window command to the client it names.
 int runRouted(const RoutedOptions &options);
 
 }
@@ -311,7 +311,7 @@ void appendJsonNumber(String<Memory> &output, std::string_view encoded) {
   }
 }
 
-// Re-encode parsed JSON with Zig's string escapes and two-space indentation.
+// Re-encode parsed JSON with the standard string escapes and two-space indentation.
 template <Allocator Memory>
 void appendJson(String<Memory> &output, const JsonValue &value, bool pretty, unsigned depth = 0) {
   const auto encoded = value.encoded();

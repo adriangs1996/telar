@@ -113,8 +113,7 @@ namespace {
 
 constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
 
-// A family or entry point this build does not implement yet: the C++ CLI is
-// replacing the Zig one family by family (see parity.md).
+// A family or entry point this build does not implement yet.
 int unavailable(std::string_view what) {
   std::fprintf(stderr, "telar: %.*s is not implemented by this telar yet\n", static_cast<int>(what.size()), what.data());
   return 1;

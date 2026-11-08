@@ -180,7 +180,7 @@ std::optional<std::string> matching(Memory &memory, std::string_view path, std::
   return root;
 }
 
-// Zig's `repository_discovery.find`: the main checkout whose origin is
+// Repository discovery: the main checkout whose origin is
 // `identity` among the runtime's workspaces and worktrees, the workspaces
 // history recorded and the managed clone. It starts the runtime if needed.
 template <Allocator Memory>
@@ -517,7 +517,7 @@ PreparedRepository parsePrepared(Memory &memory, std::string_view output, std::s
   return {.path = std::string{path->text()}, .commit = std::string{commit}, .repository = std::string{identity}, .reused = reused->text() == "true"};
 }
 
-// Zig's `repository_prepare.prepare`: bundles `options.from` and has the other
+// Repository preparation: bundles `options.from` and has the other
 // machine's telar receive it. `capture` runs the given telar words there with
 // the bundle as stdin and returns their stdout.
 template <Allocator Memory, typename Capture>
@@ -630,8 +630,8 @@ int run(Memory &memory, const RepositoryOptions &options) {
 
 // Interface: worktree_dispatch.cppm
 export {
-// Worktrees on another machine, from the machine that dispatches them, as
-// Zig's `worktree_dispatch.zig`: `create --machine` finds the project's clone
+// Worktrees on another machine, from the machine that dispatches them:
+// `create --machine` finds the project's clone
 // there, pushes the commit the branch starts from and asks that machine's
 // telar to create the worktree; `fetch --machine` brings the branch back into
 // a remote-tracking ref. All Git traffic starts here over telar's managed SSH
@@ -643,7 +643,7 @@ enum class GitDirection : std::uint8_t {
   fetch
 };
 
-// Zig's `describe` for the errors only dispatch raises.
+// Descriptions of the errors only dispatch raises.
 inline std::string_view describeDispatchError(std::string_view name) {
   static constexpr std::array<std::pair<std::string_view, std::string_view>, 12> descriptions{{
       {"UnknownMachine", "no saved machine or local label has that name; see `telar machine list`"},

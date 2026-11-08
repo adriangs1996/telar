@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks that `telar ... --help` prints each help/ text and finds help as the Zig CLI did."""
+"""Checks that `telar ... --help` prints each help/ text and finds the help a command line asks for."""
 import argparse
 import os
 from pathlib import Path

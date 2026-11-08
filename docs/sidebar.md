@@ -36,9 +36,8 @@ never authorize an answer on the agent's behalf.
 
 ## Attention order
 
-`agents/attention.zig` in `telar-client` is the one comparator every surface
-uses for agents: the sidebar list, "next agent that needs me" and toast
-order. Groups from first to last: needs input (`blocked`, `failed`), working,
+One comparator orders agents for every surface: the sidebar list, "next
+agent that needs me" and toast order. Groups from first to last: needs input (`blocked`, `failed`), working,
 ready-unseen (`done`), idle (`ready`), `unknown`. Inside a group the smallest
 `status_age_s` comes first; equal ages fall back to pane id and generation so
 the order is stable across revisions. It is pure and allocation-free.
@@ -137,8 +136,7 @@ A workspace-list revision can update the branch without an agent revision.
 The card shows no location row (`workspace › tab › pane N`) and no cwd;
 the project rows above the agents show workspace paths instead.
 
-The window draws cards in device pixels inside the sidebar band
-(`src/gui/widgets/Sidebar.zig`, `AgentCard.zig`). Text uses the `small`, `title`,
+The window draws cards in device pixels inside the sidebar band. Text uses the `small`, `title`,
 `small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
 with 4 logical pixels before the title and 2 before the detail. Card spacing
 is 3, sidebar margins 8, radius 8 and provider symbols 14 logical pixels.
@@ -176,8 +174,7 @@ COLUMNS` and `telar sidebar get` still write and report that column value, so
 the command changes nothing the window shows: the model derives the workbench
 from it only when `model.host.grid_chrome` is set, and no adapter sets it.
 
-The window's sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
-that the renderer takes off the window width before it counts columns, the
+The window's sidebar is a band of device pixels that the renderer takes off the window width before it counts columns, the
 way the top bar, tab strip and status bar come off the height. Its width is
 `gui.sidebar.width` logical pixels (default 240, bounds 220..800) scaled by
 the display and rounded, and an 8 logical px gap separates the edge line
@@ -217,7 +214,7 @@ repaints retain manual scrolling. Headers and the resize gutter do not scroll.
 The viewports belong to the delivered hit map, so pending or failed frames
 cannot change which list receives a pointer event.
 
-A collapsed sidebar keeps a workspace rail (`widgets/WorkspaceRail.zig`):
+A collapsed sidebar keeps a workspace rail:
 a band of `SidebarBand.logical_rail` (52) logical px with the same 8 px gap,
 running from under navigation to the status bar. One 36 px control per
 project in runtime order, 10 px apart below a 12 px inset, holds the favicon
@@ -249,7 +246,7 @@ project rows, falls back to the compact top-bar indicators
 the GUI keeps only bounded disposable scroll and pointer state. Configured
 metrics and other widgets belong in the bottom status bar.
 
-The tab strip (`widgets/TabStrip.zig`) packs tabs from the left, each a
+The tab strip packs tabs from the left, each a
 30 px pill with a 10 px radius: a 20 px translucent chip holding the
 application mark (`tab_label.mark`, the focused application's even for a
 renamed tab), the caption and a trailing status. While the prefix waits for a

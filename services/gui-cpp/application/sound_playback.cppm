@@ -657,7 +657,7 @@ public:
 
 private:
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> decodeHexadecimal(std::string_view text, tbc::view<std::span<Byte>, tbc::lt::a> output) {
-    // Zig's `std.fmt.hexToBytes` error names, in its order.
+    // Hexadecimal decoding error names, checked in this order.
     if (text.empty() || text.size() % digits_per_byte != 0) {
       throw EncodingError{"InvalidLength"};
     }

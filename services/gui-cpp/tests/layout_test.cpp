@@ -45,7 +45,7 @@ constexpr ClientLayoutSnapshot fixture_snapshot{
     .active_tab = fixture_location,
     .tabs = fixture_tabs,
 };
-constexpr std::string_view zig_layout_token = "9f0100350001010004000000000000000700000000000000010000040000000000000007000000000000000c00000000000000010103000101ac0d000b00000000000000000c00000000000000";
+constexpr std::string_view reference_layout_token = "9f0100350001010004000000000000000700000000000000010000040000000000000007000000000000000c00000000000000010103000101ac0d000b00000000000000000c00000000000000";
 
 void require(bool condition, const char *message) {
   if (!condition) {
@@ -59,8 +59,8 @@ void referenceToken() {
   BudgetAllocator memory{system, memory_capacity};
   {
     String<BudgetAllocator<SystemAllocator>> text{AllocatorRef<char, BudgetAllocator<SystemAllocator>>{memory}};
-    require(LayoutToken::write(fixture_snapshot, text) == zig_layout_token, "export must match the token produced by Zig's original encoder byte for byte");
-    const auto preset = LayoutToken::read(zig_layout_token);
+    require(LayoutToken::write(fixture_snapshot, text) == reference_layout_token, "export must match the reference token byte for byte");
+    const auto preset = LayoutToken::read(reference_layout_token);
     require(sameTab(preset.location, fixture_location), "import must preserve the token's persistent tab identity");
     require(preset.focused_pane == second_pane && preset.fullscreen, "import must preserve focus and fullscreen");
     require(preset.layout.nodes().size() == fixture_nodes.size(), "import must preserve every tree node");

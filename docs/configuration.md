@@ -595,10 +595,10 @@ Three things stay in code and are not configurable, because each needs an
 agent-specific program rather than data:
 
 - **Session resume.** Only `claude`, `codex`, `pi`, `cursor` and `opencode` are resumed from a
-  checkpoint (`src/backend/agent/providers/`). A configured agent restores as
+  checkpoint. A configured agent restores as
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
-  know the hook formats of the five built-ins (`src/cli/`).
+  know the hook formats of the five built-ins (`services/cli-cpp/hooks/`).
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.
@@ -1188,8 +1188,8 @@ global sequences; prefixed sequences do not expire.
 constructor such as `split_pane`, `focus_pane`, `select_tab`,
 `resize_pane`, `resize_sidebar`, `scroll_pane`, `select_tab_offset`, `move_tab`, or `plugin`, or a Lua callback. The
 `telar.bind_expr` variants require a Lua callback. Built-in action names are
-stable configuration API; Lua never emits terminal bytes or calls internal Zig
-state.
+stable configuration API; Lua never emits terminal bytes or touches internal
+runtime state.
 
 `telar.action.resize_pane({ direction = ... })` accepts `"left"`, `"right"`,
 `"up"`, or `"down"`. Each invocation moves the nearest matching split edge by

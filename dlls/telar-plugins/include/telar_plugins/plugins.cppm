@@ -255,8 +255,8 @@ struct Manifest {
   std::size_t action_count = 0;
   Capabilities capabilities;
 
-  // Zig's `parseManifest`: the typed JSON read first, then each field's
-  // check in Zig's order, failing with Zig's error names.
+  // The typed JSON read first, then each field's check in a fixed order,
+  // failing with the manifest error names.
   template <Allocator Memory>
   inline static Manifest parse(Memory &memory, std::string_view bytes) {
     if (bytes.size() > PackageLimits::manifest_bytes) {
@@ -370,7 +370,7 @@ private:
       return manifest;
     }
 
-    // A JSON number as Zig's typed read of a u16 takes it.
+    // A JSON number as a typed read of a u16 takes it.
     inline static std::uint64_t number(const JsonValue &value) {
       const auto text = value.encoded();
       if (text.empty() || (text.front() != '-' && (text.front() < '0' || text.front() > '9'))) {

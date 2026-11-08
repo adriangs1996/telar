@@ -136,7 +136,7 @@ void capacityAndAmbiguity() {
 
 void generatedDefaultsAndOverrides() {
   InputConfiguration configuration;
-  require(configuration.compile().size() == default_bindings.size(), "all declarative Zig defaults must compile into the C++ map");
+  require(configuration.compile().size() == default_bindings.size(), "all declarative defaults must compile into the binding map");
   configuration.configured[0] = {.keys = {prefix, character('c')}, .length = 2, .action = {.kind = BindingActionKind::history_palette}, .prefixed = true};
   configuration.length = 1;
   const auto compiled = configuration.compile();

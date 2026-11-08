@@ -30,8 +30,8 @@ The helper links `telar-config`, Lua and libghostty for agent icon width validat
 these dependencies are kept out of the hook process. Its Lua bootstrap is
 `dlls/telar-config/bootstrap.lua`, shared with the runtime and the GUI.
 
-[parity.md](parity.md) records what each command does today. `help/` holds
-every help text `telar` prints, and `tools/` the regression and latency checks.
+`help/` holds every help text `telar` prints, and `tools/` the regression and
+latency checks.
 
 [Execution and runtime contracts](exec-runtime.md) documents the interfaces for
 remote machine/worktree commands, the deliberate native wire differences and
@@ -86,9 +86,6 @@ build. Companion transfers verify SHA-256 before replacement, and setup repairs
 a missing companion. Release archives must contain all three artifacts; the
 installer refuses archives missing the C++ companions. Agent assets and skills
 are embedded from `integration/assets/`.
-
-See [the port report](machines-launch-report.md) for comparisons, retained tests
-and the remaining setup verification boundaries.
 
 ## Editor
 

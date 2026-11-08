@@ -116,7 +116,7 @@ inline std::optional<Family> parseFamily(std::string_view word) noexcept {
 export {
 namespace telar::runtime::cli {
 
-// The two ways the Zig CLI escaped JSON strings; `--json` output keeps each
+// The two ways the CLI escapes JSON strings; `--json` output keeps each
 // command's own. `standard` is std.json.Stringify: \b \f \n \r \t shorthands and
 // \u00XX for other control bytes. `control` is control.writeJsonString: only
 // \n \r \t shorthands, and DEL escaped too.

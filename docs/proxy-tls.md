@@ -345,11 +345,11 @@ code that may read all intercepted traffic.
 
 An authorized tap package runs in an isolated long-lived Lua child behind its
 own bounded queue. The tunnel publishes an owned exchange snapshot; the worker
-receives an immutable value and returns typed notification effects. Zig
+receives an immutable value and returns typed notification effects. The runtime
 validates the complete batch and its capabilities before applying anything.
 Timeouts, VM errors, stale identities, and full queues discard extension work.
 A Lua closure never enters the runtime loop, a TLS session, or a tunnel actor,
-and it never receives a Zig pointer.
+and it never receives a runtime pointer.
 
 ## Counters
 
@@ -416,7 +416,6 @@ certificate.
 ## Build dependency
 
 The runtime links `libnghttp2` for HPACK decoding and encoding and
-`libbrotlidec` for captured Brotli bodies. Both are compiled from the sources
-pinned in `build.zig.zon` and linked statically, so no installation is needed.
-`zig build -Dnghttp2=/path/to/prefix` and `-Dbrotli=/path/to/prefix` link a
-system installation instead; see [packaging](packaging.md#native-libraries).
+`libbrotlidec` for captured Brotli bodies. CMake builds both from the sources
+pinned in `cmake/native/manifest.cmake` and links them statically, so no
+installation is needed; see [packaging](packaging.md#native-libraries).

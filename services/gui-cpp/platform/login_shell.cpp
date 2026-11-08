@@ -23,7 +23,6 @@ std::string path() {
   return "/bin/sh";
 }
 
-// Mirrors `script` in lib/pty/login_shell.zig.
 const char *script(std::string_view shell) {
   const auto name = shell.substr(shell.find_last_of('/') + 1);
 

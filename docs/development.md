@@ -48,9 +48,6 @@ application bundles and desktop entries.
 
 ## Making changes
 
-The planned [Go proxy service migration](proxy-service.md) defines component
-ownership, the first IPC delivery and the native adapter validation gates.
-
 Test what you change before you commit:
 
 ```sh

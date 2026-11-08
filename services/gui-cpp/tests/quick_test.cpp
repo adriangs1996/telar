@@ -4295,7 +4295,7 @@ return {api_version=2, client={keybindings={
     peer.open(socket_);
     QTRY_VERIFY2_WITH_TIMEOUT(peer.ready(), qPrintable(peer.error()), runtime_wait_ms);
 
-    // As in Zig, Goto does not open over another prompt and leaves it as it was.
+    // Goto does not open over another prompt and leaves it as it was.
     peer.request(telar::ClientAction::client_open_goto, 1);
     QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
     QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);

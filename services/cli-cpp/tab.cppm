@@ -87,8 +87,8 @@ int sqlite3_busy_timeout(HistoryDatabase *, int);
 
 namespace telar::runtime::cli {
 
-// The workspace paths the history database recorded, read as Zig's
-// `repository_discovery.find` does. Hooks must not load SQLite, so its public
+// The workspace paths the history database recorded, read as repository
+// discovery does. Hooks must not load SQLite, so its public
 // ABI is resolved only while a command searches history.
 class HistoryPathReader {
 public:
@@ -270,7 +270,7 @@ private:
 };
 
 // Each workspace path the history at `database` recorded. A database that
-// exists but cannot be opened fails, as in Zig; a missing one records none.
+// exists but cannot be opened fails; a missing one records none.
 template <typename Consumer>
 void historyPaths(const char *database, Consumer &&consume) {
   HistoryPathReader reader;
@@ -303,7 +303,7 @@ struct IntegrationOptions {
   std::string_view settings;
   bool legacy = false;
 
-  // Zig's `IntegrationOptions.parse`, with its error names.
+  // The integration command's options, with their error names.
   inline static IntegrationOptions parse(std::span<char *const> arguments) {
     if (arguments.size() < 2) {
       usage("MissingIntegrationArguments");

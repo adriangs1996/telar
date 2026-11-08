@@ -14,7 +14,7 @@ using namespace telar::runtime::cli;
 
 namespace {
 
-// Expected values and error names are what Zig 0.16's std.fmt prints for the same text.
+// Expected values and error names of the CLI's integer parser for each text.
 template <typename Parse>
 std::string outcome(Parse parse) {
   try {
@@ -24,7 +24,7 @@ std::string outcome(Parse parse) {
   }
 }
 
-void parsesAsZig() {
+void parsesIntegers() {
   check(outcome([] { return parseUnsigned<std::uint32_t>("+42"); }) == "InvalidCharacter");
   check(outcome([] { return parseInt<std::uint32_t>("+42"); }) == "42");
   check(outcome([] { return parseInt<std::uint32_t>("-0"); }) == "0");
@@ -65,7 +65,7 @@ void walksWords() {
 }
 
 int main() {
-  parsesAsZig();
+  parsesIntegers();
   mapsErrors();
   walksWords();
   return 0;

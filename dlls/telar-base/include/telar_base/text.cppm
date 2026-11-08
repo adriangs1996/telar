@@ -869,7 +869,7 @@ private:
       return exponent == 1 && compare(significant, "1") == 0;
     }
 
-    // Zig coerces JSON versions through binary128. Compare its exact rounding
+    // Versions are compared as binary128 values: this is their exact rounding
     // interval around one; double precision would accept different versions.
     const auto lower = hexadecimal ? std::string_view{binary_lower.data(), binary_lower.size()} : decimal_lower;
     const auto upper = hexadecimal ? std::string_view{binary_upper.data(), binary_upper.size()} : decimal_upper;

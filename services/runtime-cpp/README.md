@@ -22,9 +22,7 @@ pinned OpenSSL, nghttp2, Brotli and Zstd, and on Linux also zlib, SQLite and
 libpcap, statically into `TELAR_DEPENDENCIES_DIR`. macOS requires version 26
 and its SDK, which provides SQLite, zlib and libpcap. Linux uses GNU
 process-spawn extensions, `epoll_pwait2`, `renameat2` and `arc4random_buf`.
-Zig builds only
-libghostty-vt for production; the executable links no
-Telar Zig runtime code.
+Zig builds only libghostty-vt.
 
 The optional interface capture helper uses libpcap on both platforms. The
 [traffic subscription guide](../../docs/traffic-capture.md) describes its
@@ -111,9 +109,7 @@ row and decode fields using the generated cell-layout manifest. Protocol
 recognition, checksum arithmetic, policy and response encoding remain native.
 
 Pass `-DCMAKE_CXX_COMPILER=/path/to/clang++` if the default compiler lacks the
-C++23 features used by the protocol serializers in `dlls/telar-client`. The measured
-build uses LLVM 23.1.2; see [performance.md](performance.md) for the host,
-binary hashes, comparisons and limitations.
+C++23 features used by the protocol serializers in `dlls/telar-client`.
 
 OpenSSL is never taken from the system. Configuration downloads the version
 pinned in `cmake/openssl/manifest.cmake`, verifies its SHA-256 and builds it
@@ -139,8 +135,7 @@ independent C++ implementations. Their libraries use injected allocation
 callbacks. Brotli and Zstd, and zlib on Linux, are the versions pinned in
 `cmake/native/manifest.cmake`; macOS uses its SDK's zlib. The capture pipeline accepts a tap through a template
 concept; with no configured tap it joins and releases captures without decoding
-their bodies. Small gzip, deflate and Zstd pass the paired Zig comparison;
-small Brotli and whole-runtime proxy acceptance remain open.
+their bodies.
 
 The dependency script fetches Ghostty commit
 `df1c99c8a5ec32c73963e5dc3fad3c9df7a3d137`, applies
@@ -354,7 +349,7 @@ idle-screen evidence before an interrupted turn settles. Focused panes and
 blocked agents reject automated prompts; prompts between panes have a budget.
 
 Agent command acknowledgement means that the bounded history queue accepted
-the command, as in Zig. Those accepted writes survive client disconnects and
+the command. Those accepted writes survive client disconnects and
 drain during orderly shutdown. Queries on the history worker observe preceding
 writes. Persistence failures enter the runtime limit ledger. Acknowledgement
 is not a promise of survival after abrupt process termination or power loss.
@@ -375,8 +370,7 @@ the configured pane/global media budget and are prepared on the media worker.
 Decoding now runs on a dedicated worker with two 64 KiB/64-event batches per
 pane. A compile-time allocator dependency charges media allocations against
 the configured pane/global budgets. The interactive terminal tracks image
-cursor movement without decoding pixels. File input and child shared-memory
-input pass exact byte/placement comparisons against Zig.
+cursor movement without decoding pixels.
 
 Suggestions are unavailable until an engine command is supplied. Each
 `--engine-arg` adds one argument, including the executable. For a Pi RPC engine:
@@ -446,11 +440,8 @@ spaces and a quote, cursor position, and rejection of a stale process identity.
 `process-probe`, `reporter-probe`, `hook-probe`, `resume-probe` and
 `graphics-probe` talk to actual daemon sockets. The agent fixture executes
 inside a PTY and reports through an independently authenticated connection.
-Comparison requires equivalent serialized results before considering timing.
 Only nondeterministic identities, timestamps and explicitly documented fixture
-paths are canonicalized. See [performance.md](performance.md) for workloads and
-commands. `--enforce` requires at least six C++ wins in seven alternated pairs
-for every selected workload.
+paths are canonicalized.
 
 For ASan and UBSan, configure a separate Debug build with
 `-DTELAR_RUNTIME_SANITIZERS=ON`. This instruments C++ code; the independently
@@ -459,30 +450,25 @@ Run performance comparisons without concurrent builds or sanitizer binaries.
 
 ## Compatibility limits
 
-All 62 request tags are handled. Replacement acceptance remains open for the
-contracts below; the detailed evidence is in [parity.md](parity.md).
+All 62 request tags are handled. Acceptance remains open for the contracts
+below.
 
-- Client delivery now bounds pending responses at 128, reserves notification
-  confirmations before publication and follows Zig's delivery priorities.
-  Optional notifications drop under pressure; lost tab closures request resync.
-  The queue has an exact reference oracle. Late-bound pane/workspace/limit
-  reads, current-state coalescing and shared attachment rotation are covered by
-  blocked-client fixtures against Zig. Exit releases its attachment after the
-  socket write completes. Broader lifecycle/resource coverage remains.
+- Client delivery bounds pending responses at 128, reserves notification
+  confirmations before publication and delivers by priority. Optional
+  notifications drop under pressure; lost tab closures request resync.
+  Late-bound pane/workspace/limit reads, current-state coalescing and shared
+  attachment rotation are covered by blocked-client fixtures. Exit releases its
+  attachment after the socket write completes. Broader lifecycle/resource
+  coverage remains.
 - Debug diagnostics include command capture, VT storage, media allocations,
   graphics storage, transfer staging/adoption and client response queue depth,
   high-water marks and drops.
-- Provider screen scanners, integration installation and system-trust command
-  behavior have reference oracles. Actual system-keychain changes and native
+- Actual system-keychain changes and native
   macOS Spaces transitions have not been exercised. Broader concurrent
   lifecycle and resource-boundary acceptance remains open.
-- Whole-runtime performance is not accepted. Atomic file/shared graphics,
-  small Brotli capture and other gates recorded in [performance.md](performance.md)
-  still fail. Paired results apply to the recorded binaries and workloads on
-  macOS ARM64; they are not a universal performance guarantee.
 
-Graphics placement eviction follows the reference's offscreen-first and
-oldest-image policy. Temporary-file Kitty input remains disabled, as in Zig.
+Graphics placement eviction is offscreen-first, then oldest image.
+Temporary-file Kitty input remains disabled.
 Plugin completeness has low priority. Packaging, hosted CI and release work
 are deferred at the user's request.
 
@@ -491,7 +477,7 @@ The runtime also accepts `server endpoint`, `server stop`, `server bridge`,
 `--background` and `--fresh`. Endpoint discovery starts the same C++ executable
 when needed. `--fresh` preserves the checkpoint as `.previous` after acquiring
 the listener. Configuration uses the vendored Lua 5.5.1 sources compiled directly
-with C++, without linking Telar Zig modules. The C++ exception mode preserves
+with C++. The C++ exception mode preserves
 callback cleanup on Lua failures. Its allocator is injected and its default
 budgets are 16 MiB, one million instructions and two seconds.
 
@@ -500,9 +486,7 @@ Process identification includes bounded group-member selection and cached
 acquisition. Hook descent checks run on a separate worker. Conflicting named
 reports wait for process reidentification while their connection is paused;
 other clients continue. Payload ownership, ordering, original observation times,
-rejection caching and stale-generation handling have focused tests. See
-[parity.md](parity.md) for the cross-runtime replacement fixtures and remaining
-acceptance gaps.
+rejection caching and stale-generation handling have focused tests.
 
 
 Path indexing publishes partial results while its build worker runs. Four clients

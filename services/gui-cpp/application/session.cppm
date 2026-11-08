@@ -500,8 +500,7 @@ public:
     return requestTabCreation(command.label(), command.argv());
   }
 
-  // Without a directory the workspace starts where the focused pane is, as
-  // in Zig.
+  // Without a directory the workspace starts where the focused pane is.
   inline void createWorkspace(WorkspaceDraft draft) {
     auto launch = defaultLaunch();
     if (!draft.path.empty()) {
@@ -3511,7 +3510,7 @@ private:
   Change apply(const ClientCommand &message, Handler &handler) {
     CompleteClientCommand reply;
     static_cast<ClientCommand &>(reply) = message;
-    // The reply starts as the command, text included, as Zig's: the actions
+    // The reply starts as the command, text included: the actions
     // whose text is only a request argument clear it.
     reply.status = ClientCommandStatus::applied;
     auto change = Change::model;
@@ -3595,7 +3594,7 @@ private:
     }
   }
 
-  // As Zig's `cli_control.zig`: a command that changes nothing is `applied`,
+  // A command that changes nothing is `applied`,
   // one that starts a change is `admitted`, and the target stays the one the
   // CLI sent, which the runtime matches the completion by.
   inline void executeNavigationCommand(const ClientCommand &message, CompleteClientCommand &reply) {

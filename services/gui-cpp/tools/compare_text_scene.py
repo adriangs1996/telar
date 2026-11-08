@@ -122,7 +122,7 @@ def main():
         manifest=manifest,
         cases=cases,
         geometry_sha256=[dict(operation=operation, glyphs=glyphs, sha256=digest) for (operation, glyphs), digest in sorted(expected.items())],
-        scope='Native Qt CPU scene-node construction, rebuilding and repainting with warm glyph/texture caches. The final ordered vertex values, matrices, material colors and blend modes match exactly in every run. This does not measure GPU drawing, complete-frame latency, process memory, asynchronous upload completion or parity against Zig.',
+        scope='Native Qt CPU scene-node construction, rebuilding and repainting with warm glyph/texture caches. The final ordered vertex values, matrices, material colors and blend modes match exactly in every run. This does not measure GPU drawing, complete-frame latency, process memory or asynchronous upload completion.',
     )
     (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for case in cases:

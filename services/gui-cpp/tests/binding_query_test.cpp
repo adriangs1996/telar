@@ -175,7 +175,7 @@ void byteArgumentsRemainQueryable() {
       .profile = {},
   };
   const ConfigurationGeneration generation{memory, source};
-  require(query(generation, 0).contains(R"("argv":["echo",[255]])"), "non-UTF-8 command bytes must retain Zig's numeric-array representation");
+  require(query(generation, 0).contains(R"("argv":["echo",[255]])"), "non-UTF-8 command bytes must retain their numeric-array representation");
 }
 
 void commandLabelsFollowPosixPaths() {

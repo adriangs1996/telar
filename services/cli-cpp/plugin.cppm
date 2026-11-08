@@ -169,8 +169,7 @@ struct PluginOptions {
   std::array<plugins::Capability, static_cast<std::size_t>(plugins::Capability::count)> capabilities{};
   std::size_t capability_count = 0;
 
-  // Zig's `PluginOptions.parse`, with its error names; `untrust` is the C++
-  // runtime's addition.
+  // The plugin command's options, with their error names.
   inline static PluginOptions parse(std::span<char *const> arguments) {
     if (arguments.size() < 2) {
       usage("MissingPluginArguments");
@@ -221,7 +220,7 @@ private:
 export {
 namespace telar::runtime::cli {
 
-// Zig's `grantedCapabilities`: the manifest's, or the requested ones, each
+// The granted capabilities: the manifest's, or the requested ones, each
 // declared there and named once.
 inline plugins::Capabilities grantedCapabilities(const plugins::Manifest &manifest, const PluginOptions &options) {
   if (options.capability_count == 0) {
@@ -277,8 +276,8 @@ void executePlugin(Memory &memory, const PluginOptions &options, const Environme
   }
 }
 
-// As Zig's `plugin.run`, a failure after the arguments parsed prints
-// `error: NAME` with Zig's error name.
+// A failure after the arguments parsed prints `error: NAME` with the error
+// name.
 template <Allocator Memory, EnvironmentLookup Environment>
 void runPlugin(Memory &memory, const PluginOptions &options, const Environment &environment) {
   try {
@@ -306,7 +305,7 @@ struct ProxyTrustOptions {
   std::string_view directory;
   std::string_view linux_backend;
 
-  // Zig's `ProxyOptions.parse`, with its error names.
+  // The proxy trust command's options, with their error names.
   inline static ProxyTrustOptions parse(std::span<char *const> arguments) {
     if (arguments.size() < 2 || std::string_view{arguments[0]} != "trust") {
       usage("MissingProxyTrustAction");
@@ -366,7 +365,7 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
   if (!options.linux_backend.empty()) {
     selected = options.linux_backend == "trust" ? proxy_trust::Backend::trust : proxy_trust::Backend::update_ca_certificates;
   }
-  // As Zig's `selectBackend`, only installation chooses a backend; status
+  // Only installation chooses a backend; status
   // and removal ignore --linux.
   if (options.action == ProxyTrustAction::install) {
 #if defined(__APPLE__)
@@ -438,7 +437,7 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
 export {
 namespace telar::runtime::cli {
 
-// Each `ClientAction` as Zig's `@tagName` prints it, in the enum's order.
+// Each `ClientAction`'s wire name, in the enum's order.
 inline constexpr std::array<std::string_view, 34> client_action_names{
     "workspace_select", "tab_create", "tab_select", "tab_next", "tab_previous", "pane_create", "pane_split",
     "pane_close", "pane_focus", "pane_resize", "pane_fullscreen", "pane_scroll", "sidebar_get", "sidebar_show",
@@ -471,8 +470,7 @@ inline void copyRange(std::string_view text) {
   }
 }
 
-// A command a window performs, as Zig's `arguments/RoutedOptions.zig`: the
-// family and verb name a `ClientAction` ("pane copy" is `pane_copy`), and the
+// A command a window performs: the family and verb name a `ClientAction` ("pane copy" is `pane_copy`), and the
 // runtime forwards it to the client `--client` names.
 // A routed command's options; its text and socket view the command's words, region `a`.
 struct RoutedOptions {

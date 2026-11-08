@@ -35,8 +35,8 @@ struct TypedDirectory {
   std::string_view expanded;
 };
 
-// The directories one expanded path can complete to, as the Zig workspace
-// form lists them. A listing may block on the filesystem, so it runs on a
+// The directories one expanded path can complete to, as the workspace form
+// lists them. A listing may block on the filesystem, so it runs on a
 // worker and keeps at most maximum_entries names, the first ones by name.
 struct DirectoryCompletion {
   static constexpr std::size_t maximum_entries = 64;

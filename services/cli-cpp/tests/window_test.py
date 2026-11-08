@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI wire fixtures independent of the retired Zig implementation."""
+"""CLI wire fixtures for window commands."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json

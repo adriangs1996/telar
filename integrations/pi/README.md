@@ -15,7 +15,7 @@ telar integration status pi
 ```
 
 This writes `~/.pi/agent/extensions/telar.ts` from
-[`src/cli/integration/pi.ts`](../../src/cli/integration/pi.ts) with the
+[`services/cli-cpp/integration/assets/pi.ts`](../../services/cli-cpp/integration/assets/pi.ts) with the
 Telar executable path filled in. Inside a Telar pane the extension runs
 `telar hook pi` on `session_start`, `agent_start`, `agent_settled`,
 `ui_prompt_start`, `ui_prompt_end` and `session_shutdown`; outside a pane it
