@@ -144,6 +144,8 @@ uses only the callee's signature:
   mutate. What the receiver reaches through its own reference fields it borrows
   exclusively, as a Rust `&mut` field is: a call that mutates through one
   invalidates every other borrow of that object, never the receiver's own.
+  Nothing a reference to const designates, nor a constant with static storage,
+  is invalidated through it, as a Rust `&T` lends nothing to mutate.
 
 A closure is checked with the function that defines it, as Rust does, so its
 call keeps which fields it reads and mutates. So are the members the compiler

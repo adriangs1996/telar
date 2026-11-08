@@ -3529,6 +3529,11 @@ namespace tbc_lint {
           if (owner == nullptr) {
             continue;
           }
+          // A constant with static storage cannot change, whatever reaches it, and neither can what a
+          // reference to const designates, as a Rust `&T` parameter cannot.
+          if (constantGlobal(owner) || constantReferent(*owner, place.target)) {
+            continue;
+          }
           // An object of a shared type, such as an allocator, keeps what it handed out valid whatever is
           // done to the inputs that reach it, also when an object that keeps it designates it.
           if (place.target.path.empty() && std::ranges::all_of(place.target.select, [](const projection &step) { return step.dereference || step.field == nullptr; }) && sharedType(owner->getType())) {
@@ -4032,6 +4037,11 @@ namespace tbc_lint {
               continue;
             }
             for (const auto &outer : inputs[first].places) {
+              // A constant with static storage cannot change through any argument, as a Rust `&'static T`
+              // cannot, so it overlaps nothing.
+              if (constantGlobal(outer.variable)) {
+                continue;
+              }
               for (const auto &inner : inputs[second].places) {
                 if (inside(inner, outer) || inside(outer, inner)) {
                   report(issue::overlap, inputs[second].argument->getExprLoc());
@@ -4051,6 +4061,21 @@ namespace tbc_lint {
             }
           }
         }
+      }
+
+      // A place inside the object a reference to const designates, reached through no further reference.
+      [[nodiscard]] static bool constantReferent(const clang::ValueDecl &variable, const object_place &place) {
+        const auto type = variable.getType();
+        if (!type->isReferenceType() || !type.getNonReferenceType().isConstQualified()) {
+          return false;
+        }
+        const auto direct = [](const projection &step) { return !step.dereference; };
+        return std::ranges::all_of(place.path, direct) && std::ranges::all_of(place.select, direct);
+      }
+
+      [[nodiscard]] static bool constantGlobal(const clang::ValueDecl *variable) {
+        const auto *global = llvm::dyn_cast_or_null<clang::VarDecl>(variable);
+        return global != nullptr && global->hasGlobalStorage() && global->getType().isConstQualified() && !global->getType()->isReferenceType();
       }
 
       // A virtual call may reach any override, which the declaration describes for all of them.

@@ -769,3 +769,63 @@ std::size_t declarationStaticInputOwned() {
 }
 
 // END CASE
+
+// CASE: declaration.constant_referent
+// PAIR: declaration.constant_referent
+// SOURCE: services/runtime-cpp/cli/server.cppm :: runServer (runRuntime)
+// STATUS: implemented
+// CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
+// SCENARIO: A launcher reads settings through a const reference while an options copy keeps a view of them; accept.
+namespace declarations {
+  struct settings {
+    std::string history;
+  };
+
+  struct launch_options {
+    std::string_view history;
+  };
+
+  class launcher {
+  public:
+    explicit launcher(const settings &values) : values_(values) {}
+    void run() { count_ += values_.history.size(); }
+
+  private:
+    const settings &values_;
+    std::size_t count_ = 0;
+  };
+
+  void launch(const launch_options &options, const settings &values) {
+    launcher running{values};
+    running.run();
+    static_cast<void>(options.history.size());
+  }
+}
+
+std::size_t declarationConstantReferent(const declarations::settings &values) {
+  const declarations::launch_options options{.history = values.history};
+  declarations::launch(options, values);
+  return options.history.size();
+}
+
+// END CASE
+
+// CASE: declaration.mutable_referent
+// PAIR: declaration.constant_referent
+// SOURCE: services/runtime-cpp/cli/server.cppm :: runServer (runRuntime)
+// STATUS: implemented
+// CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
+// SCENARIO: The same settings passed by mutable reference to a call that replaces them while a view of them is used later; reject at the call.
+namespace declarations {
+  void reset(settings &values) {
+    values.history = std::string(64, 'x');
+  }
+}
+
+std::size_t declarationMutableReferent(declarations::settings &values) {
+  const declarations::launch_options options{.history = values.history};
+  declarations::reset(values); // expected-error [tbc-invalidated-borrow]
+  return options.history.size();
+}
+
+// END CASE
