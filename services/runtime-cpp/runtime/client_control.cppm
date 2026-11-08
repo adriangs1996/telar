@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <ghostty/vt.h>
 #include <stdlib.h>
@@ -884,7 +885,8 @@ private:
     }
   }
 
-  inline static void enqueueRetired(RuntimeModel<Memory> &model, typename Processor::Request &request) noexcept {
+  // The request shares the observers of region `a`.
+  inline static void enqueueRetired(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, tbc::view<typename Processor::Request &, tbc::lt::a> request) noexcept {
     auto *link = &model.retired_observers;
     while (*link && request.count < request.entries.size()) {
       auto &observer = **link;
@@ -904,7 +906,7 @@ private:
   }
 
   // A sole pane discovers its foreground group on the worker; others read it here.
-  inline void enqueue(typename Processor::Request &request, const Agents &agents, Pane<Memory> &pane, bool sole) {
+  inline void enqueue(tbc::view<typename Processor::Request &, tbc::lt::a> request, const Agents &agents, tbc::view<Pane<Memory> &, tbc::lt::a> pane, bool sole) {
     if (auto drop = pane.observer->takeDrop()) {
       limits_.report(*drop);
     }

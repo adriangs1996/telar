@@ -118,11 +118,13 @@ public:
         initial_size_(size) {}
 
   inline void configureHistory(const HistorySession &session, bool capture_output = false) {
-    session_ = session;
     workspace_path_.assign(session.workspace_path);
     shell_.assign(session.shell);
-    session_.workspace_path = workspace_path_;
-    session_.shell = shell_;
+    // The session kept views the observer's own copies of its texts.
+    auto kept = session;
+    kept.workspace_path = workspace_path_;
+    kept.shell = shell_;
+    session_ = kept;
     if (capture_output) {
       tracker_.enableOutputCapture();
     }
@@ -315,8 +317,9 @@ private:
   std::optional<unsigned> sealed_;
   std::optional<LimitReach> drop_;
   Terminal<Memory> terminal_;
-  CommandTracker<Memory> tracker_;
-  HistorySession session_;
+  // Reads terminal_.
+  tbc::view<CommandTracker<Memory>, tbc::lt::self> tracker_;
+  tbc::view<HistorySession, tbc::lt::self> session_;
   String<Memory> workspace_path_;
   String<Memory> shell_;
   TerminalSize initial_size_;

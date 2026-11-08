@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <new>
@@ -291,7 +292,8 @@ namespace telar::runtime {
 template <Allocator Memory>
 class PathIndexBuilder {
 public:
-  inline explicit PathIndexBuilder(Memory &memory, PathIndexStorage<Memory> &storage)
+  // Builds into the storage it is given; the directories it tracks view it, region `a`.
+  inline explicit PathIndexBuilder(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<PathIndexStorage<Memory> &, tbc::lt::a> storage)
       : memory_(memory),
         storage_(storage) {}
 
@@ -353,7 +355,7 @@ private:
     }
   }
 
-  inline bool appendTracked(std::string_view relative, Directories &directories) {
+  inline bool appendTracked(std::string_view relative, tbc::view<Directories &, tbc::lt::a> directories) {
     if (!acceptable(relative)) {
       return true;
     }
@@ -489,8 +491,8 @@ private:
     }
   }
 
-  Memory &memory_;
-  PathIndexStorage<Memory> &storage_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<PathIndexStorage<Memory> &, tbc::lt::a> storage_;
 };
 
 }
@@ -643,7 +645,8 @@ private:
 
   String<Memory> root_;
   PathIndexStorage<Memory> storage_;
-  PathIndexBuilder<Memory> builder_;
+  // Builds into storage_.
+  tbc::view<PathIndexBuilder<Memory>, tbc::lt::self> builder_;
   FuzzyMatch<Memory> matcher_;
 };
 

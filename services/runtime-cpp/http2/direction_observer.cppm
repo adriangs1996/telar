@@ -224,11 +224,11 @@ class Http2PayloadFragment {
 public:
   inline void reset() noexcept { padding_ = 0; }
 
-  inline std::optional<std::span<const std::uint8_t>> body(const Http2FrameEvent &event) noexcept {
+  inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> body(tbc::view<const Http2FrameEvent &, tbc::lt::a> event) noexcept {
     return extract(event, 0);
   }
 
-  inline std::optional<std::span<const std::uint8_t>> headers(const Http2FrameEvent &event) noexcept {
+  inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent &, tbc::lt::a> event) noexcept {
     std::size_t prefix = 0;
     if (event.frame.kind == Http2FrameKind::headers && event.frame.has(Http2Flag::priority)) {
       prefix = priority_bytes;

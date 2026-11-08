@@ -575,8 +575,9 @@ private:
 
   static constexpr std::size_t maximum_entries = 1000;
   static constexpr std::size_t result_header_bytes = sizeof(Byte) + sizeof(std::uint64_t) * 2 + sizeof(std::uint16_t) + sizeof(Byte);
+  // Reserved whole and bounded before each copy, so the texts the entries view never move.
   ByteQueue<Memory> text_;
-  Vector<HistoryEntry, Memory> entries_;
+  tbc::view<Vector<HistoryEntry, Memory>, tbc::lt::self> entries_;
   std::size_t encoded_bytes_ = result_header_bytes;
 };
 

@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <ghostty/vt.h>
 #include <sys/stat.h>
@@ -417,7 +418,8 @@ public:
   std::shared_ptr<PtyResponseQueue> pty_responses;
   std::shared_ptr<PaneObserver<Memory>> observer;
   std::shared_ptr<PaneMedia<Memory>> media;
-  Terminal<Memory> terminal;
+  // Reports its graphics queries to media.
+  tbc::view<Terminal<Memory>, tbc::lt::self> terminal;
   ByteQueue<Memory> input;
   String<Memory> cwd;
   std::optional<PtyProcess> process;
