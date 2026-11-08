@@ -1,5 +1,6 @@
 #include "system_library.hpp"
 
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -167,6 +168,64 @@ std::string_view libraryConstantExpression() {
 std::string_view libraryConstantAlongsideLocal(bool constant) {
   const std::string local = "abc";
   return constant ? third_party::name() : std::string_view{local}; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: library.raw_stream_pointer
+// PAIR: library.raw_stream
+// SOURCE: services/runtime-cpp/exchange_capture/producer.cppm :: FlateDecoder::decode
+// STATUS: implemented
+// CONTRACT: A pointer field of a C struct a system header declares is a raw pointer, as Rust's `*const T` in an FFI struct, so storing a buffer in it keeps no borrow.
+// SCENARIO: A decoder hands one call's buffers to its C stream; accept.
+namespace third_party {
+  class decoder {
+  public:
+    decoder() = default;
+    decoder(const decoder &) = delete;
+    int decode(std::string_view input, std::span<unsigned char> output) {
+      stream_.next_in = reinterpret_cast<const unsigned char *>(input.data());
+      stream_.avail_in = static_cast<unsigned>(input.size());
+      stream_.next_out = output.data();
+      stream_.avail_out = static_cast<unsigned>(output.size());
+      return codec_pump(&stream_);
+    }
+
+  private:
+    codec_stream stream_{};
+  };
+}
+
+int libraryRawStreamPointer(third_party::decoder &decoder, std::string_view input, std::span<unsigned char> output) {
+  return decoder.decode(input, output);
+}
+
+// END CASE
+
+// CASE: library.project_stream_pointer
+// PAIR: library.raw_stream
+// SOURCE: services/runtime-cpp/exchange_capture/producer.cppm :: FlateDecoder::decode
+// STATUS: implemented
+// CONTRACT: A pointer field of a C struct a system header declares is a raw pointer, as Rust's `*const T` in an FFI struct, so storing a buffer in it keeps no borrow.
+// SCENARIO: The same stream declared by the project keeps the borrow its declaration does not allow; reject the store.
+namespace third_party {
+  struct project_stream {
+    const unsigned char *next_in;
+  };
+
+  class project_decoder {
+  public:
+    void decode(std::string_view input) {
+      stream_.next_in = reinterpret_cast<const unsigned char *>(input.data()); // expected-error [tbc-contract-violation]
+    }
+
+  private:
+    project_stream stream_{};
+  };
+}
+
+void libraryProjectStreamPointer(third_party::project_decoder &decoder, std::string_view input) {
+  decoder.decode(input);
 }
 
 // END CASE

@@ -494,6 +494,11 @@ it.
 A function's address is static storage, not a borrow of the object that keeps
 it, as a `std::unique_ptr` with a function deleter does.
 
+A pointer field of a C struct that a system header declares, such as zlib's
+`z_stream::next_in`, is a raw pointer, as Rust's `*const T` in an FFI struct
+is: storing a buffer in it keeps no borrow, and the code that hands the
+buffer to the C library answers for it.
+
 A field labeled `lt::self` is the one exception: it borrows only the object that
 holds it, as an allocator reference to a sibling arena does. Its borrows never
 count as the object's, so a `std::shared_ptr` to such an object carries none.

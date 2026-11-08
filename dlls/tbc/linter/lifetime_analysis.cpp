@@ -1900,8 +1900,22 @@ namespace tbc_lint {
         }
       }
 
+      // A pointer field of a C struct a system header declares, as a codec's stream: a raw pointer that,
+      // like Rust's `*const T` in an FFI struct, carries no lifetime, so storing in it keeps no borrow.
+      [[nodiscard]] bool rawForeignPointer(const field_path &fields) const {
+        if (fields.empty() || fields.back().field == nullptr || !fields.back().field->getType()->isPointerType()) {
+          return false;
+        }
+        const auto *record = llvm::dyn_cast<clang::CXXRecordDecl>(fields.back().field->getParent());
+        const auto &sources = context_.getSourceManager();
+        return record != nullptr && record->isCLike() && sources.isInSystemHeader(sources.getExpansionLoc(record->getLocation()));
+      }
+
       void store(const write_targets &where, const loans &incoming, state &current) {
         for (const auto &target : where.places) {
+          if (rawForeignPointer(target.fields)) {
+            continue;
+          }
           // A parameter passed by value is the callee's own copy: writing it, not what it designates,
           // keeps nothing for the caller.
           const bool local_copy = llvm::isa<clang::ParmVarDecl>(target.variable) && !target.designated && !target.variable->getType()->isReferenceType();

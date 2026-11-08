@@ -4,6 +4,17 @@
 // A third-party library in the shape of Qt: declared in a system header and compiled elsewhere.
 #pragma clang system_header
 
+// A C codec's stream, as zlib's z_stream: the buffers of one call are raw pointers in it.
+extern "C" {
+typedef struct codec_stream {
+  const unsigned char *next_in;
+  unsigned avail_in;
+  unsigned char *next_out;
+  unsigned avail_out;
+} codec_stream;
+int codec_pump(codec_stream *stream);
+}
+
 namespace library {
   // A scene node an item updates through a virtual the library calls, as QQuickItem::updatePaintNode is.
   class node {
