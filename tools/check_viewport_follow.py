@@ -17,9 +17,8 @@ import os
 from pathlib import Path
 import subprocess
 
-from bench_stack import executable_identity, runtime_identity
+from bench_stack import executable_identity, runtime_identity, short_socket_path, stop_runtime
 from benchmark_host import HostLoadGate
-from perf_e2e import short_socket_path, stop_runtime
 
 
 SCENARIOS = ('return', 'held', 'history', 'clamp', 'reflow', 'reflow-continuation', 'clear')

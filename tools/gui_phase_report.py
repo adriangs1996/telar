@@ -11,7 +11,7 @@ import math
 from pathlib import Path
 import statistics
 
-from echo_latency import percentile
+from bench_stack import percentile
 from tab_switch_report import stage_samples, validate_switch
 from terminal_bench_report import finite_number, latency_samples, validate_telar_display_sync
 
@@ -38,7 +38,7 @@ def native_stages(result):
     if 'switch_samples' in result:
         stage_samples(result)
     if (type(result.get('failed')) is not int or result['failed'] != 0
-            or result.get('mode') not in ('gui', 'gui-cpp') or result.get('endpoint') != 'presented'):
+            or result.get('mode') != 'gui-cpp' or result.get('endpoint') != 'presented'):
         raise ValueError('Native probe failed or has an unsupported client/endpoint')
     for name in ('app_active_start', 'app_active_end', 'window_key_start', 'window_key_end'):
         observations = result.get(name)

@@ -13,13 +13,13 @@ from pathlib import Path
 import random
 import statistics
 
-from echo_latency import percentile
+from bench_stack import percentile
 
 
 BOOTSTRAP_SAMPLES = 10000
 BOOTSTRAP_SEED = 20260918
-MODE_ORDER = ('ghostty', 'gui', 'gui-cpp', 'tui')
-MODE_LABELS = {'ghostty': 'Ghostty', 'gui': 'Telar GUI Zig', 'gui-cpp': 'Telar GUI C++ / Qt Quick', 'tui': 'Telar TUI + Ghostty'}
+MODE_ORDER = ('ghostty', 'gui-cpp', 'tui')
+MODE_LABELS = {'ghostty': 'Ghostty', 'gui-cpp': 'Telar GUI C++ / Qt Quick', 'tui': 'Telar TUI + Ghostty'}
 LATENCY_FIELDS = dict(gpu='gpu_ms', presented='presentation_ms')
 ENDPOINT_NAMES = dict(gpu='native_input_to_verified_gpu_completion_callback', presented='native_input_to_verified_drawable_presentation')
 
@@ -103,7 +103,7 @@ def load_runs(paths):
             if not isinstance(round_index, int) or isinstance(round_index, bool) or round_index < 0:
                 raise ValueError(f'invalid round: {identity}')
             if run.get('endpoint') == 'presented':
-                if mode not in ('gui', 'gui-cpp'):
+                if mode != 'gui-cpp':
                     raise ValueError('The presentation endpoint requires a Telar mode')
                 validate_telar_display_sync(run)
             if identity in seen:
@@ -227,9 +227,9 @@ def summarize_runs(runs, sources):
                                             run_p50_range_ms=[min(medians), max(medians)], geometry=geometry,
                                             runs=[dict(round=run['round'], **run['summary']) for run in measurements],
                                             throughput=throughput_statistics(measurements))
-        reference = 'ghostty' if 'ghostty' in variants else 'gui'
-        case_result['reference'] = reference if reference in variants else None
-        if reference in variants:
+        reference = 'ghostty' if 'ghostty' in variants else None
+        case_result['reference'] = reference
+        if reference:
             for mode in variants:
                 if mode != reference:
                     case_result['paired'][mode] = paired_statistics(variants[reference], variants[mode])

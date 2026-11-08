@@ -39,7 +39,7 @@ def validate_screen(trace, actual, sequence):
                 scope="Exact final runtime text only. Does not verify cell styles, all intermediate drawable pixels, cadence or native120.")
 
 
-def finish(directory, mode, zig, reader, sequence):
+def finish(directory, mode, reader, sequence):
     directory = Path(directory)
     result_path = directory / "result.json"
     if not result_path.exists():
@@ -55,17 +55,10 @@ def finish(directory, mode, zig, reader, sequence):
             raise ValueError("TUI receipt belongs to another producer")
         pane, rows = str(trace["pane_id"]), str(trace["rows"])
         socket = str(directory / "runtime.sock")
-        if mode == "gui-cpp":
-            command = [str(reader), socket, pane, str(trace["pane_generation"]), rows]
-            actual = subprocess.check_output(command, text=True, timeout=20)
-        elif mode == "gui":
-            command = [str(zig), "pane", "read", pane, "--lines", rows, "--source", "screen", "--json", "--socket", socket]
-            reply = json.loads(subprocess.check_output(command, text=True, timeout=20))
-            if reply.get("pane_id") != trace["pane_id"] or reply.get("truncated") is not False or reply.get("exit_code") is not None:
-                raise ValueError("Wrong, truncated or exited Zig pane reply")
-            actual = reply["text"]
-        else:
+        if mode != "gui-cpp":
             raise ValueError("TUI screen oracle requires a complete Telar stack")
+        command = [str(reader), socket, pane, str(trace["pane_generation"]), rows]
+        actual = subprocess.check_output(command, text=True, timeout=20)
         (directory / "runtime-screen.txt").write_text(actual)
         report = validate_screen(trace, actual, sequence)
         report["command"] = command

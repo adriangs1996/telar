@@ -1,6 +1,6 @@
 """Build an isolated ASCII TUI harness with the unchanged native presentation probe.
 
-Run OUT/gui_tui_latency.py with --cases tui, --mode gui-cpp or gui, and the
+Run OUT/gui_tui_latency.py with --cases tui, --mode gui-cpp, and the
 ordinary explicit GUI/runtime/config arguments. Final runtime text is verified
 after GUI exit, before owned-runtime cleanup. Native120 remains unverified.
 The optional coalesced write mode is a labeled producer-boundary diagnostic;
@@ -36,8 +36,8 @@ def build(output, write_mode="split"):
         text = text.replace(before, after)
 
     replace("def measure(mode, directory, setup):", "from tui_bench_report import finish as finish_tui\n\ndef measure(mode, directory, setup):")
-    replace("    runtime = runtime_program(mode, binary, getattr(options, 'cpp_runtime', None))",
-            "    if mode not in ('gui', 'gui-cpp') or getattr(options, 'case', None) != 'tui':\n        raise ValueError('This harness requires --cases tui and a complete Telar stack')\n    runtime = runtime_program(mode, binary, getattr(options, 'cpp_runtime', None))")
+    replace("    runtime = runtime_program(mode, getattr(options, 'cpp_runtime', None))",
+            "    if mode != 'gui-cpp' or getattr(options, 'case', None) != 'tui':\n        raise ValueError('This harness requires --cases tui and a complete Telar stack')\n    runtime = runtime_program(mode, getattr(options, 'cpp_runtime', None))")
     fixture = "tui_coalesced_fixture.py" if write_mode == "coalesced" else "tui_bench_fixture.py"
     replace("with_name('terminal_bench_fixture.py')", f"with_name('{fixture}')")
     replace("case == 'single'", "case in ('single', 'tui')", count=2)
@@ -47,7 +47,7 @@ def build(output, write_mode="split"):
     replace("'terminal_bench_report.py', 'bench_stack.py', 'benchmark_host.py')}",
             "'terminal_bench_report.py', 'bench_stack.py', 'benchmark_host.py', 'tui_bench_fixture.py', 'tui_coalesced_fixture.py', 'tui_bench_trace.py', 'tui_bench_report.py', 'read_cpp_pane.cpp', 'read-cpp-pane')}")
     replace("            try:\n                if getattr(options, 'image_size', None) and identity is not None:",
-            "            try:\n                if identity is not None:\n                    finish_tui(directory, mode, binary, Path(__file__).with_name('read-cpp-pane'), options.samples + WARMUP)\n                if getattr(options, 'image_size', None) and identity is not None:")
+            "            try:\n                if identity is not None:\n                    finish_tui(directory, mode, Path(__file__).with_name('read-cpp-pane'), options.samples + WARMUP)\n                if getattr(options, 'image_size', None) and identity is not None:")
     path.write_text(text)
     commands = [
         ["clang++", "-O2", "-std=c++23", "-Wall", "-Wextra", "-Werror",

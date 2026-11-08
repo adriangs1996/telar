@@ -13,7 +13,7 @@ import argparse
 from pathlib import Path
 import time
 
-# The newest three, oldest last: what `gui_history.py` walks to and captures.
+# The newest three, oldest last: the rows a history capture walks to first.
 SPECIAL = [
     "echo 'añadir café ☕ 日本語 👩‍💻 naïve' | wc -c",
     'for word in uno dos tres; do\n  echo "palabra: $word"\ndone',

@@ -127,13 +127,20 @@ class HostSnapshotTest(unittest.TestCase):
                     host_snapshot()
 
 
+def staged_stack(root):
+    # The runtime staged as telar beside the GUI is the selected runtime itself.
+    gui, runtime = root / 'telar-gui', root / 'telar'
+    for path in (gui, runtime):
+        path.write_bytes(b'fixture')
+        path.chmod(0o700)
+    return ['--mode', 'gui-cpp', '--cpp-gui', str(gui), '--cpp-runtime', str(runtime)]
+
+
 class NativeRunnerHostGateTest(unittest.TestCase):
     def test_high_load_stops_before_probe_build_or_workload(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / 'series'
-            binary = Path(temporary) / 'reference'
-            binary.write_bytes(b'fixture')
-            arguments = ['gui_tui_latency.py', str(binary), str(directory), '--mode', 'gui']
+            arguments = ['gui_tui_latency.py', str(directory), *staged_stack(Path(temporary))]
             with patch('sys.argv', arguments), patch('benchmark_host.host_snapshot', return_value=observation((20, 20, 20))), patch('gui_tui_latency.subprocess.run') as command, patch('gui_tui_latency.measure') as measure:
                 with self.assertRaises(HostLoadRejected):
                     gui_tui_latency.main()
@@ -151,11 +158,9 @@ class NativeRunnerHostGateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / 'series'
-            binary = Path(temporary) / 'reference'
-            binary.write_bytes(b'fixture')
-            arguments = ['gui_tui_latency.py', str(binary), str(directory), '--mode', 'gui', '--rounds', '2', '--max-load', '5', '7.5']
+            arguments = ['gui_tui_latency.py', str(directory), *staged_stack(Path(temporary)), '--rounds', '2', '--max-load', '5', '7.5']
             snapshots = [observation() for _ in range(5)] + [observation((20, 20, 20))]
-            with patch('sys.argv', arguments), patch('benchmark_host.host_snapshot', side_effect=snapshots), patch('gui_tui_latency.subprocess.check_output', side_effect=command_output), patch('gui_tui_latency.subprocess.run'), patch('gui_tui_latency.measure', side_effect=lambda *args: {'mode': 'gui', 'case': 'single'}) as measure, patch('gui_tui_latency.aggregate_runs') as aggregate:
+            with patch('sys.argv', arguments), patch('benchmark_host.host_snapshot', side_effect=snapshots), patch('gui_tui_latency.subprocess.check_output', side_effect=command_output), patch('gui_tui_latency.subprocess.run'), patch('gui_tui_latency.measure', side_effect=lambda *args: {'mode': 'gui-cpp', 'case': 'single'}) as measure, patch('gui_tui_latency.aggregate_runs') as aggregate:
                 with self.assertRaises(HostLoadRejected):
                     gui_tui_latency.main()
             self.assertEqual(measure.call_count, 2)

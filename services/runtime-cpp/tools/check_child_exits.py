@@ -18,8 +18,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'tools'))
-from bench_stack import executable_identity, runtime_identity
-from perf_e2e import isolated_environment, stop_runtime
+from bench_stack import executable_identity, isolated_environment, runtime_identity, stop_runtime
 
 
 CASES = ('early-exit', 'immediate', 'burst', 'signal', 'forked-writer', 'coalesced')

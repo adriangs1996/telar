@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 import statistics
 
-from echo_latency import percentile
+from bench_stack import percentile
 from native_display_reference import qualify_display
 from terminal_bench_report import finite_number, latency_samples, validate_telar_display_sync
 

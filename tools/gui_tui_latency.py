@@ -7,7 +7,6 @@ performance records still name this file.
 Resigns a private copy of Ghostty; never modifies the installed application.
 The probe reads back one marker pixel within the rendering command buffer.
 Metal and Metal 4 instrumentation have different overheads.
-The optional GUI text endpoint starts at committed text instead of keyDown.
 """
 import argparse
 import hashlib
@@ -23,55 +22,33 @@ import statistics
 import subprocess
 import time
 
-from echo_latency import percentile
 from terminal_bench_report import latency_samples, validate_telar_display_sync
-from perf_e2e import descendants, stop_runtime
 from terminal_bench_fixture import background_rate
-from bench_stack import executable_identity, process_identity, runtime_identity, staged_runtime
+from bench_stack import (descendants, executable_identity, percentile, process_identity, runtime_identity,
+                         staged_runtime, stop_runtime)
 from benchmark_host import HostLoadGate, HostLoadRejected
 
 WARMUP = 20
 BACKGROUND_RATE_TOLERANCE = .05
-MODE_GROUPS = dict(native=['ghostty', 'gui'], telar=['gui', 'gui-cpp'])
-TELAR_MODES = ('gui', 'gui-cpp')
+MODE_GROUPS = dict(native=['ghostty', 'gui-cpp'])
+TELAR_MODES = ('gui-cpp',)
 
 
-def runtime_program(mode, binary, cpp_runtime):
+def runtime_program(mode, cpp_runtime):
     if mode == 'gui-cpp':
         if cpp_runtime is None:
             raise ValueError('C++ GUI measurements require an explicit runtime')
         return cpp_runtime
-    return binary
+    return None
 
 
-def client_command(mode, binary, cpp_gui, config, fixture):
+def client_command(mode, cpp_gui, config, fixture):
     if mode == 'ghostty':
         return fixture
-    if mode == 'gui':
-        return [str(binary), 'gui', '--config', str(config)] + fixture
     if mode == 'gui-cpp':
         return [str(cpp_gui), '--fresh', '--config', str(config)] + fixture
 
     raise ValueError(f'unknown GUI mode: {mode}')
-
-
-def validate_telar_grids(reference, candidate):
-    def geometry(result):
-        fixtures = sorted((fixture['role'], fixture['cols'], fixture['rows']) for fixture in result['fixtures'])
-
-        return dict(viewport=result['viewport'], scale=result['backing_scale'],
-                    primary_cells=result['pty_cells'], marker=result['marker'], fixture_cells=fixtures)
-
-    before, after = geometry(reference), geometry(candidate)
-    if before != after:
-        raise ValueError(f'Telar GUI grids differ: Zig={before}, C++={after}')
-
-    if reference.get('image_size') != candidate.get('image_size'):
-        raise ValueError('Telar image workloads differ')
-    if reference.get('image_transport', 'shared-memory') != candidate.get('image_transport', 'shared-memory'):
-        raise ValueError('Telar image transports differ')
-    if reference.get('image_size') and reference['fixtures'][0]['image']['payload_sha256'] != candidate['fixtures'][0]['image']['payload_sha256']:
-        raise ValueError('Telar image payloads differ')
 
 
 def validate_image_receipt(result, size):
@@ -205,8 +182,8 @@ def cleanup_host(app):
 
 def measure(mode, directory, setup):
     directory.mkdir(mode=0o700)
-    binary, app, library, config, options = setup
-    runtime = runtime_program(mode, binary, getattr(options, 'cpp_runtime', None))
+    app, library, config, options = setup
+    runtime = runtime_program(mode, getattr(options, 'cpp_runtime', None))
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(('TELAR_', 'BENCH_')) and k != 'DYLD_INSERT_LIBRARIES'}
     env.update(TELAR_SOCKET=str(directory / 'runtime.sock'),
@@ -238,13 +215,12 @@ def measure(mode, directory, setup):
     if mode != 'ghostty':
         subprocess.run([str(runtime), 'server', '--background', '--no-config'],
                        env=env, cwd=directory, check=True)
-    args = client_command(mode, binary, getattr(options, 'cpp_gui', None), config, fixture)
+    args = client_command(mode, getattr(options, 'cpp_gui', None), config, fixture)
     probe_env = dict(DYLD_INSERT_LIBRARIES=str(library),
                      TELAR_DISPLAY_RESULT=str(directory / 'result.json'),
                      TELAR_DISPLAY_SAMPLES=str(options.samples + WARMUP),
                      TELAR_DISPLAY_WARMUP=str(WARMUP),
                      TELAR_DISPLAY_IDLE_SECONDS=str(getattr(options, 'idle_seconds', 2)),
-                     TELAR_DISPLAY_INPUT_METHOD=options.input_method,
                      TELAR_DISPLAY_ENDPOINT=getattr(options, 'endpoint', 'gpu'),
                      TELAR_DISPLAY_MODE=mode)
     if case:
@@ -376,7 +352,6 @@ def measure(mode, directory, setup):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('binary', type=Path)
     parser.add_argument('directory', type=Path, help='new short /tmp path for isolated sockets')
     parser.add_argument('--ghostty-app', type=Path, default=Path('/Applications/Ghostty.app'))
     parser.add_argument('--samples', type=int, default=100)
@@ -384,11 +359,12 @@ def main():
     parser.add_argument('--idle-seconds', type=float, default=2, help='idle CPU observation before input samples, from 0 to 10 seconds')
     parser.add_argument('--vsync', choices=['true', 'false'], default='true', help='Ghostty presentation policy; Telar requires true')
     parser.add_argument('--endpoint', choices=['gpu', 'presented'], default='gpu', help='Measure verified GPU completion or the native drawable presentation timestamp')
-    parser.add_argument('--mode', choices=['native', 'telar', 'gui', 'gui-cpp', 'ghostty'], default='native')
-    parser.add_argument('--cpp-gui', type=Path, help='Qt Quick executable for --mode telar or gui-cpp')
+    parser.add_argument('--mode', choices=['native', 'gui-cpp', 'ghostty'], default='native',
+                        help='native compares Ghostty with the C++ GUI')
+    parser.add_argument('--cpp-gui', type=Path, help='Qt Quick executable for --mode native or gui-cpp')
     parser.add_argument('--cpp-runtime', type=Path, help='explicit runtime for gui-cpp; stage the same binary as its telar helper')
-    parser.add_argument('--config', type=Path, help='same GUI configuration for both Telar clients')
-    parser.add_argument('--cwd', type=Path, help='same initial working directory for --mode telar, gui or gui-cpp')
+    parser.add_argument('--config', type=Path, help='GUI configuration for the Telar client')
+    parser.add_argument('--cwd', type=Path, help='initial working directory for --mode gui-cpp')
     parser.add_argument('--capture', action='store_true', help='save a Metal frame before warmup; peak RSS includes capture overhead')
     parser.add_argument('--cases', nargs='+', choices=['single', 'splits', 'tabs', 'splits-load', 'tabs-load'],
                         default=['single'])
@@ -405,11 +381,9 @@ def main():
     parser.add_argument('--background-mib-per-second', type=background_rate,
                         help='limit each background fixture in load cases; omitted means unlimited')
     parser.add_argument('--float-windows', action='store_true', help='float only probe windows in AeroSpace before resizing')
-    parser.add_argument('--source', type=Path, help='source checkout used for the measured binary')
+    parser.add_argument('--source', type=Path, help='source checkout used for the measured binaries')
     parser.add_argument('--max-load', type=float, nargs=2, metavar=('ONE_MINUTE', 'FIVE_MINUTES'),
                         help='positive host load limits; defaults to max(2, CPUs/2) and max(3, CPUs*3/4); high load discards the whole series')
-    parser.add_argument('--input-method', choices=['key', 'text'], default='key',
-                        help='keyDown event, or GUI committed text bypassing synthetic IME dispatch')
     parser.add_argument('--viewport', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help='fix render-target pixels independently of the window manager')
     options = parser.parse_args()
@@ -422,6 +396,8 @@ def main():
     if options.config is not None and not options.config.is_file():
         parser.error('--config must name an existing Lua file')
     modes = MODE_GROUPS.get(options.mode, [options.mode])
+    if options.vsync != 'true' and any(mode in TELAR_MODES for mode in modes):
+        parser.error('Telar comparisons require --vsync true')
     if options.image_pattern != 'opaque' and not options.image_size:
         parser.error('--image-pattern requires --image-size')
     if options.image_transport != 'shared-memory' and not options.image_size:
@@ -444,19 +420,15 @@ def main():
         options.cwd = options.cwd.resolve()
     if 'gui-cpp' in modes:
         if options.cpp_gui is None or not options.cpp_gui.is_file() or not os.access(options.cpp_gui, os.X_OK):
-            parser.error('--mode telar and gui-cpp require an executable --cpp-gui')
+            parser.error('--mode native and gui-cpp require an executable --cpp-gui')
         options.cpp_gui = options.cpp_gui.resolve()
         if options.cpp_runtime is None or not options.cpp_runtime.is_file() or not os.access(options.cpp_runtime, os.X_OK):
-            parser.error('--mode telar and gui-cpp require an executable --cpp-runtime')
+            parser.error('--mode native and gui-cpp require an executable --cpp-runtime')
         options.cpp_runtime = options.cpp_runtime.resolve()
         try:
             staged_runtime(options.cpp_gui, options.cpp_runtime)
         except ValueError as error:
             parser.error(str(error))
-    if options.vsync != 'true' and any(mode in TELAR_MODES for mode in modes):
-        parser.error('Telar comparisons require --vsync true')
-    if options.input_method == 'text' and options.mode != 'gui':
-        parser.error('--input-method text requires --mode gui')
     if options.throughput and options.cases != ['single']:
         parser.error('--throughput requires --cases single; it runs before layout creation')
     if options.background_mib_per_second is not None and not any(case.endswith('-load') for case in options.cases):
@@ -471,7 +443,6 @@ def main():
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     host = HostLoadGate(directory / 'host-load.json', options.max_load)
     host.checkpoint('before-setup')
-    binary = options.binary.resolve()
     app = directory / 'GhosttyProbe.app'
     if 'ghostty' in modes:
         shutil.copytree(options.ghostty_app, app, symlinks=True)
@@ -498,14 +469,13 @@ def main():
                           "right = t.bar.tabs() } } }, gui = { font = { family = 'JetBrains Mono', size = 15 }, "
                           "window = { padding = { x = 0, y = 0 }, background_opacity = 1 }, "
                           "cursor = { blink = false } } }\n")
-    manifest = dict(binary=str(binary), sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
-                    host_load_policy=host.policy,
+    manifest = dict(host_load_policy=host.policy,
                     vsync=options.vsync, endpoint=options.endpoint, warmup=WARMUP, rounds=options.rounds,
                     idle_seconds=options.idle_seconds,
                     readback_diagnostics='TGB_READBACK_DIAGNOSTICS' in os.environ,
                     capture=options.capture,
                     working_directory=str(options.cwd) if options.cwd else None,
-                    input_method=options.input_method, cases=options.cases, panes=options.panes,
+                    input_method='key', cases=options.cases, panes=options.panes,
                     image_size=options.image_size,
                     image_pattern=options.image_pattern,
                     image_transport=options.image_transport,
@@ -531,8 +501,6 @@ def main():
         manifest['cpp_gui_sha256'] = hashlib.sha256(options.cpp_gui.read_bytes()).hexdigest()
         manifest['cpp_runtime'] = executable_identity(options.cpp_runtime)
         manifest['cpp_runtime_helper'] = staged_runtime(options.cpp_gui, options.cpp_runtime)
-        manifest['runtime_pairing'] = ('same-runtime-diagnostic' if manifest['cpp_runtime']['sha256'] == manifest['sha256']
-                                       else 'distinct-runtime-executables')
         changed = subprocess.check_output(['git', 'ls-files', '-m', '-o', '--exclude-standard', '-z', '--', 'services'], cwd=source)
         manifest['cpp_changed_source_sha256'] = {
             name: hashlib.sha256((source / name).read_bytes()).hexdigest()
@@ -550,7 +518,7 @@ def main():
     (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     results = []
     rejected = []
-    setup = binary, app, library, config, options
+    setup = app, library, config, options
     host.checkpoint('before-series')
     for round_index in range(options.rounds):
         # Reversed cyclic permutations balance three variants over six rounds.
@@ -578,10 +546,6 @@ def main():
                 result['round'] = round_index
                 results.append(result)
                 (directory / 'runs.json').write_text(json.dumps(results, indent=2) + '\n')
-                if options.mode == 'telar':
-                    paired = {row['mode']: row for row in results if row['round'] == round_index and row['case'] == case}
-                    if len(paired) == len(TELAR_MODES):
-                        validate_telar_grids(paired['gui'], paired['gui-cpp'])
     host.finish()
     report = dict(manifest=manifest, runs=results, rejected_startups=rejected,
                   aggregate=aggregate_runs(results, options.cases, modes))

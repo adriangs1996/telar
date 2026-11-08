@@ -4,8 +4,7 @@
 // Native probes locate the input view independently of window chrome.
 static NSView *terminal_view(NSView *view) {
     NSString *name = NSStringFromClass(view.class);
-    if ([name isEqualToString:@"TelarView"] || [name isEqualToString:@"TelarCanvasView"] ||
-        ([name isEqualToString:@"QNSView"] &&
+    if (([name isEqualToString:@"QNSView"] &&
          [view conformsToProtocol:@protocol(NSTextInputClient)]) ||
         ([name containsString:@"SurfaceView"] &&
          [view conformsToProtocol:@protocol(NSTextInputClient)])) return view;

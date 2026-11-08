@@ -31,6 +31,16 @@ CPUS = os.environ.get("TELAR_VM_CPUS", "4")
 SSH_PORT = int(os.environ.get("TELAR_VM_SSH_PORT", "2223"))
 USER = "telar"
 GUEST_SRC = "src/telar"
+# The guest builds into out-vm, which sync leaves alone, beside the host's own out.
+GUEST_BUILD = "out-vm"
+GUEST_CLI = f"services/runtime-cpp/{GUEST_BUILD}/telar"
+# Run from the guest checkout: the CLI starts the telar-runtime built beside it
+# and `telar gui` finds telar-gui on PATH. .dev/ survives sync.
+GUEST_ENVIRONMENT = f'''mkdir -p -m 700 .dev/vm
+export PATH="$PWD/services/gui-cpp/{GUEST_BUILD}:$PATH"
+export TELAR_SOCKET="$PWD/.dev/vm/runtime.sock" TELAR_SOCKET_PATH="$PWD/.dev/vm/runtime.sock"
+export TELAR_HISTORY="$PWD/.dev/vm/history.db"
+'''
 
 
 def guest_arch():
@@ -321,7 +331,7 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 tar -xf - -C "$stage"
 mkdir -p "$HOME/{destination}"
-rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out/ --exclude=/zig-pkg/ \\
+rsync -a --delete --exclude=/.toolchain/ --exclude=/.dependencies-cache/ \\
     --exclude=/.qt-cache/ --exclude=/.dev/ \\
     --exclude=/services/runtime-cpp/dependencies/ \\
     --exclude=/services/runtime-cpp/out-vm/ --exclude=/services/runtime-cpp/out/ \\
@@ -345,8 +355,15 @@ rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out
             raise RuntimeError("Working tree sync failed")
 
 
-def build(*args):
-    guest(f'export PATH="$HOME/.local/bin:$PATH"; cd "$HOME/{GUEST_SRC}" && exec zig build -j{CPUS} "$@"', *args)
+def build():
+    """Builds the C++ runtime, CLI and GUI with the pinned toolchain the justfile uses."""
+    guest(f'''set -euo pipefail
+cd "$HOME/{GUEST_SRC}"
+tools/cpp bootstrap
+export PATH="$PWD/.toolchain/bin:$PATH"
+just runtime-build {GUEST_BUILD} Release
+just gui-build {GUEST_BUILD} Release
+''')
 
 
 def gui_smoke(screenshot_path):
@@ -355,19 +372,18 @@ def gui_smoke(screenshot_path):
     build()
     guest(f'''set -euo pipefail
 cd "$HOME/{GUEST_SRC}"
-mkdir -p -m 700 .zig-out/dev
-export WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock" TELAR_HISTORY="$PWD/.zig-out/dev/history.db"
-./zig-out/bin/telar gui --login-shell --no-config > .zig-out/dev/gui-smoke.log 2>&1 &
+{GUEST_ENVIRONMENT}
+export WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR="/run/user/$(id -u)" QT_QPA_PLATFORM=wayland
+{GUEST_CLI} gui --login-shell --no-config > .dev/vm/gui-smoke.log 2>&1 &
 gui=$!
 sleep 8
 if ! kill -0 "$gui" 2> /dev/null; then
     echo "telar gui exited early:" >&2
-    cat .zig-out/dev/gui-smoke.log >&2
+    cat .dev/vm/gui-smoke.log >&2
     exit 1
 fi
-echo "$gui" > .zig-out/dev/gui-smoke.pid
-# --login-shell execs twice in place, so the window keeps the pid we started.
+echo "$gui" > .dev/vm/gui-smoke.pid
+# The login shell, the CLI and telar-gui each exec in place, so the window keeps the pid we started.
 tr "\\0" "\\n" < "/proc/$gui/environ" | grep -q "^TELAR_LOGIN_SHELL=1$" || {{
     echo "telar gui did not come through the login shell" >&2
     exit 1
@@ -377,10 +393,11 @@ tr "\\0" "\\n" < "/proc/$gui/environ" | grep -q "^TELAR_LOGIN_SHELL=1$" || {{
         screenshot(screenshot_path)
     finally:
         guest(f'''cd "$HOME/{GUEST_SRC}"
-kill "$(cat .zig-out/dev/gui-smoke.pid 2> /dev/null)" 2> /dev/null || true
+{GUEST_ENVIRONMENT}
+kill "$(cat .dev/vm/gui-smoke.pid 2> /dev/null)" 2> /dev/null || true
 # The bracket keeps this shell, whose command line holds the pattern, out of the match.
-pkill -f "[t]elar gui" 2> /dev/null || true
-TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock" ./zig-out/bin/telar server stop > /dev/null
+pkill -f "[t]elar-gui" 2> /dev/null || true
+{GUEST_CLI} server stop > /dev/null
 ''')
 
 
@@ -436,8 +453,6 @@ def up(display, compile_project=True):
         seed.shutdown()
     with (HERE / "provision.sh").open("rb") as script:
         guest("bash -s", stdin=script)
-    with (HERE / "install-zig.sh").open("rb") as script:
-        guest("bash -s", stdin=script)
     sync()
     if compile_project:
         build()
@@ -464,24 +479,25 @@ def main():
         sync()
     elif command == "build":
         sync()
-        build(*args)
+        build()
     elif command == "run":
         sync()
         build()
         guest(f'''set -euo pipefail
 cd "$HOME/{GUEST_SRC}"
-export PATH="$HOME/.local/bin:$PATH"
-mkdir -p -m 700 .zig-out/dev
-export TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock"
-export TELAR_HISTORY="$PWD/.zig-out/dev/history.db"
-exec ./zig-out/bin/telar "$@"
+{GUEST_ENVIRONMENT}
+exec {GUEST_CLI} "$@"
 ''', *(args or ["--help"]), tty=True)
     elif command == "stop-runtime":
-        guest(f'cd "$HOME/{GUEST_SRC}" && TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock" exec ./zig-out/bin/telar server stop')
+        guest(f'''set -euo pipefail
+cd "$HOME/{GUEST_SRC}"
+{GUEST_ENVIRONMENT}
+exec {GUEST_CLI} server stop
+''')
     elif command == "shell":
         guest(f'cd "$HOME/{GUEST_SRC}" && exec bash -l', tty=True)
     elif command == "exec":
-        guest(f'export PATH="$HOME/.local/bin:$PATH"; cd "$HOME/{GUEST_SRC}" && exec "$@"', *args)
+        guest(f'cd "$HOME/{GUEST_SRC}" && exec "$@"', *args)
     elif command == "screenshot":
         screenshot(args[0] if args else STATE / "screenshot.png")
     elif command == "gui-smoke":

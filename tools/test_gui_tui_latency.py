@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from gui_tui_latency import WARMUP, aggregate_runs, client_command, runtime_program, validate_telar_grids
+from gui_tui_latency import WARMUP, aggregate_runs, client_command, runtime_program
 from terminal_bench_report import latency_samples, load_runs, markdown_report, summarize_runs, validate_telar_display_sync
 
 
@@ -44,25 +44,24 @@ class GuiComparisonTest(unittest.TestCase):
                 with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, 'qualified final screen'):
                     load_runs([path])
 
-    def test_cpp_gui_cannot_silently_measure_the_reference_runtime(self):
-        reference, candidate = Path('/reference/telar'), Path('/candidate/telar')
-        self.assertEqual(runtime_program('gui', reference, candidate), reference)
-        self.assertEqual(runtime_program('gui-cpp', reference, candidate), candidate)
+    def test_cpp_gui_requires_an_explicit_runtime(self):
+        runtime = Path('/candidate/telar')
+        self.assertEqual(runtime_program('gui-cpp', runtime), runtime)
+        self.assertIsNone(runtime_program('ghostty', runtime))
         with self.assertRaisesRegex(ValueError, 'explicit runtime'):
-            runtime_program('gui-cpp', reference, None)
+            runtime_program('gui-cpp', None)
 
     def test_clients_share_the_exact_fixture_arguments(self):
         fixture = ['/usr/bin/python3', '/tmp/a path/workload.py', 'literal $(argument)']
         config = Path('/tmp/a path/config.lua')
-        zig = client_command('gui', Path('/tmp/telar'), None, config, fixture)
-        cpp = client_command('gui-cpp', Path('/tmp/telar'), Path('/tmp/telar-gui'), config, fixture)
-        self.assertEqual(zig, ['/tmp/telar', 'gui', '--config', str(config)] + fixture)
+        cpp = client_command('gui-cpp', Path('/tmp/telar-gui'), config, fixture)
         self.assertEqual(cpp, ['/tmp/telar-gui', '--fresh', '--config', str(config)] + fixture)
-        self.assertEqual(client_command('ghostty', None, None, config, fixture), fixture)
+        self.assertEqual(client_command('ghostty', None, config, fixture), fixture)
 
     def test_unknown_clients_cannot_launch_a_fixture(self):
-        with self.assertRaises(ValueError):
-            client_command('unknown', None, None, None, [])
+        for mode in ('unknown', 'gui'):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                client_command(mode, None, None, [])
 
     def test_display_sync_requires_an_observed_enabled_layer(self):
         validate_telar_display_sync(dict(display_sync=dict(observed=True, enabled=True, disabled=False)))
@@ -73,29 +72,10 @@ class GuiComparisonTest(unittest.TestCase):
             with self.subTest(synchronization=synchronization), self.assertRaisesRegex(ValueError, 'display synchronization'):
                 validate_telar_display_sync(dict(display_sync=synchronization))
 
-    def test_grid_validation_checks_each_pane_and_display_scale(self):
-        reference = dict(viewport=[1600, 1000], backing_scale=1, pty_cells=[171, 46], marker=[235, 191],
-                         fixtures=[dict(role='primary', cols=85, rows=46),
-                                   dict(role='background', cols=86, rows=46)])
-        candidate = copy.deepcopy(reference)
-        candidate['fixtures'].reverse()
-        validate_telar_grids(reference, candidate)
-
-        for field, value in [('viewport', [1601, 1000]), ('backing_scale', 2), ('pty_cells', [170, 46]), ('marker', [235, 223])]:
-            candidate = copy.deepcopy(reference)
-            candidate[field] = value
-            with self.subTest(field=field), self.assertRaises(ValueError):
-                validate_telar_grids(reference, candidate)
-
-        candidate = copy.deepcopy(reference)
-        candidate['fixtures'][1]['cols'] -= 1
-        with self.assertRaises(ValueError):
-            validate_telar_grids(reference, candidate)
-
-    def test_cpp_report_uses_zig_as_its_paired_reference(self):
+    def test_cpp_report_pairs_against_ghostty(self):
         runs = [dict(case='single', mode=mode, round=round_index, warmup=1,
                      gpu_ms=[1000, value, value], input_method='key')
-                for round_index in range(2) for mode, value in [('gui', 4), ('gui-cpp', 2)]]
+                for round_index in range(2) for mode, value in [('ghostty', 4), ('gui-cpp', 2)]]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'comparison.json'
             path.write_text(json.dumps(dict(runs=runs)))
@@ -103,23 +83,28 @@ class GuiComparisonTest(unittest.TestCase):
             report = summarize_runs(loaded, sources)
 
         case = report['cases']['single']
-        self.assertEqual(case['reference'], 'gui')
+        self.assertEqual(case['reference'], 'ghostty')
         self.assertEqual(case['modes']['gui-cpp']['pooled']['p50_ms'], 2)
         self.assertEqual(case['paired']['gui-cpp']['quantiles']['p50']['paired_deltas_ms'], [-2, -2])
-        self.assertIn('Telar GUI C++ / Qt Quick / Telar GUI Zig', markdown_report(report))
+        self.assertIn('Telar GUI C++ / Qt Quick / Ghostty', markdown_report(report))
 
-    def test_ghostty_remains_the_reference_when_present(self):
-        runs = [dict(raw=dict(input_method='key'), source='fixture', values=[value],
-                     summary=dict(p50_ms=value, p95_ms=value), case='single', mode=mode, round=0)
-                for mode, value in [('ghostty', 1), ('gui', 4), ('gui-cpp', 2)]]
+    def test_cpp_report_without_ghostty_has_no_paired_reference(self):
+        runs = [dict(raw=dict(input_method='key'), source='fixture', values=[2],
+                     summary=dict(p50_ms=2, p95_ms=2), case='single', mode='gui-cpp', round=0)]
         case = summarize_runs(runs, [])['cases']['single']
-        self.assertEqual(case['reference'], 'ghostty')
-        self.assertEqual(case['paired']['gui-cpp']['quantiles']['p50']['paired_deltas_ms'], [1])
-        self.assertEqual(case['paired']['gui']['quantiles']['p50']['paired_deltas_ms'], [3])
+        self.assertIsNone(case['reference'])
+        self.assertEqual(case['paired'], {})
+
+    def test_removed_zig_mode_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'comparison.json'
+            path.write_text(json.dumps(dict(runs=[presented_run('gui', [1000, 4])])))
+            with self.assertRaisesRegex(ValueError, 'invalid case or mode'):
+                load_runs([path])
 
     def test_a_valid_pixel_response_cannot_hide_an_invalid_background_rate(self):
         for control in [None, dict(rate_met=False)]:
-            row = dict(case='splits-load', mode='gui', round=0, warmup=1,
+            row = dict(case='splits-load', mode='gui-cpp', round=0, warmup=1,
                        gpu_ms=[1000, 4], input_method='key', failed=0,
                        background_mib_per_second=0.125)
             if control is not None:
@@ -131,8 +116,7 @@ class GuiComparisonTest(unittest.TestCase):
                     load_runs([path])
 
     def test_presentation_report_uses_presentation_samples(self):
-        runs = [presented_run(mode, [1000, value])
-                for mode, value in [('gui', 4), ('gui-cpp', 2)]]
+        runs = [presented_run('gui-cpp', [1000, 2])]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'comparison.json'
             path.write_text(json.dumps(dict(runs=runs)))
@@ -157,7 +141,7 @@ class GuiComparisonTest(unittest.TestCase):
         self.assertEqual(aggregate['max_ms'], 51.5)
 
     def test_gpu_and_presentation_endpoints_cannot_be_paired(self):
-        runs = [dict(case='single', mode='gui', round=0, warmup=0, gpu_ms=[4]),
+        runs = [dict(case='single', mode='ghostty', round=0, warmup=0, gpu_ms=[4]),
                 presented_run('gui-cpp', [1000, 2])]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'comparison.json'
@@ -168,7 +152,7 @@ class GuiComparisonTest(unittest.TestCase):
 
     def test_presentation_requires_its_own_valid_samples(self):
         for samples in [None, [], [-1], [float('nan')]]:
-            row = presented_run('gui', [1000, 4])
+            row = presented_run('gui-cpp', [1000, 4])
             del row['presentation_ms']
             if samples is not None:
                 row['presentation_ms'] = samples
@@ -179,7 +163,7 @@ class GuiComparisonTest(unittest.TestCase):
                     load_runs([path])
 
     def test_presentation_requires_a_presented_marker_before_the_first_input(self):
-        run = presented_run('gui', [1000, 4])
+        run = presented_run('gui-cpp', [1000, 4])
         run.pop('initial_presentation', None)
 
         with self.assertRaisesRegex(ValueError, 'initial presentation'):
@@ -194,14 +178,14 @@ class GuiComparisonTest(unittest.TestCase):
                    ('presented_at', True), ('presented_at', 9), ('setup_completed_at', 11),
                    ('first_input_at', 12), ('first_input_at', 13)]
         for field, value in changes:
-            run = presented_run('gui', [1000, 4])
+            run = presented_run('gui-cpp', [1000, 4])
             run['initial_presentation'][field] = value
 
             with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, 'initial presentation'):
                 latency_samples(run)
 
         for field, value in [('geometry_epoch', True), ('setup_complete', False)]:
-            run = presented_run('gui', [1000, 4])
+            run = presented_run('gui-cpp', [1000, 4])
             run[field] = value
 
             with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, 'initial presentation'):
@@ -209,7 +193,7 @@ class GuiComparisonTest(unittest.TestCase):
 
         for viewport, marker in [(None, None), ([], []), ([0, 1000], [0, 0]),
                                  ([1600, 1000], [1600, 191]), ([True, 1000], [0, 0])]:
-            run = presented_run('gui', [1000, 4])
+            run = presented_run('gui-cpp', [1000, 4])
             run.update(viewport=viewport, marker=marker)
             run['initial_presentation'].update(viewport=viewport, marker=marker)
 
@@ -218,14 +202,14 @@ class GuiComparisonTest(unittest.TestCase):
 
     def test_initial_presentation_accepts_both_native_callback_orders(self):
         for gpu, presented in [(11, 12), (12, 11)]:
-            run = presented_run('gui', [1000, 4])
+            run = presented_run('gui-cpp', [1000, 4])
             run['initial_presentation'].update(gpu_completed_at=gpu, presented_at=presented)
 
             with self.subTest(gpu=gpu, presented=presented):
                 self.assertEqual(latency_samples(run), [1000, 4])
 
     def test_presentation_requires_native_clock_and_complete_drawable_ids(self):
-        run = presented_run('gui', [1000, 4])
+        run = presented_run('gui-cpp', [1000, 4])
         self.assertEqual(latency_samples(run), [1000, 4])
 
         changes = [('presentation_clock', None), ('presentation_clock', 'GPU completion'),
@@ -238,7 +222,7 @@ class GuiComparisonTest(unittest.TestCase):
                 latency_samples(invalid)
 
     def test_presentation_reports_require_a_telar_mode_and_verified_display_sync(self):
-        run = presented_run('gui', [1000, 4])
+        run = presented_run('gui-cpp', [1000, 4])
         changes = [('mode', 'ghostty', 'Telar mode'), ('display_sync', None, 'display synchronization'),
                    ('display_sync', dict(observed=True, enabled=False, disabled=True), 'display synchronization')]
         for field, value, message in changes:
@@ -249,12 +233,13 @@ class GuiComparisonTest(unittest.TestCase):
                     load_runs([path])
 
     def test_cli_rejects_unavailable_frame_policies_before_launch(self):
-        scenarios = [(['--mode', 'gui', '--vsync', 'false'], 'Telar comparisons require --vsync true'),
+        scenarios = [(['--mode', 'gui-cpp', '--vsync', 'false'], 'Telar comparisons require --vsync true'),
+                     (['--mode', 'gui'], "invalid choice: 'gui'"),
                      (['--mode', 'ghostty', '--endpoint', 'presented'], 'requires Telar-only modes')]
         for arguments, message in scenarios:
             with self.subTest(arguments=arguments), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / 'measurements'
-                command = [sys.executable, str(Path(__file__).with_name('gui_tui_latency.py')), '/unused/telar', str(output), *arguments]
+                command = [sys.executable, str(Path(__file__).with_name('gui_tui_latency.py')), str(output), *arguments]
                 result = subprocess.run(command, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 2)
                 self.assertIn(message, result.stderr)

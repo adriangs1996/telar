@@ -18,7 +18,7 @@ def build(output):
     directory = Path(output).resolve()
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     source = Path(__file__).resolve().parent
-    for name in ('echo_latency.py', 'headless_client.py', 'perf_e2e.py', 'load_latency.py', 'gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'tab_switch_fixture.py', 'tab_switch_packet.py', 'tab_switch_packet.h', 'tab_switch_phase.h', 'tab_switch_phase.inc', 'tab_switch_clock.c', 'terminal_bench_report.py', 'bench_stack.py', 'image_bench_fixture.py', 'image_patterns.py', 'kitty_stream.py'):
+    for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'tab_switch_fixture.py', 'tab_switch_packet.py', 'tab_switch_packet.h', 'tab_switch_phase.h', 'tab_switch_phase.inc', 'tab_switch_clock.c', 'terminal_bench_report.py', 'bench_stack.py', 'image_bench_fixture.py', 'image_patterns.py', 'kitty_stream.py'):
         shutil.copy2(source / name, directory / name)
     path = directory / 'gui_tui_latency.py'
     contents = path.read_text()

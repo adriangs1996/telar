@@ -22,8 +22,7 @@ import time
 
 root = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(root / 'tools'))
-from perf_e2e import isolated_environment, stop_runtime
-from bench_stack import process_identity, executable_identity
+from bench_stack import process_identity, executable_identity, isolated_environment, stop_runtime
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build', type=Path, required=True)

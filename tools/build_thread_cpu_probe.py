@@ -12,8 +12,7 @@ from build_tab_switch_probe import build as build_switch_probe
 
 def copy_typing_probe(directory, source):
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
-    for name in ("echo_latency.py", "headless_client.py", "perf_e2e.py", "load_latency.py",
-                 "gui_tui_latency.py", "gui_tui_latency.m", "gui_view.h", "gui_tui_marker.py",
+    for name in ("gui_tui_latency.py", "gui_tui_latency.m", "gui_view.h", "gui_tui_marker.py",
                  "terminal_bench_fixture.py", "terminal_bench_report.py", "bench_stack.py",
                  "benchmark_host.py", "image_bench_fixture.py", "image_patterns.py", "kitty_stream.py"):
         shutil.copy2(source / name, directory / name)

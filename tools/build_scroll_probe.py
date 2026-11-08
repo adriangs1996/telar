@@ -22,19 +22,19 @@ def build(output):
     if contents.count(anchor) != 1:
         raise ValueError('Scroll fixture anchor changed')
     contents = contents.replace(anchor, "Path(__file__).with_name('scroll_bench_fixture.py').resolve()")
-    guard = "    runtime = runtime_program(mode, binary, getattr(options, 'cpp_runtime', None))"
+    guard = "    runtime = runtime_program(mode, getattr(options, 'cpp_runtime', None))"
     if contents.count(guard) != 1:
         raise ValueError('Scroll measurement guard anchor changed')
     contents = contents.replace(guard,
-        "    if (mode not in ('gui', 'gui-cpp') or getattr(options, 'case', None) != 'single' or\n"
-        "            options.endpoint != 'presented' or options.input_method != 'key' or\n"
+        "    if (mode != 'gui-cpp' or getattr(options, 'case', None) != 'single' or\n"
+        "            options.endpoint != 'presented' or\n"
         "            options.image_size or options.throughput):\n"
         "        raise ValueError('Scroll probe requires one stationary pane and native presentation')\n" + guard)
     additions = {
         "    modes = MODE_GROUPS.get(options.mode, [options.mode])":
             "    modes = MODE_GROUPS.get(options.mode, [options.mode])\n"
-            "    if (any(mode not in ('gui', 'gui-cpp') for mode in modes) or options.cases != ['single'] or\n"
-            "            options.endpoint != 'presented' or options.input_method != 'key' or\n"
+            "    if (any(mode != 'gui-cpp' for mode in modes) or options.cases != ['single'] or\n"
+            "            options.endpoint != 'presented' or\n"
             "            options.image_size or options.throughput or options.text_pattern != 'repeat'):\n"
             "        parser.error('Scroll probe requires Telar-only modes, --cases single, --endpoint presented and no other workload')",
         "def measure(mode, directory, setup):":
@@ -44,11 +44,9 @@ def build(output):
             "    result['scroll_validation'] = validate_scroll(result, json.loads((directory / 'scroll.json').read_text()),\n"
             "                                                  int((directory / 'primary.claim').read_text()))\n"
             "    (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\\n')",
-        "row['round'] == round_index and row['case'] == case":
-            "row['round'] == round_index and row['case'] == 'scroll'",
         "aggregate=aggregate_runs(results, options.cases, modes)":
             "aggregate=aggregate_runs(results, ['scroll'], modes)",
-        "input_method=options.input_method, cases=options.cases, panes=options.panes,":
+        "input_method='key', cases=options.cases, panes=options.panes,":
             "input_method='native_discrete_wheel', cases=['scroll'], layout_cases=options.cases, panes=1,",
         "'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py', 'benchmark_host.py')}":
             "'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py', 'benchmark_host.py',\n"
