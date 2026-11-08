@@ -61,8 +61,11 @@ struct Limits {
   std::chrono::nanoseconds deadline = std::chrono::seconds{2};
 };
 
+// The state is the C library's, reached by a pointer that never changes while the machine lives:
+// every call mutates it through that pointer, as Rust's Lua handle does through `&self`, so what a
+// value reads of it stays valid. The machine can be neither copied nor moved.
 template <Allocator Memory>
-class Vm {
+class TBC_SHARED Vm {
 public:
   inline explicit Vm(Memory &memory, Limits limits = {})
       : memory_(memory),

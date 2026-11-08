@@ -1164,3 +1164,77 @@ std::size_t declarationUnsharedReferenceResult(declarations::buffered_face &face
 }
 
 // END CASE
+
+// CASE: declaration.pinned_shared_field
+// PAIR: declaration.pinned_shared_field
+// SOURCE: services/gui-cpp/config/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
+// STATUS: implemented
+// CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
+// SCENARIO: A value read from the owner's pinned machine is used after the owner records it; accept.
+namespace declarations {
+  class TBC_SHARED pinned_machine {
+  public:
+    pinned_machine() = default;
+    pinned_machine(const pinned_machine &) = delete;
+    pinned_machine &operator=(const pinned_machine &) = delete;
+
+    [[nodiscard]] int *slot() const;
+  };
+
+  class pinned_reader {
+  public:
+    int read() {
+      const int *slot = machine_.slot();
+      record(*slot);
+      return *slot;
+    }
+
+    void record(int value);
+
+  private:
+    pinned_machine machine_;
+    int recorded_ = 0;
+  };
+}
+
+int declarationPinnedSharedField() {
+  declarations::pinned_reader reader;
+  return reader.read();
+}
+
+// END CASE
+
+// CASE: declaration.movable_shared_field
+// PAIR: declaration.pinned_shared_field
+// SOURCE: services/gui-cpp/config/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
+// STATUS: pending
+// CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
+// SCENARIO: A machine that can be assigned may be replaced by the call, dropping the value it lent; reject at the call.
+namespace declarations {
+  class TBC_SHARED movable_machine {
+  public:
+    [[nodiscard]] int *slot() const;
+  };
+
+  class movable_reader {
+  public:
+    int read() {
+      const int *slot = machine_.slot();
+      record(*slot); // expected-error [tbc-invalidated-borrow]
+      return *slot;
+    }
+
+    void record(int value);
+
+  private:
+    movable_machine machine_;
+    int recorded_ = 0;
+  };
+}
+
+int declarationMovableSharedField() {
+  declarations::movable_reader reader;
+  return reader.read();
+}
+
+// END CASE
