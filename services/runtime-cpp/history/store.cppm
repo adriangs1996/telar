@@ -521,16 +521,18 @@ public:
   }
 
   inline bool append(const Statement &row) {
-    auto entry = view(row);
-    const auto bytes = ValueCodec<HistoryEntry>::encodedSize(entry);
+    const auto stored = view(row);
+    const auto bytes = ValueCodec<HistoryEntry>::encodedSize(stored);
     if (entries_.size() == maximum_entries || bytes > max_payload_size - encoded_bytes_) {
       return false;
     }
 
-    entry.command = copy(entry.command);
-    entry.cwd = copy(entry.cwd);
-    entry.workspace_path = copy(entry.workspace_path);
-    entry.provider = copy(entry.provider);
+    // The kept entry starts with no text and views only the copies these rows hold.
+    auto entry = header(row);
+    entry.command = copy(stored.command);
+    entry.cwd = copy(stored.cwd);
+    entry.workspace_path = copy(stored.workspace_path);
+    entry.provider = copy(stored.provider);
     entries_.push_back(entry);
     encoded_bytes_ += bytes;
     return true;
@@ -548,6 +550,16 @@ public:
 
 private:
   inline static HistoryEntry view(const Statement &row) {
+    auto entry = header(row);
+    entry.provider = row.text(11);
+    entry.command = row.text(6);
+    entry.cwd = row.text(7);
+    entry.workspace_path = row.text(8);
+    return entry;
+  }
+
+  // The row's scalar columns; the entry's texts stay empty.
+  inline static tbc::view<HistoryEntry, tbc::lt::static_storage> header(const Statement &row) {
     if (row.integer(0) <= 0 || row.integer(1) <= 0) {
       throw RequestError{FailureCode::internal, "Invalid stored history identity"};
     }
@@ -565,10 +577,6 @@ private:
         .status = static_cast<HistoryStatus>(row.integer(5)),
         .author = static_cast<HistoryAuthor>(row.integer(9)),
         .origin = static_cast<HistoryOrigin>(row.integer(10)),
-        .provider = row.text(11),
-        .command = row.text(6),
-        .cwd = row.text(7),
-        .workspace_path = row.text(8),
         .command_truncated = row.integer(12) != 0,
     };
   }

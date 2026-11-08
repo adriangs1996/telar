@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <new>
@@ -285,7 +286,8 @@ private:
   Memory &memory_;
   std::atomic<bool> cancelled_{false};
   GitStatusReader<Memory> status_;
-  GitBaseDistance<Memory> distance_;
+  // Watches cancelled_.
+  tbc::view<GitBaseDistance<Memory>, tbc::lt::self> distance_;
 };
 
 }

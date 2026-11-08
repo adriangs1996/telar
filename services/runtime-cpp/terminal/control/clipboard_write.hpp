@@ -19,7 +19,8 @@ public:
   static constexpr std::size_t maximum_mimes = 64;
   static constexpr std::size_t maximum_aliases = 64;
 
-  explicit ClipboardWrite(Memory &memory, const ClipboardMetadata &metadata, std::size_t limit)
+  // Copies the metadata; it keeps only its allocator, region `a`.
+  explicit ClipboardWrite(tbc::view<Memory &, tbc::lt::a> memory, const ClipboardMetadata &metadata, std::size_t limit)
       : metadata(metadata), memory_(memory), spool_(AllocatorRef<std::uint8_t, Memory>{memory}), limit_(limit) {}
 
   // Its contents view its own spool and names, so it stays where it is built.
@@ -209,8 +210,8 @@ private:
   }
 
   static constexpr std::size_t initial_capacity = 4096;
-  Memory &memory_;
-  Vector<std::uint8_t, Memory> spool_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> spool_;
   std::size_t limit_;
   std::array<Entry, maximum_mimes> entries_;
   std::array<Alias, maximum_aliases> aliases_;

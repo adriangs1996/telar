@@ -600,3 +600,82 @@ std::size_t declarationSelfFieldElidedDangling(declarations::arena &memory) {
 }
 
 // END CASE
+
+// CASE: declaration.shared_kept
+// PAIR: declaration.shared_kept
+// SOURCE: services/runtime-cpp/config/loader.cppm :: Loader::load (lua::JsonDecoder::install)
+// STATUS: implemented
+// CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
+// SCENARIO: A machine keeps the loader's arena and is passed with that arena to a call that may mutate the machine; accept.
+namespace declarations {
+  template <typename Memory>
+  class machine {
+  public:
+    explicit machine(Memory &memory) : memory_(memory) {}
+    machine(const machine &) = delete;
+    machine &operator=(const machine &) = delete;
+
+    [[nodiscard]] int *slot() const {
+      return slot_;
+    }
+
+  private:
+    Memory &memory_;
+    int *slot_ = nullptr;
+  };
+
+  template <typename Memory>
+  void install(int *slot, Memory &memory) {
+    static_cast<void>(memory);
+    static_cast<void>(slot);
+  }
+
+  template <typename Memory>
+  class machine_loader {
+  public:
+    explicit machine_loader(Memory &memory) : memory_(memory) {}
+
+    void load() {
+      const machine<Memory> running{memory_};
+      install(running.slot(), memory_);
+      static_cast<void>(running.slot());
+    }
+
+  private:
+    Memory &memory_;
+  };
+}
+
+void declarationSharedKept(declarations::arena &memory) {
+  declarations::machine_loader<declarations::arena>{memory}.load();
+}
+
+// END CASE
+
+// CASE: declaration.unshared_kept
+// PAIR: declaration.shared_kept
+// SOURCE: services/runtime-cpp/config/loader.cppm :: Loader::load (lua::JsonDecoder::install)
+// STATUS: implemented
+// CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
+// SCENARIO: The same loader over a pool without the mark lets the call invalidate the pool the machine keeps; reject at the call.
+namespace declarations {
+  class pooled_loader {
+  public:
+    explicit pooled_loader(pool &memory) : memory_(memory) {}
+
+    void load() {
+      const machine<pool> running{memory_};
+      install(running.slot(), memory_); // expected-error [tbc-invalidated-borrow]
+      static_cast<void>(running.slot());
+    }
+
+  private:
+    pool &memory_;
+  };
+}
+
+void declarationUnsharedKept(declarations::pool &memory) {
+  declarations::pooled_loader{memory}.load();
+}
+
+// END CASE

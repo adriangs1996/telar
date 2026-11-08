@@ -1004,7 +1004,6 @@ private:
     pane->terminal.controlPolicy() = control_policy_;
     const auto *workspace = model.workspaces.find(location.workspace.id);
     const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
-    auto &result = *pane;
     auto phase = LaunchPhase::pane_registration;
     bool registered = false;
     try {
@@ -1013,25 +1012,28 @@ private:
       }
 
       pane->observer->configureHistory(session, model.capture_output);
-      result.event_identity = model.panes.insert(identity.id, std::move(pane));
+      const auto handle = model.panes.insert(identity.id, std::move(pane));
       registered = true;
-      if (result.event_identity > maximum_event_identity) {
+      // The pane now lives in the table, where it is found again.
+      auto &inserted = *model.panes.find(identity.id);
+      inserted.event_identity = handle;
+      if (handle > maximum_event_identity) {
         throw RequestError{FailureCode::resource_limit, "Pane event identity space exhausted"};
       }
 
       phase = LaunchPhase::output_actor;
-      poller_.watch(result.process->descriptor(), eventToken(EventSource::pane, result.event_identity));
+      poller_.watch(inserted.process->descriptor(), eventToken(EventSource::pane, handle));
     } catch (const std::exception &error) {
       history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = session, .finished_at_ms = ObservationTime::now().milliseconds, .failure = {identity.generation, phase, launchFailureCause(error)}});
       if (registered) {
-        poller_.remove(result.process->descriptor());
+        poller_.remove(model.panes.find(identity.id)->process->descriptor());
         model.panes.erase(identity.id);
       }
 
       throw;
     }
 
-    return result;
+    return *model.panes.find(identity.id);
   }
 
   inline void refreshAfterDetach(RuntimeModel<Memory> &model, const ClientStore<Memory> &clients, std::uint64_t identity) noexcept {
@@ -1246,9 +1248,8 @@ private:
       throw;
     }
 
-    auto *result = execution.get();
     executions_.insert(token, std::move(execution));
-    return *result;
+    return *executions_.find(token);
   }
 
   inline std::uint64_t administration(RuntimeModel<Memory> &model) {

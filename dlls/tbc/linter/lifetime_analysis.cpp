@@ -3523,8 +3523,8 @@ namespace tbc_lint {
             continue;
           }
           // An object of a shared type, such as an allocator, keeps what it handed out valid whatever is
-          // done to the inputs that reach it.
-          if (place.target.path.empty() && std::ranges::all_of(place.target.select, [](const projection &step) { return step.dereference; }) && sharedType(owner->getType())) {
+          // done to the inputs that reach it, also when an object that keeps it designates it.
+          if (place.target.path.empty() && std::ranges::all_of(place.target.select, [](const projection &step) { return step.dereference || step.field == nullptr; }) && sharedType(owner->getType())) {
             continue;
           }
           auto &same = seen[placeHash(place)];
