@@ -530,7 +530,7 @@ int run(Memory &memory, const Options &options) {
   try {
     ServerOptions server_options{};
     server_options.socket = options.socket.value_or("");
-    const RuntimePaths paths{memory, server_options, ProcessEnvironment{}};
+    const RuntimePaths paths{memory, server_options, process_environment};
     constexpr std::size_t frame_bytes = runtime_clipboard_chunk_bytes + 1024;
     ControlSession session{memory, paths.socket.c_str(), frame_bytes, 128};
     session.receiveTimeout(10);
@@ -687,7 +687,7 @@ template <Allocator Memory>
 void observeRuntime(Memory &memory, const RuntimeOptions &options) {
   ServerOptions server_options{};
   server_options.socket = options.socket.value_or("");
-  const RuntimePaths paths{memory, server_options, ProcessEnvironment{}};
+  const RuntimePaths paths{memory, server_options, process_environment};
   RuntimeConnection connection{paths.socket.c_str()};
   if (options.action != RuntimeOptions::Action::watch) {
     connection.receiveTimeout(30);

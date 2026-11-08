@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <stdlib.h>
@@ -151,16 +152,17 @@ Enum choice(std::string_view text, const char *error, const std::array<std::stri
 
 // Zig's `arguments/Cursor.zig`: consumes words left to right; `take` keeps each
 // command's own missing-value error.
+// Walks a command's words, region `a`; the words it hands out view them.
 class Cursor {
 public:
-  inline explicit Cursor(Arguments words) noexcept
+  inline explicit Cursor(tbc::view<Arguments, tbc::lt::a> words) noexcept
       : words_(words) {}
 
   [[nodiscard]] inline bool empty() const noexcept {
     return words_.empty();
   }
 
-  inline std::optional<std::string_view> next() noexcept {
+  inline tbc::view<std::optional<std::string_view>, tbc::lt::a> next() noexcept {
     if (words_.empty()) {
       return std::nullopt;
     }
@@ -170,7 +172,7 @@ public:
     return word;
   }
 
-  inline std::string_view take(const char *missing) {
+  inline tbc::view<std::string_view, tbc::lt::a> take(const char *missing) {
     const auto word = next();
     if (!word) {
       usage(missing);
@@ -179,12 +181,12 @@ public:
     return *word;
   }
 
-  [[nodiscard]] inline Arguments rest() const noexcept {
+  [[nodiscard]] inline tbc::view<Arguments, tbc::lt::a> rest() const noexcept {
     return words_;
   }
 
 private:
-  Arguments words_;
+  tbc::view<Arguments, tbc::lt::a> words_;
 };
 
 }

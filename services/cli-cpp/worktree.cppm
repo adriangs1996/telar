@@ -791,8 +791,8 @@ private:
   // The agent session of the pane this command runs in, when the runtime
   // confirms the process descends from it.
   inline std::optional<CoordinatorReference> sourceCoordinator() {
-    const auto id = maybeUnsigned(ProcessEnvironment{}.lookup("TELAR_PANE_ID"));
-    const auto generation = maybeUnsigned(ProcessEnvironment{}.lookup("TELAR_PANE_GENERATION"));
+    const auto id = maybeUnsigned(process_environment.lookup("TELAR_PANE_ID"));
+    const auto generation = maybeUnsigned(process_environment.lookup("TELAR_PANE_GENERATION"));
     if (!id || !generation || *id == 0 || *generation == 0) {
       return std::nullopt;
     }

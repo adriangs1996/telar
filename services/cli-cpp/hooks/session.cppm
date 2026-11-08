@@ -112,7 +112,9 @@ private:
     if (kind == "started" && index == count_ && count_ != identifiers_.size()) {
       identifiers_[count_++].assign(identifier);
     } else if (kind == "completed" && index != count_) {
-      identifiers_[index] = identifiers_[--count_];
+      // The last identifier fills the gap; copied first, as one element is read while another is written.
+      const auto last = identifiers_[--count_];
+      identifiers_[index] = last;
     }
   }
 

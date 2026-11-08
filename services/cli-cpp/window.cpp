@@ -463,7 +463,7 @@ int connected(const Options &options, const char *prefix, Execute execute) {
       server.socket = socket;
     }
 
-    const RuntimePaths paths{memory, server, ProcessEnvironment{}};
+    const RuntimePaths paths{memory, server, process_environment};
     Session session{memory, paths.socket.c_str()};
     session.receiveTimeout(receive_timeout);
     Text output{AllocatorRef<char, Memory>{memory}};
@@ -540,7 +540,7 @@ int runWindow(Family family, std::span<char *const> words) {
     auto options = SuggestionOptions::parse(words);
     if (options.current) {
       try {
-        const auto current = ProcessEnvironment{}.lookup("TELAR_PANE_ID");
+        const auto current = process_environment.lookup("TELAR_PANE_ID");
 
         if (current.empty()) {
           throw Failure{"MissingCurrentIdentity"};

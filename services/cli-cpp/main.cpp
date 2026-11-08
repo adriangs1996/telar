@@ -163,7 +163,7 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
   case Family::gui:
     return runWindowCommand(memory, options, true);
   case Family::hook:
-    return runHook(memory, HookOptions::parse(options), ProcessEnvironment{});
+    return runHook(memory, HookOptions::parse(options), process_environment);
   case Family::integration:
     return runIntegration(memory, IntegrationOptions::parse(options));
   case Family::client:
@@ -175,7 +175,7 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
   case Family::config:
     return runWindow(family, options);
   case Family::plugin:
-    runPlugin(memory, PluginOptions::parse(options), ProcessEnvironment{});
+    runPlugin(memory, PluginOptions::parse(options), process_environment);
     return 0;
   case Family::proxy: {
     if (!options.empty() && std::string_view{options.front()} == "watch") {
@@ -185,7 +185,7 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     }
 
     SynchronizedAllocator synchronized{memory};
-    return runProxyTrust(synchronized, ProxyTrustOptions::parse(options), ProcessEnvironment{});
+    return runProxyTrust(synchronized, ProxyTrustOptions::parse(options), process_environment);
   }
   case Family::server:
     runServer(memory, words);

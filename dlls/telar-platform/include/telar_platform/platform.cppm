@@ -225,7 +225,8 @@ enum class CommandPurpose {
 template <Allocator Memory>
 class Command {
 public:
-  inline explicit Command(Memory &memory, const Launch &launch, CommandPurpose purpose = CommandPurpose::terminal)
+  // Copies the launch; it keeps only its allocator, region `a`.
+  inline explicit Command(tbc::view<Memory &, tbc::lt::a> memory, const Launch &launch, CommandPurpose purpose = CommandPurpose::terminal)
       : executable_(AllocatorRef<char, Memory>{memory}),
         cwd_(launch.cwd, AllocatorRef<char, Memory>{memory}),
         arguments_(AllocatorRef<String<Memory>, Memory>{memory}),
@@ -386,16 +387,16 @@ private:
   }
 
   using SensitiveMemory = ErasingAllocator<Memory>;
-  String<Memory> executable_;
-  String<Memory> cwd_;
-  Vector<String<Memory>, Memory> arguments_;
-  SensitiveMemory environment_memory_;
+  tbc::view<String<Memory>, tbc::lt::a> executable_;
+  tbc::view<String<Memory>, tbc::lt::a> cwd_;
+  tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> arguments_;
+  tbc::view<SensitiveMemory, tbc::lt::a> environment_memory_;
   // The environment allocates from the sibling allocator, and the spawn arrays point into the
   // command's own strings, so a command keeps its address.
   tbc::view<Vector<String<SensitiveMemory>, SensitiveMemory>, tbc::lt::self> environment_;
   tbc::view<Vector<char *, Memory>, tbc::lt::self> argument_pointers_;
   tbc::view<Vector<char *, Memory>, tbc::lt::self> environment_pointers_;
-  Memory &memory_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
   bool restorable_;
 };
 
@@ -758,6 +759,10 @@ struct ProcessEnvironment {
     return value == nullptr ? std::string_view{} : std::string_view{value};
   }
 };
+
+// The process's environment, which is one per process: a value looked up in it borrows this object,
+// which outlives every caller.
+inline constexpr ProcessEnvironment process_environment{};
 
 template <typename Environment>
 concept EnvironmentLookup = requires(const Environment &environment, const char *name) {

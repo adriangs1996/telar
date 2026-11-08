@@ -529,7 +529,7 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
 #endif
   const ExecutablePath executable;
   const ExecutablePath cli{"telar"};
-  plugins::TapConfiguration tap_configuration{memory, configuration.configuration_directory.view(), configuration.plugins.configured(), ProcessEnvironment{}};
+  plugins::TapConfiguration tap_configuration{memory, configuration.configuration_directory.view(), configuration.plugins.configured(), process_environment};
   installPngDecoder();
   SqliteAllocator sqlite_memory{memory};
   std::optional<traffic::Service<Memory>> traffic_service;
@@ -539,10 +539,10 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
     traffic_service.emplace(memory, endpoint, configuration.proxy.stream_interception);
   }
   plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace, traffic_service ? &*traffic_service : nullptr};
-  if (!tap_configuration.specifications().empty()) { plugin_service.watchTrust(plugins::Paths::trust(memory, ProcessEnvironment{})); }
+  if (!tap_configuration.specifications().empty()) { plugin_service.watchTrust(plugins::Paths::trust(memory, process_environment)); }
 
   traffic::Tap<Memory, plugins::Service<Memory>> tap{plugin_service, traffic_service ? &*traffic_service : nullptr};
-  ProxyRuntime<Memory, NativeEventLoop<Memory>, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(ProcessEnvironment{}), tap};
+  ProxyRuntime<Memory, NativeEventLoop<Memory>, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(process_environment), tap};
   traffic::control::Backend network_backend{memory, proxy, traffic_service ? &*traffic_service : nullptr, traffic::control::Configuration{
       .endpoint = paths.socket,
       .executable = executable.view(),

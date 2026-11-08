@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 #include <new>
 
@@ -258,13 +259,14 @@ private:
   void *library_ = nullptr;
   Database *database_ = nullptr;
   Statement *statement_ = nullptr;
-  Open open_{};
-  Close close_{};
-  Prepare prepare_{};
-  Finalize finalize_{};
-  Step step_{};
-  Text text_{};
-  Length length_{};
+  // Functions of the library library_ holds open.
+  tbc::view<Open, tbc::lt::self> open_{};
+  tbc::view<Close, tbc::lt::self> close_{};
+  tbc::view<Prepare, tbc::lt::self> prepare_{};
+  tbc::view<Finalize, tbc::lt::self> finalize_{};
+  tbc::view<Step, tbc::lt::self> step_{};
+  tbc::view<Text, tbc::lt::self> text_{};
+  tbc::view<Length, tbc::lt::self> length_{};
 };
 
 // Each workspace path the history at `database` recorded. A database that

@@ -1014,7 +1014,7 @@ inline std::string decode(std::string_view word) {
 template <Allocator Memory>
 std::vector<std::string> sshOptions(Memory &memory, std::string_view destination) {
   MachineFieldRules::destination(destination);
-  const RuntimePaths paths{memory, ServerOptions{}, ProcessEnvironment{}};
+  const RuntimePaths paths{memory, ServerOptions{}, process_environment};
   paths.prepareSocket();
   const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.rfind('/'));
   std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
@@ -2055,7 +2055,7 @@ int openWindow(Memory &memory, const WindowOptions &options) {
   server.no_config = options.no_config;
   server.profile = options.profile ? std::string_view{*options.profile} : std::string_view{};
   server.fresh = options.fresh;
-  const RuntimePaths paths{memory, server, ProcessEnvironment{}};
+  const RuntimePaths paths{memory, server, process_environment};
   std::optional<RuntimeConnection> connection;
   if (connectExisting(connection, paths.socket.c_str()) && options.fresh) {
     std::fprintf(stderr, "telar: a runtime is already running; stop it first (telar server stop) or drop --fresh\n");

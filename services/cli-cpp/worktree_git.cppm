@@ -384,7 +384,7 @@ inline void branch(std::string_view value) {
   }
 }
 
-inline void single(std::optional<std::string_view> &field, std::string_view value, const char *error) {
+inline void single(tbc::view<std::optional<std::string_view> &, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char *error) {
   if (field) {
     usage(error);
   }
@@ -676,7 +676,7 @@ template <Allocator Memory>
 class Channel {
 public:
   inline Channel(Memory &memory, std::optional<std::string_view> socket, bool start)
-      : paths_(memory, socketOptions(socket), ProcessEnvironment{}) {
+      : paths_(memory, socketOptions(socket), process_environment) {
     std::optional<RuntimeConnection> probe;
     if (start && !connectExisting(probe, paths_.socket.c_str()) && startRuntime(memory, socketOptions(socket), paths_) != RuntimeStart::listening) {
       throw Failure{"the local runtime is not reachable"};

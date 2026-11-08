@@ -599,7 +599,7 @@ int run(Memory &memory, const DiagnosticsOptions &options) {
   try {
     ServerOptions server_options{};
     server_options.socket = options.socket.value_or("");
-    const RuntimePaths paths{memory, server_options, ProcessEnvironment{}};
+    const RuntimePaths paths{memory, server_options, process_environment};
     if (options.action == DiagnosticsOptions::Action::logs) {
       readLogs(paths.socket, options);
     } else {
@@ -678,14 +678,14 @@ struct HistoryOptions {
   bool assume_yes = false;
   std::string_view query;
   HistoryScope scope = HistoryScope::global;
-  std::string_view scope_value;
+  tbc::view<std::string_view, tbc::lt::a> scope_value;
   std::uint64_t pane_id = 0;
   bool failed_only = false;
   HistoryAuthorFilter author = HistoryAuthorFilter::all;
   std::uint16_t limit = default_limit;
   std::optional<std::string_view> socket = std::nullopt;
 
-  inline void setScope(HistoryScope value, std::string_view path = {}) {
+  inline void setScope(HistoryScope value, tbc::view<std::string_view, tbc::lt::a> path = {}) {
     if (scope != HistoryScope::global) {
       throw std::invalid_argument{"ConflictingHistoryScopes"};
     }
@@ -1365,7 +1365,7 @@ int run(Memory &memory, const HistoryOptions &options) {
 
     ServerOptions server_options{};
     server_options.socket = options.socket.value_or("");
-    const RuntimePaths paths{memory, server_options, ProcessEnvironment{}};
+    const RuntimePaths paths{memory, server_options, process_environment};
     ensureRuntime(memory, paths);
     ControlSession session{memory, paths.socket.c_str(), max_payload_size, max_batch_payload + 2048};
     session.receiveTimeout(30);

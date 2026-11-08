@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -473,14 +474,15 @@ inline void copyRange(std::string_view text) {
 // A command a window performs, as Zig's `arguments/RoutedOptions.zig`: the
 // family and verb name a `ClientAction` ("pane copy" is `pane_copy`), and the
 // runtime forwards it to the client `--client` names.
+// A routed command's options; its text and socket view the command's words, region `a`.
 struct RoutedOptions {
   ClientAction action{};
   std::uint64_t client_id = 0;
   std::uint64_t target_id = 0;
   std::int64_t value = 0;
-  std::string_view text{};
+  tbc::view<std::string_view, tbc::lt::a> text{};
   bool json = false;
-  const char *socket = nullptr;
+  tbc::view<const char *, tbc::lt::a> socket = nullptr;
 
   // `words` starts at the family. Not a routed command: nullopt, so the
   // family's own parser reads it.

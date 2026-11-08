@@ -86,7 +86,7 @@ struct Options {
   std::string_view text{};
   std::optional<std::string_view> workspace{};
   std::optional<std::string_view> tab{};
-  const char *socket = nullptr;
+  tbc::view<const char *, tbc::lt::a> socket = nullptr;
   bool json = false;
   bool stdin_text = false;
   bool enter = false;
@@ -104,7 +104,7 @@ struct Options {
   ReportAgentCommand command{};
 };
 
-inline void socketOption(Options &options, Cursor &cursor) {
+inline void socketOption(tbc::view<Options &, tbc::lt::a> options, Cursor &cursor) {
   const auto value = cursor.take("MissingSocketPath");
   if (options.socket) {
     usage("DuplicateSocketOption");
@@ -330,7 +330,7 @@ inline constexpr auto interrupt_settle = std::chrono::seconds{15};
 
 
 inline std::uint64_t current(const char *name, bool nonzero = false) {
-  const auto text = ProcessEnvironment{}.lookup(name);
+  const auto text = process_environment.lookup(name);
   const auto id = maybeUnsigned(text);
   if (!id || (nonzero && *id == 0)) {
     throw Failure{missing_pane_context};
@@ -353,7 +353,7 @@ inline std::uint64_t paneId(std::string_view target) {
 
 inline std::uint64_t entityId(std::string_view target, const char *variable) {
   if (target == "--current") {
-    const auto value = ProcessEnvironment{}.lookup(variable);
+    const auto value = process_environment.lookup(variable);
     if (value.empty()) {
       throw Failure{"MissingCurrentIdentity"};
     }
@@ -903,7 +903,7 @@ namespace telar::runtime::cli {
 template <Allocator Memory>
 int runAgent(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
-  const RuntimePaths paths{memory, socketOptions(options.socket), ProcessEnvironment{}};
+  const RuntimePaths paths{memory, socketOptions(options.socket), process_environment};
   connectRuntime(memory, paths, options.action != "acknowledge" && options.action != "report-title" && options.action != "report-state" && options.action != "report-command");
   Output out{memory};
   try {
@@ -1199,7 +1199,7 @@ int run(Memory &memory, const ExecutionOptions &options) {
   try {
     ServerOptions server_options{};
     server_options.socket = options.socket;
-    const RuntimePaths paths{memory, server_options, ProcessEnvironment{}};
+    const RuntimePaths paths{memory, server_options, process_environment};
     ensureRuntime(memory, paths);
     ControlSession session{memory, paths.socket.c_str()};
     session.receiveTimeout(30);
@@ -1408,7 +1408,7 @@ namespace telar::runtime::cli {
 template <Allocator Memory>
 int runPane(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
-  const RuntimePaths paths{memory, socketOptions(options.socket), ProcessEnvironment{}};
+  const RuntimePaths paths{memory, socketOptions(options.socket), process_environment};
   connectRuntime(memory, paths, options.action == "read" || options.action == "send-keys" || options.action == "focus");
   Output out{memory};
   try {
@@ -1687,7 +1687,7 @@ std::optional<std::uint64_t> prepare(Memory &memory, std::string_view cwd, bool 
 
   ServerOptions server_options{};
   server_options.socket = socket;
-  const RuntimePaths paths{memory, server_options, ProcessEnvironment{}};
+  const RuntimePaths paths{memory, server_options, process_environment};
   ensureRuntime(memory, paths);
   ControlSession session{memory, paths.socket.c_str()};
   session.receiveTimeout(30);

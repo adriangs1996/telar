@@ -1590,7 +1590,7 @@ class Logins {
     }
 
     try {
-      const RuntimePaths paths{memory_, ServerOptions{}, ProcessEnvironment{}};
+      const RuntimePaths paths{memory_, ServerOptions{}, process_environment};
       ControlSession session{memory_, paths.socket.c_str()};
       session.receiveTimeout(static_cast<unsigned>(status_timeout.count()));
       const auto result = session.template exchange<NotificationShown>(ShowNotification{.notification = {.duration_ms = max_notification_duration_ms, .title = utf8Prefix(plan.title, max_notification_title_bytes), .message = utf8Prefix(body, max_notification_message_bytes), .link = found.url}});

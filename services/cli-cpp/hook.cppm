@@ -376,7 +376,7 @@ inline std::optional<AgentPlanStatus> planStatus(std::string_view text) noexcept
 }
 
 template <Allocator Memory>
-void setPlan(Payload<Memory> &input, Reports &reports, ReportAgentProgress &report) {
+void setPlan(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<Reports &, tbc::lt::a> reports, tbc::view<ReportAgentProgress &, tbc::lt::a> report) {
   const bool todo = input.fields.text("tool_name") == "TodoWrite";
   const auto items = input.tools.value(todo ? "todos" : "plan");
   if (!items || !items->encoded().starts_with('[')) {
@@ -412,7 +412,7 @@ void setPlan(Payload<Memory> &input, Reports &reports, ReportAgentProgress &repo
 }
 
 template <Allocator Memory>
-void updatePlan(Payload<Memory> &input, Reports &reports, ReportAgentProgress &report) {
+void updatePlan(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<Reports &, tbc::lt::a> reports, tbc::view<ReportAgentProgress &, tbc::lt::a> report) {
   if (input.event() == "SessionStart") {
     report.plan_op = AgentPlanOp::set;
     return;
@@ -647,7 +647,8 @@ std::optional<ReportAgentTitle> titleReport(Payload<Memory> &input) {
 }
 
 template <Allocator Memory, EnvironmentLookup Environment>
-void map(Payload<Memory> &input, Reports &reports, SessionFiles &files, const Environment &environment) {
+// The reports view the payload, the files and their own texts, all region `a`.
+void map(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<Reports &, tbc::lt::a> reports, tbc::view<SessionFiles &, tbc::lt::a> files, const Environment &environment) {
   TELAR_TRACE("hooks.mapReports");
   reports.command = commandReport(input);
   reports.title = titleReport(input);
