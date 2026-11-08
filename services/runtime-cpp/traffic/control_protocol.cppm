@@ -695,7 +695,8 @@ public:
   }
 };
 
-class FlowControl {
+// What hooks decide about proxied flows, which every flow reports to at once.
+class TBC_SHARED FlowControl {
 public:
   using Time = std::chrono::steady_clock::time_point;
   static constexpr std::size_t chunk_bytes = 64 * 1024;

@@ -339,14 +339,14 @@ public:
 
     bool active = false;
     for (std::size_t round = 0; round < maximum_rounds && !finished_ && !upgraded_; ++round) {
-      bool request_progress = advanceMessage(request_, child, origin, readiness);
+      bool request_progress = advanceMessage(request_, CaptureSide::request, counters_, capture_, child, origin, readiness);
       active = active || request_progress;
       if (sendContinue(child)) {
         active = true;
-        request_progress = advanceMessage(request_, child, origin, TunnelReadiness::available()) || request_progress;
+        request_progress = advanceMessage(request_, CaptureSide::request, counters_, capture_, child, origin, TunnelReadiness::available()) || request_progress;
       }
       if (request_.state() == State::head_too_large) {
-        reject(request_head_too_large);
+        rejectHead(true);
         return sendRejection(child) || active;
       }
       if (request_.state() == State::failed) {
@@ -370,11 +370,11 @@ public:
         break;
       }
 
-      const bool response_progress = advanceMessage(response_, origin, child, {readiness.origin, readiness.child});
+      const bool response_progress = advanceMessage(response_, CaptureSide::response, counters_, capture_, origin, child, {readiness.origin, readiness.child});
       active = active || response_progress;
       if (response_.state() == State::head_too_large) {
         capture_.fail();
-        reject(response_head_too_large);
+        rejectHead(false);
         return sendRejection(child) || active;
       }
       if (response_.state() == State::failed) {
@@ -458,7 +458,7 @@ private:
   using State = Http1MessageRelay::State;
 
   template <PeekableByteStream Source, ByteStream Destination>
-  inline bool advanceMessage(Relay &message, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
+  inline static bool advanceMessage(Relay &message, CaptureSide side, ProxyCounters &counters, Capture &capture, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
     bool expired = false;
     if constexpr (requires { message.deadline(); }) {
       const auto deadline = message.deadline();
@@ -467,7 +467,7 @@ private:
     if (!expired && !readiness.child.satisfies(message.sourceInterest()) && !readiness.origin.satisfies(message.destinationInterest())) {
       return false;
     }
-    Http1TransportObserver observer{counters_, capture_, &message == &request_ ? CaptureSide::request : CaptureSide::response};
+    Http1TransportObserver observer{counters, capture, side};
     return message.advance(source, destination, observer);
   }
 
@@ -511,9 +511,10 @@ private:
     }
   }
 
-  inline void reject(std::string_view answer) noexcept {
+  // Answers a head too large to relay with the fixed response of its side.
+  inline void rejectHead(bool request) noexcept {
     counters_.record(ProxyCounter::http1_head_too_large);
-    rejection_ = answer;
+    rejection_ = request ? request_head_too_large : response_head_too_large;
   }
 
   template <ByteStream Child>
@@ -541,7 +542,7 @@ private:
   Relay request_;
   Relay response_;
   StreamReadiness continue_waiting_ = StreamReadiness::writable;
-  std::string_view rejection_;
+  tbc::view<std::string_view, tbc::lt::static_storage> rejection_;
   std::size_t rejection_offset_ = 0;
   StreamReadiness rejection_waiting_ = StreamReadiness::writable;
   bool response_started_ = false;
@@ -683,189 +684,201 @@ private:
 export {
 namespace telar::runtime {
 
+// One direction of a flow: the chunk a hook was offered and the replacement it chose. Its flow owns the
+// identity every event carries and the control it reports to.
 class FlowGate {
 public:
-  FlowGate() = default;
-  inline ~FlowGate() {
-    if (control_ && ticket_) {
-      control_->cancel(ticket_);
-    }
-  }
-  FlowGate(const FlowGate &) = delete;
-  FlowGate &operator=(const FlowGate &) = delete;
-
-  inline void attach(traffic::FlowControl *control, traffic::FlowEvent event) noexcept {
-    control_ = control;
-    event_ = event;
-  }
-
-  inline void visibility(traffic::Visibility value) noexcept { event_.visibility = value; }
-  inline std::optional<traffic::FlowControl::Time> deadline() const noexcept { return ticket_ ? control_->deadline(ticket_) : std::nullopt; }
   inline bool rejected() const noexcept { return rejected_; }
   inline std::string_view failureReason() const noexcept { return failure_; }
-  inline void fail(std::string_view reason, bool reading = false) noexcept {
-    if (rejected_) { return; }
-    rejected_ = true;
-    failure_ = reason;
-    if (control_) {
-      auto event = event_;
-      event.bytes = {};
-      event.reason = reason;
-      if (reading) { event.direction = event.direction == traffic::Direction::outbound ? traffic::Direction::inbound : traffic::Direction::outbound; }
-      control_->observeFlow(traffic::Kind::flow_error, event);
-    }
-  }
-
-  // The caller retains its input until the entire replacement has been sent, including partial TLS writes.
-  template <ByteStream Stream>
-  inline StreamResult write(Stream &stream, std::span<const Byte> bytes) noexcept {
-    if (rejected_) {
-      return {StreamResult::State::failed};
-    }
-    if (!control_) {
-      return stream.write(bytes);
-    }
-    if (!offered_) {
-      event_.bytes = bytes.first(std::min(bytes.size(), traffic::FlowControl::chunk_bytes));
-      original_size_ = event_.bytes.size();
-      ticket_ = control_->intercept(event_);
-      offered_ = true;
-    }
-    if (ticket_) {
-      const auto decision = control_->poll(ticket_, replacement_.bytes());
-      if (decision.verdict == traffic::Verdict::pending) {
-        return {StreamResult::State::blocked, 0, StreamReadiness::completion};
-      }
-      ticket_ = 0;
-      if (decision.verdict == traffic::Verdict::reject) {
-        fail("hook_rejected");
-        return {StreamResult::State::failed};
-      }
-      replacing_ = decision.verdict == traffic::Verdict::replace;
-      replacement_size_ = decision.bytes;
-    }
-
-    const auto input = bytes.first(original_size_);
-    const auto output = replacing_ ? replacement_.bytes().first(replacement_size_).subspan(sent_) : input;
-    if (output.empty()) {
-      return complete();
-    }
-    const auto result = stream.write(output);
-    if (result.state != StreamResult::State::data) {
-      if (result.state == StreamResult::State::failed || result.state == StreamResult::State::ended) { fail("socket_write_failed"); }
-      return result;
-    }
-    event_.bytes = output.first(result.bytes);
-    control_->observeFlow(traffic::Kind::stream_data, event_);
-    event_.offset += result.bytes;
-    if (replacing_) {
-      sent_ += result.bytes;
-      return sent_ == replacement_size_ ? complete() : StreamResult{StreamResult::State::blocked, 0, StreamReadiness::writable};
-    }
-    offered_ = false;
-    return result;
-  }
 
 private:
-  inline StreamResult complete() noexcept {
-    const auto count = original_size_;
-    eraseSensitive(replacement_.bytes().data(), replacement_size_);
-    offered_ = replacing_ = false;
-    sent_ = replacement_size_ = 0;
-    return {StreamResult::State::data, count};
-  }
+  friend class FlowState;
 
-  traffic::FlowControl *control_ = nullptr;
-  traffic::FlowEvent event_;
   SensitiveBuffer<traffic::FlowControl::chunk_bytes> replacement_;
   std::uint64_t ticket_ = 0;
+  std::uint64_t offset_ = 0;
   std::size_t original_size_ = 0;
   std::size_t replacement_size_ = 0;
   std::size_t sent_ = 0;
   bool offered_ = false;
   bool replacing_ = false;
   bool rejected_ = false;
-  std::string_view failure_;
+  tbc::view<std::string_view, tbc::lt::a> failure_;
 };
 
+class FlowState;
+
+// A stream of one direction of a flow, whose writes a hook may hold or replace.
 template <ByteStream Stream>
 class FlowStream {
 public:
-  inline explicit FlowStream(Stream &stream, FlowGate &gate) noexcept : stream_(stream), gate_(&gate) {}
-  inline explicit FlowStream(Stream &stream, FlowGate *gate) noexcept : stream_(stream), gate_(gate) {}
-  inline StreamResult read(std::span<Byte> bytes) noexcept {
-    const auto result = stream_.read(bytes);
-    if (gate_ && result.state == StreamResult::State::failed) { gate_->fail("socket_read_failed", true); }
-    return result;
-  }
-  inline StreamResult write(std::span<const Byte> bytes) noexcept { return gate_ ? gate_->write(stream_, bytes) : stream_.write(bytes); }
+  inline explicit FlowStream(Stream &stream, FlowState *flow, traffic::Direction direction) noexcept : stream_(stream), flow_(flow), direction_(direction) {}
+  inline StreamResult read(std::span<Byte> bytes) noexcept;
+  inline StreamResult write(std::span<const Byte> bytes) noexcept;
   inline void halfClose() noexcept { stream_.halfClose(); }
-  inline StreamResult peek(std::span<Byte> bytes) noexcept requires PeekableByteStream<Stream> {
-    const auto result = stream_.peek(bytes);
-    if (gate_ && result.state == StreamResult::State::failed) { gate_->fail("socket_read_failed", true); }
-    return result;
-  }
-  inline StreamView peekView(std::size_t maximum) noexcept requires BufferedByteStream<Stream> {
-    const auto result = stream_.peekView(maximum);
-    if (gate_ && result.state == StreamResult::State::failed) { gate_->fail("socket_read_failed", true); }
-    return result;
-  }
+  inline StreamResult peek(std::span<Byte> bytes) noexcept requires PeekableByteStream<Stream>;
+  inline StreamView peekView(std::size_t maximum) noexcept requires BufferedByteStream<Stream>;
   inline void consume(std::size_t bytes) noexcept requires BufferedByteStream<Stream> { stream_.consume(bytes); }
+
 private:
   Stream &stream_;
-  FlowGate *gate_;
+  FlowState *flow_;
+  traffic::Direction direction_;
 };
 
+// A proxied flow as hooks see it. It owns the identity its events carry, so an event it hands out views
+// the flow and nothing that outlives a call is kept elsewhere.
 class FlowState {
 public:
+  FlowState() = default;
+  FlowState(const FlowState &) = delete;
+  FlowState &operator=(const FlowState &) = delete;
+
   inline ~FlowState() {
-    if (control_) {
-      event_.reason = outbound.rejected() ? outbound.failureReason() : inbound.rejected() ? inbound.failureReason() : reason_;
-      control_->observeFlow(traffic::Kind::flow_close, event_);
+    if (!control_) {
+      return;
+    }
+    auto closed = event(traffic::Direction::outbound);
+    closed.reason = outbound_.rejected_ ? outbound_.failure_ : inbound_.rejected_ ? inbound_.failure_ : reason_;
+    control_->observeFlow(traffic::Kind::flow_close, closed);
+    for (const auto *gate : {&outbound_, &inbound_}) {
+      if (gate->ticket_) {
+        control_->cancel(gate->ticket_);
+      }
     }
   }
 
-  inline void open(traffic::FlowControl *control, std::uint64_t id, int child, int origin, std::string_view host) noexcept {
+  // The control the flow reports to, and the reasons it gives, which are usually literals, are region `a`.
+  inline void open(tbc::view<traffic::FlowControl *, tbc::lt::a> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept {
     control_ = control;
+    id_ = id;
     endpoint(child, client_);
     endpoint(origin, server_);
-    event_ = {.id = id, .client = client_.view(), .server = server_.view(), .host = host};
-    outbound.attach(control, event_);
-    auto incoming = event_;
-    incoming.direction = traffic::Direction::inbound;
-    inbound.attach(control, incoming);
+    host_.assign(host.substr(0, ProxyHostname::maximum_bytes));
     if (control_) {
-      control_->observeFlow(traffic::Kind::flow_open, event_);
+      control_->observeFlow(traffic::Kind::flow_open, event(traffic::Direction::outbound));
     }
   }
 
-  inline void visibility(traffic::Visibility value) noexcept {
-    event_.visibility = value;
-    outbound.visibility(value);
-    inbound.visibility(value);
-  }
+  inline void visibility(traffic::Visibility value) noexcept { visibility_ = value; }
+  inline void reason(tbc::view<std::string_view, tbc::lt::a> value) noexcept { reason_ = value; }
 
-  inline void reason(std::string_view value) noexcept { reason_ = value; }
-  inline auto context() const noexcept -> traffic::FlowEvent { return event_; }
-  inline void error(std::string_view value) noexcept {
+  // The flow's identity, which views the flow.
+  inline traffic::FlowEvent context() const noexcept { return event(traffic::Direction::outbound); }
+
+  inline void error(tbc::view<std::string_view, tbc::lt::a> value) noexcept {
     reason_ = value;
     if (control_) {
-      event_.reason = value;
-      control_->observeFlow(traffic::Kind::flow_error, event_);
+      auto failed = event(traffic::Direction::outbound);
+      failed.reason = value;
+      control_->observeFlow(traffic::Kind::flow_error, failed);
     }
   }
-  inline bool rejected() const noexcept { return outbound.rejected() || inbound.rejected(); }
+
+  inline bool rejected() const noexcept { return outbound_.rejected() || inbound_.rejected(); }
 
   inline std::optional<traffic::FlowControl::Time> deadline() const noexcept {
-    const auto out = outbound.deadline();
-    const auto in = inbound.deadline();
-    return out && in ? std::min(*out, *in) : out ? out : in;
+    std::optional<traffic::FlowControl::Time> earliest;
+    for (const auto *gate : {&outbound_, &inbound_}) {
+      if (const auto due = gate->ticket_ ? control_->deadline(gate->ticket_) : std::nullopt) {
+        earliest = earliest ? std::min(*earliest, *due) : *due;
+      }
+    }
+    return earliest;
   }
 
-  FlowGate outbound;
-  FlowGate inbound;
+  // A direction fails once; the reason is reported as the opposite direction's when it was reading.
+  inline void fail(traffic::Direction direction, tbc::view<std::string_view, tbc::lt::a> reason, bool reading = false) noexcept {
+    auto &gate = this->gate(direction);
+    if (gate.rejected_) {
+      return;
+    }
+    gate.rejected_ = true;
+    gate.failure_ = reason;
+    if (control_) {
+      auto failed = event(reading ? opposite(direction) : direction);
+      failed.offset = gate.offset_;
+      failed.reason = reason;
+      control_->observeFlow(traffic::Kind::flow_error, failed);
+    }
+  }
+
+  // The caller retains its input until the entire replacement has been sent, including partial TLS writes.
+  template <ByteStream Stream>
+  inline StreamResult write(traffic::Direction direction, Stream &stream, std::span<const Byte> bytes) noexcept {
+    auto &gate = this->gate(direction);
+    if (gate.rejected_) {
+      return {StreamResult::State::failed};
+    }
+    if (!control_) {
+      return stream.write(bytes);
+    }
+    if (!gate.offered_) {
+      auto offered = event(direction);
+      offered.offset = gate.offset_;
+      offered.bytes = bytes.first(std::min(bytes.size(), traffic::FlowControl::chunk_bytes));
+      gate.original_size_ = offered.bytes.size();
+      gate.ticket_ = control_->intercept(offered);
+      gate.offered_ = true;
+    }
+    if (gate.ticket_) {
+      const auto decision = control_->poll(gate.ticket_, gate.replacement_.bytes());
+      if (decision.verdict == traffic::Verdict::pending) {
+        return {StreamResult::State::blocked, 0, StreamReadiness::completion};
+      }
+      gate.ticket_ = 0;
+      if (decision.verdict == traffic::Verdict::reject) {
+        fail(direction, "hook_rejected");
+        return {StreamResult::State::failed};
+      }
+      gate.replacing_ = decision.verdict == traffic::Verdict::replace;
+      gate.replacement_size_ = decision.bytes;
+    }
+
+    const auto input = bytes.first(gate.original_size_);
+    const auto output = gate.replacing_ ? gate.replacement_.bytes().first(gate.replacement_size_).subspan(gate.sent_) : input;
+    if (output.empty()) {
+      return complete(gate);
+    }
+    const auto result = stream.write(output);
+    if (result.state != StreamResult::State::data) {
+      if (result.state == StreamResult::State::failed || result.state == StreamResult::State::ended) { fail(direction, "socket_write_failed"); }
+      return result;
+    }
+    auto written = event(direction);
+    written.offset = gate.offset_;
+    written.bytes = output.first(result.bytes);
+    control_->observeFlow(traffic::Kind::stream_data, written);
+    gate.offset_ += result.bytes;
+    if (gate.replacing_) {
+      gate.sent_ += result.bytes;
+      return gate.sent_ == gate.replacement_size_ ? complete(gate) : StreamResult{StreamResult::State::blocked, 0, StreamReadiness::writable};
+    }
+    gate.offered_ = false;
+    return result;
+  }
 
 private:
+  inline static traffic::Direction opposite(traffic::Direction direction) noexcept {
+    return direction == traffic::Direction::outbound ? traffic::Direction::inbound : traffic::Direction::outbound;
+  }
+
+  inline FlowGate &gate(traffic::Direction direction) noexcept {
+    return direction == traffic::Direction::outbound ? outbound_ : inbound_;
+  }
+
+  inline traffic::FlowEvent event(traffic::Direction direction) const noexcept {
+    return {.id = id_, .direction = direction, .visibility = visibility_, .client = client_.view(), .server = server_.view(), .host = host_.view()};
+  }
+
+  inline static StreamResult complete(FlowGate &gate) noexcept {
+    const auto count = gate.original_size_;
+    eraseSensitive(gate.replacement_.bytes().data(), gate.replacement_size_);
+    gate.offered_ = gate.replacing_ = false;
+    gate.sent_ = gate.replacement_size_ = 0;
+    return {StreamResult::State::data, count};
+  }
+
   inline static void endpoint(int socket, FixedText<128> &result) noexcept {
     sockaddr_storage address{};
     socklen_t size = sizeof(address);
@@ -877,12 +890,43 @@ private:
       result.assign(text.data());
     }
   }
-  traffic::FlowControl *control_ = nullptr;
-  traffic::FlowEvent event_;
+
+  tbc::view<traffic::FlowControl *, tbc::lt::a> control_ = nullptr;
+  std::uint64_t id_ = 0;
+  traffic::Visibility visibility_ = traffic::Visibility::wire;
   FixedText<128> client_;
   FixedText<128> server_;
-  std::string_view reason_ = "closed";
+  FixedText<ProxyHostname::maximum_bytes> host_;
+  tbc::view<std::string_view, tbc::lt::a> reason_ = "closed";
+  tbc::view<FlowGate, tbc::lt::a> outbound_;
+  tbc::view<FlowGate, tbc::lt::a> inbound_;
 };
+
+template <ByteStream Stream>
+inline StreamResult FlowStream<Stream>::read(std::span<Byte> bytes) noexcept {
+  const auto result = stream_.read(bytes);
+  if (flow_ && result.state == StreamResult::State::failed) { flow_->fail(direction_, "socket_read_failed", true); }
+  return result;
+}
+
+template <ByteStream Stream>
+inline StreamResult FlowStream<Stream>::write(std::span<const Byte> bytes) noexcept {
+  return flow_ ? flow_->write(direction_, stream_, bytes) : stream_.write(bytes);
+}
+
+template <ByteStream Stream>
+inline StreamResult FlowStream<Stream>::peek(std::span<Byte> bytes) noexcept requires PeekableByteStream<Stream> {
+  const auto result = stream_.peek(bytes);
+  if (flow_ && result.state == StreamResult::State::failed) { flow_->fail(direction_, "socket_read_failed", true); }
+  return result;
+}
+
+template <ByteStream Stream>
+inline StreamView FlowStream<Stream>::peekView(std::size_t maximum) noexcept requires BufferedByteStream<Stream> {
+  const auto result = stream_.peekView(maximum);
+  if (flow_ && result.state == StreamResult::State::failed) { flow_->fail(direction_, "socket_read_failed", true); }
+  return result;
+}
 
 }
 }
@@ -960,8 +1004,8 @@ public:
       return false;
     }
 
-    const bool outgoing = transfer(request_, child, origin, readiness);
-    const bool incoming = transfer(response_, origin, child, {readiness.origin, readiness.child});
+    const bool outgoing = transfer(request_, streams_, capture_, child, origin, readiness);
+    const bool incoming = transfer(response_, streams_, capture_, origin, child, {readiness.origin, readiness.child});
     if (finished()) {
       origin.halfClose();
       settle();
@@ -990,20 +1034,28 @@ public:
   }
 
 private:
+  using Streams = Http2StreamIds<2 * Http2StreamTracker::capacity>;
+
   inline void observe(Http2Direction direction, const Http2Event &event) noexcept {
-    if (event.kind == Http2Event::Kind::request_started) {
-      streams_.start(event.stream);
-    } else if (event.kind == Http2Event::Kind::response_ended || event.kind == Http2Event::Kind::stream_reset) {
-      streams_.finish(event.stream);
-    }
-    capture_.observe(direction, event);
+    observe(streams_, capture_, direction, event);
   }
 
+  inline static void observe(Streams &streams, Capture &capture, Http2Direction direction, const Http2Event &event) noexcept {
+    if (event.kind == Http2Event::Kind::request_started) {
+      streams.start(event.stream);
+    } else if (event.kind == Http2Event::Kind::response_ended || event.kind == Http2Event::Kind::stream_reset) {
+      streams.finish(event.stream);
+    }
+    capture.observe(direction, event);
+  }
+
+  // Where a direction's events go: the tracked streams and the capture, lent while it transfers.
   struct DirectionSink {
-    Http2Connection &connection;
+    Streams &streams;
+    Capture &capture;
     Http2Direction direction;
 
-    inline void emit(const Http2Event &event) noexcept { connection.observe(direction, event); }
+    inline void emit(const Http2Event &event) noexcept { observe(streams, capture, direction, event); }
   };
 
   struct Direction {
@@ -1015,7 +1067,7 @@ private:
   };
 
   template <ByteStream Source, ByteStream Destination>
-  inline bool transfer(Direction &direction, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
+  inline static bool transfer(Direction &direction, Streams &streams, Capture &capture, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
     if (!readiness.child.satisfies(direction.relay.sourceInterest()) && !readiness.origin.satisfies(direction.relay.destinationInterest())) {
       return false;
     }
@@ -1025,7 +1077,7 @@ private:
       const auto progress = direction.relay.advance(source, destination, [&](RelayDirection<>::Observation stage, std::span<const std::uint8_t> bytes) noexcept {
         const bool request = direction.kind == Http2Direction::request;
         if ((request && stage == RelayDirection<>::Observation::received) || (!request && stage == RelayDirection<>::Observation::forwarded)) {
-          DirectionSink sink{*this, direction.kind};
+          DirectionSink sink{streams, capture, direction.kind};
           direction.observer.observe(bytes, sink);
         }
       });
@@ -1035,7 +1087,7 @@ private:
       }
     }
     if (direction.relay.finished()) {
-      capture_.finish(direction.kind);
+      capture.finish(direction.kind);
     }
     return active;
   }
@@ -1064,7 +1116,7 @@ private:
   static constexpr std::size_t maximum_rounds = 8;
   ProxyCounters &counters_;
   [[no_unique_address]] Capture capture_;
-  Http2StreamIds<2 * Http2StreamTracker::capacity> streams_;
+  Streams streams_;
   Direction request_;
   Direction response_;
   bool settled_ = false;
@@ -1729,8 +1781,8 @@ public:
     }
 
     PrefixedStream prefixed{child_stream, prefix_};
-    FlowStream child{prefixed, flow_ ? &flow_->inbound : nullptr};
-    FlowStream origin{origin_stream, flow_ ? &flow_->outbound : nullptr};
+    FlowStream child{prefixed, flow_, traffic::Direction::inbound};
+    FlowStream origin{origin_stream, flow_, traffic::Direction::outbound};
 
     if (active) {
       readiness = TunnelReadiness::available();
@@ -2057,7 +2109,7 @@ public:
   }
 
 private:
-  inline std::string_view recordFailure() noexcept {
+  inline tbc::view<std::string_view, tbc::lt::static_storage> recordFailure() noexcept {
     using Failure = typename TlsSession<Memory>::Failure;
     switch (session_->failure()) {
     case Failure::context:
@@ -2143,8 +2195,8 @@ public:
     const auto tls = plain_ ? plain_->deadline() : tls_ ? tls_->deadline() : std::nullopt;
     return flow && tls ? std::min(*flow, *tls) : flow ? flow : tls;
   }
-  inline void reason(std::string_view value) noexcept { if (flow_) { flow_->reason(value); } }
-  inline void error(std::string_view value) noexcept { if (flow_) { flow_->error(value); } }
+  inline void reason(tbc::view<std::string_view, tbc::lt::a> value) noexcept { if (flow_) { flow_->reason(value); } }
+  inline void error(tbc::view<std::string_view, tbc::lt::a> value) noexcept { if (flow_) { flow_->error(value); } }
 
 private:
   Memory &memory_;

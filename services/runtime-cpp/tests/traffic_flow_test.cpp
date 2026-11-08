@@ -102,16 +102,16 @@ struct PartialStream {
 static void gates(SystemAllocator &memory) {
   for (const auto verdict : {Verdict::allow, Verdict::replace, Verdict::reject}) {
     Control control{memory};
-    FlowGate gate;
-    gate.attach(&control, {.id = 1, .host = "fixture.test"});
+    FlowState gate;
+    gate.open(&control, 1, -1, -1, "fixture.test");
     PartialStream stream;
     const std::array<Byte, 3> original{'o', 0, 'd'};
     const std::array<Byte, 7> replacement{'c', 'h', 0, 'n', 'g', 'e', 'd'};
-    check(gate.write(stream, original).state == StreamResult::State::blocked && stream.output.empty());
+    check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked && stream.output.empty());
     check(gate.deadline().has_value());
     control.broker.decide(control.ticket, verdict, verdict == Verdict::replace ? std::span<const Byte>{replacement} : std::span<const Byte>{});
     StreamResult result{StreamResult::State::blocked};
-    for (unsigned attempt = 0; attempt < 10 && result.state == StreamResult::State::blocked; ++attempt) { result = gate.write(stream, original); }
+    for (unsigned attempt = 0; attempt < 10 && result.state == StreamResult::State::blocked; ++attempt) { result = gate.write(traffic::Direction::outbound, stream, original); }
     check(control.requests == 1);
     if (verdict == Verdict::reject) { check(gate.rejected() && stream.output.empty()); }
     else {
@@ -124,13 +124,13 @@ static void gates(SystemAllocator &memory) {
   {
     Control control{memory};
     control.broker.disconnect();
-    FlowGate gate;
-    gate.attach(&control, {.id = 2, .host = "fixture.test"});
+    FlowState gate;
+    gate.open(&control, 2, -1, -1, "fixture.test");
     PartialStream stream;
     const std::array<Byte, 3> original{'o', 'l', 'd'};
-    check(gate.write(stream, original).state == StreamResult::State::blocked);
+    check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked);
     control.broker.configure({.host = "fixture.test", .visibility = 3});
-    check(gate.write(stream, original).state == StreamResult::State::data);
+    check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::data);
     check(control.requests == 1 && stream.output == "old");
   }
   ProxyHostPolicy hosts{memory};
