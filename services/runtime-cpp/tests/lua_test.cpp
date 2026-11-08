@@ -120,7 +120,14 @@ void testLua() {
   SystemAllocator system;
   {
     lua::Vm vm{system};
-    vm.execute("return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and os == nil and debug == nil and load == nil and setmetatable == nil", "@sandbox");
+    // The sandbox keeps only the clock of the os library.
+    vm.execute(R"lua(
+local os_names = {}
+for name in pairs(os) do os_names[#os_names + 1] = name end
+table.sort(os_names)
+return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and table.concat(os_names, ',') == 'clock,date,time' and debug == nil and load == nil and setmetatable == nil
+)lua",
+               "@sandbox");
     check(lua_toboolean(vm.state(), -1));
   }
   testLuaFailures(system);

@@ -103,7 +103,11 @@ static void host() {
   const auto entry = std::string{directory.path()} + "/main.lua";
   write(entry, R"lua(
 local traffic = require('telar.traffic')
-assert(io == nil and os == nil and debug == nil)
+assert(io == nil and debug == nil)
+local os_names = {}
+for name in pairs(os) do os_names[#os_names + 1] = name end
+table.sort(os_names)
+assert(table.concat(os_names, ',') == 'clock,date,time')
 local stop
 stop = traffic.subscribe({events={packet=true},filter='udp port 53535'}, function(err, event)
   assert(not err, err)

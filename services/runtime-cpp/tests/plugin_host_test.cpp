@@ -108,7 +108,11 @@ void testPluginHost() {
   writePlugin(path, R"lua(
 local telar = require('telar')
 assert(require('helper') == require('helper') and loads == 1)
-assert(io == nil and os == nil and debug == nil and package == nil)
+assert(io == nil and debug == nil and package == nil)
+local os_names = {}
+for name in pairs(os) do os_names[#os_names + 1] = name end
+table.sort(os_names)
+assert(table.concat(os_names, ',') == 'clock,date,time')
 assert(load == nil and loadfile == nil and dofile == nil and print == nil)
 assert(getmetatable == nil and setmetatable == nil and rawset == nil)
 local called = 0

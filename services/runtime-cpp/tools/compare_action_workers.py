@@ -65,9 +65,9 @@ def fixtures():
             ('two_targets', "return t.action.notification{title='x',pane_id=1,tab_id=2}"),
             ('callback_error', "error('intentional callback error')"),
             ('instruction_limit', 'while true do end'),
-            ('memory_limit', "local x=string.rep('x',64*1024*1024); return {}")):
+            ('memory_limit', "local x=string.rep('x',300*1024*1024); return {}")):
         add(name, body, None)
-    add('sandbox', "assert(io==nil and os==nil and debug==nil and loadfile==nil and dofile==nil and rawset==nil); return {}", bytes([0]))
+    add('sandbox', "local names={}; for name in pairs(os) do names[#names+1]=name end; table.sort(names); assert(table.concat(names,',')=='clock,date,time' and io==nil and debug==nil and loadfile==nil and dofile==nil and rawset==nil); return {}", bytes([0]))
     for name, context in (
             ('invalid_bool', ['2', '3', '1', '2', '42']),
             ('tab_count_overflow', ['1', '65536', '1', '2', '42']),
