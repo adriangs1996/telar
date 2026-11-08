@@ -115,7 +115,7 @@ std::optional<std::string_view> optionalText(const QByteArray &bytes) noexcept {
 
 static_assert(ConcurrentAllocator<ApplicationAllocator>);
 
-ConfigurationSource::ConfigurationSource(ApplicationAllocator &memory, QObject *parent)
+ConfigurationSource::ConfigurationSource(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
       fonts_(memory),
@@ -680,7 +680,7 @@ void ConfigurationSource::complete() {
   }
 }
 
-void ConfigurationSource::adopt(PreparedConfiguration result) {
+void ConfigurationSource::adopt(tbc::view<PreparedConfiguration, tbc::lt::a> result) {
   if (!result || result->revision != revision_) {
     return;
   }

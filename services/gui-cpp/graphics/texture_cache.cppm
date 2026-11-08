@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -805,7 +806,9 @@ public:
 export {
 namespace telar::gui {
 
-struct GraphicsBudget {
+// The bytes every pane's graphics hold, which each store counts against. It hands out nothing, so a
+// reference to it stays valid whatever any store records.
+struct TBC_SHARED GraphicsBudget {
   static constexpr std::size_t global_capacity = runtime::GraphicsLimits::maximum_global_bytes;
   std::size_t used = 0;
 };

@@ -102,7 +102,8 @@ public:
   template <typename Value>
   using Done = std::function<void(LuaOutcome<Value>)>;
 
-  explicit ConfigurationSource(ApplicationAllocator &memory, QObject *parent = nullptr);
+  // The source keeps the application's allocator, and what is prepared with it, region `a`.
+  explicit ConfigurationSource(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, QObject *parent = nullptr);
   ~ConfigurationSource() override;
   ConfigurationSource(const ConfigurationSource &) = delete;
   ConfigurationSource &operator=(const ConfigurationSource &) = delete;
@@ -161,13 +162,13 @@ private:
   [[nodiscard]] ConfigurationReloadRequest request(bool force);
   void schedule(bool force);
   void complete();
-  void adopt(PreparedConfiguration result);
+  void adopt(tbc::view<PreparedConfiguration, tbc::lt::a> result);
   void fail(const std::exception &error);
   void updateAppearance(Appearance appearance);
   void reload();
 
-  ApplicationAllocator &memory_;
-  FontCache<ApplicationAllocator> fonts_;
+  tbc::view<ApplicationAllocator &, tbc::lt::a> memory_;
+  tbc::view<FontCache<ApplicationAllocator>, tbc::lt::a> fonts_;
   QTimer poll_;
   QTimer debounce_;
   ConfigurationWatch watch_;
@@ -175,12 +176,13 @@ private:
   Appearance appearance_ = Appearance::unknown;
   std::optional<ThemeValues> locked_theme_;
   InputConfiguration default_input_;
-  BindingMap<BindingAction> default_keymap_;
-  Owned<Generation, ApplicationAllocator> generation_;
+  // The default keymap is compiled from the input beside it, so the source stays where Qt made it.
+  tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
+  tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
   tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
-  std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars_{};
+  tbc::view<std::array<std::optional<BarRender>, components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
   ConfigurationPreparation::CommandArguments arguments_;
-  std::optional<PluginPackages> plugins_;
+  tbc::view<std::optional<PluginPackages>, tbc::lt::a> plugins_;
   PluginOverrides plugin_overrides_;
   runtime::plugins::TrustStore trust_;
   std::uint64_t next_generation_ = 1;

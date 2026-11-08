@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -86,7 +87,9 @@ public:
   static constexpr std::size_t maximum_history_query_bytes = HistoryBrowser<Memory>::maximum_query_bytes;
   static constexpr std::uint16_t default_sidebar_columns = SidebarColumns::minimum_width;
 
-  inline Session(Memory &memory, Transport &transport, Effects effects = {})
+  // The session keeps the allocator and the transport, region `a`, which also holds what its replies and
+  // requests view of the session's own panes, workspaces and responses.
+  inline Session(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<Transport &, tbc::lt::a> transport, Effects effects = {})
       : memory_(memory),
         transport_(transport),
         effects_(std::move(effects)),
@@ -106,6 +109,9 @@ public:
         launch_arguments_(AllocatorRef<std::string_view, Memory>{memory}) {
     decode_.resize(decode_capacity);
   }
+
+  Session(const Session &) = delete;
+  Session &operator=(const Session &) = delete;
 
   inline void setLaunch(const Launch &launch) {
     BodySchema<Launch>::validate(launch);
@@ -416,8 +422,11 @@ public:
         return;
       }
 
-      pane = &ensurePane(pane_id, agent->location);
-      pane->generation = agent->pane_generation;
+      // The agent's row is read before the pane table can grow.
+      const auto location = agent->location;
+      const auto generation = agent->pane_generation;
+      pane = &ensurePane(pane_id, location);
+      pane->generation = generation;
     }
 
     auto &tab = ensureTab(pane->location);
@@ -433,7 +442,8 @@ public:
       return false;
     }
 
-    return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = *row->workspace});
+    const auto workspace = *row->workspace;
+    return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = workspace});
   }
 
   inline bool leaveWorktree() {
@@ -446,7 +456,8 @@ public:
       return false;
     }
 
-    return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = row->source});
+    const auto source = row->source;
+    return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = source});
   }
 
   inline std::size_t forgetGoneWorktrees() {
@@ -759,7 +770,9 @@ public:
   }
 
   inline void pasteHistory(std::uint64_t entry_id, bool alternate = false) {
-    const auto command = history_.command(entry_id);
+    // The entry is copied out of the history, which pasting must not be able to reach.
+    const String<Memory> entry{history_.command(entry_id), AllocatorRef<char, Memory>{memory_}};
+    const std::string_view command = entry;
     const auto *pane = focusedPane();
     if (pane == nullptr || !pane->attached || pane->exited) {
       throw EncodingError{"No terminal is ready for input"};
@@ -1983,7 +1996,7 @@ private:
     }
   }
 
-  void resolveHistoryScope(QueryHistory &request, HistoryScope scope) const {
+  void resolveHistoryScope(tbc::view<QueryHistory &, tbc::lt::a> request, HistoryScope scope) const {
     if (scope == HistoryScope::pane || scope == HistoryScope::cwd) {
       const auto *pane = focusedPane();
       if (pane == nullptr) {
@@ -3526,7 +3539,7 @@ private:
   }
 
   template <ClientCommandHandler Handler>
-  inline Change executeCommand(const ClientCommand &message, CompleteClientCommand &reply, Handler &handler) {
+  inline Change executeCommand(const ClientCommand &message, tbc::view<CompleteClientCommand &, tbc::lt::a> reply, Handler &handler) {
     switch (message.action) {
     case ClientAction::layout_get:
       reply.text = exportLayout();
@@ -3780,7 +3793,7 @@ private:
     focusPane(commandPane(identity).id);
   }
 
-  inline std::string_view exportLayout() {
+  inline tbc::view<std::string_view, tbc::lt::a> exportLayout() {
     const auto *tab = activeTab();
     if (tab == nullptr || tab->focused_pane == 0) {
       throw EncodingError{"No active tab layout"};
@@ -3903,17 +3916,17 @@ private:
   std::uint64_t copy_search_request_ = 0;
   HostMetrics metrics_;
   ProxyStatus proxy_{};
-  Memory &memory_;
-  Transport &transport_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<Transport &, tbc::lt::a> transport_;
   [[no_unique_address]] Effects effects_;
   SoundPlayback sound_playback_;
   GraphicsBudget graphics_budget_;
   GraphicsPauses graphics_pauses_;
   LimitReports limit_reports_;
   static constexpr std::uint64_t limit_notice_duration_ns = 8'000'000'000;
-  Vector<Owned<Pane<Memory>, Memory>, Memory> panes_;
+  tbc::view<Vector<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
   Vector<Owned<Tab<Memory>, Memory>, Memory> tabs_;
-  WorkspaceReplica<Memory> workspaces_;
+  tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
   AgentReplica<Memory> agents_;
   AgentAcknowledgement agent_acknowledgement_;
   NotificationCenter notifications_;
@@ -3926,10 +3939,11 @@ private:
   String<Memory> clipboard_;
   String<Memory> notice_;
   String<Memory> error_;
-  String<Memory> command_response_;
+  tbc::view<String<Memory>, tbc::lt::a> command_response_;
   String<Memory> launch_cwd_;
   Vector<String<Memory>, Memory> argument_storage_;
-  Vector<std::string_view, Memory> launch_arguments_;
+  // The launch arguments view the strings stored beside them.
+  tbc::view<Vector<std::string_view, Memory>, tbc::lt::self> launch_arguments_;
   std::array<Pending, maximum_pending> pending_;
   std::size_t pending_count_ = 0;
   std::optional<TabLocation> active_tab_;
