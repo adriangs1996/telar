@@ -77,8 +77,6 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME clipboard-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/clipboard_test.py" --telar "$<TARGET_FILE:telar>")
   set_tests_properties(clipboard-cli-tests PROPERTIES TIMEOUT 30)
-  add_executable(pane-agent-probe tests/pane_agent_probe.cpp)
-  target_link_libraries(pane-agent-probe PRIVATE cli-core)
   add_test(NAME pane-agent-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/pane_agent_test.py" --telar "$<TARGET_FILE:telar>")
   # Expected outputs come from the Zig CLI on macOS: the window launch
   # checks the display first on Linux, and setup reports the local platform.

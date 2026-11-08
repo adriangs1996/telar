@@ -1,8 +1,4 @@
-.zig-cache/
-zig-out/
-.zig-out/
 .DS_Store
-zig-pkg/
 /out-perf/
 # Verified Qt sources, private builds and installed SDKs managed by CMake.
 /.qt-cache/
@@ -18,7 +14,6 @@ references/*
 !references/README.md
 .lavish/*
 state/
-!src/model/state/
 /coverage.lcov
 /*.zcov
 __pycache__/

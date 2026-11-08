@@ -203,8 +203,6 @@
     "services/gui-cpp/tests/plugin_effect_cases.cppm": "telar.gui.tests.plugin_effect_cases",
     "services/gui-cpp/tests/session_fixture.cppm": "telar.gui.tests.session_fixture",
     "services/gui-cpp/tools/probe_geometry.cppm": "telar.gui.tools.probe_geometry",
-    "services/gui-cpp/tools/probe_graphics.cppm": "telar.gui.tools.probe_graphics",
-    "services/gui-cpp/tools/probe_history_hint.cppm": "telar.gui.tools.probe_history_hint",
     "services/gui-cpp/tools/probe_io.cppm": "telar.gui.tools.probe_io",
     "services/gui-cpp/tools/probe_text.cppm": "telar.gui.tools.probe_text"
   },
