@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "application/dependencies.hpp"
 #include "attachment_preview.hpp"
 #include "attachments/catalog.hpp"
@@ -51,7 +52,8 @@ signals:
   void queued();
 
 private:
-  [[nodiscard]] static ClipboardImageResult prepare(ApplicationAllocator &memory, ClipboardImageJob job, platform::ClipboardImageSource source);
+  // The prepared images are allocated from memory.
+  [[nodiscard]] static tbc::view<ClipboardImageResult, tbc::lt::a> prepare(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, ClipboardImageJob job, platform::ClipboardImageSource source);
   void start(ClipboardImageJob job);
   void complete();
   void drain();

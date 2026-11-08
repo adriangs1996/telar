@@ -74,6 +74,9 @@ struct TextPlacement {
 class TextScene {
 public:
   explicit TextScene(QQuickWindow &window);
+  // The layouts allocate from memory_, so the scene keeps its address.
+  TextScene(const TextScene &) = delete;
+  TextScene &operator=(const TextScene &) = delete;
 
   void configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection);
   void begin(const QRectF &bounds, qreal scale, const QRectF &clip, std::unique_ptr<QSGNode> previous = {});

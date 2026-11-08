@@ -708,7 +708,8 @@ private:
     if (owned_tail_) {
       tail_.assign(fitted);
     } else {
-      lines_[count_] = fitted;
+      // Unless the fit shortens the label into its buffer, it keeps the whole paragraph or nothing.
+      lines_[count_] = fitted.empty() ? std::string_view{} : paragraph;
     }
 
     ++count_;

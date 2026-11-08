@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/capture.hpp"
 #include "attachments/types.hpp"
@@ -53,7 +54,8 @@ public:
   ClipboardImageSource(ClipboardImageSource &&other) noexcept;
   ClipboardImageSource &operator=(ClipboardImageSource &&other) noexcept;
 
-  [[nodiscard]] AttachmentCapture<ApplicationAllocator> read(ApplicationAllocator &memory, ClipboardCaptureRequest request) const;
+  // The capture is allocated from memory.
+  [[nodiscard]] tbc::view<AttachmentCapture<ApplicationAllocator>, tbc::lt::a> read(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, ClipboardCaptureRequest request) const;
 
 private:
   friend class ClipboardImageMonitor;

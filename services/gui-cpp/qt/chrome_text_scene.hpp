@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
@@ -78,7 +79,8 @@ struct ChromeTextPaint {
   std::optional<Color> foreground = std::nullopt;
 };
 
-QSGNode *paintChromeText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection);
-QSGNode *paintTerminalText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization);
+// Each result reuses the previous node or is a new one the caller adopts.
+tbc::view<QSGNode *, tbc::lt::a> paintChromeText(tbc::view<QSGNode *, tbc::lt::a> previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection);
+tbc::view<QSGNode *, tbc::lt::a> paintTerminalText(tbc::view<QSGNode *, tbc::lt::a> previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization);
 
 }

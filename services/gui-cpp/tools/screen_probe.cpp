@@ -97,6 +97,9 @@ Options parseOptions(int argc, const char *const *argv) {
 
 class ScreenProbe {
 public:
+  ScreenProbe(const ScreenProbe &) = delete;
+  ScreenProbe &operator=(const ScreenProbe &) = delete;
+
   explicit ScreenProbe(Options options)
       : options_(options),
         memory_(upstream_, screen_budget),

@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
@@ -25,9 +26,10 @@ import telar.gui.graphics.placeholder;
 namespace telar::gui::qt {
 
 QSGNode *paintRoundedRectangle(QQuickWindow &window, QSGNode *previous, RoundedRectangle shape, qreal density);
-QSGNode *paintRoundedRectangleAt(QQuickWindow &window, QSGNode *previous, RoundedRectanglePaint paint, qreal density);
+// Each result reuses the previous node or is a new one the caller adopts.
+tbc::view<QSGNode *, tbc::lt::a> paintRoundedRectangleAt(QQuickWindow &window, tbc::view<QSGNode *, tbc::lt::a> previous, RoundedRectanglePaint paint, qreal density);
 QSGNode *paintSoftwareRoundedRectangle(QQuickWindow &window, QSGNode *previous, RoundedRectangle shape, qreal density);
-QSGNode *paintSoftwareRoundedRectangleAt(QQuickWindow &window, QSGNode *previous, RoundedRectanglePaint paint, qreal density);
+tbc::view<QSGNode *, tbc::lt::a> paintSoftwareRoundedRectangleAt(QQuickWindow &window, tbc::view<QSGNode *, tbc::lt::a> previous, RoundedRectanglePaint paint, qreal density);
 void paintRoundedRectangles(QQuickWindow &window, QSGNode &root, std::span<const RoundedRectanglePaint> paints, qreal density);
 
 }

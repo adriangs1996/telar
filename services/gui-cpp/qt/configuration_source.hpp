@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -117,7 +118,8 @@ public:
   [[nodiscard]] const BindingMap<BindingAction> &keymap() const noexcept;
   void invoke(BindingAction action, BindingContext context, Done<Effects> done);
   void expression(BindingAction action, BindingContext context, Done<InputExpression> done);
-  [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action, const Actions *resolved = nullptr) const;
+  // A command tab comes from the configured rows or from the actions a render resolved.
+  [[nodiscard]] tbc::view<std::optional<runtime::config::CommandTabView>, tbc::lt::a> commandTab(BindingAction action, tbc::view<const Actions *, tbc::lt::a> resolved = nullptr) const;
   [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action, const Actions *resolved = nullptr) const;
   [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action, const Actions *resolved = nullptr) const;
   [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action, const Actions *resolved = nullptr) const;
@@ -175,7 +177,7 @@ private:
   InputConfiguration default_input_;
   BindingMap<BindingAction> default_keymap_;
   Owned<Generation, ApplicationAllocator> generation_;
-  Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands_;
+  tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
   std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars_{};
   ConfigurationPreparation::CommandArguments arguments_;
   std::optional<PluginPackages> plugins_;

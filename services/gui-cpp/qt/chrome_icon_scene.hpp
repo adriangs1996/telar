@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -58,6 +59,7 @@ struct ChromeIconPaint {
   std::uint64_t revision = 0;
 };
 
-QSGNode *paintChromeIcon(QSGNode *previous, QQuickWindow &window, const ChromeIconPaint &paint);
+// The result reuses the previous node or is a new one the caller adopts.
+tbc::view<QSGNode *, tbc::lt::a> paintChromeIcon(tbc::view<QSGNode *, tbc::lt::a> previous, QQuickWindow &window, const ChromeIconPaint &paint);
 
 }

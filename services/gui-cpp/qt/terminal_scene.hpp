@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "../application/dependencies.hpp"
 #include "cell_glyphs.hpp"
 #include <algorithm>
@@ -84,7 +85,8 @@ public:
   TerminalScene &operator=(TerminalScene &&) = delete;
 
   void synchronize(QQuickWindow &window, const TerminalPresentation &frame);
-  static QSGNode *synchronizeNode(QSGNode *previous, QQuickWindow &window, const TerminalPresentation &frame);
+  // The result reuses the previous node or is a new one the caller adopts.
+  static tbc::view<QSGNode *, tbc::lt::a> synchronizeNode(tbc::view<QSGNode *, tbc::lt::a> previous, QQuickWindow &window, const TerminalPresentation &frame);
 
 private:
   struct Row {

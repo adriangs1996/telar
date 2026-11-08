@@ -65,7 +65,7 @@ include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/box_curve.cpp platform/awake_clock.cpp platform/wall_clock.cpp)
 telar_modules(gui-core)
-target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/dlls/tbc/include")
 add_dependencies(gui-core gui-graphics-tables gui-bindings gui-box-edges gui-palette-actions gui-themes)
 target_link_libraries(gui-core PUBLIC telar::config gui-harfbuzz)
 target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)

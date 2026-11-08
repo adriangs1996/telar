@@ -8,6 +8,7 @@ module;
 #include <hb.h>
 
 #include "../platform/font.h"
+#include "tbc/view.hpp"
 #include <cstring>
 
 #include <cmath>
@@ -126,7 +127,8 @@ class Face {
 public:
   static constexpr std::size_t maximum_sizes = 8;
 
-  explicit Face(std::span<const std::uint8_t> bytes, const FontMatch &match = {});
+  // FreeType reads the bytes for as long as the face exists; the match is copied.
+  explicit Face(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes, const FontMatch &match = {});
   ~Face();
   Face(const Face &) = delete;
   Face &operator=(const Face &) = delete;
@@ -172,14 +174,14 @@ private:
     OwnedSize handle;
   };
 
-  void selectFace(std::span<const std::uint8_t> bytes, const FontMatch &match);
+  void selectFace(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes, const FontMatch &match);
   void applyVariation(const FontVariation &variation);
   void initializeShaping();
   [[nodiscard]] OwnedSize createSize(std::uint16_t pixel_height);
   void selectSize(std::uint16_t pixel_height);
 
   std::unique_ptr<std::remove_pointer_t<FT_Library>, LibraryDeleter> library_;
-  std::unique_ptr<std::remove_pointer_t<FT_Face>, FaceDeleter> face_;
+  tbc::view<std::unique_ptr<std::remove_pointer_t<FT_Face>, FaceDeleter>, tbc::lt::a> face_;
   std::unique_ptr<hb_font_t, ShapingFontDeleter> shaping_font_;
   std::unique_ptr<hb_buffer_t, ShapingBufferDeleter> shaping_buffer_;
   std::optional<LigatureCoverage> ligatures_;

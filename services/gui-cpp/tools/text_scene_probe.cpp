@@ -178,6 +178,9 @@ QByteArray sceneDigest(const QSGNode &root) {
 
 class TextCase {
 public:
+  TextCase(const TextCase &) = delete;
+  TextCase &operator=(const TextCase &) = delete;
+
   TextCase(QQuickWindow &window, const std::shared_ptr<const FontCollection> &collection, unsigned length)
       : collection_(collection),
         fonts_(ResidentFonts::shared(collection)),

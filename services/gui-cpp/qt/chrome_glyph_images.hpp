@@ -83,6 +83,11 @@ struct CachedGlyph {
 };
 
 struct OpticalGlyphRasterizers {
+  // pixels allocates from memory, so the rasterizers keep their address.
+  OpticalGlyphRasterizers() = default;
+  OpticalGlyphRasterizers(const OpticalGlyphRasterizers &) = delete;
+  OpticalGlyphRasterizers &operator=(const OpticalGlyphRasterizers &) = delete;
+
   std::uint8_t strength = std::numeric_limits<std::uint8_t>::max();
 #ifdef Q_OS_MACOS
   static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;

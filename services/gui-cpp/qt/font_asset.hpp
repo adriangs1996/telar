@@ -5,6 +5,7 @@ static_assert(true);
 
 
 #include "../core/memory.hpp"
+#include "tbc/view.hpp"
 #include "font_source.hpp"
 #include "../platform/font.h"
 #include <algorithm>
@@ -43,7 +44,8 @@ public:
 
 private:
   SystemAllocator memory_;
-  Vector<std::uint8_t, SystemAllocator> bytes_;
+  // Allocated from memory_, which the asset owns.
+  tbc::view<Vector<std::uint8_t, SystemAllocator>, tbc::lt::self> bytes_;
   fonts::FontMatch match_;
 };
 

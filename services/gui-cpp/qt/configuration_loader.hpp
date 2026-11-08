@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "../application/dependencies.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include <cstddef>
@@ -128,7 +129,8 @@ using PreparedConfiguration = Owned<ConfigurationPreparation, ApplicationAllocat
 
 class ConfigurationLoader {
 public:
-  [[nodiscard]] static PreparedConfiguration prepare(ApplicationAllocator &memory, const ConfigurationReloadRequest &request);
+  // The preparation is allocated from memory.
+  [[nodiscard]] static tbc::view<PreparedConfiguration, tbc::lt::a> prepare(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationReloadRequest &request);
   static void trackModules(const ConfigurationGeneration<ApplicationAllocator> &generation, const QString &root, ConfigurationWatch::Modules &modules);
   static void trackModuleNames(const QStringList &names, const QString &root, ConfigurationWatch::Modules &modules);
 
