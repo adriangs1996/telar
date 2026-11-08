@@ -82,6 +82,17 @@ struct GraphicsCounters {
   std::uint64_t stage_blocked = 0;
   std::uint64_t stage_deferred = 0;
 
+  inline void merge(const GraphicsCounters &other) noexcept {
+    accumulate(messages, other.messages);
+    accumulate(bytes, other.bytes);
+    accumulate(images, other.images);
+    accumulate(placements, other.placements);
+    accumulate(transfers_staged, other.transfers_staged);
+    accumulate(transfers_adopted, other.transfers_adopted);
+    accumulate(stage_blocked, other.stage_blocked);
+    accumulate(stage_deferred, other.stage_deferred);
+  }
+
   template <typename Message>
   inline void record(const Message &message) {
     accumulate(messages);
@@ -244,6 +255,20 @@ struct FrameCounters {
   std::uint64_t diff_scanned_cells = 0;
   Timing encode;
   Timing ack;
+
+  inline void merge(const FrameCounters &other) noexcept {
+    accumulate(frames, other.frames);
+    accumulate(frame_bytes, other.frame_bytes);
+    accumulate(frame_cells, other.frame_cells);
+    accumulate(frame_spans, other.frame_spans);
+    accumulate(snapshots, other.snapshots);
+    accumulate(cursor_only_frames, other.cursor_only_frames);
+    accumulate(noop_frames, other.noop_frames);
+    accumulate(damaged_rows, other.damaged_rows);
+    accumulate(diff_scanned_cells, other.diff_scanned_cells);
+    encode.merge(other.encode);
+    ack.merge(other.ack);
+  }
 
   inline void write(Line &line) const {
     line.field("frames", frames);

@@ -16,6 +16,7 @@ module;
 #include <zstd.h>
 
 #include <cerrno>
+#include "tbc/view.hpp"
 
 export module telar.runtime.exchange_capture.pipeline;
 
@@ -71,9 +72,10 @@ public:
     CapturedExchange<Memory> exchange;
   };
 
-  inline explicit CaptureJoiner(Memory &memory, std::chrono::milliseconds timeout) noexcept : memory_(memory), timeout_ms_(timeout.count()) {}
+  // The joiner holds halves until their peers arrive, and the halves keep their quota: region `a`.
+  inline explicit CaptureJoiner(tbc::view<Memory &, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept : memory_(memory), timeout_ms_(timeout.count()) {}
 
-  inline Result push(std::int64_t now_ms, Half half) noexcept {
+  inline tbc::view<Result, tbc::lt::a> push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept {
     Result result{State::pending, CapturedExchange<Memory>{memory_}};
     const auto existing = find(half->key);
     if (existing) {
@@ -104,7 +106,7 @@ public:
     return result;
   }
 
-  inline std::optional<CapturedExchange<Memory>> expire(std::int64_t now_ms) noexcept {
+  inline tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> expire(std::int64_t now_ms) noexcept {
     std::optional<std::size_t> expired;
     occupied_.forEach([&](std::size_t index) {
       if (!expired && slots_[index]->expires_at_ms <= now_ms) {
@@ -140,9 +142,9 @@ private:
     return found;
   }
 
-  Memory &memory_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
   std::int64_t timeout_ms_;
-  std::array<std::optional<Entry>, capacity> slots_;
+  tbc::view<std::array<std::optional<Entry>, capacity>, tbc::lt::a> slots_;
   SlotIndexes<capacity> occupied_;
 };
 

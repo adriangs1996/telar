@@ -643,9 +643,10 @@ Restore(Memory &memory, RuntimeModel<Memory> &model, PaneService<Memory, Poller,
 export {
 namespace telar::runtime::checkpoint {
 
+// Writes a checkpoint into the caller's buffer, region `a`, which the finished bytes view.
 class Writer {
 public:
-  inline explicit Writer(std::span<Byte> buffer, Counters counters)
+  inline explicit Writer(tbc::view<std::span<Byte>, tbc::lt::a> buffer, Counters counters)
       : buffer_(buffer),
         remaining_(buffer.empty() ? buffer : buffer.first(buffer.size() - 1)) {
     constexpr std::size_t header_bytes = magic.size() + sizeof(current_version) + 4 * sizeof(std::uint64_t);
@@ -677,7 +678,7 @@ public:
     }
   }
 
-  inline std::span<const Byte> finish() {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> finish() {
     const auto count = buffer_.size() - remaining_.size() - 1;
     buffer_[count] = static_cast<Byte>(Kind::end);
     return buffer_.first(count + 1);
@@ -809,8 +810,8 @@ private:
     text32({reinterpret_cast<const char *>(record.payload.data()), record.payload.size()});
   }
 
-  std::span<Byte> buffer_;
-  std::span<Byte> remaining_;
+  tbc::view<std::span<Byte>, tbc::lt::a> buffer_;
+  tbc::view<std::span<Byte>, tbc::lt::a> remaining_;
 };
 
 }

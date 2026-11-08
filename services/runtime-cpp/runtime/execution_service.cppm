@@ -549,7 +549,9 @@ public:
     }
 
     const auto slot = client.availableAttachmentSlot();
-    auto attachment = makeOwned<Attachment<Memory>>(memory_, memory_, client.graphics_credit, pane.id, pane.media);
+    // The attachment shares the pane's media through its own handle.
+    auto media = pane.media;
+    auto attachment = makeOwned<Attachment<Memory>>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
     attachment->slot = slot;
     attachment->graphics.configure(client.shared_graphics);
     attachment->clipboard_revision = pane.terminal.effects.clipboard_revision;

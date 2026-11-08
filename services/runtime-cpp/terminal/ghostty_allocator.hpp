@@ -1,14 +1,16 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <ghostty/vt.h>
 
 namespace telar::runtime {
 
+// Lends Ghostty the allocator, region `a`, which outlives the bridge.
 template <Allocator Memory>
 class GhosttyAllocatorBridge {
 public:
-  explicit GhosttyAllocatorBridge(Memory &memory) noexcept
+  explicit GhosttyAllocatorBridge(tbc::view<Memory &, tbc::lt::a> memory) noexcept
       : allocator_{.ctx = &memory,
                    .vtable = &callbacks_} {}
 
@@ -16,7 +18,7 @@ public:
     return &allocator_;
   }
 
-  Memory &memory() const noexcept {
+  tbc::view<Memory &, tbc::lt::a> memory() const noexcept {
     return *static_cast<Memory *>(allocator_.ctx);
   }
 
@@ -50,7 +52,7 @@ private:
       .free = deallocate,
   };
 
-  GhosttyAllocator allocator_;
+  tbc::view<GhosttyAllocator, tbc::lt::a> allocator_;
 };
 
 }

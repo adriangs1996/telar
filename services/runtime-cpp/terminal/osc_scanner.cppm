@@ -315,8 +315,9 @@ namespace telar::runtime {
 template <Allocator Memory>
 class ResponseOutbox {
 public:
-  inline explicit ResponseOutbox(Memory &memory, PtyResponseQueue &queue)
-      : overflow_(AllocatorRef<std::uint8_t, Memory>{memory}), queue_(queue) {}
+  // The outbox shares the queue it fills, so it keeps no borrow of whoever else holds it.
+  inline explicit ResponseOutbox(Memory &memory, std::shared_ptr<PtyResponseQueue> queue)
+      : overflow_(AllocatorRef<std::uint8_t, Memory>{memory}), queue_(std::move(queue)) {}
 
   inline ~ResponseOutbox() { discard(); }
 
@@ -324,7 +325,7 @@ public:
   ResponseOutbox &operator=(const ResponseOutbox &) = delete;
 
   inline void append(std::span<const std::uint8_t> response) {
-    if (response.empty() || queue_.closed()) {
+    if (response.empty() || queue_->closed()) {
       return;
     }
     if (response.size() > PtyResponseQueue::message_byte_capacity || response.size() + header_bytes > maximum_bytes - size_) {
@@ -348,19 +349,19 @@ public:
     }
     size_ = required;
     if (!priority_) {
-      priority_ = queue_.retainWorkerPriority();
+      priority_ = queue_->retainWorkerPriority();
     }
   }
 
   inline bool drain() noexcept {
-    if (queue_.closed()) {
+    if (queue_->closed()) {
       discard();
       return true;
     }
     while (pending()) {
       const auto count = nextSize();
       const auto *data = overflow_.empty() ? inline_.data() : overflow_.data();
-      if (!queue_.tryPush({data + consumed_ + header_bytes, count})) {
+      if (!queue_->tryPush({data + consumed_ + header_bytes, count})) {
         return false;
       }
       consumed_ += header_bytes + count;
@@ -374,7 +375,7 @@ public:
     consumed_ = 0;
     Vector<std::uint8_t, Memory>{overflow_.get_allocator()}.swap(overflow_);
     if (priority_) {
-      queue_.releaseWorkerPriority();
+      queue_->releaseWorkerPriority();
       priority_ = false;
     }
   }
@@ -398,7 +399,7 @@ private:
   static constexpr std::size_t header_bytes = sizeof(std::uint16_t);
   std::array<std::uint8_t, inline_bytes> inline_;
   Vector<std::uint8_t, Memory> overflow_;
-  PtyResponseQueue &queue_;
+  std::shared_ptr<PtyResponseQueue> queue_;
   std::size_t size_ = 0;
   std::size_t consumed_ = 0;
   bool priority_ = false;

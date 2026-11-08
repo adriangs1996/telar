@@ -445,18 +445,25 @@ void testFrameCounters() {
   Terminal terminal{memory, telar::TerminalSize{20, 4, 8, 16}};
   FrameSync frames{memory, 1};
   FrameCounters counters;
-  frames.setCounters(counters);
+  const auto collect = [&] { counters.merge(frames.takeCounters()); };
   terminal.refresh();
   const auto snapshot = frames.prepare(terminal.screen);
+  collect();
   check(!snapshot.empty() && counters.frames == 1 && counters.snapshots == 1 && counters.frame_cells == 80);
-  check(frames.acknowledge(1) && counters.ack.count == 1);
+  check(frames.acknowledge(1));
+  collect();
+  check(counters.ack.count == 1);
   constexpr std::array<telar::Byte, 1> input{'x'};
   terminal.feed(input);
   terminal.refresh();
-  check(!frames.prepare(terminal.screen).empty() && counters.frames == 2 && counters.snapshots == 1);
+  check(!frames.prepare(terminal.screen).empty());
+  collect();
+  check(counters.frames == 2 && counters.snapshots == 1);
   check(counters.frame_cells == 81 && counters.damaged_rows >= 1 && counters.diff_scanned_cells >= 20);
   check(counters.encode.count == 2 && frames.acknowledge(2));
-  check(frames.prepare(terminal.screen).empty() && counters.frames == 2);
+  check(frames.prepare(terminal.screen).empty());
+  collect();
+  check(counters.frames == 2);
 }
 
 void testAllocationStatistics() {

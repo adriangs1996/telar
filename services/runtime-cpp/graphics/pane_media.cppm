@@ -391,7 +391,7 @@ public:
         control_parser_(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
-        response_outbox_(memory, *responses_),
+        response_outbox_(memory, responses_),
         storage_limit_(limits.screenBytes()),
         uploads_(limits.screenBytes()) {
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), size.cols, size.rows));
@@ -597,8 +597,7 @@ private:
   GhosttyAllocatorBridge<Memory> allocator_;
   TerminalHandle terminal_;
   std::shared_ptr<PtyResponseQueue> responses_;
-  // Keeps the queue responses_ owns.
-  tbc::view<ResponseOutbox<Memory>, tbc::lt::self> response_outbox_;
+  ResponseOutbox<Memory> response_outbox_;
   std::size_t storage_limit_;
   GraphicsUploadLimits uploads_;
   bool response_failed_ = false;
@@ -695,6 +694,11 @@ public:
 
   inline void output(std::span<const Byte> bytes) {
     terminal_.feed(bytes);
+  }
+
+  // The input lends the terminal, so a batch resizes it through the input too.
+  inline void resize(TerminalSize size) {
+    terminal_.resize(size);
   }
 
   inline bool atomicFrame(const AtomicFrameView &frame) {
@@ -871,7 +875,7 @@ public:
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.direct_frames, statistics.direct));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.file_frames, statistics.file));
         } else {
-          terminal_->resize(std::get<TerminalSize>(event));
+          input.resize(std::get<TerminalSize>(event));
         }
       }
       terminal_->refresh();

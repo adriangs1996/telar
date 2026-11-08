@@ -253,7 +253,7 @@ public:
     const auto executable = std::string_view{command.arguments().front()};
     foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), 48));
     process.emplace(command.specification(settings.size));
-    terminal.attachMedia(*media);
+    terminal.attachMedia(media);
   }
 
   inline bool read(ReadMode mode = ReadMode::once) {

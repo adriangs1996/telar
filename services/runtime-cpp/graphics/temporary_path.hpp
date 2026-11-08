@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "child_file.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -26,7 +28,8 @@ public:
     }
   }
 
-  std::string_view authorize() noexcept {
+  // The refusal, if any, is a literal.
+  tbc::view<std::string_view, tbc::lt::static_storage> authorize() noexcept {
 #if defined(__APPLE__)
     if (::fcntl(file_.descriptor.get(), F_GETPATH, path_.data()) != 0) {
       return "EINVAL: invalid data";

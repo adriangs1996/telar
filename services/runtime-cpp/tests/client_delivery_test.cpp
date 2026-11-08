@@ -267,7 +267,7 @@ void attachmentRotation() {
   client.next_attachment = 1;
   for (const auto index : {1, 2, 0}) {
     AttachmentDelivery delivery{model, client};
-    check(delivery.prepare(DeliveryLane::cells, now, timeout));
+    check(delivery.prepare(model, client, DeliveryLane::cells, now, timeout));
     const auto frame = peer.receive<PaneFrame>();
     check(frame.pane_id == ids[index]);
     check(client.attachment(frame.pane_id)->frames.acknowledge(frame.frame_id));
@@ -275,7 +275,7 @@ void attachmentRotation() {
 
   for (const auto index : {1, 2, 0}) {
     AttachmentDelivery delivery{model, client};
-    check(delivery.prepare(DeliveryLane::cwd, now, timeout));
+    check(delivery.prepare(model, client, DeliveryLane::cwd, now, timeout));
     check(peer.receive<PaneCwd>().pane_id == ids[index]);
   }
 
@@ -283,9 +283,9 @@ void attachmentRotation() {
   auto &reattached = panes.attach(model, client, ids[1], {80, 24, 0, 0});
   check(reattached.slot == 1 && client.next_attachment == 1);
   AttachmentDelivery rotated{model, client};
-  check(rotated.prepare(DeliveryLane::foreground, now, timeout));
+  check(rotated.prepare(model, client, DeliveryLane::foreground, now, timeout));
   check(peer.receive<PaneForeground>().pane_id == ids[1] && client.next_attachment == 2);
-  check(rotated.prepare(DeliveryLane::cwd, now, timeout));
+  check(rotated.prepare(model, client, DeliveryLane::cwd, now, timeout));
   check(peer.receive<PaneCwd>().pane_id == ids[1] && client.next_attachment == 2);
 
   for (auto &attachment : client.attachments) {

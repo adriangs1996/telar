@@ -216,8 +216,9 @@ public:
   }
 
 #if TELAR_DIAGNOSTICS
-  inline void bindCounters(tbc::view<diagnostics::GraphicsCounters &, tbc::lt::a> counters) noexcept {
-    counters_ = &counters;
+  // What the synchronizer counted since the last call, which the caller adds to the runtime's metrics.
+  inline diagnostics::GraphicsCounters takeCounters() noexcept {
+    return std::exchange(counters_, {});
   }
 #endif
 
@@ -233,7 +234,7 @@ public:
 
   inline bool advanceTransfer(Connection<Memory> &connection) {
     if (!transfer_) {
-      TELAR_DIAGNOSTIC(if (counters_ != nullptr && (snapshot_ != SnapshotState::idle || observed_revision_ != available_revision_)) { diagnostics::accumulate(counters_->stage_deferred); });
+      TELAR_DIAGNOSTIC(if (snapshot_ != SnapshotState::idle || observed_revision_ != available_revision_) { diagnostics::accumulate(counters_.stage_deferred); });
       return false;
     }
 
@@ -379,7 +380,7 @@ public:
 
     try {
       if (stage(storage) == StageResult::staged) {
-        TELAR_DIAGNOSTIC(if (counters_ != nullptr) { diagnostics::accumulate(counters_->transfers_staged); });
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.transfers_staged));
       }
     } catch (const std::bad_alloc &) {
       abandon(storage.revision());
@@ -390,10 +391,10 @@ private:
   template <typename Message>
   inline void send(Connection<Memory> &connection, const Message &message) {
     connection.send(message);
-    TELAR_DIAGNOSTIC(if (counters_ != nullptr) {
-      counters_->record(message);
-      diagnostics::accumulate(counters_->stage_blocked, std::exchange(pending_blocked_, 0));
-      diagnostics::accumulate(counters_->transfers_adopted, std::exchange(pending_adopted_, 0));
+    TELAR_DIAGNOSTIC({
+      counters_.record(message);
+      diagnostics::accumulate(counters_.stage_blocked, std::exchange(pending_blocked_, 0));
+      diagnostics::accumulate(counters_.transfers_adopted, std::exchange(pending_adopted_, 0));
     });
   }
 
@@ -498,7 +499,7 @@ private:
   bool shared_ = false;
   bool initialized_ = false;
 #if TELAR_DIAGNOSTICS
-  tbc::view<diagnostics::GraphicsCounters *, tbc::lt::a> counters_ = nullptr;
+  diagnostics::GraphicsCounters counters_;
   std::uint64_t available_revision_ = 0;
   std::uint64_t pending_blocked_ = 0;
   std::uint64_t pending_adopted_ = 0;

@@ -2257,6 +2257,7 @@ private:
   inline void handle(std::uint64_t identity, const FrameAck &message) {
     if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
       attachment->frames.acknowledge(message.frame_id);
+      TELAR_DIAGNOSTIC(model_.metrics.frames.merge(attachment->frames.takeCounters()));
     }
   }
 

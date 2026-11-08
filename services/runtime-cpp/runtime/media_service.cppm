@@ -653,7 +653,8 @@ private:
     return false;
   }
 
-  inline static void enqueueRetired(RuntimeModel<Memory> &model, typename Processor::Request &request) noexcept {
+  // The request shares the model's retired media, and so what that media keeps: region `a`.
+  inline static void enqueueRetired(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, tbc::view<typename Processor::Request &, tbc::lt::a> request) noexcept {
     auto *link = &model.retired_media;
     while (*link && request.count < request.entries.size()) {
       auto &media = **link;
@@ -714,8 +715,8 @@ private:
 
     for (auto *client : clients.items()) {
       if (auto *attachment = client == nullptr ? nullptr : client->attachment(pane)) {
-        TELAR_DIAGNOSTIC(attachment->graphics.bindCounters(metrics.graphics));
         attachment->graphics.stageAtMediaBoundary(storage);
+        TELAR_DIAGNOSTIC(metrics.graphics.merge(attachment->graphics.takeCounters()));
       }
     }
   }
@@ -853,6 +854,10 @@ private:
           build_worker(&completion, std::in_place, index),
           query_worker(&completion, std::in_place, memory, index) {}
 
+    // The workers keep the slot's index, so the slot stays where it was built.
+    Slot(const Slot &) = delete;
+    Slot &operator=(const Slot &) = delete;
+
     std::uint64_t client;
     std::uint64_t used = 0;
     OwnedPathQuery wanted;
@@ -863,8 +868,8 @@ private:
     bool answered_partial = false;
     bool abandoned = false;
     Index index;
-    ObservationWorker<PathBuildTask<Index>> build_worker;
-    ObservationWorker<PathQueryTask<Memory, Index>> query_worker;
+    tbc::view<ObservationWorker<PathBuildTask<Index>>, tbc::lt::self> build_worker;
+    tbc::view<ObservationWorker<PathQueryTask<Memory, Index>>, tbc::lt::self> query_worker;
   };
 
   inline static Owned<Slot, Memory> emptySlot(Memory &memory) noexcept {

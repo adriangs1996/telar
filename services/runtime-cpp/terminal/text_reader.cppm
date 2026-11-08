@@ -113,7 +113,8 @@ private:
     std::array<std::uint16_t, maximum_links * 2> slots{};
   };
 
-  inline static std::string_view stringView(GhosttyString value) noexcept {
+  // The text is the terminal's, which the string only points at, as a raw pointer lends no borrow.
+  inline static tbc::view<std::string_view, tbc::lt::a> stringView(tbc::view<GhosttyString, tbc::lt::a> value) noexcept {
     return {reinterpret_cast<const char *>(value.ptr), value.len};
   }
 
@@ -128,7 +129,7 @@ private:
     return value;
   }
 
-  inline std::optional<std::uint16_t> intern(tbc::view<LinkTable &, tbc::lt::a> table, tbc::view<const Identity &, tbc::lt::a> identity) {
+  inline std::optional<std::uint16_t> intern(tbc::view<LinkTable &, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity) {
     auto slot = hash(identity) % table.slots.size();
     while (table.slots[slot] != 0) {
       const auto index = static_cast<std::uint16_t>(table.slots[slot] - 1);
@@ -478,7 +479,7 @@ public:
   FrameSync &operator=(const FrameSync &) = delete;
 
   inline bool acknowledge(std::uint64_t frame_id) noexcept {
-    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_ == nullptr ? nullptr : &counters_->ack});
+    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.ack});
     if (frame_id == 0 || frame_id != outstanding_id_) {
       return false;
     }
@@ -510,7 +511,7 @@ public:
 
   inline std::span<const Byte> prepare(const Screen<Memory> &screen) {
     TELAR_TRACE("frame_sync.prepare");
-    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_ == nullptr ? nullptr : &counters_->encode});
+    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.encode});
     if (screen.cols != previous_header_.cols || screen.rows != previous_header_.rows) {
       outstanding_id_ = 0;
       snapshot_pending_ = true;
@@ -542,7 +543,7 @@ public:
     } else {
       appendDamage(screen, written);
       if (spans_.empty() && !metadata_changed && sameHeader(header, previous_header_)) {
-        TELAR_DIAGNOSTIC(if (counters_ != nullptr) { diagnostics::accumulate(counters_->noop_frames); });
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.noop_frames));
         observed_revision_ = screen.revision;
         metadata_revision_ = screen.metadata_revision;
         return {};
@@ -597,8 +598,9 @@ public:
   }
 
 #if TELAR_DIAGNOSTICS
-  inline void setCounters(tbc::view<diagnostics::FrameCounters &, tbc::lt::a> counters) noexcept {
-    counters_ = &counters;
+  // What the sync counted since the last call, which the caller adds to the runtime's metrics.
+  inline diagnostics::FrameCounters takeCounters() noexcept {
+    return std::exchange(counters_, {});
   }
 #endif
 
@@ -647,9 +649,9 @@ private:
         --end;
       }
 
-      TELAR_DIAGNOSTIC(if (counters_ != nullptr) {
-        diagnostics::accumulate(counters_->damaged_rows);
-        diagnostics::accumulate(counters_->diff_scanned_cells, first - row_start + row_start + screen.cols - end + (first < end ? 2 : 0));
+      TELAR_DIAGNOSTIC({
+        diagnostics::accumulate(counters_.damaged_rows);
+        diagnostics::accumulate(counters_.diff_scanned_cells, first - row_start + row_start + screen.cols - end + (first < end ? 2 : 0));
       });
 
       if (first == end) {
@@ -700,21 +702,17 @@ private:
   static constexpr std::size_t maximum_metadata_bytes = 153098 + maximum_spans * 12 + 62;
 #if TELAR_DIAGNOSTICS
   inline void recordFrame(std::size_t bytes, bool snapshot) noexcept {
-    if (counters_ == nullptr) {
-      return;
-    }
-
-    diagnostics::accumulate(counters_->frames);
-    diagnostics::accumulate(counters_->frame_bytes, bytes);
-    diagnostics::accumulate(counters_->frame_spans, spans_.size());
-    diagnostics::accumulate(counters_->snapshots, snapshot);
-    diagnostics::accumulate(counters_->cursor_only_frames, spans_.empty());
+    diagnostics::accumulate(counters_.frames);
+    diagnostics::accumulate(counters_.frame_bytes, bytes);
+    diagnostics::accumulate(counters_.frame_spans, spans_.size());
+    diagnostics::accumulate(counters_.snapshots, snapshot);
+    diagnostics::accumulate(counters_.cursor_only_frames, spans_.empty());
     for (const auto &span : spans_) {
-      diagnostics::accumulate(counters_->frame_cells, span.count);
+      diagnostics::accumulate(counters_.frame_cells, span.count);
     }
   }
 
-  tbc::view<diagnostics::FrameCounters *, tbc::lt::a> counters_ = nullptr;
+  diagnostics::FrameCounters counters_;
 #endif
   std::uint64_t pane_id_;
   tbc::view<Vector<ScreenCell, Memory>, tbc::lt::a> baseline_;
@@ -749,13 +747,14 @@ enum class TerminalPurpose {
 template <Allocator Memory>
 class Terminal {
 public:
-  inline explicit Terminal(Memory &memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, std::shared_ptr<PtyResponseQueue> responses = {}, GraphicsQueryResources resources = {})
+  // The terminal keeps the allocator, the query resources and the media it feeds: region `a`.
+  inline explicit Terminal(tbc::view<Memory &, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses = {}, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {})
       : screen(memory),
         effects(memory),
         graphics(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
-        response_outbox_(memory, *responses_),
+        response_outbox_(memory, responses_),
         control_(memory, *responses_, purpose != TerminalPurpose::observation, resources),
         pending_control_input_(memory, control_input_limit),
         purpose_(purpose) {
@@ -795,7 +794,8 @@ public:
     resize(size);
   }
 
-  inline tbc::view<std::span<const Byte>, tbc::lt::a> encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::a> destination) {
+  // The bytes view the destination, region `b`, apart from what the terminal keeps.
+  inline tbc::view<std::span<const Byte>, tbc::lt::b> encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::b> destination) {
     GhosttyHandle<GhosttyKeyEncoder, ghostty_key_encoder_free> encoder;
     GhosttyHandle<GhosttyKeyEvent, ghostty_key_event_free> event;
     checkGhostty(ghostty_key_encoder_new(allocator_.get(), encoder.output()));
@@ -850,12 +850,12 @@ public:
     }
   }
 
-  // Pane owns both objects and destroys Terminal before PaneMedia. Only the
-  // runtime touches this borrowed ingress port; workers own sealed batches.
-  inline void attachMedia(PaneMedia<Memory> &media) noexcept {
+  // The terminal shares the media it feeds, so either may go first. Only the
+  // runtime touches this ingress port; workers own sealed batches.
+  inline void attachMedia(tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media) noexcept {
     assert(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
-    media_ = &media;
-    media.requireOrderedInput();
+    media_ = std::move(media);
+    media_->requireOrderedInput();
     control_.enableMediaBoundaries();
   }
 
@@ -1053,9 +1053,9 @@ public:
   }
 #endif
 
-  Screen<Memory> screen;
-  TerminalEffects<Memory> effects;
-  GraphicsStorage<Memory> graphics;
+  tbc::view<Screen<Memory>, tbc::lt::a> screen;
+  tbc::view<TerminalEffects<Memory>, tbc::lt::a> effects;
+  tbc::view<GraphicsStorage<Memory>, tbc::lt::a> graphics;
 
 private:
   inline std::size_t feedControl(std::span<const Byte> bytes) {
@@ -1293,18 +1293,18 @@ private:
     screen.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, UINT32_MAX));
   }
 
-  GhosttyAllocatorBridge<Memory> allocator_;
+  tbc::view<GhosttyAllocatorBridge<Memory>, tbc::lt::a> allocator_;
   TerminalHandle terminal_;
   RenderStateHandle render_state_;
   RowIteratorHandle row_iterator_;
   RowCellsHandle row_cells_;
-  std::shared_ptr<PtyResponseQueue> responses_;
-  // The outbox and the engine keep the queue responses_ owns.
-  tbc::view<ResponseOutbox<Memory>, tbc::lt::self> response_outbox_;
-  PaneMedia<Memory> *media_ = nullptr;
+  tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses_;
+  tbc::view<ResponseOutbox<Memory>, tbc::lt::a> response_outbox_;
+  tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media_;
   static constexpr std::size_t control_input_limit = 128 * 1024;
-  tbc::view<control::Engine<Memory>, tbc::lt::self> control_;
-  ByteQueue<Memory> pending_control_input_;
+  // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
+  tbc::view<control::Engine<Memory>, tbc::lt::a> control_;
+  tbc::view<ByteQueue<Memory>, tbc::lt::a> pending_control_input_;
   TerminalPurpose purpose_;
   CellProjection projection_;
   TerminalSize size_{};

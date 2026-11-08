@@ -156,7 +156,7 @@ int main() {
   const auto deliver = [&](ClientPeer &peer, bool acknowledge, bool snapshot) {
     auto timeout = std::chrono::nanoseconds::max();
     AttachmentDelivery delivery{model, peer.session()};
-    check(delivery.prepare(DeliveryLane::cells, now, timeout));
+    check(delivery.prepare(model, peer.session(), DeliveryLane::cells, now, timeout));
     const auto frame = peer.receive<PaneFrame>();
     auto &screen = screens[&peer == &first ? 0 : 1];
     check(screen.apply(frame) == telar::gui::FrameApplication::applied);
@@ -196,7 +196,7 @@ int main() {
   pane.terminal.feed(byteView("new output during outstanding viewport\r\n"));
   auto timeout = std::chrono::nanoseconds::max();
   AttachmentDelivery blocked{model, first.session()};
-  check(!blocked.prepare(DeliveryLane::cells, now, timeout));
+  check(!blocked.prepare(model, first.session(), DeliveryLane::cells, now, timeout));
   select(second, 9);
   deliver(second, true, false);
   auto &sync = first.session().attachment(pane.id)->frames;

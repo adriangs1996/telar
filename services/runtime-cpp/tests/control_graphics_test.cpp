@@ -595,9 +595,10 @@ void orderedMediaBoundaries() {
     BudgetAllocator memory{system, 64 * 1024 * 1024};
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     auto queue = std::make_shared<PtyResponseQueue>();
-    PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue};
+    auto shared_media = std::make_shared<PaneMedia<decltype(memory)>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    auto &media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
-    terminal.attachMedia(media);
+    terminal.attachMedia(shared_media);
     terminal.feed(bytes(input).first(split));
     terminal.feed(bytes(input).subspan(split));
     std::string actual;
@@ -623,9 +624,10 @@ void orderedMediaBoundaries() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   auto queue = std::make_shared<PtyResponseQueue>();
-  PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue};
+  auto shared_media = std::make_shared<PaneMedia<decltype(memory)>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+  auto &media = *shared_media;
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
-  terminal.attachMedia(media);
+  terminal.attachMedia(shared_media);
   std::string quiet;
   constexpr unsigned commands = 32;
   for (unsigned index = 0; index < commands; ++index) {
@@ -742,9 +744,10 @@ void retainedAtomicFrames() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   auto queue = std::make_shared<PtyResponseQueue>();
-  PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue};
+  auto shared_media = std::make_shared<PaneMedia<decltype(memory)>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+  auto &media = *shared_media;
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
-  terminal.attachMedia(media);
+  terminal.attachMedia(shared_media);
   std::string input;
   for (unsigned index = 0; index < 9; ++index) {
     input += frame;

@@ -158,32 +158,35 @@ private:
 export {
 namespace telar::runtime {
 
+// Which of a client's attachments can deliver, found once per write. It keeps the attachments' indexes,
+// not the attachments or their panes, so the client and the model are lent to each call, and the
+// connection apart from the attachment it delivers.
 template <Allocator Memory>
 class AttachmentDelivery {
 public:
   using Clock = std::chrono::steady_clock;
 
-  inline explicit AttachmentDelivery(RuntimeModel<Memory> &model, ClientSession<Memory> &client) : model_(model), client_(client) {
-    for (const auto &attachment : client.attachments) {
-      auto *pane = model.panes.find(attachment->pane_id);
-      if (pane != nullptr && !attachment->exit_sent) {
-        slots_[attachment->slot] = {attachment.get(), pane, false};
-        occupied_ |= std::uint64_t{1} << attachment->slot;
+  inline explicit AttachmentDelivery(const RuntimeModel<Memory> &model, const ClientSession<Memory> &client) {
+    for (std::size_t index = 0; index < client.attachments.size(); ++index) {
+      const auto &attachment = *client.attachments[index];
+      if (model.panes.find(attachment.pane_id) != nullptr && !attachment.exit_sent) {
+        slots_[attachment.slot] = {static_cast<std::uint8_t>(index), false};
+        occupied_ |= std::uint64_t{1} << attachment.slot;
       }
     }
   }
 
-  inline bool prepare(DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
-    const auto start = client_.next_attachment;
+  inline bool prepare(RuntimeModel<Memory> &model, ClientSession<Memory> &client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
+    const auto start = client.next_attachment;
     auto candidates = std::rotr(occupied_, static_cast<int>(start));
     while (candidates != 0) {
       const auto slot = (start + std::countr_zero(candidates)) % ClientSession<Memory>::attachment_capacity;
       candidates &= candidates - 1;
-      const auto &candidate = slots_[slot];
-      auto *attachment = candidate.attachment;
-      auto *pane = candidate.pane;
-      if (prepare(*attachment, *pane, lane, now, timeout)) {
-        client_.next_attachment = (slot + 1) % ClientSession<Memory>::attachment_capacity;
+      auto &attachment = *client.attachments[slots_[slot].index];
+      auto &pane = *model.panes.find(attachment.pane_id);
+      Output output{client.connection, client.completing_exit, client.frame_interval, model.metrics};
+      if (prepare(output, attachment, pane, lane, now, timeout)) {
+        client.next_attachment = (slot + 1) % ClientSession<Memory>::attachment_capacity;
         return true;
       }
     }
@@ -193,45 +196,52 @@ public:
 
 private:
   struct Slot {
-    Attachment<Memory> *attachment;
-    Pane<Memory> *pane;
+    std::uint8_t index;
     bool cells_current;
   };
 
-  inline bool prepare(Attachment<Memory> &attachment, Pane<Memory> &pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
+  // The parts of the client and the model a delivery writes, lent apart from the attachment and its pane.
+  struct Output {
+    Connection<Memory> &connection;
+    std::optional<std::uint64_t> &completing_exit;
+    std::chrono::nanoseconds frame_interval;
+    [[maybe_unused]] diagnostics::RuntimeCounters &metrics;
+  };
+
+  inline bool prepare(Output &output, Attachment<Memory> &attachment, Pane<Memory> &pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
     const auto &effects = pane.terminal.effects;
     switch (lane) {
     case DeliveryLane::cells:
-      return cells(attachment, pane, now, timeout);
+      return cells(output, attachment, pane, now, timeout);
     case DeliveryLane::cwd:
-      return metadata(attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{pane.id, pane.cwd});
+      return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{pane.id, pane.cwd});
     case DeliveryLane::foreground:
-      return metadata(attachment.foreground_revision, pane.foreground_revision, PaneForeground{pane.id, pane.foreground.view()});
+      return metadata(output.connection, attachment.foreground_revision, pane.foreground_revision, PaneForeground{pane.id, pane.foreground.view()});
     case DeliveryLane::title:
-      return metadata(attachment.title_revision, effects.title_revision, PaneTitle{pane.id, effects.title()});
+      return metadata(output.connection, attachment.title_revision, effects.title_revision, PaneTitle{pane.id, effects.title()});
     case DeliveryLane::progress:
-      return metadata(attachment.progress_revision, effects.progress_revision, PaneProgress{pane.id, effects.progress_state, effects.progress_percent});
+      return metadata(output.connection, attachment.progress_revision, effects.progress_revision, PaneProgress{pane.id, effects.progress_state, effects.progress_percent});
     case DeliveryLane::exit:
-      return exit(attachment, pane);
+      return exit(output, attachment, pane);
     case DeliveryLane::graphics:
-      return graphics(attachment, pane, timeout);
+      return graphics(output, attachment, pane, timeout);
     default:
       return false;
     }
   }
 
   template <typename Message>
-  inline bool metadata(std::uint64_t &observed, std::uint64_t revision, const Message &message) {
+  inline static bool metadata(Connection<Memory> &connection, std::uint64_t &observed, std::uint64_t revision, const Message &message) {
     if (observed == revision) {
       return false;
     }
 
-    client_.connection.send(message);
+    connection.send(message);
     observed = revision;
     return true;
   }
 
-  inline bool cells(Attachment<Memory> &attachment, Pane<Memory> &pane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
+  inline bool cells(Output &output, Attachment<Memory> &attachment, Pane<Memory> &pane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
     if (attachment.frames.waitingForAck(pane.terminal.screen)) {
       return false;
     }
@@ -242,7 +252,7 @@ private:
       return false;
     }
 
-    attachment.pacer.configure(client_.frame_interval);
+    attachment.pacer.configure(output.frame_interval);
     if (pane.last_input) {
       attachment.pacer.noteInput(*pane.last_input);
     }
@@ -273,8 +283,8 @@ private:
     }
 
     pane.terminal.refresh();
-    TELAR_DIAGNOSTIC(attachment.frames.setCounters(model_.metrics.frames));
     const auto payload = attachment.frames.prepare(pane.terminal.screen);
+    TELAR_DIAGNOSTIC(output.metrics.frames.merge(attachment.frames.takeCounters()));
     slots_[attachment.slot].cells_current = true;
     if (attachment.viewport) {
       pane.terminal.scrollToBottom();
@@ -287,56 +297,56 @@ private:
       return false;
     }
 
-    client_.connection.sendPayload(payload);
+    output.connection.sendPayload(payload);
     return true;
   }
 
-  inline bool exit(Attachment<Memory> &attachment, const Pane<Memory> &pane) {
+  inline bool exit(Output &output, Attachment<Memory> &attachment, const Pane<Memory> &pane) {
     if (!pane.output_closed || !pane.exit_status || !pane.media->idle() || attachment.frames.waitingForAck() || !slots_[attachment.slot].cells_current) {
       return false;
     }
 
     const auto status = *pane.exit_status;
-    client_.connection.send(PaneExited{
+    output.connection.send(PaneExited{
         .pane_id = pane.id,
         .kind = WIFEXITED(status) ? ExitKind::exited : ExitKind::signaled,
         .value = static_cast<std::uint32_t>(WIFEXITED(status) ? WEXITSTATUS(status) : WTERMSIG(status)),
     });
     attachment.exit_sent = true;
-    client_.completing_exit = pane.id;
+    output.completing_exit = pane.id;
     return true;
   }
 
-  inline bool graphics(Attachment<Memory> &attachment, Pane<Memory> &pane, std::chrono::nanoseconds &timeout) {
-    TELAR_DIAGNOSTIC(attachment.graphics.bindCounters(model_.metrics.graphics));
-    const auto queued = client_.connection.queuedBytes();
+  inline static bool graphics(Output &output, Attachment<Memory> &attachment, Pane<Memory> &pane, std::chrono::nanoseconds &timeout) {
+    const bool sent = publishGraphics(output.connection, attachment, pane, timeout);
+    TELAR_DIAGNOSTIC(output.metrics.graphics.merge(attachment.graphics.takeCounters()));
+    return sent;
+  }
+
+  inline static bool publishGraphics(Connection<Memory> &connection, Attachment<Memory> &attachment, Pane<Memory> &pane, std::chrono::nanoseconds &timeout) {
+    const auto queued = connection.queuedBytes();
     if (pane.media->busy()) {
-      if (attachment.graphics.advanceTransfer(client_.connection)) {
+      if (attachment.graphics.advanceTransfer(connection)) {
         timeout = std::chrono::nanoseconds::zero();
       }
-      return client_.connection.queuedBytes() != queued;
+      return connection.queuedBytes() != queued;
     }
 
     auto *terminal = pane.media->terminal();
     try {
-      const bool pending = terminal == nullptr ? attachment.graphics.publish(client_.connection, pane.terminal.graphics) : attachment.graphics.publish(client_.connection, terminal->graphics);
+      const bool pending = terminal == nullptr ? attachment.graphics.publish(connection, pane.terminal.graphics) : attachment.graphics.publish(connection, terminal->graphics);
       if (pending) {
         timeout = std::chrono::nanoseconds::zero();
       }
     } catch (const std::bad_alloc &) {
       attachment.graphics.abandon(terminal == nullptr ? pane.terminal.graphics.revision() : terminal->graphics.revision());
     }
-    return client_.connection.queuedBytes() != queued;
+    return connection.queuedBytes() != queued;
   }
 
-  RuntimeModel<Memory> &model_;
-  ClientSession<Memory> &client_;
   std::array<Slot, ClientSession<Memory>::attachment_capacity> slots_;
   std::uint64_t occupied_ = 0;
 };
-
-template <Allocator Memory>
-AttachmentDelivery(RuntimeModel<Memory> &model, ClientSession<Memory> &client) -> AttachmentDelivery<Memory>;
 
 }
 }
@@ -501,8 +511,8 @@ private:
       }
     }
 
-    AttachmentDelivery attachments{model_, client};
-    if (queued_lane <= DeliveryLane::cells || attachments.prepare(DeliveryLane::cells, now, timeout)) {
+    AttachmentDelivery<Memory> attachments{model_, client};
+    if (queued_lane <= DeliveryLane::cells || attachments.prepare(model_, client, DeliveryLane::cells, now, timeout)) {
       return;
     }
 
@@ -513,7 +523,7 @@ private:
     }
 
     for (const auto lane : {DeliveryLane::cwd, DeliveryLane::foreground, DeliveryLane::title, DeliveryLane::progress, DeliveryLane::exit, DeliveryLane::graphics}) {
-      if (queued_lane <= lane || attachments.prepare(lane, now, timeout)) {
+      if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
         return;
       }
 

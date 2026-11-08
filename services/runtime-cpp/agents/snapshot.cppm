@@ -923,7 +923,8 @@ template <Allocator Memory>
 class AgentSnapshotBuilder {
 public:
   inline void publish(ClientSession<Memory> &client, const RuntimeModel<Memory> &model, const AgentRegistry<Memory> &registry) {
-    auto &entries = entries_;
+    // The entries view the model, the registry and these texts only while the snapshot is sent.
+    std::array<AgentSnapshotEntry, AgentRegistry<Memory>::capacity> entries;
     auto &directories = directories_;
     auto &placeholders = placeholders_;
     std::size_t count = 0;
@@ -1003,7 +1004,6 @@ public:
   }
 
 private:
-  std::array<AgentSnapshotEntry, AgentRegistry<Memory>::capacity> entries_;
   std::array<FixedText<48>, AgentRegistry<Memory>::capacity> directories_;
   std::array<FixedText<96>, AgentRegistry<Memory>::capacity> placeholders_;
 };

@@ -170,11 +170,12 @@ static void testClosedGeneration() {
 static void testResponseOutbox() {
   SystemAllocator system;
   BudgetAllocator memory{system, 4096};
-  PtyResponseQueue queue;
+  const auto shared_queue = std::make_shared<PtyResponseQueue>();
+  auto &queue = *shared_queue;
   const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
   {
-    ResponseOutbox first{memory, queue};
-    ResponseOutbox second{memory, queue};
+    ResponseOutbox first{memory, shared_queue};
+    ResponseOutbox second{memory, shared_queue};
     first.append(ack);
     second.append(ack);
     check(first.drain());
@@ -189,7 +190,7 @@ static void testResponseOutbox() {
   auto storage = std::make_shared<std::vector<std::uint8_t>>(PtyResponseQueue::total_byte_capacity - 1, 42);
   check(queue.tryPushOwned(*storage, storage));
   {
-    ResponseOutbox outbox{memory, queue};
+    ResponseOutbox outbox{memory, shared_queue};
     outbox.append(ack);
     check(queue.hasCapacity() && !queue.hasCapacityFor(ack.size()));
     check(!outbox.drain() && outbox.nextSize() == ack.size());
@@ -201,7 +202,7 @@ static void testResponseOutbox() {
     check(!outbox.pending());
   }
   {
-    ResponseOutbox outbox{memory, queue};
+    ResponseOutbox outbox{memory, shared_queue};
     const std::array<std::uint8_t, 1024> message{};
     for (unsigned index = 0; index < 3; ++index) {
       outbox.append(message);
@@ -244,7 +245,8 @@ static void testWorkerPublicationFailure() {
 
 template <bool Fixed = false>
 static void testWorkerPriority() {
-  PtyResponseQueue queue;
+  const auto shared_queue = std::make_shared<PtyResponseQueue>();
+  auto &queue = *shared_queue;
   const std::array<std::uint8_t, Fixed ? 4 : 1> native_bytes{'N'};
   const auto publish = [](PtyResponseQueue::Producer &producer, const auto &bytes) {
     if constexpr (Fixed) {
@@ -262,7 +264,7 @@ static void testWorkerPriority() {
   std::atomic<std::size_t> yielded = 0;
   std::jthread worker{[&] {
     SystemAllocator memory;
-    ResponseOutbox outbox{memory, queue};
+    ResponseOutbox outbox{memory, shared_queue};
     for (unsigned index = 0; index < 100; ++index) {
       outbox.append(ack);
     }

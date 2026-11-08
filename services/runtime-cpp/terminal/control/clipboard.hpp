@@ -443,9 +443,10 @@ private:
     pending_.reset();
   }
 
-  std::optional<ClipboardRoute> authorizedRoute(const ClipboardMetadata &metadata, bool write, bool exempt) {
+  // Uses only the grants, so the metadata may live in what this sequence holds.
+  static std::optional<ClipboardRoute> authorizedRoute(ClipboardGrants &grants, const ClipboardMetadata &metadata, bool write, bool exempt) {
     if (!exempt && !metadata.name.view().empty()) {
-      if (const auto granted = grants_.use(metadata.password.view(), write)) {
+      if (const auto granted = grants.use(metadata.password.view(), write)) {
         return granted;
       }
     }
@@ -481,7 +482,7 @@ private:
         request.mimes[request.mime_count++].assign(*mime);
       }
     }
-    const auto granted = authorizedRoute(metadata, false, request.mime_count == 0);
+    const auto granted = authorizedRoute(grants_, metadata, false, request.mime_count == 0);
     request.route = granted.value_or(*preferred_);
     request.prompt = policy.clipboard_read == Access::ask && request.mime_count != 0 && !granted;
   }
@@ -505,7 +506,7 @@ private:
     request.metadata = transaction_->metadata;
     request.write = true;
     request.ending = ending;
-    const auto granted = authorizedRoute(request.metadata, true, false);
+    const auto granted = authorizedRoute(grants_, request.metadata, true, false);
     request.route = granted.value_or(*preferred_);
     request.prompt = policy.clipboard_write == Access::ask && !granted;
     request.transaction = std::move(transaction_);

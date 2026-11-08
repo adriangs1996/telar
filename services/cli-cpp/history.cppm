@@ -1244,8 +1244,9 @@ inline tbc::view<HistoryScopeValue, tbc::lt::a> scopeValue(tbc::view<const Histo
   throw std::runtime_error{"InvalidHistoryScope"};
 }
 
+// The results view the session; region `b` keeps them apart from the options' own `a`.
 template <Allocator Memory>
-tbc::view<HistoryResults, tbc::lt::a> query(tbc::view<ControlSession<Memory> &, tbc::lt::a> session, const HistoryOptions &options, const HistoryScopeValue &scope) {
+tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession<Memory> &, tbc::lt::b> session, const HistoryOptions &options, const HistoryScopeValue &scope) {
   return session.template exchange<HistoryResults>(QueryHistory{
       .query = options.query,
       .scope = options.scope,

@@ -7,6 +7,7 @@ module;
 
 #include <cstring>
 #include <cstdint>
+#include "tbc/view.hpp"
 
 
 
@@ -364,16 +365,17 @@ template <Allocator Memory>
 struct CapturedExchange {
   using Half = Owned<CaptureHalf<Memory>, Memory>;
 
-  inline explicit CapturedExchange(Memory &memory) noexcept
+  // The halves keep the quota they were captured under, region `a`.
+  inline explicit CapturedExchange(tbc::view<Memory &, tbc::lt::a> memory) noexcept
       : request(nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory}),
         response(nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory}) {}
 
-  inline void include(Half half) noexcept {
+  inline void include(tbc::view<Half, tbc::lt::a> half) noexcept {
     (half->side == CaptureSide::request ? request : response) = std::move(half);
   }
 
-  Half request;
-  Half response;
+  tbc::view<Half, tbc::lt::a> request;
+  tbc::view<Half, tbc::lt::a> response;
 };
 
 }

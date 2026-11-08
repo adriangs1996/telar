@@ -274,7 +274,7 @@ struct ProxyRejection {
 
   Reason reason;
 
-  inline std::string_view response() const noexcept {
+  inline tbc::view<std::string_view, tbc::lt::static_storage> response() const noexcept {
     if (reason == Reason::invalid_target) {
       return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
     }

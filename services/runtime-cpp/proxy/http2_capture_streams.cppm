@@ -24,6 +24,7 @@ module;
 #include <zlib.h>
 #include <zstd.h>
 #include <cassert>
+#include "tbc/view.hpp"
 
 export module telar.runtime.proxy.http2_capture_streams;
 
@@ -462,7 +463,7 @@ private:
     }
   }
 
-  inline void respond(std::string_view response) noexcept {
+  inline void respond(tbc::view<std::string_view, tbc::lt::static_storage> response) noexcept {
     response_ = response;
     state_ = State::replying;
   }
@@ -512,7 +513,7 @@ private:
   bool inspected_ = false;
   FixedText<ProxyHostname::maximum_bytes> hostname_;
   std::optional<Origin> origin_;
-  std::string_view response_;
+  tbc::view<std::string_view, tbc::lt::static_storage> response_;
   Time drain_until_{};
   State state_ = State::reading;
   bool successful_ = false;

@@ -24,6 +24,7 @@ module;
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
+#include "tbc/view.hpp"
 
 export module telar.runtime.plugins.service;
 
@@ -97,6 +98,8 @@ public:
   }
 
   inline ~Service() { stop(); }
+  Service(const Service &) = delete;
+  Service &operator=(const Service &) = delete;
 
   inline void watchTrust(std::string_view path) {
     if (workers_.empty()) { return; }
@@ -192,7 +195,8 @@ private:
   TapBudget budget_;
   ResultQueue<Memory> results_;
   std::optional<CancellationSignal> cancellation_;
-  Vector<Owned<Worker<Memory>, Memory>, Memory> workers_;
+  // Workers report to the queue, budget and cancellation above, so the service is pinned.
+  tbc::view<Vector<Owned<Worker<Memory>, Memory>, Memory>, tbc::lt::self> workers_;
   FixedText<PATH_MAX> trust_path_;
   std::jthread trust_monitor_;
   std::atomic<std::uint64_t> next_event_{1};

@@ -15,6 +15,7 @@ module;
 #include <cstdint>
 
 #include "telar_base/diagnostics/config.hpp"
+#include "tbc/view.hpp"
 
 export module telar.runtime.graphics.prepared_images;
 
@@ -396,7 +397,7 @@ public:
     bool changed = false;
     std::size_t supported_count = 0;
     for (std::size_t index = 0; index < count; ++index) {
-      const auto image = readImage(ghostty_kitty_graphics_image(storage, identities[index]));
+      const auto image = readImage(allocator_.memory(), ghostty_kitty_graphics_image(storage, identities[index]));
       if (image) {
         changed |= !sameImage(images_[supported_count].description.key, image->description.key);
         images_[supported_count++] = *image;
@@ -449,7 +450,7 @@ public:
       checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.data(), identities.size(), &count));
       sample.images += count;
       for (const auto identity : std::span{identities}.first(std::min(count, identities.size()))) {
-        const auto image = readImage(ghostty_kitty_graphics_image(storage, identity));
+        const auto image = readImage(allocator_.memory(), ghostty_kitty_graphics_image(storage, identity));
         if (image) {
           sample.resident_bytes += image->pixels.size();
         }
@@ -481,7 +482,8 @@ public:
   }
 
 private:
-  inline std::optional<GraphicsImageView> readImage(GhosttyKittyGraphicsImage image) {
+  // The pixels are the terminal's, which the allocator maps: the view borrows the allocator, region `a`.
+  inline static tbc::view<std::optional<GraphicsImageView>, tbc::lt::a> readImage(tbc::view<Memory &, tbc::lt::a> memory, GhosttyKittyGraphicsImage image) {
     GraphicsImageView view{};
     GhosttyKittyImageFormat format{};
     const Byte *pixels = nullptr;
@@ -495,7 +497,7 @@ private:
     view.description.format = format == GHOSTTY_KITTY_IMAGE_FORMAT_RGB ? ImageFormat::rgb : ImageFormat::rgba;
     view.pixels = {pixels, length};
     if constexpr (requires(Memory &memory) { memory.imagePixels(view.pixels); }) {
-      view.pixels = allocator_.memory().imagePixels(view.pixels);
+      view.pixels = memory.imagePixels(view.pixels);
     }
     view.description.byte_len = view.pixels.size();
     return view;

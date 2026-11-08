@@ -193,7 +193,6 @@ static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
   auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   auto &terminal = *media->terminal();
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
-  TELAR_DIAGNOSTIC(sync.bindCounters(model.metrics.graphics));
   const auto feed = [&](std::string_view text) {
     media->output({reinterpret_cast<const Byte *>(text.data()), text.size()});
     check(media->seal() && !media->process());
@@ -258,6 +257,7 @@ static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
   check(!publish());
   check(peer.receive<GraphicsSnapshot>().phase == SnapshotPhase::end);
 #if TELAR_DIAGNOSTICS
+  model.metrics.graphics.merge(sync.takeCounters());
   check(model.metrics.graphics.messages == (shared ? 7 : 8));
   check(model.metrics.graphics.images == 1 && model.metrics.graphics.placements == 1);
   check(model.metrics.graphics.bytes > 4);
@@ -271,7 +271,6 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
   auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   using StageResult = decltype(sync)::StageResult;
-  TELAR_DIAGNOSTIC(sync.bindCounters(model.metrics.graphics));
   sync.configure(shared);
 
   auto &storage = media->terminal()->graphics;
@@ -312,10 +311,12 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
     sync.stageAtMediaBoundary(storage);
   }
   check(credit.used() == 4);
+  TELAR_DIAGNOSTIC(model.metrics.graphics.merge(sync.takeCounters()));
   TELAR_DIAGNOSTIC(check(model.metrics.graphics.transfers_staged == 1));
   TELAR_DIAGNOSTIC(check(model.metrics.graphics.transfers_adopted == 0));
   sync.stageAtMediaBoundary(storage);
   check(credit.used() == 4 && peer.session().connection.queuedBytes() == 0);
+  TELAR_DIAGNOSTIC(model.metrics.graphics.merge(sync.takeCounters()));
   TELAR_DIAGNOSTIC(check(model.metrics.graphics.transfers_staged == 1));
 
   const std::string_view replacement = "\x1b_Ga=T,f=32,s=1,v=1,i=1,p=8,C=1,q=2;AAD//w==\x1b\\";
@@ -350,6 +351,7 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
   check(!sync.advanceTransfer(peer.session().connection));
   sync.returnCredit(4);
   check(credit.used() == 0);
+  TELAR_DIAGNOSTIC(model.metrics.graphics.merge(sync.takeCounters()));
   TELAR_DIAGNOSTIC(check(model.metrics.graphics.transfers_adopted == 1));
   TELAR_DIAGNOSTIC(check(model.metrics.graphics.stage_blocked == 1));
   TELAR_DIAGNOSTIC(check(model.metrics.graphics.stage_deferred == 1));
