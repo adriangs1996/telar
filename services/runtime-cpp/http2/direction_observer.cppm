@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -140,8 +141,9 @@ private:
   inline static void *resize(void *pointer, std::size_t size, void *owner) noexcept { return static_cast<Blocks *>(owner)->resize(pointer, size); }
 
   ErasingAllocator<Memory> memory_;
-  Blocks blocks_;
-  nghttp2_mem callbacks_;
+  // nghttp2 allocates through the blocks, which allocate from the sibling allocator.
+  tbc::view<Blocks, tbc::lt::self> blocks_;
+  tbc::view<nghttp2_mem, tbc::lt::self> callbacks_;
 };
 
 }

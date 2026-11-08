@@ -43,7 +43,7 @@ import telar.runtime.history.store;
 using namespace telar;
 using namespace telar::runtime;
 
-class AuditAllocator {
+class TBC_SHARED AuditAllocator {
 public:
   static constexpr bool thread_safe = false;
   std::size_t live = 0;

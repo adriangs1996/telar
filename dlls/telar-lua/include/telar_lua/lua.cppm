@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <new>
@@ -582,7 +583,8 @@ namespace telar::runtime::lua {
 
 class Value {
 public:
-  inline explicit Value(lua_State *state, int index, std::string_view label)
+  // A value views a slot of the state; its label is its own copy.
+  inline explicit Value(tbc::view<lua_State *, tbc::lt::a> state, int index, std::string_view label)
       : state_(state),
         index_(lua_absindex(state, index)),
         restored_top_(lua_gettop(state)),
@@ -597,21 +599,22 @@ public:
 
   // The same value under another name: a profile's tables are reported as
   // the configuration's, as Zig's diagnostics name them.
-  inline Value as(std::string_view label) const {
+  // Another value of the same state, in region `a`; it does not view this one.
+  inline tbc::view<Value, tbc::lt::a> as(std::string_view label) const {
     return Value{state_, index_, label};
   }
 
-  inline Value field(const char *name) const {
+  inline tbc::view<Value, tbc::lt::a> field(const char *name) const {
     require(LUA_TTABLE, "must be a table");
     return Value{*this, name};
   }
 
-  inline Value element(lua_Integer position) const {
+  inline tbc::view<Value, tbc::lt::a> element(lua_Integer position) const {
     require(LUA_TTABLE, "must be an array");
     return Value{*this, position};
   }
 
-  inline Value entry(std::string_view key) const {
+  inline tbc::view<Value, tbc::lt::a> entry(std::string_view key) const {
     require(LUA_TTABLE, "must be a table");
     return Value{*this, key};
   }
@@ -628,7 +631,8 @@ public:
     lua_pushvalue(state_, index_);
   }
 
-  inline std::string_view string() const {
+  // The state's string, which outlives this slot while the table that holds it does.
+  inline tbc::view<std::string_view, tbc::lt::a> string() const {
     require(LUA_TSTRING, "must be a string");
     std::size_t size = 0;
     const auto *text = lua_tolstring(state_, index_, &size);
@@ -792,7 +796,7 @@ private:
     }
   }
 
-  lua_State *state_;
+  tbc::view<lua_State *, tbc::lt::a> state_;
   int index_;
   int restored_top_;
   std::string label_;

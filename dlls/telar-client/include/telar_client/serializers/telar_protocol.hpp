@@ -253,8 +253,8 @@ namespace telar {
       BodySchema<HistoryScopeValue>::encodeBody(value, output, scope);
     }
 
-    static value_type
-    decode(std::span<const Byte> &input, DecodeStorage &storage, HistoryScope scope) {
+    static Decoded<value_type>
+    decode(DecodeInput input, DecodeStorage &storage, HistoryScope scope) {
       value_type value{};
       BodySchema<HistoryScopeValue>::decodeBody(input, value, storage, scope);
       return value;
@@ -279,8 +279,8 @@ namespace telar {
       }
     }
 
-    static value_type
-    decode(std::span<const Byte> &input, DecodeStorage &storage, const PaneTarget &target) {
+    static Decoded<value_type>
+    decode(DecodeInput input, DecodeStorage &storage, const PaneTarget &target) {
       if (target.kind != PaneTarget::Kind::default_target) {
         return std::nullopt;
       }

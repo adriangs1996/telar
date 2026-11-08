@@ -48,7 +48,7 @@ private:
 };
 
 template <Allocator Upstream>
-class MediaAllocator {
+class TBC_SHARED MediaAllocator {
 public:
   static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
 

@@ -10,6 +10,11 @@ target_compile_features(telar-base PUBLIC cxx_std_23)
 target_include_directories(telar-base PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<INSTALL_INTERFACE:include>")
+# The header-only lifetime annotations its interfaces declare; a parent project may provide them.
+if(NOT TARGET tbc::tbc)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
+endif()
+target_link_libraries(telar-base PUBLIC tbc::tbc)
 
 telar_editor_flags(telar-base)
 

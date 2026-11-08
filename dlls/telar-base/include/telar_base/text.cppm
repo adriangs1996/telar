@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_base/program_identity.hpp"
 #include "telar_base/text/base64.hpp"
 #include <chrono>
@@ -165,7 +166,7 @@ private:
   bool finished_ = false;
 };
 
-inline std::string_view trimText(std::string_view text, std::string_view characters) noexcept {
+inline tbc::view<std::string_view, tbc::lt::a> trimText(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters) noexcept {
   const auto start = text.find_first_not_of(characters);
   if (start == std::string_view::npos) {
     return {};
@@ -589,7 +590,8 @@ namespace telar::runtime {
 template <Allocator Memory, std::size_t Count>
 class JsonFields {
 public:
-  inline explicit JsonFields(Memory &memory, const JsonValue &object, const std::array<std::string_view, Count> &names)
+  // The fields view the object's text and the names, and allocate scratch text, all in region `a`.
+  inline explicit JsonFields(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<const JsonValue &, tbc::lt::a> object, tbc::view<const std::array<std::string_view, Count> &, tbc::lt::a> names)
       : names_(names), text_(AllocatorRef<char, Memory>{memory}) {
     object.eachMember([&](const JsonValue &key, const JsonValue &value) {
       key.string(text_);
@@ -627,9 +629,9 @@ private:
     return static_cast<std::size_t>(found - names_.begin());
   }
 
-  std::array<std::string_view, Count> names_;
-  std::array<std::optional<JsonValue>, Count> values_;
-  String<Memory> text_;
+  tbc::view<std::array<std::string_view, Count>, tbc::lt::a> names_;
+  tbc::view<std::array<std::optional<JsonValue>, Count>, tbc::lt::a> values_;
+  tbc::view<String<Memory>, tbc::lt::a> text_;
 };
 
 template <Allocator Memory, std::size_t Count>
@@ -650,10 +652,11 @@ enum class JsonKind { object,
 template <Allocator Memory>
 class JsonNode {
 public:
-  inline explicit JsonNode(Memory &memory, JsonKind kind = JsonKind::object)
+  // A node allocates its text and children from the allocator in region `a`.
+  inline explicit JsonNode(tbc::view<Memory &, tbc::lt::a> memory, JsonKind kind = JsonKind::object)
       : name_(AllocatorRef<char, Memory>{memory}), text_(AllocatorRef<char, Memory>{memory}), children_(AllocatorRef<JsonNode, Memory>{memory}), kind_(kind) {}
 
-  inline static JsonNode parse(Memory &memory, std::string_view source) {
+  inline static tbc::view<JsonNode, tbc::lt::a> parse(tbc::view<Memory &, tbc::lt::a> memory, std::string_view source) {
     if (inspectUtf8(source) != Utf8Validation::valid) {
       throw JsonError{};
     }
@@ -733,9 +736,9 @@ private:
   static constexpr unsigned maximum_depth = 256;
   static constexpr unsigned indentation = 2;
 
-  inline Memory &memory() const noexcept { return text_.get_allocator().memory(); }
+  inline tbc::view<Memory &, tbc::lt::a> memory() const noexcept { return text_.get_allocator().memory(); }
 
-  inline static JsonNode fromValue(Memory &memory, JsonValue value) {
+  inline static tbc::view<JsonNode, tbc::lt::a> fromValue(tbc::view<Memory &, tbc::lt::a> memory, JsonValue value) {
     const auto encoded = value.encoded();
     const auto kind = encoded.starts_with('{') ? JsonKind::object : encoded.starts_with('[') ? JsonKind::array
                                                                 : encoded.starts_with('"')   ? JsonKind::string
@@ -798,9 +801,9 @@ private:
     output += kind_ == JsonKind::object ? '}' : ']';
   }
 
-  String<Memory> name_;
-  String<Memory> text_;
-  Vector<JsonNode, Memory> children_;
+  tbc::view<String<Memory>, tbc::lt::a> name_;
+  tbc::view<String<Memory>, tbc::lt::a> text_;
+  tbc::view<Vector<JsonNode, Memory>, tbc::lt::a> children_;
   JsonKind kind_;
 };
 

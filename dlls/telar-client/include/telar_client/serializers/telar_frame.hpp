@@ -197,7 +197,7 @@ namespace telar {
     }
 
     static void
-    decodeBody(std::span<const Byte> &input, TextMetadata &value, DecodeStorage &storage) {
+    decodeBody(DecodeInput input, tbc::view<TextMetadata &, tbc::lt::a> value, DecodeStorage &storage) {
       value.status = EnumByte<MetadataStatus, 2>::decode(input);
       const auto rows = u16::decode(input);
       const auto links = u16::decode(input);
@@ -260,7 +260,7 @@ namespace telar {
       }
     }
 
-    static value_type decode(std::span<const Byte> &input, DecodeStorage &storage) {
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage &storage) {
       const auto length = u32::decode(input);
       if (length == 0) {
         return std::nullopt;

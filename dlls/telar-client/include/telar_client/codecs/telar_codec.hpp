@@ -226,8 +226,9 @@ namespace telar {
       return checkedWireSize(u8::width, MessageSchema<Message>::encodedSize(message));
     }
 
+    // The encoded bytes, written into the caller's buffer.
     template <typename Message>
-    static std::span<Byte> encode(const Message &message, std::span<Byte> buffer) {
+    static tbc::view<std::span<Byte>, tbc::lt::a> encode(const Message &message, tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
       const auto size = encodedSize(message);
       if (buffer.size() < size) {
         throw EncodingError{"Output buffer too small"};
@@ -314,7 +315,7 @@ namespace telar {
     }
 
     template <typename Message>
-    static Message decode(std::span<const Byte> input, DecodeStorage &storage) {
+    static Decoded<Message> decode(DecodeFrame input, DecodeStorage &storage) {
       using Sch = MessageSchema<Message>;
       if (input.empty() || input.size() > max_payload_size) {
         throw EncodingError{"Invalid message length"};

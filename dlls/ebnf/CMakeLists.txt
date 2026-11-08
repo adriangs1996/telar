@@ -21,7 +21,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(EBNF_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(EBNF_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
+if(NOT TARGET tbc::tbc)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
+endif()
 
 add_library(ebnf-core STATIC)
 add_library(ebnf::ebnf ALIAS ebnf-core)

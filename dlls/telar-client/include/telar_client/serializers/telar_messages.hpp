@@ -777,8 +777,8 @@ namespace telar {
       }
     }
 
-    static void decodeBody(std::span<const Byte> &input,
-                           HistoryScopeValue &value,
+    static void decodeBody(DecodeInput input,
+                           tbc::view<HistoryScopeValue &, tbc::lt::a> value,
                            DecodeStorage &,
                            HistoryScope scope) {
       EnumByte<HistoryScope, 3>::validate(scope);

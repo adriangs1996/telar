@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_client/codecs/telar_annotations.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -1707,7 +1708,7 @@ namespace telar {
       writeAll(frame_buffer.data(), frame_prefix_size + payload.size());
     }
 
-    inline std::span<const Byte> receiveFrame(std::span<Byte> buffer) _throw(SocketError) {
+    inline tbc::view<std::span<const Byte>, tbc::lt::a> receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) _throw(SocketError) {
       std::array<Byte, frame_prefix_size> prefix{};
       readAll(prefix.data(), prefix.size());
 

@@ -348,7 +348,7 @@ namespace telar {
       }
     }
 
-    static value_type decode(std::span<const Byte> &input, DecodeStorage &storage) {
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage &storage) {
       if (!BoolByte::decode(input)) {
         return std::nullopt;
       }
@@ -396,7 +396,7 @@ namespace telar {
       }
     }
 
-    static value_type decode(std::span<const Byte> &input, DecodeStorage &storage) {
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage &storage) {
       const auto count = CountCodec::decode(input);
       validateCount(count);
       if (count > input.size() / minimumWidth<ElementCodec>()) {
@@ -436,7 +436,7 @@ namespace telar {
       BodySchema<Value>::encodeBody(value, output);
     }
 
-    static Value decode(std::span<const Byte> &input, DecodeStorage &storage) {
+    static Decoded<Value> decode(DecodeInput input, DecodeStorage &storage) {
       Value value{};
       BodySchema<Value>::decodeBody(input, value, storage);
       validateBody(value);
@@ -471,7 +471,7 @@ namespace telar {
     }
 
     template <typename Value, typename... Context>
-    static Value decode(std::span<const Byte> input, DecodeStorage &storage, Context... context) {
+    static Decoded<Value> decode(DecodeFrame input, DecodeStorage &storage, Context... context) {
       if (input.size() > max_payload_size) {
         throw EncodingError{"Encoded body exceeds the frame limit"};
       }

@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <stdlib.h>
 #include <new>
@@ -199,7 +200,7 @@ struct CertificatePair {
     extension(pair.certificate.get(), NID_basic_constraints, "critical,CA:TRUE");
     extension(pair.certificate.get(), NID_key_usage, "critical,keyCertSign,cRLSign");
     extension(pair.certificate.get(), NID_subject_key_identifier, "hash");
-    pair.sign(pair.key.get());
+    sign(pair.certificate, pair.key.get());
     return pair;
   }
 
@@ -220,7 +221,7 @@ struct CertificatePair {
     std::copy(prefix.begin(), prefix.end(), alternative.begin());
     std::copy(hostname.begin(), hostname.end(), alternative.begin() + prefix.size());
     extension(leaf.certificate.get(), NID_subject_alt_name, alternative.data());
-    leaf.sign(key.get());
+    sign(leaf.certificate, key.get());
     return leaf;
   }
 
@@ -302,7 +303,8 @@ private:
     requireTls(extension != nullptr && X509_add_ext(certificate, extension.get(), -1) == 1, "Set TLS certificate extension");
   }
 
-  inline void sign(EVP_PKEY *issuer) {
+  // Signs a certificate with a key; a pair signs its own certificate with its own key.
+  inline static void sign(TlsCertificate &certificate, EVP_PKEY *issuer) {
     requireTls(X509_sign(certificate.get(), issuer, EVP_sha256()) > 0, "Sign TLS certificate");
     const auto length = i2d_X509(certificate.get(), nullptr);
     requireTls(length > 0 && length <= static_cast<int>(maximum_der_bytes), "TLS certificate exceeds its DER bound");
@@ -412,7 +414,8 @@ class CertificateAuthority {
 public:
   static constexpr std::string_view common_name = "telar local CA";
 
-  inline static CertificateAuthority loadOrCreate(Memory &memory, const TlsLibrary<Memory> &library, int directory, AuthorityKind kind) {
+  // An authority allocates from its allocator in region `a`; the library only checks that it is configured.
+  inline static tbc::view<CertificateAuthority, tbc::lt::a> loadOrCreate(tbc::view<Memory &, tbc::lt::a> memory, const TlsLibrary<Memory> &library, int directory, AuthorityKind kind) {
     if (auto existing = loadExisting(memory, library, directory, kind)) {
       return std::move(*existing);
     }
@@ -420,7 +423,7 @@ public:
     return create(memory, library, directory, AuthorityFiles::forKind(kind), kind);
   }
 
-  inline static std::optional<CertificateAuthority> loadExisting(Memory &memory, const TlsLibrary<Memory> &library, int directory, AuthorityKind kind) {
+  inline static tbc::view<std::optional<CertificateAuthority>, tbc::lt::a> loadExisting(tbc::view<Memory &, tbc::lt::a> memory, const TlsLibrary<Memory> &library, int directory, AuthorityKind kind) {
     TELAR_TRACE("tls.loadAuthority");
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto files = AuthorityFiles::forKind(kind);
@@ -440,7 +443,7 @@ public:
     return CertificateAuthority{memory, std::move(pair)};
   }
 
-  inline static CertificateAuthority create(Memory &memory, const TlsLibrary<Memory> &library, int directory, AuthorityFiles files, AuthorityKind kind) {
+  inline static tbc::view<CertificateAuthority, tbc::lt::a> create(tbc::view<Memory &, tbc::lt::a> memory, const TlsLibrary<Memory> &library, int directory, AuthorityFiles files, AuthorityKind kind) {
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto lifetime = kind == AuthorityKind::system_trust ? CertificatePair::system_lifetime : CertificatePair::private_lifetime;
     auto pair = CertificatePair::authority(common_name, lifetime);
@@ -513,11 +516,11 @@ public:
   }
 
 private:
-  inline explicit CertificateAuthority(Memory &memory, CertificatePair pair) noexcept
+  inline explicit CertificateAuthority(tbc::view<Memory &, tbc::lt::a> memory, CertificatePair pair) noexcept
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  Memory &memory_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
   CertificatePair pair_;
 };
 

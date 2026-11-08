@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -389,9 +390,11 @@ private:
   String<Memory> cwd_;
   Vector<String<Memory>, Memory> arguments_;
   SensitiveMemory environment_memory_;
-  Vector<String<SensitiveMemory>, SensitiveMemory> environment_;
-  Vector<char *, Memory> argument_pointers_;
-  Vector<char *, Memory> environment_pointers_;
+  // The environment allocates from the sibling allocator, and the spawn arrays point into the
+  // command's own strings, so a command keeps its address.
+  tbc::view<Vector<String<SensitiveMemory>, SensitiveMemory>, tbc::lt::self> environment_;
+  tbc::view<Vector<char *, Memory>, tbc::lt::self> argument_pointers_;
+  tbc::view<Vector<char *, Memory>, tbc::lt::self> environment_pointers_;
   Memory &memory_;
   bool restorable_;
 };
@@ -1242,7 +1245,7 @@ private:
 export {
 namespace telar::runtime {
 
-inline std::optional<std::string_view> readRegularFile(std::string_view path, std::span<char> buffer) noexcept {
+inline tbc::view<std::optional<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
   std::array<char, PATH_MAX> terminated;
   if (path.size() >= terminated.size() || path.contains('\0')) {
     return std::nullopt;
@@ -1280,7 +1283,7 @@ namespace telar::runtime {
 
 class GitFiles {
 public:
-  inline static std::optional<std::string_view> join(std::string_view directory, std::string_view suffix, std::span<char> buffer) noexcept {
+  inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> join(std::string_view directory, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     while (directory.ends_with('/')) {
       directory.remove_suffix(1);
     }
@@ -1296,7 +1299,7 @@ public:
     return std::string_view{buffer.data(), length};
   }
 
-  inline static std::optional<std::string_view> resolve(std::string_view directory, std::string_view path, std::span<char> buffer) noexcept {
+  inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> resolve(std::string_view directory, std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     if (path.empty() || path.contains('\0')) {
       return std::nullopt;
     }
@@ -1312,7 +1315,7 @@ public:
     return std::string_view{buffer.data(), path.size()};
   }
 
-  inline static std::optional<std::string_view> directory(std::string_view root, std::span<char> buffer) noexcept {
+  inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> directory(std::string_view root, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     std::array<char, PATH_MAX> path;
     const auto dot_git = join(root, ".git", path);
     std::array<char, PATH_MAX + 16> bytes;
@@ -1330,7 +1333,7 @@ public:
     return resolve(root, trim(contents.substr(prefix.size()), " \t"), buffer);
   }
 
-  inline static std::string_view trim(std::string_view value, std::string_view characters) noexcept {
+  inline static tbc::view<std::string_view, tbc::lt::a> trim(tbc::view<std::string_view, tbc::lt::a> value, std::string_view characters) noexcept {
     const auto first = value.find_first_not_of(characters);
     if (first == std::string_view::npos) {
       return {};

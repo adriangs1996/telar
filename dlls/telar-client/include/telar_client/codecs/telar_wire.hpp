@@ -1,5 +1,10 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
+#include <type_traits>
+#include <utility>
+
 #include <array>
 #include <concepts>
 #include <cstddef>
@@ -171,10 +176,15 @@ namespace telar {
   // The frame owns decoded string bytes. This separate caller-owned buffer
   // owns decoded list elements and must not overlap the frame or be reused
   // while a decoded value still references it.
-  struct DecodeStorage {
-    std::span<Byte> remaining{};
+  // Decoded values view the input frame and the caller's decode storage, both in region `a`.
+  using DecodeInput = tbc::view<std::span<const Byte> &, tbc::lt::a>;
+  using DecodeFrame = tbc::view<std::span<const Byte>, tbc::lt::a>;
+  template <typename Value> using Decoded = tbc::view<Value, tbc::lt::a>;
 
-    template <typename T> std::span<T> allocate(std::size_t count) {
+  struct DecodeStorage {
+    tbc::view<std::span<Byte>, tbc::lt::a> remaining{};
+
+    template <typename T> tbc::view<std::span<T>, tbc::lt::a> allocate(std::size_t count) {
       static_assert(std::is_trivially_destructible_v<T>);
 
       if (count == 0) {
@@ -326,12 +336,14 @@ namespace telar {
   }
 
   template <typename WireCodec, typename Storage>
-  auto decodeValue(std::span<const Byte> &input, Storage &storage) {
-    if constexpr (requires { WireCodec::decode(input, storage); }) {
-      return WireCodec::decode(input, storage);
-    } else {
-      return WireCodec::decode(input);
-    }
+    requires requires(std::span<const Byte> &input, Storage &storage) { WireCodec::decode(input, storage); }
+  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte> &>(), std::declval<Storage &>()))>> decodeValue(DecodeInput input, Storage &storage) {
+    return WireCodec::decode(input, storage);
+  }
+
+  template <typename WireCodec, typename Storage>
+  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte> &>()))>> decodeValue(DecodeInput input, Storage &) {
+    return WireCodec::decode(input);
   }
 
 } // namespace telar

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "telar_base/memory/allocation_statistics.hpp"
 #include <algorithm>
 #include <concepts>
@@ -20,7 +21,7 @@ namespace telar {
     { memory.deallocate(pointer, size, alignment) } noexcept -> std::same_as<void>;
   };
 
-  class SystemAllocator {
+  class TBC_SHARED SystemAllocator {
   public:
     static constexpr bool thread_safe = true;
 
@@ -39,7 +40,7 @@ namespace telar {
   };
 
   template <Allocator Upstream>
-  class BudgetAllocator {
+  class TBC_SHARED BudgetAllocator {
   public:
     static constexpr bool thread_safe = false;
 
@@ -125,7 +126,7 @@ namespace telar {
   BudgetAllocator(Upstream &upstream, std::size_t limit) -> BudgetAllocator<Upstream>;
 
   template <Allocator Upstream>
-  class SynchronizedAllocator {
+  class TBC_SHARED SynchronizedAllocator {
   public:
     static constexpr bool thread_safe = true;
 
@@ -161,13 +162,14 @@ namespace telar {
   concept ConcurrentAllocator = Allocator<Memory> && Memory::thread_safe;
 
   template <typename Value, Allocator Memory>
-  class AllocatorRef {
+  class TBC_SHARED AllocatorRef {
   public:
     using value_type = Value;
     using propagate_on_container_move_assignment = std::false_type;
     using is_always_equal = std::false_type;
 
-    explicit AllocatorRef(Memory &memory) noexcept
+    // A handle to the allocator, whose region the containers that use it carry.
+    explicit AllocatorRef(tbc::view<Memory &, tbc::lt::a> memory) noexcept
         : memory_(&memory) {}
 
     template <typename Other>
@@ -191,7 +193,7 @@ namespace telar {
       memory_->deallocate(pointer, count * sizeof(Value), alignof(Value));
     }
 
-    Memory &memory() const noexcept {
+    tbc::view<Memory &, tbc::lt::a> memory() const noexcept {
       return *memory_;
     }
 
@@ -201,7 +203,7 @@ namespace telar {
     }
 
   private:
-    Memory *memory_;
+    tbc::view<Memory *, tbc::lt::a> memory_;
   };
 
   template <typename Value, Allocator Memory>
@@ -230,8 +232,9 @@ namespace telar {
   template <typename Value, Allocator Memory>
   using Owned = std::unique_ptr<Value, AllocationDeleter<Value, Memory>>;
 
+  // The owner keeps what Value's constructor keeps of the arguments, and its allocator.
   template <typename Value, Allocator Memory, typename... Arguments>
-  Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments) {
+  TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments) {
     AllocatorRef<Value, Memory> allocator{memory};
     Value *value = allocator.allocate(1);
 

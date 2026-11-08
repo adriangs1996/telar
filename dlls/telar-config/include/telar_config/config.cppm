@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <exception>
 #include <memory>
 #include <type_traits>
@@ -172,7 +173,7 @@ inline void printableUiText(const lua::Value &source, std::string_view text, boo
   }
 }
 
-inline std::string_view fittedUiText(std::string_view text, LimitReach reach, LimitNotices &limits) {
+inline tbc::view<std::string_view, tbc::lt::a> fittedUiText(tbc::view<std::string_view, tbc::lt::a> text, LimitReach reach, LimitNotices &limits) {
   if (text.size() > reach.value) {
     reach.requested = text.size();
     limits.add(reach);
@@ -796,7 +797,7 @@ private:
     Codec::encode(ShowNotification{.request_id = 1, .notification = body}, storage);
   }
 
-  inline std::string_view fitted(std::string_view text, LimitReach limit) const {
+  inline tbc::view<std::string_view, tbc::lt::a> fitted(tbc::view<std::string_view, tbc::lt::a> text, LimitReach limit) const {
     if (text.size() > limit.value) {
       limit.requested = text.size();
       limits_.add(limit);
@@ -1003,7 +1004,8 @@ struct AgentManifest {
     return display_name.view().empty() ? name.view() : display_name.view();
   }
 
-  inline std::string_view placeholderTitle(FixedText<96> &storage) const {
+  // The manifest's own placeholder, or one built in the caller's storage.
+  inline tbc::view<std::string_view, tbc::lt::a> placeholderTitle(tbc::view<FixedText<96> &, tbc::lt::a> storage) const {
     if (!placeholder.view().empty()) {
       return placeholder.view();
     }
@@ -1018,9 +1020,9 @@ struct AgentManifest {
   }
 
   AgentProvider provider = AgentProvider::unknown;
-  FixedText<32> name;
-  FixedText<32> display_name;
-  FixedText<96> placeholder;
+  tbc::view<FixedText<32>, tbc::lt::a> name;
+  tbc::view<FixedText<32>, tbc::lt::a> display_name;
+  tbc::view<FixedText<96>, tbc::lt::a> placeholder;
   FixedText<8> icon;
   AgentAttachmentMarkers attachments = AgentAttachmentMarkers::none;
   AgentInterruptKey interrupt = AgentInterruptKey::none;
@@ -1210,7 +1212,7 @@ public:
   }
 
 private:
-  inline static std::string_view printable(const lua::Value &value) {
+  inline static tbc::view<std::string_view, tbc::lt::a> printable(const lua::Value &value) {
     const auto text = value.string();
     validateUtf8(text);
     if (text.empty() || std::ranges::any_of(text, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f; })) {
@@ -1641,7 +1643,8 @@ namespace telar::runtime::config {
 
 class ComponentShapeReader {
 public:
-  inline static ComponentShape read(const lua::Value &value, unsigned inherited_priority, LimitNotices &limits) {
+  // A shape views the value's strings, which belong to the state in the value's region `a`.
+  inline static tbc::view<ComponentShape, tbc::lt::a> read(const lua::Value &value, unsigned inherited_priority, LimitNotices &limits) {
     ComponentShape shape;
     shape.kind = kind(value.field("ui"));
     fields(value, shape.kind);
@@ -1799,7 +1802,7 @@ private:
     }
   }
 
-  inline static std::string_view text(const lua::Value &value, const char *name, std::string_view fallback = {}) {
+  inline static tbc::view<std::string_view, tbc::lt::a> text(const lua::Value &value, const char *name, tbc::view<std::string_view, tbc::lt::a> fallback = {}) {
     const auto field = value.field(name);
     return field.present() ? field.string() : fallback;
   }

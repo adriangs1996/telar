@@ -62,7 +62,7 @@ export {
 namespace telar {
 
 template <Allocator Upstream>
-class BufferAllocator {
+class TBC_SHARED BufferAllocator {
 public:
   static constexpr bool thread_safe = false;
 
@@ -255,7 +255,7 @@ export {
 namespace telar {
 
 template <Allocator Memory>
-class CAllocationBlocks {
+class TBC_SHARED CAllocationBlocks {
 public:
   inline explicit CAllocationBlocks(Memory &memory) noexcept : memory_(memory) {}
 
@@ -451,7 +451,7 @@ export {
 namespace telar {
 
 template <Allocator Upstream>
-class ErasingAllocator {
+class TBC_SHARED ErasingAllocator {
 public:
   static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
 
@@ -484,7 +484,7 @@ export {
 namespace telar {
 
 template <Allocator Upstream>
-class RecyclingAllocator {
+class TBC_SHARED RecyclingAllocator {
 public:
   static constexpr bool thread_safe = false;
 
@@ -602,7 +602,8 @@ public:
     std::memcpy(bytes_, bytes.data() + first, bytes.size() - first);
   }
 
-  inline std::span<const Byte> read(std::uint64_t offset, std::span<Byte> destination) const noexcept {
+  // The bytes copied into the caller's destination, not a view of the stream.
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> read(std::uint64_t offset, tbc::view<std::span<Byte>, tbc::lt::a> destination) const noexcept {
     if (offset < retainedOffset() || offset >= total_) {
       return {};
     }

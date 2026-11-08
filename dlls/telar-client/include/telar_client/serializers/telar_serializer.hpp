@@ -33,7 +33,7 @@ namespace telar {
     }
 
     template <typename Message, typename Storage>
-    static void decode(std::span<const Byte> &input, Message &message, Storage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, Storage &storage) {
       memberValue<Member>(message) = decodeValue<WireCodec>(input, storage);
     }
 
@@ -84,7 +84,7 @@ namespace telar {
     }
 
     template <typename Message>
-    static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
       memberValue<Member>(message) =
           WireCodec::decode(input, storage, memberValue<ContextMember>(message));
     }
@@ -130,7 +130,7 @@ namespace telar {
     }
 
     template <typename Message>
-    static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
       const auto count = CountCodec::decode(input);
       validate(count);
       if (count > input.size() / minimumWidth<ElementCodec>()) {
@@ -165,7 +165,7 @@ namespace telar {
     }
 
     template <typename Message>
-    static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
       auto values = memberValue<Member>(message);
       if (values.size() > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated separated list items"};
