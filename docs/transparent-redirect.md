@@ -144,8 +144,8 @@ remote traffic, selected outgoing traffic, redirected local-client connections,
 exclusions and restoration after shutdown:
 
 ```sh
-/usr/bin/python3 services/runtime-cpp/tools/check_incoming.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
+/usr/bin/python3 src/runtime-cpp/tools/check_incoming.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
   --ssh-client CONTROLLED_HOST --live
 ```
 
@@ -331,9 +331,9 @@ so a retry does not release the same reference twice.
 From the repository root:
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar-runtime redirect-tests tls-tests
-ctest --test-dir services/runtime-cpp/out -R '^(redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
-python3 services/runtime-cpp/tools/check_redirect.py --runtime services/runtime-cpp/out/telar-runtime
+cmake --build src/runtime-cpp/out --target telar-runtime redirect-tests tls-tests
+ctest --test-dir src/runtime-cpp/out -R '^(redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
+python3 src/runtime-cpp/tools/check_redirect.py --runtime src/runtime-cpp/out/telar-runtime
 ```
 
 The tests cover native PF syntax, target validation, startup rollback and stale
@@ -348,8 +348,8 @@ unprivileged runtime and runs the real `--dry-run` command without changing PF.
 For native acceptance, run this as your account in a terminal:
 
 ```sh
-python3 services/runtime-cpp/tools/check_redirect.py \
-  --runtime services/runtime-cpp/out/telar-runtime --live
+python3 src/runtime-cpp/tools/check_redirect.py \
+  --runtime src/runtime-cpp/out/telar-runtime --live
 ```
 
 It asks sudo only for administrative helper operations. It redirects ephemeral
@@ -368,8 +368,8 @@ The user reported that combined check passing with a controlled LAN origin on
 The separate process-selection acceptance check is:
 
 ```sh
-/usr/bin/python3 services/runtime-cpp/tools/check_redirect.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
+/usr/bin/python3 src/runtime-cpp/tools/check_redirect.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
   --live --process-selection --ssh-origin YOUR_CONTROLLED_LAN_HOST
 ```
 
@@ -389,8 +389,8 @@ The SSH fixture currently supplies an IPv4 destination. The option also reaches
 the selected child process when combined with `--process-selection`.
 
 ```sh
-/usr/bin/python3 services/runtime-cpp/tools/check_redirect.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
+/usr/bin/python3 src/runtime-cpp/tools/check_redirect.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
   --ssh-origin CONTROLLED_HOST --bound-interface IFACE --live
 ```
 

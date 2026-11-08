@@ -1,0 +1,62 @@
+# include-cleaner currently diagnoses implicit primary-module imports as missing headers.
+# clang-tidy 23.1.5 crashes (SIGSEGV) in unchecked-optional-access and
+# static-initialization-cycle on module units that import std or see one
+# declaration through several BMIs; re-enable both once the pinned LLVM fixes it.
+InheritParentConfig: false
+Checks: >-
+  *,
+  -misc-include-cleaner,
+  -bugprone-unchecked-optional-access,
+  -misc-static-initialization-cycle,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -fuchsia-*,
+  -google-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -openmp-*,
+  -zircon-*,
+  -modernize-use-trailing-return-type,
+  -portability-avoid-pragma-once,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|/)src/(gui-cpp/|runtime-cpp/(config/command_tab_(registry|reference|view)|agents/provider|text/executable_name)[.]hpp$)'
+ExcludeHeaderFilterRegex: '(^|/)(generated|out[^/]*|third_party|vendor)/'
+SystemHeaders: false
+FormatStyle: file
+CheckOptions:
+  cppcoreguidelines-macro-usage.AllowedRegexp: '^TELAR_GUI_(ALLOCATOR|LINK_HOST)$'
+  misc-include-cleaner.IgnoreHeaders: '(^|/)_[^/]+[.]h;sys/_types/.*;sys/syslimits[.]h;sys/fcntl[.]h;bits/.*;sys/types[.]h;sys/file[.]h;limits[.]h;fcntl[.]h;stdlib[.]h'
+  readability-function-size.ParameterThreshold: '5'
+  readability-function-size.LineThreshold: '100'
+  readability-function-size.StatementThreshold: '100'
+  readability-function-size.NestingThreshold: '4'
+  readability-function-cognitive-complexity.Threshold: '25'
+  readability-function-cognitive-complexity.IgnoreMacros: 'true'
+  readability-function-size.IgnoreMacros: 'true'
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: 'true'
+  readability-identifier-length.MinimumVariableNameLength: '3'
+  readability-identifier-length.MinimumParameterNameLength: '3'
+  readability-identifier-length.IgnoredVariableNames: '^(x|y|r|g|b|a|id)$'
+  readability-identifier-length.IgnoredParameterNames: '^(x|y|r|g|b|a|id)$'
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: lower_case
+  readability-identifier-naming.FunctionCase: camelBack
+  readability-identifier-naming.FunctionIgnoredRegexp: '^qt_.*|^qml.*|^main$'
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
+  readability-identifier-naming.ConstantCase: lower_case
+  readability-identifier-naming.PrivateMemberCase: lower_case
+  readability-identifier-naming.PrivateMemberSuffix: '_'
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
+  readability-magic-numbers.IgnoreBitFieldsWidths: 'true'
+  readability-magic-numbers.IgnoreUserDefinedLiterals: 'true'

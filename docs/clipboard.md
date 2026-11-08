@@ -68,8 +68,8 @@ clipboard requests then fail explicitly. Static headless Linux distribution
 builds default to this setting, preserving their dependency-free linkage.
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar telar-runtime runtime-clipboard-tests
-ctest --test-dir services/runtime-cpp/out \
+cmake --build src/runtime-cpp/out --target telar telar-runtime runtime-clipboard-tests
+ctest --test-dir src/runtime-cpp/out \
   -R '^(runtime-clipboard-tests|clipboard-cli-tests|cli-help-tests)$' --output-on-failure
 ```
 
@@ -78,4 +78,4 @@ On Linux, `-DTELAR_CLIPBOARD_INTEGRATION_TESTS=ON` adds
 and uses a private headless session rather than the desktop clipboard. It checks
 native text/PNG/JPEG/TIFF output, multi-megabyte transfers, size rejection and
 runtime responsiveness while a clipboard owner stalls. The library's separate
-Wayland/X11 integration tests live in `dlls/clipboard`.
+Wayland/X11 integration tests live in `lib/clipboard`.

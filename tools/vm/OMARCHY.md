@@ -86,7 +86,7 @@ qualify those separate font comparisons.
 The 2026-11-03 ARM64 validation built the Release runtime and GUI with the
 pinned Qt sources. The Wayland/OpenGL smoke test reported
 `connected=1 panes=1 graphics_api=3 error=` and saved a rendered terminal
-window. The [runtime validation](../../services/runtime-cpp/README.md)
+window. The [runtime validation](../../src/runtime-cpp/README.md)
 records the native Linux suites and sanitizer checks. A complete VM restart
 preserved automatic login and the Quickshell override; the repeated GUI
 smoke check passed with the same connection and OpenGL result.

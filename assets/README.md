@@ -22,12 +22,12 @@ and horizontal metrics, so rebuilding preserves the approved outlines
 without depending on installed fonts or rasterizer versions.
 
 Text rasterization links FreeType 2.13.2 from the source archive pinned in
-`services/gui-cpp/cmake/fonts.cmake`. Portions of this software are copyright © 2023 The FreeType
+`src/gui-cpp/cmake/fonts.cmake`. Portions of this software are copyright © 2023 The FreeType
 Project (<https://www.freetype.org>). All rights reserved. The upstream archive
 contains the complete FreeType License and GPLv2 alternative.
 
 Text shaping links HarfBuzz 11.0.0 from the source archive pinned in
-`services/gui-cpp/cmake/fonts.cmake`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
+`src/gui-cpp/cmake/fonts.cmake`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
 
 `NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
 upstream attribution shipped in the release archive.

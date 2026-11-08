@@ -49,7 +49,7 @@ def prepare(output, base=None):
         original = str(ROOT / relative)
         roots[:] = [entry for entry in roots if entry['name'] != original]
         roots.append(dict(type='file', name=original, **{'external-contents': str(target)}))
-    terminal_path = 'services/runtime-cpp/terminal/terminal.hpp'
+    terminal_path = 'src/runtime-cpp/terminal/terminal.hpp'
     terminal = read(terminal_path)
     for name, work in [('feed', 'bytes.size()'), ('refresh', 'screen.cells.size()')]:
         terminal = replace_once(terminal, f'TELAR_TRACE("terminal.{name}");',
@@ -62,11 +62,11 @@ def prepare(output, base=None):
         anchor = f'  {signature} {{\n'
         terminal = replace_once(terminal, anchor, anchor + f'    TELAR_PHASE_TRACE("terminal.{name}", this, {work}, static_cast<std::uint64_t>(purpose_));\n')
     add(terminal_path, 'terminal.hpp', terminal)
-    frame_path = 'services/runtime-cpp/terminal/frame_sync.hpp'
+    frame_path = 'src/runtime-cpp/terminal/frame_sync.hpp'
     frame = replace_once(read(frame_path), 'TELAR_TRACE("frame_sync.prepare");',
                          'TELAR_PHASE_TRACE("frame_sync.prepare", this, screen.cells.size(), pane_id_);')
     add(frame_path, 'frame_sync.hpp', frame)
-    add('services/runtime-cpp/diagnostics/trace.hpp', 'trace.hpp', read('tools/macos_runtime_scope_trace.hpp'))
+    add('src/runtime-cpp/diagnostics/trace.hpp', 'trace.hpp', read('tools/macos_runtime_scope_trace.hpp'))
     (output / 'overlay.json').write_text(json.dumps(overlay, indent=2) + '\n')
     generated = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in output.iterdir()}
     (output / 'manifest.json').write_text(json.dumps(dict(scope=__doc__, inputs=inputs, generated=generated), indent=2) + '\n')

@@ -5,8 +5,8 @@
 
 | Command | GUI/runtime build | Socket and history |
 | --- | --- | --- |
-| `just app` | Debug, `services/*/out/` | `.dev/runtime.sock`, `.dev/history.db` |
-| `just app-release` | Release, `services/*/out-dev-release/` | `.dev/release/runtime.sock`, `.dev/release/history.db` |
+| `just app` | Debug, `src/*/out/` | `.dev/runtime.sock`, `.dev/history.db` |
+| `just app-release` | Release, `src/*/out-dev-release/` | `.dev/release/runtime.sock`, `.dev/release/history.db` |
 
 Release uses the same CMake build type as production packaging, without installing
 or replacing an app. Its CLI helpers live in `.dev/release/bin/`, separate from

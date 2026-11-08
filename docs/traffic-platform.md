@@ -69,7 +69,7 @@ through TUN and preserves more-specific LAN, loopback and VPN routes.
 | C++ `exchange_capture/` | HTTP/1 and HTTP/2 capture, byte quotas, decoding and joining; completed exchanges retained through runtime recordings | Cross-source passive/proxy packet correlation |
 | C++ `plugins/` | Digest-bound traffic grants with live revocation, isolated persistent Lua workers, subscriptions, ordered inline decisions, package-bound control/recording and bounded crash recovery | Configuration reload and app management from Desktop |
 | Desktop `ui/api.lua` | Runtime subscriptions, asynchronous I/O, Lua UI, traffic subscriptions, scoped hooks, runtime capture/redirect and CA administration, recording/query/PCAPNG | Package-bound traffic permissions |
-| Go `services/proxy/` | macOS/Linux TUN adapters, TCP netstack, IPv4/IPv6 forwarding and TLS detection | Telar IPC, full interface observation and interception decisions |
+| Go `src/proxy/` | macOS/Linux TUN adapters, TCP netstack, IPv4/IPv6 forwarding and TLS detection | Telar IPC, full interface observation and interception decisions |
 
 These paths are independent of the agent tracker. Existing tap callbacks
 receive completed captured exchanges and return notification effects; they
@@ -354,12 +354,12 @@ nor forwarding acceptance.
 The consolidated native verifier can include the prepared optional stages:
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar-runtime traffic-interface-probe
-sudo -v && /usr/bin/python3 services/runtime-cpp/tools/check_network.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg \
+cmake --build src/runtime-cpp/out --target telar-runtime traffic-interface-probe
+sudo -v && /usr/bin/python3 src/runtime-cpp/tools/check_network.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
   --ssh-origin YOUR_CONTROLLED_LAN_HOST --selection --incoming \
-  --interface-probe services/runtime-cpp/out/traffic-interface-probe
+  --interface-probe src/runtime-cpp/out/traffic-interface-probe
 ```
 
 Supply the documented VPN host, address and interface options separately when a

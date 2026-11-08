@@ -22,10 +22,10 @@ inputs.
 
 | Workload | Tool | Probe |
 | --- | --- | --- |
-| GUI text scene construction | `services/gui-cpp/tools/compare_text_scene.py` | `gui-text-scene-probe` |
-| GUI terminal scene | `services/gui-cpp/tools/compare_terminal_scene.py` | `gui-terminal-scene-probe` |
-| Runtime PTY round trips | `services/runtime-cpp/tools/bench_control_pty.py` | `control-pty-latency-probe` |
-| Runtime control queries | `services/runtime-cpp/tools/bench_control_queries.py` | its own fixtures |
+| GUI text scene construction | `src/gui-cpp/tools/compare_text_scene.py` | `gui-text-scene-probe` |
+| GUI terminal scene | `src/gui-cpp/tools/compare_terminal_scene.py` | `gui-terminal-scene-probe` |
+| Runtime PTY round trips | `src/runtime-cpp/tools/bench_control_pty.py` | `control-pty-latency-probe` |
+| Runtime control queries | `src/runtime-cpp/tools/bench_control_queries.py` | its own fixtures |
 | Complete GUI against Ghostty | `tools/gui_tui_latency.py` | the GUI and runtime |
 
 A workload with no tool gets a probe beside the existing ones (a target in the

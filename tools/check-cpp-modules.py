@@ -7,8 +7,8 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-SCOPES = ('dlls/', 'services/runtime-cpp/', 'services/cli-cpp/',
-          'services/gui-cpp/', 'services/auth-daemon/')
+SCOPES = ('lib/', 'src/runtime-cpp/', 'src/cli-cpp/',
+          'src/gui-cpp/', 'src/auth-daemon/')
 
 
 def main():
@@ -58,12 +58,12 @@ def main():
           f'{owned} headers reached only through their owner module')
 
 
-INCLUDE_ROOTS = [str(path.relative_to(ROOT)) for path in sorted(ROOT.glob('dlls/*/include*'))]
+INCLUDE_ROOTS = [str(path.relative_to(ROOT)) for path in sorted(ROOT.glob('lib/*/include*'))]
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.M)
 
 
 def resolve(including, spelling):
-    service = re.match(r'services/[^/]+', including)
+    service = re.match(r'src/[^/]+', including)
     for base in [str(Path(including).parent)] + ([service[0]] if service else []) + INCLUDE_ROOTS:
         candidate = os.path.normpath(os.path.join(base, spelling))
         if (ROOT / candidate).is_file():

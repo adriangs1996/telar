@@ -598,7 +598,7 @@ agent-specific program rather than data:
   checkpoint. A configured agent restores as
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
-  know the hook formats of the five built-ins (`services/cli-cpp/hooks/`).
+  know the hook formats of the five built-ins (`src/cli-cpp/hooks/`).
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.

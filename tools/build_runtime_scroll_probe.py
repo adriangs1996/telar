@@ -16,7 +16,7 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'services/runtime-cpp/tests/scroll_projection_probe.cpp'
+SOURCE = ROOT / 'src/runtime-cpp/tests/scroll_projection_probe.cpp'
 
 
 def digest(path):
@@ -46,7 +46,7 @@ def build_probe(build, output, overlay=None, source=SOURCE, include_dirs=()):
     source = source.resolve(strict=True)
     include_dirs = [path.resolve(strict=True) for path in include_dirs]
     database = json.loads((build / 'compile_commands.json').read_text())
-    reference = ROOT / 'services/runtime-cpp/tests/terminal_test.cpp'
+    reference = ROOT / 'src/runtime-cpp/tests/terminal_test.cpp'
     entry = next(row for row in database if Path(row['file']).resolve() == reference)
     compile_command = entry.get('arguments') or shlex.split(entry['command'])
     compile_command = list(compile_command)
@@ -89,7 +89,7 @@ def build_probe(build, output, overlay=None, source=SOURCE, include_dirs=()):
         },
         'overlay_inputs': overlay_inputs(overlay),
         'headers': {
-            name: digest(ROOT / 'services/runtime-cpp/terminal' / name)
+            name: digest(ROOT / 'src/runtime-cpp/terminal' / name)
             for name in ['terminal.hpp', 'frame_sync.hpp', 'screen.hpp',
                          'cell_projection.hpp', 'text_metadata.hpp']
         },

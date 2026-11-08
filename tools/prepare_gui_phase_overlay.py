@@ -63,7 +63,7 @@ def prepare(output):
 ''')
     (output / 'gui_phase_trace.hpp').write_text(header)
 
-    path = 'services/gui-cpp/qt/application.cpp'
+    path = 'src/gui-cpp/qt/application.cpp'
     source = read(path)
     source = replace_once(source, '  WindowImages::forWindow(window);\n', '''  WindowImages::forWindow(window);
   connect(&window, &QQuickWindow::beforeFrameBegin, this, [&window] {
@@ -102,7 +102,7 @@ def prepare(output):
                       trace_pane != nullptr ? trace_pane->screen.frameId() : 0);''')
     add(path, source)
 
-    path = 'services/gui-cpp/qt/terminal_item.cpp'
+    path = 'src/gui-cpp/qt/terminal_item.cpp'
     source = read(path)
     source = replace_once(source, '  CellSelection selection;\n', '''  TELAR_PHASE_TRACE("terminal.paint", this, current->id, current->screen.frameId());
   CellSelection selection;
@@ -112,7 +112,7 @@ def prepare(output):
 ''')
     add(path, source)
 
-    path = 'services/gui-cpp/qt/runtime_connection.cpp'
+    path = 'src/gui-cpp/qt/runtime_connection.cpp'
     source = read(path)
     source = replace_once(source, 'void RuntimeConnection::read() {\n', '''void RuntimeConnection::read() {
   TELAR_PHASE_TRACE("socket.read", this, 0, 0);

@@ -2,9 +2,9 @@ name: tbc
 
 on:
   push:
-    paths: ["dlls/tbc/**", "dlls/ebnf/**", "services/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: ["lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   pull_request:
-    paths: ["dlls/tbc/**", "dlls/ebnf/**", "services/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: ["lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
-        working-directory: dlls/tbc
+        working-directory: lib/tbc
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,7 +58,7 @@ jobs:
           cmake --build --preset debug --target lint
 
       - name: Check EBNF module consumers
-        working-directory: dlls/ebnf
+        working-directory: lib/ebnf
         run: |
           cmake --preset ${{ matrix.preset }}
           cmake --build --preset ${{ matrix.preset }}

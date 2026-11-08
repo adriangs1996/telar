@@ -9,7 +9,7 @@ find `telar` afterwards. `telar` typed in a terminal opens the same window as
 the launchers; without a display (an SSH login, or Linux without
 `WAYLAND_DISPLAY`) it says so and names the CLI commands to use instead.
 
-The C++ services use the [pinned module build and onboarding guide](build/cpp-modules.md),
+Telar's C++ projects use the [pinned module build and onboarding guide](build/cpp-modules.md),
 including development, CI, standalone libraries and release packaging.
 
 ## Install a local build
@@ -51,7 +51,7 @@ just install-gui    # bundle into ~/Applications, telar into ~/.local/bin
 ```
 
 `just install-gui` builds the runtime and the GUI in Release, stages them with
-`services/gui-cpp/tools/package_macos.py`, replaces
+`src/gui-cpp/tools/package_macos.py`, replaces
 `~/Applications/Telar C++ Preview.app` and links `~/.local/bin/telar` to the
 bundled CLI; both directories are recipe parameters. The release bundle,
 `Telar.app`, comes from `packaging/release/macos.sh`. A running runtime keeps
@@ -63,7 +63,7 @@ The bundle layout:
 ```
 Telar.app/Contents/
   Info.plist                 packaging/macos/Info.plist.in, version from VERSION
-  MacOS/Telar                launcher, services/gui-cpp/tools/macos_launcher.cpp
+  MacOS/Telar                launcher, src/gui-cpp/tools/macos_launcher.cpp
   MacOS/telar-gui, telar-gui-command   the C++ client and its surface helper
   Frameworks/, PlugIns/      the managed Qt the client loads
   Resources/telar.icns       packaging/macos/telar.icns
@@ -111,14 +111,14 @@ telar-linux-ARCH/
   share/telar/licenses/
 ```
 
-`services/gui-cpp/tools/package_linux.py` stages it. It copies the Qt
+`src/gui-cpp/tools/package_linux.py` stages it. It copies the Qt
 libraries the client and its plugins name, directly or through each other,
 and gives every ELF file an `$ORIGIN` RUNPATH into `lib`, so the tree runs
 from wherever it is unpacked. `telar` finds `telar-gui` and `telar-runtime`
 beside the file a symlink resolves to.
 
 The build for servers, where remote mode runs the runtime, is the C++
-runtime and CLI without a window: `services/runtime-cpp` builds `telar`,
+runtime and CLI without a window: `src/runtime-cpp` builds `telar`,
 `telar-runtime` and `telar-config-check` side by side. The release makes
 them static musl executables ([details](#the-linux-headless-build)), and
 the desktop archive carries the same files.

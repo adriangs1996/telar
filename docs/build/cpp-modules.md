@@ -52,7 +52,7 @@ macOS ARM64 26, CMake 4.4.5, Homebrew LLVM/clangd 23.1.4,
 Ninja 1.11.1.git.kitware.jobserver-1, Zig 0.17.0.
 
 ```sh
-cmake -S dlls/telar-base -B .dev/modules/baseline-base -G Ninja \
+cmake -S lib/telar-base -B .dev/modules/baseline-base -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
 cmake --build .dev/modules/baseline-base
 ctest --test-dir .dev/modules/baseline-base --output-on-failure
@@ -239,7 +239,7 @@ tools/cpp test gui
 El primer configure de runtime/CLI/GUI prepara Zig y VT automáticamente; el de GUI
 construye Qt antes de resolver sus paquetes. No abre una ventana ni instala la app.
 Para tests GUI de integración, pasar
-`-DTELAR_GUI_TEST_RUNTIME="$PWD/services/runtime-cpp/out/telar"` al configure: apunta
+`-DTELAR_GUI_TEST_RUNTIME="$PWD/src/runtime-cpp/out/telar"` al configure: apunta
 al CLI recién construido, que inicia su runtime hermano en el fixture privado.
 
 ```sh
@@ -261,7 +261,7 @@ tools/cpp test cli
 tools/cpp configure base
 tools/cpp build base -- --parallel 3
 tools/cpp test base
-python3 tools/check-cpp-package.py --build dlls/telar-base/out
+python3 tools/check-cpp-package.py --build lib/telar-base/out
 ```
 
 También acepta `client`, `platform`, `lua`, `plugins`, `config`, `tls`, `websock`,
@@ -286,8 +286,8 @@ apuntan a `out/compile_commands.json`; para un build alternativo, pasar
 
 ```sh
 .toolchain/bin/clangd --experimental-modules-support
-python3 tools/check-cpp-editor.py --build dlls/telar-base/out \
-  --file dlls/telar-base/tests/base_test.cpp
+python3 tools/check-cpp-editor.py --build lib/telar-base/out \
+  --file lib/telar-base/tests/base_test.cpp
 ```
 
 La configuración raíz elimina los flags de BMI del driver: clangd construye sus
@@ -387,7 +387,7 @@ Debug antes de ejecutar CTest, no solo los tests seleccionados en CI.
 
 La comprobación incremental usa `runtime-core`: un build sin cambios queda sin
 trabajo; añadir y restaurar un comentario en
-`dlls/telar-platform/src/pipe_process.cpp` recompila únicamente su objeto y archivo
+`lib/telar-platform/src/pipe_process.cpp` recompila únicamente su objeto y archivo
 estático; editar y restaurar la interfaz `platform.cppm` recompila sus consumidores
 en runtime; la última repetición vuelve a quedar sin trabajo. Se restauraron los
 bytes originales. Registro: `incremental-final.log` e `incremental-result.log`.
@@ -463,7 +463,7 @@ tools/cpp exec -- cmake --install .dev/modules/runtime-clean-release \
   --prefix "$PWD/.dev/modules/package-prefix"
 install -m 755 .dev/modules/renderer-target/release/telar-diagram-renderer \
   .dev/modules/package-prefix/bin/telar-diagram-renderer
-python3 services/gui-cpp/tools/package_macos.py \
+python3 src/gui-cpp/tools/package_macos.py \
   --build .dev/modules/gui-clean-release --runtime-prefix .dev/modules/package-prefix \
   --output .dev/modules/Telar-modules-final.app
 codesign --verify --deep --strict .dev/modules/Telar-modules-final.app
@@ -509,7 +509,7 @@ tools/cpp exec -- just runtime-lint 3 "$PWD/.dev/tooling-fix/runtime-lint"
 tools/cpp configure runtime -B .dev/runtime-lint --config Debug
 tools/cpp exec -- cmake -DJOBS=3 \
   -DRUNTIME_BUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
-  -P services/runtime-cpp/cmake/lint.cmake
+  -P src/runtime-cpp/cmake/lint.cmake
 
 python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
 ```

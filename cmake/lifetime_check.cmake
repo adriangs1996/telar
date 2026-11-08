@@ -1,14 +1,14 @@
 include_guard(GLOBAL)
 
 include("${CMAKE_CURRENT_LIST_DIR}/lint_prepare.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../dlls/tbc/cmake/tbcLifetimeCheck.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../lib/tbc/cmake/tbcLifetimeCheck.cmake")
 
 # Builds what the selected translation units read, then checks their lifetimes
 # with the project's tbc-lint, <jobs> units at a time.
 function(telar_lifetime_check project_directory build_directory include_regex exclude_regex jobs)
   tbc_find_linter("${project_directory}" linter)
   if(NOT EXISTS "${linter}")
-    message(FATAL_ERROR "tbc-lint was not found at '${linter}'. Build dlls/tbc with its release preset or set TBC_LINTER.")
+    message(FATAL_ERROR "tbc-lint was not found at '${linter}'. Build lib/tbc with its release preset or set TBC_LINTER.")
   endif()
   telar_lint_prepare("${build_directory}" "${include_regex}" "${exclude_regex}" "${jobs}" patterns sources)
   execute_process(COMMAND "${linter}" --warnings-as-errors "-p=${build_directory}" "-j=${jobs}" ${sources}

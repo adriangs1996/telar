@@ -1,0 +1,37 @@
+# include-cleaner currently diagnoses implicit primary-module imports as missing headers.
+# clang-tidy 23.1.5 crashes (SIGSEGV) in unchecked-optional-access and
+# static-initialization-cycle on module units that import std or see one
+# declaration through several BMIs; re-enable both once the pinned LLVM fixes it.
+InheritParentConfig: false
+Checks: >-
+  *,
+  -misc-include-cleaner,
+  -bugprone-unchecked-optional-access,
+  -misc-static-initialization-cycle,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -fuchsia-*,
+  -google-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -modernize-use-equals-default,
+  -modernize-use-trailing-return-type,
+  -mpi-*,
+  -objc-*,
+  -openmp-*,
+  -zircon-*
+ExtraArgs:
+  - -Weverything
+  - -Wno-c++98-compat
+  - -Wno-c++98-compat-pedantic
+  - -Wno-c++11-compat
+  - -Wno-c++14-compat
+  - -Wno-c++17-compat
+  - -Wno-c++20-compat
+WarningsAsErrors: ''
+HeaderFilterRegex: '(^|/)(src/((runtime|cli)-cpp|auth-daemon)|lib/(websock|telar-(base|lua|platform|plugins|config|tls)))/'
+ExcludeHeaderFilterRegex: '(^|/)(dependencies|generated|out[^/]*|tests|third_party|vendor)/'
+SystemHeaders: false

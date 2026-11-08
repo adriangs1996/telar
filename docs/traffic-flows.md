@@ -158,9 +158,9 @@ byte-exact original packet delivery, provenance, binary TCP reconstruction and
 an explicit reconstruction-error event for an invalid fragment:
 
 ```sh
-python3 services/runtime-cpp/tools/check_traffic.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg --fragments
+python3 src/runtime-cpp/tools/check_traffic.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg --fragments
 ```
 
 That check and `ip-fragment-tests` pass with normal and AddressSanitizer builds.
@@ -213,9 +213,9 @@ fragmented IPv6 messages, original packets, message boundaries, binary data and
 structured recording queries:
 
 ```sh
-python3 services/runtime-cpp/tools/check_traffic.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg --datagrams
+python3 src/runtime-cpp/tools/check_traffic.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg --datagrams
 ```
 
 That check passes with normal and AddressSanitizer runtimes. Native Lua-host
@@ -397,19 +397,19 @@ client features. The example does not install trust or change redirection.
 ## Verification
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar-runtime traffic-tests traffic-flow-tests http-message-tests http2-endpoint-tests redirect-tests tls-tests
-ctest --test-dir services/runtime-cpp/out -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|network-check-tests|tls-tests)$' --output-on-failure
-cmake --build services/desktop-mode/out/debug --target traffic_dbg
-python3 services/runtime-cpp/tools/check_traffic_hooks.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg
-python3 services/runtime-cpp/tools/check_traffic_hooks.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg --http-edit
+cmake --build src/runtime-cpp/out --target telar-runtime traffic-tests traffic-flow-tests http-message-tests http2-endpoint-tests redirect-tests tls-tests
+ctest --test-dir src/runtime-cpp/out -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|network-check-tests|tls-tests)$' --output-on-failure
+cmake --build src/desktop-mode/out/debug --target traffic_dbg
+python3 src/runtime-cpp/tools/check_traffic_hooks.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg
+python3 src/runtime-cpp/tools/check_traffic_hooks.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg --http-edit
 # Use a test Python environment with tools/requirements-network.txt installed.
-python3 services/runtime-cpp/tools/check_traffic_hooks.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg --http2-edit
+python3 src/runtime-cpp/tools/check_traffic_hooks.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg --http2-edit
 ```
 
 The actual runtime/Lua hook check proves scoped registration, binary replacement
@@ -454,9 +454,9 @@ For native capture to Lua, loopback/LAN redirect and concurrent/crashed helper
 recovery, run from an interactive terminal:
 
 ```sh
-python3 services/runtime-cpp/tools/check_network.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg \
+python3 src/runtime-cpp/tools/check_network.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
   --ssh-origin CONTROLLED_HOST
 ```
 
@@ -476,7 +476,7 @@ selection and incoming-only/combined IPv4 checks passed on 2026-10-30.
 The routed capture stage also checks packets in both directions on the actual
 LAN/VPN interface; the earlier loopback capture result does not establish that
 new stage's coverage.
-`--interface-probe services/runtime-cpp/out/traffic-interface-probe` adds the
+`--interface-probe src/runtime-cpp/out/traffic-interface-probe` adds the
 [temporary virtual-interface check](traffic-capture.md#check-delivery-without-root).
 Its native creation, binary packet delivery, removal and recreation checks
 passed through Desktop Lua on 2026-10-30.
@@ -485,7 +485,7 @@ Run the Lua check with `--http` to verify fragmented cleartext HTTP requests and
 binary response bodies. The inspector's real Qt rendering, request selection
 and domain input are checked by `traffic_inspector_dbg`; its ring retention and
 literal domain filters are checked by `luajit tests/traffic_inspector.lua` from
-`services/desktop-mode`.
+`src/desktop-mode`.
 
 Native loopback redirect first passed on 2026-10-25. On 2026-10-27, the user
 reported a successful combined `check_network.py` run on macOS with a controlled

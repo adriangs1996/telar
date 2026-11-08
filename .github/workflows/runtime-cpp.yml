@@ -3,10 +3,10 @@ name: C++ runtime
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['services/runtime-cpp/**', 'services/cli-cpp/**', 'dlls/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**']
+    paths: ['src/runtime-cpp/**', 'src/cli-cpp/**', 'lib/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**']
   push:
     branches: [main]
-    paths: ['services/runtime-cpp/**', 'services/cli-cpp/**', 'dlls/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**']
+    paths: ['src/runtime-cpp/**', 'src/cli-cpp/**', 'lib/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**']
 
 permissions:
   contents: read
@@ -32,7 +32,7 @@ jobs:
     name: macOS ARM64 (${{ matrix.configuration }})
     defaults:
       run:
-        working-directory: services/runtime-cpp
+        working-directory: src/runtime-cpp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,7 +59,7 @@ jobs:
           tools/cpp build base -B .dev/ci/base -- --parallel 3
           tools/cpp test base -B .dev/ci/base
           python3 tools/check-cpp-package.py --build .dev/ci/base
-          python3 tools/check-cpp-editor.py --build .dev/ci/base --file dlls/telar-base/tests/base_test.cpp
+          python3 tools/check-cpp-editor.py --build .dev/ci/base --file lib/telar-base/tests/base_test.cpp
 
       - name: Build libghostty-vt
         working-directory: ${{ github.workspace }}
@@ -88,9 +88,9 @@ jobs:
         if: matrix.configuration == 'Release'
         working-directory: ${{ github.workspace }}
         run: |
-          tools/cpp configure tbc -B dlls/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-          tools/cpp build tbc -B dlls/tbc/out/release -- --target tbc-lint --parallel 3
-          tools/cpp exec -- cmake -DJOBS=3 -DRUNTIME_BUILD_DIRECTORY=services/runtime-cpp/out -P services/runtime-cpp/cmake/lifetime.cmake
+          tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+          tools/cpp exec -- cmake -DJOBS=3 -DRUNTIME_BUILD_DIRECTORY=src/runtime-cpp/out -P src/runtime-cpp/cmake/lifetime.cmake
           for project in auth websock; do
             tools/cpp build "$project" -B ".dev/ci/$project" -- --target lifetime-check
           done
@@ -101,8 +101,8 @@ jobs:
         with:
           name: runtime-cpp-${{ matrix.configuration }}
           path: |
-            services/runtime-cpp/out/CMakeCache.txt
-            services/runtime-cpp/out/Testing/Temporary/LastTest.log
+            src/runtime-cpp/out/CMakeCache.txt
+            src/runtime-cpp/out/Testing/Temporary/LastTest.log
 
   linux:
     strategy:
@@ -115,7 +115,7 @@ jobs:
     name: Linux (${{ matrix.os }}, ${{ matrix.configuration }})
     defaults:
       run:
-        working-directory: services/runtime-cpp
+        working-directory: src/runtime-cpp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -143,7 +143,7 @@ jobs:
           tools/cpp build base -B .dev/ci/base -- --parallel 3
           tools/cpp test base -B .dev/ci/base
           python3 tools/check-cpp-package.py --build .dev/ci/base
-          python3 tools/check-cpp-editor.py --build .dev/ci/base --file dlls/telar-base/tests/base_test.cpp
+          python3 tools/check-cpp-editor.py --build .dev/ci/base --file lib/telar-base/tests/base_test.cpp
 
       - name: Build libghostty-vt
         working-directory: ${{ github.workspace }}

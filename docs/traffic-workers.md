@@ -231,11 +231,11 @@ the package's channels. Closing Desktop does not trigger any of this recovery.
 ## Verification
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar-runtime plugin-traffic-tests plugin-tests traffic-flow-tests
-ctest --test-dir services/runtime-cpp/out -R '^(plugin-traffic-tests|plugin-tests|traffic-flow-tests)$' --output-on-failure
-python3 services/runtime-cpp/tools/check_traffic_workers.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg
+cmake --build src/runtime-cpp/out --target telar-runtime plugin-traffic-tests plugin-tests traffic-flow-tests
+ctest --test-dir src/runtime-cpp/out -R '^(plugin-traffic-tests|plugin-tests|traffic-flow-tests)$' --output-on-failure
+python3 src/runtime-cpp/tools/check_traffic_workers.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 
 The real-runtime check grants packages through the CLI and uses real TCP origins.

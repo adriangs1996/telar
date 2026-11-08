@@ -170,12 +170,12 @@ can continue. The existing startup trust maintenance still applies.
 ## Verification
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar-runtime traffic-control-tests tls-tests redirect-tests
-ctest --test-dir services/runtime-cpp/out -R '^(traffic-control-tests|tls-tests|redirect-tests)$' --output-on-failure
-cmake --build services/desktop-mode/out/debug --target traffic_dbg
-python3 services/runtime-cpp/tools/check_traffic.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg --control
+cmake --build src/runtime-cpp/out --target telar-runtime traffic-control-tests tls-tests redirect-tests
+ctest --test-dir src/runtime-cpp/out -R '^(traffic-control-tests|tls-tests|redirect-tests)$' --output-on-failure
+cmake --build src/desktop-mode/out/debug --target traffic_dbg
+python3 src/runtime-cpp/tools/check_traffic.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg --control
 ```
 
 Native tests cover fragmented/malformed IPC, mutation denial, connected producer
@@ -192,9 +192,9 @@ new control API and browser trust are separate acceptance checks.
 The privileged API check is ready for an ordinary terminal with sudo access:
 
 ```sh
-sudo -v && /usr/bin/python3 services/runtime-cpp/tools/check_traffic.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg --control-live
+sudo -v && /usr/bin/python3 src/runtime-cpp/tools/check_traffic.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg --control-live
 ```
 
 It starts/stops native capture through Lua, verifies a real loopback UDP packet,
@@ -218,9 +218,9 @@ relay and a control reply while deliberately subscribing to no flow events. It
 requires neither sudo nor OS trust changes:
 
 ```sh
-/usr/bin/python3 -B services/runtime-cpp/tests/network_check_test.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg
+/usr/bin/python3 -B src/runtime-cpp/tests/network_check_test.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 
 On 2026-10-30, both regression cases passed with the ordinary runtime and with
@@ -264,11 +264,11 @@ already installed; `--browser` can select its executable explicitly.
 ```sh
 python3 -m venv /tmp/telar-browser-venv
 /tmp/telar-browser-venv/bin/python -m pip install \
-  -r services/runtime-cpp/tools/requirements-browser.txt
-/tmp/telar-browser-venv/bin/python services/runtime-cpp/tools/check_browser_trust.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg \
-  --tls-probe services/runtime-cpp/out/tls-tests
+  -r src/runtime-cpp/tools/requirements-browser.txt
+/tmp/telar-browser-venv/bin/python src/runtime-cpp/tools/check_browser_trust.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
+  --tls-probe src/runtime-cpp/out/tls-tests
 ```
 
 The default HTTPS origin is `https://example.com`; supply `--url` with a reachable
@@ -321,10 +321,10 @@ previous public file, retrying rotation must publish the new signer, resume TLS
 and produce the expected browser rejection of an untrusted private CA.
 
 ```sh
-/tmp/telar-browser-venv/bin/python services/runtime-cpp/tools/check_ca_rotation.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg \
-  --tls-probe services/runtime-cpp/out/tls-tests \
+/tmp/telar-browser-venv/bin/python src/runtime-cpp/tools/check_ca_rotation.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
+  --tls-probe src/runtime-cpp/out/tls-tests \
   --url https://YOUR_REACHABLE_HTTPS_ORIGIN
 ```
 

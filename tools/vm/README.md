@@ -74,7 +74,7 @@ the host.
 
 `build` runs `tools/cpp bootstrap`, then `just runtime-build out-vm Release` and
 `just gui-build out-vm Release` with the pinned toolchain, so the guest keeps
-its builds in `services/runtime-cpp/out-vm` and `services/gui-cpp/out-vm`.
+its builds in `src/runtime-cpp/out-vm` and `src/gui-cpp/out-vm`.
 The first GUI build compiles the private Qt and takes a while. Sync leaves
 those directories, `.toolchain`, `.dependencies-cache`, `.qt-cache` and `.dev`
 alone. `run`, `gui-smoke` and `stop-runtime` use the CLI from `out-vm`, which

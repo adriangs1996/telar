@@ -35,23 +35,23 @@ if [[ $command == build ]]; then
   bash tools/vm/install-zig.sh 0.17.0
   export PATH="$HOME/.local/bin:$PATH"
 
-  python3 services/runtime-cpp/tools/build_ghostty.py \
-    --build-dir services/runtime-cpp/dependencies/ghostty \
-    --prefix services/runtime-cpp/dependencies/install
+  python3 src/runtime-cpp/tools/build_ghostty.py \
+    --build-dir src/runtime-cpp/dependencies/ghostty \
+    --prefix src/runtime-cpp/dependencies/install
 
-  cmake -S services/runtime-cpp -B services/runtime-cpp/out-vm -G Ninja \
+  cmake -S src/runtime-cpp -B src/runtime-cpp/out-vm -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-    -DGHOSTTY_VT_ROOT="$PWD/services/runtime-cpp/dependencies/install"
-  cmake --build services/runtime-cpp/out-vm --target telar-runtime telar telar-config-check --parallel 2
+    -DGHOSTTY_VT_ROOT="$PWD/src/runtime-cpp/dependencies/install"
+  cmake --build src/runtime-cpp/out-vm --target telar-runtime telar telar-config-check --parallel 2
 
-  cmake -S services/gui-cpp -B services/gui-cpp/out-vm -G Ninja \
+  cmake -S src/gui-cpp -B src/gui-cpp/out-vm -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-    -DGHOSTTY_VT_ROOT="$PWD/services/runtime-cpp/dependencies/install"
-  cmake --build services/gui-cpp/out-vm --target telar-gui --parallel 2
+    -DGHOSTTY_VT_ROOT="$PWD/src/runtime-cpp/dependencies/install"
+  cmake --build src/gui-cpp/out-vm --target telar-gui --parallel 2
 
   mkdir -p .dev/vm/bin
   # The CLI starts the telar-runtime built beside it.
-  ln -sfn "$PWD/services/runtime-cpp/out-vm/telar" .dev/vm/bin/telar
+  ln -sfn "$PWD/src/runtime-cpp/out-vm/telar" .dev/vm/bin/telar
   printf 'Telar C++ is built. Run tools/vm/omarchy.py run from the host.\n'
 elif [[ $command == run ]]; then
   export PATH="$PWD/.dev/vm/bin:$PATH"
@@ -63,7 +63,7 @@ elif [[ $command == run ]]; then
   export XDG_RUNTIME_DIR
   export QSG_RHI_BACKEND=opengl
   export QT_QPA_PLATFORM=wayland
-  test -x services/gui-cpp/out-vm/telar-gui
+  test -x src/gui-cpp/out-vm/telar-gui
 
   desktop_startup_timeout_seconds=60
   desktop_probe_interval_seconds=1
@@ -90,7 +90,7 @@ elif [[ $command == run ]]; then
     --setenv=TELAR_HISTORY="$TELAR_HISTORY" --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
     --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" --setenv=QSG_RHI_BACKEND=opengl \
     --setenv=QT_QPA_PLATFORM=wayland \
-    "$PWD/services/gui-cpp/out-vm/telar-gui" --cwd "$PWD" "$@"
+    "$PWD/src/gui-cpp/out-vm/telar-gui" --cwd "$PWD" "$@"
 else
   printf 'Unknown operation: %s\n' "$command" >&2
   exit 2

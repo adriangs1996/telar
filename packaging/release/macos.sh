@@ -43,7 +43,7 @@ build() {
     # TELAR_RUNTIME_DISTRIBUTABLE links the non-system libraries statically
     # and fails the build when any executable links outside the base system.
     # shellcheck disable=SC2086
-    cmake -S "$root/services/runtime-cpp" -B "$stage/runtime" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    cmake -S "$root/src/runtime-cpp" -B "$stage/runtime" -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DTELAR_RUNTIME_DISTRIBUTABLE=ON -DBUILD_TESTING=OFF -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
         -DGHOSTTY_VT_ROOT="$ghostty"
     cmake --build "$stage/runtime" --target distributable-linkage
@@ -53,12 +53,12 @@ build() {
     install -m 755 "$stage/renderer/release/telar-diagram-renderer" "$stage/prefix/bin/telar-diagram-renderer"
 
     # shellcheck disable=SC2086
-    cmake -S "$root/services/gui-cpp" -B "$stage/gui" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
+    cmake -S "$root/src/gui-cpp" -B "$stage/gui" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
         -DGHOSTTY_VT_ROOT="$ghostty" -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$stage/qt-cache}"
     cmake --build "$stage/gui" --target telar-gui telar-gui-command
 
     rm -rf "$stage/Telar.app"
-    python3 "$root/services/gui-cpp/tools/package_macos.py" --release \
+    python3 "$root/src/gui-cpp/tools/package_macos.py" --release \
         --build "$stage/gui" --runtime-prefix "$stage/prefix" --output "$stage/Telar.app"
 
     app=$stage/Telar.app/Contents

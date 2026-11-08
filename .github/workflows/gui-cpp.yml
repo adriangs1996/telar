@@ -5,10 +5,10 @@ on:
   pull_request:
     paths:
       - '.github/workflows/gui-cpp.yml'
-      - 'services/gui-cpp/**'
+      - 'src/gui-cpp/**'
       - 'packaging/release/install-linux-deps.sh'
-      - 'dlls/telar-*/**'
-      - 'dlls/tbc/**'
+      - 'lib/telar-*/**'
+      - 'lib/tbc/**'
       - 'cmake/**'
       - 'justfile'
       - 'tools/check-cpp-*.py'
@@ -21,10 +21,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/gui-cpp.yml'
-      - 'services/gui-cpp/**'
+      - 'src/gui-cpp/**'
       - 'packaging/release/install-linux-deps.sh'
-      - 'dlls/telar-*/**'
-      - 'dlls/tbc/**'
+      - 'lib/telar-*/**'
+      - 'lib/tbc/**'
       - 'cmake/**'
       - 'justfile'
       - 'tools/check-cpp-*.py'
@@ -71,10 +71,10 @@ jobs:
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .qt-cache
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/managed_toolchain.cmake', 'services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/managed_toolchain.cmake', 'src/gui-cpp/cmake/qt.cmake', 'src/gui-cpp/cmake/qt/**') }}
 
       - name: Test dependency integrity and package isolation
-        run: python3 -m unittest discover -s services/gui-cpp/tools -p test_qt_dependency.py -v
+        run: python3 -m unittest discover -s src/gui-cpp/tools -p test_qt_dependency.py -v
 
       - name: Install Zig and build libghostty-vt
         run: |
@@ -82,26 +82,26 @@ jobs:
 
       - name: Configure with managed Qt
         run: |
-          cmake -S services/gui-cpp -B services/gui-cpp/out -G Ninja \
+          cmake -S src/gui-cpp -B src/gui-cpp/out -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
             -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" \
             -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT" -DTELAR_GUI_QT_JOBS=3
 
       - name: Build GUI and focused regression tests
         run: |
-          cmake --build services/gui-cpp/out --parallel 3 \
+          cmake --build src/gui-cpp/out --parallel 3 \
             --target telar-gui gui-status-bar-test gui-native-pointer-events-test
-          ctest --test-dir services/gui-cpp/out --output-on-failure -R '^gui-(qt-dependency|status-bar|native-pointer-events)$'
+          ctest --test-dir src/gui-cpp/out --output-on-failure -R '^gui-(qt-dependency|status-bar|native-pointer-events)$'
 
       - name: Test native macOS navigation
         if: runner.os == 'macOS'
         run: |
-          cmake --build services/gui-cpp/out --parallel 3 --target gui-native-window-appearance-test
-          QT_QUICK_BACKEND=software ctest --test-dir services/gui-cpp/out --output-on-failure -R '^gui-native-window-appearance$'
+          cmake --build src/gui-cpp/out --parallel 3 --target gui-native-window-appearance-test
+          QT_QUICK_BACKEND=software ctest --test-dir src/gui-cpp/out --output-on-failure -R '^gui-native-window-appearance$'
 
       - name: Check lifetimes
         if: matrix.configuration == 'Release'
         run: |
-          tools/cpp configure tbc -B dlls/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-          tools/cpp build tbc -B dlls/tbc/out/release -- --target tbc-lint --parallel 3
-          cmake --build services/gui-cpp/out --target gui-lifetime
+          tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+          cmake --build src/gui-cpp/out --target gui-lifetime

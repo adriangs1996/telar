@@ -13,7 +13,7 @@ import math
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'services/gui-cpp/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src/gui-cpp/tools'))
 from history_capture_proxy import history_results_tag
 
 MAXIMUM_CLOCK_UNCERTAINTY_SECONDS = 1e-6

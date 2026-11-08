@@ -63,13 +63,7 @@ placements, per-pane and global quotas, and the byte credit returned to the
 runtime. The window reports images and exact pointer pixels as supported; its
 cell pixel size comes from its font metrics.
 
-`telar-core` contains only bounded wire values, formats, rectangles, clipping,
-and schema messages. It contains no parser, allocator, PTY, or terminal writer.
-
-`lib/kitty_protocol` is a dependency-free library that encodes Kitty image
-transmissions, placements, and deletions into a caller-owned writer. It owns no
-resources or pacing policy. The runtime media path and `core.Image` use its
-format values.
+The runtime's Kitty command handling lives in `src/runtime-cpp/graphics/`.
 
 ## Implemented child subset
 
@@ -142,7 +136,7 @@ redraws, scrolling and scrollback move the image with them, and each client
 sizes it with its own cell metrics. Consecutive cells of one row form a run;
 the image is fitted into the placement's grid keeping its aspect ratio and
 centered, as kitty and Ghostty do, and each run draws its fragment over cell
-backgrounds and under text (`services/gui-cpp/graphics/placeholder.cppm`).
+backgrounds and under text (`src/gui-cpp/graphics/placeholder.cppm`).
 Placeholder cells never draw a glyph, whether or not their image is there,
 and never ask for an installed font.
 

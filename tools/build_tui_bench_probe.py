@@ -51,8 +51,8 @@ def build(output, write_mode="split"):
     path.write_text(text)
     commands = [
         ["clang++", "-O2", "-std=c++23", "-Wall", "-Wextra", "-Werror",
-         "-I", str(root / "services/runtime-cpp/tests"),
-         "-I", str(root / "dlls/telar-client/include"), "-I", str(root / "dlls/telar-base/include"),
+         "-I", str(root / "src/runtime-cpp/tests"),
+         "-I", str(root / "lib/telar-client/include"), "-I", str(root / "lib/telar-base/include"),
          str(directory / "read_cpp_pane.cpp"), "-o", str(directory / "read-cpp-pane")],
         ["clang", "-dynamiclib", "-O2", "-fobjc-arc", "-framework", "AppKit",
          "-framework", "QuartzCore", "-framework", "Metal",

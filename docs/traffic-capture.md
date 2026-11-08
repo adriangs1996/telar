@@ -216,12 +216,12 @@ Import a PCAP through the same data channel. Every imported event is labelled
 From the repository root, run the focused checks:
 
 ```sh
-cmake --build services/runtime-cpp/out --target telar-runtime traffic-tests plugin-tests tls-tests
-ctest --test-dir services/runtime-cpp/out -R '^(traffic-tests|plugin-tests|tls-tests)$' --output-on-failure
-cmake --build services/desktop-mode/out/debug --target traffic_dbg
-python3 services/runtime-cpp/tools/check_traffic.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg
+cmake --build src/runtime-cpp/out --target telar-runtime traffic-tests plugin-tests tls-tests
+ctest --test-dir src/runtime-cpp/out -R '^(traffic-tests|plugin-tests|tls-tests)$' --output-on-failure
+cmake --build src/desktop-mode/out/debug --target traffic_dbg
+python3 src/runtime-cpp/tools/check_traffic.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 
 The cross-process check starts an isolated runtime with a private temporary
@@ -232,11 +232,11 @@ inside the callback. It leaves the regular runtime and OS trust untouched.
 To check actual loopback capture, run this as your account in a terminal. It
 requests sudo for the capture helper, keeps its temporary runtime unprivileged,
 checks exact UDP bytes and interface attribution, and shuts both down. Add
-`--lua-probe services/desktop-mode/out/debug/traffic_dbg` to verify the real Lua path:
+`--lua-probe src/desktop-mode/out/debug/traffic_dbg` to verify the real Lua path:
 
 ```sh
-python3 services/runtime-cpp/tools/check_traffic_live.py \
-  --runtime services/runtime-cpp/out/telar-runtime
+python3 src/runtime-cpp/tools/check_traffic_live.py \
+  --runtime src/runtime-cpp/out/telar-runtime
 ```
 
 This establishes loopback acceptance only. Physical interfaces, VPN devices
@@ -245,9 +245,9 @@ and interface changes still need native coverage tests.
 The verifier also has an optional controlled-host check for a routed interface:
 
 ```sh
-/usr/bin/python3 services/runtime-cpp/tools/check_traffic_live.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg \
+/usr/bin/python3 src/runtime-cpp/tools/check_traffic_live.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
   --ssh-origin CONTROLLED_HOST
 ```
 
@@ -295,11 +295,11 @@ reuse it. A Lua regression covers both reused and changed indices, missing
 openings, stale packets, mismatched indices and duplicate openings.
 
 ```sh
-cmake --build services/runtime-cpp/out --target traffic-interface-probe
-/usr/bin/python3 services/runtime-cpp/tools/check_traffic_live.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg \
-  --interface-probe services/runtime-cpp/out/traffic-interface-probe
+cmake --build src/runtime-cpp/out --target traffic-interface-probe
+/usr/bin/python3 src/runtime-cpp/tools/check_traffic_live.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
+  --interface-probe src/runtime-cpp/out/traffic-interface-probe
 ```
 
 The same `--interface-probe` argument enables this stage in `check_network.py`.

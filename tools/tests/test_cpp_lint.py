@@ -17,7 +17,7 @@ class ModuleLintPreparation(unittest.TestCase):
     def test_clean_lint_prepares_all_selected_contexts_incrementally(self):
         with tempfile.TemporaryDirectory(prefix='telar-lint + ') as temporary:
             root = Path(temporary).resolve() / 'tests'
-            source = root / 'services/runtime-cpp'
+            source = root / 'src/runtime-cpp'
             binary = root / 'binary'
             (source / 'tools').mkdir(parents=True)
             (source / 'tests').mkdir()
@@ -65,7 +65,7 @@ add_executable(unrelated-tests tests/never.cpp)
             outputs = [Path(entry['output']) for entry in selected]
             self.assertFalse(any(path.exists() for path in outputs))
             command = [CMAKE, '-DRUNTIME_BUILD_DIRECTORY=' + str(binary), '-DJOBS=2',
-                       '-P', ROOT / 'services/runtime-cpp/cmake/lint.cmake']
+                       '-P', ROOT / 'src/runtime-cpp/cmake/lint.cmake']
             first = run(*command)
             self.assertEqual(first.returncode, 0, first.stdout)
             self.assertIn('for 3 files', first.stdout)

@@ -11,10 +11,10 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECTS = {'runtime': 'services/runtime-cpp', 'cli': 'services/cli-cpp',
-            'gui': 'services/gui-cpp', 'auth': 'services/auth-daemon',
-            **{name: 'dlls/telar-' + name for name in ('base', 'client', 'platform', 'lua', 'plugins', 'config', 'tls')},
-            'tbc': 'dlls/tbc', 'ebnf': 'dlls/ebnf', 'websock': 'dlls/websock'}
+PROJECTS = {'runtime': 'src/runtime-cpp', 'cli': 'src/cli-cpp',
+            'gui': 'src/gui-cpp', 'auth': 'src/auth-daemon',
+            **{name: 'lib/telar-' + name for name in ('base', 'client', 'platform', 'lua', 'plugins', 'config', 'tls')},
+            'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf', 'websock': 'lib/websock'}
 CACHE = ROOT / '.toolchain'
 
 
@@ -46,7 +46,7 @@ def vt():
         if not (zig / '.complete').exists():
             run(ROOT / 'packaging/release/install-zig.sh', zig, manifest['versions']['zig'])
             (zig / '.complete').touch()
-        recipe = ROOT / 'services/runtime-cpp'
+        recipe = ROOT / 'src/runtime-cpp'
         identity = hashlib.sha256()
         for file in ('tools/build_ghostty.py', 'vendor/ghostty-vt-state.patch', 'vendor/wuffs-codec.json'):
             identity.update((recipe / file).read_bytes())

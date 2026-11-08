@@ -138,11 +138,11 @@ export format through their ordinary filesystem API.
 ## Verification
 
 ```sh
-cmake --build services/runtime-cpp/out --target traffic-recording-tests
-ctest --test-dir services/runtime-cpp/out -R '^traffic-recording-tests$' --output-on-failure
-python3 services/runtime-cpp/tools/check_traffic_recordings.py \
-  --runtime services/runtime-cpp/out/telar-runtime \
-  --lua-probe services/desktop-mode/out/debug/traffic_dbg
+cmake --build src/runtime-cpp/out --target traffic-recording-tests
+ctest --test-dir src/runtime-cpp/out -R '^traffic-recording-tests$' --output-on-failure
+python3 src/runtime-cpp/tools/check_traffic_recordings.py \
+  --runtime src/runtime-cpp/out/telar-runtime \
+  --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 
 Unit checks cover count/byte/age retention, gaps, pagination, binary payloads,

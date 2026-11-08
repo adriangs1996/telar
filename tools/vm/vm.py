@@ -33,11 +33,11 @@ USER = "telar"
 GUEST_SRC = "src/telar"
 # The guest builds into out-vm, which sync leaves alone, beside the host's own out.
 GUEST_BUILD = "out-vm"
-GUEST_CLI = f"services/runtime-cpp/{GUEST_BUILD}/telar"
+GUEST_CLI = f"src/runtime-cpp/{GUEST_BUILD}/telar"
 # Run from the guest checkout: the CLI starts the telar-runtime built beside it
 # and `telar gui` finds telar-gui on PATH. .dev/ survives sync.
 GUEST_ENVIRONMENT = f'''mkdir -p -m 700 .dev/vm
-export PATH="$PWD/services/gui-cpp/{GUEST_BUILD}:$PATH"
+export PATH="$PWD/src/gui-cpp/{GUEST_BUILD}:$PATH"
 export TELAR_SOCKET="$PWD/.dev/vm/runtime.sock" TELAR_SOCKET_PATH="$PWD/.dev/vm/runtime.sock"
 export TELAR_HISTORY="$PWD/.dev/vm/history.db"
 '''
@@ -333,10 +333,10 @@ tar -xf - -C "$stage"
 mkdir -p "$HOME/{destination}"
 rsync -a --delete --exclude=/.toolchain/ --exclude=/.dependencies-cache/ \\
     --exclude=/.qt-cache/ --exclude=/.dev/ \\
-    --exclude=/services/runtime-cpp/dependencies/ \\
-    --exclude=/services/runtime-cpp/out-vm/ --exclude=/services/runtime-cpp/out/ \\
-    --exclude=/services/runtime-cpp/out-vm-debug/ \\
-    --exclude=/services/gui-cpp/out-vm/ --exclude=/services/gui-cpp/out/ \\
+    --exclude=/src/runtime-cpp/dependencies/ \\
+    --exclude=/src/runtime-cpp/out-vm/ --exclude=/src/runtime-cpp/out/ \\
+    --exclude=/src/runtime-cpp/out-vm-debug/ \\
+    --exclude=/src/gui-cpp/out-vm/ --exclude=/src/gui-cpp/out/ \\
     "$stage/" "$HOME/{destination}/"
 '''
     with subprocess.Popen(ssh("bash", "-c", script), stdin=subprocess.PIPE) as process:

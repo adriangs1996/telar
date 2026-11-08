@@ -1,8 +1,8 @@
 dev_dir := justfile_directory() / ".dev"
 release_dev_dir := dev_dir / "release"
 release_build_dir := "out-dev-release"
-runtime_dir := justfile_directory() / "services/runtime-cpp"
-gui_dir := justfile_directory() / "services/gui-cpp"
+runtime_dir := justfile_directory() / "src/runtime-cpp"
+gui_dir := justfile_directory() / "src/gui-cpp"
 renderer_dir := justfile_directory() / "tools/diagram-renderer"
 runtime := runtime_dir / "out/telar-runtime"
 cli := runtime_dir / "out/telar"
@@ -19,7 +19,7 @@ default:
     @just --list
 
 # Build the pinned libghostty-vt and bootstrap its verified Zig compiler.
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 vt:
     "{{ justfile_directory() }}/tools/cpp" vt
 
@@ -27,22 +27,22 @@ vt:
 build: runtime-build gui-build
 
 # Build the runtime, using out/Debug by default.
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-runtime telar
 
 # Build the GUI, using out/Debug by default.
-[working-directory: "services/gui-cpp"]
+[working-directory: "src/gui-cpp"]
 gui-build directory="out" build_type="Debug": (gui-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-gui telar-gui-command
 
 # Build the standalone C++ auth daemon without the runtime or GUI dependencies.
-[working-directory: "services/auth-daemon"]
+[working-directory: "src/auth-daemon"]
 auth-build directory="out" build_type="Debug": (auth-configure directory build_type)
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-auth-daemon
 
 # Build and run the auth daemon tests. Extra arguments are passed to CTest.
-[working-directory: "services/auth-daemon"]
+[working-directory: "src/auth-daemon"]
 auth-test *args: auth-build
     "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
 
@@ -50,27 +50,27 @@ auth-test *args: auth-build
 auth-editor: (auth-configure "out" "Debug")
 
 # Analyze the auth daemon sources without applying fixes.
-[working-directory: "services/auth-daemon"]
+[working-directory: "src/auth-daemon"]
 auth-lint: auth-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target lint
 
 # Format the auth daemon sources.
-[working-directory: "services/auth-daemon"]
+[working-directory: "src/auth-daemon"]
 auth-format: auth-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format
 
 # Check the auth daemon formatting without changing sources.
-[working-directory: "services/auth-daemon"]
+[working-directory: "src/auth-daemon"]
 auth-format-check: auth-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format-check
 
 # Build the standalone WebSocket library's compilation smoke test.
-[working-directory: "dlls/websock"]
+[working-directory: "lib/websock"]
 websock-build directory="out" build_type="Debug": (websock-configure directory build_type)
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}"
 
 # Run the WebSocket library tests. Extra arguments are passed to CTest.
-[working-directory: "dlls/websock"]
+[working-directory: "lib/websock"]
 websock-test *args: websock-build
     "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
 
@@ -78,17 +78,17 @@ websock-test *args: websock-build
 websock-editor: (websock-configure "out" "Debug")
 
 # Analyze the WebSocket library sources without applying fixes.
-[working-directory: "dlls/websock"]
+[working-directory: "lib/websock"]
 websock-lint: websock-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target lint
 
 # Format the WebSocket library sources.
-[working-directory: "dlls/websock"]
+[working-directory: "lib/websock"]
 websock-format: websock-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format
 
 # Check the WebSocket library formatting without changing sources.
-[working-directory: "dlls/websock"]
+[working-directory: "lib/websock"]
 websock-format-check: websock-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format-check
 
@@ -119,18 +119,18 @@ stop-release:
 test: runtime-test gui-test
 
 # Build and run the runtime tests. Extra arguments are passed to CTest.
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 runtime-test *args: (runtime-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out
     "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
 
 # Build and run the GUI tests, the integration ones against the runtime. Extra arguments are passed to CTest.
-[working-directory: "services/gui-cpp"]
+[working-directory: "src/gui-cpp"]
 gui-test *args: dev-bin (gui-configure "out" "Debug" "-DTELAR_GUI_TEST_RUNTIME=" + dev_telar)
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out
     "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
 
-# Each project gets out/compile_commands.json and, for a dll, the header flags in
+# Each project gets out/compile_commands.json and, for a library, the header flags in
 # out/clangd/compile_flags.txt; its .clangd-build.json then refreshes them on save.
 # Configure the C++ libraries, CLI and auth daemon for clangd.
 editor: runtime-editor
@@ -141,38 +141,38 @@ editor: runtime-editor
     export PATH="{{ justfile_directory() }}/.toolchain/bin:$PATH"
     ghostty=$("{{ justfile_directory() }}/tools/cpp" vt | tail -n 1)
     options+=("-DGHOSTTY_VT_ROOT=$ghostty" "-DCMAKE_TOOLCHAIN_FILE={{ justfile_directory() }}/.toolchain/toolchain.cmake")
-    for project in dlls/telar-base dlls/telar-client dlls/telar-config dlls/telar-lua dlls/telar-platform dlls/telar-plugins dlls/telar-tls dlls/websock services/cli-cpp services/auth-daemon; do
+    for project in lib/telar-base lib/telar-client lib/telar-config lib/telar-lua lib/telar-platform lib/telar-plugins lib/telar-tls lib/websock src/cli-cpp src/auth-daemon; do
         cmake -S "$project" -B "$project/out" "${options[@]}" >/dev/null
         echo "configured $project/out"
     done
 
 # Refresh the runtime compilation database and generated headers for clangd.
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 runtime-editor: (runtime-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target cell-layout
 
 # Analyze the production runtime sources without applying fixes.
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 runtime-lint jobs="2" directory="out": (runtime-configure directory "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lint.cmake
 
 # Analyze the GUI sources with its clang-tidy profile.
-[working-directory: "services/gui-cpp"]
+[working-directory: "src/gui-cpp"]
 gui-lint: (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lint
 
 # Build the optimized lifetime checker that each project's .tbc.json names.
 lifetime-checker:
-    "{{ justfile_directory() }}/tools/cpp" configure tbc -B dlls/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-    "{{ justfile_directory() }}/tools/cpp" build tbc -B dlls/tbc/out/release -- --target tbc-lint
+    "{{ justfile_directory() }}/tools/cpp" configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+    "{{ justfile_directory() }}/tools/cpp" build tbc -B lib/tbc/out/release -- --target tbc-lint
 
 # Check the lifetimes of the production runtime, CLI and telar library sources.
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 runtime-lifetime directory="out": lifetime-checker (runtime-configure directory "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lifetime.cmake
 
 # Check the lifetimes of the GUI sources.
-[working-directory: "services/gui-cpp"]
+[working-directory: "src/gui-cpp"]
 gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lifetime
 
@@ -195,22 +195,22 @@ install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".l
     ln -sf "{{ apps }}/$app/Contents/Resources/bin/telar" "{{ bin }}/telar"
 
 # Run the Go proxy service. Extra arguments are passed to the service.
-[working-directory: "services/proxy"]
+[working-directory: "src/proxy"]
 proxy *args:
     go run ./cmd/telar-proxy {{ args }}
 
 # Test the Go proxy module. Extra arguments are passed to `go test`.
-[working-directory: "services/proxy"]
+[working-directory: "src/proxy"]
 proxy-test *args:
     go test {{ args }} ./...
 
 # Validate Linux TUN forwarding and NAT in an isolated Docker network.
 proxy-test-linux:
-    python3 services/proxy/tests/linux/run.py
+    python3 src/proxy/tests/linux/run.py
 
 # Build EBNF and run tests with color. Extra arguments are forwarded to CTest.
 [positional-arguments]
-[working-directory: "dlls/ebnf"]
+[working-directory: "lib/ebnf"]
 ebnf-test *args:
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --preset debug
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build --preset debug
@@ -233,22 +233,22 @@ dev-app binary state_dir:
 
 # Both platforms use the verified repository-local compiler and managed libraries.
 [private]
-[working-directory: "services/runtime-cpp"]
+[working-directory: "src/runtime-cpp"]
 runtime-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" configure runtime -B "{{ directory }}" --config {{ build_type }} -- {{ options }}
 
 [private]
-[working-directory: "dlls/websock"]
+[working-directory: "lib/websock"]
 websock-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake -S . -B "{{ directory }}" -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_TOOLCHAIN_FILE="{{ justfile_directory() }}/.toolchain/toolchain.cmake" {{ options }}
 
 [private]
-[working-directory: "services/auth-daemon"]
+[working-directory: "src/auth-daemon"]
 auth-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake -S . -B "{{ directory }}" -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_TOOLCHAIN_FILE="{{ justfile_directory() }}/.toolchain/toolchain.cmake" {{ options }}
 
 [private]
-[working-directory: "services/gui-cpp"]
+[working-directory: "src/gui-cpp"]
 gui-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" configure gui -B "{{ directory }}" --config {{ build_type }} -- -DTELAR_GUI_QT_BUILD_DIR="{{ justfile_directory() }}/.qt-cache" {{ options }}
 

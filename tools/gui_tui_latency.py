@@ -489,7 +489,7 @@ def main():
                     started_at=time.strftime('%Y-%m-%dT%H:%M:%S%z'))
     source = options.source.resolve() if options.source else Path(__file__).resolve().parent.parent
     manifest['source_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip()
-    patch = subprocess.check_output(['git', 'diff', '--', 'services', 'dlls', 'cmake'], cwd=source)
+    patch = subprocess.check_output(['git', 'diff', '--', 'src', 'lib', 'cmake'], cwd=source)
     (directory / 'source.patch').write_bytes(patch)
     manifest['source_patch_sha256'] = hashlib.sha256(patch).hexdigest()
     if 'ghostty' in modes:
@@ -501,7 +501,7 @@ def main():
         manifest['cpp_gui_sha256'] = hashlib.sha256(options.cpp_gui.read_bytes()).hexdigest()
         manifest['cpp_runtime'] = executable_identity(options.cpp_runtime)
         manifest['cpp_runtime_helper'] = staged_runtime(options.cpp_gui, options.cpp_runtime)
-        changed = subprocess.check_output(['git', 'ls-files', '-m', '-o', '--exclude-standard', '-z', '--', 'services'], cwd=source)
+        changed = subprocess.check_output(['git', 'ls-files', '-m', '-o', '--exclude-standard', '-z', '--', 'src'], cwd=source)
         manifest['cpp_changed_source_sha256'] = {
             name: hashlib.sha256((source / name).read_bytes()).hexdigest()
             for name in changed.decode().split('\0') if name and (source / name).is_file()}
