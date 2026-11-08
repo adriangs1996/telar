@@ -122,9 +122,11 @@ uses only the callee's signature:
   does not name. A returned value borrows what that input owns and what it holds.
 - The callee keeps an argument only where its declaration says so: a parameter
   and a receiver field that share a label, a labeled output parameter, a
-  parameter whose type a template's parameters spell, as `T` in `push(T value)`,
-  whose borrows belong to `T`, or any argument that lends to a constructor of a
-  class whose fields carry no label.
+  parameter whose type the class template's own parameters spell, as `T` in
+  `Vector<T>::push(T value)`, whose borrows belong to `T`, or any argument that
+  lends to a constructor of a class whose fields carry no label. A member
+  template's parameter, such as a callback's type, is never kept: a Rust struct
+  keeps an `F` only in a field of type `F`.
 - The call uses everything it is given, including what its receiver holds, as a
   Rust call needs every borrow its inputs carry to be live.
 - The call may invalidate an input it can mutate. Its summary says only which
@@ -358,6 +360,18 @@ tbc::view<std::string_view, tbc::lt::a> textOf(const record &input) {
 }
 ```
 
+A field labeled `lt::static_storage` only ever holds storage that outlives every
+caller, as a Rust `&'static str` does, so its object borrows nothing through it.
+Initializing or assigning it from anything else is a `tbc-contract-violation`:
+
+```cpp
+struct limit {
+  tbc::view<std::string_view, tbc::lt::static_storage> name;
+};
+
+limit fromLiteral() { return {.name = "terminal.max_bytes"}; }
+```
+
 ## Receiver fields
 
 A region label on a field is shared by every method of that class whose
@@ -376,6 +390,12 @@ A result in that region can come from the receiver's field or from any
 parameter in the region. A non-const method can retain any argument passed to a
 parameter in the region, whatever it returns. Retention accumulates across
 calls: every retained source must outlive the receiver's later uses.
+
+What a region keeps of a labeled reference parameter depends on its fields: a
+reference, a pointer or a view there keeps the argument itself, while fields
+that hold values keep a copy of what the argument holds, so a temporary passed
+by `const &` and copied does not dangle. An allocator, or any shared type, is
+always kept by reference.
 
 A body keeps nothing its declaration does not let it keep. Storing an input's
 borrow in a field, in an output parameter, or in what an input designates
@@ -471,6 +491,22 @@ template <typename Upstream>
 class TBC_SHARED SynchronizedAllocator {
   // ...
 };
+```
+
+A pointer a shared type's method returns, such as an allocated block, is fresh
+storage, unchecked like a `new` expression's.
+
+## Constructing factories
+
+A function template marked `TBC_CONSTRUCTS` builds its first template argument
+from the arguments of its trailing pack, as `Box::new(Value::new(arguments))`
+does. Its result keeps what that type's constructors keep of those arguments, by
+their declarations, and borrows the arguments before the pack, such as the
+allocator `makeOwned` takes:
+
+```cpp
+template <typename Value, Allocator Memory, typename... Arguments>
+TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments);
 ```
 
 ```cpp
@@ -584,6 +620,9 @@ has deliberate limits:
   region apart from the reference, as `&'s Stream<'b>` does.
 - Two objects that each keep the same mutable reference, when neither is the
   other's field, are not reported; only overlapping arguments of one call are.
+- A function known by its declaration may call a callback it receives with
+  borrows of its other inputs; what the callback keeps of them in its captures
+  is not yet followed back to the caller.
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
   protocols still require further analysis or audited models.

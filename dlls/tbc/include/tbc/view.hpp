@@ -45,6 +45,15 @@ namespace tbc {
 #define TBC_SHARED
 #endif
 
+  // A function template marked TBC_CONSTRUCTS builds its first template argument from the arguments
+  // of its trailing parameter pack, as `Box::new(Value::new(arguments))` does: its result keeps what
+  // that type's constructor keeps of them, and borrows its other arguments.
+#if defined(__clang__)
+#define TBC_CONSTRUCTS [[clang::annotate("tbc::constructs")]]
+#else
+#define TBC_CONSTRUCTS
+#endif
+
   // Region labels are scoped contract variables for the linter, not C++ type barriers.
   template <typename type, detail::lifetime_region region = lt::elided>
     requires(std::is_object_v<type> || std::is_reference_v<type>)

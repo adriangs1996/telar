@@ -1193,6 +1193,91 @@ namespace tbc_lint {
         }
       }
 
+      // A factory marked TBC_CONSTRUCTS, whose callers rely on the constructor it forwards to.
+      [[nodiscard]] static bool constructs(const clang::FunctionDecl &function) {
+        const auto *pattern = function.getPrimaryTemplate() != nullptr ? function.getPrimaryTemplate()->getTemplatedDecl() : nullptr;
+        return annotated(function, "tbc::constructs") || (pattern != nullptr && annotated(*pattern, "tbc::constructs"));
+      }
+
+      // What a TBC_CONSTRUCTS factory returns: what its first template argument's constructor keeps of the
+      // arguments the trailing pack forwards, and a borrow of each argument before the pack.
+      std::optional<loans> forwardedConstruction(const clang::FunctionDecl &callee, const clang::CallExpr &call, const state &current) {
+        const auto *arguments = callee.getTemplateSpecializationArgs();
+        const auto *pattern = callee.getPrimaryTemplate() != nullptr ? callee.getPrimaryTemplate()->getTemplatedDecl() : nullptr;
+        if (!constructs(callee) || pattern == nullptr || arguments == nullptr || arguments->size() == 0 || arguments->get(0).getKind() != clang::TemplateArgument::Type) {
+          return std::nullopt;
+        }
+        const auto offset = argumentOffset(call);
+        const unsigned leading = pattern->getNumParams() == 0 ? 0 : pattern->getNumParams() - 1;
+        loans result;
+        llvm::SmallVector<const clang::Expr *, 4> forwarded;
+        for (unsigned index = offset; index < call.getNumArgs(); ++index) {
+          if (index - offset < leading) {
+            result.merge(reference(call.getArg(index), current));
+          } else {
+            forwarded.push_back(call.getArg(index));
+          }
+        }
+        result.merge(constructorRetention(recordOf(arguments->get(0).getAsType()), forwarded, current));
+        return result;
+      }
+
+      // A view parameter given an owner it is converted from, as the forwarded arguments of a factory are.
+      [[nodiscard]] static bool viewOfOwner(const clang::ParmVarDecl &parameter, const clang::Expr &argument) {
+        const auto type = argument.getType().getNonReferenceType();
+        return viewType(parameter.getType().getNonReferenceType()) && !parameter.getType()->isReferenceType() && !viewType(type) && !type->isPointerType();
+      }
+
+      // What constructing a record from some arguments keeps: what each constructor that can take them
+      // keeps by its declaration, or, for an aggregate, what each argument holds.
+      loans constructorRetention(const clang::CXXRecordDecl *record, llvm::ArrayRef<const clang::Expr *> arguments, const state &current) {
+        loans result;
+        const auto *definition = record != nullptr ? record->getDefinition() : nullptr;
+        bool matched = false;
+        const bool labeled = definition != nullptr && llvm::any_of(definition->fields(), [&](const clang::FieldDecl *field) { return viewAnnotation(field->getType(), context_).region != nullptr; });
+        llvm::SmallVector<const clang::CXXConstructorDecl *, 4> constructors;
+        if (definition != nullptr) {
+          constructors.append(definition->ctor_begin(), definition->ctor_end());
+        }
+        for (const auto *constructor : constructors) {
+          if (constructor->isDeleted() || constructor->getMinRequiredArguments() > arguments.size() || (!constructor->isVariadic() && constructor->getNumParams() < arguments.size())) {
+            continue;
+          }
+          matched = true;
+          if (constructor->isCopyOrMoveConstructor()) {
+            result.merge(copiedValue(arguments.front(), current));
+            continue;
+          }
+          for (unsigned index = 0; index < arguments.size() && index < constructor->getNumParams(); ++index) {
+            const auto *parameter = constructor->getParamDecl(index);
+            if (labeled) {
+              const auto *region = parameterAnnotation(*parameter, context_).region;
+              if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*constructor, region)) {
+                result.merge(viewOfOwner(*parameter, *arguments[index]) ? storage(arguments[index], current) : retainedArgument(*constructor, *definition, *parameter, *arguments[index], region, current));
+              }
+              continue;
+            }
+            if (!lends(*parameter)) {
+              continue;
+            }
+            result.merge(viewOfOwner(*parameter, *arguments[index]) ? storage(arguments[index], current) : lent(*constructor, *parameter, *arguments[index], current));
+            if (parameter->getType()->isReferenceType()) {
+              result.merge(reference(arguments[index], current));
+            }
+          }
+        }
+        if (!matched) {
+          const bool references = definition == nullptr || llvm::any_of(definition->fields(), [](const clang::FieldDecl *field) { return field->getType()->isReferenceType() || field->getType()->isPointerType(); });
+          for (const auto *argument : arguments) {
+            result.merge(copiedValue(argument, current));
+            if (references) {
+              result.merge(reference(argument, current));
+            }
+          }
+        }
+        return unplaced(result);
+      }
+
       // A standard function, or a library function whose body is visible, follows the argument-shape model.
       [[nodiscard]] bool libraryFunction(const clang::FunctionDecl &callee) const {
         return standardDeclaration(callee) || (context_.getSourceManager().isInSystemHeader(callee.getLocation()) && callee.hasBody());
@@ -1708,6 +1793,36 @@ namespace tbc_lint {
         return false;
       }
 
+      // A type a class template's own parameters spell, as `T` of `Vector<T>`: only such an argument can be
+      // kept by an object of that class, as a Rust struct keeps a `T` only in a field of type `T`. A member
+      // template's parameter, as a callback's type, names nothing the object holds.
+      [[nodiscard]] bool spelledByClass(clang::QualType type, const clang::CXXRecordDecl &record) const {
+        const auto *canonical = record.getCanonicalDecl();
+        for (unsigned steps = 0; steps < 16 && !type.isNull(); ++steps) {
+          const auto *node = type.getTypePtr();
+          const clang::Decl *associated = nullptr;
+          if (const auto *substitution = llvm::dyn_cast<clang::SubstTemplateTypeParmType>(node)) {
+            associated = substitution->getAssociatedDecl();
+          } else if (const auto *pack = llvm::dyn_cast<clang::SubstTemplateTypeParmPackType>(node)) {
+            associated = pack->getAssociatedDecl();
+          }
+          if (associated != nullptr) {
+            const auto *owner = llvm::dyn_cast<clang::CXXRecordDecl>(associated);
+            return owner != nullptr && owner->getCanonicalDecl() == canonical;
+          }
+          if (const auto *reference = llvm::dyn_cast<clang::ReferenceType>(node)) {
+            type = reference->getPointeeTypeAsWritten();
+          } else if (const auto *pointer = llvm::dyn_cast<clang::PointerType>(node)) {
+            type = pointer->getPointeeType();
+          } else if (const auto next = type.getSingleStepDesugaredType(context_); next != type) {
+            type = next;
+          } else {
+            return false;
+          }
+        }
+        return false;
+      }
+
       // A parameter of the class's own type shares its regions, as `Self` does.
       [[nodiscard]] static bool ownType(const clang::ParmVarDecl &parameter, const clang::FunctionDecl &function) {
         const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function);
@@ -1730,6 +1845,10 @@ namespace tbc_lint {
         const auto *field = llvm::dyn_cast<clang::FieldDecl>(&target);
         const auto *output = llvm::dyn_cast<clang::ParmVarDecl>(&target);
         if (field == nullptr && (output == nullptr || output->getDeclContext() != &function_)) {
+          return;
+        }
+        // What a template argument receives, as a callback invoked with borrows, is part of its type.
+        if (output != nullptr && spelledByTemplate(output->getType())) {
           return;
         }
         const auto *region = field != nullptr ? viewAnnotation(field->getType(), context_).region : parameterAnnotation(*output, context_).region;
@@ -1761,7 +1880,9 @@ namespace tbc_lint {
           // What a template argument or a value of the same type holds is part of its type.
           const bool contents = source.kind == origin_kind::parameter;
           const bool same_type = output != nullptr && sameType(output->getType().getNonReferenceType(), parameter->getType().getNonReferenceType());
-          if (contents && (spelledByTemplate(parameter->getType()) || ownType(*parameter, function_) || same_type)) {
+          const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_);
+          const bool generic = field != nullptr && method != nullptr ? spelledByClass(parameter->getType(), *method->getParent()) : spelledByTemplate(parameter->getType());
+          if (contents && (generic || ownType(*parameter, function_) || same_type || carriesRegion(parameter->getType(), region))) {
             continue;
           }
           if (region == nullptr || parameterAnnotation(*parameter, context_).region != region) {
@@ -2050,6 +2171,10 @@ namespace tbc_lint {
           // A reference member holds where its referent lies, as a constructor's initializer gives it.
           const bool binds = positioned && fields[index]->getType()->isReferenceType();
           auto contents = binds ? reference(initializer->getInit(index), current) : value(initializer->getInit(index), current);
+          if (positioned && staticField(*fields[index])) {
+            checkStatic(contents, initializer->getInit(index)->getBeginLoc());
+            continue;
+          }
           if (positioned) {
             field_path at;
             appendField(at, *fields[index], storage_kind::object);
@@ -2058,6 +2183,15 @@ namespace tbc_lint {
           result.merge(contents);
         }
         return positioned ? result : unplaced(result);
+      }
+
+      // What a static field receives must outlive every caller.
+      void checkStatic(const loans &incoming, clang::SourceLocation where) {
+        for (const auto &source : incoming.values) {
+          if (source.kind != origin_kind::static_storage && source.kind != origin_kind::unknown) {
+            report(issue::contract, where, &source);
+          }
+        }
       }
 
       // The storage an object owns lies one level below the object's place.
@@ -2375,10 +2509,7 @@ namespace tbc_lint {
           const auto *parameter = constructor->getParamDecl(index);
           const auto region = parameterAnnotation(*parameter, context_).region;
           if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*constructor, region)) {
-            retained.merge(lent(*constructor, *parameter, *construction.getArg(index), current));
-            if (parameter->getType()->isReferenceType()) {
-              retained.merge(reference(construction.getArg(index), current));
-            }
+            retained.merge(retainedArgument(*constructor, *constructor->getParent(), *parameter, *construction.getArg(index), region, current));
           }
         }
         retained = unplaced(retained);
@@ -2652,7 +2783,7 @@ namespace tbc_lint {
       // closure or to a member the compiler writes. An override of a library virtual takes its contract
       // from the library, whose callers are not checked.
       [[nodiscard]] bool declarationOnly() const {
-        if (transparent(&function_)) {
+        if (transparent(&function_) || constructs(function_)) {
           return false;
         }
         const auto &sources = context_.getSourceManager();
@@ -2720,6 +2851,14 @@ namespace tbc_lint {
           return unplaced(standardArguments(call, 0, current));
         }
 
+        if (auto constructed = forwardedConstruction(*callee, call, current)) {
+          return std::move(*constructed);
+        }
+        // A pointer a shared type hands out, as an allocator's block, is fresh storage no variable holds,
+        // unchecked like a `new` expression's.
+        if (object != nullptr && call.getType()->isPointerType() && sharedType(objectType(*object))) {
+          return {};
+        }
         const auto result_annotation = returnAnnotation(*callee, context_);
         // A static result's referent outlives every caller and borrows from none of the inputs.
         if (staticRegion(result_annotation.region)) {
@@ -2781,11 +2920,11 @@ namespace tbc_lint {
           }
           result.merge(receiverContents(*object, current));
         }
-        // A region no parameter is labeled with comes from what the arguments of a type that carries it hold.
-        if (selected_region != nullptr && !hasMatchingParameter(*callee, selected_region)) {
+        // A region also comes from what the arguments of a type that carries it hold.
+        if (selected_region != nullptr) {
           for (unsigned index = 0; index < callee->getNumParams() && index + offset < call.getNumArgs(); ++index) {
             const auto *parameter = callee->getParamDecl(index);
-            if (!carriesRegion(parameter->getType(), selected_region)) {
+            if (parameterAnnotation(*parameter, context_).present || !carriesRegion(parameter->getType(), selected_region)) {
               continue;
             }
             const auto *argument = call.getArg(index + offset);
@@ -2986,6 +3125,33 @@ namespace tbc_lint {
         llvm::SmallVector<const clang::FieldDecl *, 8> fields;
         recordFields(*record->getDefinition(), fields);
         return llvm::any_of(fields, [&](const clang::FieldDecl *field) { return viewAnnotation(field->getType(), context_).region == region; });
+      }
+
+      // Whether a record keeps references in a region: a field there that is a reference, a pointer or a
+      // view. Its other fields in the region hold copies of what they are given.
+      [[nodiscard]] bool keepsReferences(const clang::CXXRecordDecl &record, const clang::Type *region) const {
+        llvm::SmallVector<const clang::FieldDecl *, 8> fields;
+        if (const auto *definition = record.getDefinition()) {
+          recordFields(*definition, fields);
+        }
+        return llvm::any_of(fields, [&](const clang::FieldDecl *field) {
+          const auto type = field->getType();
+          return viewAnnotation(type, context_).region == region && (type->isReferenceType() || type->isPointerType() || viewType(type.getNonReferenceType()));
+        });
+      }
+
+      // What an object keeps of an argument for a region it shares with the parameter: the argument
+      // itself where the region keeps references, or a copy of what it holds.
+      loans retainedArgument(const clang::FunctionDecl &callee, const clang::CXXRecordDecl &record, const clang::ParmVarDecl &parameter, const clang::Expr &argument, const clang::Type *region, const state &current) {
+        // An object keeps a shared type, such as an allocator, by reference, inside whatever uses it.
+        if (!keepsReferences(record, region) && !viewType(parameter.getType().getNonReferenceType()) && !parameter.getType()->isPointerType() && !sharedType(parameter.getType())) {
+          return copiedValue(&argument, current);
+        }
+        auto result = lent(callee, parameter, argument, current);
+        if (parameter.getType()->isReferenceType()) {
+          result.merge(reference(&argument, current));
+        }
+        return result;
       }
 
       bool hasMatchingParameter(const clang::FunctionDecl &callee, const clang::Type *region) const {
@@ -3278,7 +3444,14 @@ namespace tbc_lint {
 
       void checkReturn(const clang::ReturnStmt &statement, const state &current) {
         const auto output = returnAnnotation(function_, context_);
-        if (statement.getRetValue() == nullptr || (!output.present && !containsViews(function_.getReturnType()))) {
+        if (statement.getRetValue() == nullptr) {
+          return;
+        }
+        if (!output.present && !containsViews(function_.getReturnType())) {
+          // What an aggregate writes to its static fields is checked even when it borrows nothing.
+          if (llvm::isa<clang::InitListExpr>(clean(statement.getRetValue()))) {
+            static_cast<void>(value(statement.getRetValue(), current));
+          }
           return;
         }
         const auto result = function_.getReturnType()->isReferenceType() ? reference(statement.getRetValue(), current) : value(statement.getRetValue(), current);
@@ -3558,8 +3731,11 @@ namespace tbc_lint {
           for (unsigned other = 0; other < callee->getNumParams() && other + offset < call.getNumArgs(); ++other) {
             const auto *input = callee->getParamDecl(other);
             const auto annotation = parameterAnnotation(*input, context_);
+            const auto *argument = call.getArg(other + offset);
             if (other != index && annotation.present && annotation.region == region && !outputParameter(*input)) {
-              incoming.merge(storage(call.getArg(other + offset), current));
+              incoming.merge(lent(*callee, *input, *argument, current));
+            } else if (other != index && !annotation.present && carriesRegion(input->getType(), region)) {
+              incoming.merge(input->getType()->isPointerType() ? referencedContents(value(argument, current), current) : value(argument, current));
             }
           }
           stampTemporary(incoming, call.getExprLoc());
@@ -3580,8 +3756,8 @@ namespace tbc_lint {
             const auto *parameter = callee->getParamDecl(index);
             const auto region = parameterAnnotation(*parameter, context_).region;
             if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*callee, region)) {
-              retained.merge(storage(call.getArg(index + offset), current));
-            } else if (!transparent(callee) && !libraryRecord(objectType(*object)) && !context_.getSourceManager().isInSystemHeader(context_.getSourceManager().getExpansionLoc(callee->getLocation())) && spelledByTemplate(parameter->getType())) {
+              retained.merge(retainedArgument(*callee, *method->getParent(), *parameter, *call.getArg(index + offset), region, current));
+            } else if (!transparent(callee) && !libraryRecord(objectType(*object)) && !context_.getSourceManager().isInSystemHeader(context_.getSourceManager().getExpansionLoc(callee->getLocation())) && spelledByClass(parameter->getType(), *method->getParent())) {
               retained.merge(copiedValue(call.getArg(index + offset), current));
             }
           }
@@ -4034,6 +4210,12 @@ namespace tbc_lint {
         if (transfersAllocation(left->getType())) {
           transferOwnership(movedFrom(right), targets(left, current), storage_kind::data, current);
         }
+        if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(clean(left))) {
+          if (const auto *field = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl()); field != nullptr && staticField(*field)) {
+            checkStatic(value(right, current), right->getBeginLoc());
+            return;
+          }
+        }
         if (!containsViews(left->getType())) {
           return;
         }
@@ -4051,7 +4233,9 @@ namespace tbc_lint {
             const auto *initializer = initialized->getInitializer();
             if (initializer->isMemberInitializer()) {
               const auto *field = initializer->getMember();
-              if (containsViews(field->getType())) {
+              if (staticField(*field)) {
+                checkStatic(value(initializer->getInit(), current), initializer->getSourceLocation());
+              } else if (containsViews(field->getType())) {
                 auto incoming = field->getType()->isReferenceType() ? reference(initializer->getInit(), current) : value(initializer->getInit(), current);
                 for (auto &source : incoming.values) {
                   markBorrowSite(source, initializer->getInit()->getBeginLoc());

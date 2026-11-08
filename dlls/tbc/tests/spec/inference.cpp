@@ -932,12 +932,12 @@ struct cleared_builder {
 // SOURCE: dlls/ebnf/parser.cppm :: parser::parse
 // STATUS: implemented
 // CONTRACT: Items retained by an earlier call can reach a declared result unless the container is cleared.
-// SCENARIO: The builder appends to a list that may still hold items from a previous source.
+// SCENARIO: A builder without a region keeps the source, which its declaration does not allow, and returns a list that may still hold items from a previous source.
 struct uncleared_builder {
   inferred::text_list list;
 
   tbc::view<inferred::text_list, tbc::lt::a> extend(tbc::view<std::string_view, tbc::lt::a> source) {
-    list.add(source);
+    list.add(source);       // expected-error [tbc-contract-violation]
     return std::move(list); // expected-error [tbc-contract-violation]
   }
 };

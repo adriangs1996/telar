@@ -82,6 +82,12 @@ namespace tbc_lint {
     return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::static_storage";
   }
 
+  // A field that only ever holds storage that outlives every caller, as a Rust `&'static str` does,
+  // so its object borrows nothing through it. What is written to it must be static.
+  inline bool staticField(const clang::FieldDecl &field) {
+    return staticRegion(viewAnnotation(field.getType(), field.getASTContext()).region);
+  }
+
   // A deduced return type repeats the label of what it returns, which the declaration never stated.
   inline annotation returnAnnotation(const clang::FunctionDecl &function, const clang::ASTContext &context) {
     return viewAnnotation(contractDeclaration(function, context).getDeclaredReturnType(), context);
@@ -408,7 +414,7 @@ namespace tbc_lint {
       }
       if (const auto *definition = record->getDefinition()) {
         for (const auto *field : definition->fields()) {
-          if (!selfBorrowing(*field) && containsViews(field->getType(), seen)) {
+          if (!selfBorrowing(*field) && !staticField(*field) && containsViews(field->getType(), seen)) {
             return true;
           }
         }
