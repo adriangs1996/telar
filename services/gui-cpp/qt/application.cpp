@@ -509,7 +509,7 @@ void Application::prepareFrame(PresentedFrame &frame) {
   auto *images = WindowImages::findWindow(*window_);
   if (images != nullptr && !images->empty()) {
     images->beginCatalogSnapshot();
-    for (const auto &pane : session().panes()) {
+    for (const auto &pane : std::as_const(*this).session().panes()) {
       images->observeCatalog(pane->graphics);
     }
   }
@@ -725,8 +725,9 @@ void Application::present(const PresentedFrame &frame) {
         continue;
       }
 
-      if (pane.terminal != nullptr && pane.terminal->application() == this && pane.terminal->paneIdentity() == identity.pane_id) {
-        pane.terminal->presentFrame(pane.frame);
+      auto *const terminal = pane.terminal.data();
+      if (terminal != nullptr && terminal->application() == this && terminal->paneIdentity() == identity.pane_id) {
+        terminal->presentFrame(pane.frame);
       }
 
       session().presented(identity.pane_id, identity.frame_id);
@@ -747,13 +748,7 @@ const Configuration &Application::configuration() const noexcept {
 void Application::consume(MachineClient &client, QByteArrayView payload) {
   try {
     const bool active = client.key.machine.slot == machines_.active();
-    const auto handler = [this, active](const ClientCommand &message, CompleteClientCommand &reply) {
-      if (active) {
-        executeHostCommand(message, reply);
-      } else {
-        UnsupportedClientCommand{}(message, reply);
-      }
-    };
+    const auto handler = HostCommands{.application = *this, .active = active};
     const auto notification_revision = client.session.notificationRevision();
     const auto graphics_revision = client.session.graphicsRecoveryRevision();
     const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
@@ -858,18 +853,40 @@ void Application::presentChange(Change change) {
   }
 }
 
-void Application::executeHostCommand(const ClientCommand &message, CompleteClientCommand &reply) {
+void Application::HostCommands::operator()(const ClientCommand &message, tbc::view<CompleteClientCommand &, tbc::lt::a> reply) const {
+  if (!active) {
+    UnsupportedClientCommand{}(message, reply);
+  } else if (!answerConfiguration(application, message, reply)) {
+    application.executeHostCommand(message, reply);
+  }
+}
+
+bool Application::answerConfiguration(tbc::view<Application &, tbc::lt::a> application, const ClientCommand &message, tbc::view<CompleteClientCommand &, tbc::lt::a> reply) {
   switch (message.action) {
-  case ClientAction::config_show:
-    reply.text = configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), session().clientViewState());
-    break;
+  case ClientAction::config_show: {
+    // The query rewrites the source's buffer, so the state views a copy of the title, not the session.
+    const auto title = application.configuration().window_title;
+    auto state = application.session().clientViewState();
+    state.window_title = title.view();
+    reply.text = application.configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), state);
+
+    return true;
+  }
   case ClientAction::plugin_list:
   case ClientAction::plugin_get: {
-    const auto page = configuration_source_.queryPlugins(message);
+    const auto page = application.configuration_source_.queryPlugins(message);
     reply.text = page.text;
     reply.value = page.next;
-    break;
+
+    return true;
   }
+  default:
+    return false;
+  }
+}
+
+void Application::executeHostCommand(const ClientCommand &message, CompleteClientCommand &reply) {
+  switch (message.action) {
   case ClientAction::plugin_enable:
   case ClientAction::plugin_disable:
     configuration_source_.setPluginEnabled(message, message.action == ClientAction::plugin_enable);

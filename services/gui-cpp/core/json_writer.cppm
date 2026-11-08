@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 
 #include <cmath>
@@ -49,7 +50,8 @@ public:
     count_ = count_ < capacity ? count_ + 1 : capacity;
   }
 
-  [[nodiscard]] inline std::span<const std::uint8_t> ordered(Samples &buffer) const noexcept {
+  // The samples are copied into the buffer, region `a`, in the order they were taken.
+  [[nodiscard]] inline tbc::view<std::span<const std::uint8_t>, tbc::lt::a> ordered(tbc::view<Samples &, tbc::lt::a> buffer) const noexcept {
     const auto start = (next_ + capacity - count_) % capacity;
     for (std::size_t index = 0; index < count_; ++index) {
       buffer[index] = samples_[(start + index) % capacity];
@@ -71,9 +73,10 @@ private:
 export {
 namespace telar::gui {
 
+// Writes JSON into the caller's buffer, region `a`, which the written text views.
 class JsonWriter {
 public:
-  inline explicit JsonWriter(std::span<char> buffer) noexcept
+  inline explicit JsonWriter(tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept
       : buffer_(buffer) {}
 
   template <typename Consumer>
@@ -100,7 +103,7 @@ public:
     write(value);
   }
 
-  [[nodiscard]] inline std::string_view view() const noexcept {
+  [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> view() const noexcept {
     return {buffer_.data(), length_};
   }
 
@@ -271,7 +274,7 @@ private:
     std::invoke(std::forward<Consumer>(consume), *this);
   }
 
-  std::span<char> buffer_;
+  tbc::view<std::span<char>, tbc::lt::a> buffer_;
   std::size_t length_ = 0;
   bool first_ = true;
 };

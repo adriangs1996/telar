@@ -5,6 +5,7 @@ static_assert(true);
 
 
 #include "../application/dependencies.hpp"
+#include "tbc/view.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -30,6 +31,7 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
 #include "application/dependencies.hpp"
 
 
@@ -74,7 +76,8 @@ public:
   void detach(GraphicsScene &scene) noexcept;
   void beginCatalogSnapshot() noexcept;
   void observeCatalog(const GraphicsStore<ApplicationAllocator> &store) noexcept;
-  [[nodiscard]] std::optional<LimitReach> preparePlacements(std::span<const ImagePlacementSource> sources);
+  // The reach names the selection's declared limit.
+  [[nodiscard]] tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
   [[nodiscard]] const ImagePlacementSelection &placements() const noexcept;
   [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene &scene, const GraphicsStore<ApplicationAllocator> &store, ImageKey key);
   void append(GraphicsScene &scene, QSGNode &parent, ImageTextureHandle handle, const ImageGeometry &geometry);

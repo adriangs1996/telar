@@ -303,7 +303,7 @@ public:
     if (row.resyncs > requests_per_window) {
       row.due_ns = deadlineAfter(row.since_ns, healthy_window_ns << std::min(row.backoff, maximum_doublings));
       increment(row.backoff);
-      setWaiting(row, true);
+      setWaiting(*slot, true);
     } else {
       request(pane_id);
     }
@@ -316,10 +316,10 @@ public:
       return;
     }
 
-    for (auto &row : std::span{rows_}.first(count_)) {
-      if (row.waiting && now_ns >= row.due_ns) {
-        resume(row, now_ns);
-        request(row.pane_id);
+    for (std::size_t slot = 0; slot < count_; ++slot) {
+      if (rows_[slot].waiting && now_ns >= rows_[slot].due_ns) {
+        resume(slot, now_ns);
+        request(rows_[slot].pane_id);
       }
     }
   }
@@ -334,9 +334,8 @@ public:
 
     const auto slot = find(pane_id);
     if (slot && rows_[*slot].waiting && elapsed(now_ns, rows_[*slot].since_ns) >= healthy_window_ns) {
-      auto &row = rows_[*slot];
-      resume(row, now_ns);
-      request(row.pane_id);
+      resume(*slot, now_ns);
+      request(pane_id);
     }
   }
 
@@ -351,8 +350,8 @@ public:
       row.snapshot_begun = true;
     } else if (row.snapshot_begun) {
       row.snapshot_begun = false;
-      setWaiting(row, false);
       row.resumed_ns = now_ns;
+      setWaiting(*slot, false);
       ++revision_;
     }
   }
@@ -433,12 +432,13 @@ private:
   }
 
   inline void remove(std::size_t slot) noexcept {
-    setWaiting(rows_[slot], false);
+    setWaiting(slot, false);
     rows_[slot] = rows_[--count_];
     ++revision_;
   }
 
-  inline void setWaiting(Row &row, bool waiting) noexcept {
+  inline void setWaiting(std::size_t slot, bool waiting) noexcept {
+    auto &row = rows_[slot];
     if (row.waiting != waiting) {
       row.waiting = waiting;
       if (waiting) {
@@ -451,11 +451,12 @@ private:
     }
   }
 
-  inline void resume(Row &row, std::uint64_t now_ns) noexcept {
+  inline void resume(std::size_t slot, std::uint64_t now_ns) noexcept {
+    auto &row = rows_[slot];
     row.resyncs = 1;
     row.since_ns = now_ns;
     row.snapshot_begun = false;
-    setWaiting(row, false);
+    setWaiting(slot, false);
   }
 
   std::array<Row, capacity> rows_{};

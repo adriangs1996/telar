@@ -22,6 +22,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 
 
 import telar.gui.platform.notification_commands;
@@ -63,6 +65,12 @@ public:
     static_assert(Host::attempts > 0);
   }
 
+  ~SoundPlayer() = default;
+  SoundPlayer(const SoundPlayer &) = delete;
+  SoundPlayer &operator=(const SoundPlayer &) = delete;
+  SoundPlayer(SoundPlayer &&) = delete;
+  SoundPlayer &operator=(SoundPlayer &&) = delete;
+
   void start(AgentSound sound) {
     if (process_.active()) {
       throw std::logic_error{"SoundPlaybackAlreadyActive"};
@@ -93,7 +101,8 @@ public:
 
 private:
   Observer &observer_;
-  CommandProcess<Host, platform::SoundAttempt, SoundPlayer> process_;
+  // The process reports back to this player.
+  tbc::view<CommandProcess<Host, platform::SoundAttempt, SoundPlayer>, tbc::lt::self> process_;
   platform::SoundAttempt attempt_;
 };
 

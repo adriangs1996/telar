@@ -26,6 +26,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 
 
 import telar.gui.links.link_hover;
@@ -107,7 +109,8 @@ private:
   LinkOpening opening_;
   Context current_context_{};
   Context pending_context_{};
-  CommandProcess<Host, LinkTarget, ExternalLinkOpener> process_;
+  // The process reports back to this opener.
+  tbc::view<CommandProcess<Host, LinkTarget, ExternalLinkOpener>, tbc::lt::self> process_;
 };
 
 }

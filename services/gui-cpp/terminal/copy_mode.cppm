@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 #include <cstring>
@@ -804,7 +805,8 @@ public:
     return true;
   }
 
-  [[nodiscard]] inline std::optional<CopyPlan> search(std::span<const PaneMatch> results, const CopyGrid &grid) const {
+  // The plan's replacement matches view the results, region `a`, until it is applied.
+  [[nodiscard]] inline tbc::view<std::optional<CopyPlan>, tbc::lt::a> search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid &grid) const {
     if (!state_ || state_->pointer) {
       return {};
     }

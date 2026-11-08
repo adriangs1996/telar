@@ -474,7 +474,7 @@ private:
     }
   }
 
-  [[nodiscard]] inline std::optional<NotificationInput> summary(Message &message) const {
+  [[nodiscard]] inline tbc::view<std::optional<NotificationInput>, tbc::lt::a> summary(tbc::view<Message &, tbc::lt::a> message) const {
     const auto total = blocked_ + done_ + failed_;
     if (total == 0) {
       return std::nullopt;
@@ -585,21 +585,6 @@ struct Tab {
         label(AllocatorRef<char, Memory>{memory}),
         foreground(AllocatorRef<char, Memory>{memory}) {}
 
-  [[nodiscard]] inline std::string_view applicationName(const Pane<Memory> *pane) const noexcept {
-    constexpr std::string_view fallback = "shell";
-    if (pane != nullptr) {
-      if (!pane->foreground.empty()) {
-        return pane->foreground;
-      }
-
-      if (pane->id != foreground_pane) {
-        return fallback;
-      }
-    }
-
-    return foreground.empty() ? fallback : std::string_view{foreground};
-  }
-
   inline bool observeForeground(PaneForeground report) {
     if (foreground_pane == report.pane_id && foreground == report.name) {
       return false;
@@ -638,6 +623,24 @@ struct Tab {
   bool loading = false;
   bool workspace_active = false;
 };
+
+// The application a tab shows: the pane's foreground, else the one the tab remembers for its
+// foreground pane. The name views either the tab or the pane, region `a`.
+template <Allocator Memory>
+[[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory> &, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory> *>, tbc::lt::a> pane) noexcept {
+  constexpr std::string_view fallback = "shell";
+  if (pane != nullptr) {
+    if (!pane->foreground.empty()) {
+      return pane->foreground;
+    }
+
+    if (pane->id != tab.foreground_pane) {
+      return fallback;
+    }
+  }
+
+  return tab.foreground.empty() ? fallback : std::string_view{tab.foreground};
+}
 
 template <Allocator Memory>
 struct Workspace {
@@ -1023,8 +1026,8 @@ public:
     }
 
     const auto retained = retainedCount(std::span{ordered}.first(count));
-    prepare(staging_entries_, retained);
-    prepare(staging_worktrees_, snapshot.worktrees.size());
+    prepare(staging_entries_, retained, memory_);
+    prepare(staging_worktrees_, snapshot.worktrees.size(), memory_);
     for (std::size_t index = 0; index < retained; ++index) {
       assign(staging_entries_[index], *ordered[index]);
     }
@@ -1081,14 +1084,14 @@ private:
   }
 
   template <typename Row>
-  inline void prepare(Vector<Row, Memory> &rows, std::size_t count) {
+  inline static void prepare(Vector<Row, Memory> &rows, std::size_t count, Memory &memory) {
     while (rows.size() > count) {
       rows.pop_back();
     }
 
     rows.reserve(count);
     while (rows.size() < count) {
-      rows.emplace_back(memory_);
+      rows.emplace_back(memory);
     }
   }
 

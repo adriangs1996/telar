@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 #include <cstring>
@@ -110,7 +111,7 @@ public:
   static constexpr std::size_t command_preview_bytes = 512;
   static constexpr std::size_t command_cache_bytes = std::size_t{768} * 1024;
 
-  inline explicit HistoryPageStorage(Memory &memory, std::span<const HistoryEntry> entries = {})
+  inline explicit HistoryPageStorage(tbc::view<Memory &, tbc::lt::a> memory, std::span<const HistoryEntry> entries = {})
       : rows_(AllocatorRef<HistoryRow<Memory>, Memory>{memory}),
         commands_(AllocatorRef<char, Memory>{memory}) {
     entries = entries.first(std::min(entries.size(), maximum_entries));
@@ -134,7 +135,8 @@ public:
     return rows_;
   }
 
-  [[nodiscard]] inline std::string_view command(const HistoryRow<Memory> &row) const {
+  [[nodiscard]] inline std::string_view command(std::size_t index) const {
+    const auto &row = rows_[index];
     if (!row.command_complete) {
       return {};
     }
@@ -159,7 +161,7 @@ private:
     return bytes;
   }
 
-  inline void append(Memory &memory, const HistoryEntry &entry) {
+  inline void append(tbc::view<Memory &, tbc::lt::a> memory, const HistoryEntry &entry) {
     auto &row = rows_.emplace_back(memory);
     row.id = entry.id;
     row.pane_id = entry.pane_id;
@@ -182,8 +184,8 @@ private:
     }
   }
 
-  Vector<HistoryRow<Memory>, Memory> rows_;
-  String<Memory> commands_;
+  tbc::view<Vector<HistoryRow<Memory>, Memory>, tbc::lt::a> rows_;
+  tbc::view<String<Memory>, tbc::lt::a> commands_;
 };
 
 }
@@ -363,10 +365,7 @@ public:
   }
 
   [[nodiscard]] inline QueryHistory refresh(std::uint64_t request_id) {
-    auto request = criteria_;
-    request.request_id = request_id;
-
-    return requestPage(request);
+    return requestPage({.request_id = request_id});
   }
 
   [[nodiscard]] inline bool canPage(HistoryPage direction) const noexcept {
@@ -386,12 +385,7 @@ public:
     const auto newer = state_.page_offset - std::min<std::uint32_t>(state_.page_offset, page_entries);
     const auto offset = direction == HistoryPage::older ? static_cast<std::uint32_t>(older) : newer;
 
-    auto request = criteria_;
-    request.request_id = request_id;
-    request.offset = offset;
-    request.snapshot_id = state_.snapshot_id;
-
-    return requestPage(request);
+    return requestPage({.request_id = request_id, .offset = offset, .snapshot_id = state_.snapshot_id});
   }
 
   inline bool apply(const HistoryResults &message) {
@@ -422,6 +416,10 @@ public:
   }
 
   [[nodiscard]] inline const HistoryRow<Memory> &entry(std::uint64_t id) const {
+    return page_.rows()[entryIndex(id)];
+  }
+
+  [[nodiscard]] inline std::size_t entryIndex(std::uint64_t id) const {
     if (state_.phase != HistoryPhase::ready) {
       throw EncodingError{"History results are not ready"};
     }
@@ -431,17 +429,18 @@ public:
       throw EncodingError{"The selected command is no longer available"};
     }
 
-    return *found;
+    return static_cast<std::size_t>(found - page_.rows().begin());
   }
 
   [[nodiscard]] inline std::string_view command(std::uint64_t id) const {
-    const auto &row = entry(id);
+    const auto index = entryIndex(id);
+    const auto &row = page_.rows()[index];
     if (row.command_truncated) {
       throw EncodingError{"Command unavailable or capture truncated; cannot paste"};
     }
 
     if (row.command_complete) {
-      return page_.command(row);
+      return page_.command(index);
     }
 
     if (state_.command_id == id && state_.command_phase == HistoryPhase::ready) {
@@ -468,7 +467,7 @@ public:
 
     const auto &row = page_.rows()[state_.selection];
     if (row.command_complete) {
-      return page_.command(row);
+      return page_.command(state_.selection);
     }
 
     return state_.command_id == row.id && state_.command_phase == HistoryPhase::ready ? std::string_view{selected_command_} : std::string_view{row.command};
@@ -692,6 +691,23 @@ public:
   }
 
 private:
+  // What a search asks for, without the text the stored strings hold.
+  struct Criteria {
+    HistoryScope scope{};
+    std::optional<std::uint64_t> scope_id;
+    bool scope_path = false;
+    bool failed_only = false;
+    HistoryAuthorFilter author{};
+    HistoryMatch match{};
+    bool distinct = false;
+  };
+
+  struct PageRequest {
+    std::uint64_t request_id = 0;
+    std::uint32_t offset = 0;
+    std::uint64_t snapshot_id = 0;
+  };
+
   inline void contentChanged() noexcept {
     ++revision_;
     ++view_version_;
@@ -712,15 +728,44 @@ private:
 
     query_ = std::move(next_query);
     scope_path_ = std::move(next_scope);
-    criteria_ = query;
-    criteria_.query = query_;
-    if (std::holds_alternative<std::string_view>(criteria_.scope_value)) {
-      criteria_.scope_value = std::string_view{scope_path_};
-    }
-
+    const auto *const scope_id = std::get_if<std::uint64_t>(&query.scope_value);
+    criteria_ = {
+        .scope = query.scope,
+        .scope_id = scope_id == nullptr ? std::nullopt : std::optional{*scope_id},
+        .scope_path = std::holds_alternative<std::string_view>(query.scope_value),
+        .failed_only = query.failed_only,
+        .author = query.author,
+        .match = query.match,
+        .distinct = query.distinct,
+    };
     delete_request_ = 0;
 
-    return requestPage(criteria_);
+    return requestPage({.request_id = query.request_id});
+  }
+
+  // The request views the stored query text and scope path.
+  [[nodiscard]] inline QueryHistory request(PageRequest page) const noexcept {
+    HistoryScopeValue scope_value{};
+    if (criteria_.scope_path) {
+      scope_value = std::string_view{scope_path_};
+    } else if (criteria_.scope_id) {
+      scope_value = *criteria_.scope_id;
+    }
+
+    return {
+        .request_id = page.request_id,
+        .query = query_,
+        .scope = criteria_.scope,
+        .scope_value = scope_value,
+        .failed_only = criteria_.failed_only,
+        .author = criteria_.author,
+        .match = criteria_.match,
+        .distinct = criteria_.distinct,
+        .limit = page_entries,
+        .offset = page.offset,
+        .snapshot_id = page.snapshot_id,
+        .entry_id = 0,
+    };
   }
 
   inline HistoryPageStorage<Memory> copyPage(std::span<const HistoryEntry> entries) {
@@ -767,17 +812,17 @@ private:
     contentChanged();
   }
 
-  inline QueryHistory requestPage(QueryHistory request) {
-    track(request.request_id);
-    page_request_ = request.request_id;
-    pending_offset_ = request.offset;
+  inline QueryHistory requestPage(PageRequest page) {
+    track(page.request_id);
+    page_request_ = page.request_id;
+    pending_offset_ = page.offset;
     state_.phase = HistoryPhase::loading;
     error_.assign({});
     clearCommand();
     clearOutput();
     contentChanged();
 
-    return request;
+    return request(page);
   }
 
   inline void track(std::uint64_t request_id) {
@@ -819,7 +864,7 @@ private:
   String<Memory> scope_path_;
   String<Memory> output_;
   runtime::FixedText<maximum_error_bytes> error_;
-  QueryHistory criteria_;
+  Criteria criteria_;
   HistoryViewState state_;
   std::array<std::uint64_t, maximum_requests> requests_{};
   std::uint64_t page_request_ = 0;

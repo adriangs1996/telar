@@ -301,12 +301,12 @@ std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, 
     if (budget) {
       require(rejected && client.tabs().size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
       if (discover_before_confirmation) {
-        require(client.tabs().back()->applicationName(nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
+        require(tabApplicationName(*client.tabs().back(), nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
       }
     } else {
       require(!rejected && client.tabs().size() == 2 && client.focusedPane()->id == 2, "a complete allocation budget must adopt the confirmed command");
       if (discover_before_confirmation) {
-        require(client.activeTab()->applicationName(client.focusedPane()) == discovered_application, "confirmation must preserve the discovered foreground for the newly adopted pane");
+        require(tabApplicationName(*client.activeTab(), client.focusedPane()) == discovered_application, "confirmation must preserve the discovered foreground for the newly adopted pane");
       }
     }
   }

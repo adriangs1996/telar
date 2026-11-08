@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -39,7 +40,7 @@ struct TextRange {
   std::size_t start = 0;
   std::size_t end = 0;
 
-  [[nodiscard]] inline std::string_view view(std::string_view text) const {
+  [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> view(tbc::view<std::string_view, tbc::lt::a> text) const {
     return text.substr(start, end - start);
   }
 
@@ -106,11 +107,16 @@ public:
   EditorLaunch(EditorLaunch &&) = delete;
   EditorLaunch &operator=(EditorLaunch &&) = delete;
 
+  // The arguments view copies this launch keeps, valid until its next call.
   [[nodiscard]] inline std::span<const std::string_view> arguments(std::string_view executable, std::string_view path, std::uint32_t line, std::uint32_t column) {
     const auto convention = conventionOf(executable);
-    arguments_[0] = executable;
+    executable_.truncate(0);
+    executable_.append(executable);
+    path_.truncate(0);
+    path_.append(path);
+    arguments_[0] = executable_.view();
     if (line == 0 || convention == Convention::none) {
-      arguments_[1] = path;
+      arguments_[1] = path_.view();
 
       return std::span{arguments_}.first(2);
     }
@@ -124,7 +130,7 @@ public:
     }
 
     arguments_[1] = convention == Convention::goto_flag ? "-g" : position_.view();
-    arguments_[2] = convention == Convention::goto_flag ? position_.view() : path;
+    arguments_[2] = convention == Convention::goto_flag ? position_.view() : path_.view();
 
     return arguments_;
   }
@@ -210,8 +216,10 @@ private:
     }
   }
 
+  BoundedText<LinkText::maximum_uri_bytes> executable_;
+  BoundedText<LinkText::maximum_uri_bytes> path_;
   BoundedText<LinkText::maximum_uri_bytes + position_bytes> position_;
-  std::array<std::string_view, maximum_arguments> arguments_;
+  tbc::view<std::array<std::string_view, maximum_arguments>, tbc::lt::self> arguments_;
 };
 
 }

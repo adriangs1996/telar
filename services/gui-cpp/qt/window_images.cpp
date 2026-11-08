@@ -200,7 +200,7 @@ void WindowImages::selectPlacements(std::span<const ImagePlacementSource> source
   }
 }
 
-std::optional<LimitReach> WindowImages::preparePlacements(std::span<const ImagePlacementSource> sources) {
+tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> WindowImages::preparePlacements(std::span<const ImagePlacementSource> sources) {
   if (!placementSourcesChanged(sources)) {
     return std::nullopt;
   }

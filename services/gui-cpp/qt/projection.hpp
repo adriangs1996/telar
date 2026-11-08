@@ -129,7 +129,7 @@ QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<cons
       continue;
     }
 
-    const auto program = tab.applicationName(&candidate);
+    const auto program = tabApplicationName(tab, &candidate);
     auto card = applicationMarkRecord(program);
     card.insert(QStringLiteral("key"), QString::number(candidate.id));
     card.insert(QStringLiteral("program"), toQString(program));
@@ -166,7 +166,7 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Pa
     }
   }
 
-  const auto application = tab.applicationName(pane);
+  const auto application = tabApplicationName(tab, pane);
   TabCaption::Buffer storage;
   const auto caption = TabCaption::resolve({.manual = tab.label, .application = application, .directory = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd}, .session_title = session_title}, storage);
   auto label = toQString(caption);

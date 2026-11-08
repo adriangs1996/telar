@@ -241,7 +241,7 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
   for (const auto *tab : ordered) {
     NavigationLabel label;
     label.append(NavigationLabel::tab_prefix);
-    label.append(tab->label.empty() ? tab->applicationName(session().findPane(tab->focused_pane)) : std::string_view{tab->label});
+    label.append(tab->label.empty() ? tabApplicationName(*tab, session().findPane(tab->focused_pane)) : std::string_view{tab->label});
     matches.add(NavigationTarget{tab->location}, label.view(), query);
   }
 
@@ -336,7 +336,7 @@ QVariantMap Application::paletteRecord(const PaletteTarget &target, bool queried
     });
     if (found != session().tabs().end()) {
       label.append(NavigationLabel::tab_prefix);
-      label.append((*found)->label.empty() ? (*found)->applicationName(session().findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
+      label.append((*found)->label.empty() ? tabApplicationName(*(*found), session().findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
     }
 
     return navigationRecord(navigation, label, PaletteRowKind::tab, queried);

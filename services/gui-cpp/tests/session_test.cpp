@@ -155,11 +155,11 @@ void detachedTabForegroundsAndAgentTitles() {
     });
     require(entry != client.tabs().end() && client.findPane(remembered_detached_pane) == nullptr, "workspace metadata must not instantiate detached panes");
     const auto *detached = entry->get();
-    require(client.activeTab()->applicationName(client.focusedPane()) == "Python", "foreground snapshots must honor this client's focused pane");
-    require(detached->applicationName(nullptr) == "nvim", "detached tabs must retain the first reported application until focus is known");
+    require(tabApplicationName(*client.activeTab(), client.focusedPane()) == "Python", "foreground snapshots must honor this client's focused pane");
+    require(tabApplicationName(*detached, nullptr) == "nvim", "detached tabs must retain the first reported application until focus is known");
     deliver(client, PaneForeground{.pane_id = remembered_detached_pane, .name = "vim"});
     deliver(client, PaneForeground{.pane_id = other_detached_pane, .name = "lazygit"});
-    require(detached->applicationName(nullptr) == "vim", "detached reports must update only the remembered foreground pane");
+    require(tabApplicationName(*detached, nullptr) == "vim", "detached reports must update only the remembered foreground pane");
     const std::array agents{AgentSnapshotEntry{.pane_id = 1, .pane_generation = 1, .location = location, .pane_index = 1, .workspace_label = "Copied workspace metadata", .session_title = "Working session", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Custom display name", .icon = "?", .status = AgentStatus::blocked, .blocked_reason = AgentBlockedReason::permission, .sequence = 1}};
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     require(client.agents().size() == 1 && client.agents().front().title_state == AgentTitleState::ready && client.agents().front().title == "Working session", "agent snapshots must preserve title eligibility as well as its text");

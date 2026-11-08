@@ -86,6 +86,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "application/dependencies.hpp"
 #include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
@@ -679,7 +681,17 @@ private:
     std::optional<HistoryHoverFrame> history_hover;
   };
 
+  // Answers the commands of the active machine's client. A configuration reply views the
+  // application's buffers, region `a`, until the client encodes it.
+  struct HostCommands {
+    tbc::view<Application &, tbc::lt::a> application;
+    bool active = false;
+
+    void operator()(const ClientCommand &message, tbc::view<CompleteClientCommand &, tbc::lt::a> reply) const;
+  };
+
   void consume(MachineClient &client, QByteArrayView payload);
+  [[nodiscard]] static bool answerConfiguration(tbc::view<Application &, tbc::lt::a> application, const ClientCommand &message, tbc::view<CompleteClientCommand &, tbc::lt::a> reply);
   void executeHostCommand(const ClientCommand &message, CompleteClientCommand &reply);
   void synchronizeFontMetrics();
   void synchronizeWorkbenchGeometry();
@@ -822,17 +834,17 @@ private:
   std::uint64_t pointer_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
-  PickController<Application, ApplicationAllocator, ConfigurationSource> pick_controller_;
+  tbc::view<PickController<Application, ApplicationAllocator, ConfigurationSource>, tbc::lt::self> pick_controller_;
   QPointer<QQuickItem> component_pick_return_focus_;
   ComponentSurfaceState component_surfaces_;
-  ElementSlots element_slots_{configuration_source_, [this] { return componentContext(); }, this};
+  tbc::view<ElementSlots, tbc::lt::self> element_slots_{configuration_source_, [this] { return componentContext(); }, this};
   QVariantMap element_bars_;
   QTimer component_timer_;
   SurfaceCommand component_command_;
   std::optional<ComponentCommandOwner> component_command_owner_;
   std::uint64_t next_component_revision_ = 0;
   std::optional<QPointF> component_action_anchor_;
-  PluginWorker<Application> plugin_worker_;
+  tbc::view<PluginWorker<Application>, tbc::lt::self> plugin_worker_;
   struct PluginOwner {
     MachineClientKey source;
     std::uint64_t runtime_generation = 0;
@@ -851,10 +863,10 @@ private:
   bool sidebar_machine_row_shown_ = false;
   bool restore_layout_ = true;
   std::optional<WindowFramePacer<>> frame_pacer_;
-  KeyBindings key_bindings_;
-  PointerDispatcher pointer_dispatcher_;
-  ExternalLinkOpener<ApplicationLinkHost, Application, MachineClientKey> link_opener_;
-  SoundPlayer<ApplicationSoundHost, Application> sound_player_;
+  tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
+  tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
+  tbc::view<ExternalLinkOpener<ApplicationLinkHost, Application, MachineClientKey>, tbc::lt::self> link_opener_;
+  tbc::view<SoundPlayer<ApplicationSoundHost, Application>, tbc::lt::self> sound_player_;
   SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
   ListModel workspaces_;
   QVariantMap workspace_context_;

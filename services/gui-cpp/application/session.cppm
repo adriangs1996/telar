@@ -86,6 +86,7 @@ public:
   static constexpr std::uint16_t history_page_size = HistoryBrowser<Memory>::page_entries;
   static constexpr std::size_t maximum_history_query_bytes = HistoryBrowser<Memory>::maximum_query_bytes;
   static constexpr std::uint16_t default_sidebar_columns = SidebarColumns::minimum_width;
+  static constexpr std::size_t maximum_launch_arguments = 64;
 
   // The session keeps the allocator and the transport, region `a`, which also holds what its replies and
   // requests view of the session's own panes, workspaces and responses.
@@ -105,8 +106,7 @@ public:
         error_(AllocatorRef<char, Memory>{memory}),
         command_response_(AllocatorRef<char, Memory>{memory}),
         launch_cwd_(AllocatorRef<char, Memory>{memory}),
-        argument_storage_(AllocatorRef<String<Memory>, Memory>{memory}),
-        launch_arguments_(AllocatorRef<std::string_view, Memory>{memory}) {
+        argument_storage_(AllocatorRef<String<Memory>, Memory>{memory}) {
     decode_.resize(decode_capacity);
   }
 
@@ -117,15 +117,14 @@ public:
     BodySchema<Launch>::validate(launch);
     launch_cwd_ = launch.cwd;
     argument_storage_.clear();
-    launch_arguments_.clear();
+    launch_argument_count_ = 0;
     argument_storage_.reserve(launch.arguments.size());
-    launch_arguments_.reserve(launch.arguments.size());
     for (const auto argument : launch.arguments) {
       argument_storage_.emplace_back(argument, AllocatorRef<char, Memory>{memory_});
     }
 
     for (const auto &argument : argument_storage_) {
-      launch_arguments_.push_back(argument);
+      launch_arguments_[launch_argument_count_++] = argument;
     }
   }
 
@@ -1495,7 +1494,7 @@ public:
       if (!tab->label.empty()) {
         tokens.tab = tab->label;
       } else {
-        tokens.tab = tab->applicationName(pane);
+        tokens.tab = tabApplicationName(*tab, pane);
       }
       const auto workspace = std::ranges::find_if(workspaces_, [&](const auto &entry) {
         return sameWorkspace(entry.location, tab->location.workspace);
@@ -2320,7 +2319,7 @@ private:
 
   [[nodiscard]] Launch defaultLaunch() const noexcept {
     static constexpr std::array<std::string_view, 1> default_shell{"/bin/sh"};
-    const auto arguments = launch_arguments_.empty() ? std::span<const std::string_view>{default_shell} : std::span<const std::string_view>{launch_arguments_};
+    const auto arguments = launch_argument_count_ == 0 ? std::span<const std::string_view>{default_shell} : std::span<const std::string_view>{launch_arguments_}.first(launch_argument_count_);
 
     return {.cwd = launch_cwd_.empty() ? std::string_view{"/"} : std::string_view{launch_cwd_}, .arguments = arguments};
   }
@@ -3864,7 +3863,7 @@ private:
     }
   }
 
-  inline std::size_t orderedTabs(std::array<Tab<Memory> *, maximum_tabs> &ordered) const noexcept {
+  inline std::size_t orderedTabs(tbc::view<std::array<Tab<Memory> *, maximum_tabs> &, tbc::lt::a> ordered) const noexcept {
     std::size_t count = 0;
     if (!active_tab_) {
       return count;
@@ -3925,25 +3924,26 @@ private:
   LimitReports limit_reports_;
   static constexpr std::uint64_t limit_notice_duration_ns = 8'000'000'000;
   tbc::view<Vector<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
-  Vector<Owned<Tab<Memory>, Memory>, Memory> tabs_;
+  tbc::view<Vector<Owned<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
   tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
-  AgentReplica<Memory> agents_;
+  tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
   AgentAcknowledgement agent_acknowledgement_;
   NotificationCenter notifications_;
   std::uint64_t notification_revision_ = 0;
-  HistoryBrowser<Memory> history_;
-  PeekScreen<Memory> peek_;
+  tbc::view<HistoryBrowser<Memory>, tbc::lt::a> history_;
+  tbc::view<PeekScreen<Memory>, tbc::lt::a> peek_;
   PathPickerPage path_picker_;
   SuggestionState suggestion_;
-  Vector<Byte, Memory> decode_;
-  String<Memory> clipboard_;
-  String<Memory> notice_;
-  String<Memory> error_;
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> decode_;
+  tbc::view<String<Memory>, tbc::lt::a> clipboard_;
+  tbc::view<String<Memory>, tbc::lt::a> notice_;
+  tbc::view<String<Memory>, tbc::lt::a> error_;
   tbc::view<String<Memory>, tbc::lt::a> command_response_;
-  String<Memory> launch_cwd_;
-  Vector<String<Memory>, Memory> argument_storage_;
-  // The launch arguments view the strings stored beside them.
-  tbc::view<Vector<std::string_view, Memory>, tbc::lt::self> launch_arguments_;
+  tbc::view<String<Memory>, tbc::lt::a> launch_cwd_;
+  tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> argument_storage_;
+  // The launch arguments view the strings stored beside them; the protocol allows at most 64.
+  tbc::view<std::array<std::string_view, maximum_launch_arguments>, tbc::lt::self> launch_arguments_{};
+  std::size_t launch_argument_count_ = 0;
   std::array<Pending, maximum_pending> pending_;
   std::size_t pending_count_ = 0;
   std::optional<TabLocation> active_tab_;

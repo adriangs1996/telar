@@ -168,7 +168,7 @@ std::string_view Application::historyTabName(const Pane<ApplicationAllocator> *p
   if (pane != nullptr) {
     for (const auto &tab : session().tabs()) {
       if (sameTab(tab->location, pane->location)) {
-        return tab->label.empty() ? tab->applicationName(session().findPane(tab->focused_pane)) : std::string_view{tab->label};
+        return tab->label.empty() ? tabApplicationName(*tab, session().findPane(tab->focused_pane)) : std::string_view{tab->label};
       }
     }
   }

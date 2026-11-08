@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include <QByteArray>
 #include <QStringList>
 #include <QtCore/qtypes.h>
@@ -39,7 +41,8 @@ public:
 
 private:
   std::array<QByteArray, maximum_arguments> storage_;
-  std::array<std::string_view, maximum_arguments> views_{};
+  // Each view reads the bytes stored beside it.
+  tbc::view<std::array<std::string_view, maximum_arguments>, tbc::lt::self> views_{};
   std::size_t count_ = 0;
 };
 

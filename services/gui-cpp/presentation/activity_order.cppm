@@ -934,7 +934,7 @@ struct ProjectActivity {
     return result;
   }
 
-  [[nodiscard]] inline std::optional<std::string_view> summary(Text &storage) const {
+  [[nodiscard]] inline tbc::view<std::optional<std::string_view>, tbc::lt::a> summary(tbc::view<Text &, tbc::lt::a> storage) const {
     storage.truncate(0);
     if (worktrees == 0 || !path) {
       return std::nullopt;

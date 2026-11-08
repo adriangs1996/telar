@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -33,15 +34,16 @@ import telar.gui.terminal.screen;
 export {
 namespace telar::gui {
 
+// Every part views the parsed text, region `a`.
 struct UriView {
-  std::string_view scheme;
-  std::string_view path;
-  std::optional<std::string_view> host = std::nullopt;
-  std::optional<std::string_view> user = std::nullopt;
-  std::optional<std::string_view> password = std::nullopt;
+  tbc::view<std::string_view, tbc::lt::a> scheme;
+  tbc::view<std::string_view, tbc::lt::a> path;
+  tbc::view<std::optional<std::string_view>, tbc::lt::a> host = std::nullopt;
+  tbc::view<std::optional<std::string_view>, tbc::lt::a> user = std::nullopt;
+  tbc::view<std::optional<std::string_view>, tbc::lt::a> password = std::nullopt;
   std::optional<std::uint16_t> port = std::nullopt;
-  std::optional<std::string_view> query = std::nullopt;
-  std::optional<std::string_view> fragment = std::nullopt;
+  tbc::view<std::optional<std::string_view>, tbc::lt::a> query = std::nullopt;
+  tbc::view<std::optional<std::string_view>, tbc::lt::a> fragment = std::nullopt;
 
   [[nodiscard]] inline static std::optional<UriView> parse(std::string_view text) {
     const auto colon = text.find(':');
@@ -109,7 +111,7 @@ private:
     return negative && value != 0 ? std::nullopt : std::optional{static_cast<std::uint16_t>(value)};
   }
 
-  inline bool authority(std::string_view text, bool empty_authority_has_path) {
+  inline bool authority(tbc::view<std::string_view, tbc::lt::a> text, bool empty_authority_has_path) {
     if (text.empty()) {
       return empty_authority_has_path;
     }

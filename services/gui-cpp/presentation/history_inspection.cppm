@@ -716,7 +716,7 @@ enum class StatusMode : std::uint8_t {
 
 struct ModeHint {
   KeyChord key;
-  std::string_view label;
+  tbc::view<std::string_view, tbc::lt::static_storage> label;
 };
 
 template <typename Router>

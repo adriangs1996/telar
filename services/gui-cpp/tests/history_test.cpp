@@ -352,7 +352,7 @@ void commandPreviewBoundaries() {
   const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = command}};
   const Storage page{memory, entries};
   require(page.rows().front().command.size() == Storage::command_preview_bytes - 1, "previews must stop before a split UTF-8 scalar");
-  require(page.command(page.rows().front()) == command, "preview truncation must preserve complete canonical command bytes");
+  require(page.command(0) == command, "preview truncation must preserve complete canonical command bytes");
 }
 
 void selectedCommandAllocationFailure() {

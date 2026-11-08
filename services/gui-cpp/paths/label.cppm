@@ -521,7 +521,8 @@ public:
   static constexpr std::string_view ellipsis = "…";
   static constexpr std::uint32_t ellipsis_columns = 1;
 
-  inline void layout(std::string_view path, std::span<const std::uint16_t> positions, std::uint16_t width) {
+  // The runs view the laid out path, region `a`, until the next layout.
+  inline void layout(tbc::view<std::string_view, tbc::lt::a> path, std::span<const std::uint16_t> positions, std::uint16_t width) {
     count_ = 0;
     const auto name_start = nameStart(path);
     if (cellTextColumns(path) <= width) {
@@ -538,7 +539,7 @@ public:
     appendSpan({.path = path, .positions = positions, .start = name_start, .end = path.size(), .name_start = name_start});
   }
 
-  [[nodiscard]] inline std::span<const PathLabelRun> runs() const noexcept {
+  [[nodiscard]] inline tbc::view<std::span<const PathLabelRun>, tbc::lt::a> runs() const noexcept {
     return std::span{runs_}.first(count_);
   }
 
@@ -593,7 +594,7 @@ private:
     return first >= span.name_start ? PathLabelTone::name : PathLabelTone::directory;
   }
 
-  inline void appendSpan(const Span &span) {
+  inline void appendSpan(tbc::view<Span, tbc::lt::a> span) {
     if (span.start == span.end) {
       return;
     }
@@ -616,13 +617,13 @@ private:
     push({.text = span.path.substr(run_start, span.end - run_start), .tone = tone});
   }
 
-  inline void push(PathLabelRun run) noexcept {
+  inline void push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept {
     if (count_ < runs_.size()) {
       runs_[count_++] = run;
     }
   }
 
-  std::array<PathLabelRun, maximum_runs> runs_{};
+  tbc::view<std::array<PathLabelRun, maximum_runs>, tbc::lt::a> runs_{};
   std::size_t count_ = 0;
 };
 

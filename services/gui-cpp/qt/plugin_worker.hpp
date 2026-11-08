@@ -54,6 +54,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 
@@ -238,7 +240,8 @@ private:
   std::array<Byte, PluginEffects::maximum_bytes> output_{};
   std::size_t output_length_ = 0;
   std::uint64_t execution_ = 0;
-  CommandProcess<NativePluginWorkerHost, PluginWorkerCommand, PluginWorker> process_;
+  // The process reports back to this worker.
+  tbc::view<CommandProcess<NativePluginWorkerHost, PluginWorkerCommand, PluginWorker>, tbc::lt::self> process_;
   QObject context_;
 };
 
