@@ -436,3 +436,115 @@ void declarationReferenceParameterKept(std::string_view &text, const std::string
 }
 
 // END CASE
+
+// CASE: declaration.shared_reached
+// PAIR: declaration.shared_reach
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: Runtime (session_.configure)
+// STATUS: implemented
+// CONTRACT: An object of a TBC_SHARED type is never invalidated, whatever a call does to the inputs that keep it, as a Rust type with interior mutability keeps every borrow it lent valid.
+// SCENARIO: A store builds a pass over a model that keeps the shared arena and mutates the model; the model, keeping the arena too, stays valid; accept.
+namespace declarations {
+  struct shared_model {
+    explicit shared_model(arena &memory) : memory(memory) {}
+    arena &memory;
+    std::vector<int> items;
+  };
+
+  class shared_pass {
+  public:
+    shared_pass(arena &memory, shared_model &target) : memory_(memory), target_(target) {}
+    void apply() { target_.items.push_back(1); }
+
+  private:
+    arena &memory_;
+    shared_model &target_;
+  };
+
+  class shared_store {
+  public:
+    explicit shared_store(arena &memory) : memory_(memory) {}
+    template <typename Model>
+    void configure(Model &target) {
+      shared_pass pass{memory_, target};
+      pass.apply();
+    }
+
+  private:
+    arena &memory_;
+  };
+
+  class shared_owner {
+  public:
+    explicit shared_owner(arena &memory) : model_(memory), store_(memory) {
+      store_.configure(model_);
+    }
+    shared_owner(const shared_owner &) = delete;
+
+  private:
+    shared_model model_;
+    shared_store store_;
+  };
+}
+
+void declarationSharedReached(declarations::arena &memory) {
+  const declarations::shared_owner made{memory};
+  static_cast<void>(&made);
+}
+
+// END CASE
+
+// CASE: declaration.unshared_reached
+// PAIR: declaration.shared_reach
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: Runtime (session_.configure)
+// STATUS: implemented
+// CONTRACT: An object of a TBC_SHARED type is never invalidated, whatever a call does to the inputs that keep it, as a Rust type with interior mutability keeps every borrow it lent valid.
+// SCENARIO: The same store over a pool without the mark may invalidate the pool its argument keeps; reject at the argument.
+namespace declarations {
+  struct pooled_model {
+    explicit pooled_model(pool &memory) : memory(memory) {}
+    pool &memory;
+    std::vector<int> items;
+  };
+
+  class pooled_pass {
+  public:
+    pooled_pass(pool &memory, pooled_model &target) : memory_(memory), target_(target) {}
+    void apply() { target_.items.push_back(1); }
+
+  private:
+    pool &memory_;
+    pooled_model &target_;
+  };
+
+  class pooled_store {
+  public:
+    explicit pooled_store(pool &memory) : memory_(memory) {}
+    template <typename Model>
+    void configure(Model &target) {
+      pooled_pass pass{memory_, target};
+      pass.apply();
+    }
+
+  private:
+    pool &memory_;
+  };
+
+  class pooled_owner {
+  public:
+    explicit pooled_owner(pool &memory) : model_(memory), store_(memory) {
+      store_.configure(model_); // expected-error [tbc-invalidated-borrow]
+    }
+    pooled_owner(const pooled_owner &) = delete;
+
+  private:
+    pooled_model model_;
+    pooled_store store_;
+  };
+}
+
+void declarationUnsharedReached(declarations::pool &memory) {
+  const declarations::pooled_owner made{memory};
+  static_cast<void>(&made);
+}
+
+// END CASE

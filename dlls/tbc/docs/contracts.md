@@ -516,6 +516,10 @@ class TBC_SHARED SynchronizedAllocator {
 A pointer a shared type's method returns, such as an allocated block, is fresh
 storage, unchecked like a `new` expression's.
 
+Nor is an object of a shared type invalidated by a call to something that keeps
+it: a store that mutates a model holding the allocator leaves the allocator, and
+every other borrow of it, valid.
+
 A field may keep a reference to a sibling of a shared type, as services keep the
 allocator or the limit queue of the object that holds them. That borrow is internal
 to the object, so the object only has to keep its address: it must be neither

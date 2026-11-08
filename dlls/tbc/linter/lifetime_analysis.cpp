@@ -3522,6 +3522,11 @@ namespace tbc_lint {
           if (owner == nullptr) {
             continue;
           }
+          // An object of a shared type, such as an allocator, keeps what it handed out valid whatever is
+          // done to the inputs that reach it.
+          if (place.target.path.empty() && std::ranges::all_of(place.target.select, [](const projection &step) { return step.dereference; }) && sharedType(owner->getType())) {
+            continue;
+          }
           auto &same = seen[placeHash(place)];
           if (llvm::any_of(same, [&](const invalidation *earlier) { return earlier->target == place.target && earlier->range.first == place.range.first && earlier->range.last == place.range.last; })) {
             continue;
