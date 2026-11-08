@@ -56,6 +56,7 @@ static_assert(true);
 #include <QtCore/qtversion.h>
 #include <QtCore/qtversionchecks.h>
 #include <initializer_list>
+#include "tbc/view.hpp"
 
 
 
@@ -499,8 +500,9 @@ private:
 
 namespace {
 
+// The node painted is the previous one again or a new one Qt takes: region `a`.
 template <bool retain_meshes>
-QSGNode *paintText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization) {
+tbc::view<QSGNode *, tbc::lt::a> paintText(tbc::view<QSGNode *, tbc::lt::a> previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization) {
   std::unique_ptr<QSGNode> owner{previous};
   auto fonts = ResidentFonts::shared(collection);
   auto *scene = dynamic_cast<ChromeScene<ResidentFonts, retain_meshes> *>(owner.get());

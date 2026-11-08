@@ -35,6 +35,7 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <exception>
+#include "tbc/view.hpp"
 
 
 
@@ -49,7 +50,8 @@ QRectF logical(Rect bounds, qreal scale) {
   return {bounds.x / scale, bounds.y / scale, bounds.width / scale, bounds.height / scale};
 }
 
-ModeHint readHint(const QVariantMap &value, QByteArray &storage) {
+// The hint views the label it writes into the storage, region `a`.
+tbc::view<ModeHint, tbc::lt::a> readHint(const QVariantMap &value, tbc::view<QByteArray &, tbc::lt::a> storage) {
   const auto kind = value.value(QStringLiteral("key")).toInt();
   if (kind < static_cast<int>(KeyChord::Key::character) || kind > static_cast<int>(KeyChord::Key::back_tab)) {
     throw std::invalid_argument{"InvalidModeHintKey"};

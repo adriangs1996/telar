@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
+#include "tbc/view.hpp"
 
 namespace telar::gui::qt {
 
@@ -25,9 +26,11 @@ inline std::unique_ptr<QSGImageNode> createSceneImage(const QQuickWindow &window
   return node;
 }
 
+// The parent owns the node it adopts, so the node lives as long as the parent, region `a`. Qt holds it
+// by address from then on, so the node is reached raw, as Qt does.
 template <std::derived_from<QSGNode> Node>
-Node &adoptSceneNode(QSGNode &parent, std::unique_ptr<Node> node, SceneOrder order = SceneOrder::last) {
-  auto &result = *node;
+tbc::view<Node &, tbc::lt::a> adoptSceneNode(tbc::view<QSGNode &, tbc::lt::a> parent, std::unique_ptr<Node> node, SceneOrder order = SceneOrder::last) {
+  auto &result = *tbc::raw(node.get());
   if (order == SceneOrder::first) {
     parent.prependChildNode(node.release());
   } else {
@@ -38,7 +41,7 @@ Node &adoptSceneNode(QSGNode &parent, std::unique_ptr<Node> node, SceneOrder ord
 }
 
 template <std::derived_from<QSGNode> Node, typename... Arguments>
-Node &appendSceneNode(QSGNode &parent, Arguments &&...arguments) {
+tbc::view<Node &, tbc::lt::a> appendSceneNode(tbc::view<QSGNode &, tbc::lt::a> parent, Arguments &&...arguments) {
   return adoptSceneNode(parent, std::make_unique<Node>(std::forward<Arguments>(arguments)...));
 }
 

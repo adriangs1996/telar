@@ -12,6 +12,7 @@ module;
 #include <cstdio>
 
 #include <limits.h>
+#include "tbc/view.hpp"
 
 export module telar.gui.config.plugin_query;
 
@@ -369,7 +370,8 @@ namespace telar::gui {
 
 class InputQuery {
 public:
-  [[nodiscard]] inline static std::string_view write(const InputConfiguration &input, std::span<char> output) {
+  // Each query is written into the output, region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const InputConfiguration &input, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
     writer.object([&](JsonWriter &object) {
       object.member("prefix", [&](JsonWriter &value) {
@@ -456,7 +458,7 @@ namespace telar::gui {
 class BindingQuery {
 public:
   template <Allocator Memory>
-  [[nodiscard]] inline static std::string_view write(const InputConfiguration &input, std::size_t index, const ActionDescriptions<Memory> &descriptions, const runtime::config::RetainedCommandTabRegistry &commands, std::span<char> output) {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const InputConfiguration &input, std::size_t index, const ActionDescriptions<Memory> &descriptions, const runtime::config::RetainedCommandTabRegistry &commands, tbc::view<std::span<char>, tbc::lt::a> output) {
     if (index >= input.length) {
       throw std::runtime_error{"BindingNotFound"};
     }
@@ -671,7 +673,8 @@ struct PluginPage {
 
 class PluginQuery {
 public:
-  [[nodiscard]] inline static PluginPage list(const PluginCatalog &catalog, const ClientCommand &request, std::span<char> output) {
+  // A page is written into the output, region `a`.
+  [[nodiscard]] inline static tbc::view<PluginPage, tbc::lt::a> list(const PluginCatalog &catalog, const ClientCommand &request, tbc::view<std::span<char>, tbc::lt::a> output) {
     catalog.validateGeneration(request.target_id);
     const auto index = page(request.value, catalog.size());
     JsonWriter writer{output};
@@ -686,7 +689,7 @@ public:
     return {.text = writer.view(), .next = index + 1 < catalog.size() ? static_cast<std::int64_t>(index + 1) : -1};
   }
 
-  [[nodiscard]] inline static PluginPage get(const PluginCatalog &catalog, const ClientCommand &request, std::span<char> output) {
+  [[nodiscard]] inline static tbc::view<PluginPage, tbc::lt::a> get(const PluginCatalog &catalog, const ClientCommand &request, tbc::view<std::span<char>, tbc::lt::a> output) {
     catalog.validateGeneration(request.target_id);
     const auto index = catalog.find(request.text);
     const auto *package = catalog.package(index);

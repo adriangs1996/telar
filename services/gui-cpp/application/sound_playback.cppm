@@ -12,6 +12,7 @@ module;
 
 
 #include <cmath>
+#include "tbc/view.hpp"
 
 export module telar.gui.application.sound_playback;
 
@@ -618,7 +619,8 @@ public:
   static constexpr std::size_t binary_capacity = text_capacity / digits_per_byte;
 
   template <Allocator Memory>
-  inline static std::string_view write(const ClientLayoutSnapshot &snapshot, String<Memory> &output) {
+  // The token is written into the output, region `a`.
+  inline static tbc::view<std::string_view, tbc::lt::a> write(const ClientLayoutSnapshot &snapshot, tbc::view<String<Memory> &, tbc::lt::a> output) {
     std::array<Byte, binary_capacity> binary{};
     const auto encoded = Codec::encode(snapshot, binary);
     output.clear();
@@ -654,7 +656,7 @@ public:
   }
 
 private:
-  inline static std::span<const Byte> decodeHexadecimal(std::string_view text, std::span<Byte> output) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> decodeHexadecimal(std::string_view text, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     // Zig's `std.fmt.hexToBytes` error names, in its order.
     if (text.empty() || text.size() % digits_per_byte != 0) {
       throw EncodingError{"InvalidLength"};

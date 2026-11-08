@@ -7,6 +7,7 @@ module;
 
 #include <cstddef>
 #include <cstring>
+#include "tbc/view.hpp"
 
 export module telar.gui.presentation.application_mark;
 
@@ -279,7 +280,8 @@ private:
     return close + 1;
   }
 
-  inline static std::optional<std::string_view> token(std::string_view name, Tokens values) noexcept {
+  // A token's value is one of the values, region `a`.
+  inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept {
     if (name == "workspace") {
       return values.workspace;
     }

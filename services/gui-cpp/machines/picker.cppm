@@ -4,6 +4,7 @@ module;
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include "tbc/view.hpp"
 
 
 
@@ -340,7 +341,8 @@ export {
 namespace telar::gui {
 
 struct MachineOpening {
-  [[nodiscard]] inline static std::optional<std::string_view> saved(const MachineProfiles &profiles, std::string_view label, std::string_view hostname) {
+  // The destination is one of the profiles', region `a`.
+  [[nodiscard]] inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> saved(tbc::view<const MachineProfiles &, tbc::lt::a> profiles, std::string_view label, std::string_view hostname) {
     if (const auto index = profiles.find(label)) {
       return profiles.rows()[*index].destination();
     }

@@ -23,6 +23,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <memory>
 #include <span>
+#include "tbc/view.hpp"
 
 #pragma once
 
@@ -32,8 +33,9 @@ import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 
+// The node painted is the previous one again or a new one Qt takes: region `a`.
 template <std::size_t Capacity, typename Draw>
-QSGNode *paintRoundedShapes(QQuickItem &item, QSGNode *previous, Draw draw) {
+tbc::view<QSGNode *, tbc::lt::a> paintRoundedShapes(QQuickItem &item, tbc::view<QSGNode *, tbc::lt::a> previous, Draw draw) {
   auto &window = *item.window();
   const auto density = window.effectiveDevicePixelRatio();
   const auto anchor = item.mapToScene(QPointF{});

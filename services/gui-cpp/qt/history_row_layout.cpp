@@ -158,9 +158,10 @@ QVariantList HistoryRowLayout::commandLines() const {
     return result;
   }
 
+  const std::string_view command{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
   for (std::uint16_t index = 0; index < card_.shown; ++index) {
     const Rect area{.x = geometry_.command.x, .y = card_.text_y + (static_cast<float>(index) * cell_height_), .width = geometry_.command.width, .height = cell_height_};
-    result.append(commandLine(card_.lines[index], area, false, highlight));
+    result.append(commandLine(HistoryCard::line(command, card_.lines[index]), area, false, highlight));
   }
 
   return result;

@@ -105,7 +105,7 @@ void card(SystemAllocator &memory) {
   probe::write(layout.shown);
   probe::write(layout.more);
   for (std::uint16_t index = 0; index < layout.shown; ++index) {
-    probe::writeText(layout.lines[index]);
+    probe::writeText(HistoryCard::line(text, layout.lines[index]));
   }
 }
 

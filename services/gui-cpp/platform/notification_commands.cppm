@@ -11,6 +11,7 @@ module;
 #include <cstdint>
 
 #include <climits>
+#include "tbc/view.hpp"
 
 export module telar.gui.platform.notification_commands;
 
@@ -38,8 +39,9 @@ struct CommandLine {
   std::array<std::string_view, maximum_arguments> values{};
   std::size_t count = 0;
 
+  // The command views the executable and the texts the arguments view, region `a`.
   template <std::size_t Count>
-  [[nodiscard]] static constexpr CommandLine withArguments(std::string_view executable, const std::array<std::string_view, Count> &arguments) noexcept {
+  [[nodiscard]] static constexpr tbc::view<CommandLine, tbc::lt::a> withArguments(tbc::view<std::string_view, tbc::lt::a> executable, tbc::view<std::array<std::string_view, Count>, tbc::lt::a> arguments) noexcept {
     static_assert(Count <= maximum_arguments);
     CommandLine command{.executable = executable, .count = Count};
     std::copy(arguments.begin(), arguments.end(), command.values.begin());

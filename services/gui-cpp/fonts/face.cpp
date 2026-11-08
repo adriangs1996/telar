@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 
 #include <cstddef>
@@ -44,7 +45,8 @@ struct VariationDeleter {
   }
 };
 
-std::unique_ptr<FT_MM_Var, VariationDeleter> variationMaster(FT_Library library, FT_Face face) {
+// FreeType frees the master through the library it came from, region `a`.
+tbc::view<std::unique_ptr<FT_MM_Var, VariationDeleter>, tbc::lt::a> variationMaster(tbc::view<FT_Library, tbc::lt::a> library, FT_Face face) {
   FT_MM_Var *master = nullptr;
   if (FT_Get_MM_Var(face, &master) != 0) {
     throw std::runtime_error{"FontVariationUnavailable"};

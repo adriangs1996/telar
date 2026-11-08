@@ -12,6 +12,7 @@ module;
 
 
 #include <cmath>
+#include "tbc/view.hpp"
 
 export module telar.gui.presentation.history_inspection;
 
@@ -309,7 +310,8 @@ struct TabCaption {
     return path;
   }
 
-  [[nodiscard]] inline static std::string_view resolve(Content content, Buffer &storage) noexcept {
+  // The caption is one of the content's texts or is written into the storage, region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> resolve(tbc::view<Content, tbc::lt::a> content, tbc::view<Buffer &, tbc::lt::a> storage) noexcept {
     if (!content.manual.empty()) {
       return content.manual;
     }

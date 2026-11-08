@@ -64,7 +64,7 @@ namespace telar::gui::qt {
 NativeChromeText::NativeChromeText(QQuickItem *parent)
     : QQuickItem(parent),
       glyphs_(memory_),
-      fitted_glyphs_(memory_),
+      fit_(memory_),
       ancestors_(*this) {
   setFlag(ItemHasContents);
 }
@@ -228,16 +228,17 @@ void NativeChromeText::refreshLayout() {
     }
     advance_ = glyphs_.advance();
     metrics_ = fonts_->face(preferred).metrics(pixel_height_);
+    // The catalog is told before any setter emits, as a handler may replace the text this views.
+    if (catalog_ != nullptr) {
+      catalog_->request(text, preferred);
+    }
     setSupported(true);
     setImplicitWidth(advance_ / display_scale_);
     setImplicitHeight(metrics_.line_height / display_scale_);
     setBaselineOffset(metrics_.ascender / display_scale_);
     ++revision_;
     fit_dirty_ = true;
-    fit_shape_dirty_ = true;
-    if (catalog_ != nullptr) {
-      catalog_->request(text, preferred);
-    }
+    fit_.dirty = true;
   } catch (const std::exception &) {
     setSupported(false);
   }
@@ -276,7 +277,7 @@ void NativeChromeText::refreshFit() {
       };
       TextFit::Buffer buffer{};
       const auto fitted = TextFit::fit(text, static_cast<float>(width() * display_scale_), measure, buffer);
-      shapeFittedText(fitted);
+      fit_.shape(*fonts_, fitted, {.pixel_height = pixel_height_, .preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular});
     }
 
     ++revision_;
@@ -287,16 +288,16 @@ void NativeChromeText::refreshFit() {
   refreshAvailability();
 }
 
-void NativeChromeText::shapeFittedText(std::string_view text) {
-  if (!fit_shape_dirty_ && text == std::string_view{fitted_text_.data(), fitted_bytes_}) {
+void NativeChromeText::FittedText::shape(ResidentFonts &fonts, std::string_view fitted, fonts::TextRequest request) {
+  if (!dirty && fitted == std::string_view{text.data(), bytes}) {
     return;
   }
 
-  fitted_glyphs_.shape(*fonts_, text, {.pixel_height = pixel_height_, .preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular});
-  fitted_advance_ = fitted_glyphs_.advance();
-  std::ranges::copy(text, fitted_text_.begin());
-  fitted_bytes_ = text.size();
-  fit_shape_dirty_ = false;
+  glyphs.shape(fonts, fitted, request);
+  advance = glyphs.advance();
+  std::ranges::copy(fitted, text.begin());
+  bytes = fitted.size();
+  dirty = false;
 }
 
 void NativeChromeText::updatePolish() {
@@ -344,9 +345,9 @@ QSGNode *NativeChromeText::updatePaintNode(QSGNode *previous, [[maybe_unused]] U
   }
 
   try {
-    const auto &layout = fitted_ ? fitted_glyphs_ : glyphs_;
+    const auto &layout = fitted_ ? fit_.glyphs : glyphs_;
 
-    return paintChromeText(previous, *window(), {.glyphs = layout.glyphs(), .spans = layout.spans(), .metrics = metrics_, .scene_origin = mapToScene({0, 0}), .bounds = size(), .color = color_, .scale = display_scale_, .fade_width = fade_width_, .revision = revision_, .pixel_height = pixel_height_, .advance = fitted_ ? fitted_advance_ : advance_, .horizontal_alignment = alignment_, .whole_pixel_centering = whole_pixel_centering_, .emphasized = emphasized_}, collection_);
+    return paintChromeText(previous, *window(), {.glyphs = layout.glyphs(), .spans = layout.spans(), .metrics = metrics_, .scene_origin = mapToScene({0, 0}), .bounds = size(), .color = color_, .scale = display_scale_, .fade_width = fade_width_, .revision = revision_, .pixel_height = pixel_height_, .advance = fitted_ ? fit_.advance : advance_, .horizontal_alignment = alignment_, .whole_pixel_centering = whole_pixel_centering_, .emphasized = emphasized_}, collection_);
   } catch (const std::exception &) {
     QMetaObject::invokeMethod(this, [this] {
       render_failed_ = true;

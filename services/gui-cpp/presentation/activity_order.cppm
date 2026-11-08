@@ -9,6 +9,7 @@ module;
 
 #include <cstring>
 #include <cmath>
+#include "tbc/view.hpp"
 
 export module telar.gui.presentation.activity_order;
 
@@ -75,7 +76,8 @@ struct AgentOrder {
   }
 
   template <Allocator Memory>
-  [[nodiscard]] inline static const Worktree<Memory> *taskRow(const WorkspaceReplica<Memory> &workspaces, const Agent<Memory> &agent) noexcept {
+  // The row is one of the replica's, region `a`; the agent only names it.
+  [[nodiscard]] inline static tbc::view<const Worktree<Memory> *, tbc::lt::a> taskRow(tbc::view<const WorkspaceReplica<Memory> &, tbc::lt::a> workspaces, const Agent<Memory> &agent) noexcept {
     if (const auto *row = workspaces.worktree(agent.work_tree)) {
       return row;
     }
@@ -901,7 +903,8 @@ struct ProjectActivity {
   std::optional<std::string_view> path;
 
   template <Allocator Memory>
-  [[nodiscard]] inline static ProjectActivity derive(const WorkspaceReplica<Memory> &workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept {
+  // The activity names the project's path in the replica, region `a`.
+  [[nodiscard]] inline static tbc::view<ProjectActivity, tbc::lt::a> derive(tbc::view<const WorkspaceReplica<Memory> &, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept {
     ProjectActivity result;
     result.worktrees = static_cast<std::size_t>(std::ranges::count(workspaces.worktrees(), project, &Worktree<Memory>::source));
     const auto index = workspaces.indexOf(project);
@@ -1139,7 +1142,7 @@ struct TaskCardLabels {
   }
 
   template <Allocator Memory>
-  [[nodiscard]] inline static std::string_view commandState(const Worktree<Memory> &task, bool connected) noexcept {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::static_storage> commandState(const Worktree<Memory> &task, bool connected) noexcept {
     if (!connected) {
       return "offline · last known";
     }
@@ -1155,7 +1158,8 @@ struct TaskCardLabels {
   }
 
   template <Allocator Memory>
-  [[nodiscard]] inline static std::string_view commandFacts(std::string_view machine, const Worktree<Memory> &task, bool connected, Text &storage) {
+  // The facts are written into the storage, or are the state alone when they do not fit: region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> commandFacts(std::string_view machine, const Worktree<Memory> &task, bool connected, tbc::view<Text &, tbc::lt::a> storage) {
     const auto status = commandState(task, connected);
     storage.truncate(0);
     try {

@@ -7,6 +7,7 @@ module;
 #include <cstddef>
 
 #include <ghostty/vt/unicode.h>
+#include "tbc/view.hpp"
 
 export module telar.gui.presentation.form_field_geometry;
 
@@ -190,8 +191,9 @@ struct PathPickerFooter {
   std::array<PathPickerHintPlacement, maximum_hints> hints{};
   std::size_t count = 0;
 
+  // The footer places only its own literal hints; the status is measured, not kept.
   template <TextColumnMeasure MeasureColumns>
-  [[nodiscard]] inline static PathPickerFooter measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
+  [[nodiscard]] inline static tbc::view<PathPickerFooter, tbc::lt::static_storage> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
     PathPickerFooter result;
     const auto &labels = mac_style ? mac_hints : pc_hints;
     std::uint32_t used = measure_columns(status) + status_gap;

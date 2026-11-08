@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 
 #include <cstddef>
@@ -80,7 +81,8 @@ struct ClientQueryContext {
 
 class ClientQuery {
 public:
-  [[nodiscard]] inline static std::string_view write(const Configuration &configuration, const ClientQueryContext &context, std::span<char> output) {
+  // Each query is written into the output, region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const Configuration &configuration, const ClientQueryContext &context, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
     writer.object([&](JsonWriter &object) {
       object.member("source", [&](JsonWriter &value) {
@@ -148,7 +150,7 @@ namespace telar::gui {
 
 class GuiQuery {
 public:
-  [[nodiscard]] inline static std::string_view write(const Configuration &configuration, std::span<char> output, bool default_titlebar) {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const Configuration &configuration, tbc::view<std::span<char>, tbc::lt::a> output, bool default_titlebar) {
     JsonWriter writer{output};
     writer.object([&](JsonWriter &object) {
       object.member("font", [&](JsonWriter &value) {
@@ -250,7 +252,7 @@ namespace telar::gui {
 
 class ThemeQuery {
 public:
-  [[nodiscard]] inline static std::string_view write(const ThemeSelection &selection, std::span<char> output) {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const ThemeSelection &selection, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
     writer.object([&](JsonWriter &object) {
       object.member("base", [&](JsonWriter &value) {

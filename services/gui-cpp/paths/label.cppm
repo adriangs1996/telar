@@ -8,6 +8,7 @@ module;
 
 
 #include <ghostty/vt/unicode.h>
+#include "tbc/view.hpp"
 
 export module telar.gui.paths.label;
 
@@ -404,7 +405,8 @@ public:
     return path;
   }
 
-  [[nodiscard]] inline static std::optional<std::string_view> relativeTo(std::string_view anchor, std::string_view path) noexcept {
+  // The relative path is a suffix of the path, region `a`.
+  [[nodiscard]] inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept {
     if (anchor.size() == 1) {
       if (path.size() <= 1) {
         return std::nullopt;

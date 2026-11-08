@@ -34,13 +34,17 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 
 
 import telar.gui.fonts.face;
 
 namespace telar::gui::qt {
 
-class ResidentFonts {
+// The faces a window shares. A face it hands out is a member that never moves, fallbacks included, so
+// a reference to it stays valid whatever is done through the fonts.
+class TBC_SHARED ResidentFonts {
 public:
   explicit ResidentFonts(std::shared_ptr<const FontAsset> source);
   explicit ResidentFonts(std::shared_ptr<const FontCollection> collection);
@@ -49,8 +53,9 @@ public:
   [[nodiscard]] std::optional<fonts::FontRole> source(std::string_view text, fonts::FontRole preferred);
   [[nodiscard]] std::size_t fallbackCount() const noexcept;
   [[nodiscard]] static std::shared_ptr<const FontAsset> resolveSource(const QString &family, const QString &style);
-  [[nodiscard]] static std::shared_ptr<ResidentFonts> shared(const std::shared_ptr<const FontAsset> &source);
-  [[nodiscard]] static std::shared_ptr<ResidentFonts> shared(const std::shared_ptr<const FontCollection> &collection);
+  // The fonts come from a process-wide cache, which keeps its own share of the source.
+  [[nodiscard]] static tbc::view<std::shared_ptr<ResidentFonts>, tbc::lt::static_storage> shared(const std::shared_ptr<const FontAsset> &source);
+  [[nodiscard]] static tbc::view<std::shared_ptr<ResidentFonts>, tbc::lt::static_storage> shared(const std::shared_ptr<const FontCollection> &collection);
 
 private:
   std::shared_ptr<const FontAsset> primary_source_;

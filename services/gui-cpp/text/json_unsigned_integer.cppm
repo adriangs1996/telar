@@ -12,6 +12,7 @@ module;
 
 #include <ghostty/vt/unicode.h>
 #include <cmath>
+#include "tbc/view.hpp"
 
 export module telar.gui.text.json_unsigned_integer;
 
@@ -507,7 +508,8 @@ struct TextFit {
   using Buffer = std::array<char, maximum_bytes>;
 
   template <LabelMeasure Measure>
-  [[nodiscard]] inline static std::string_view fit(std::string_view text, float width, Measure &measure, Buffer &buffer) {
+  // The fitted text is the text itself or the prefix written into the buffer, region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> fit(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure &measure, tbc::view<Buffer &, tbc::lt::a> buffer) {
     if (!std::isfinite(width)) {
       throw std::invalid_argument{"InvalidTextFitWidth"};
     }

@@ -18,6 +18,7 @@ module;
 #include <arpa/inet.h>
 #include <cinttypes>
 #include <cstdio>
+#include "tbc/view.hpp"
 
 export module telar.gui.config.plugin_effects;
 
@@ -279,7 +280,8 @@ namespace telar::gui {
 class RuntimeQuery {
 public:
   template <Allocator Memory>
-  [[nodiscard]] inline static std::string_view write(const runtime::config::RuntimeValues<Memory> &values, std::span<char> output) {
+  // The query is written into the output, region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const runtime::config::RuntimeValues<Memory> &values, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
     writer.object([&](JsonWriter &object) {
       object.member("graphics_pane_bytes", values.graphics.pane_bytes);

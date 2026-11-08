@@ -117,7 +117,7 @@ void cardsBoundTheRemainingLineCount() {
   const std::string command(command_bytes, '\n');
   const auto card = HistoryCard::measure(row, chrome, metrics, command);
   require(card.shown == HistoryCard::maximum_lines && card.more == HistoryCard::more_bound, "a long command must count only the visible lines and bounded remainder");
-  require(card.lines.front().data() == command.data(), "card lines must borrow command storage");
+  require(HistoryCard::line(command, card.lines.front()).data() == command.data(), "card lines must lie in the command they were measured over");
   require(card.meta.y >= card.text_y + (static_cast<float>(card.shown) * metrics.cell_height), "metadata must remain below the wrapped command");
   require(card.height <= metrics.viewport_height, "the selected card must remain inside the list viewport");
 }

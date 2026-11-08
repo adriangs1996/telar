@@ -20,6 +20,7 @@ module;
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <ghostty/vt/unicode.h>
+#include "tbc/view.hpp"
 
 export module telar.gui.config.generation;
 
@@ -1220,7 +1221,8 @@ private:
     }
   };
 
-  inline static Fields combined(std::span<const std::string_view> base, std::initializer_list<std::string_view> extra) {
+  // The fields name what the base and the extra names view, region `a`.
+  inline static tbc::view<Fields, tbc::lt::a> combined(tbc::view<std::span<const std::string_view>, tbc::lt::a> base, tbc::view<std::initializer_list<std::string_view>, tbc::lt::a> extra) {
     Fields result;
     for (const auto name : base) {
       result.names[result.count++] = name;

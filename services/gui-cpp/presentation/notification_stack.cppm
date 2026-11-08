@@ -9,6 +9,7 @@ module;
 #include <cstdint>
 #include <ghostty/vt/unicode.h>
 #include <cmath>
+#include "tbc/view.hpp"
 
 
 
@@ -42,7 +43,7 @@ struct AgentCardLabels {
   static constexpr std::size_t suffix_capacity = 32;
   using Project = BoundedText<workspace_capacity + machine_capacity + suffix_capacity>;
 
-  [[nodiscard]] inline static std::string_view title(std::string_view session, std::string_view display_name) noexcept {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> title(tbc::view<std::string_view, tbc::lt::a> session, tbc::view<std::string_view, tbc::lt::a> display_name) noexcept {
     if (!session.empty()) {
       return session;
     }
@@ -71,7 +72,8 @@ struct AgentCardLabels {
     }
   }
 
-  [[nodiscard]] inline static std::string_view project(std::string_view workspace, std::string_view machine, bool coordinator, Project &storage) {
+  // The label is written into the storage, or is one of the names when it does not fit: region `a`.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> project(tbc::view<std::string_view, tbc::lt::a> workspace, tbc::view<std::string_view, tbc::lt::a> machine, bool coordinator, tbc::view<Project &, tbc::lt::a> storage) {
     storage.truncate(0);
     try {
       if (!machine.empty()) {
@@ -118,7 +120,7 @@ struct NotificationActionLabel {
   }
 
   template <LabelMeasure Measure>
-  [[nodiscard]] inline static std::string_view fitHost(std::string_view host, float width, Measure &measure, Buffer &buffer) {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> fitHost(tbc::view<std::string_view, tbc::lt::a> host, float width, Measure &measure, tbc::view<Buffer &, tbc::lt::a> buffer) {
     if (!std::isfinite(width) || width < 0) {
       throw std::invalid_argument{"InvalidNotificationActionWidth"};
     }
@@ -445,7 +447,7 @@ struct PeekLabels {
   using Facts = BoundedText<facts_bytes>;
 
   template <Allocator Memory>
-  [[nodiscard]] inline static std::string_view title(const Agent<Memory> &agent, const Worktree<Memory> *task) noexcept {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> title(tbc::view<const Agent<Memory> &, tbc::lt::a> agent, tbc::view<const Worktree<Memory> *, tbc::lt::a> task) noexcept {
     if (task == nullptr) {
       return AgentCardLabels::title({}, agent.display_name);
     }

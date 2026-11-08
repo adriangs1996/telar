@@ -47,6 +47,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "core/memory.hpp"
 
 
@@ -117,22 +119,33 @@ private:
   void invalidateLayout();
   void refreshLayout();
   void refreshFit();
-  void shapeFittedText(std::string_view text);
   void refreshAvailability();
   void setSupported(bool supported);
   void refreshFonts();
 
+  // The text fitted to the item's width, shaped apart from the full text it is cut from.
+  struct FittedText {
+    explicit FittedText(SystemAllocator &memory) : glyphs(memory) {}
+    void shape(ResidentFonts &fonts, std::string_view text, fonts::TextRequest request);
+
+    fonts::TextLayout<SystemAllocator> glyphs;
+    TextFit::Buffer text{};
+    std::size_t bytes = 0;
+    std::int32_t advance = 0;
+    bool dirty = true;
+  };
+
   SystemAllocator memory_;
   fonts::TextLayout<SystemAllocator> glyphs_;
-  fonts::TextLayout<SystemAllocator> fitted_glyphs_;
-  AncestorGeometry ancestors_;
+  FittedText fit_;
+  // The ancestors are watched through this item, which stays where Qt made it.
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
   std::shared_ptr<ResidentFonts> fonts_;
   std::shared_ptr<const FontCollection> collection_;
   QPointer<WindowFontCatalog> catalog_;
   QMetaObject::Connection catalog_connection_;
   QString text_;
   QByteArray utf8_;
-  TextFit::Buffer fitted_text_{};
   QColor color_;
   FontMetrics metrics_;
   qreal pixel_size_ = ChromeMetrics{}.body;
@@ -140,8 +153,6 @@ private:
   qreal fade_width_ = 0;
   std::uint64_t revision_ = 0;
   std::int32_t advance_ = 0;
-  std::int32_t fitted_advance_ = 0;
-  std::size_t fitted_bytes_ = 0;
   std::uint16_t pixel_height_ = 0;
   Qt::TextElideMode elide_ = Qt::ElideRight;
   Qt::Alignment alignment_ = Qt::AlignLeft;
@@ -152,7 +163,6 @@ private:
   bool available_ = false;
   bool layout_dirty_ = true;
   bool fit_dirty_ = true;
-  bool fit_shape_dirty_ = true;
   bool fitted_ = false;
   bool render_failed_ = false;
 };

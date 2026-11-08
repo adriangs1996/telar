@@ -40,6 +40,7 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "platform/font.h"
+#include "tbc/view.hpp"
 
 
 import telar.gui.fonts.face;
@@ -85,7 +86,8 @@ public:
   }
 
 private:
-  static Vector<std::uint8_t, Memory> read(Memory &memory, const std::filesystem::path &path) {
+  // The bytes are storage of the allocator, region `a`.
+  static tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> read(tbc::view<Memory &, tbc::lt::a> memory, const std::filesystem::path &path) {
     const auto data = runtime::readFile(memory, path.c_str(), telar_font_max_bytes);
 
     return {data.cbegin(), data.cend(), AllocatorRef<std::uint8_t, Memory>{memory}};

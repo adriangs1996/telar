@@ -9,6 +9,7 @@ module;
 #include <ghostty/vt/unicode.h>
 
 #include <cstring>
+#include "tbc/view.hpp"
 
 
 export module telar.gui.presentation.history_meta_geometry;
@@ -183,6 +184,12 @@ struct HistoryCardMetrics {
   float viewport_height = 0;
 };
 
+// A shown line of a command, as where it lies in the command the card was measured over.
+struct HistoryCardLine {
+  std::uint32_t offset = 0;
+  std::uint32_t length = 0;
+};
+
 struct HistoryCard {
   static constexpr std::size_t maximum_lines = 10;
   static constexpr std::uint16_t more_bound = 64;
@@ -194,7 +201,7 @@ struct HistoryCard {
   static constexpr float minimum_meta_height = 22;
   static constexpr float meta_padding = 6;
 
-  std::array<std::string_view, maximum_lines> lines{};
+  std::array<HistoryCardLine, maximum_lines> lines{};
   std::uint16_t shown = 0;
   std::uint16_t more = 0;
   std::uint16_t line_limit = maximum_lines;
@@ -203,6 +210,12 @@ struct HistoryCard {
   float height = 0;
   Rect meta;
 
+  // The text of a shown line of the command the card was measured over.
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> line(tbc::view<std::string_view, tbc::lt::a> command, HistoryCardLine line) noexcept {
+    return command.substr(std::min<std::size_t>(line.offset, command.size()), line.length);
+  }
+
+  // The card keeps where its lines lie in the command, so it views nothing the caller may replace.
   [[nodiscard]] inline static HistoryCard measure(const HistoryRowGeometry &row, ChromeMetrics chrome, HistoryCardMetrics metrics, std::string_view command) noexcept {
     HistoryCard result;
     result.line_limit = lineLimit(chrome, metrics);
@@ -217,7 +230,7 @@ struct HistoryCard {
       }
 
       if (total < result.line_limit) {
-        result.lines[total] = *line;
+        result.lines[total] = {.offset = static_cast<std::uint32_t>(line->data() - command.data()), .length = static_cast<std::uint32_t>(line->size())};
       }
 
       ++total;

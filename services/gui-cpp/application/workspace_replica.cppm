@@ -10,6 +10,7 @@ module;
 
 
 #include <cstring>
+#include "tbc/view.hpp"
 
 
 export module telar.gui.application.workspace_replica;
@@ -355,7 +356,8 @@ public:
     return change.current == AgentStatus::blocked || change.current == AgentStatus::done || change.current == AgentStatus::failed;
   }
 
-  [[nodiscard]] inline static std::optional<NotificationInput> input(const AgentStatusChange &change, std::string_view label, Message &message) {
+  // The input's message is written into the message, region `a`; its title is a literal.
+  [[nodiscard]] inline static tbc::view<std::optional<NotificationInput>, tbc::lt::a> input(const AgentStatusChange &change, std::string_view label, tbc::view<Message &, tbc::lt::a> message) {
     if (!alertable(change)) {
       return std::nullopt;
     }
@@ -441,7 +443,7 @@ private:
     return status == AgentStatus::failed ? failed_duration_ns : NotificationInput::default_duration_ns;
   }
 
-  [[nodiscard]] inline static std::string_view formatMessage(const AgentStatusChange &change, std::string_view label, Message &message) {
+  [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> formatMessage(const AgentStatusChange &change, std::string_view label, tbc::view<Message &, tbc::lt::a> message) {
     message.truncate(0);
     try {
       message.append(label);

@@ -11,6 +11,7 @@ module;
 #include <sys/file.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "tbc/view.hpp"
 
 module telar.gui.platform.notification_commands;
 
@@ -23,7 +24,8 @@ namespace telar::gui::platform {
 
 namespace {
 
-std::string_view lockFilename(std::span<char> output, std::string_view basename, unsigned slot) {
+// The filename is written into the output, region `a`.
+tbc::view<std::string_view, tbc::lt::a> lockFilename(tbc::view<std::span<char>, tbc::lt::a> output, std::string_view basename, unsigned slot) {
   constexpr std::string_view prefix = ".gui-";
   constexpr std::string_view suffix = ".lock";
   if (basename.size() + prefix.size() + suffix.size() >= output.size()) {
