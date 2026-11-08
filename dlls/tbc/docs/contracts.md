@@ -535,8 +535,9 @@ class TBC_SHARED SynchronizedAllocator {
 };
 ```
 
-A pointer a shared type's method returns, such as an allocated block, is fresh
-storage, unchecked like a `new` expression's.
+A pointer or a reference a shared type's method returns, such as an allocated
+block or a cache's entry, is storage the shared object keeps valid, unchecked
+like a `new` expression's.
 
 Nor is an object of a shared type invalidated by a call to something that keeps
 it: a store that mutates a model holding the allocator leaves the allocator, and

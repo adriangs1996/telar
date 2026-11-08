@@ -1090,3 +1090,77 @@ std::size_t declarationOwnedReceiverAlias() {
 }
 
 // END CASE
+
+// CASE: declaration.shared_reference_result
+// PAIR: declaration.shared_reference_result
+// SOURCE: services/gui-cpp/qt/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
+// STATUS: implemented
+// CONTRACT: A reference a shared type's method returns is storage the shared object keeps valid, as a pointer it returns is, so a call through it invalidates nothing of its caller.
+// SCENARIO: An item measures through a face its shared fonts hand out while a view of its own text is used later; accept.
+namespace declarations {
+  class font_face {
+  public:
+    int measure(int size) {
+      size_ = size;
+      return size_;
+    }
+
+  private:
+    int size_ = 0;
+  };
+
+  class TBC_SHARED shared_fonts {
+  public:
+    font_face &face() { return face_; }
+
+  private:
+    font_face face_;
+  };
+
+  class text_item {
+  public:
+    explicit text_item(shared_fonts &fonts) : fonts_(&fonts) {}
+
+    std::size_t layout() {
+      const std::string_view text{utf8_};
+      height_ = fonts_->face().measure(12);
+      return text.size();
+    }
+
+  private:
+    shared_fonts *fonts_;
+    std::string utf8_ = "text";
+    int height_ = 0;
+  };
+}
+
+std::size_t declarationSharedReferenceResult(declarations::shared_fonts &fonts) {
+  declarations::text_item item{fonts};
+  return item.layout();
+}
+
+// END CASE
+
+// CASE: declaration.unshared_reference_result
+// PAIR: declaration.shared_reference_result
+// SOURCE: services/gui-cpp/qt/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
+// STATUS: implemented
+// CONTRACT: A reference a shared type's method returns is storage the shared object keeps valid, as a pointer it returns is, so a call through it invalidates nothing of its caller.
+// SCENARIO: A face the item owns grows a buffer a view of it was taken from before; reject the later use.
+namespace declarations {
+  class buffered_face {
+  public:
+    std::string &buffer() { return buffer_; }
+
+  private:
+    std::string buffer_ = "glyphs";
+  };
+}
+
+std::size_t declarationUnsharedReferenceResult(declarations::buffered_face &face) {
+  const std::string_view glyphs{face.buffer()};
+  face.buffer().append(64, 'x'); // expected-error [tbc-invalidated-borrow]
+  return glyphs.size();
+}
+
+// END CASE

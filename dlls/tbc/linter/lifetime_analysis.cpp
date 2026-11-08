@@ -2915,9 +2915,9 @@ namespace tbc_lint {
         if (auto constructed = forwardedConstruction(*callee, call, current)) {
           return std::move(*constructed);
         }
-        // A pointer a shared type hands out, as an allocator's block, is fresh storage no variable holds,
-        // unchecked like a `new` expression's.
-        if (object != nullptr && call.getType()->isPointerType() && sharedType(objectType(*object))) {
+        // A pointer or a reference a shared type hands out, as an allocator's block or a cache's entry, is
+        // storage the shared object keeps valid, unchecked like a `new` expression's.
+        if (object != nullptr && (call.getType()->isPointerType() || callee->getReturnType()->isReferenceType()) && sharedType(objectType(*object))) {
           return {};
         }
         const auto result_annotation = returnAnnotation(*callee, context_);

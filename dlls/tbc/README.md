@@ -247,7 +247,7 @@ cmake --build --preset debug --target spec-check
 
 The first command validates fixture syntax/metadata, the runner, and implemented
 regressions. `spec-check` deliberately fails on unmet pending specifications.
-The corpus has 334 cases: 284 implemented regressions and 50 explicitly pending
+The corpus has 336 cases: 286 implemented regressions and 50 explicitly pending
 requirements. Fixtures are never linked or executed. Provenance validation requires the surrounding Telar checkout.
 
 ## Format and static analysis
