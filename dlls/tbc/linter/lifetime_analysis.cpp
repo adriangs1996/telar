@@ -11,7 +11,6 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/STLExtras.h>
-#include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallVector.h>
@@ -45,6 +44,9 @@ namespace tbc_lint {
       missing,
       relocated_self,
       elided_contract,
+      self_borrow,
+      retention,
+      overlap,
     };
 
     // How deep a borrow reaches into a variable: the variable itself, the storage it owns, such as a
@@ -113,7 +115,7 @@ namespace tbc_lint {
     // dereferences have their own, which leaves room for wrappers that reach a stream through
     // references.
     enum class path_bound : std::uint8_t {
-      held = 1,
+      held = 2,
       steps = 4,
       dereferences = 3,
     };
@@ -354,12 +356,6 @@ namespace tbc_lint {
           }
 
           if (bucket != nullptr) {
-            // One borrow held at many positions is held inside their common prefix, as soon as it is,
-            // so that a single large merge does not compare it against all of them.
-            if (widenInto(*bucket, value, covered)) {
-              changed = true;
-              continue;
-            }
             bucket->push_back(static_cast<unsigned>(values.size()));
           }
           values.push_back(value);
@@ -375,206 +371,11 @@ namespace tbc_lint {
           }
           values = std::move(kept);
         }
-        // Widening reads the whole set, so it runs again only once the set has doubled.
-        if (changed && values.size() > widen_at) {
-          widenHeld();
-          widen_at = std::max(widen_from, 2 * values.size());
-        }
-
         return changed;
       }
 
       bool merge(const loans &other) {
         return merge(llvm::ArrayRef<origin>(other.values));
-      }
-
-      // The form a borrow takes at a loop head that keeps changing: held anywhere in its object, and
-      // standing for any field of the object its last dereference reaches. The form depends on the
-      // borrow alone, so a loop's borrows take few forms and its solution converges. It is coarser,
-      // so it is sound.
-      // The form a borrow takes at a loop head that keeps changing: held anywhere in its object, and
-      // standing for any field of the object its last dereference reaches. The form depends on the
-      // borrow alone, so a loop's borrows take few forms and its solution converges. It is coarser,
-      // so it is sound.
-      void coarsen() {
-        llvm::SmallVector<origin, 2> coarse;
-        coarse.reserve(values.size());
-        for (auto value : values) {
-          if (!value.held.empty()) {
-            value.held.assign(1, projection{.field = nullptr});
-          }
-          if (const auto steps = objectSteps(value.select); steps < value.select.size()) {
-            value.select.truncate(steps);
-            value.select.push_back({.field = nullptr});
-          }
-          coarse.push_back(std::move(value));
-        }
-        values.clear();
-        widen_at = widen_from;
-        merge(coarse);
-      }
-
-    private:
-      // Past these sizes, one borrow held at many positions of an object is held somewhere inside
-      // their common prefix. The positions of a deep object graph multiply with the parts of an input
-      // its borrows stand for; coarsening only where a borrow lands in many of them bounds the sets
-      // and keeps ordinary code exact. A coarser position covers the finer ones, so it is sound.
-      static constexpr std::size_t widen_from = 64;
-      static constexpr std::size_t held_positions = 4;
-      std::size_t widen_at = widen_from;
-
-      // Widens the live positions of a borrow in a bucket, together with an incoming one, into the first
-      // of them once there are more than the threshold. The others become covered by it.
-      bool widenInto(llvm::ArrayRef<unsigned> bucket, const origin &value, llvm::BitVector &covered) {
-        llvm::SmallVector<unsigned, 8> same;
-        for (const auto position : bucket) {
-          if (!covered.test(position) && sameBorrow(values[position], value)) {
-            same.push_back(position);
-          }
-        }
-        if (same.size() < held_positions) {
-          return false;
-        }
-        auto &kept = values[same.front()];
-        const auto keep = [&](const field_path &held) {
-          const auto common = std::ranges::mismatch(kept.held, held).in1 - kept.held.begin();
-          kept.held.truncate(static_cast<std::size_t>(common));
-        };
-        keep(value.held);
-        for (const auto position : llvm::drop_begin(same)) {
-          keep(values[position].held);
-          covered.set(position);
-        }
-        widenTo(kept.held);
-        return true;
-      }
-
-      void widenHeld(std::size_t positions = held_positions) {
-        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<unsigned, 4>> groups;
-        for (unsigned position = 0; position < values.size(); ++position) {
-          groups[borrowHash(values[position])].push_back(position);
-        }
-        llvm::BitVector dropped(static_cast<unsigned>(values.size()));
-        llvm::SmallVector<unsigned, 8> same;
-        for (const auto &group : groups) {
-          if (group.second.size() <= positions) {
-            continue;
-          }
-          // Equal hashes can still be different borrows.
-          same.clear();
-          for (const auto position : group.second) {
-            if (sameBorrow(values[position], values[group.second.front()])) {
-              same.push_back(position);
-            }
-          }
-          if (same.size() <= positions) {
-            continue;
-          }
-          auto &kept = values[same.front()];
-          for (const auto position : llvm::drop_begin(same)) {
-            const auto &held = values[position].held;
-            const auto common = std::ranges::mismatch(kept.held, held).in1 - kept.held.begin();
-            kept.held.truncate(static_cast<std::size_t>(common));
-            dropped.set(position);
-          }
-          widenTo(kept.held);
-        }
-        widenParts(dropped);
-        if (dropped.none()) {
-          return;
-        }
-        llvm::SmallVector<origin, 2> kept;
-        for (unsigned position = 0; position < values.size(); ++position) {
-          if (!dropped.test(position)) {
-            kept.push_back(std::move(values[position]));
-          }
-        }
-        values = std::move(kept);
-      }
-
-      // Borrows that stand for many fields of one object an input designates stand for any field of
-      // it instead: the parts share their steps up to the last dereference and differ in the fields
-      // after it. A dereference cannot follow a cut, so parts reached through different pointers stay
-      // apart. The coarser part contains the finer ones, so it is sound.
-      void widenParts(llvm::BitVector &dropped) {
-        llvm::DenseMap<llvm::hash_code, llvm::SmallVector<unsigned, 4>> groups;
-        for (unsigned position = 0; position < values.size(); ++position) {
-          const auto &value = values[position];
-          if (!dropped.test(position) && objectSteps(value.select) < value.select.size()) {
-            groups[partHash(value)].push_back(position);
-          }
-        }
-        llvm::SmallVector<unsigned, 8> same;
-        for (const auto &group : groups) {
-          if (group.second.size() <= held_positions) {
-            continue;
-          }
-          same.clear();
-          for (const auto position : group.second) {
-            if (samePart(values[position], values[group.second.front()])) {
-              same.push_back(position);
-            }
-          }
-          if (same.size() <= held_positions) {
-            continue;
-          }
-          auto &kept = values[same.front()];
-          bool held_differs = false;
-          for (const auto position : llvm::drop_begin(same)) {
-            const auto &held = values[position].held;
-            held_differs = held_differs || held != kept.held;
-            const auto common = std::ranges::mismatch(kept.held, held).in1 - kept.held.begin();
-            kept.held.truncate(static_cast<std::size_t>(common));
-            dropped.set(position);
-          }
-          if (held_differs) {
-            widenTo(kept.held);
-          }
-          kept.select.truncate(objectSteps(kept.select));
-          kept.select.push_back({.field = nullptr});
-        }
-      }
-
-      // The steps of a part up to and including its last dereference, which reach the object the
-      // remaining fields select from.
-      static std::size_t objectSteps(const field_path &select) {
-        for (auto index = select.size(); index > 0; --index) {
-          if (select[index - 1].dereference) {
-            return index;
-          }
-        }
-        return 0;
-      }
-
-      // Every field of a borrow but where it is held and the fields its part selects in one object.
-      static bool samePart(const origin &left, const origin &right) {
-        const auto steps = objectSteps(left.select);
-        return steps == objectSteps(right.select) && std::equal(left.select.begin(), left.select.begin() + static_cast<std::ptrdiff_t>(steps), right.select.begin()) && left.kind == right.kind && left.storage == right.storage && left.path == right.path && left.variable == right.variable && left.expression == right.expression && left.region == right.region && left.invalidated == right.invalidated && left.full_expression == right.full_expression && left.borrow_site == right.borrow_site;
-      }
-
-      static llvm::hash_code partHash(const origin &value) {
-        auto select = llvm::hash_value(objectSteps(value.select));
-        for (std::size_t index = 0; index < objectSteps(value.select); ++index) {
-          select = llvm::hash_combine(select, value.select[index].field, value.select[index].dereference);
-        }
-        auto path = llvm::hash_value(value.path.size());
-        for (const auto &step : value.path) {
-          path = llvm::hash_combine(path, step.field, std::to_underlying(step.level));
-        }
-        return llvm::hash_combine(std::to_underlying(value.kind), std::to_underlying(value.storage), path, select, value.variable, value.expression, value.region, value.invalidated, value.full_expression, value.borrow_site.getRawEncoding());
-      }
-
-      // Ends a position with a step that stands for any field below it, within the position bound.
-      static void widenTo(field_path &held) {
-        if (!held.empty() && cut(held.back())) {
-          return;
-        }
-        const auto fields = static_cast<std::size_t>(std::ranges::count_if(held, [](const projection &step) { return !step.dereference; }));
-        if (fields >= std::to_underlying(path_bound::held)) {
-          const auto last = llvm::find_if(llvm::reverse(held), [](const projection &step) { return !step.dereference; });
-          held.truncate(static_cast<std::size_t>(std::distance(last, held.rend())) - 1U);
-        }
-        held.push_back({.field = nullptr});
       }
     };
 
@@ -962,14 +763,6 @@ namespace tbc_lint {
         return found == references.end() ? loans{} : found->second;
       }
 
-      void coarsen() {
-        for (auto *map : {&values, &references, &designated}) {
-          for (auto &entry : *map) {
-            entry.second.coarsen();
-          }
-        }
-      }
-
       bool merge(const state &other) {
         bool changed = false;
         for (const auto &entry : other.values) {
@@ -1005,7 +798,17 @@ namespace tbc_lint {
       // The parts of its parameters and receiver fields whose incoming contents the function uses.
       loans uses;
 
-      bool invalidate(const object_place &target, storage_range range) {
+      // A summary known only by its declaration states which inputs a call can invalidate, not which of
+      // their fields: an input is invalidated whole, as a Rust `&mut` borrow lends the whole object.
+      // Through a reference it reaches at most the object the input's first reference designates. A
+      // closure's callers see its body, so its summary keeps fields, as Rust closures capture them.
+      bool whole_inputs = true;
+
+      bool invalidate(object_place target, storage_range range) {
+        if (whole_inputs) {
+          target.path.clear();
+          target.select.erase(std::ranges::find_if(target.select, [](const projection &step) { return step.dereference; }), target.select.end());
+        }
         const auto found = std::ranges::find_if(invalidates, [&](const invalidation &entry) { return entry.target == target; });
         if (found == invalidates.end()) {
           invalidates.push_back({.target = target, .range = range});
@@ -1029,6 +832,7 @@ namespace tbc_lint {
       }
 
       bool merge(const function_summary &other) {
+        whole_inputs = other.whole_inputs;
         bool changed = returned.merge(other.returned);
         if (other.invalidates_environment && !invalidates_environment) {
           invalidates_environment = true;
@@ -1181,6 +985,7 @@ namespace tbc_lint {
             errors_(errors),
             reported_(reported),
             cache_(cache) {
+        summary_.whole_inputs = !transparent(&function);
         const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function);
         if (method != nullptr && method->getParent()->isLambda()) {
           clang::FieldDecl *this_capture = nullptr;
@@ -1194,40 +999,20 @@ namespace tbc_lint {
         }
       }
 
-      static constexpr unsigned widen_after = 1u << 30;
-
       function_summary run(const clang::CFG &cfg, bool diagnostics = false) {
         const auto *graph = &cfg;
         llvm::SmallVector<state, 16> inputs(graph->getNumBlockIDs());
         llvm::BitVector reached(graph->getNumBlockIDs());
         llvm::BitVector queued(graph->getNumBlockIDs());
         llvm::SmallVector<const clang::CFGBlock *, 16> work;
-        // A block whose input keeps changing heads a loop that is still growing; past a few changes, its
-        // borrows take their coarse form.
-        llvm::SmallVector<unsigned, 16> changes(graph->getNumBlockIDs());
-        llvm::BitVector coarse(graph->getNumBlockIDs());
         const auto *entry = &graph->getEntry();
         inputs[entry->getBlockID()] = initialState();
         reached.set(entry->getBlockID());
         queued.set(entry->getBlockID());
         work.push_back(entry);
 
-        std::size_t debug_steps = 0;
-        const auto debug_size = [&](const state &s) {
-          std::size_t total = 0;
-          for (const auto *map : {&s.values, &s.references, &s.designated}) {
-            for (const auto &entry : *map) {
-              total += entry.second.values.size();
-            }
-          }
-          return total;
-        };
-        const auto debug_start = std::chrono::steady_clock::now();
         while (!work.empty()) {
           const auto *block = work.pop_back_val();
-          if (std::getenv("TBC_DEBUG") != nullptr && ++debug_steps % 500 == 0) {
-            llvm::errs() << "DEBUG " << function_.getQualifiedNameAsString() << " steps=" << debug_steps << " blocks=" << graph->getNumBlockIDs() << " size=" << debug_size(inputs[block->getBlockID()]) << " ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - debug_start).count() << "\n";
-          }
           queued.reset(block->getBlockID());
           auto output = inputs[block->getBlockID()];
           transfer(*block, output);
@@ -1243,63 +1028,18 @@ namespace tbc_lint {
 
             const auto id = next->getBlockID();
             bool changed = false;
-            if (test || coarse[id]) {
+            if (test) {
               auto incoming = output;
-              if (test) {
-                refine(*test, branch, incoming);
-              }
-              if (coarse[id]) {
-                incoming.coarsen();
-              }
+              refine(*test, branch, incoming);
               changed = inputs[id].merge(incoming);
             } else {
               changed = inputs[id].merge(output);
-            }
-            if (changed && !coarse[id] && ++changes[id] > widen_after) {
-              coarse.set(id);
-              inputs[id].coarsen();
             }
             if ((!reached[id] || changed) && !queued[id]) {
               queued.set(id);
               work.push_back(next);
             }
             reached.set(id);
-          }
-        }
-        if (std::getenv("TBC_DEBUG") != nullptr) {
-          const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - debug_start).count();
-          if (elapsed > 200) {
-            llvm::errs() << "DONE " << function_.getQualifiedNameAsString() << " steps=" << debug_steps << " blocks=" << graph->getNumBlockIDs() << " exit=" << debug_size(inputs[graph->getExit().getBlockID()]) << " ms=" << elapsed << "\n";
-            const auto &final_state = inputs[graph->getExit().getBlockID()];
-            const char *names[] = {"values", "references", "designated"};
-            int map_index = 0;
-            for (const auto *map : {&final_state.values, &final_state.references, &final_state.designated}) {
-              for (const auto &item : *map) {
-                if (item.second.values.size() < 50) {
-                  continue;
-                }
-                llvm::errs() << "  " << names[map_index] << " " << item.first->getName() << " n=" << item.second.values.size() << "\n";
-                llvm::DenseMap<const clang::ValueDecl *, unsigned> by_variable;
-                std::array<unsigned, 12> select_lengths{};
-                std::array<unsigned, 12> held_lengths{};
-                for (const auto &source : item.second.values) {
-                  ++by_variable[source.variable];
-                  ++select_lengths[std::min<std::size_t>(source.select.size(), 11)];
-                  ++held_lengths[std::min<std::size_t>(source.held.size(), 11)];
-                }
-                for (const auto &[variable, occurrences] : by_variable) {
-                  if (occurrences >= 20) {
-                    llvm::errs() << "    from " << (variable != nullptr ? variable->getName() : "<none>") << " " << occurrences << "\n";
-                  }
-                }
-                llvm::errs() << "    select:";
-                for (auto count : select_lengths) llvm::errs() << " " << count;
-                llvm::errs() << "\n    held:";
-                for (auto count : held_lengths) llvm::errs() << " " << count;
-                llvm::errs() << "\n";
-              }
-              ++map_index;
-            }
           }
         }
 
@@ -1357,17 +1097,6 @@ namespace tbc_lint {
             report(issue::relocated_self, initializerLocation(*constructor, *field));
           }
         }
-        for (const auto &[key, written] : summary_.writes) {
-          const auto *field = llvm::dyn_cast<clang::FieldDecl>(key);
-          if (field == nullptr) {
-            continue;
-          }
-          for (const auto &source : written.values) {
-            if (source.kind == origin_kind::receiver) {
-              report(issue::relocated_self, initializerLocation(*constructor, *field), &source);
-            }
-          }
-        }
       }
 
       [[nodiscard]] static clang::SourceLocation initializerLocation(const clang::CXXConstructorDecl &constructor, const clang::FieldDecl &field) {
@@ -1408,6 +1137,8 @@ namespace tbc_lint {
       llvm::SmallPtrSet<const clang::ValueDecl *, 4> by_reference_;
       bool reporting_ = false;
       bool collecting_ = false;
+      // Where the statement being transferred writes, for what a store reports.
+      clang::SourceLocation write_site_{};
       // What each receiver held when the call being resolved began; null outside such a call.
       llvm::DenseMap<std::pair<const clang::Expr *, const state *>, loans> *receiver_contents_ = nullptr;
 
@@ -1523,6 +1254,15 @@ namespace tbc_lint {
           break;
         case issue::relocated_self:
           id = diagnostics.getCustomDiagID(severity, "object keeps a borrow of itself but can be copied or moved [tbc-dangling-borrow]");
+          break;
+        case issue::self_borrow:
+          id = diagnostics.getCustomDiagID(severity, "object keeps a borrow of itself; label the field tbc::lt::self and pin the type, or keep an index [tbc-dangling-borrow]");
+          break;
+        case issue::overlap:
+          id = diagnostics.getCustomDiagID(severity, "argument overlaps another one the call can mutate; pass disjoint objects or an index [tbc-invalidated-borrow]");
+          break;
+        case issue::retention:
+          id = diagnostics.getCustomDiagID(severity, "stores a borrow its declaration does not let it keep; label the input and the place that keeps it with one region [tbc-contract-violation]");
           break;
         }
         {
@@ -1841,7 +1581,7 @@ namespace tbc_lint {
           return selected(current.held(designation.variable), inlineFields(designation.path));
         }
         loans result;
-        result.add({.kind = designation.kind, .select = *position, .variable = designation.variable});
+        result.add({.kind = designation.kind, .select = *position, .variable = designation.variable, .region = designation.region});
         if (const auto found = current.designated.find(designation.variable); found != current.designated.end()) {
           result.merge(selected(found->second, *position));
         }
@@ -1947,8 +1687,92 @@ namespace tbc_lint {
         return result;
       }
 
+      // A type a template's parameters spell, as `T`, `const T &` or `Args &&...`: what it holds belongs to
+      // the template argument, which carries its own borrows into whatever keeps it, as `T: 'a` does.
+      [[nodiscard]] bool spelledByTemplate(clang::QualType type) const {
+        for (unsigned steps = 0; steps < 16 && !type.isNull(); ++steps) {
+          const auto *node = type.getTypePtr();
+          if (llvm::isa<clang::SubstTemplateTypeParmType, clang::SubstTemplateTypeParmPackType>(node)) {
+            return true;
+          }
+          if (const auto *reference = llvm::dyn_cast<clang::ReferenceType>(node)) {
+            type = reference->getPointeeTypeAsWritten();
+          } else if (const auto *pointer = llvm::dyn_cast<clang::PointerType>(node)) {
+            type = pointer->getPointeeType();
+          } else if (const auto next = type.getSingleStepDesugaredType(context_); next != type) {
+            type = next;
+          } else {
+            return false;
+          }
+        }
+        return false;
+      }
+
+      // A parameter of the class's own type shares its regions, as `Self` does.
+      [[nodiscard]] static bool ownType(const clang::ParmVarDecl &parameter, const clang::FunctionDecl &function) {
+        const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function);
+        const auto *record = recordOf(parameter.getType().getNonReferenceType());
+        return method != nullptr && record != nullptr && record->getCanonicalDecl() == method->getParent()->getCanonicalDecl();
+      }
+
+      // Callers know only the declaration, so a body keeps no borrow it does not declare: an input's
+      // borrow stays where it lands only when the input and that place share a region, or in a new
+      // object whose class declares none, which callers assume keeps every argument that lends. An
+      // object never keeps a borrow of itself but in a field labeled `lt::self`.
+      void checkRetention(const clang::ValueDecl &target, const loans &incoming, clang::SourceLocation where) {
+        if (!reporting_ || where.isInvalid() || !declarationOnly()) {
+          return;
+        }
+        // A shared type's implementation is audited, as a Rust type with interior mutability is unsafe code.
+        if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && sharedRecord(*method->getParent())) {
+          return;
+        }
+        const auto *field = llvm::dyn_cast<clang::FieldDecl>(&target);
+        const auto *output = llvm::dyn_cast<clang::ParmVarDecl>(&target);
+        if (field == nullptr && (output == nullptr || output->getDeclContext() != &function_)) {
+          return;
+        }
+        const auto *region = field != nullptr ? viewAnnotation(field->getType(), context_).region : parameterAnnotation(*output, context_).region;
+        const auto *constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function_);
+        const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(constructor->getParent()->fields(), [&](const clang::FieldDecl *member) { return viewAnnotation(member->getType(), context_).region != nullptr; });
+        for (const auto &source : incoming.values) {
+          if (source.invalidated != nullptr) {
+            continue;
+          }
+          if (source.kind == origin_kind::receiver) {
+            if (field == nullptr || !selfBorrowing(*field)) {
+              report(issue::self_borrow, where, &source);
+            }
+            continue;
+          }
+          if (source.kind == origin_kind::receiver_region) {
+            if (field == nullptr && source.variable != &target && (region == nullptr || source.region != region)) {
+              report(issue::retention, where, &source);
+            }
+            continue;
+          }
+          if (!parameterOrigin(source) || source.variable == &target || elided) {
+            continue;
+          }
+          const auto *parameter = llvm::dyn_cast<clang::ParmVarDecl>(source.variable);
+          if (parameter == nullptr || parameter->getDeclContext() != &function_) {
+            continue;
+          }
+          // What a template argument or a value of the same type holds is part of its type.
+          const bool contents = source.kind == origin_kind::parameter;
+          const bool same_type = output != nullptr && sameType(output->getType().getNonReferenceType(), parameter->getType().getNonReferenceType());
+          if (contents && (spelledByTemplate(parameter->getType()) || ownType(*parameter, function_) || same_type)) {
+            continue;
+          }
+          if (region == nullptr || parameterAnnotation(*parameter, context_).region != region) {
+            report(issue::retention, where, &source);
+          }
+        }
+      }
+
       void store(const write_targets &where, const loans &incoming, state &current) {
         for (const auto &target : where.places) {
+          checkRetention(*target.variable, incoming, write_site_);
           if (target.designated) {
             current.designated[target.variable].merge(heldAt(incoming, target.fields));
             continue;
@@ -2352,9 +2176,11 @@ namespace tbc_lint {
         return llvm::isa<clang::CXXOperatorCallExpr>(call) && llvm::isa_and_nonnull<clang::CXXMethodDecl>(call.getDirectCallee()) ? 1U : 0U;
       }
 
+      // A labeled reference or pointer to a non-const object that can hold borrows, which a call fills.
       [[nodiscard]] bool outputParameter(const clang::ParmVarDecl &parameter) const {
         const auto type = parameter.getType();
-        return parameterAnnotation(parameter, context_).present && type->isReferenceType() && !type.getNonReferenceType().isConstQualified() && containsViews(type.getNonReferenceType()) && !viewType(type);
+        const auto object = type->isPointerType() ? type->getPointeeType() : type.getNonReferenceType();
+        return parameterAnnotation(parameter, context_).present && (type->isReferenceType() || type->isPointerType()) && !object.isConstQualified() && containsViews(object) && !viewType(object) && !object->isPointerType();
       }
 
       function_entry *knownDeclaration(const clang::FunctionDecl *callee) {
@@ -2371,6 +2197,19 @@ namespace tbc_lint {
 
       function_entry *knownFunction(const clang::CallExpr &call) {
         return knownDeclaration(call.getDirectCallee());
+      }
+
+      // A call whose callers see its body, as Rust checks a closure with the function that defines it
+      // and derives memberwise special members: a lambda's call operator, or a member the compiler
+      // writes. Any other call is known only by its declaration.
+      [[nodiscard]] static bool transparent(const clang::FunctionDecl *callee) {
+        const auto *method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(callee);
+        return method != nullptr && (method->getParent()->isLambda() || method->isDefaulted());
+      }
+
+      // The summary of a call whose body its callers see.
+      function_entry *transparentFunction(const clang::CallExpr &call) {
+        return transparent(call.getDirectCallee()) ? knownFunction(call) : nullptr;
       }
 
       // A summary's borrow lies at its symbolic place inside the actual borrow that replaces its input,
@@ -2464,7 +2303,8 @@ namespace tbc_lint {
       // What one construction writes to each field of the new object, its bases' fields included, or
       // nothing when its constructor has no summary.
       std::optional<field_writes> constructedFields(const clang::CXXConstructExpr &construction, const state &current) {
-        const auto *known = knownDeclaration(constructorOf(construction));
+        const auto *constructor = constructorOf(construction);
+        const auto *known = transparent(constructor) ? knownDeclaration(constructor) : nullptr;
         if (known == nullptr) {
           return std::nullopt;
         }
@@ -2535,7 +2375,10 @@ namespace tbc_lint {
           const auto *parameter = constructor->getParamDecl(index);
           const auto region = parameterAnnotation(*parameter, context_).region;
           if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*constructor, region)) {
-            retained.merge(storage(construction.getArg(index), current));
+            retained.merge(lent(*constructor, *parameter, *construction.getArg(index), current));
+            if (parameter->getType()->isReferenceType()) {
+              retained.merge(reference(construction.getArg(index), current));
+            }
           }
         }
         retained = unplaced(retained);
@@ -2553,7 +2396,10 @@ namespace tbc_lint {
         }
         for (unsigned index = 0; index < constructor->getNumParams() && index < construction.getNumArgs(); ++index) {
           if (lends(*constructor->getParamDecl(index))) {
-            retained.merge(lent(*constructor->getParamDecl(index), *construction.getArg(index), current));
+            retained.merge(lent(*constructor, *constructor->getParamDecl(index), *construction.getArg(index), current));
+            if (constructor->getParamDecl(index)->getType()->isReferenceType()) {
+              retained.merge(reference(construction.getArg(index), current));
+            }
           }
         }
         retained = unplaced(retained);
@@ -2576,12 +2422,16 @@ namespace tbc_lint {
         if (record == nullptr || !record->hasDefinition()) {
           return;
         }
+        // The subobject keeps what its constructor's declaration lets it retain, in any field that can.
+        loans retained;
+        if (construction == nullptr || (!declaredRetention(*construction, current, retained) && !elidedRetention(*construction, current, retained))) {
+          retained.add({.kind = origin_kind::unknown, .expression = initializer.getInit()});
+        }
         llvm::SmallVector<const clang::FieldDecl *, 8> members;
         recordFields(*record->getDefinition(), members);
         for (const auto *field : members) {
           if (containsViews(field->getType())) {
-            current.values[field] = {};
-            current.values[field].add({.kind = origin_kind::unknown, .expression = initializer.getInit()});
+            current.values[field] = retained;
             current.written.insert(field);
           }
         }
@@ -2739,7 +2589,7 @@ namespace tbc_lint {
           return std::nullopt;
         }
         if (hasReceiver(callee)) {
-          return object != nullptr ? std::optional<loans>(objectStorage(*object, current)) : std::nullopt;
+          return object != nullptr ? std::optional<loans>(receiverLent(callee, *object, current)) : std::nullopt;
         }
         const auto parameter = elidedParameter(callee);
         if (!parameter) {
@@ -2752,27 +2602,62 @@ namespace tbc_lint {
         if (index >= call.getNumArgs()) {
           return std::nullopt;
         }
-        return lent(**parameter, *call.getArg(index), current);
+        return lent(callee, **parameter, *call.getArg(index), current);
       }
 
-      // What an argument lends through its parameter: the object a reference binds, or what a view or a
-      // pointer passed by value designates, never the copy the call receives.
-      loans lent(const clang::ParmVarDecl &parameter, const clang::Expr &argument, const state &current) {
-        return parameter.getType()->isReferenceType() ? reference(&argument, current) : value(&argument, current);
+      // A reference a call returns designates some part of what it borrows, at fields its declaration
+      // does not name.
+      static loans somewhereInside(loans result) {
+        for (auto &source : result.values) {
+          if (source.variable != nullptr) {
+            appendStep(source.path, {.field = nullptr, .level = std::max(source.storage, storage_kind::object)});
+          }
+        }
+        return result;
       }
 
-      // Whether callers in other translation units see only this definition's declaration. An override
-      // of a library virtual takes its contract from the library, whose callers are not checked.
-      [[nodiscard]] bool outOfLine() const {
-        if (function_.isInlined() || function_.getTemplatedKind() != clang::FunctionDecl::TK_NonTemplate) {
+      // What an argument lends through its parameter to a call's result. A returned reference designates
+      // part of the object a reference binds, or of what a pointer designates. A value borrows what that
+      // object owns, and, as Rust's implied bounds require, what it holds; what a view or a pointer
+      // passed by value designates; or what an object passed by value holds, never the copy itself.
+      loans lent(const clang::FunctionDecl &callee, const clang::ParmVarDecl &parameter, const clang::Expr &argument, const state &current) {
+        const auto type = parameter.getType();
+        if (callee.getReturnType()->isReferenceType()) {
+          return somewhereInside(type->isReferenceType() ? reference(&argument, current) : value(&argument, current));
+        }
+        if (!type->isReferenceType()) {
+          return value(&argument, current);
+        }
+        auto result = storage(&argument, current);
+        if (containsViews(type.getNonReferenceType()) && !viewType(type.getNonReferenceType()) && !type.getNonReferenceType()->isPointerType()) {
+          result.merge(value(&argument, current));
+        }
+        return result;
+      }
+
+      // What a receiver lends to a call's result: part of the object for a returned reference, otherwise
+      // the storage it owns and, as Rust's implied bounds require, what it holds.
+      loans receiverLent(const clang::FunctionDecl &callee, const clang::Expr &object, const state &current) {
+        if (callee.getReturnType()->isReferenceType()) {
+          return somewhereInside(objectStorage(object, current));
+        }
+        auto result = objectStorage(object, current);
+        if (!viewType(objectType(object)) && containsViews(objectType(object))) {
+          result.merge(receiverContents(object, current));
+        }
+        return result;
+      }
+
+      // Whether callers know this function only by its declaration, which every call does but those to a
+      // closure or to a member the compiler writes. An override of a library virtual takes its contract
+      // from the library, whose callers are not checked.
+      [[nodiscard]] bool declarationOnly() const {
+        if (transparent(&function_)) {
           return false;
         }
         const auto &sources = context_.getSourceManager();
-        if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && llvm::any_of(method->overridden_methods(), [&](const clang::CXXMethodDecl *base) { return sources.isInSystemHeader(sources.getExpansionLoc(base->getLocation())); })) {
-          return false;
-        }
-        const auto definition = sources.getFileID(sources.getExpansionLoc(function_.getLocation()));
-        return llvm::any_of(function_.redecls(), [&](const clang::FunctionDecl *declaration) { return sources.getFileID(sources.getExpansionLoc(declaration->getLocation())) != definition; });
+        const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_);
+        return method == nullptr || llvm::none_of(method->overridden_methods(), [&](const clang::CXXMethodDecl *base) { return sources.isInSystemHeader(sources.getExpansionLoc(base->getLocation())); });
       }
 
       // Whether a returned borrow comes from where the elided contract of an unannotated declaration says.
@@ -2841,7 +2726,7 @@ namespace tbc_lint {
           return {};
         }
         if (result_annotation.region == nullptr) {
-          if (const auto *known = knownFunction(call)) {
+          if (const auto *known = transparentFunction(call)) {
             return instantiate(known->summary.returned, call, current);
           }
           if (callee->getReturnType()->isReferenceType() && context_.getSourceManager().isInSystemHeader(callee->getLocation()) && (object == nullptr || !standardType(objectType(*object), "function"))) {
@@ -2873,18 +2758,18 @@ namespace tbc_lint {
           }
           if (selected_region != nullptr) {
             if (annotation.region == selected_region) {
-              result.merge(parameter->getType()->isReferenceType() ? reference(call.getArg(index + offset), current) : storage(call.getArg(index + offset), current));
+              result.merge(lent(*callee, *parameter, *call.getArg(index + offset), current));
             }
           } else if (object == nullptr) {
             if (elided != nullptr && (annotation.region == nullptr || annotation.region != parameterAnnotation(*elided, context_).region)) {
               ambiguous = true;
             }
             elided = parameter;
-            result.merge(parameter->getType()->isReferenceType() ? reference(call.getArg(index + offset), current) : storage(call.getArg(index + offset), current));
+            result.merge(lent(*callee, *parameter, *call.getArg(index + offset), current));
           }
         }
         if (selected_region == nullptr && object != nullptr) {
-          return objectStorage(*object, current);
+          return receiverLent(*callee, *object, current);
         }
         if (ambiguous) {
           report(issue::ambiguous, call.getExprLoc());
@@ -2895,6 +2780,17 @@ namespace tbc_lint {
             return receiverContents(*object, current);
           }
           result.merge(receiverContents(*object, current));
+        }
+        // A region no parameter is labeled with comes from what the arguments of a type that carries it hold.
+        if (selected_region != nullptr && !hasMatchingParameter(*callee, selected_region)) {
+          for (unsigned index = 0; index < callee->getNumParams() && index + offset < call.getNumArgs(); ++index) {
+            const auto *parameter = callee->getParamDecl(index);
+            if (!carriesRegion(parameter->getType(), selected_region)) {
+              continue;
+            }
+            const auto *argument = call.getArg(index + offset);
+            result.merge(parameter->getType()->isPointerType() ? referencedContents(value(argument, current), current) : value(argument, current));
+          }
         }
         if (result.values.empty() && ((selected_region != nullptr && !hasMatchingParameter(*callee, selected_region)) || (selected_region == nullptr && elided == nullptr))) {
           result.add({.kind = origin_kind::unknown, .expression = &call});
@@ -3076,6 +2972,22 @@ namespace tbc_lint {
         return result;
       }
 
+      // Whether a parameter's object has a field in a region, which is then a region of its type, as the
+      // lifetime parameter of a Rust `Record<'a>` is.
+      [[nodiscard]] bool carriesRegion(clang::QualType type, const clang::Type *region) const {
+        type = type.getNonReferenceType();
+        if (type->isPointerType()) {
+          type = type->getPointeeType();
+        }
+        const auto *record = recordOf(type);
+        if (region == nullptr || record == nullptr || !record->hasDefinition()) {
+          return false;
+        }
+        llvm::SmallVector<const clang::FieldDecl *, 8> fields;
+        recordFields(*record->getDefinition(), fields);
+        return llvm::any_of(fields, [&](const clang::FieldDecl *field) { return viewAnnotation(field->getType(), context_).region == region; });
+      }
+
       bool hasMatchingParameter(const clang::FunctionDecl &callee, const clang::Type *region) const {
         for (const auto *parameter : callee.parameters()) {
           const auto annotation = parameterAnnotation(*parameter, context_);
@@ -3166,8 +3078,13 @@ namespace tbc_lint {
             const auto element = elementType(construction->getType());
             for (unsigned index = 0; index < construction->getNumArgs(); ++index) {
               const auto *argument = construction->getArg(index);
-              // A container built from an iterator range copies the elements the iterators designate.
+              // A container built from an iterator range copies the elements the iterators designate; a
+              // view element made from an owner views that owner's storage.
               if (!element.isNull() && pointerLike(argument->getType()) && !sameType(element, argument->getType())) {
+                const auto designated = designatedType(argument->getType());
+                if (viewType(element) && !designated.isNull() && !viewType(designated) && !designated->isPointerType()) {
+                  result.merge(ownedBy(value(argument, current)));
+                }
                 result.merge(referencedContents(value(argument, current), current));
               } else {
                 result.merge(copiedValue(argument, current));
@@ -3339,7 +3256,7 @@ namespace tbc_lint {
         }
         const auto input = parameterAnnotation(*parameter, context_);
         if (output.region != nullptr) {
-          return input.region == output.region && input.present;
+          return (input.region == output.region && input.present) || (source.kind == origin_kind::parameter && !input.present && carriesRegion(parameter->getType(), output.region));
         }
         if (llvm::isa<clang::CXXMethodDecl>(function_)) {
           return false;
@@ -3378,7 +3295,7 @@ namespace tbc_lint {
             report(issue::dangling, statement.getReturnLoc(), &source);
           } else if (output.present && source.kind != origin_kind::unknown && !allowed(source, output)) {
             report(issue::contract, statement.getReturnLoc(), &source);
-          } else if (!output.present && outOfLine() && !elidedAllows(source)) {
+          } else if (!output.present && declarationOnly() && !elidedAllows(source)) {
             report(issue::elided_contract, statement.getReturnLoc(), &source);
           }
         }
@@ -3485,24 +3402,6 @@ namespace tbc_lint {
       }
 
       void applyCall(const clang::CallExpr &call, state &current) {
-        const auto debug_call_start = std::chrono::steady_clock::now();
-        const auto debug_report = llvm::make_scope_exit([&] {
-          const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - debug_call_start).count();
-          if (elapsed > 300 && std::getenv("TBC_DEBUG") != nullptr && call.getDirectCallee() != nullptr) {
-            const auto *debug_known = knownFunction(call);
-            std::size_t writes = 0;
-            std::size_t designated_writes = 0;
-            if (debug_known != nullptr) {
-              for (const auto &item : debug_known->summary.writes) writes += item.second.values.size();
-              for (const auto &item : debug_known->summary.designated) designated_writes += item.second.values.size();
-            }
-            std::size_t state_size = 0;
-            for (const auto *map : {&current.values, &current.references, &current.designated}) {
-              for (const auto &item : *map) state_size += item.second.values.size();
-            }
-            llvm::errs() << "CALL " << elapsed << "ms in " << function_.getNameAsString() << " -> " << call.getDirectCallee()->getNameAsString() << " at " << call.getBeginLoc().printToString(context_.getSourceManager()) << " returned=" << (debug_known ? debug_known->summary.returned.values.size() : 0) << " writes=" << writes << " designated=" << designated_writes << " uses=" << (debug_known ? debug_known->summary.uses.values.size() : 0) << " invalidates=" << (debug_known ? debug_known->summary.invalidates.size() : 0) << " state=" << state_size << "\n";
-          }
-        });
         const auto *callee = call.getDirectCallee();
         if (callee == nullptr) {
           return;
@@ -3516,13 +3415,10 @@ namespace tbc_lint {
         // An assigned object is overwritten rather than read: only the place it is written to must be live,
         // as for a container's structural operations.
         const bool overwritten = object != nullptr && overwrites(*callee);
-        // A call to a function with a summary uses only the inputs that function uses; any other call
-        // may use everything it is given.
-        const auto *summarized = knownFunction(call);
+        // A call uses everything it is given, as a Rust call does; only a member the compiler writes is
+        // known to use less.
         const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(callee);
-        if (method != nullptr && method->getParent()->isLambda()) {
-          summarized = nullptr;
-        }
+        const auto *summarized = method != nullptr && method->getParent()->isLambda() ? nullptr : transparentFunction(call);
         // Calling a member function needs a live object. What it reads of the object's contents depends on
         // the function.
         if (object != nullptr) {
@@ -3557,7 +3453,9 @@ namespace tbc_lint {
         if ((known != nullptr && known->summary.invalidates_environment) || ((name == "getenv" || name == "setenv" || name == "unsetenv" || name == "putenv") && context_.getSourceManager().isInSystemHeader(callee->getLocation()))) {
           invalidateEnvironment(call, current);
         }
+        const auto inputs = callInputs(call, current);
         applyInferredInvalidations(call, current);
+        checkOverlap(call, inputs, current);
         const auto type = object == nullptr ? clang::QualType{} : objectType(*object);
         if (object != nullptr && libraryRecord(type) && !viewType(type) && !iteratorRecord(type)) {
           // The standard container modifiers that store their arguments.
@@ -3664,7 +3562,15 @@ namespace tbc_lint {
               incoming.merge(storage(call.getArg(other + offset), current));
             }
           }
-          store(writeTargets(reference(call.getArg(index + offset), current), targets(call.getArg(index + offset), current)), incoming, current);
+          stampTemporary(incoming, call.getExprLoc());
+          const auto *argument = call.getArg(index + offset);
+          if (parameter->getType()->isPointerType()) {
+            auto where = writeTargets(value(argument, current), pointees(argument, current));
+            where.replaces = false;
+            store(where, incoming, current);
+          } else {
+            store(writeTargets(reference(argument, current), targets(argument, current)), incoming, current);
+          }
         }
         // A parameter region shared with a receiver field lets a mutating call retain that argument.
         // Earlier arguments may still be retained, so the receiver accumulates loans.
@@ -3675,11 +3581,14 @@ namespace tbc_lint {
             const auto region = parameterAnnotation(*parameter, context_).region;
             if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*callee, region)) {
               retained.merge(storage(call.getArg(index + offset), current));
+            } else if (!transparent(callee) && !libraryRecord(objectType(*object)) && !context_.getSourceManager().isInSystemHeader(context_.getSourceManager().getExpansionLoc(callee->getLocation())) && spelledByTemplate(parameter->getType())) {
+              retained.merge(copiedValue(call.getArg(index + offset), current));
             }
           }
           if (!retained.values.empty()) {
             auto where = writeTargets(objectReference(*object, current), objectTargets(*object, current));
             where.replaces = false;
+            stampTemporary(retained, call.getExprLoc());
             store(where, retained, current);
           }
         }
@@ -3692,10 +3601,14 @@ namespace tbc_lint {
       }
 
       void applyInferredInvalidations(const clang::CallExpr &call, state &current) {
+        const auto *callee = call.getDirectCallee();
         const auto *known = knownFunction(call);
-        if (known == nullptr) {
+        if (known == nullptr || overridable(*callee)) {
+          applyDeclaredInvalidations(call, current);
           return;
         }
+        const bool whole_receiver = !transparent(callee);
+        std::optional<storage_range> receiver_range;
         const receiver_reads reads(*this);
         // The call's places are found in the state it was entered with, then invalidated together.
         llvm::SmallVector<invalidation, 8> places;
@@ -3726,11 +3639,23 @@ namespace tbc_lint {
             for (const auto &designation : designated(target).values) {
               if (const auto place = placeWithin(designation, target)) {
                 places.push_back({.target = *place, .range = range});
+              } else if (designation.kind == origin_kind::receiver && designation.variable == nullptr && target.path.empty()) {
+                // The whole object `this` designates: each of its fields.
+                if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && method->getParent()->getDefinition() != nullptr) {
+                  llvm::SmallVector<const clang::FieldDecl *, 8> fields;
+                  recordFields(*method->getParent()->getDefinition(), fields);
+                  for (const auto *field : fields) {
+                    places.push_back({.target = {.variable = field}, .range = range});
+                  }
+                }
               }
             }
             continue;
           }
           const auto *parameter = llvm::dyn_cast<clang::ParmVarDecl>(target.variable);
+          if (parameter != nullptr && sharedType(parameter->getType())) {
+            continue;
+          }
           if (parameter != nullptr && calleeParameter(*parameter, *known)) {
             const auto index = parameter->getFunctionScopeIndex() + argumentOffset(call);
             if (index >= call.getNumArgs()) {
@@ -3742,6 +3667,11 @@ namespace tbc_lint {
           } else if (const auto *field = llvm::dyn_cast<clang::FieldDecl>(target.variable)) {
             const auto *object = receiver(call);
             if (object == nullptr) {
+              continue;
+            }
+            // A call through its declaration borrows its whole receiver, as `&mut self` does.
+            if (whole_receiver) {
+              receiver_range = receiver_range ? receiver_range->widen(range) : range;
               continue;
             }
             if (capturedReceiver(*call.getDirectCallee(), field)) {
@@ -3759,6 +3689,190 @@ namespace tbc_lint {
             }
           } else {
             places.push_back({.target = target, .range = range});
+          }
+        }
+        if (receiver_range) {
+          receiverPlaces(call, *receiver_range, current, places);
+        }
+        invalidateAll(places, &call, current);
+      }
+
+      // Where invalidating a call's whole receiver lands: every field of this object, or each place the
+      // receiver object can have.
+      void receiverPlaces(const clang::CallExpr &call, storage_range range, const state &current, llvm::SmallVectorImpl<invalidation> &places) {
+        const auto *object = receiver(call);
+        const auto *method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(call.getDirectCallee());
+        if (object == nullptr || method == nullptr || sharedType(objectType(*object))) {
+          return;
+        }
+        if (llvm::isa<clang::CXXThisExpr>(clean(object))) {
+          llvm::SmallVector<const clang::FieldDecl *, 8> fields;
+          if (const auto *record = method->getParent()->getDefinition()) {
+            recordFields(*record, fields);
+          }
+          for (const auto *field : fields) {
+            places.push_back({.target = {.variable = field}, .range = range});
+          }
+          return;
+        }
+        for (const auto &actual : invalidationTargets(*object, current)) {
+          places.push_back({.target = actual, .range = range});
+        }
+      }
+
+      // The objects a project call receives by reference or through a pointer, before it runs, and
+      // whether it may mutate each. The receiver comes first.
+      struct call_input {
+        const clang::Expr *argument = nullptr;
+        llvm::SmallVector<object_place, 2> places;
+        bool exclusive = false;
+      };
+
+      llvm::SmallVector<call_input, 4> callInputs(const clang::CallExpr &call, const state &current) {
+        llvm::SmallVector<call_input, 4> result;
+        const auto *callee = call.getDirectCallee();
+        const auto &sources = context_.getSourceManager();
+        if (callee == nullptr || transparent(callee) || sources.isInSystemHeader(sources.getExpansionLoc(callee->getLocation())) || libraryFunction(*callee)) {
+          return result;
+        }
+        const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(callee);
+        if (const auto *object = receiver(call); object != nullptr && method != nullptr && method->isInstance() && !sharedType(objectType(*object))) {
+          result.push_back({.argument = object, .places = invalidationTargets(*object, current), .exclusive = !method->isConst()});
+        }
+        const auto offset = argumentOffset(call);
+        for (unsigned index = 0; index < callee->getNumParams() && index + offset < call.getNumArgs(); ++index) {
+          const auto *parameter = callee->getParamDecl(index);
+          const auto type = parameter->getType();
+          if ((!type->isReferenceType() && !type->isPointerType()) || sharedType(type)) {
+            continue;
+          }
+          const auto *argument = call.getArg(index + offset);
+          call_input input{.argument = argument, .places = {}, .exclusive = exclusiveParameter(*parameter)};
+          if (type->isReferenceType()) {
+            input.places = invalidationTargets(*argument, current);
+          } else {
+            for (const auto &source : value(argument, current).values) {
+              if (source.variable != nullptr) {
+                input.places.push_back({.variable = source.variable, .level = source.storage, .path = source.path, .designated = standsForInput(source), .select = source.select});
+              }
+            }
+          }
+          result.push_back(std::move(input));
+        }
+        return result;
+      }
+
+      // Whether one place lies inside the object at another.
+      static bool inside(const object_place &inner, const object_place &outer) {
+        if (inner.variable != outer.variable || inner.designated != outer.designated || (inner.designated && !sameDesignation(inner.select, outer.select))) {
+          return false;
+        }
+        return std::max(inner.level, storage_kind::object) >= std::max(outer.level, storage_kind::object) && within(inner.path, outer);
+      }
+
+      // A callee assumes that what it may mutate overlaps none of its other inputs, which Rust guarantees
+      // by lending one exclusive borrow at a time. Nor may a view it receives point into storage that the
+      // call itself invalidates.
+      void checkOverlap(const clang::CallExpr &call, llvm::ArrayRef<call_input> inputs, const state &current) {
+        for (std::size_t first = 0; first < inputs.size(); ++first) {
+          for (std::size_t second = 0; second < inputs.size(); ++second) {
+            if (first == second || !inputs[first].exclusive) {
+              continue;
+            }
+            for (const auto &outer : inputs[first].places) {
+              for (const auto &inner : inputs[second].places) {
+                if (inside(inner, outer) || inside(outer, inner)) {
+                  report(issue::overlap, inputs[second].argument->getExprLoc());
+                }
+              }
+            }
+          }
+        }
+        if (inputs.empty()) {
+          return;
+        }
+        const auto offset = argumentOffset(call);
+        for (unsigned index = offset; index < call.getNumArgs(); ++index) {
+          for (const auto &source : value(call.getArg(index), current).values) {
+            if (source.invalidated == &call) {
+              report(issue::overlap, call.getArg(index)->getExprLoc(), &source);
+            }
+          }
+        }
+      }
+
+      // A virtual call may reach any override, which the declaration describes for all of them.
+      [[nodiscard]] static bool overridable(const clang::FunctionDecl &callee) {
+        const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&callee);
+        return method != nullptr && method->isVirtual() && !method->hasAttr<clang::FinalAttr>() && !method->getParent()->hasAttr<clang::FinalAttr>() && !method->getParent()->isLambda();
+      }
+
+      // Objects of a shared type, such as an allocator, keep every borrow they hand out valid whatever
+      // is done through them, as a Rust type with interior mutability does through `&self`.
+      [[nodiscard]] static bool sharedType(clang::QualType type) {
+        const auto *record = recordOf(type.getNonReferenceType()->isPointerType() ? type.getNonReferenceType()->getPointeeType() : type.getNonReferenceType());
+        return record != nullptr && sharedRecord(*record);
+      }
+
+      [[nodiscard]] static bool sharedRecord(const clang::CXXRecordDecl &declaration) {
+        const auto *record = &declaration;
+        if (const auto *specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record)) {
+          if (const auto *pattern = specialization->getSpecializedTemplate()->getTemplatedDecl(); pattern != nullptr && annotated(*pattern, "tbc::shared")) {
+            return true;
+          }
+        }
+        return annotated(*record, "tbc::shared");
+      }
+
+      [[nodiscard]] static bool annotated(const clang::Decl &declaration, llvm::StringRef name) {
+        return llvm::any_of(declaration.specific_attrs<clang::AnnotateAttr>(), [&](const clang::AnnotateAttr *attribute) { return attribute->getAnnotation() == name; });
+      }
+
+      // Whether a parameter lets the callee mutate what the argument designates: a reference or a
+      // pointer to a non-const object of a type that is not shared.
+      [[nodiscard]] static bool exclusiveParameter(const clang::ParmVarDecl &parameter) {
+        const auto type = parameter.getType();
+        clang::QualType pointee;
+        if (type->isReferenceType()) {
+          pointee = type.getNonReferenceType();
+        } else if (type->isPointerType()) {
+          pointee = type->getPointeeType();
+        } else {
+          return false;
+        }
+        return !pointee.isConstQualified() && !pointee->isFunctionType() && !sharedType(pointee);
+      }
+
+      // A project call whose body its callers do not see may free or move what its exclusive inputs own,
+      // as a Rust callee may through each `&mut` it receives.
+      void applyDeclaredInvalidations(const clang::CallExpr &call, state &current) {
+        const auto *callee = call.getDirectCallee();
+        const auto &sources = context_.getSourceManager();
+        if (callee == nullptr || sources.isInSystemHeader(sources.getExpansionLoc(callee->getLocation())) || libraryFunction(*callee)) {
+          return;
+        }
+        llvm::SmallVector<invalidation, 8> places;
+        const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(callee);
+        if (const auto *object = receiver(call); object != nullptr && method != nullptr && method->isInstance() && !method->isConst() && !sharedType(objectType(*object))) {
+          receiverPlaces(call, owned_storage, current, places);
+        }
+        const auto offset = argumentOffset(call);
+        for (unsigned index = 0; index < callee->getNumParams() && index + offset < call.getNumArgs(); ++index) {
+          const auto *parameter = callee->getParamDecl(index);
+          if (!exclusiveParameter(*parameter)) {
+            continue;
+          }
+          const auto *argument = call.getArg(index + offset);
+          if (parameter->getType()->isReferenceType()) {
+            for (const auto &actual : invalidationTargets(*argument, current)) {
+              places.push_back({.target = actual, .range = owned_storage});
+            }
+            continue;
+          }
+          for (const auto &source : value(argument, current).values) {
+            if (source.variable != nullptr) {
+              places.push_back({.target = {.variable = source.variable, .level = source.storage, .path = source.path, .designated = standsForInput(source), .select = source.select}, .range = owned_storage});
+            }
           }
         }
         invalidateAll(places, &call, current);
@@ -3846,7 +3960,7 @@ namespace tbc_lint {
       }
 
       void applyInferredWrites(const clang::CallExpr &call, state &current) {
-        const auto *known = knownFunction(call);
+        const auto *known = transparentFunction(call);
         if (known == nullptr) {
           return;
         }
@@ -3942,6 +4056,7 @@ namespace tbc_lint {
                 for (auto &source : incoming.values) {
                   markBorrowSite(source, initializer->getInit()->getBeginLoc());
                 }
+                checkRetention(*field, incoming, initializer->getSourceLocation());
                 current.values[field] = std::move(incoming);
                 current.written.insert(field);
               }
@@ -3966,6 +4081,7 @@ namespace tbc_lint {
             continue;
           }
           const auto *node = statement->getStmt();
+          write_site_ = node->getBeginLoc();
           checkPointerAccesses(*node, current);
           if (const auto *declaration = llvm::dyn_cast<clang::DeclStmt>(node)) {
             for (const auto *entry : declaration->decls()) {

@@ -35,6 +35,16 @@ namespace tbc {
     concept lifetime_region = std::is_base_of_v<region_tag, region>;
   }
 
+  // A class marked TBC_SHARED keeps every borrow it hands out valid whatever is done through it, as a
+  // Rust type with interior mutability does through `&self`; an allocator is one. Many objects may keep
+  // a reference to one of its objects, and calls through it invalidate nothing. Its implementation is
+  // trusted rather than checked, like the unsafe code behind such a Rust type.
+#if defined(__clang__)
+#define TBC_SHARED [[clang::annotate("tbc::shared")]]
+#else
+#define TBC_SHARED
+#endif
+
   // Region labels are scoped contract variables for the linter, not C++ type barriers.
   template <typename type, detail::lifetime_region region = lt::elided>
     requires(std::is_object_v<type> || std::is_reference_v<type>)

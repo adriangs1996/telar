@@ -1,7 +1,9 @@
 # tbc
 
-C++23 lifetime annotations and a Clang AST linter. This is an initial, limited
-implementation, not a Rust borrow checker. Run project commands from `dlls/tbc`.
+C++23 lifetime annotations and a Clang AST linter that applies Rust's borrow
+checking rules to C++: each function is checked on its own, and calls are known
+by their declarations. It is a limited implementation, not a proof of memory
+safety. Run project commands from `dlls/tbc`.
 
 [Rust borrow checker rules](docs/rust-borrow-checker.md) catalogs the source rules,
 exceptions, and analysis boundaries, with official references and checked examples.
@@ -79,7 +81,8 @@ text_a longerText(text_a first, text_a second) {
 [`docs/contracts.md`](docs/contracts.md) describes the signature design. Repeated
 `lt::a` denotes a common region, not one particular argument or allocation.
 The linter instantiates region variables per call. `lt::b`, `lt::c`, and
-`lt::d` describe independent variables. Visible helpers need no annotation:
+`lt::d` describe independent variables. Helpers that Rust's lifetime elision
+describes need no annotation:
 
 ```cpp
 std::string_view prefix(std::string_view input) {
@@ -87,13 +90,13 @@ std::string_view prefix(std::string_view input) {
 }
 ```
 
-`tbc::view<T>` also requests inference/elision without an explicit label.
+`tbc::view<T>` also requests elision without an explicit label.
 
 `view<T, region>` is an alias for `T`: ordinary calls, native methods, layout,
 and ABI remain unchanged. No macros, external traits, or parameter-name strings
 are required. Clang retains the spelled aliases for the linter. C++ itself does
-not prevent assignment between regions. The checker follows inferred dependencies
-and checks explicit return regions. General effect analysis remains incomplete.
+not prevent assignment between regions. The checker checks every definition
+against its declaration and every call against the callee's declaration.
 
 `<tbc/lifetime.hpp>` also provides descriptive `lifetime<tag>` labels and the
 older pointer-backed `borrow<T, scope>` utility. The signature examples use
@@ -131,11 +134,16 @@ const int &invalid() {
 }
 ```
 
-The checker builds CFGs and infers function summaries for visible project bodies,
-including instantiated templates and included headers. It follows aliases,
-borrowed aggregate fields, copies/moves, direct constructor initializers, reachable
-branches, recursive call chains, and modeled invalidations. It distinguishes a
-copied descriptor's contents from a reference to the descriptor object itself.
+The checker builds a CFG for each project function, including instantiated
+templates and included headers, and follows aliases, borrowed aggregate fields,
+copies/moves, constructor initializers, reachable branches and loops, and the
+standard library's modeled effects within it. A call is known by its declaration:
+its result follows elision or labels, it keeps only what its labels let it keep,
+and it uses everything it receives. What it can invalidate is the one effect
+summarized across calls, an input at a time, never field by field, as Rust's
+`&mut` lends a whole object. A closure is checked with its enclosing function.
+An object never borrows itself, and a call's mutable argument never overlaps
+another argument.
 
 Explicit `view<T, region>` contracts remain binding. They can be written once on
 a declaration while its definition uses native types. The checker reads spelled
@@ -155,7 +163,7 @@ does not control is used to infer what the project borrows, never reported: a
 call into a compiled third-party function, or an expression spelled inside a
 system-header macro such as GoogleTest's assertion machinery, does not produce
 `tbc-missing-contract`. A project expression passed as a macro argument is still
-checked. Annotations are only requested for project code that cannot be inferred.
+checked. Annotations are only requested where Rust would need an explicit lifetime.
 
 ### Limits
 
@@ -172,19 +180,21 @@ checked. Annotations are only requested for project code that cannot be inferred
   reference field, at most three times. What a pointer held in a field
   designates stays merged with the object that holds the pointer. Distinct
   inputs, and the objects reached through different dereferences of one input,
-  are assumed not to alias.
+  are assumed not to alias, which each call's overlap check and the ban on
+  self-borrowing objects uphold.
 - Emplacement forwards its arguments to an element constructor; only standard
   elements and pointers are assumed to keep them, so
   `map.emplace(key, std::string)` into a view element is not tracked.
-  Constructors and functions defined in another translation unit, virtual
-  dispatch, and allocators remain contract boundaries. An annotated
-  declaration's contract, elided or labeled, is checked against its definition
-  in the translation unit that defines it.
+  A declaration's contract, elided or labeled, is checked against its
+  definition in the translation unit that defines it. A type marked
+  `TBC_SHARED`, such as an allocator, is trusted to keep the borrows it hands out
+  valid. One label names one region, so `&'s Stream<'b>` cannot yet be stated.
 - Deferred captures, allocator/destructor dependencies, foreign invalidation,
   exception unwinding, mutable globals, and indirect dispatch remain incomplete.
 - Bounds, nullability, initialization, concurrency, and explicit outlives bounds
-  remain separate implementation targets. Rust's exclusive aliasing rules are not
-  a target: overlapping mutable references are legal C++.
+  remain separate implementation targets. Exclusive aliasing is checked per call
+  and per object; two objects that each keep the same mutable reference are not
+  reported.
 
 A clean run is not proof of arbitrary C++ memory safety. See
 [`docs/contracts.md`](docs/contracts.md) for supported inference, boundary rules,
@@ -237,7 +247,7 @@ cmake --build --preset debug --target spec-check
 
 The first command validates fixture syntax/metadata, the runner, and implemented
 regressions. `spec-check` deliberately fails on unmet pending specifications.
-The corpus has 291 cases: 244 implemented regressions and 47 explicitly pending
+The corpus has 292 cases: 243 implemented regressions and 49 explicitly pending
 requirements. Fixtures are never linked or executed. Provenance validation requires the surrounding Telar checkout.
 
 ## Format and static analysis

@@ -252,23 +252,8 @@ namespace contracts {
     tbc::view<const char *, tbc::lt::self> cursor_;
   };
 
-  class borrowed_text {
-  public:
-    borrowed_text()
-        : cursor_(storage_.data()) {}
-
-    borrowed_text(const borrowed_text &) = delete;
-    borrowed_text &operator=(const borrowed_text &) = delete;
-
-  private:
-    std::string storage_{"abc"};
-    const char *cursor_;
-  };
-
   std::shared_ptr<const self_text> chooseSelf(const std::shared_ptr<const self_text> &first, const std::shared_ptr<const self_text> &second);
-  std::shared_ptr<const borrowed_text> chooseBorrowed(const std::shared_ptr<const borrowed_text> &first, const std::shared_ptr<const borrowed_text> &second);
   void keep(const std::shared_ptr<const self_text> &text);
-  void keep(const std::shared_ptr<const borrowed_text> &text);
 }
 
 void selfFieldInternal(const std::shared_ptr<const contracts::self_text> &first, const std::shared_ptr<const contracts::self_text> &second) {
@@ -282,7 +267,25 @@ void selfFieldInternal(const std::shared_ptr<const contracts::self_text> &first,
 // SOURCE: services/gui-cpp/qt/font_asset.hpp :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
-// SCENARIO: Without the label, the pointer may borrow anything, so the opaque two-input call needs a contract.
+// SCENARIO: Without the label, the object keeps a borrow of itself, rejected where it is taken; its pointer may then borrow anything, so the opaque two-input call needs a contract.
+namespace contracts {
+  class borrowed_text {
+  public:
+    borrowed_text()
+        : cursor_(storage_.data()) {} // expected-error [tbc-dangling-borrow]
+
+    borrowed_text(const borrowed_text &) = delete;
+    borrowed_text &operator=(const borrowed_text &) = delete;
+
+  private:
+    std::string storage_{"abc"};
+    const char *cursor_;
+  };
+
+  std::shared_ptr<const borrowed_text> chooseBorrowed(const std::shared_ptr<const borrowed_text> &first, const std::shared_ptr<const borrowed_text> &second);
+  void keep(const std::shared_ptr<const borrowed_text> &text);
+}
+
 void selfFieldUnlabeled(const std::shared_ptr<const contracts::borrowed_text> &first, const std::shared_ptr<const contracts::borrowed_text> &second) {
   contracts::keep(contracts::chooseBorrowed(first, second)); // expected-error [tbc-missing-contract]
 }

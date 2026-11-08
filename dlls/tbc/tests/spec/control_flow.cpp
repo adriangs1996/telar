@@ -4,27 +4,32 @@
 #include <cstring>
 
 namespace flow {
-  // A reply is copied into the queue's slot unless an owner keeps the caller's bytes alive.
+  using reply_bytes = tbc::view<std::span<const std::uint8_t>, tbc::lt::a>;
+
+  // A reply is copied into the queue's slot unless an owner keeps the caller's bytes alive. The queue
+  // keeps the length of its own copy rather than a view of it, which would borrow the queue itself.
   class reply_queue {
   public:
-    void push(std::span<const std::uint8_t> reply, std::shared_ptr<const void> owner) {
+    void push(reply_bytes reply, std::shared_ptr<const void> owner) {
       if (owner) {
         owner_ = std::move(owner);
+        borrowed_ = reply;
       } else {
         std::memcpy(bytes_.data(), reply.data(), reply.size());
+        borrowed_ = {};
       }
-
-      view_ = owner_ ? reply : std::span<const std::uint8_t>{bytes_}.first(reply.size());
+      size_ = reply.size();
     }
 
     std::span<const std::uint8_t> peek() const {
-      return view_;
+      return owner_ ? borrowed_ : std::span<const std::uint8_t>{bytes_}.first(size_);
     }
 
   private:
     std::array<std::uint8_t, 64> bytes_{};
     std::shared_ptr<const void> owner_;
-    std::span<const std::uint8_t> view_;
+    reply_bytes borrowed_;
+    std::size_t size_ = 0;
   };
 
   // The same queue with copying and retaining as separate functions.
@@ -32,22 +37,25 @@ namespace flow {
   public:
     void push(std::span<const std::uint8_t> reply) {
       std::memcpy(bytes_.data(), reply.data(), reply.size());
-      view_ = std::span<const std::uint8_t>{bytes_}.first(reply.size());
+      borrowed_ = {};
+      size_ = reply.size();
     }
 
-    void push(std::span<const std::uint8_t> reply, std::shared_ptr<const void> owner) {
+    void push(reply_bytes reply, std::shared_ptr<const void> owner) {
       owner_ = std::move(owner);
-      view_ = reply;
+      borrowed_ = reply;
+      size_ = reply.size();
     }
 
     std::span<const std::uint8_t> peek() const {
-      return view_;
+      return borrowed_.empty() ? std::span<const std::uint8_t>{bytes_}.first(size_) : borrowed_;
     }
 
   private:
     std::array<std::uint8_t, 64> bytes_{};
     std::shared_ptr<const void> owner_;
-    std::span<const std::uint8_t> view_;
+    reply_bytes borrowed_;
+    std::size_t size_ = 0;
   };
 } // namespace flow
 

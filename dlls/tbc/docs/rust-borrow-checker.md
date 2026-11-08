@@ -1018,13 +1018,29 @@ code can request.
 
 ## 12. What this means for tbc
 
-The current signature API is [`view<T, region>`](contracts.md), with symbolic
-region labels and intended elision. The implemented analysis is still a small
-local check: a directly returned annotated reference to a local object or
-by-value parameter. Region inference and the broader rules above remain pending.
-The older pointer-backed `borrow<T, scope>` utility is not the signature notation.
+The signature API is [`view<T, region>`](contracts.md), with symbolic region
+labels and lifetime elision. [`contracts.md`](contracts.md) describes how `tbc`
+applies these rules to C++:
 
-A Rust-inspired C++ analyzer would need explicit semantics for at least:
+- Each function is checked on its own: borrows are followed through its places,
+  branches and loops, and through the closures it defines.
+- A call is known by its declaration. Elision or labels give its result, labels
+  give what it keeps, and it needs every borrow it receives to be live. Every
+  definition is checked against its declaration.
+- C++ chooses a non-const accessor by the object's constness rather than by its
+  use, so a call's ability to invalidate an input is summarized across calls, an
+  input at a time, never field by field. Rust needs no such summary.
+- Exclusivity is upheld where `noalias` matters to the callee: a call's mutable
+  argument may not overlap another argument, and an object may not borrow itself
+  except through a pinned `lt::self` field.
+- A `TBC_SHARED` type is the trusted boundary that `UnsafeCell` and unsafe code
+  form in Rust.
+
+Shared versus exclusive loans between two independent holders, one region per
+level of a type (`&'s T<'b>`), and explicit outlives bounds remain pending. The
+older pointer-backed `borrow<T, scope>` utility is not the signature notation.
+
+A Rust-inspired C++ analyzer needs explicit semantics for at least:
 
 - Places, ownership, initialization, moves, destruction, and C++ replacement.
 - Shared versus exclusive loans, their derivations, and overlap.

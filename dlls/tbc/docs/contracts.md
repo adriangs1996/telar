@@ -1,8 +1,12 @@
-# Inferred lifetimes and explicit contracts
+# Lifetimes, declarations and explicit contracts
 
-`tbc` infers borrowed results from visible function bodies. Ordinary references,
-pointers, `std::string_view`, and aggregates containing borrowed fields do not
-need a `tbc::view` return annotation just to enable checking.
+`tbc` checks C++ the way Rust's borrow checker checks Rust. Inside a function it
+follows every borrow through the function's own code. A call is known only by
+its declaration: Rust's lifetime elision, or `tbc::view` labels where elision
+names no source, say what the result borrows and what the callee keeps. Each
+body is checked against its own declaration where it is defined. Ordinary
+references, pointers, `std::string_view`, and aggregates containing borrowed
+fields need no annotation while elision describes them.
 
 `<tbc/view.hpp>` provides `tbc::view<T, region>` for an explicit interface
 contract. It aliases the native C++ type `T`. No wrapper, macro, external trait,
@@ -17,8 +21,8 @@ std::string_view prefix(std::string_view source) {
 }
 ```
 
-The inferred result borrows `source`. A caller can use the result while those
-bytes remain valid. Keeping a result from a temporary string and using it in a
+The result borrows `source`, its only parameter that can lend. A caller can use
+the result while those bytes remain valid. Keeping a result from a temporary string and using it in a
 later full expression produces `tbc-dangling-borrow`. Reading the result within
 the temporary's full expression is allowed.
 
@@ -46,10 +50,12 @@ const node &identity(const node &input) { return input; }
 node copy(const node &input) { return input; }
 ```
 
-`identity` requires the input object to remain alive. `copy` preserves the input's
-borrowed contents without retaining a reference to its descriptor object.
+`identity` requires the input object to remain alive. So does `copy`: by elision
+its result borrows `input`, and, as Rust's implied bounds require, what `input`
+holds. To state that a copy keeps only the borrowed contents, label them as a
+region of the type, as a Rust `Node<'a>` does (see below).
 
-## What inference follows
+## What a function's own code follows
 
 The checker builds a Clang CFG for each available project function definition.
 It propagates dependencies through local aliases, assignments, calls, copies,
@@ -65,7 +71,7 @@ Reading a reference field does the same for its referent. Writing through either
 updates the object it designates. For an input, such as a parameter or a field
 of the receiver, "where it points" and "what that object holds" are separate
 parts: a borrow can stand for a part reached through references, as a stream
-wrapper reaches the buffer of the stream it wraps:
+wrapper's body reaches the buffer of the stream it wraps:
 
 ```cpp
 class gated_stream {
@@ -77,14 +83,13 @@ private:
 };
 ```
 
-What `peek` returns stands for what `stream_`'s referent designates, so a caller
-that wraps a local `buffer_stream` around its own buffer gets a view of that
-buffer, not of the local wrapper. What a callee writes through an input lands in
-the object the caller's argument designates. The input itself, and past it each
-reference field, is followed this way, at most three times; what a pointer held
-in a field designates stays merged with the object that holds the pointer. The
-parts an input reaches are typed: a field the reached type does not have stops
-the part there.
+Inside `peek`, what `stream_.peek()` returns stands for what `stream_`'s
+referent designates. The input itself, and past it each reference field, is
+followed this way, at most three times; what a pointer held in a field
+designates stays merged with the object that holds the pointer. The parts an
+input reaches are typed: a field the reached type does not have stops the part
+there. Callers know `peek` by its declaration only: its elided result borrows
+the wrapper and what the wrapper holds.
 
 Standard-library calls are modeled by the kind of receiver. A view
 (`std::string_view`, `std::span`) lends its referent. An iterator, recognized
@@ -103,25 +108,75 @@ captures. `this` inside a lambda is the object the closure captured, so what a
 callback does to that object's fields lands in that object, also when a
 template helper invokes it. A `std::function` keeps the borrows of the callable it wraps.
 
-Function summaries describe returned dependencies, borrowed receiver/output
-writes, writes into what inputs designate, modeled invalidations, and the parts
-of parameters and receiver fields whose incoming contents the function uses,
-through the references it follows. A call uses only those, so an object whose
-views a method rebuilds before reading them is not reported for holding them
-stale; a call to a function without a summary may use everything it is given,
-and a project function without a body may also read what a pointer argument
-designates. Calling a member function needs a live object either way.
 Counting, clearing, or growing a sequence container does not read what its
 elements borrow; an associative container compares its keys, so it does. A
-dependency worklist solves those summaries across call chains and mutually
-recursive functions. Summaries use symbolic parameter positions and receiver
-fields. Each call substitutes its actual arguments, so cached summaries do not
-connect unrelated calls.
+visible literal-backed result needs no artificial input lifetime.
 
-A function that returns its first argument need not retain a dependency on a
-second argument that it only reads during the call. A function that can return
-either argument retains both possible dependencies. A visible literal-backed
-result needs no artificial input lifetime.
+## Calls are known by their declaration
+
+A call to a project function uses its declaration, never its body, as a Rust call
+uses only the callee's signature:
+
+- The result borrows what elision or the result's label names. A returned
+  reference designates some part of what it borrows, at fields the declaration
+  does not name. A returned value borrows what that input owns and what it holds.
+- The callee keeps an argument only where its declaration says so: a parameter
+  and a receiver field that share a label, a labeled output parameter, a
+  parameter whose type a template's parameters spell, as `T` in `push(T value)`,
+  whose borrows belong to `T`, or any argument that lends to a constructor of a
+  class whose fields carry no label.
+- The call uses everything it is given, including what its receiver holds, as a
+  Rust call needs every borrow its inputs carry to be live.
+- The call may invalidate an input it can mutate. Its summary says only which
+  inputs, never which of their fields: a method's receiver counts whole, as
+  `&mut self` lends the whole object. Through a reference, it reaches the object
+  that reference designates. This summary is the one thing the checker infers
+  across calls, because C++ picks a non-const accessor such as `operator[]` by
+  the object's constness rather than by its use; every `&mut` would otherwise
+  conflict, which Rust code never meets. A project function without a visible
+  body, or a virtual one that is not `final`, may invalidate every input it can
+  mutate.
+
+A closure is checked with the function that defines it, as Rust does, so its
+call keeps which fields it reads and mutates. So are the members the compiler
+writes, such as a defaulted assignment.
+
+```cpp
+void clearResponse(stream &target);
+
+void observeMethod(stream &active) {
+  const std::string_view method = active.request.method;
+  clearResponse(active); // tbc-invalidated-borrow: the call may mutate all of `active`
+  observe(method);
+}
+```
+
+Mutating one field directly leaves the other fields' borrows valid; a call that
+only needs the response takes the response:
+
+```cpp
+void clearResponse(message &response);
+
+void observeMethod(stream &active) {
+  const std::string_view method = active.request.method;
+  clearResponse(active.response);
+  observe(method);
+}
+```
+
+A callee assumes its inputs do not overlap. An argument it can mutate, by a
+non-const reference or pointer or as the receiver of a non-const method, may not
+designate, contain, or lie inside another of its arguments, and no view passed by
+value may point into storage the call invalidates (`tbc-invalidated-borrow`), as
+Rust lends one `&mut` borrow at a time:
+
+```cpp
+void releaseGeometry(model &state, workspace &target);
+
+releaseGeometry(state, state.workspaces.front()); // the workspace lies inside the model
+```
+
+Pass disjoint parts, or an index the callee looks up.
 
 Project headers are checked too. Template definitions are analyzed in their
 instantiated forms; an uninstantiated dependent template has not been verified.
@@ -287,6 +342,22 @@ if (std::holds_alternative<std::string_view>(criteria.scope)) {
 Which alternative borrows what is not tracked, so a test leaves a variant with
 several borrowing alternatives unchanged.
 
+## Regions of a type
+
+A label on a field is a region of its class, like a lifetime parameter of a Rust
+struct. A free function whose result takes a region that no parameter names
+borrows what its arguments of that class hold, as `&Record<'a> -> &'a str` does:
+
+```cpp
+struct record {
+  tbc::view<std::string_view, tbc::lt::a> text;
+};
+
+tbc::view<std::string_view, tbc::lt::a> textOf(const record &input) {
+  return input.text; // the text the record holds, not the record
+}
+```
+
 ## Receiver fields
 
 A region label on a field is shared by every method of that class whose
@@ -304,13 +375,20 @@ struct holder {
 A result in that region can come from the receiver's field or from any
 parameter in the region. A non-const method can retain any argument passed to a
 parameter in the region, whatever it returns. Retention accumulates across
-calls: every retained source must outlive the receiver's later uses. With a
-visible body, inferred writes can refine that retention.
+calls: every retained source must outlive the receiver's later uses.
 
-A constructor is a mutating method too. Without a visible body, the new object
-retains every argument whose parameter shares a region with a field, so a
-prepared statement can state that it borrows its database, as Rust's
-`Statement<'conn>` does:
+A body keeps nothing its declaration does not let it keep. Storing an input's
+borrow in a field, in an output parameter, or in what an input designates
+requires the input and that place to share a label, as a Rust method can store
+`&'a str` only in a `Holder<'a>` (`tbc-contract-violation`). What a template
+argument holds may be stored where the template keeps that argument, and a
+parameter of the class's own type, as `Self` in an assignment or a swap, shares
+the class's regions. A constructor of a class whose fields carry no label may
+keep any argument, which its callers assume it does.
+
+A constructor is a mutating method too. The new object retains every argument
+whose parameter shares a region with a field, so a prepared statement can state
+that it borrows its database, as Rust's `Statement<'conn>` does:
 
 ```cpp
 class statement {
@@ -322,8 +400,8 @@ private:
 };
 ```
 
-A body-less constructor of a class whose fields carry no region may retain any
-argument that can lend. A Rust struct always declares its lifetimes; without that
+A constructor of a class whose fields carry no region may retain any argument
+that can lend, and a reference parameter's object itself. A Rust struct always declares its lifetimes; without that
 declaration, assuming every one is retained is sound and asks callers only to
 keep those arguments alive. Labels narrow it to what the object really keeps, as
 a font face keeps its bytes but copies its match:
@@ -336,9 +414,9 @@ tbc::view<std::unique_ptr<FT_FaceRec, FaceDeleter>, tbc::lt::a> face_;
 What a field labeled with a result's region owns lives in that region too, as a
 field of `&'a self` does.
 
-A field label only matters to methods of its own class. On an aggregate without
-such methods it has no effect; the checker infers the field's dependencies from
-the code that initializes it.
+A field label matters to methods of its own class and to functions whose result
+takes its region. Code that initializes an aggregate's fields directly is
+followed as written.
 
 ## Constructors
 
@@ -348,17 +426,16 @@ fields held there is not part of the result. A base initializer, a delegating
 initializer, and an inheriting constructor (`using base::base`) write the
 fields as the constructor they run does.
 
-An object whose constructor stores a borrow of the object itself, such as a
-pointer to a sibling field or an allocator reference to a member arena, is valid
-only while the object keeps its address. A copy or a move leaves the borrow
-pointing at the source. As Rust admits self-references only behind `Pin`, such a
-type must be neither copyable nor movable; otherwise the initializer that takes
-the borrow is a `tbc-dangling-borrow`:
+An object never keeps a borrow of itself, such as a pointer to a sibling field
+or a service that references a sibling model: callers know each of its fields as
+a separate input, which Rust guarantees by refusing self-referential structs.
+Storing such a borrow is a `tbc-dangling-borrow` where it is taken, in a
+constructor or any method:
 
 ```cpp
 class buffer {
 public:
-  buffer() : cursor_(storage_.data()) {} // tbc-dangling-borrow unless copies and moves are deleted
+  buffer() : cursor_(storage_.data()) {} // tbc-dangling-borrow
 
 private:
   std::string storage_;
@@ -366,14 +443,35 @@ private:
 };
 ```
 
+Keep an index or an offset instead, or pass the sibling to each call that needs
+it.
+
 A function's address is static storage, not a borrow of the object that keeps
 it, as a `std::unique_ptr` with a function deleter does.
 
-A field labeled `lt::self` borrows only the object that holds it, as an allocator
-reference to a sibling arena does. Its borrows never count as the object's, so a
-`std::shared_ptr` to such an object carries none. The label is a promise, like a
-raw pointer behind Rust's `Pin`: the checker only requires the type to be neither
-copyable nor movable.
+A field labeled `lt::self` is the one exception: it borrows only the object that
+holds it, as an allocator reference to a sibling arena does. Its borrows never
+count as the object's, so a `std::shared_ptr` to such an object carries none.
+The label is a promise, like a raw pointer behind Rust's `Pin`: the checker only
+requires the type to be neither copyable nor movable, and rejects the
+initializer otherwise.
+
+## Shared types
+
+A class marked `TBC_SHARED`, from `<tbc/view.hpp>`, keeps every borrow it hands
+out valid whatever is done through it, as a Rust type with interior mutability
+does through `&self`. An allocator is the usual case: many objects keep a
+reference to it, a call through it invalidates nothing, and two arguments may
+name the same one. Its implementation is trusted rather than checked, like the
+unsafe code behind such a Rust type, so the mark belongs only on types audited
+for it.
+
+```cpp
+template <typename Upstream>
+class TBC_SHARED SynchronizedAllocator {
+  // ...
+};
+```
 
 ```cpp
 class asset {
@@ -387,12 +485,11 @@ private:
 };
 ```
 
-## Elision and unavailable bodies
+## Elision
 
-`tbc::view<T>` uses `lt::elided`. With a visible body, the checker infers its
-actual dependencies, just as for a native borrowed result.
+`tbc::view<T>` uses `lt::elided`, which means the same as no annotation.
 
-For an annotated declaration without a body, the existing signature rules are:
+For an annotated declaration, the signature rules are:
 
 1. Each elided annotated input introduces an independent region.
 2. One input region can supply an elided result.
@@ -400,11 +497,10 @@ For an annotated declaration without a body, the existing signature rules are:
    otherwise.
 4. Multiple incompatible input regions produce `tbc-ambiguous-lifetime`.
 
-Callers that cannot see the body rely on these promises, so the checker verifies
-each one against the definition when it checks the translation unit that defines
-the function. A method declared in a header with an elided result and defined in
-its own source file is checked there: returning a parameter instead of the
-receiver's storage is a `tbc-contract-violation`.
+Callers rely on these promises, so the checker verifies each one against the
+definition when it checks the translation unit that defines the function. A
+method with an elided result that returns a parameter instead of the receiver's
+storage is a `tbc-contract-violation`.
 
 ```cpp
 class session {
@@ -421,9 +517,8 @@ too. A method's result borrows from its receiver. A function without a receiver
 borrows from its only parameter that can lend, a reference, a pointer or a
 view; with no such parameter it borrows nothing, as Rust's `'static` output. With
 several, elision names no source, and using the result is
-`tbc-missing-contract` until the declaration labels one. A definition out of line,
-declared in another file and not inline, is checked against the same rule,
-because callers in other translation units see only the declaration:
+`tbc-missing-contract` until the declaration labels one. Every definition is
+checked against the same rule, because callers see only the declaration:
 
 ```cpp
 class registry {
@@ -483,10 +578,12 @@ has deliberate limits:
   apart. A function that retains an argument on one path retains it for every
   call, whatever value selects that path: a queue that copies a reply unless a
   shared owner is supplied must copy and retain in separate functions. A shared
-  owner retained beside a view does not keep the view's referent alive. In a large
-  set of borrows, one borrow held at many positions of an object is held at their
-  common prefix instead, which bounds what deep object graphs produce; a coarser
-  position only makes later writes to those fields keep the borrow.
+  owner retained beside a view does not keep the view's referent alive.
+- One label per field or parameter names one region. A wrapper that holds a
+  reference to an object which itself holds borrows cannot yet name the inner
+  region apart from the reference, as `&'s Stream<'b>` does.
+- Two objects that each keep the same mutable reference, when neither is the
+  other's field, are not reported; only overlapping arguments of one call are.
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
   protocols still require further analysis or audited models.
@@ -494,12 +591,11 @@ has deliberate limits:
   dispatch, and conflicting redeclaration contracts are not comprehensively
   checked. Unsupported result dependencies may produce `tbc-missing-contract`.
 - Bounds, nullability, initialization, and concurrency are separate checks and
-  remain pending. Exclusive aliasing is not a target. A pointer annotation is not a
-  non-null promise.
+  remain pending. A pointer annotation is not a non-null promise.
 
 A region label alone cannot describe reallocation, retained callbacks, or every
 foreign-library effect. The pending specifications preserve those requirements
 without pretending the annotation already implements them.
 
-See `tests/spec/inference.cpp` for paired acceptance/rejection regressions and
+See `tests/spec/places.cpp` and `tests/spec/inference.cpp` for paired acceptance/rejection regressions and
 `tests/spec/README.md` for the distinction between implemented and pending cases.

@@ -11,8 +11,11 @@
 #include <vector>
 
 namespace inferred {
+  using source_a = tbc::view<std::string_view, tbc::lt::a>;
+
+  // A record's text is region `a` of its type, as the lifetime parameter of a Rust `Record<'a>`.
   struct record {
-    std::string_view text;
+    source_a text;
     std::vector<record> children;
   };
 
@@ -36,7 +39,8 @@ namespace inferred {
     return parent;
   }
 
-  record copyRecord(const record &input) {
+  // A copied record holds what its input's region `a` holds, not the input itself.
+  tbc::view<record, tbc::lt::a> copyRecord(const record &input) {
     const auto &alias = input;
     return alias;
   }
@@ -49,12 +53,12 @@ namespace inferred {
     return input;
   }
 
-  std::string_view preferFirst(std::string_view first, std::string_view second) {
+  source_a preferFirst(source_a first, std::string_view second) {
     observe(second);
     return first;
   }
 
-  std::string_view choose(std::string_view first, std::string_view second, bool pick_first) {
+  source_a choose(source_a first, source_a second, bool pick_first) {
     return pick_first ? first : second;
   }
 
@@ -72,10 +76,10 @@ namespace inferred {
   }
 
   struct reader {
-    std::string_view borrowed;
+    source_a borrowed;
     std::string owned;
 
-    std::string_view readBorrowed() const {
+    source_a readBorrowed() const {
       return borrowed;
     }
 
@@ -85,14 +89,14 @@ namespace inferred {
   };
 
   struct source_parser {
-    std::string_view source;
+    source_a source;
 
-    record parse(std::string_view input) {
+    tbc::view<record, tbc::lt::a> parse(source_a input) {
       source = input;
       return parseRule();
     }
 
-    record parseRule() const {
+    tbc::view<record, tbc::lt::a> parseRule() const {
       return branch(source);
     }
   };
@@ -102,7 +106,7 @@ namespace inferred {
     return parser.parse(source);
   }
 
-  void write(record &destination, std::string_view source) {
+  void write(tbc::view<record &, tbc::lt::a> destination, source_a source) {
     auto &alias = destination;
     alias = branch(source);
   }
@@ -115,12 +119,12 @@ namespace inferred {
   };
 
   struct constructed_reference {
-    const std::string &source;
+    tbc::view<const std::string &, tbc::lt::a> source;
 
-    explicit constructed_reference(const std::string &input)
+    explicit constructed_reference(tbc::view<const std::string &, tbc::lt::a> input)
         : source(input) {}
 
-    std::string_view read() const {
+    source_a read() const {
       return source;
     }
   };
@@ -139,8 +143,6 @@ namespace inferred {
     return prefix(source);
   }
 
-  using source_a = tbc::view<std::string_view, tbc::lt::a>;
-
   source_a explicitChoice(source_a first, source_a second) {
     return choose(first, second, true);
   }
@@ -149,25 +151,25 @@ namespace inferred {
   std::string_view opaque_pair(std::string_view first, std::string_view second);
 
   struct text_list {
-    std::vector<std::string_view> items;
+    tbc::view<std::vector<std::string_view>, tbc::lt::a> items;
 
     void clear() {
       items.clear();
     }
 
-    void add(std::string_view item) {
+    void add(source_a item) {
       items.push_back(item);
     }
   };
 
   struct text_slot {
-    std::string_view text;
+    source_a text;
 
-    void store(std::string_view next) {
+    void store(source_a next) {
       text = next;
     }
 
-    std::string_view exchange(std::string_view next) {
+    source_a exchange(source_a next) {
       const auto previous = text;
       text = next;
       return previous;
@@ -914,7 +916,7 @@ inferred::record inferredMovedAggregateRetained(const std::string &source) {
 // CONTRACT: Clearing a container discards its previous loans before a declared result region is checked.
 // SCENARIO: A builder clears its retained list through a helper, refills it from the source, and returns it; accept.
 struct cleared_builder {
-  inferred::text_list list;
+  tbc::view<inferred::text_list, tbc::lt::a> list;
 
   tbc::view<inferred::text_list, tbc::lt::a> rebuild(tbc::view<std::string_view, tbc::lt::a> source) {
     list.clear();
@@ -1073,8 +1075,8 @@ void inferredOpaqueReceiverRetained() {
 // PAIR: inference.self_borrow
 // SOURCE: dlls/telar-platform/include/telar_platform/platform.cppm :: Command::environment_
 // STATUS: implemented
-// CONTRACT: An object may borrow its own fields when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
-// SCENARIO: A field keeps a pointer to a sibling field of a non-copyable, non-movable object; accept.
+// CONTRACT: An object may borrow its own fields through a field labeled `lt::self` when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
+// SCENARIO: A labeled field keeps a pointer to a sibling field of a non-copyable, non-movable object; accept.
 namespace inferred {
   class pinned_buffer {
   public:
@@ -1090,7 +1092,7 @@ namespace inferred {
 
   private:
     std::string storage_{"abc"};
-    const char *cursor_;
+    tbc::view<const char *, tbc::lt::self> cursor_;
   };
 }
 

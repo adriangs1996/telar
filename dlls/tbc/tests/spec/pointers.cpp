@@ -1,3 +1,5 @@
+#include "tbc/view.hpp"
+
 #include <array>
 #include <cstring>
 #include <dirent.h>
@@ -14,19 +16,23 @@ namespace pointers {
     static_cast<void>(text);
   }
 
+  using text_a = tbc::view<std::string_view, tbc::lt::a>;
+
+  // A record's text is region `a` of its type, as the lifetime parameter of a Rust `Record<'a>`.
   struct record {
-    std::string_view text;
+    text_a text;
   };
 
   struct keeper {
-    std::string_view kept;
+    text_a kept;
 
-    void keep(std::string_view text) {
+    void keep(text_a text) {
       kept = text;
     }
   };
 
-  std::string_view pointeeText(const record *pointer) {
+  // The text the pointee holds, not the pointee.
+  text_a pointeeText(const record *pointer) {
     return pointer->text;
   }
 
@@ -331,15 +337,15 @@ void pointerReferenceParameterEscape(pointers::frame &frame) {
 namespace pointers {
   class view_reader {
   public:
-    explicit view_reader(std::string_view &view)
+    explicit view_reader(tbc::view<std::string_view &, tbc::lt::a> view)
         : view_(view) {}
 
-    [[nodiscard]] std::string_view read() const {
+    [[nodiscard]] text_a read() const {
       return view_;
     }
 
   private:
-    std::string_view &view_;
+    tbc::view<std::string_view &, tbc::lt::a> view_;
   };
 
   struct buffer {
@@ -378,10 +384,10 @@ namespace pointers {
   };
 
   struct relay {
-    const char *pending = nullptr;
+    tbc::view<const char *, tbc::lt::a> pending = nullptr;
 
     template <typename Source>
-    void advance(Source &source) {
+    void advance(tbc::view<const Source &, tbc::lt::a> source) {
       pending = source.peek().data();
     }
   };
@@ -390,7 +396,7 @@ namespace pointers {
     std::string &target;
   };
 
-  void attach(record *target, std::string_view text) {
+  void attach(tbc::view<record *, tbc::lt::a> target, text_a text) {
     target->text = text;
   }
 
@@ -402,8 +408,8 @@ namespace pointers {
 // CASE: pointer.reference_field_read
 // PAIR: pointer.reference_field
 // SOURCE: services/runtime-cpp/tls/interception.cppm :: TlsStream::peekView
-// STATUS: implemented
-// CONTRACT: Reading a reference field yields what its referent holds, not the referent itself.
+// STATUS: pending
+// CONTRACT: Reading a reference field yields what its referent holds, not the referent itself; a result that names the referent's region rather than the reference's, as `&'s &'b str` does, needs one region per level.
 // SCENARIO: The local view refers to the caller's string, so the view read back may be returned; accept.
 std::string_view pointerReferenceFieldRead(const std::string &text) {
   std::string_view local = text;
@@ -431,8 +437,8 @@ std::string_view pointerReferenceFieldDead() {
 // CASE: pointer.nested_reference_wrapper
 // PAIR: pointer.nested_reference
 // SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::advance
-// STATUS: implemented
-// CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
+// STATUS: pending
+// CONTRACT: A wrapper's view of the stream it wraps can name the stream's own region rather than the wrapper's, as `&'s Stream<'b>` does; one label per field cannot yet tell the two apart.
 // SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
 void pointerNestedReferenceWrapper(pointers::buffer &source, pointers::relay &out) {
   pointers::buffer_stream stream{source};

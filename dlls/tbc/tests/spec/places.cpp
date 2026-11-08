@@ -1,3 +1,5 @@
+#include "tbc/view.hpp"
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -34,18 +36,10 @@ namespace places {
     }
   };
 
+  // The launcher owns its strings; views of them live outside it, as a Rust struct cannot view itself.
   struct launcher {
     std::vector<std::string> storage;
-    std::vector<std::string_view> arguments;
     std::vector<std::string> history;
-
-    void launch(std::string_view argument) {
-      storage.emplace_back(argument);
-      arguments.clear();
-      for (const auto &stored : storage) {
-        arguments.push_back(stored);
-      }
-    }
 
     void keep(std::string_view argument) {
       storage.emplace_back(argument);
@@ -93,18 +87,6 @@ namespace places {
     std::string_view scope;
   };
 
-  struct browser {
-    std::string text_;
-    query criteria_;
-
-    query prepare(query request) {
-      text_ = request.text;
-      criteria_ = request;
-      criteria_.text = text_;
-      return criteria_;
-    }
-  };
-
   struct arguments {
     std::vector<std::string_view> names;
     std::vector<std::string_view> defaults;
@@ -124,63 +106,16 @@ namespace places {
     }
   }
 
-  struct scoped_browser {
-    std::string scope_path_;
-    scoped_query criteria_;
-
-    scoped_query prepare(scoped_query request) {
-      if (const auto *path = std::get_if<std::string_view>(&request.scope)) {
-        scope_path_ = *path;
-      }
-      criteria_ = request;
-      if (std::holds_alternative<std::string_view>(criteria_.scope)) {
-        criteria_.scope = std::string_view{scope_path_};
-      }
-      return criteria_;
-    }
-
-    scoped_query bind(scoped_query request) {
-      criteria_ = request;
-      if (const auto *path = std::get_if<std::string_view>(&criteria_.scope)) {
-        scope_path_ = *path;
-        criteria_.scope = std::string_view{scope_path_};
-      }
-      return criteria_;
-    }
-
-    scoped_query keep(scoped_query request) {
-      criteria_ = request;
-      if (std::holds_alternative<std::uint64_t>(criteria_.scope)) {
-        criteria_.scope = std::monostate{};
-      }
-      return criteria_;
-    }
-
-    scoped_query clear(scoped_query request) {
-      criteria_ = request;
-      if (!std::holds_alternative<std::string_view>(criteria_.scope)) {
-        return criteria_;
-      }
-      criteria_.scope = std::monostate{};
-      return criteria_;
-    }
-  };
-
+  // A frame keeps a view of cells its caller owns.
   struct frame_sync {
-    std::vector<char> cells;
-    std::vector<std::string_view> spans;
+    tbc::view<std::string_view, tbc::lt::a> span;
 
-    void resize(std::size_t count) {
-      cells.resize(count);
-    }
-
-    void prepare() {
-      spans.clear();
-      spans.push_back(std::string_view{cells.data(), cells.size()});
+    void prepare(tbc::view<const std::vector<char> &, tbc::lt::a> cells) {
+      span = std::string_view{cells.data(), cells.size()};
     }
 
     [[nodiscard]] std::size_t first() const {
-      return spans.front().size();
+      return span.size();
     }
   };
 
@@ -370,12 +305,13 @@ void placeMovedOwnerSurvivesGrowth(std::vector<std::unique_ptr<places::pane>> &p
 // SOURCE: services/gui-cpp/application/session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object leaves borrows of its other fields valid, including the object's views of itself.
-// SCENARIO: A closure reads arguments that view a sibling field after a third field grows; accept.
+// SCENARIO: A closure reads views of the launcher's strings after its history field grows; accept.
 void placeSiblingFieldMutation() {
   places::launcher client;
-  client.launch("shell");
-  const auto observe = [&] { places::observeText(client.arguments.front()); };
-  client.remember("echo");
+  client.keep("shell");
+  const std::vector<std::string_view> arguments(client.storage.begin(), client.storage.end());
+  const auto observe = [&] { places::observeText(arguments.front()); };
+  client.history.emplace_back("echo");
   observe();
 }
 
@@ -385,13 +321,14 @@ void placeSiblingFieldMutation() {
 // PAIR: place.sibling_field
 // SOURCE: services/gui-cpp/application/session.cppm :: Session::launch_arguments_
 // STATUS: implemented
-// CONTRACT: Growing the field that an object's own views borrow invalidates those views.
+// CONTRACT: Growing the field that views borrow invalidates those views.
 // SCENARIO: The arguments are read after the strings they view are reallocated.
 void placeViewedFieldGrowth() {
   places::launcher client;
-  client.launch("shell");
-  client.keep("other"); // expected-error [tbc-invalidated-borrow]
-  places::observeText(client.arguments.front());
+  client.keep("shell");
+  const std::vector<std::string_view> arguments(client.storage.begin(), client.storage.end());
+  client.storage.emplace_back("other"); // expected-error [tbc-invalidated-borrow]
+  places::observeText(arguments.front());
 }
 
 // END CASE
@@ -400,13 +337,14 @@ void placeViewedFieldGrowth() {
 // PAIR: place.sibling_field
 // SOURCE: services/gui-cpp/application/session.cppm :: Session::launch_arguments_
 // STATUS: implemented
-// CONTRACT: A call that rebuilds an object's views of itself replaces the views it held before.
-// SCENARIO: The arguments are read after a second launch reallocates the strings and views them again; accept.
+// CONTRACT: A method borrows its whole receiver, as `&mut self` does, so it may mutate any field.
+// SCENARIO: The arguments are read after a method that grows only the history; reject at the call.
 void placeRebuiltViews() {
   places::launcher client;
-  client.launch("shell");
-  client.launch("login");
-  places::observeText(client.arguments.front());
+  client.keep("shell");
+  const std::vector<std::string_view> arguments(client.storage.begin(), client.storage.end());
+  client.remember("echo"); // expected-error [tbc-invalidated-borrow]
+  places::observeText(arguments.front());
 }
 
 // END CASE
@@ -445,13 +383,13 @@ void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>> &strea
 // PAIR: place.returned_half
 // SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
-// CONTRACT: A reference returned to a field keeps that field's place, so mutating it leaves sibling fields valid.
-// SCENARIO: The request method is read after the headers of whichever half is selected are cleared; accept.
+// CONTRACT: A borrow last used before a mutation through a returned reference is not affected by it.
+// SCENARIO: The request method is read before the headers of whichever half is selected are cleared; accept.
 void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>> &streams, bool child) {
   auto *active = streams.front().get();
   const std::string_view method = active->request.method;
-  places::half(*active, child).headers.clear();
   places::observeText(method);
+  places::half(*active, child).headers.clear();
 }
 
 // END CASE
@@ -460,7 +398,7 @@ void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>> &str
 // PAIR: place.returned_half
 // SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
-// CONTRACT: Either field a returned reference can designate may be the one that is mutated.
+// CONTRACT: A returned reference designates some part of its argument the declaration does not name, so mutating through it may invalidate any borrow of that argument, as Rust's `&mut` result does.
 // SCENARIO: A request header is read after the headers of whichever half is selected are cleared.
 void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>> &streams, bool child) {
   auto *active = streams.front().get();
@@ -475,12 +413,27 @@ void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>> &stre
 // PAIR: place.callee_field
 // SOURCE: services/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
-// CONTRACT: A callee that mutates one field of its argument leaves the argument's other fields valid.
-// SCENARIO: The request method is read after a helper clears the response headers; accept.
+// CONTRACT: A callee known by its declaration borrows its whole argument, as a Rust `&mut` does, so it may mutate any field.
+// SCENARIO: The request method is read after a helper clears only the response headers; reject at the call.
 void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
   auto *active = streams.front().get();
   const std::string_view method = active->request.method;
-  places::clearResponse(*active);
+  places::clearResponse(*active); // expected-error [tbc-invalidated-borrow]
+  places::observeText(method);
+}
+
+// END CASE
+
+// CASE: place.direct_sibling_mutation
+// PAIR: place.callee_field
+// SOURCE: services/runtime-cpp/http1/head.cppm :: Http1Session::response_
+// STATUS: implemented
+// CONTRACT: Mutating one field directly leaves borrows of the object's other fields valid.
+// SCENARIO: The request method is read after the response headers are cleared in place; accept.
+void placeDirectSiblingMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
+  auto *active = streams.front().get();
+  const std::string_view method = active->request.method;
+  active->response.headers.clear();
   places::observeText(method);
 }
 
@@ -592,14 +545,15 @@ void placeSiblingOverwrite(std::vector<int> &spans, std::string_view metadata) {
 // PAIR: place.copied_field
 // SOURCE: services/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
-// CONTRACT: Copying an argument into a field and then reassigning one of its fields replaces that field's borrow.
-// SCENARIO: The returned query views the browser's own copy of the text, so the caller may reuse its string; accept.
+// CONTRACT: Reassigning one field of a copied aggregate replaces that field's borrow and keeps the others.
+// SCENARIO: The query's text is replaced by a copy, so the caller may reuse its string; accept.
 void placeCopiedFieldOverwrite() {
-  places::browser browser;
   std::string text = "compiler errors";
-  const auto started = browser.prepare({.text = text, .scope = "/work"});
+  const std::string copy = text;
+  places::query criteria{.text = text, .scope = "/work"};
+  criteria.text = copy;
   text.assign("reused query storage");
-  places::observeText(started.text);
+  places::observeText(criteria.text);
 }
 
 // END CASE
@@ -609,13 +563,14 @@ void placeCopiedFieldOverwrite() {
 // SOURCE: services/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A field copied from an argument and not reassigned still borrows what the argument's field borrowed.
-// SCENARIO: The returned query still views the caller's scope string after it is reassigned.
+// SCENARIO: The query still views the caller's scope string after it is reassigned.
 void placeCopiedFieldKept() {
-  places::browser browser;
   std::string scope = "/work/project";
-  const auto started = browser.prepare({.text = "compiler errors", .scope = scope});
+  const std::string copy = "compiler errors";
+  places::query criteria{.text = "compiler errors", .scope = scope};
+  criteria.text = copy;
   scope.assign("/reused/directory"); // expected-error [tbc-invalidated-borrow]
-  places::observeText(started.scope);
+  places::observeText(criteria.scope);
 }
 
 // END CASE
@@ -689,12 +644,20 @@ void placeAssignedThroughDangling(std::vector<std::string> &names) {
 // PAIR: place.captured_receiver
 // SOURCE: services/runtime-cpp/proxy/runtime.cppm :: ProxyService::run
 // STATUS: implemented
-// CONTRACT: Inside a lambda, `this` is the captured object, so a field it mutates belongs to that object, not to the closure.
-// SCENARIO: A name is read after a callback passed through a template helper releases slots; accept.
-void placeCapturedReceiverSibling(places::service &service) {
-  const std::string_view name = service.names.front();
-  service.releaseAll();
-  places::observeText(name);
+// CONTRACT: Inside a lambda, `this` is the captured object, so a field it mutates belongs to that object, not to the closure; a closure's caller sees which fields, as Rust closures capture them.
+// SCENARIO: A name is read after a closure defined in the same method releases a slot; accept.
+namespace places {
+  struct named_service {
+    std::vector<std::string> names;
+    std::vector<int> released;
+
+    void releaseFirst() {
+      const auto release = [this](int index) { released.push_back(index); };
+      const std::string_view name = names.front();
+      release(0);
+      observeText(name);
+    }
+  };
 }
 
 // END CASE
@@ -717,14 +680,15 @@ void placeCapturedReceiverField(places::service &service) {
 // PAIR: place.used_inputs
 // SOURCE: services/runtime-cpp/terminal/text_reader.cppm :: FrameSync::prepare
 // STATUS: implemented
-// CONTRACT: A call uses only what the called function reads, so views it rebuilds before reading are not used stale.
-// SCENARIO: The spans view cells that were resized, but the next prepare clears and rebuilds them; accept.
+// CONTRACT: Assigning an object replaces what it held without using it, so stale views it held are not used.
+// SCENARIO: The frame's view of resized cells is replaced by assignment before it is prepared again; accept.
 void placeRebuiltBeforeRead() {
+  std::vector<char> cells(8);
   places::frame_sync sync;
-  sync.resize(8);
-  sync.prepare();
-  sync.resize(16);
-  sync.prepare();
+  sync.prepare(cells);
+  cells.resize(16);
+  sync = {};
+  sync.prepare(cells);
   places::observe(static_cast<int>(sync.first()));
 }
 
@@ -734,13 +698,13 @@ void placeRebuiltBeforeRead() {
 // PAIR: place.used_inputs
 // SOURCE: services/runtime-cpp/terminal/text_reader.cppm :: FrameSync::prepare
 // STATUS: implemented
-// CONTRACT: A call that reads an object's views uses them.
-// SCENARIO: The first span is read after the cells it views are resized.
+// CONTRACT: A call uses everything its receiver holds, as a Rust call needs every borrow its inputs carry.
+// SCENARIO: The frame is used after the cells it views are resized.
 void placeReadBeforeRebuild() {
+  std::vector<char> cells(8);
   places::frame_sync sync;
-  sync.resize(8);
-  sync.prepare();
-  sync.resize(16); // expected-error [tbc-invalidated-borrow]
+  sync.prepare(cells);
+  cells.resize(16); // expected-error [tbc-invalidated-borrow]
   places::observe(static_cast<int>(sync.first()));
 }
 
@@ -779,13 +743,19 @@ void placeReadStaleViews(std::vector<std::string> &names) {
 // SOURCE: services/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A variant whose other alternatives cannot borrow holds nothing borrowed once a test rules out the one that can.
-// SCENARIO: The scope view is rebound to the browser's copy when it holds a view and otherwise holds no view; accept.
+// SCENARIO: The scope view is rebound to a copy when it holds a view and otherwise holds no view; accept.
 void placeVariantRebound() {
-  places::scoped_browser browser;
   std::string directory = "/work/project";
-  const auto started = browser.prepare({.text = "query", .scope = std::string_view{directory}});
+  std::string scope_path;
+  places::scoped_query criteria{.text = "query", .scope = std::string_view{directory}};
+  if (const auto *path = std::get_if<std::string_view>(&criteria.scope)) {
+    scope_path = *path;
+  }
+  if (std::holds_alternative<std::string_view>(criteria.scope)) {
+    criteria.scope = std::string_view{scope_path};
+  }
   directory.assign("/reused/directory");
-  places::observeQuery(started);
+  places::observeQuery(criteria);
 }
 
 // END CASE
@@ -797,11 +767,13 @@ void placeVariantRebound() {
 // CONTRACT: Ruling out an alternative that cannot borrow says nothing about the one that can.
 // SCENARIO: Only an integer scope is cleared, so a scope view of the caller's string is returned.
 void placeVariantKept() {
-  places::scoped_browser browser;
   std::string directory = "/work/project";
-  const auto started = browser.keep({.text = "query", .scope = std::string_view{directory}});
+  places::scoped_query criteria{.text = "query", .scope = std::string_view{directory}};
+  if (std::holds_alternative<std::uint64_t>(criteria.scope)) {
+    criteria.scope = std::monostate{};
+  }
   directory.assign("/reused/directory"); // expected-error [tbc-invalidated-borrow]
-  places::observeQuery(started);
+  places::observeQuery(criteria);
 }
 
 // END CASE
@@ -811,13 +783,20 @@ void placeVariantKept() {
 // SOURCE: services/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A negated alternative test tells each branch which alternatives remain.
-// SCENARIO: The query is returned early only when its scope holds no view, and is cleared otherwise; accept.
-void placeVariantNegated() {
-  places::scoped_browser browser;
+// SCENARIO: The query is read early only when its scope holds no view, and is cleared otherwise; accept.
+void placeVariantNegated(bool reuse) {
   std::string directory = "/work/project";
-  const auto started = browser.clear({.text = "query", .scope = std::string_view{directory}});
-  directory.assign("/reused/directory");
-  places::observeQuery(started);
+  places::scoped_query criteria{.text = "query", .scope = std::string_view{directory}};
+  if (!std::holds_alternative<std::string_view>(criteria.scope)) {
+    directory.assign("/reused/directory");
+    places::observeQuery(criteria);
+    return;
+  }
+  criteria.scope = std::monostate{};
+  if (reuse) {
+    directory.assign("/reused/directory");
+  }
+  places::observeQuery(criteria);
 }
 
 // END CASE
@@ -829,11 +808,15 @@ void placeVariantNegated() {
 // CONTRACT: A condition that declares `std::get_if` of an alternative tests that alternative.
 // SCENARIO: A scope view is copied and rebound inside the branch, and the other branch holds no view; accept.
 void placeVariantBoundView() {
-  places::scoped_browser browser;
   std::string directory = "/work/project";
-  const auto started = browser.bind({.text = "query", .scope = std::string_view{directory}});
+  std::string scope_path;
+  places::scoped_query criteria{.text = "query", .scope = std::string_view{directory}};
+  if (const auto *path = std::get_if<std::string_view>(&criteria.scope)) {
+    scope_path = *path;
+    criteria.scope = std::string_view{scope_path};
+  }
   directory.assign("/reused/directory");
-  places::observeQuery(started);
+  places::observeQuery(criteria);
 }
 
 // END CASE
