@@ -4,27 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <array>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <chrono>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include <iostream>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.runtime.tests.check;
 import telar.runtime.plugins.protocol;
 
 using namespace telar;

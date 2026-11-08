@@ -128,8 +128,8 @@ def main():
         if source.is_dir():
             shutil.copytree(source, licenses / name)
     shutil.copy2(base / 'terminal/glyphs/LICENSE', licenses / 'cell-glyphs.txt')
-    shutil.copy2(root / 'src/assets/JetBrainsMono-OFL.txt', licenses / 'JetBrainsMono-OFL.txt')
-    shutil.copy2(root / 'src/assets/TelarForma-OFL.txt', licenses / 'TelarForma-OFL.txt')
+    shutil.copy2(root / 'assets/JetBrainsMono-OFL.txt', licenses / 'JetBrainsMono-OFL.txt')
+    shutil.copy2(root / 'assets/TelarForma-OFL.txt', licenses / 'TelarForma-OFL.txt')
     print(output)
 
 

@@ -1,11 +1,18 @@
 module;
 
-#include "../window.hpp"
+// Qt generates its core protocol header from a wayland.xml newer than many
+// systems' libwayland, under the same WAYLAND_CLIENT_PROTOCOL_H guard. It must
+// come first: the scanner header below pulls in the system one otherwise, and
+// Qt's private headers then miss the interfaces only the newer one declares.
 #include <QtWaylandClient/private/qwaylanddisplay_p.h>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
-#include "../native/telar_gui.h"
+
+#include "../window.hpp"
+// These C headers carry no __cplusplus guard of their own.
+extern "C" {
 #include "background_effect.h"
 #include "ext-background-effect-v1-client-protocol.h"
+}
 #include <QAbstractEventDispatcher>
 #include <QByteArray>
 #include <QEvent>
@@ -26,38 +33,6 @@ module;
 module telar.gui.platform.private_file_stamp;
 
 import std;
-
-
-// Qt generates its core protocol header from a wayland.xml newer than many
-// systems' libwayland, under the same WAYLAND_CLIENT_PROTOCOL_H guard. It must
-// come first: the scanner header below pulls in the system one otherwise, and
-// Qt's private headers then miss the interfaces only the newer one declares.
-
-#include "platform/window.hpp"
-extern "C" {
-#include "../native/telar_gui.h"
-#include "background_effect.h"
-#include "ext-background-effect-v1-client-protocol.h"
-}
-#include <QAbstractEventDispatcher>
-#include <QByteArray>
-#include <QEvent>
-#include <QGuiApplication>
-#include <QObject>
-#include <QPlatformSurfaceEvent>
-#include <QQuickWindow>
-#include <QString>
-#include <QTimer>
-#include <QWindow>
-#include <QtCore/qlogging.h>
-#include <QtCore/qstringliteral.h>
-#include <QtGui/qguiapplication_platform.h>
-#include <algorithm>
-#include <cstdint>
-#include <memory>
-#include <tuple>
-#include <wayland-client-core.h>
-#include <wayland-client-protocol.h>
 
 namespace telar::gui::platform {
 namespace {

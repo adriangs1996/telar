@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <ghostty/vt.h>
 #include <stdlib.h>
@@ -38,7 +39,6 @@ module;
 
 #if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
 #include <mach/mach.h>
-#include "tbc/view.hpp"
 #endif
 
 export module telar.runtime.diagnostics.runtime_telemetry;

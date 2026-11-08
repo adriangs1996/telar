@@ -209,7 +209,7 @@ def run(options):
     reference_build = (options.reference_build_dir or build).resolve()
     work = options.output_dir.resolve()
     work.mkdir(parents=True, exist_ok=True)
-    fonts = [root / "src/assets" / name for name in ("IBMPlexSans-Regular.ttf", "IBMPlexSans-SemiBold.ttf", "SymbolsNerdFontMono-Regular.ttf")]
+    fonts = [root / "assets" / name for name in ("IBMPlexSans-Regular.ttf", "IBMPlexSans-SemiBold.ttf", "SymbolsNerdFontMono-Regular.ttf")]
     sources = reference_files(root, work, fonts)
     command = reference_command(root, reference_build, work)
     subprocess.run(command, check=True, timeout=180)

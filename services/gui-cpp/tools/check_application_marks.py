@@ -217,7 +217,7 @@ def main():
     core, names = reference_core(root)
     records = list(itertools.chain(mark_records(names), raster_records()))
     payload = b"".join(records)
-    atlas = root / "src/assets/provider-symbols-320x64.rgba"
+    atlas = root / "assets/provider-symbols-320x64.rgba"
     with tempfile.TemporaryDirectory(prefix="telar-application-marks-") as directory:
         work = Path(directory)
         (work / "probe.cpp").write_text(cpp_probe)

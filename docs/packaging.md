@@ -73,7 +73,7 @@ The bundle layout:
 
 ```
 Telar.app/Contents/
-  Info.plist                 packaging/macos/Info.plist.in, version from build.zig.zon
+  Info.plist                 packaging/macos/Info.plist.in, version from VERSION
   MacOS/Telar                launcher, src/launcher/main.zig
   Resources/telar.icns       packaging/macos/telar.icns
   Resources/bin/telar        the executable
@@ -88,7 +88,7 @@ because macOS file systems fold case: `Telar` and `telar` cannot share
 `Contents/MacOS`.
 
 The icon comes from two sources drawn for different sizes:
-`src/assets/telar-mark.svg` for 16 to 64 px and `src/assets/telar-icon.svg`
+`assets/telar-mark.svg` for 16 to 64 px and `assets/telar-icon.svg`
 for 128 to 1024 px. One script renders the iconset, runs `iconutil` and
 also writes `packaging/linux/telar.png`, the top bar mark and the site's
 brand files:
@@ -217,12 +217,12 @@ place for the system's certificate bundle, so the runtime reads
 ## Releases
 
 A tag `vX.Y.Z` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml).
-The tag must equal `.version` in `build.zig.zon`; `telar --version` and the
-bundle's `Info.plist` read it from there.
+The tag must equal the version in [`VERSION`](../VERSION); `telar --version` and
+the bundle's `Info.plist` read it from there.
 
 To publish a version:
 
-1. Set `.version` in `build.zig.zon`, commit and merge to `main`.
+1. Set the version in `VERSION`, commit and merge to `main`.
 2. Tag that commit `vX.Y.Z` and push the tag.
 3. Watch the workflow. It publishes the release once every platform built.
 

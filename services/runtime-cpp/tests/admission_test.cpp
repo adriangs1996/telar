@@ -4,21 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include <array>
 #include <cstddef>
-#include <span>
-#include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include <chrono>
 #include <sys/socket.h>
+#include <unistd.h>
 
-
-
+import std;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.transport.connection;
 
 using namespace telar;

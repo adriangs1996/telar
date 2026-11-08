@@ -1,7 +1,7 @@
-#include "protocol_peer.hpp"
-#include <array>
 #include <cstdio>
-#include <thread>
+
+import std;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

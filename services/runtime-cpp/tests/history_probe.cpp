@@ -4,29 +4,19 @@ static_assert(true);
 #endif
 
 
-#include "protocol_peer.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
-#include <span>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "telar_client/codecs/telar_codec.hpp"
-#include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include <chrono>
 #include <cstdio>
-#include <fstream>
-#include <vector>
 
-
-
+import std;
+import telar.client.protocol;
+import telar.runtime.tests.protocol_peer;
 import telar.client;
 
 using namespace telar;

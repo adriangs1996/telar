@@ -1,9 +1,11 @@
-#include "agent_oracle.hpp"
-#include <chrono>
-#include <filesystem>
-#include <iostream>
 #include <sys/wait.h>
-#include <thread>
+#include <cerrno>
+#include <cstdio>
+#include <sys/types.h>
+#include <unistd.h>
+
+import std;
+import telar.runtime.tests.agent_oracle;
 
 using namespace telar;
 

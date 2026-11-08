@@ -475,12 +475,19 @@ namespace telar {
     std::string_view name{};
   };
 
+  // What a client shows for a pane of a tab it has not loaded. `cwd` is empty until the runtime observes one.
+  struct TabPane {
+    std::uint64_t pane_id = 0;
+    std::string_view foreground{};
+    std::string_view cwd{};
+  };
+
   struct TabDescriptor {
     std::uint64_t tab_id = 0;
     std::uint16_t position = 0;
     std::uint16_t pane_count = 0;
     std::string_view label{};
-    std::span<const PaneForeground> foregrounds{};
+    std::span<const TabPane> panes{};
   };
 
   struct WorkspaceListEntry {
@@ -861,9 +868,10 @@ namespace telar {
   };
 
   template <>
-  struct BodySchema<PaneForeground>
-      : Serializer<Field<&PaneForeground::pane_id, NonzeroU64, "pane_id">,
-                   Field<&PaneForeground::name, Text16<48, false>, "name">> {};
+  struct BodySchema<TabPane>
+      : Serializer<Field<&TabPane::pane_id, NonzeroU64, "pane_id">,
+                   Field<&TabPane::foreground, Text16<48, false>, "foreground">,
+                   Field<&TabPane::cwd, Text16<4096>, "cwd">> {};
 
   template <>
   struct BodySchema<TabDescriptor>
@@ -871,17 +879,17 @@ namespace telar {
                    Field<&TabDescriptor::position, u16, "position">,
                    Field<&TabDescriptor::pane_count, BoundedInteger<u16, 0, 64>, "pane_count">,
                    Field<&TabDescriptor::label, DisplayText16<128>, "label">,
-                   Field<&TabDescriptor::foregrounds,
-                         CountedSpan<u16, ValueCodec<PaneForeground>, 64>,
-                         "foregrounds">> {
+                   Field<&TabDescriptor::panes,
+                         CountedSpan<u16, ValueCodec<TabPane>, 64>,
+                         "panes">> {
     static void validate(const TabDescriptor &value) {
-      if (value.foregrounds.size() > value.pane_count) {
-        throw EncodingError{"Too many foreground entries"};
+      if (value.panes.size() > value.pane_count) {
+        throw EncodingError{"Too many tab pane entries"};
       }
-      for (std::size_t i = 0; i < value.foregrounds.size(); ++i) {
+      for (std::size_t i = 0; i < value.panes.size(); ++i) {
         for (std::size_t j = 0; j < i; ++j) {
-          if (value.foregrounds[i].pane_id == value.foregrounds[j].pane_id) {
-            throw EncodingError{"Duplicate foreground pane"};
+          if (value.panes[i].pane_id == value.panes[j].pane_id) {
+            throw EncodingError{"Duplicate tab pane"};
           }
         }
       }

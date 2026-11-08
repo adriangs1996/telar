@@ -4,41 +4,21 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "packet_fixture.hpp"
-#include "tls_fixture.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <array>
-#include <optional>
 #include <pcap/pcap.h>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <chrono>
-#include <string>
-#include <unordered_map>
-#include "telar_platform/random_bytes.hpp"
-#include <atomic>
 #include <cassert>
-#include <stdexcept>
-#include "telar_client/serializers/telar_messages.hpp"
-#include <memory>
-#include "telar_base/memory/fixed_text.hpp"
-#include <exception>
-#include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <limits.h>
-#include <mutex>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
+import telar.runtime.tests.packet_fixture;
+import telar.runtime.tests.tls_fixture;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
 

@@ -14,7 +14,7 @@ import subprocess
 from PIL import Image
 
 
-ASSETS = Path(__file__).resolve().parents[1] / "src" / "assets"
+ASSETS = Path(__file__).resolve().parents[1] / "assets"
 SOURCES = ("Claude-symbol.svg", "OpenAI-symbol.svg", "Pi-symbol.svg", "Cursor-symbol.svg", "OpenCode-symbol.svg")
 SIDE = 64
 

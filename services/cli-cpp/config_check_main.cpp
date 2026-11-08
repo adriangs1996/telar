@@ -4,21 +4,11 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <charconv>
 #include <cstdio>
 
-
-
+import std;
+import telar.client.protocol;
 import telar.cli.tab;
 
 int main(int argc, char **argv) {

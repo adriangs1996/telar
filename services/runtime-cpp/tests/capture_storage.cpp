@@ -4,23 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "capture_oracle.hpp"
-#include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <array>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <chrono>
 
-
-
+import std;
+import telar.base.memory;
+import telar.runtime.tests.capture_oracle;
 import telar.runtime.exchange_capture.exchange;
 
 using namespace telar;

@@ -6,7 +6,6 @@ static_assert(true);
 #endif
 
 
-#include "client_peer.hpp"
 #include "../diagnostics/line.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_base/diagnostics/config.hpp"
@@ -77,9 +76,9 @@ static_assert(true);
 #include "../terminal/control/clipboard.hpp"
 #include <poll.h>
 #include <thread>
+#include <ghostty/vt.h>
 
-
-
+import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
 
 using namespace telar;

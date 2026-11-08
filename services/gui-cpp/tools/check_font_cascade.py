@@ -192,7 +192,7 @@ def main():
     variants = ["JetBrainsMono-Regular.ttf", "IBMPlexSans-Regular.ttf", "SymbolsNerdFontMono-Regular.ttf"]
     for index, font in enumerate(variants):
         expected = subprocess.run([work / "original"], input=struct.pack("<I", index) + payload, capture_output=True, check=True, timeout=180).stdout
-        actual = subprocess.run([build / "gui-font-cascade-probe", root / "src/assets", font], input=payload, capture_output=True, check=True, timeout=180).stdout
+        actual = subprocess.run([build / "gui-font-cascade-probe", root / "assets", font], input=payload, capture_output=True, check=True, timeout=180).stdout
         (work / (str(index) + "-original.bin")).write_bytes(expected)
         (work / (str(index) + "-cpp.bin")).write_bytes(actual)
         if expected != actual:

@@ -132,6 +132,11 @@ El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
   AST usan directamente el SDK de Clang con el que se construye la herramienta.
 - Fixtures y utilidades de tests: includes locales, macros de aserción y fixtures
   de compilación deliberadamente válida o inválida. No son APIs de aplicación.
+  Los fixtures compartidos sin macros de runtime y CLI son interfaces de módulo
+  (`runtime-test-fixtures`, `cli-test-check`); sus importadores ya no reciben la
+  biblioteca estándar textual. Quien use la API C de ghostty sigue incluyendo
+  `<ghostty/vt.h>`: sus `static inline` de dos fragmentos globales distintos solo
+  se fusionan contra una copia textual en la unidad importadora.
 
 ### Un módulo dueño por header textual
 

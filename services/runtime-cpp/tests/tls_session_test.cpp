@@ -4,38 +4,25 @@ static_assert(true);
 #endif
 
 
-#include <concepts>
 #include <cstdint>
-#include <span>
 #include <cstddef>
 #include <cstring>
-#include <array>
-#include <algorithm>
 #include <cassert>
 #include <cerrno>
-#include <exception>
 #include <csignal>
 #include <sys/socket.h>
-#include "telar_platform/file_descriptor.hpp"
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include "telar_base/memory/fixed_text.hpp"
-#include <string_view>
 #include <arpa/inet.h>
-#include <optional>
 #include <openssl/ssl.h>
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
-#include "telar_base/memory/allocator.hpp"
 #include <openssl/crypto.h>
-#include <stdexcept>
 #include <ctime>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_platform/random_bytes.hpp"
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -48,16 +35,12 @@ static_assert(true);
 #endif
 #include <unistd.h>
 #include <cstdlib>
-#include "telar_platform/trace.hpp"
-#include <chrono>
-#include <atomic>
-#include <mutex>
-#include "tls_fixture.hpp"
-#include <thread>
 
-
-
-#include "socket_pair.hpp"
+import std;
+import telar.base.memory;
+import telar.platform.primitives;
+import telar.runtime.tests.socket_pair;
+import telar.runtime.tests.tls_fixture;
 import telar.runtime.tls.interception;
 
 using namespace telar;

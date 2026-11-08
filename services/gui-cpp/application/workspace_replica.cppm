@@ -578,42 +578,64 @@ struct Pane {
   std::optional<Byte> progress_percent;
 };
 
+// A pane the runtime listed for a tab. It stands in for the pane while the tab is not loaded.
+struct TabMember {
+  static constexpr std::size_t foreground_capacity = 48;
+
+  std::uint64_t pane_id = 0;
+  runtime::FixedText<foreground_capacity> foreground;
+};
+
 template <Allocator Memory>
 struct Tab {
   inline explicit Tab(Memory &memory, TabLocation identity)
       : location(identity),
         label(AllocatorRef<char, Memory>{memory}),
-        foreground(AllocatorRef<char, Memory>{memory}) {}
+        foreground(AllocatorRef<char, Memory>{memory}),
+        directory(AllocatorRef<char, Memory>{memory}),
+        members(AllocatorRef<TabMember, Memory>{memory}) {}
 
-  inline bool observeForeground(PaneForeground report) {
-    if (foreground_pane == report.pane_id && foreground == report.name) {
-      return false;
+  inline void observeForeground(PaneForeground report) {
+    if (foreground_pane == report.pane_id) {
+      foreground = report.name;
     }
 
-    foreground = report.name;
-    foreground_pane = report.pane_id;
-
-    return true;
+    for (auto &member : members) {
+      if (member.pane_id == report.pane_id) {
+        member.foreground.assign(report.name);
+      }
+    }
   }
 
-  inline bool observeForegrounds(std::span<const PaneForeground> names) {
-    if (names.empty()) {
-      return false;
+  // The tab shows its focused pane, else the first one the runtime listed.
+  inline void observePanes(std::span<const TabPane> panes) {
+    members.clear();
+    if (panes.empty()) {
+      return;
     }
 
-    auto selected = names.front();
-    for (const auto name : names) {
-      if (name.pane_id == focused_pane) {
-        selected = name;
+    members.reserve(panes.size());
+    const auto *selected = &panes.front();
+    for (const auto &pane : panes) {
+      auto &member = members.emplace_back();
+      member.pane_id = pane.pane_id;
+      member.foreground.assign(pane.foreground);
+      if (pane.pane_id == focused_pane) {
+        selected = &pane;
       }
     }
 
-    return observeForeground(selected);
+    foreground = selected->foreground;
+    foreground_pane = selected->pane_id;
+    directory = selected->cwd;
   }
 
   TabLocation location;
   String<Memory> label;
   String<Memory> foreground;
+  // The foreground pane's working directory, as the runtime last listed it.
+  String<Memory> directory;
+  Vector<TabMember, Memory> members;
   PaneLayout layout;
   std::uint64_t focused_pane = 0;
   std::uint64_t foreground_pane = 0;

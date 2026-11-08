@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include <cerrno>
 #include <exception>
 #include "telar_platform/file_descriptor.hpp"
@@ -58,11 +57,8 @@ static_assert(true);
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
 
-
-
+import telar.runtime.tests.check;
 import telar.runtime.platform.request_worker;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.plugins.run_worker;

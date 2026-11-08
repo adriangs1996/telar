@@ -1,6 +1,11 @@
-#include "backpressure.hpp"
 #include <poll.h>
 #include <termios.h>
+#include <cstdio>
+#include <sys/types.h>
+#include <unistd.h>
+
+import std;
+import telar.runtime.tests.backpressure;
 
 using namespace telar;
 

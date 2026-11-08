@@ -4,24 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include <cstddef>
-#include <string_view>
-#include <limits>
-#include <optional>
 #include <cstdint>
-#include <concepts>
-#include <span>
-#include <algorithm>
 #include <cstring>
-#include <array>
-#include <atomic>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/trace.hpp"
-#include "test_byte_stream.hpp"
 
-
-
+import std;
+import telar.base.memory;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
+import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http1.head;
 import telar.runtime.http1.intercepted_relay;
 import telar.runtime.proxy.runtime;

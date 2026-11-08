@@ -143,11 +143,11 @@ void detachedTabForegroundsAndAgentTitles() {
     constexpr std::uint64_t unfocused_active_pane = 7;
     constexpr std::uint64_t remembered_detached_pane = 12;
     constexpr std::uint64_t other_detached_pane = 13;
-    const std::array active_names{PaneForeground{.pane_id = unfocused_active_pane, .name = "other"}, PaneForeground{.pane_id = 1, .name = "Python"}};
-    const std::array detached_names{PaneForeground{.pane_id = remembered_detached_pane, .name = "nvim"}, PaneForeground{.pane_id = other_detached_pane, .name = "git"}};
+    const std::array active_names{TabPane{.pane_id = unfocused_active_pane, .foreground = "other"}, TabPane{.pane_id = 1, .foreground = "Python"}};
+    const std::array detached_names{TabPane{.pane_id = remembered_detached_pane, .foreground = "nvim", .cwd = "/projects/detached"}, TabPane{.pane_id = other_detached_pane, .foreground = "git", .cwd = "/projects/other"}};
     const std::array tabs{
-        TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 2, .foregrounds = active_names},
-        TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 2, .foregrounds = detached_names},
+        TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 2, .panes = active_names},
+        TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 2, .panes = detached_names},
     };
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "project", .tabs = tabs});
     const auto entry = std::ranges::find_if(client.tabs(), [](const auto &tab) {
@@ -160,6 +160,8 @@ void detachedTabForegroundsAndAgentTitles() {
     deliver(client, PaneForeground{.pane_id = remembered_detached_pane, .name = "vim"});
     deliver(client, PaneForeground{.pane_id = other_detached_pane, .name = "lazygit"});
     require(tabApplicationName(*detached, nullptr) == "vim", "detached reports must update only the remembered foreground pane");
+    require(std::string_view{detached->directory} == "/projects/detached", "detached tabs must show the listed directory of their foreground pane");
+    require(detached->members.size() == 2 && detached->members[0].foreground.view() == "vim" && detached->members[1].foreground.view() == "lazygit", "detached tabs must list every pane and follow its foreground reports");
     const std::array agents{AgentSnapshotEntry{.pane_id = 1, .pane_generation = 1, .location = location, .pane_index = 1, .workspace_label = "Copied workspace metadata", .session_title = "Working session", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Custom display name", .icon = "?", .status = AgentStatus::blocked, .blocked_reason = AgentBlockedReason::permission, .sequence = 1}};
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     require(client.agents().size() == 1 && client.agents().front().title_state == AgentTitleState::ready && client.agents().front().title == "Working session", "agent snapshots must preserve title eligibility as well as its text");
@@ -188,8 +190,8 @@ void configuredWindowTitles() {
     client.configure(configuration);
     require(client.windowTitle("host").view() == "project/shell/@host", "automatic tab labels must default to shell before foreground discovery");
 
-    const std::array foregrounds{PaneForeground{.pane_id = 1, .name = "Python"}};
-    const std::array metadata_tabs{TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 1, .foregrounds = foregrounds}};
+    const std::array metadata_panes{TabPane{.pane_id = 1, .foreground = "Python"}};
+    const std::array metadata_tabs{TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 1, .panes = metadata_panes}};
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "project", .tabs = metadata_tabs});
     require(client.windowTitle("host").view() == "project/Python/@host", "configured titles must use remembered foreground metadata before a pane report arrives");
 

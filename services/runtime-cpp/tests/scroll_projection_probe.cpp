@@ -4,62 +4,30 @@ static_assert(true);
 #endif
 
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_platform/trace.hpp"
 #include "cell_layout.hpp"
-#include "../terminal/ghostty_handle.hpp"
 #include <cstring>
-#include <tuple>
-#include "../graphics/kitty_framing.hpp"
-#include <array>
-#include <variant>
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <algorithm>
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#include <utility>
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include <stdexcept>
-#include "../graphics/temporary_path.hpp"
-#include <charconv>
-#include "../terminal/ghostty_allocator.hpp"
-#include <optional>
-#include "telar_config/graphics/limits.hpp"
-#include <limits>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
-#include "../terminal/control/engine.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "../terminal/graphics_cursor.hpp"
 #include <cassert>
-#include "check.hpp"
-#include <chrono>
-#include <exception>
 #include <ghostty/vt.h>
-#include <string>
 
-#include "tests/check.hpp"
 
 #ifdef TELAR_SCROLL_CENSUS
 
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;
 
 extern "C" std::uint64_t scroll_census_count;

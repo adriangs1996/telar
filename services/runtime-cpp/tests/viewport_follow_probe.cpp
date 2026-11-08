@@ -1,16 +1,12 @@
-#include "../../gui-cpp/terminal/screen.hpp"
-#include "tests/check.hpp"
-#include "tests/protocol_peer.hpp"
-#include <array>
 #include <cerrno>
-#include <chrono>
 #include <cstdio>
-#include <fstream>
-#include <limits>
-#include <string>
 #include <termios.h>
-#include <thread>
 #include <unistd.h>
+
+import std;
+import telar.gui.terminal.screen;
+import telar.runtime.tests.check;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 using namespace telar::runtime;

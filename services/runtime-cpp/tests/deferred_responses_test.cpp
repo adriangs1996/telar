@@ -4,87 +4,28 @@ static_assert(true);
 #endif
 
 
-#include "client_peer.hpp"
-#include "../diagnostics/line.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <array>
-#include <span>
 #include <sys/types.h>
-#include "telar_base/memory/allocator.hpp"
-#include <chrono>
 #include <cstdint>
-#include <bit>
-#include <concepts>
-#include <stdexcept>
-#include <variant>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <cassert>
 #include <cstring>
-#include <exception>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <cstddef>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include <algorithm>
-#include <optional>
-#include "../graphics/kitty_framing.hpp"
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#include <utility>
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "../graphics/temporary_path.hpp"
-#include <charconv>
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/trace.hpp"
-#include <limits>
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <string_view>
 #include <sys/mman.h>
-#include <atomic>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <unistd.h>
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
-#include <tuple>
-#include "../terminal/control/engine.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "../terminal/graphics_cursor.hpp"
-#include <memory>
-#include "telar_base/program_identity.hpp"
 #include <limits.h>
 #include <csignal>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <system_error>
-#include "telar_base/diagnostics/limit_reach.hpp"
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #include <climits>
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #endif
 #if (defined(__linux__))
 #include <sched.h>
@@ -95,14 +36,21 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#endif
 #include <new>
-#include "telar_config/terminal/control/policy.hpp"
 #include <sys/stat.h>
+#include <ghostty/vt.h>
 
-
-
+import std;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.runtime;
 
 using namespace telar;
@@ -144,9 +92,18 @@ void testDeferredResponses() {
   check(reader.receive<TabSnapshot>().panes.empty());
   const auto snapshot = reader.receive<WorkspaceSnapshot>();
   check(snapshot.name == "Current workspace" && snapshot.tabs.size() == 1);
-  check(snapshot.tabs.front().label == "Current tab" && snapshot.tabs.front().pane_count == 0 && snapshot.tabs.front().foregrounds.empty());
+  check(snapshot.tabs.front().label == "Current tab" && snapshot.tabs.front().pane_count == 0 && snapshot.tabs.front().panes.empty());
 
   pane.close_requested = false;
+  pane.cwd.assign("/tmp/described");
+  workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{10, location.workspace});
+  const auto described = reader.receive<WorkspaceSnapshot>();
+  check(described.tabs.front().panes.size() == 1 && described.tabs.front().panes.front().pane_id == pane.id && described.tabs.front().panes.front().cwd == "/tmp/described");
+  pane.cwd.assign(std::string_view{"/tmp/\0hostile", 13});
+  workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{11, location.workspace});
+  const auto hostile = reader.receive<WorkspaceSnapshot>();
+  check(hostile.tabs.front().panes.size() == 1 && hostile.tabs.front().panes.front().cwd.empty());
+
   workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{5, location});
   pane.exit_status = 7 << 8;
   check(reader.receive<TabSnapshot>().panes.empty());

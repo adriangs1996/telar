@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render every telar icon file from the three brand sources in src/assets.
+"""Render every telar icon file from the three brand sources in assets.
 
 - telar-icon.svg: the weaver in her web, for 128 px and up.
 - telar-mark.svg: the weaver alone, drawn for 64 px and down.
@@ -20,7 +20,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "src" / "assets"
+ASSETS = ROOT / "assets"
 ICON = ASSETS / "telar-icon.svg"
 MARK = ASSETS / "telar-mark.svg"
 MONO = ASSETS / "telar-mark-mono.svg"

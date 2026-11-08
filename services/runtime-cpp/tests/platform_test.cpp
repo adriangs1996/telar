@@ -4,28 +4,12 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include <array>
-#include <chrono>
-#include <concepts>
 #include <cstdint>
-#include <span>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
 #include <cerrno>
-#endif
-#if (defined(__linux__))
-#include <exception>
-#endif
-#if (defined(__linux__))
-#include <algorithm>
-#endif
-#if (defined(__linux__))
-#include <atomic>
 #endif
 #if (defined(__linux__))
 #include <climits>
@@ -48,27 +32,17 @@ static_assert(true);
 #if (defined(__linux__))
 #include <unistd.h>
 #endif
-#include <string_view>
 #include <sys/stat.h>
 #include <sys/un.h>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <limits.h>
-#include "telar_base/memory/fixed_text.hpp"
-#include <limits>
-#include <optional>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <sys/types.h>
 #include <unistd.h>
-#include "telar_platform/trace.hpp"
 #if (defined(__APPLE__))
 #include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #if (!(defined(__APPLE__)))
 #include <linux/close_range.h>
@@ -77,23 +51,20 @@ static_assert(true);
 #include <sys/syscall.h>
 #endif
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <stdexcept>
-#include <variant>
 #include <cassert>
-#include <bit>
-#include <exception>
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <csignal>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <cerrno>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.platform.system_certificates;
 import telar.runtime.platform.launch_program;
 import telar.runtime.platform.process_probe;

@@ -180,7 +180,7 @@ def main():
     freetype = next(path for path in includes if path.endswith("/include") and (Path(path) / "freetype/freetype.h").is_file())
     harfbuzz = next(path for path in includes if (Path(path) / "hb-ft.h").is_file())
     dependencies = [build / "libgui-harfbuzz.a", build / "libgui-freetype.a"]
-    paths = [root / "src/assets" / name for name in ("IBMPlexSans-Regular.ttf", "IBMPlexSans-SemiBold.ttf", "JetBrainsMono-Regular.ttf", "SymbolsNerdFontMono-Regular.ttf")]
+    paths = [root / "assets" / name for name in ("IBMPlexSans-Regular.ttf", "IBMPlexSans-SemiBold.ttf", "JetBrainsMono-Regular.ttf", "SymbolsNerdFontMono-Regular.ttf")]
     paths += [root / "services/gui-cpp/tests/fixtures/metrics-variable.ttf"] * 2
     records = requests()
     payload = b"".join(struct.pack("<3I", height, style, len(text)) + text for height, style, text in records)

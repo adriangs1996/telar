@@ -24,49 +24,15 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(Threads REQUIRED)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
-file(READ "${TELAR_ROOT}/src/client/config/bootstrap.lua" TELAR_CONFIG_BOOTSTRAP)
+file(READ "${TELAR_ROOT}/dlls/telar-config/bootstrap.lua" TELAR_CONFIG_BOOTSTRAP)
 configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/gui_config_bootstrap.hpp" @ONLY)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/src/client/config/bootstrap.lua")
-
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.inc"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_themes.py" "${TELAR_ROOT}/src/model/appearance/theme_support.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.inc"
-  DEPENDS tools/generate_themes.py "${TELAR_ROOT}/src/model/appearance/theme_support.zig" "${TELAR_ROOT}/src/model/appearance/TerminalTheme.zig" "${TELAR_ROOT}/src/model/appearance/Palette.zig"
-  VERBATIM)
-add_custom_target(gui-themes DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/theme_presets.inc")
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholder_diacritics.hpp"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_graphics_tables.py" "${TELAR_ROOT}/lib/kitty_protocol/unicode_placeholder.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholder_diacritics.hpp"
-  DEPENDS tools/generate_graphics_tables.py "${TELAR_ROOT}/lib/kitty_protocol/unicode_placeholder.zig"
-  VERBATIM)
-add_custom_target(gui-graphics-tables DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholder_diacritics.hpp")
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.inc"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_bindings.py" "${TELAR_ROOT}/src/client/config/default_bindings.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.inc"
-  DEPENDS tools/generate_bindings.py "${TELAR_ROOT}/src/client/config/default_bindings.zig"
-  VERBATIM)
-add_custom_target(gui-bindings DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/default_bindings.inc")
-
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.inc"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_palette.py" "${TELAR_ROOT}/src/model/state/command_palette.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.inc"
-  DEPENDS tools/generate_palette.py tools/generate_bindings.py "${TELAR_ROOT}/src/model/state/command_palette.zig"
-  VERBATIM)
-add_custom_target(gui-palette-actions DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/palette_actions.inc")
-
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.inc"
-  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_box_edges.py" "${TELAR_ROOT}/lib/cellglyphs/box_lines.zig" "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.inc"
-  DEPENDS tools/generate_box_edges.py "${TELAR_ROOT}/lib/cellglyphs/box_lines.zig" "${TELAR_ROOT}/lib/cellglyphs/BoxLines.zig" "${TELAR_ROOT}/lib/cellglyphs/box_style.zig"
-  VERBATIM)
-add_custom_target(gui-box-edges DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/box_edge_table.inc")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/dlls/telar-config/bootstrap.lua")
 
 include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/box_curve.cpp platform/awake_clock.cpp platform/wall_clock.cpp)
 telar_modules(gui-core)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/dlls/tbc/include")
-add_dependencies(gui-core gui-graphics-tables gui-bindings gui-box-edges gui-palette-actions gui-themes)
 target_link_libraries(gui-core PUBLIC telar::config gui-harfbuzz)
 target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)
 set_source_files_properties(terminal/glyphs/box_curve.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
@@ -92,7 +58,7 @@ add_custom_target(gui-lint
     -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lint.cmake"
   USES_TERMINAL
   VERBATIM)
-add_dependencies(gui-lint gui-posix gui-themes gui-glyphs telar-gui-command)
+add_dependencies(gui-lint gui-posix gui-glyphs telar-gui-command)
 
 add_custom_target(gui-lifetime
   COMMAND "${CMAKE_COMMAND}"
@@ -101,7 +67,7 @@ add_custom_target(gui-lifetime
     -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lifetime.cmake"
   USES_TERMINAL
   VERBATIM)
-add_dependencies(gui-lifetime gui-posix gui-themes gui-glyphs telar-gui-command)
+add_dependencies(gui-lifetime gui-posix gui-glyphs telar-gui-command)
 
 add_library(gui-config INTERFACE)
 set(GHOSTTY_VT_ROOT "" CACHE PATH "Installed libghostty-vt prefix")
@@ -114,13 +80,12 @@ set_target_properties(gui-unicode PROPERTIES
 target_link_libraries(gui-core PUBLIC gui-unicode)
 target_link_libraries(gui-config INTERFACE gui-core gui-unicode)
 target_include_directories(gui-config INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-add_dependencies(gui-config gui-themes)
 
 file(GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/clangd/config/compile_flags.txt"
   CONTENT "-xc++\n-std=c++${CMAKE_CXX_STANDARD}\n-I$<JOIN:$<REMOVE_DUPLICATES:$<TARGET_PROPERTY:gui-config,INTERFACE_INCLUDE_DIRECTORIES>>,\n-I>\n-D$<JOIN:$<TARGET_PROPERTY:gui-config,INTERFACE_COMPILE_DEFINITIONS>,\n-D>\n")
 
-add_custom_target(gui-editor DEPENDS gui-themes gui-graphics-tables gui-bindings gui-box-edges gui-palette-actions)
+add_custom_target(gui-editor)
 add_library(gui-editor-context INTERFACE)
 target_link_libraries(gui-editor-context INTERFACE gui-config)
 file(GENERATE
@@ -746,7 +711,7 @@ if(TELAR_GUI_NATIVE)
     add_executable(gui-font-cascade-test tests/font_cascade_test.cpp)
     target_link_libraries(gui-font-cascade-test PRIVATE gui-fonts gui-unicode)
     target_compile_options(gui-font-cascade-test PRIVATE -ffp-contract=off)
-    add_test(NAME gui-font-cascade COMMAND gui-font-cascade-test "${TELAR_ROOT}/src/assets")
+    add_test(NAME gui-font-cascade COMMAND gui-font-cascade-test "${TELAR_ROOT}/assets")
     add_dependencies(gui-lint gui-font-cascade-test)
     add_executable(gui-font-cascade-probe tools/font_cascade_probe.cpp)
     target_link_libraries(gui-font-cascade-probe PRIVATE gui-fonts gui-unicode)
@@ -759,7 +724,7 @@ if(TELAR_GUI_NATIVE)
     add_executable(gui-row-text-test tests/row_text_test.cpp)
     target_link_libraries(gui-row-text-test PRIVATE gui-fonts gui-unicode)
     target_compile_options(gui-row-text-test PRIVATE -ffp-contract=off)
-    add_test(NAME gui-row-text COMMAND gui-row-text-test "${TELAR_ROOT}/src/assets")
+    add_test(NAME gui-row-text COMMAND gui-row-text-test "${TELAR_ROOT}/assets")
     add_dependencies(gui-lint gui-row-text-test)
     add_executable(gui-font-shaping-probe tools/font_shaping_probe.cpp)
     target_link_libraries(gui-font-shaping-probe PRIVATE gui-fonts)
@@ -911,8 +876,8 @@ if(TELAR_GUI_NATIVE)
       COMMAND "${GUI_WAYLAND_SCANNER}" private-code "${GUI_BACKGROUND_EFFECT_XML}" "${GUI_BACKGROUND_EFFECT_CODE}"
       DEPENDS "${GUI_BACKGROUND_EFFECT_XML}" VERBATIM)
     target_sources(gui-platform PRIVATE platform/linux/background_effect.cpp
-      "${TELAR_ROOT}/lib/window/linux/background_effect.c" "${GUI_BACKGROUND_EFFECT_HEADER}" "${GUI_BACKGROUND_EFFECT_CODE}")
-    target_include_directories(gui-platform PRIVATE "${TELAR_ROOT}/lib/window/linux" "${GUI_BACKGROUND_EFFECT_DIR}")
+      platform/linux/background_effect.c "${GUI_BACKGROUND_EFFECT_HEADER}" "${GUI_BACKGROUND_EFFECT_CODE}")
+    target_include_directories(gui-platform PRIVATE "${GUI_BACKGROUND_EFFECT_DIR}")
     target_link_libraries(gui-platform PRIVATE Qt6::WaylandClientPrivate PkgConfig::GUI_WAYLAND_CLIENT PkgConfig::GUI_XCB)
     target_link_libraries(gui-platform PRIVATE Fontconfig::Fontconfig)
     target_sources(gui-platform PRIVATE platform/linux/font.c)
@@ -1103,7 +1068,7 @@ if(TELAR_GUI_NATIVE)
   add_dependencies(telar-gui telar-gui-command)
   add_dependencies(gui-lint telar-gui)
 
-  set(gui_font_directory "${TELAR_ROOT}/src/assets")
+  set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts
     PREFIX "/telar/fonts"
     BASE "${gui_font_directory}"

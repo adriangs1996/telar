@@ -4,7 +4,7 @@
 // list at sw.kovidgoyal.net/kitty/graphics-protocol. Decoration, so they sit
 // just outside the content and only appear when the viewport leaves room.
 //
-// Marks: Claude, Codex and Pi from src/assets; Ghostty from
+// Marks: Claude, Codex and Pi from assets; Ghostty from
 // github.com/ghostty-org/ghostty; kitty from sw.kovidgoyal.net/kitty; WezTerm
 // from github.com/wez/wezterm; Konsole is KDE Breeze's utilities-terminal,
 // the icon Konsole ships with; iTerm2 and Warp via simpleicons.org.

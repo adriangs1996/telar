@@ -508,15 +508,7 @@ def main():
         shutil.copytree(root / "src/core", core_directory)
         (model_directory / "oracle.zig").write_text(model_exports)
         (core_directory / "oracle.zig").write_text(core_exports)
-        subprocess.run(
-            [
-                sys.executable,
-                str(root / "services/gui-cpp/tools/generate_bindings.py"),
-                str(root / "src/client/config/default_bindings.zig"),
-                str(work / "default_bindings.hpp"),
-            ],
-            check=True,
-        )
+        shutil.copy2(root / "services/gui-cpp/config/default_bindings.inc", work / "default_bindings.hpp")
         subprocess.run(
             [
                 options.compiler,

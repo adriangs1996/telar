@@ -256,6 +256,7 @@ using telar::TabDescriptor;
 using telar::TabLocation;
 using telar::TabMoveDirection;
 using telar::TabMoved;
+using telar::TabPane;
 using telar::TabRenamed;
 using telar::TabSnapshot;
 using telar::TaggedIdSerializer;

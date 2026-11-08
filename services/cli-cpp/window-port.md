@@ -69,9 +69,9 @@ registry, checks configured plugin actions and keymap conflicts, reports limits
 and retired keys, and writes no configuration. Its separate link keeps Lua and
 libghostty's icon-width validation out of hooks. `cmake/window.cmake` builds and
 installs it beside `telar`; one include in `CMakeLists.txt` wires in that file.
-Standalone CLI builds now need `GHOSTTY_VT_ROOT`. The bootstrap is owned by
-`services/cli-cpp/config/bootstrap.lua`; it was copied byte-for-byte from the
-reference and creates no new dependency on `src/`.
+Standalone CLI builds now need `GHOSTTY_VT_ROOT`. The bootstrap is
+`dlls/telar-config/bootstrap.lua`, shared with the runtime and the GUI; it was
+copied byte-for-byte from the reference and creates no dependency on `src/`.
 
 `window_json.hpp` is a reusable JSON-output helper; `window_options.hpp` owns
 this package's argument cursor and unsigned parsing. They are CLI-local, not

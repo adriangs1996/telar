@@ -18,7 +18,7 @@ static_assert(true);
 #include <optional>
 #include <span>
 #include <string_view>
-#include "placeholder_diacritics.hpp"
+#include "graphics/placeholder_diacritics.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "../terminal/screen.hpp"
 #include "../core/memory.hpp"

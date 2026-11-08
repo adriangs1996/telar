@@ -282,8 +282,8 @@ def build(source_path, output, drawings_path):
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=root / "src/assets/JetBrainsMono-Regular.ttf")
-    parser.add_argument("--drawings", type=Path, default=root / "src/assets/TelarForma-glyphs.json")
-    parser.add_argument("--output", type=Path, default=root / "src/assets/TelarForma-Regular.ttf")
+    parser.add_argument("--source", type=Path, default=root / "assets/JetBrainsMono-Regular.ttf")
+    parser.add_argument("--drawings", type=Path, default=root / "assets/TelarForma-glyphs.json")
+    parser.add_argument("--output", type=Path, default=root / "assets/TelarForma-Regular.ttf")
     arguments = parser.parse_args()
     build(arguments.source, arguments.output, arguments.drawings)

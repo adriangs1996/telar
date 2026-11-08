@@ -4,14 +4,10 @@ static_assert(true);
 #endif
 
 
-#include "telar_base/memory/allocator.hpp"
-#include <array>
 #include <cstdint>
-#include <optional>
-#include <span>
 
-
-
+import std;
+import telar.base.memory;
 import telar.runtime.paths.query_task;
 
 using namespace telar;

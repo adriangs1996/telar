@@ -1,9 +1,7 @@
-#include "tests/protocol_peer.hpp"
-#include <chrono>
-#include <filesystem>
-#include <iostream>
 #include <sys/un.h>
-#include <thread>
+
+import std;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 using Clock = std::chrono::steady_clock;

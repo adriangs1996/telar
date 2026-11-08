@@ -278,10 +278,10 @@ std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, 
     const auto request = transport.last<CreateTab>();
     constexpr std::string_view discovered_application = "foreground_process_requiring_heap_storage";
     if (discover_before_confirmation) {
-      const std::array foregrounds{PaneForeground{.pane_id = 2, .name = discovered_application}};
+      const std::array panes{TabPane{.pane_id = 2, .foreground = discovered_application}};
       const std::array descriptors{
           TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1},
-          TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 1, .foregrounds = foregrounds},
+          TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 1, .panes = panes},
       };
       deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
     }

@@ -4,30 +4,21 @@ static_assert(true);
 #endif
 
 
-#include <concepts>
 #include <cstdint>
-#include <span>
-#include <string_view>
-#include <limits>
-#include <optional>
-#include <algorithm>
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstddef>
 #include <nghttp2/nghttp2.h>
-#include <array>
-#include "http2_oracle_stream.hpp"
 #include <cerrno>
-#include <exception>
 #include <csignal>
 #include <sys/socket.h>
-#include "telar_platform/file_descriptor.hpp"
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 
-
-
+import std;
+import telar.base.memory;
+import telar.platform.primitives;
+import telar.runtime.tests.http2_oracle_stream;
 import telar.runtime.http2.direction_observer;
 import telar.runtime.proxy.relay_direction;
 

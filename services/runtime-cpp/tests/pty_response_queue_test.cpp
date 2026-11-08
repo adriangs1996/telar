@@ -3,18 +3,10 @@
 static_assert(true);
 #endif
 
-
-#include "check.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <stdexcept>
-#include <thread>
-#include <atomic>
-#include <vector>
-
-#include "terminal/pty_response_queue.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.runtime.terminal.osc_scanner;
 
 using namespace telar;

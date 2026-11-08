@@ -4,24 +4,16 @@ static_assert(true);
 #endif
 
 
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <array>
 #include <brotli/decode.h>
-#include <optional>
-#include <utility>
-#include <initializer_list>
 #include <zlib.h>
-#include <string_view>
-#include "telar_platform/trace.hpp"
 #include <zstd.h>
-#include <stdexcept>
 
-
-
+import std;
+import telar.base.memory;
+import telar.platform.primitives;
 import telar.runtime.exchange_capture.producer;
 
 using namespace telar;

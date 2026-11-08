@@ -4,54 +4,30 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/serializers/telar_messages.hpp"
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <concepts>
-#include "telar_base/memory/allocator.hpp"
-#include <span>
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include <array>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_base/memory/fixed_text.hpp"
-#include <charconv>
-#include <optional>
-#include <string_view>
-#include <stdexcept>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <algorithm>
-#include <atomic>
-#include <memory>
 #include <cstring>
-#include <utility>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
 #include <cassert>
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
 #include <poll.h>
 #include <sys/uio.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <climits>
-#include "telar_platform/trace.hpp"
 #include <csignal>
 #include <cstdio>
-#include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include "telar_platform/random_bytes.hpp"
 #include <arpa/inet.h>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.platform.primitives;
 import telar.runtime.plugins.service;
 
 using namespace telar;

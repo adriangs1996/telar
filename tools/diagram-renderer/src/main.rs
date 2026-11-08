@@ -11,8 +11,8 @@ const MAX_SOURCE: usize = 48 * 1024;
 const MAX_SVG: usize = 4 * 1024 * 1024;
 const MAX_SIDE: u32 = 4096;
 const MAX_PIXELS: u32 = 4 * 1024 * 1024;
-const FONT: &[u8] = include_bytes!("../../../src/assets/IBMPlexSans-Regular.ttf");
-const BOLD_FONT: &[u8] = include_bytes!("../../../src/assets/IBMPlexSans-SemiBold.ttf");
+const FONT: &[u8] = include_bytes!("../../../assets/IBMPlexSans-Regular.ttf");
+const BOLD_FONT: &[u8] = include_bytes!("../../../assets/IBMPlexSans-SemiBold.ttf");
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

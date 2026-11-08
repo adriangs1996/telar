@@ -111,7 +111,7 @@ def main():
     for required in (binary, command_helper, launcher_binary, cli, runtime, helper, config_check):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
-    version = re.search(r'\.version\s*=\s*"([^"]+)"', (root / 'build.zig.zon').read_text()).group(1)
+    version = (root / 'VERSION').read_text().strip()
     contents = output / 'Contents'
     macos = contents / 'MacOS'
     resources = contents / 'Resources'
@@ -129,8 +129,8 @@ def main():
             shutil.copytree(source, resources / 'licenses' / name)
     shutil.copytree(qt_licenses, resources / 'licenses/qt')
     shutil.copy2(base / 'terminal/glyphs/LICENSE', resources / 'licenses/cell-glyphs.txt')
-    shutil.copy2(root / 'src/assets/JetBrainsMono-OFL.txt', resources / 'licenses/JetBrainsMono-OFL.txt')
-    shutil.copy2(root / 'src/assets/TelarForma-OFL.txt', resources / 'licenses/TelarForma-OFL.txt')
+    shutil.copy2(root / 'assets/JetBrainsMono-OFL.txt', resources / 'licenses/JetBrainsMono-OFL.txt')
+    shutil.copy2(root / 'assets/TelarForma-OFL.txt', resources / 'licenses/TelarForma-OFL.txt')
     template = (root / 'packaging/macos/Info.plist.in').read_bytes().replace(b'@VERSION@', version.encode())
     info = plistlib.loads(template)
     if not args.release:

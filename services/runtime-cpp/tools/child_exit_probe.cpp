@@ -4,28 +4,19 @@ static_assert(true);
 #endif
 
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
-#include "../terminal/ghostty_handle.hpp"
 #include <cstring>
-#include "../tests/check.hpp"
-#include "../tests/protocol_peer.hpp"
-#include <chrono>
 #include <csignal>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <map>
-#include <memory>
 #include <sys/wait.h>
-#include <thread>
 #include <unistd.h>
+#include <ghostty/vt.h>
 
-#include "tests/check.hpp"
-#include "tests/protocol_peer.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
+import telar.runtime.tests.protocol_peer;
 import telar.runtime.terminal.text_reader;
 
 using namespace telar;

@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag vX.Y.Z whose version matches build.zig.zon builds every
+# Pushing a tag vX.Y.Z whose version matches VERSION builds every
 # platform, publishes the GitHub release with SHA256SUMS and provenance
 # attestations, and updates the Homebrew tap. docs/packaging.md lists the
 # secrets; without them the release still publishes, unsigned.
@@ -28,13 +28,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Tag matches build.zig.zon
+      - name: Tag matches VERSION
         id: version
         run: |
-          manifest=$(sed -n 's/^ *\.version = "\(.*\)",$/\1/p' build.zig.zon)
+          manifest=$(head -n 1 VERSION)
           tag=${GITHUB_REF_NAME#v}
           if [ "$manifest" != "$tag" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match build.zig.zon version $manifest"
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION $manifest"
             exit 1
           fi
           echo "version=$tag" >> "$GITHUB_OUTPUT"

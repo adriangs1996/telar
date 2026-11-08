@@ -4,14 +4,11 @@ static_assert(true);
 #endif
 
 
-#include "telar_base/memory/allocator.hpp"
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include "check.hpp"
 
-
-
+import std;
+import telar.base.memory;
+import telar.cli.tests.check;
 import telar.cli.output;
 
 using namespace telar;

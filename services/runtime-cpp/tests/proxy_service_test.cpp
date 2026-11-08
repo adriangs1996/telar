@@ -4,52 +4,24 @@ static_assert(true);
 #endif
 
 
-#include "http2_fixture.hpp"
 #include <pthread.h>
 #include <cstdint>
 #include <cstring>
 #include <netinet/in.h>
-#include <optional>
 #include <sys/socket.h>
-#include <string_view>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <array>
 #include <cstddef>
-#include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <cerrno>
-#include <exception>
 #include <csignal>
 #include <netinet/tcp.h>
-#include <span>
-#include "telar_platform/random_bytes.hpp"
 #include <cstdlib>
-#include "telar_base/text/base64.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <variant>
-#include <concepts>
 #include <unistd.h>
-#include <chrono>
-#include <atomic>
 #include <netdb.h>
-#include "telar_platform/trace.hpp"
-#include <type_traits>
-#include <utility>
-#include <limits>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>
-#include <memory>
-#include <stdexcept>
 #include <zstd.h>
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include <initializer_list>
 #include <cassert>
-#include <condition_variable>
-#include <mutex>
 #include <cstdio>
 #include <nghttp2/nghttp2.h>
 #include <openssl/ssl.h>
@@ -67,25 +39,12 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <bitset>
 #include <poll.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #include <climits>
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #endif
 #if (defined(__linux__))
 #include <sched.h>
@@ -96,13 +55,14 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#endif
-#include <thread>
-#include "tls_fixture.hpp"
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.http2_fixture;
+import telar.runtime.tests.tls_fixture;
 import telar.runtime.proxy.runtime;
 
 using namespace telar;

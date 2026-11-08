@@ -192,7 +192,7 @@ def main():
     root = Path(__file__).resolve().parents[3]
     output = options.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    fonts = [root / 'src/assets' / name for name in
+    fonts = [root / 'assets' / name for name in
              ('JetBrainsMono-Regular.ttf', 'SymbolsNerdFontMono-Regular.ttf', 'IBMPlexSans-Regular.ttf', 'IBMPlexSans-SemiBold.ttf')]
     fonts.append(root / 'services/gui-cpp/tests/fixtures/metrics-variable.ttf')
     payload, records, cells = corpus()

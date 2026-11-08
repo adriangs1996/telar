@@ -4,18 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "agent_oracle.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <exception>
 #include <sqlite3.h>
-#include <chrono>
-#include <filesystem>
-#include <iostream>
 #include <termios.h>
-#include <thread>
+#include <cstdio>
+#include <sys/types.h>
+#include <unistd.h>
 
-
-
+import std;
+import telar.client.protocol;
+import telar.runtime.tests.agent_oracle;
 import telar.runtime.history.store;
 
 using namespace telar;

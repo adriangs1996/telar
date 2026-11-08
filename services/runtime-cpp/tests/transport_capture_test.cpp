@@ -4,49 +4,29 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include <array>
 #include <cstdint>
-#include <atomic>
-#include <concepts>
-#include <condition_variable>
-#include <optional>
 #include <pthread.h>
-#include <chrono>
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <bit>
-#include <limits>
 #include <brotli/decode.h>
-#include <utility>
-#include <initializer_list>
 #include <zlib.h>
-#include "telar_platform/trace.hpp"
 #include <zstd.h>
-#include <mutex>
-#include <type_traits>
-#include "http2_fixture.hpp"
 #include <nghttp2/nghttp2.h>
 #include <csignal>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
-#include "test_byte_stream.hpp"
 #include <poll.h>
-#include <thread>
 
-
-
+import std;
+import telar.base.memory;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
+import telar.runtime.tests.http2_fixture;
+import telar.runtime.tests.test_byte_stream;
 import telar.runtime.exchange_capture.pipeline;
 import telar.runtime.proxy.runtime;
 

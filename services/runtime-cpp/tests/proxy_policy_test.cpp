@@ -4,28 +4,18 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include <chrono>
 #include <cstddef>
-#include "telar_base/memory/allocator.hpp"
-#include <string_view>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <array>
-#include <optional>
-#include <span>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 #include <cstring>
-#include <stdexcept>
 #include <cmath>
 #include <cstdio>
-#include <initializer_list>
-#include <string>
 
-
-
+import std;
+import telar.base.memory;
+import telar.runtime.tests.check;
 import telar.config;
 import telar.lua;
 

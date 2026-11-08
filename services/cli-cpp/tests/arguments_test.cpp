@@ -4,20 +4,10 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include "check.hpp"
-#include <string>
 
-
-
+import std;
+import telar.cli.tests.check;
 import telar.cli.command_limit;
 
 using namespace telar::runtime::cli;

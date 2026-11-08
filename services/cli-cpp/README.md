@@ -27,8 +27,8 @@ ctest --test-dir out --output-on-failure
 
 `config check` execs the sibling `telar-config-check`, installed beside `telar`.
 The helper links `telar-config`, Lua and libghostty for agent icon width validation;
-these dependencies are kept out of the hook process. Its Lua bootstrap lives in
-`config/bootstrap.lua` and has no build dependency on the retired Zig tree.
+these dependencies are kept out of the hook process. Its Lua bootstrap is
+`dlls/telar-config/bootstrap.lua`, shared with the runtime and the GUI.
 
 The C++ `telar` is replacing the Zig CLI command by command;
 [parity.md](parity.md) records what each command does today and how it is

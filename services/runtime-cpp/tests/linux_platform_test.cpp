@@ -4,31 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include <array>
-#include <charconv>
 #include <cstdint>
 #include <cstdio>
 #include <fcntl.h>
-#include <limits>
-#include <optional>
-#include <span>
-#include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
-#include "telar_base/memory/fixed_text.hpp"
-#include <chrono>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
 #include <sys/types.h>
 #if (defined(__APPLE__))
 #include <cerrno>
-#endif
-#if (defined(__APPLE__))
-#include <exception>
 #endif
 #if (defined(__APPLE__))
 #include <CoreFoundation/CoreFoundation.h>
@@ -36,24 +20,8 @@ static_assert(true);
 #if (defined(__APPLE__))
 #include <Security/Security.h>
 #endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#include <memory>
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #if (!(defined(__APPLE__)))
 #include <cstdlib>
-#endif
-#if (!(defined(__APPLE__)))
-#include <memory>
 #endif
 #if (!(defined(__APPLE__)))
 #include <openssl/err.h>
@@ -64,45 +32,31 @@ static_assert(true);
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <cstddef>
-#include "telar_client/codecs/telar_wire.hpp"
 #if (defined(__APPLE__))
 #include <libproc.h>
 #endif
 #if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#if (!(defined(__APPLE__)))
 #include <dirent.h>
-#endif
-#if (!(defined(__APPLE__)))
 #endif
 #include <cstdlib>
 #include <limits.h>
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/trace.hpp"
-#include <exception>
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 #include <ctime>
-#include <string>
 #include <sys/prctl.h>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.platform.launch_program;
 import telar.runtime.platform.process_probe;
 import telar.runtime.platform.system_certificates;

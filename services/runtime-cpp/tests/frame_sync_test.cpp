@@ -4,20 +4,18 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "../diagnostics/line.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_platform/trace.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
-#include "../terminal/ghostty_handle.hpp"
 #include <cstring>
-#include <tuple>
+#include <ghostty/vt.h>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;
 
 using namespace telar;

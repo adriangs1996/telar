@@ -4,22 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <cstdint>
-#include <span>
 #include <cassert>
 #include <cstring>
 #include <cstddef>
-#include "telar_base/memory/fixed_text.hpp"
-#include <array>
-#include <bit>
-#include <optional>
-#include "../terminal/ghostty_allocator.hpp"
+#include <ghostty/vt.h>
 
-#include "terminal/ghostty_allocator.hpp"
-
-
+import std;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.base.memory;
 
 using namespace telar;

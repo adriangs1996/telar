@@ -1,9 +1,13 @@
-#include "backpressure.hpp"
-#include "check.hpp"
-#include "protocol_peer.hpp"
-#include <chrono>
 #include <termios.h>
-#include <thread>
+#include <cstdio>
+#include <sys/types.h>
+#include <unistd.h>
+
+import std;
+import telar.base.diagnostics;
+import telar.runtime.tests.backpressure;
+import telar.runtime.tests.check;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

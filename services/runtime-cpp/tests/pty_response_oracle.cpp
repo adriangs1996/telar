@@ -1,4 +1,6 @@
-#include "terminal/pty_response_queue.hpp"
+
+import std;
+import telar.runtime.terminal.control;
 
 using namespace telar;
 using namespace telar::runtime;

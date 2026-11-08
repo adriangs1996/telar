@@ -1,10 +1,12 @@
-#include "agent_oracle.hpp"
-#include <chrono>
-#include <filesystem>
-#include <iostream>
 #include <poll.h>
-#include <source_location>
 #include <termios.h>
+#include <unistd.h>
+#include <cstdio>
+
+import std;
+import telar.runtime.tests.agent_oracle;
+
+using namespace telar;
 
 static std::string_view operation;
 

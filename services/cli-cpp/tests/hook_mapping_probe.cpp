@@ -4,36 +4,23 @@ static_assert(true);
 #endif
 
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include <algorithm>
 #include <cerrno>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include "telar_base/memory/allocator.hpp"
-#include <exception>
-#include <charconv>
 #include <cstdint>
-#include <optional>
-#include <span>
-#include <string_view>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include <chrono>
-#include <limits>
 #include <cstring>
 #include <unistd.h>
-#include <concepts>
 #include <dirent.h>
 #include <cstdlib>
 #include <openssl/md5.h>
-#include "telar_platform/trace.hpp"
 #include <cstdio>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
 import telar.cli.hook;
 
 using namespace telar;

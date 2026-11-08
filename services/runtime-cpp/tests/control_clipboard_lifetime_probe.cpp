@@ -1,10 +1,13 @@
-#include "check.hpp"
-#include "protocol_peer.hpp"
-#include "clipboard_task.hpp"
-#include <chrono>
 #include <poll.h>
 #include <termios.h>
-#include <thread>
+#include <cerrno>
+#include <cstdio>
+#include <unistd.h>
+
+import std;
+import telar.runtime.tests.check;
+import telar.runtime.tests.clipboard_task;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 using namespace telar::runtime::control_test;

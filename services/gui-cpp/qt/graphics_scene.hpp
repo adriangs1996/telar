@@ -9,7 +9,7 @@ static_assert(true);
 #include <cstdint>
 #include <limits>
 #include <string_view>
-#include "placeholder_diacritics.hpp"
+#include "graphics/placeholder_diacritics.hpp"
 #include <algorithm>
 #include <cmath>
 #include "telar_client/serializers/telar_messages.hpp"

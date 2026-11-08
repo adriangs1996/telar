@@ -1,8 +1,10 @@
-#include "agent_oracle.hpp"
-#include "hook_worktree_fixture.hpp"
-#include <filesystem>
-#include <iostream>
-#include <thread>
+
+#include <cstdio>
+#include <sys/types.h>
+#include <unistd.h>
+import std;
+import telar.runtime.tests.agent_oracle;
+import telar.runtime.tests.hook_worktree_fixture;
 
 using namespace telar;
 using namespace telar::runtime;

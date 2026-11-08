@@ -119,7 +119,28 @@ inline QVariantMap applicationMarkRecord(std::string_view application) {
   };
 }
 
-// Panes arrive as the session's owning pointers.
+// `owns` tells which agent runs in this card's pane.
+template <Allocator Memory, typename Owns>
+QVariantMap tabCard(std::uint64_t pane_id, std::string_view program, bool focused, std::span<const Agent<Memory>> agents, Owns owns) {
+  auto card = applicationMarkRecord(program);
+  card.insert(QStringLiteral("key"), QString::number(pane_id));
+  card.insert(QStringLiteral("program"), toQString(program));
+  card.insert(QStringLiteral("focused"), focused);
+  QString attention;
+  for (const auto &agent : agents) {
+    if (owns(agent) && AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input) {
+      attention = QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(agent.status))]);
+      break;
+    }
+  }
+
+  card.insert(QStringLiteral("attentionColor"), attention);
+
+  return card;
+}
+
+// Panes arrive as the session's owning pointers. A tab not loaded yet has none, so it shows
+// the panes the runtime listed for it.
 template <Allocator Memory, typename Panes>
 QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<const Agent<Memory>> agents) {
   QVariantList cards;
@@ -129,21 +150,19 @@ QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<cons
       continue;
     }
 
-    const auto program = tabApplicationName(tab, &candidate);
-    auto card = applicationMarkRecord(program);
-    card.insert(QStringLiteral("key"), QString::number(candidate.id));
-    card.insert(QStringLiteral("program"), toQString(program));
-    card.insert(QStringLiteral("focused"), candidate.id == tab.focused_pane);
-    QString attention;
-    for (const auto &agent : agents) {
-      if (agent.pane_id == candidate.id && agent.pane_generation == candidate.generation && AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input) {
-        attention = QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(agent.status))]);
-        break;
-      }
-    }
+    cards.append(tabCard(candidate.id, tabApplicationName(tab, &candidate), candidate.id == tab.focused_pane, agents, [&](const Agent<Memory> &agent) {
+      return agent.pane_id == candidate.id && agent.pane_generation == candidate.generation;
+    }));
+  }
 
-    card.insert(QStringLiteral("attentionColor"), attention);
-    cards.append(std::move(card));
+  if (!cards.isEmpty() || tab.loaded) {
+    return cards;
+  }
+
+  for (const auto &member : tab.members) {
+    cards.append(tabCard(member.pane_id, member.foreground.view(), member.pane_id == tab.foreground_pane, agents, [&](const Agent<Memory> &agent) {
+      return agent.pane_id == member.pane_id && sameTab(agent.location, tab.location);
+    }));
   }
 
   return cards;
@@ -184,7 +203,7 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Pa
   }
 
   record.insert(QStringLiteral("title"), title);
-  record.insert(QStringLiteral("path"), tab.label.empty() && pane != nullptr ? displayPath(pane->cwd) : QString{});
+  record.insert(QStringLiteral("path"), tab.label.empty() ? displayPath(pane != nullptr ? std::string_view{pane->cwd} : std::string_view{tab.directory}) : QString{});
   record.insert(QStringLiteral("cards"), tabCards(tab, panes, agents));
   record.insert(QStringLiteral("selected"), selected);
   const auto activity = TabActivity::derive(tab, pane, agents, selected);

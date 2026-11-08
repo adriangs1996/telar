@@ -1,0 +1,199 @@
+# Sidebar raster assets
+
+`JetBrainsMono-Regular.ttf` is Telar's embedded monospace fallback face. It is the
+non-Nerd-Font regular face used by Ghostty's embedded-font build. Its SHA-256
+is `a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f`.
+The font is distributed under the SIL Open Font License 1.1; the complete
+license is in `JetBrainsMono-OFL.txt`.
+
+`TelarForma-Regular.ttf` is the GUI's default terminal face, Telar Forma Regular,
+version 0.106. Its SHA-256 is
+`9324d4cd24202cd135b2a5c11b2fed4884fa36f7476389b95c80b695ef711bbe`.
+It uses the approved 50/50 design with a slashed zero and the `1`, `f`, `w`,
+`t`, `o` and `y` drawings retained from version 0.103.
+Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
+without requiring a system installation. Only `Regular` is available;
+bold and italic terminal attributes use the existing synthesized styles.
+It retains the SIL Open Font License 1.1 and copyright notices; the license
+text is in `TelarForma-OFL.txt`. Rebuild it with `uv run tools/build_forma.py`
+from the pinned bundled base and `TelarForma-glyphs.json`. The JSON stores
+the 402 approved glyph overrides as coordinates, contour ends, point flags
+and horizontal metrics, so rebuilding preserves the approved outlines
+without depending on installed fonts or rasterizer versions.
+
+Text rasterization links FreeType 2.13.2 from the source archive pinned in
+`services/gui-cpp/cmake/fonts.cmake`. Portions of this software are copyright © 2023 The FreeType
+Project (<https://www.freetype.org>). All rights reserved. The upstream archive
+contains the complete FreeType License and GPLv2 alternative.
+
+Text shaping links HarfBuzz 11.0.0 from the source archive pinned in
+`services/gui-cpp/cmake/fonts.cmake`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
+
+`NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
+upstream attribution shipped in the release archive.
+
+The GUI embeds the complete `SymbolsNerdFontMono-Regular.ttf` from
+[Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1)
+as a missing-glyph fallback and for its chrome icons. It retains the
+configured font for covered text. The face is 2,610,012 bytes; the source
+release archive SHA-256 is
+`01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996` and the
+TTF SHA-256 is
+`fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749`. It can
+be reproduced by downloading
+`https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/NerdFontsSymbolsOnly.zip`
+(SHA-256 `fdca3682534f6f65e1ccb2345b0362ccf67d9b8eca7c8025330946e93e2473bc`)
+and extracting `SymbolsNerdFontMono-Regular.ttf` without modification. The
+same bundled Nerd Fonts license and attribution apply.
+
+`IBMPlexSans-Regular.ttf` (200,500 bytes) and `IBMPlexSans-SemiBold.ttf`
+(202,632 bytes) are the GUI's embedded proportional chrome face. They are the
+static complete TTFs from IBM Plex release
+[`@ibm/plex-sans@1.1.0`](https://github.com/IBM/plex/releases/tag/%40ibm%2Fplex-sans%401.1.0),
+downloaded on 2026-09-14 from
+`https://github.com/IBM/plex/releases/download/%40ibm%2Fplex-sans%401.1.0/ibm-plex-sans.zip`
+(SHA-256 `fb365d910566e6d199cc2c15579a7dd9a267128e18431a394ed81f1970c69200`)
+as `ibm-plex-sans/fonts/complete/ttf/IBMPlexSans-Regular.ttf` and
+`IBMPlexSans-SemiBold.ttf` without modification. Their SHA-256 are
+`975dcda37d80f038dcd143c22e33ca2d97a0cc5a929aace1c749153b0fe1afa5` and
+`a20caf8286023a6a7a85e40b1d2a4ae9fc3e3b1f9eda8f4c542dd4986af67bb1`.
+The fonts are distributed under the SIL Open Font License 1.1 with Reserved
+Font Name "Plex"; the release's `LICENSE.txt` is copied verbatim as
+`IBMPlexSans-OFL.txt`. Only native chrome labels use these faces; terminal
+cells never select them.
+
+The original app icons below are retained as source assets. The window embeds
+the T3 Code provider atlas described below.
+
+`Claude.png` was downloaded on 2026-08-26 from the Apple touch icon linked by
+Anthropic's official Claude download page. It is a 256 x 256 RGBA PNG with
+SHA-256
+`1bec5f7b12a4a46fea879633464ebf1d32144ef731a0f054539b2d7251871cb6`.
+
+`Codex.png` is `Contents/Resources/icon-chatgpt.png` from the official Codex
+macOS disk image downloaded on 2026-08-26. The application identifies itself
+as `com.openai.codex`, version `26.820.60940` build `7119`, and is signed by
+`Developer ID Application: OpenAI OpCo, LLC (2DC432GLL2)`. The source DMG
+SHA-256 is
+`6545f82798df8e6ceaba1dad1d2aed3bb71b97545b342a5916b70d7732931c5c`;
+the extracted 2048 x 2048 RGBA PNG SHA-256 is
+`3453947a9ce2709b7ec51c0559c7eb976e4ac53b232b607d1d81b0d1d1048b61`.
+
+`Pi.svg` is the square badge from the Pi press kit, downloaded on 2026-09-02
+from `https://pi.dev/favicon.svg`. The press kit describes it as the square
+mark for favicons and compact badges; the primary logo at
+`https://pi.dev/logo.svg` is a white mark without a background and would
+vanish on light terminals. Its SHA-256 is
+`a5624bc3b8cac94de75f6f13701eca2ad3ef67bbeba286c4af3f398806f0858a`.
+Pi is published by Earendil Inc. under the MIT License.
+
+`Pi.png` is the 256 x 256 RGBA rasterization of `Pi.svg` with SHA-256
+`9397ec24ab94be1917b12fac5748baf0e70bbf6c25f79b00e4960f5b1906d22b`. It is
+reproducible with librsvg 2.62.3:
+
+```sh
+rsvg-convert -w 256 -h 256 -f png -o Pi.png Pi.svg
+```
+
+Official sources and usage terms:
+
+- <https://claude.ai/download>
+- <https://cdn.prod.website-files.com/6889473510b50328dbb70ae6/68c33859cc6cd903686c66a2_apple-touch-icon.png>
+- <https://openai.com/codex/for-work/>
+- <https://persistent.oaistatic.com/codex-app-prod/Codex.dmg>
+- <https://openai.com/brand/>
+- <https://pi.dev/press-kit>
+- <https://pi.dev/favicon.svg>
+- <https://github.com/earendil-works/pi/blob/main/LICENSE>
+
+Telar's own brand is a weaver: a spider whose body is a terminal with a
+`>_` face and whose feet end in cursors, hanging from the thread it spins.
+Telar pulls the threads of many sessions, panes and machines, as the spider
+does with its web. The colors are Pierre Dark's: the `#0a0a0a`..`#1d1d1d`
+neutrals, `#bdbdbd`..`#e5e5e5` for the spider and `#009fff` for what is
+live. The three sources are drawn for different sizes:
+
+- `telar-icon.svg` (SHA-256
+  `4299a72132ff33504735c3d94d4b41f534bb8f793b192bec1da23f4b487f960d`), the
+  weaver in her web with three caught terminals, the live one in blue, for
+  128 px and up.
+- `telar-mark.svg` (SHA-256
+  `b58f8b63681a9cd3832db7340f511495c8aa531e5bce5848438ae2902d243dc8`), the
+  weaver alone with heavier legs and outline, for 64 px and down.
+- `telar-mark-mono.svg` (SHA-256
+  `3037f817667d85158f3bae784ccfde081a9c0256bfe1a7149f9afc6103edbc73`), the
+  weaver in one color without a container.
+
+`telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
+`355173b38b9f442bb593b0ebf41ba201d5220bf497ddcd4032cb28f112d84209`, and
+`telar-mark-64.rgba` its raw straight-alpha RGBA, SHA-256
+`82605b49a3d7c37188a923e2e3daa79483f085b912ba73e3b903c08fe19e8c52`. The top
+bar box-filters it into the icon atlas at cell size, sixteen
+premultiplied-alpha bilinear taps per pixel, and keeps its alpha so the host
+composes it over whatever it paints behind the bar.
+
+`tools/build_brand_icons.py` renders both, the macOS `.icns` (16 to 64 px
+from the mark, 128 to 1024 px from the icon), the Linux PNG and the site's
+brand files from these sources. The hashes above come from librsvg 2.63.0
+and Pillow 12.2.0:
+
+```sh
+uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
+```
+
+## Sidebar provider symbols
+
+`provider-symbols-320x64.rgba` contains five 64 × 64 RGBA symbols in
+Claude, OpenAI, Pi, Cursor, OpenCode order. Its SHA-256 is
+`4be9ed259a5eff22249ade14ea174b4ccc503bf05c8dc857863206185dab4b05`.
+The window embeds this 81,920-byte atlas. Its first four slots are byte for
+byte those of the previous four-symbol atlas. The GUI box-filters the symbols
+into its existing sprite page, premultiplies them, and draws them at 60%
+opacity. OpenAI, Cursor and OpenCode follow the theme's `text` color; Claude
+and Pi retain their source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
+or upload the symbols. Workspace favicons retain their own colors.
+
+`Claude-symbol.svg` and `OpenAI-symbol.svg` preserve the path and viewBox of
+`ClaudeAI` and `OpenAI` in
+[T3 Code's Icons.tsx](https://github.com/pingdotgg/t3code/blob/9375c779707fb95c06670db6da87441720b2d2e2/apps/web/src/components/Icons.tsx),
+retrieved on 2026-09-14. The retrieved file SHA-256 is
+`d5e70eeecb8d930c4976f1d302b401c90ac0d78cc2becb4d23e522a7ed8b2354`.
+OpenAI uses white for tinting and Claude retains its orange fill. The complete
+upstream MIT notice is in `T3-Icons-LICENSE.txt`. `Pi-symbol.svg` matches `PiAgentIcon` in the same
+revision, including its black background and 160-unit corner radius.
+
+`Cursor-symbol.svg` preserves the path and viewBox of the 2D cube from
+Cursor's official brand kit, `General Logos/Cube/SVG/CUBE_2D_DARK.svg` in
+`https://ptht05hbb1ssoooe.public.blob.vercel-storage.com/assets/brand/cursor-brand-assets.zip`,
+linked from <https://cursor.com/brand> and downloaded on 2026-09-26. The
+archive SHA-256 is
+`97488a7751914e60f9ff532bc33810cdeaebdddc017548abe6ca2bc29bbc3928` and the
+source SVG SHA-256 is
+`cd0e3e5d8991a4cdd4577f8896cd063105207665165c73e25a1ff918dd367eb7`. The
+brand kit publishes the cube in one flat color per theme, so Telar keeps the
+path and paints it white for tinting, as with OpenAI; the file's SHA-256 is
+`980e90eb26b2760b159b7984054e9751d971b687fee7ec6fdf09c2b49c540712`. Cursor
+is a trademark of Anysphere, Inc.; the brand page asks to call the product
+Cursor, not "Cursor AI" or "Cursor Code".
+
+`OpenCode-symbol.svg` preserves the viewBox and both paths of the logo in
+OpenCode's official brand kit, `OpenCode Brand Assets/Logo/opencode-logo-dark.svg`
+in <https://opencode.ai/opencode-brand-assets.zip>, linked from
+<https://opencode.ai/brand> and downloaded on 2026-09-26. The archive SHA-256
+is `776374c53e62ec715c84fb1ed7e4cd109cce9ce40cc240ca8c7fbde5c5f48abb` and the
+source SVG SHA-256 is
+`4e84f87aa7bc2a5f8a72eeb08d3d4f1836b422189256d0bd5e7bfabc830d7ed0`. The same
+paths ship in `packages/console/app/src/asset/brand/` of
+[OpenCode v1.18.30](https://github.com/anomalyco/opencode/tree/v1.18.30), under
+the MIT license. The kit draws the mark in two greys per theme: the frame in
+`#F1ECEC` and the inner block in `#4B4646` on dark backgrounds. Telar drops
+the no-op full-size mask and clip, paints the frame white for tinting and the
+inner block white at 31% opacity, the ratio of those two greys; the file's
+SHA-256 is `95d1509e96cececc54baf28a6285b69877ca2d9108dfbe6f09a0de735056bb41`.
+
+Regenerate with librsvg 2.62.3 and Pillow 12.2.0 (librsvg 2.63.0 produces
+the same bytes):
+
+```sh
+uv run --no-project --with pillow==12.2.0 python tools/build_provider_symbols.py
+```

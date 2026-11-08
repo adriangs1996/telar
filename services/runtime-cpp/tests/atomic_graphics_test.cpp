@@ -4,23 +4,19 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "../graphics/kitty_control.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <algorithm>
-#include <array>
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <cstring>
-#include <filesystem>
-#include <set>
-#include <string>
-#include <vector>
+#include <cstdlib>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-
-
+import std;
+import telar.platform.primitives;
+import telar.runtime.graphics.kitty;
+import telar.runtime.tests.check;
 import telar.runtime.graphics.pane_media;
 
 using namespace telar;

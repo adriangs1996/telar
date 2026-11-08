@@ -6,7 +6,7 @@ use ttf_parser::{Face, GlyphId};
 use crate::unicode_width::{Cluster, consume_cluster, is_cjk_wide_char};
 
 static TEXT_MEASURER: Lazy<Mutex<FontFace>> = Lazy::new(|| {
-    let data = include_bytes!("../../../../../src/assets/IBMPlexSans-Regular.ttf").to_vec();
+    let data = include_bytes!("../../../../../assets/IBMPlexSans-Regular.ttf").to_vec();
     let units_per_em = Face::parse(&data, 0).expect("embedded font").units_per_em().max(1);
     Mutex::new(FontFace::new(data, 0, units_per_em))
 });

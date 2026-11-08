@@ -1,7 +1,10 @@
-#include "protocol_peer.hpp"
-#include <chrono>
-#include <map>
 #include <termios.h>
+#include <cerrno>
+#include <cstdio>
+#include <unistd.h>
+
+import std;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

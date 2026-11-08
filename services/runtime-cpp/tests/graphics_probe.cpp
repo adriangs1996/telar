@@ -1,10 +1,15 @@
-#include "protocol_peer.hpp"
-#include "telar_base/text/base64.hpp"
-#include <chrono>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <termios.h>
+#include <cstdlib>
+#include <cerrno>
+#include <cstdio>
+#include <unistd.h>
+
+import std;
+import telar.base.text;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

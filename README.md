@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/assets/telar-mark.svg" alt="Telar" width="96" height="96">
+  <img src="assets/telar-mark.svg" alt="Telar" width="96" height="96">
 </p>
 
 <h1 align="center">Telar</h1>

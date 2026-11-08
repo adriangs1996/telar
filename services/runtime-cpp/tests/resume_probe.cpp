@@ -4,19 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "protocol_peer.hpp"
-#include <string_view>
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include <algorithm>
 #include <cstring>
-#include <filesystem>
-#include <iostream>
-#include <thread>
+#include <cstdio>
+#include <unistd.h>
 
-
-
+import std;
+import telar.base.text;
+import telar.client.protocol;
+import telar.runtime.tests.protocol_peer;
 import telar.config;
 
 using namespace telar;

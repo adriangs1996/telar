@@ -1,7 +1,7 @@
 # Font metric fixtures
 
 `metrics-variable.ttf` and `metrics-collection.ttc` are modified, subsetted
-derivatives of `src/assets/JetBrainsMono-Regular.ttf`. The renamed families are
+derivatives of `assets/JetBrainsMono-Regular.ttf`. The renamed families are
 Telar Metrics Fixture and Telar Static Fixture. The included
 `metrics-variable-OFL.txt` preserves the original SIL Open Font License.
 

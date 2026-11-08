@@ -4,49 +4,25 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
-#include <span>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "telar_client/codecs/telar_codec.hpp"
-#include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cstdlib>
 #include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#if (!(defined(__APPLE__)))
-#endif
-#include <string_view>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <concepts>
-#include <stdexcept>
-#include <charconv>
 #include <csignal>
 #include <dirent.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <thread>
-#include "telar_platform/random_bytes.hpp"
-#include <limits>
-#include <optional>
-#include <type_traits>
-#include <string>
-#include "telar_client/serializers/telar_messages.hpp"
-#include <format>
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -54,35 +30,25 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <filesystem>
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
 #include <cassert>
-#include "telar_base/program_identity.hpp"
 #include <sys/types.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <climits>
 #include <dlfcn.h>
-#include <utility>
 #include <openssl/sha.h>
 #include <sys/file.h>
 #include <signal.h>
-#include <vector>
-#include <system_error>
-#include <bit>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <new>
-#include "telar_base/text/utf8.hpp"
 #include <sys/mman.h>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
 import telar.cli.worktree;
 
 namespace {

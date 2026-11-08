@@ -4,25 +4,8 @@ static_assert(true);
 #endif
 
 
-#include "telar_platform/random_bytes.hpp"
-#include "check.hpp"
-#if (defined(__APPLE__))
-#include "telar_base/memory/fixed_text.hpp"
-#endif
 #if (defined(__APPLE__))
 #include <cerrno>
-#endif
-#if (defined(__APPLE__))
-#include <exception>
-#endif
-#if (defined(__APPLE__))
-#include "telar_platform/file_descriptor.hpp"
-#endif
-#if (defined(__APPLE__))
-#include <algorithm>
-#endif
-#if (defined(__APPLE__))
-#include <array>
 #endif
 #if (defined(__APPLE__))
 #include <cstdint>
@@ -37,9 +20,6 @@ static_assert(true);
 #include <netinet6/in6_var.h>
 #endif
 #if (defined(__APPLE__))
-#include <span>
-#endif
-#if (defined(__APPLE__))
 #include <sys/ioctl.h>
 #endif
 #if (defined(__APPLE__))
@@ -50,15 +30,6 @@ static_assert(true);
 #endif
 #if (defined(__APPLE__))
 #include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include "telar_base/memory/fixed_text.hpp"
-#endif
-#if (!(defined(__APPLE__)))
-#include "telar_platform/file_descriptor.hpp"
-#endif
-#if (!(defined(__APPLE__)))
-#include <algorithm>
 #endif
 #if (!(defined(__APPLE__)))
 #include <arpa/inet.h>
@@ -79,32 +50,24 @@ static_assert(true);
 #include <net/if.h>
 #endif
 #if (!(defined(__APPLE__)))
-#include <span>
-#endif
-#if (!(defined(__APPLE__)))
 #include <sys/ioctl.h>
 #endif
 #if (!(defined(__APPLE__)))
 #include <sys/uio.h>
 #endif
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <array>
-#include <optional>
 #include <pcap/pcap.h>
-#include <algorithm>
 #include <arpa/inet.h>
 #include <poll.h>
+#include <unistd.h>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.platform.git_status;
 import telar.runtime.traffic.capture_analysis;
 

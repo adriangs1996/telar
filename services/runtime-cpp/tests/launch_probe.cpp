@@ -1,9 +1,9 @@
-#include "check.hpp"
-#include "protocol_peer.hpp"
-#include <chrono>
 #include <cstdlib>
-#include <optional>
-#include <thread>
+#include <cstdio>
+
+import std;
+import telar.runtime.tests.check;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

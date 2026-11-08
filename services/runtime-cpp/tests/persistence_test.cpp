@@ -4,20 +4,11 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include <algorithm>
-#include <array>
 #include <fcntl.h>
 #include <limits.h>
-#include <string_view>
 #include <sys/stat.h>
 #include <cstdint>
-#include "telar_platform/random_bytes.hpp"
 #include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -28,74 +19,24 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include <span>
 #include <unistd.h>
 #include <cstdlib>
 #include <sys/file.h>
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <sys/types.h>
-#include <chrono>
-#include <bit>
-#include <concepts>
-#include <stdexcept>
-#include <variant>
-#include "telar_client/serializers/telar_messages.hpp"
 #include <cassert>
 #include <cstring>
-#include "telar_client/codecs/telar_codec.hpp"
 #include <cstddef>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include <optional>
-#include "../graphics/kitty_framing.hpp"
-#include "../graphics/media_budget.hpp"
-#include "../graphics/kitty_control.hpp"
-#include "../graphics/child_file.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#include <utility>
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "../graphics/temporary_path.hpp"
-#include <charconv>
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/trace.hpp"
-#include <limits>
-#include "telar_platform/mapped_region.hpp"
 #include <sys/mman.h>
-#include <atomic>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "cell_layout.hpp"
-#include <tuple>
-#include "../terminal/control/engine.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "../terminal/graphics_cursor.hpp"
-#include <memory>
-#include "telar_base/program_identity.hpp"
 #include <csignal>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <system_error>
-#include "telar_base/diagnostics/limit_reach.hpp"
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #include <climits>
-#endif
-#if (defined(__linux__))
-#endif
-#if (defined(__linux__))
 #endif
 #if (defined(__linux__))
 #include <sched.h>
@@ -106,17 +47,21 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#endif
 #include <new>
-#include "telar_config/terminal/control/policy.hpp"
-#include <condition_variable>
 #include <pthread.h>
-#include <random>
-#include <string>
+#include <ghostty/vt.h>
 
-
-
+import std;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.runtime.persistence.session_store;
 import telar.runtime.platform.request_worker;
 

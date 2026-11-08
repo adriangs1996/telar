@@ -1,12 +1,14 @@
-#include "check.hpp"
-#include "protocol_peer.hpp"
-#include "control_png_pty_inputs.hpp"
-#include <algorithm>
-#include <chrono>
 #include <fcntl.h>
 #include <poll.h>
 #include <termios.h>
-#include <thread>
+#include <cerrno>
+#include <unistd.h>
+#include <cstdio>
+
+import std;
+import telar.runtime.tests.check;
+import telar.runtime.tests.control_png_pty_inputs;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 using Clock = std::chrono::steady_clock;

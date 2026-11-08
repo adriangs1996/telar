@@ -5,12 +5,8 @@ static_assert(true);
 
 
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include <string_view>
 
-
-
+import std;
 import telar.runtime.diagnostics.runtime_telemetry;
 
 extern "C" std::uint64_t classify_name(const char *bytes, std::size_t length) {

@@ -31,17 +31,13 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
 #include <algorithm>
 #include "integration_assets.hpp"
 #include <cstring>
 #include <limits>
 #include <type_traits>
-#include "check.hpp"
 
-
-
+import telar.cli.tests.check;
 import telar.cli.integration.settings;
 import telar.cli.tab;
 

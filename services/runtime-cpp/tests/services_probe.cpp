@@ -1,8 +1,9 @@
-#include "agent_oracle.hpp"
-#include "protocol_peer.hpp"
-#include <chrono>
-#include <filesystem>
-#include <thread>
+
+#include <cstdio>
+#include <unistd.h>
+import std;
+import telar.runtime.tests.agent_oracle;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

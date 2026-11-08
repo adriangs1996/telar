@@ -9,7 +9,7 @@ from fontTools.varLib import build
 
 def main():
     root = Path(__file__).resolve().parents[3]
-    original = root / 'src/assets/JetBrainsMono-Regular.ttf'
+    original = root / 'assets/JetBrainsMono-Regular.ttf'
     output = root / 'services/gui-cpp/tests/fixtures/metrics-variable.ttf'
     family = 'Telar Metrics Fixture'
     font = TTFont(original, recalcTimestamp=False)

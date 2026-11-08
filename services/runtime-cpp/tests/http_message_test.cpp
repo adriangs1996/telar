@@ -4,34 +4,19 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <optional>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>
-#include <array>
-#include <memory>
-#include <stdexcept>
 #include <zstd.h>
-#include <limits>
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include <charconv>
-#include <concepts>
-#include <algorithm>
-#include "test_byte_stream.hpp"
-#include <string>
-#include <vector>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.runtime.tests.check;
+import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http.message;
 import telar.runtime.http1.intercepted_relay;
 

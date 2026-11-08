@@ -1,6 +1,8 @@
 # Embeds help/*.txt, the texts `telar --help` and `telar FAMILY [COMMAND] --help` print:
 # help/telar.txt is the root, help/FAMILY.txt a family and help/FAMILY/COMMAND.txt a command.
-set(TELAR_VERSION "0.0.0" CACHE STRING "Version telar --version and the root help print")
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../../../VERSION" telar_repository_version LIMIT_COUNT 1)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../../../VERSION")
+set(TELAR_VERSION "${telar_repository_version}" CACHE STRING "Version telar --version and the root help print")
 set(help_directory "${CMAKE_CURRENT_SOURCE_DIR}/help")
 file(GLOB_RECURSE help_files RELATIVE "${help_directory}" CONFIGURE_DEPENDS "${help_directory}/*.txt")
 list(SORT help_files)

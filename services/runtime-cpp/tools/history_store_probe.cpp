@@ -4,39 +4,20 @@ static_assert(true);
 #endif
 
 
-#include "../tests/check.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <sqlite3.h>
-#include <stdexcept>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include "telar_base/text/utf8.hpp"
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
-#include <atomic>
-#include <exception>
-#include "telar_base/diagnostics/limit_reach.hpp"
-#include "telar_platform/trace.hpp"
-#include <bit>
-#include <concepts>
 #include <cassert>
-#include <unordered_set>
-#include <fstream>
-#include <iostream>
-#include <set>
 
-#include "tests/check.hpp"
-
-
+import std;
+import telar.base.diagnostics;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.history.event;
 import telar.runtime.history.store;
 

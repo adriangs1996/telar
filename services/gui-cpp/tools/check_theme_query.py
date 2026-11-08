@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import random
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -376,15 +377,7 @@ def main():
         (work / "probe.zig").write_text(zig)
         (work / "cellgrid.zig").write_text('pub const Color=@import("color").Color;\n')
         (work / "syntaxhl.zig").write_text('pub const Role=@import("role").Role;\n')
-        subprocess.run(
-            [
-                sys.executable,
-                str(root / "services/gui-cpp/tools/generate_themes.py"),
-                str(root / "src/model/appearance/theme_support.zig"),
-                str(work / "theme_presets.hpp"),
-            ],
-            check=True,
-        )
+        shutil.copy2(root / "services/gui-cpp/config/theme_presets.inc", work / "theme_presets.hpp")
         subprocess.run(
             [
                 options.compiler,

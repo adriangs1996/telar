@@ -4,59 +4,33 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "telar_platform/random_bytes.hpp"
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include <array>
 #include <cstdint>
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
-#include <span>
-#include <utility>
-#include <string_view>
-#include <optional>
-#include <chrono>
-#include "telar_base/memory/fixed_text.hpp"
-#include <stdexcept>
-#include <algorithm>
 #include <arpa/inet.h>
-#include <atomic>
-#include <mutex>
 #include <pcap/pcap.h>
-#include <string>
-#include <unordered_map>
-#include <concepts>
 #include <cstdio>
 #include <netdb.h>
 #include <sys/socket.h>
-#include <limits>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>
-#include <memory>
 #include <zstd.h>
-#include <charconv>
 #include <csignal>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <initializer_list>
-#include "telar_platform/trace.hpp"
 #include <cassert>
-#include <condition_variable>
-#include <type_traits>
 #include <unistd.h>
 #include <nghttp2/nghttp2.h>
-#include "test_byte_stream.hpp"
-#include "packet_fixture.hpp"
-#include <thread>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
+import telar.runtime.tests.packet_fixture;
+import telar.runtime.tests.test_byte_stream;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.proxy.runtime;

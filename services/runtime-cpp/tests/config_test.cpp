@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include "config_bootstrap.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
@@ -49,8 +48,7 @@ static_assert(true);
 #include <filesystem>
 #include <fstream>
 
-
-
+import telar.runtime.tests.check;
 import telar.runtime.config.loader;
 
 using namespace telar::runtime;

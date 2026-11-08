@@ -370,6 +370,14 @@ private:
     return !pane.close_requested && !pane.exit_status && pane.location.workspace.kind == location.workspace.kind && pane.location.workspace.id == location.workspace.id && pane.location.tab_id == location.tab_id;
   }
 
+  // A pane's output decodes its OSC 7 directory, so it can hold a NUL the codec rejects;
+  // one such pane must not fail the snapshot of its whole workspace.
+  [[nodiscard]] inline static std::string_view snapshotDirectory(std::string_view cwd) noexcept {
+    constexpr std::size_t maximum_bytes = 4096;
+
+    return cwd.size() <= maximum_bytes && cwd.find('\0') == std::string_view::npos ? cwd : std::string_view{};
+  }
+
   inline void project(const ReadPane &request, auto &send) const {
     auto *pane = model_.panes.find(request.pane_id);
     if (pane == nullptr || (request.pane_generation != 0 && pane->generation != request.pane_generation)) {
@@ -407,21 +415,21 @@ private:
     }
 
     std::array<TabDescriptor, 64> descriptors;
-    std::array<PaneForeground, 256> foregrounds;
-    std::size_t foreground_count = 0;
+    std::array<TabPane, 256> panes;
+    std::size_t pane_count = 0;
     std::size_t count = 0;
     for (const auto &tab : workspace->tabs) {
-      const auto first = foreground_count;
+      const auto first = pane_count;
       const TabLocation location{request.workspace, tab.id};
       for (const auto *pane : model_.panes.items()) {
         if (pane != nullptr && matchesSnapshot(*pane, location)) {
           const auto name = pane->foreground.view();
-          foregrounds[foreground_count++] = PaneForeground{pane->id, name.empty() ? "shell" : name};
+          panes[pane_count++] = TabPane{.pane_id = pane->id, .foreground = name.empty() ? "shell" : name, .cwd = snapshotDirectory(pane->cwd)};
         }
       }
 
-      const auto names = std::span{foregrounds}.subspan(first, foreground_count - first);
-      descriptors[count] = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(names.size()), .label = tab.label, .foregrounds = names};
+      const auto members = std::span{panes}.subspan(first, pane_count - first);
+      descriptors[count] = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(members.size()), .label = tab.label, .panes = members};
       ++count;
     }
 

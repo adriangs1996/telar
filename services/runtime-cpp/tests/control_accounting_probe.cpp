@@ -4,25 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "../terminal/control/engine.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <charconv>
-#include <algorithm>
-#include <array>
 #include <cstdio>
-#include <fstream>
-#include <stdexcept>
-#include <string_view>
-#include <vector>
+#include <cstdint>
+#include <ghostty/vt.h>
 
-#include "terminal/control/engine.hpp"
-#include "terminal/ghostty_allocator.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.runtime.terminal.control;
 import telar.runtime.terminal.text_reader;
 
 using namespace telar;

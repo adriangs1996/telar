@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <chrono>
 #include <cstddef>
@@ -62,8 +61,7 @@ static_assert(true);
 #include <thread>
 #include <fstream>
 
-
-
+import telar.runtime.tests.check;
 import telar.runtime.plugins.run_worker;
 import telar.platform;
 import telar.runtime.traffic.capture;

@@ -4,17 +4,13 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "erasure_checking_allocator.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <cstddef>
 #include <cstring>
-#include <array>
 #include <cstdint>
-#include <span>
 
-
-
+import std;
+import telar.runtime.tests.check;
+import telar.runtime.tests.erasure_checking_allocator;
 import telar.base.memory;
 
 using namespace telar;

@@ -4,29 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include <cerrno>
-#include <exception>
-#include <array>
 #include <cstdio>
 #include <fcntl.h>
 #include <limits.h>
-#include <limits>
 #include <unistd.h>
-#include "telar_base/memory/allocator.hpp"
-#include <concepts>
 #include <cstdlib>
-#include <string_view>
-#include <stdexcept>
-#include <charconv>
 #include <cstdint>
-#include <optional>
-#include <span>
 #include <spawn.h>
 #include <sys/wait.h>
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include <algorithm>
 #include <sys/stat.h>
 #include <cstddef>
 #include <cstring>
@@ -36,27 +22,21 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include "telar_platform/trace.hpp"
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 #include <arpa/inet.h>
-#include <chrono>
 #include <ctime>
 #include <openssl/crypto.h>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "tls_fixture.hpp"
-#include <functional>
-#include <vector>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
+import telar.runtime.tests.tls_fixture;
 import telar.runtime.platform.system_certificates;
 import telar.tls;
 

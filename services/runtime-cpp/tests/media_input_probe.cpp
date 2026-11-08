@@ -4,40 +4,21 @@ static_assert(true);
 #endif
 
 
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/pty_response_queue.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <stdexcept>
-#include "../graphics/kitty_control.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include "../graphics/child_file.hpp"
-#include "../graphics/temporary_path.hpp"
-#include "../graphics/kitty_framing.hpp"
-#include <algorithm>
-#include <charconv>
-#include "../diagnostics/line.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include <optional>
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/trace.hpp"
-#include <limits>
-#include "telar_client/codecs/telar_codec.hpp"
-#include "check.hpp"
-#include <chrono>
 #include <cstdio>
-#include <string>
-#include <vector>
+#include <ghostty/vt.h>
 
-#include "tests/check.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.config;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.runtime.graphics.pane_media;
 
 using namespace telar;

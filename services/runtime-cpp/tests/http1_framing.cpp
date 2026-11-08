@@ -5,18 +5,10 @@ static_assert(true);
 
 
 #include <cstddef>
-#include <string_view>
-#include <limits>
-#include <optional>
 #include <cstdint>
-#include <concepts>
-#include <span>
-#include <algorithm>
 #include <cstring>
-#include <array>
 
-
-
+import std;
 import telar.runtime.http1.head;
 import telar.runtime.http1.intercepted_relay;
 

@@ -4,20 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <chrono>
 #include <cstdint>
-#include <charconv>
 #include <cstring>
-#include <limits>
-#include <optional>
-#include <utility>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.runtime.diagnostics.line;
 import telar.runtime.command_capture.tracker;
 
 using namespace telar;

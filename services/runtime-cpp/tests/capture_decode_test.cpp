@@ -4,35 +4,19 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include "erasure_checking_allocator.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <array>
 #include <brotli/decode.h>
-#include <optional>
-#include <utility>
-#include <initializer_list>
 #include <zlib.h>
-#include <string_view>
-#include "telar_platform/trace.hpp"
 #include <zstd.h>
-#include <stdexcept>
-#include <algorithm>
-#include <atomic>
 #include <cassert>
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
-#include <type_traits>
-#include <charconv>
-#include <thread>
 
-
-
+import std;
+import telar.base.memory;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
+import telar.runtime.tests.erasure_checking_allocator;
 import telar.runtime.exchange_capture.producer;
 
 using namespace telar;

@@ -4,16 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
 #include <cerrno>
-#include <exception>
-#include "../terminal/ghostty_handle.hpp"
 #include <cstring>
 #include <unistd.h>
+#include <cstdio>
+#include <ghostty/vt.h>
 
-#include "terminal/ghostty_handle.hpp"
-
-
+import std;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 import telar.platform;
 
 int main(int argc, char **argv) {

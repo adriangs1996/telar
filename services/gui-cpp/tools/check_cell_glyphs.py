@@ -2,6 +2,7 @@ import argparse
 import itertools
 from pathlib import Path
 import random
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -261,7 +262,7 @@ def main():
         (work / "probe.cpp").write_text(cpp_probe)
         (work / "probe.zig").write_text(zig_probe)
         (work / "gfx.zig").write_text(gfx_probe)
-        subprocess.run(["python3", str(root / "services/gui-cpp/tools/generate_box_edges.py"), str(root / "lib/cellglyphs/box_lines.zig"), str(work / "box_edge_table.hpp")], check=True)
+        shutil.copy2(root / "services/gui-cpp/terminal/glyphs/box_edge_table.inc", work / "box_edge_table.hpp")
         subprocess.run([options.compiler, "-std=c++23", "-O2", "-ffp-contract=off", "-I", str(root / "services/gui-cpp"), "-I", str(work), str(work / "probe.cpp"), str(root / "services/gui-cpp/terminal/glyphs/box_curve.cpp"), "-o", str(work / "cpp")], check=True)
         subprocess.run(["zig", "build-exe", "-O", "ReleaseSafe", "-lc", "--dep", "cellglyphs", "--dep", "gfx", f"-Mroot={work / 'probe.zig'}", "--dep", "gfx", f"-Mcellglyphs={root / 'lib/cellglyphs/root.zig'}", f"-Mgfx={work / 'gfx.zig'}", f"-femit-bin={work / 'zig'}"], check=True)
         previous = subprocess.run([str(work / "zig")], input=payload, capture_output=True, check=True).stdout

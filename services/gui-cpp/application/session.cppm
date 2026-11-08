@@ -2919,7 +2919,7 @@ private:
 
       tab.label = descriptor.label;
       tab.position = descriptor.position;
-      tab.observeForegrounds(descriptor.foregrounds);
+      tab.observePanes(descriptor.panes);
     }
 
     if (current_workspace && !active_tab_ && (presented_ || leave_pending_) && !message.tabs.empty()) {
@@ -3179,9 +3179,7 @@ private:
     }
 
     for (const auto &tab : tabs_) {
-      if (tab->foreground_pane == message.pane_id) {
-        tab->observeForeground(message);
-      }
+      tab->observeForeground(message);
     }
 
     return Change::model;

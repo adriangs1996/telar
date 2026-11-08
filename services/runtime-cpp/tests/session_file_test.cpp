@@ -4,37 +4,22 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include <chrono>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include "telar_base/text/utf8.hpp"
 #include <cstring>
-#include <span>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cstddef>
-#include <stdexcept>
-#include <exception>
 #include <sqlite3.h>
-#include "telar_base/memory/allocator.hpp"
-#include <charconv>
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/trace.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "check.hpp"
-#include <filesystem>
-#include <fstream>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.agents.snapshot;
 
 using namespace telar;

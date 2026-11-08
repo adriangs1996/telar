@@ -4,40 +4,25 @@ static_assert(true);
 #endif
 
 
-#include "check.hpp"
-#include <array>
-#include <optional>
-#include <string_view>
-#include "telar_base/memory/allocator.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <span>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <exception>
 #include <cstddef>
-#include "telar_base/program_identity.hpp"
 #include <cerrno>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <sys/types.h>
 #include <limits.h>
-#include <atomic>
-#include <chrono>
 #include <poll.h>
 #include <sys/wait.h>
-#include <charconv>
-#include "telar_base/memory/fixed_text.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <algorithm>
-#include "telar_platform/trace.hpp"
-#include <filesystem>
-#include <fstream>
 
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.workspaces.git_probe;
 import telar.runtime.worktrees.git_probe;
 

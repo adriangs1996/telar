@@ -33,7 +33,7 @@ def main():
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
     cases = options.font or [
-        (root / 'src/assets' / name, 'regular') for name in
+        (root / 'assets' / name, 'regular') for name in
         ('IBMPlexSans-Regular.ttf', 'IBMPlexSans-SemiBold.ttf', 'JetBrainsMono-Regular.ttf', 'SymbolsNerdFontMono-Regular.ttf')
     ] + [(root / 'services/gui-cpp/tests/fixtures/metrics-variable.ttf', variant) for variant in ('regular', 'wide')]
     cases = [(Path(path), variant) for path, variant in cases]

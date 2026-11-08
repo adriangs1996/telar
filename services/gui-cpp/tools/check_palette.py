@@ -294,15 +294,15 @@ def main():
                'src/gui/widgets/ChromeMetrics.zig', 'src/gui/widgets/label_size.zig',
                'services/gui-cpp/palette/query.hpp', 'services/gui-cpp/palette/navigation_label.hpp',
                'services/gui-cpp/palette/ranked_matches.hpp', 'services/gui-cpp/presentation/palette_geometry.hpp',
-               'services/gui-cpp/tools/palette_probe.cpp', 'services/gui-cpp/tools/generate_palette.py',
-               'services/gui-cpp/tools/generate_bindings.py', 'dlls/telar-base/include/telar_base/history/search_policy.hpp']
+               'services/gui-cpp/tools/palette_probe.cpp', 'services/gui-cpp/config/palette_actions.inc',
+               'services/gui-cpp/config/default_bindings.inc', 'dlls/telar-base/include/telar_base/history/search_policy.hpp']
     sources.extend(['services/gui-cpp/input/key_label.hpp', 'src/gui/widgets/overlays/key_label.zig',
                     'lib/keyinput/root.zig', 'lib/keyinput/Key.zig', 'lib/keyinput/Char.zig', 'lib/keyinput/Mods.zig'])
     result = dict(cases=len(cases), cases_by_kind={kind: sum(name == kind for name, _ in cases) for kind in ['query', 'label', 'ranking', 'catalogue', 'key_label', 'geometry']},
                   input_sha256=hashlib.sha256(payload).hexdigest(), output_bytes=len(candidate_run.stdout),
                   output_sha256=hashlib.sha256(candidate_run.stdout).hexdigest(), reference_command=command,
                   candidate_binary_sha256=hashlib.sha256(cpp.read_bytes()).hexdigest(),
-                  generated_catalogue_sha256=hashlib.sha256((options.build_dir / 'generated/palette_actions.hpp').read_bytes()).hexdigest(),
+                  generated_catalogue_sha256=hashlib.sha256((root / 'services/gui-cpp/config/palette_actions.inc').read_bytes()).hexdigest(),
                   source_sha256={name: hashlib.sha256((repository / name).read_bytes()).hexdigest() for name in sources},
                   generated_sha256={str(path.relative_to(output)): hashlib.sha256(path.read_bytes()).hexdigest() for path in output.rglob('*.zig')},
                   scope='Unchanged original prefix/query, describe/lastBoundary, bounded insert, full 29-entry action catalogue and collect, key_label, fuzzy score and PaletteLayout/ChromeMetrics procedures. Record storage uses facades. Byte-exact comparison covers catalogue order, labels, matching scores, both host key-label styles, seven physical rectangles and three row heights. Qt exposes the implemented subset. It does not establish native pixels, visible-row admission, complete palette behavior or comparative performance.')

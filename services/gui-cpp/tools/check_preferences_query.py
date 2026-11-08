@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import random
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -325,15 +326,7 @@ def main():
         work = Path(directory)
         (work / "probe.cpp").write_text(cpp)
         (work / "probe.zig").write_text(zig)
-        subprocess.run(
-            [
-                sys.executable,
-                str(root / "services/gui-cpp/tools/generate_bindings.py"),
-                str(root / "src/client/config/default_bindings.zig"),
-                str(work / "default_bindings.hpp"),
-            ],
-            check=True,
-        )
+        shutil.copy2(root / "services/gui-cpp/config/default_bindings.inc", work / "default_bindings.hpp")
         subprocess.run(
             [
                 options.compiler,

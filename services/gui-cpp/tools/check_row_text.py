@@ -212,7 +212,7 @@ def main():
     variants = {}
     for index, font in enumerate(['JetBrainsMono-Regular.ttf', 'IBMPlexSans-Regular.ttf', 'SymbolsNerdFontMono-Regular.ttf']):
         expected = subprocess.run([work / 'original'], input=struct.pack('<I', index) + payload, capture_output=True, check=True, timeout=180).stdout
-        actual = subprocess.run([build / 'gui-row-text-probe', root / 'src/assets', font], input=payload, capture_output=True, check=True, timeout=180).stdout
+        actual = subprocess.run([build / 'gui-row-text-probe', root / 'assets', font], input=payload, capture_output=True, check=True, timeout=180).stdout
         (work / f'{index}-original.bin').write_bytes(expected)
         (work / f'{index}-cpp.bin').write_bytes(actual)
         if expected != actual:

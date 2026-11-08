@@ -675,6 +675,30 @@ private:
     QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<SystemAllocator> *, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
   }
 
+  Q_SLOT static void unloadedTabsShowTheirListedPanes() {
+    SystemAllocator memory;
+    const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 2};
+    Tab tab{memory, location};
+    const std::array panes{telar::TabPane{.pane_id = 4, .foreground = "zsh", .cwd = "/work/telar"}, telar::TabPane{.pane_id = 5, .foreground = "nvim", .cwd = "/work/other"}};
+    tab.observePanes(panes);
+    std::array agents{Agent{memory}};
+    agents.front().pane_id = 5;
+    agents.front().location = location;
+    agents.front().status = telar::AgentStatus::blocked;
+    const auto record = tabRecord(tab, static_cast<const Pane<SystemAllocator> *>(nullptr), std::array<const Pane<SystemAllocator> *, 0>{}, std::span<const Agent<SystemAllocator>>{agents}, false);
+    QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("zsh"));
+    QCOMPARE(record.value(QStringLiteral("path")).toString(), QStringLiteral("/work/telar"));
+    const auto cards = record.value(QStringLiteral("cards")).toList();
+    QCOMPARE(cards.size(), 2);
+    QCOMPARE(cards[0].toMap().value(QStringLiteral("key")).toString(), QStringLiteral("4"));
+    QVERIFY(cards[0].toMap().value(QStringLiteral("focused")).toBool());
+    QCOMPARE(cards[1].toMap().value(QStringLiteral("program")).toString(), QStringLiteral("nvim"));
+    QVERIFY(!cards[1].toMap().value(QStringLiteral("attentionColor")).toString().isEmpty());
+
+    tab.loaded = true;
+    QVERIFY(tabRecord(tab, static_cast<const Pane<SystemAllocator> *>(nullptr), std::array<const Pane<SystemAllocator> *, 0>{}, std::span<const Agent<SystemAllocator>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
+  }
+
   Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {
     QQuickWindow window;
     ListModel tabs;
