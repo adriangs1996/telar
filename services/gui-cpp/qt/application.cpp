@@ -284,7 +284,7 @@ void Application::runtimeDisconnected(MachineClient &client) {
   static_cast<void>(client.session.settlePresentation());
   client.phase = client.connection.link().phase;
   client.needs_setup = client.connection.link().setup_repairs;
-  summarizeMachine(client);
+  summarizeMachine(client.key);
   if (client.key.machine.slot != machines_.active()) {
     return;
   }
@@ -760,7 +760,7 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
     }
 
     static_cast<void>(client.session.settlePresentation());
-    summarizeMachine(client);
+    summarizeMachine(client.key);
     if (active && client.key.machine.slot != Machines::local_slot && (change == Change::stopped || change == Change::closed)) {
       selectMachine(machines_.token(Machines::local_slot));
       return;

@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 #include <cstdio>
@@ -166,7 +167,7 @@ public:
     std::int32_t advance = 0;
     visit(fonts, text, request, [&](FontSpan span) {
       const auto run = fonts.face(span.role.value_or(FontRole::primary)).shape(span.text, request.pixel_height);
-      advance = addAdvance(advance, spanAdvance(fonts, span, request, run));
+      advance = addAdvance(advance, spanAdvance(fonts, span, request, run.advance()));
     });
 
     return advance;
@@ -192,7 +193,7 @@ private:
         glyphs_[start + index] = run.glyph(index);
       }
 
-      advance_ = addAdvance(advance_, spanAdvance(fonts, span, request, run));
+      advance_ = addAdvance(advance_, spanAdvance(fonts, span, request, run.advance()));
     });
   }
 
@@ -232,9 +233,9 @@ private:
   }
 
   template <CascadingFontProvider Fonts>
-  inline static std::int32_t spanAdvance(Fonts &fonts, FontSpan span, TextRequest request, ShapedRunView run) {
+  inline static std::int32_t spanAdvance(Fonts &fonts, FontSpan span, TextRequest request, std::int32_t shaped_advance) {
     if (!span.role || !fittedFont(*span.role)) {
-      return run.advance();
+      return shaped_advance;
     }
 
     const auto width = static_cast<std::int64_t>(fonts.face(FontRole::primary).metrics(request.pixel_height).maximum_advance) * span.columns;
@@ -634,7 +635,8 @@ public:
     auto &primary = fonts.face(FontRole::primary);
     if (cached_face_ != &primary || cached_height_ != request.pixel_height) {
       ascii_ = {};
-      cached_face_ = &primary;
+      // Only the face's identity is kept, never dereferenced.
+      cached_face_ = tbc::raw(&primary);
       cached_height_ = request.pixel_height;
     }
     const auto &coverage = primary.ligatures();

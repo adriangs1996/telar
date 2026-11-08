@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 
 
 
@@ -67,7 +68,8 @@ public:
 private:
   std::string shell_;
   std::vector<std::string> storage_;
-  std::vector<std::string_view> arguments_;
+  // The arguments view the strings stored beside them.
+  tbc::view<std::vector<std::string_view>, tbc::lt::self> arguments_;
 };
 }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -40,7 +41,7 @@ private:
   QColor color_ = Qt::white;
   qreal fraction_ = 0;
   qreal turns_ = 0;
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
 };
 
 }

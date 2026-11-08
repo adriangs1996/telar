@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -69,7 +70,7 @@ private:
   qreal radius_ = 0;
   qreal border_width_ = 0;
   float border_alpha_ = 1;
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
   std::optional<QRectF> paint_clip_;
 };
 

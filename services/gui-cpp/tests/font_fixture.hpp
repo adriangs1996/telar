@@ -52,7 +52,8 @@ namespace telar::gui::test {
 template <Allocator Memory>
 class FontFixture {
 public:
-  FontFixture(Memory &memory, const std::filesystem::path &directory, const char *primary_filename = "JetBrainsMono-Regular.ttf")
+  // The fixture reads its fonts into memory, region `a`.
+  FontFixture(tbc::view<Memory &, tbc::lt::a> memory, const std::filesystem::path &directory, const char *primary_filename = "JetBrainsMono-Regular.ttf")
       : regular_bytes_(read(memory, directory / "IBMPlexSans-Regular.ttf")),
         emphasized_bytes_(read(memory, directory / "IBMPlexSans-SemiBold.ttf")),
         primary_bytes_(read(memory, directory / primary_filename)),
@@ -93,16 +94,17 @@ private:
     return {data.cbegin(), data.cend(), AllocatorRef<std::uint8_t, Memory>{memory}};
   }
 
-  Vector<std::uint8_t, Memory> regular_bytes_;
-  Vector<std::uint8_t, Memory> emphasized_bytes_;
-  Vector<std::uint8_t, Memory> primary_bytes_;
-  Vector<std::uint8_t, Memory> text_bytes_;
-  Vector<std::uint8_t, Memory> symbols_bytes_;
-  fonts::Face regular_;
-  fonts::Face emphasized_;
-  fonts::Face primary_;
-  fonts::Face text_;
-  fonts::Face symbols_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> regular_bytes_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> emphasized_bytes_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> primary_bytes_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> text_bytes_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> symbols_bytes_;
+  // The faces read the bytes stored beside them.
+  tbc::view<fonts::Face, tbc::lt::self> regular_;
+  tbc::view<fonts::Face, tbc::lt::self> emphasized_;
+  tbc::view<fonts::Face, tbc::lt::self> primary_;
+  tbc::view<fonts::Face, tbc::lt::self> text_;
+  tbc::view<fonts::Face, tbc::lt::self> symbols_;
 };
 
 }

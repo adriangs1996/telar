@@ -185,7 +185,8 @@ private:
   std::unique_ptr<hb_font_t, ShapingFontDeleter> shaping_font_;
   std::unique_ptr<hb_buffer_t, ShapingBufferDeleter> shaping_buffer_;
   std::optional<LigatureCoverage> ligatures_;
-  std::array<SizeEntry, maximum_sizes> sizes_{};
+  // The sizes are FreeType children of this face.
+  tbc::view<std::array<SizeEntry, maximum_sizes>, tbc::lt::self> sizes_{};
   std::size_t next_size_slot_ = 0;
   std::uint16_t active_height_ = 0;
 };

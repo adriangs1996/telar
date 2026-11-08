@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include <vector>
 #include "../core/memory.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -105,13 +106,25 @@ void writeBitmap(fonts::GlyphBitmapView bitmap) {
 
 void writeRun(fonts::Face &face, std::string_view text, const Request &request) {
   const auto height = static_cast<std::uint16_t>(request.pixel_height);
-  const auto run = face.shape(text, height);
+  // Reading metrics and rasterizing reach the face, so the shaped run is copied first.
+  std::vector<fonts::ShapedGlyph> glyphs;
+  std::int32_t advance = 0;
+  bool right_to_left = false;
+  {
+    const auto run = face.shape(text, height);
+    advance = run.advance();
+    right_to_left = run.rightToLeft();
+    glyphs.reserve(run.size());
+    for (std::size_t index = 0; index < run.size(); ++index) {
+      glyphs.push_back(run.glyph(index));
+    }
+  }
+
   const auto metrics = face.metrics(height);
-  write(std::array{static_cast<std::int32_t>(RunStatus::shaped), metrics.ascender, static_cast<std::int32_t>(metrics.line_height), static_cast<std::int32_t>(metrics.maximum_advance), static_cast<std::int32_t>(run.size()), run.advance()});
-  write(static_cast<std::uint32_t>(run.rightToLeft()));
+  write(std::array{static_cast<std::int32_t>(RunStatus::shaped), metrics.ascender, static_cast<std::int32_t>(metrics.line_height), static_cast<std::int32_t>(metrics.maximum_advance), static_cast<std::int32_t>(glyphs.size()), advance});
+  write(static_cast<std::uint32_t>(right_to_left));
   const fonts::GlyphStyle style{.bold = (request.style_mask & bold_style_bit) != 0, .italic = (request.style_mask & italic_style_bit) != 0};
-  for (std::size_t index = 0; index < run.size(); ++index) {
-    const auto glyph = run.glyph(index);
+  for (const auto &glyph : glyphs) {
     write(std::array{static_cast<std::int32_t>(glyph.index), static_cast<std::int32_t>(glyph.cluster), glyph.x_advance, glyph.y_advance, glyph.x_offset, glyph.y_offset});
     writeBitmap(face.rasterize({.index = glyph.index, .pixel_height = height, .style = style}));
   }

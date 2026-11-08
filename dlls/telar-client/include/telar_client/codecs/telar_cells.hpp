@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../serializers/telar_cells.hpp"
+#include "tbc/view.hpp"
 
 namespace telar {
 
@@ -60,7 +61,8 @@ namespace telar {
       return size;
     }
 
-    static std::span<Byte> encode(std::span<const Cell> cells, std::span<Byte> buffer) {
+    // The encoded bytes are the front of the buffer, region `a`.
+    static tbc::view<std::span<Byte>, tbc::lt::a> encode(std::span<const Cell> cells, tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
       const auto size = encodedSize(cells);
       if (size > buffer.size()) {
         throw EncodingError{"Cell buffer too small"};

@@ -1,3 +1,4 @@
+#include "tbc/view.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/capture.hpp"
@@ -60,7 +61,8 @@ private:
 
 using NativeSource = NativeReference<CGImageSourceRef>;
 
-NativeSource sourceFromFile(const char *path, ClipboardImageError &failure) {
+// The source is a Core Foundation object it retains, depending on no argument.
+tbc::view<NativeSource, tbc::lt::static_storage> sourceFromFile(const char *path, ClipboardImageError &failure) {
   const runtime::FileDescriptor descriptor{telarGuiOpenClipboardImageFile(path)};
   if (!descriptor) {
     return NativeSource{nullptr};
@@ -210,7 +212,8 @@ struct PngWriter {
   }
 };
 
-SensitiveBytes<ApplicationAllocator> encode(ApplicationAllocator &memory, CGImageSourceRef source) {
+// The bytes are allocated from memory, region `a`.
+tbc::view<SensitiveBytes<ApplicationAllocator>, tbc::lt::a> encode(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, CGImageSourceRef source) {
   PngWriter writer{.bytes = SensitiveBytes{memory}, .failure = nullptr};
   const CGDataConsumerCallbacks callbacks{.putBytes = PngWriter::write, .releaseConsumer = nullptr};
   const NativeReference consumer{CGDataConsumerCreate(&writer, &callbacks)};

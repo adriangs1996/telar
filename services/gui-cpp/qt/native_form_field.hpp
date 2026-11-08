@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "form_composition_events.hpp"
 #include "form_input_context.hpp"
 #include <algorithm>
@@ -153,7 +154,7 @@ private:
   bool discarding_composition_ = false;
   bool metrics_dirty_ = true;
   bool form_control_ = true;
-  [[no_unique_address]] ActiveCompositionEvents composition_events_;
+  [[no_unique_address]] tbc::view<ActiveCompositionEvents, tbc::lt::self> composition_events_;
 };
 
 }

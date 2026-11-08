@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "surface_command.hpp"
 #include <cstdint>
 #include "telar_base/text/utf8.hpp"
@@ -101,7 +102,7 @@ bool SurfaceCommand::active() const noexcept {
   return running_;
 }
 
-void SurfaceCommand::start(const SurfaceCommandRequest &request, Completion complete) {
+void SurfaceCommand::start(const SurfaceCommandRequest &request, tbc::view<Completion, tbc::lt::a> complete) {
   if (running_) {
     throw std::logic_error{"A surface command is already running"};
   }

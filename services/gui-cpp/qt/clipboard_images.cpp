@@ -18,7 +18,7 @@ namespace telar::gui::qt {
 
 static_assert(ConcurrentAllocator<ApplicationAllocator>);
 
-ClipboardImages::ClipboardImages(ApplicationAllocator &memory, QObject *parent)
+ClipboardImages::ClipboardImages(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
       clipboard_(memory) {
@@ -60,7 +60,7 @@ void ClipboardImages::capture(ClipboardImageJob job) {
   start(job);
 }
 
-std::optional<ClipboardImageResult> ClipboardImages::takeResult() {
+tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> ClipboardImages::takeResult() {
   return std::exchange(result_, std::nullopt);
 }
 

@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "../core/memory.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -49,8 +50,9 @@ private:
   SystemAllocator memory_;
   Vector<std::uint8_t, SystemAllocator> regular_bytes_;
   Vector<std::uint8_t, SystemAllocator> emphasized_bytes_;
-  fonts::Face regular_;
-  fonts::Face emphasized_;
+  // The faces read the bytes stored beside them.
+  tbc::view<fonts::Face, tbc::lt::self> regular_;
+  tbc::view<fonts::Face, tbc::lt::self> emphasized_;
 };
 
 }

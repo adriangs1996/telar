@@ -1,3 +1,4 @@
+#include "tbc/view.hpp"
 #include "native_pointer_events.hpp"
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
@@ -61,8 +62,9 @@ struct NativePointerEvents::Native final : QWindowSystemEventHandler {
 
 private:
   struct Dispatch {
+    // The scopes of nested dispatches form a stack of raw links that each scope pops when it ends.
     Dispatch(Native &native, QEvent::Type event_kind) : owner(&native), previous(native.active_), kind(event_kind) {
-      native.active_ = this;
+      native.active_ = tbc::raw(this);
     }
 
     ~Dispatch() {

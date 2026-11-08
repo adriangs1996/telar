@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include "../core/memory.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -95,7 +96,7 @@ private:
 
   SystemAllocator memory_;
   fonts::IconLayout<SystemAllocator> layout_;
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
   std::shared_ptr<const FontAsset> source_;
   std::shared_ptr<ResidentFonts> fonts_;
   QString glyph_;

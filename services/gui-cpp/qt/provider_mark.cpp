@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "provider_mark.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <string_view>
@@ -45,7 +46,7 @@ public:
   ProviderNode()
       : image(appendSceneNode<QSGSimpleTextureNode>(*this)) {}
 
-  QSGSimpleTextureNode &image;
+  tbc::view<QSGSimpleTextureNode &, tbc::lt::self> image;
   std::unique_ptr<QSGTexture> texture;
   int side = 0;
 };

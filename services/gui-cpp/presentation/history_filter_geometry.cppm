@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -201,11 +202,11 @@ struct HistoryEmpty {
   };
 
   BoundedText<title_capacity> title;
-  std::string_view subtitle;
+  tbc::view<std::string_view, tbc::lt::static_storage> subtitle;
   Action action = Action::none;
   bool emphasized = false;
 
-  [[nodiscard]] inline static HistoryEmpty derive(const HistoryEmptyOptions &options) {
+  [[nodiscard]] inline static tbc::view<HistoryEmpty, tbc::lt::static_storage> derive(const HistoryEmptyOptions &options) {
     HistoryEmpty result;
     if (options.phase == HistoryPhase::loading && !options.has_page) {
       result.title.append("Searching your command history…");

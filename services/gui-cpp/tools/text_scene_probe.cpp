@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
@@ -181,8 +182,10 @@ public:
   TextCase(const TextCase &) = delete;
   TextCase &operator=(const TextCase &) = delete;
 
-  TextCase(QQuickWindow &window, const std::shared_ptr<const FontCollection> &collection, unsigned length)
-      : collection_(collection),
+  // The case paints through the window, region `a`, whose glyph cache it keeps warm.
+  TextCase(tbc::view<QQuickWindow &, tbc::lt::a> window, const std::shared_ptr<const FontCollection> &collection, unsigned length)
+      : window_(window),
+        collection_(collection),
         fonts_(ResidentFonts::shared(collection)),
         images_(ChromeGlyphImages<ResidentFonts>::shared(window, fonts_)) {
     constexpr std::string_view alphabet = "0123456789abcdef ABCDEF -> != ffi ";
@@ -217,18 +220,24 @@ public:
     return collection_;
   }
 
+  [[nodiscard]] tbc::view<QQuickWindow &, tbc::lt::a> window() const noexcept {
+    return window_;
+  }
+
 private:
+  tbc::view<QQuickWindow &, tbc::lt::a> window_;
   std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
-  std::shared_ptr<ChromeGlyphImages<ResidentFonts>> images_;
+  tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts>>, tbc::lt::a> images_;
   std::vector<fonts::ShapedGlyph> glyphs_;
-  ChromeTextPaint paint_;
+  // The paint views the glyphs stored beside it.
+  tbc::view<ChromeTextPaint, tbc::lt::self> paint_;
 };
 
 class SceneRun {
 public:
-  SceneRun(QQuickWindow &window, const TextCase &text, Operation operation)
-      : window_(window),
+  SceneRun(const TextCase &text, Operation operation)
+      : window_(text.window()),
         text_(text),
         operation_(operation),
         paint_(text.paint()) {}
@@ -259,8 +268,8 @@ private:
   std::unique_ptr<QSGNode> node_;
 };
 
-void measure(QQuickWindow &window, const TextCase &text, Operation operation, Options options) {
-  SceneRun scene{window, text, operation};
+void measure(const TextCase &text, Operation operation, Options options) {
+  SceneRun scene{text, operation};
   for (unsigned index = 0; index < options.warmup; ++index) {
     scene.step();
   }
@@ -280,7 +289,7 @@ void runCases(QQuickWindow &window, const std::shared_ptr<const FontCollection> 
   for (const auto length : text_lengths) {
     const TextCase text{window, collection, length};
     for (const auto operation : {Operation::create, Operation::rebuild, Operation::repaint}) {
-      measure(window, text, operation, options);
+      measure(text, operation, options);
     }
   }
 }

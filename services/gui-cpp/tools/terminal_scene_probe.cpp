@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "../application/dependencies.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
@@ -283,7 +284,8 @@ private:
   std::shared_ptr<ResidentFonts> fonts_;
   ResolvedFont resolved_;
   std::vector<Byte> characters_;
-  std::vector<Cell> cells_;
+  // The cells view the characters stored beside them.
+  tbc::view<std::vector<Cell>, tbc::lt::self> cells_;
   std::vector<Byte> encoded_;
   std::array<Byte, terminal_rows> row_flags_{};
   QString preedit_;

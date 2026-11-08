@@ -258,7 +258,8 @@ namespace telar::gui::qt {
       ShapeMaterial material_{true};
     };
 
-    QSGNode *paintSoftwareBatch(QQuickWindow &window, QSGNode &root, std::span<const RoundedRectanglePaint> paints, qreal density) {
+    // The result is the first of the root's children left unpainted.
+    tbc::view<QSGNode *, tbc::lt::a> paintSoftwareBatch(QQuickWindow &window, tbc::view<QSGNode &, tbc::lt::a> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
       auto *next = root.firstChild();
       for (const auto paint : paints) {
         auto *current = next;

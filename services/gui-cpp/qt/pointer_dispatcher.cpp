@@ -265,18 +265,20 @@ void PointerDispatcher::cancel() {
   cancelTabDrag();
   retireHistoryHover();
   const auto previous_recipients = recipients();
-  for (auto &lease : captures_) {
+  for (std::size_t index = 0; index < captures_.size(); ++index) {
+    auto &lease = captures_[index];
     lease.history.cancel();
-    if (lease.child.owned()) {
-      report(lease.pane_id, lease.child.cancel(view(lease)));
-    }
-
+    const auto pane_id = lease.pane_id;
+    const auto outcome = lease.child.owned() ? std::optional{lease.child.cancel(view(lease))} : std::nullopt;
     lease.terminal.clear();
+    if (outcome) {
+      report(pane_id, *outcome);
+    }
   }
 
   for (const auto &recipient : previous_recipients) {
-    if (recipient.terminal != nullptr) {
-      recipient.terminal->releaseMouse();
+    if (auto *const terminal = recipient.terminal.data(); terminal != nullptr) {
+      terminal->releaseMouse();
     }
   }
 }
@@ -370,10 +372,11 @@ bool PointerDispatcher::move(QMouseEvent &event) {
 
   const auto destinations = recipients();
   for (const auto &destination : destinations) {
-    if (destination.terminal != nullptr && (destination.child_buttons & event.buttons()) != Qt::NoButton) {
-      destination.terminal->observeLinkPointer(destination.terminal->mapFromScene(event.position()), event.modifiers());
+    auto *const terminal = destination.terminal.data();
+    if (terminal != nullptr && (destination.child_buttons & event.buttons()) != Qt::NoButton) {
+      terminal->observeLinkPointer(terminal->mapFromScene(event.position()), event.modifiers());
       if (destination.child_buttons.testFlag(Qt::LeftButton)) {
-        destination.terminal->link_gesture_.cancel();
+        terminal->link_gesture_.cancel();
       }
     }
   }

@@ -1,3 +1,4 @@
+#include "tbc/view.hpp"
 #include "qt/optical_text.hpp"
 #include "font_smoothing.h"
 #include <CoreText/CoreText.h>
@@ -300,9 +301,13 @@ void OpticalText::add(const QTextLayout &layout, QPointF position, QColor color)
       continue;
     }
 
+    // Positioning reuses the state's buffers, so the font is found again by its index.
+    const auto font_index = static_cast<std::size_t>(font - self.fonts.data());
     self.positionGlyphs(run, position);
-    const bool bold = (font->synthesized & static_cast<unsigned>(QFontEngine::SynthesizedBold)) != 0;
-    bounds = CGRectUnion(bounds, drawGlyphs(self.context, font->native.get(), self.indexes, self.positions, bold));
+    const auto &positioned = self.fonts[font_index];
+    const bool bold = (positioned.synthesized & static_cast<unsigned>(QFontEngine::SynthesizedBold)) != 0;
+    // The context is a Core Graphics object the state retains; drawing reaches it by address.
+    bounds = CGRectUnion(bounds, drawGlyphs(tbc::raw(self.context), positioned.native.get(), self.indexes, self.positions, bold));
   }
 
   CGContextFlush(self.context);

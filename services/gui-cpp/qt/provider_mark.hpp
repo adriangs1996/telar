@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <QColor>
@@ -52,7 +53,7 @@ protected:
   void itemChange(ItemChange change, const ItemChangeData &data) override;
 
 private:
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
   AgentProvider provider_ = AgentProvider::unknown;
   bool telar_mark_ = false;
   bool monochrome_ = false;

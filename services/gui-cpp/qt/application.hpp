@@ -600,8 +600,8 @@ private:
   void selectMachine(MachineToken target);
   void releaseMachineInput();
   void forgetMachineView();
-  void summarizeMachine(const MachineClient &client);
-  void connectMachine(MachineClient &client);
+  void summarizeMachine(MachineClientKey key);
+  void connectMachine(Machines::Slot slot);
   [[nodiscard]] MachineClient *findClient(MachineClientKey key) const noexcept;
   [[nodiscard]] GuiSession &session() noexcept;
   [[nodiscard]] const GuiSession &session() const noexcept;
@@ -778,7 +778,8 @@ private:
 
   ApplicationAllocator &memory_;
   Machines machines_;
-  std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity> clients_;
+  // Each client reports back to this application.
+  tbc::view<std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity>, tbc::lt::self> clients_;
   std::uint64_t next_client_generation_ = 1;
   std::uint64_t machine_view_revision_ = 0;
   struct ActivitySourceVersion {
@@ -840,7 +841,7 @@ private:
   tbc::view<ElementSlots, tbc::lt::self> element_slots_{configuration_source_, [this] { return componentContext(); }, this};
   QVariantMap element_bars_;
   QTimer component_timer_;
-  SurfaceCommand component_command_;
+  tbc::view<SurfaceCommand, tbc::lt::self> component_command_;
   std::optional<ComponentCommandOwner> component_command_owner_;
   std::uint64_t next_component_revision_ = 0;
   std::optional<QPointF> component_action_anchor_;

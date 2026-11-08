@@ -36,7 +36,8 @@ class ClipboardImages final : public QObject {
   Q_OBJECT
 
 public:
-  explicit ClipboardImages(ApplicationAllocator &memory, QObject *parent = nullptr);
+  // The captures allocate from memory, region `a`.
+  explicit ClipboardImages(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, QObject *parent = nullptr);
   ~ClipboardImages() override;
   ClipboardImages(const ClipboardImages &) = delete;
   ClipboardImages &operator=(const ClipboardImages &) = delete;
@@ -44,7 +45,7 @@ public:
   ClipboardImages &operator=(ClipboardImages &&) = delete;
 
   void capture(ClipboardImageJob job);
-  [[nodiscard]] std::optional<ClipboardImageResult> takeResult();
+  [[nodiscard]] tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> takeResult();
   [[nodiscard]] bool busy() const noexcept;
 
 signals:
@@ -59,13 +60,13 @@ private:
   void drain();
   void startQueued();
 
-  ApplicationAllocator &memory_;
-  platform::ClipboardImageMonitor clipboard_;
+  tbc::view<ApplicationAllocator &, tbc::lt::a> memory_;
+  tbc::view<platform::ClipboardImageMonitor, tbc::lt::a> clipboard_;
   QThreadPool worker_pool_;
   QFutureWatcher<ClipboardImageResult> task_;
   std::optional<ClipboardImageJob> running_;
   std::optional<ClipboardImageJob> queued_;
-  std::optional<ClipboardImageResult> result_;
+  tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> result_;
   bool busy_ = false;
 };
 

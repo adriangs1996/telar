@@ -431,21 +431,26 @@ void Application::componentCommandFinished(const ComponentCommandOwner &owner, S
 }
 
 void Application::tickComponents() {
-  const auto *definitions = configuration_source_.definitions();
-  if (definitions == nullptr) {
+  if (configuration_source_.definitions() == nullptr) {
     return;
   }
 
   const auto now = Clock::now();
   bool rendered = false;
+  // Projecting a source may change the surfaces, so each step reads them again.
   const auto tick = [&](std::size_t index, bool panel) {
-    const auto &state = surfaceState(component_surfaces_, index, panel);
-    const auto &source = surfaceSource(*definitions, index, panel);
-    if (state.clock_next <= now) {
+    const auto *definitions = configuration_source_.definitions();
+    if (definitions == nullptr) {
+      return;
+    }
+
+    const auto source = surfaceSource(*definitions, index, panel);
+    if (surfaceState(component_surfaces_, index, panel).clock_next <= now) {
       projectComponentSource(index, panel);
       emit componentsChanged();
     }
 
+    const auto &state = surfaceState(component_surfaces_, index, panel);
     const bool live = source.kind == components::SourceKind::dynamic || source.kind == components::SourceKind::command;
     if (!rendered && live && !state.rendering && state.next <= now && (source.kind != components::SourceKind::command || !component_command_.active())) {
       rendered = true;

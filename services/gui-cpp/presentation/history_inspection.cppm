@@ -387,7 +387,8 @@ struct HistoryInspectionFacts {
   std::string_view directory;
   PaletteRole exit_color = PaletteRole::text;
 
-  [[nodiscard]] inline static HistoryInspectionFacts derive(const HistoryInspectionEntry &entry, CalendarSample sampled) {
+  // The facts view the entry's directory, region `a`.
+  [[nodiscard]] inline static tbc::view<HistoryInspectionFacts, tbc::lt::a> derive(tbc::view<HistoryInspectionEntry, tbc::lt::a> entry, CalendarSample sampled) {
     HistoryInspectionFacts result;
     result.directory = entry.directory;
     result.took = HistoryLabels::duration(entry.duration_ns);
@@ -716,7 +717,7 @@ enum class StatusMode : std::uint8_t {
 
 struct ModeHint {
   KeyChord key;
-  tbc::view<std::string_view, tbc::lt::static_storage> label;
+  std::string_view label;
 };
 
 template <typename Router>
@@ -739,7 +740,8 @@ public:
   static constexpr std::size_t capacity = actions.size();
 
   template <PrefixHintRouter Router>
-  [[nodiscard]] inline static ModeHints resolve(const Router &router) noexcept {
+  // The labels of the hints a router binds are literals.
+  [[nodiscard]] inline static tbc::view<ModeHints, tbc::lt::static_storage> resolve(const Router &router) noexcept {
     ModeHints result;
     for (const auto &[action, label] : actions) {
       if (const auto key = router.prefixedKeyForAction({.kind = action})) {
@@ -750,18 +752,19 @@ public:
     return result;
   }
 
-  inline void append(ModeHint hint) noexcept {
+  // The hints view their labels, region `a`.
+  inline void append(tbc::view<ModeHint, tbc::lt::a> hint) noexcept {
     if (count_ < hints_.size()) {
       hints_[count_++] = hint;
     }
   }
 
-  [[nodiscard]] inline std::span<const ModeHint> items() const noexcept {
+  [[nodiscard]] inline tbc::view<std::span<const ModeHint>, tbc::lt::a> items() const noexcept {
     return std::span{hints_}.first(count_);
   }
 
 private:
-  std::array<ModeHint, capacity> hints_{};
+  tbc::view<std::array<ModeHint, capacity>, tbc::lt::a> hints_{};
   std::size_t count_ = 0;
 };
 

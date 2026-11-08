@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "image_resource.hpp"
 #include <cstddef>
 #include <atomic>
@@ -233,7 +234,7 @@ public:
       : resource_(&resource),
         scene_(scene),
         handle_(handle),
-        next_(resource.first_node_) {
+        next_(tbc::raw(resource.first_node_)) {
     setOpacity(0);
     auto node = createSceneImage(window);
     node->setTexture(resource_->texture_.get());
@@ -245,11 +246,13 @@ public:
     node->setRect({destination.x, destination.y, destination.width, destination.height});
     adoptSceneNode(*this, std::move(node));
 
+    // The resource's draw nodes form an intrusive list of raw links that each node leaves when
+    // it is destroyed, or that the resource clears when it goes first.
     if (next_ != nullptr) {
-      next_->previous_ = this;
+      next_->previous_ = tbc::raw(this);
     }
 
-    resource_->first_node_ = this;
+    resource_->first_node_ = tbc::raw(this);
   }
 
   ~ImageDrawNode() override {
@@ -258,13 +261,13 @@ public:
     }
 
     if (previous_ != nullptr) {
-      previous_->next_ = next_;
+      previous_->next_ = tbc::raw(next_);
     } else {
-      resource_->first_node_ = next_;
+      resource_->first_node_ = tbc::raw(next_);
     }
 
     if (next_ != nullptr) {
-      next_->previous_ = previous_;
+      next_->previous_ = tbc::raw(previous_);
     }
   }
 

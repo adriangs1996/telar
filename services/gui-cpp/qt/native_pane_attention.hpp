@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -95,7 +96,7 @@ private:
   bool notification_pending_ = false;
   std::optional<std::uint64_t> deadline_ns_;
   QPointer<WindowAnimationClock> clock_;
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
 };
 
 }

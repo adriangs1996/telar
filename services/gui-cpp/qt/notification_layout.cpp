@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "notification_layout.hpp"
 #include "application.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -245,11 +246,11 @@ void NotificationLayout::refreshFonts() {
   fonts_ = ResidentFonts::shared(collection_);
 }
 
-float NotificationLayout::measure(std::string_view text, std::uint16_t pixels, bool emphasized) {
+float NotificationLayout::measure(WindowFontCatalog &catalog, ResidentFonts &fonts, std::string_view text, std::uint16_t pixels, bool emphasized) {
   const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
-  catalog_->request(text, role);
+  catalog.request(text, role);
 
-  return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts_, text, {.pixel_height = pixels, .preferred = role}));
+  return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(fonts, text, {.pixel_height = pixels, .preferred = role}));
 }
 
 NotificationLayout::Content &NotificationLayout::content(const NotificationItem &item, float width) {
@@ -271,18 +272,22 @@ NotificationLayout::Content &NotificationLayout::content(const NotificationItem 
     found->id = item.id;
     found->width = width;
     found->message.assign(item.message.view());
-    const auto measure_body = [&](std::string_view label) {
-      return measure(label, chrome_.body, false);
+    // The window owns its catalog; this layout only observes it.
+    const auto measure_body = [catalog = tbc::raw(catalog_.data()), &fonts = *fonts_, pixels = chrome_.body](std::string_view label) {
+      return measure(*catalog, fonts, label, pixels, false);
     };
     found->body.wrap(found->message.view(), width - metrics_.px(NotificationMetrics::text_insets), measure_body);
     found->height = metrics_.height(found->body.count(), item.clickable());
-    found->record = contentRecord(item, *found);
+    auto made = contentRecord(item, *found);
+    found->record = std::move(made.record);
+    found->action_advance = made.action_advance;
+    found->action_line_height = made.action_line_height;
   }
 
   return *found;
 }
 
-QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Content &content) {
+NotificationLayout::ContentRecord NotificationLayout::contentRecord(const NotificationItem &item, const Content &content) const {
   const NotificationCardGeometry geometry{.bounds = {.width = content.width, .height = content.height}, .metrics = metrics_};
   QVariantList body;
   for (std::size_t index = 0; index < content.body.count(); ++index) {
@@ -291,8 +296,8 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
 
   auto action = NotificationActionLabel::target(item.target.kind);
   NotificationActionLabel::Buffer link_label;
-  const auto measure_action = [&](std::string_view label) {
-    return measure(label, chrome_.small, true);
+  const auto measure_action = [catalog = tbc::raw(catalog_.data()), &fonts = *fonts_, pixels = chrome_.small](std::string_view label) {
+    return measure(*catalog, fonts, label, pixels, true);
   };
   if (!item.link.view().empty()) {
     action = NotificationActionLabel::fitHost(item.linkHost(), geometry.bodyWidth(), measure_action, link_label);
@@ -305,11 +310,11 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
   }
 
   const auto action_bounds = geometry.action();
-  content.action_line_height = static_cast<float>(fonts_->face(fonts::FontRole::emphasized).metrics(chrome_.small).line_height);
-  content.action_advance = measure_action(action);
+  const auto action_line_height = static_cast<float>(fonts_->face(fonts::FontRole::emphasized).metrics(chrome_.small).line_height);
+  const auto action_advance = measure_action(action);
   const auto accessible = item.link.view().empty() ? toQString(item.title.view()) + QStringLiteral(": ") + toQString(item.message.view()) : toQString(item.title.view()) + QStringLiteral(", opens ") + toQString(item.linkHost()) + QStringLiteral(": ") + toQString(item.message.view());
 
-  return {
+  return {.record = {
       {QStringLiteral("key"), controller_->notificationIdentity(item.id)},
       {QStringLiteral("title"), toQString(item.title.view())},
       {QStringLiteral("titleBounds"), logicalBounds(geometry.title(), density_)},
@@ -323,14 +328,17 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
       {QStringLiteral("shadows"), shadows},
       {QStringLiteral("clickable"), item.clickable()},
       {QStringLiteral("accessible"), accessible},
-  };
+  }, .action_advance = action_advance, .action_line_height = action_line_height};
 }
 
 void NotificationLayout::rebuild() {
   const auto machine_view = controller_ ? controller_->viewVersion().machine : 0;
   if (machine_view != machine_view_) {
     machine_view_ = machine_view;
-    contents_ = {};
+    for (auto &content : contents_) {
+      content.clear();
+    }
+
     stack_ = {};
   }
 

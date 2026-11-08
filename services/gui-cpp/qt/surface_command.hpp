@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/view.hpp"
 #include <QByteArray>
 #include <QList>
 #include <QObject>
@@ -58,7 +59,8 @@ public:
   SurfaceCommand &operator=(const SurfaceCommand &) = delete;
   SurfaceCommand(SurfaceCommand &&) = delete;
   SurfaceCommand &operator=(SurfaceCommand &&) = delete;
-  void start(const SurfaceCommandRequest &request, Completion complete);
+  // The command keeps the completion, and what it captures, region `a`, until it runs.
+  void start(const SurfaceCommandRequest &request, tbc::view<Completion, tbc::lt::a> complete);
   void cancel();
   [[nodiscard]] bool active() const noexcept;
 
@@ -74,7 +76,7 @@ private:
   QTimer grace_;
   SurfaceCommandRequest request_;
   SurfaceCommandResult result_;
-  Completion complete_;
+  tbc::view<Completion, tbc::lt::a> complete_;
   QByteArray payload_;
   qint64 group_ = 0;
   bool running_ = false;

@@ -1,3 +1,4 @@
+#include "tbc/view.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
@@ -213,8 +214,9 @@ private:
   std::array<Byte, 2> text_{'a', 'b'};
   std::array<std::vector<Byte>, 2> full_bytes_;
   std::array<std::vector<Byte>, 2> delta_bytes_;
-  std::array<FrameSpan, 1> spans_;
-  PaneFrame frame_;
+  // The frame and its spans view the bytes stored beside them.
+  tbc::view<std::array<FrameSpan, 1>, tbc::lt::self> spans_;
+  tbc::view<PaneFrame, tbc::lt::self> frame_;
   std::size_t changed_ = 0;
 };
 

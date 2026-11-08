@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -328,8 +329,9 @@ private:
   int preferred_row_ = 0;
   bool loading_ = false;
   bool pending_ = false;
-  SurfaceCommand listing_;
-  SurfaceCommand selection_;
+  // The commands report back to this controller.
+  tbc::view<SurfaceCommand, tbc::lt::self> listing_;
+  tbc::view<SurfaceCommand, tbc::lt::self> selection_;
 };
 
 }

@@ -235,8 +235,8 @@ void Application::reconcileAttachmentFrame(std::uint64_t pane_id) {
 
 void Application::dismissAttachment(std::uint64_t identity) try {
   synchronizeAttachments();
-  const auto &prompt = attachments_.prompt();
-  const auto *const pane = prompt ? session().findPane(prompt->target.pane_id) : nullptr;
+  const auto target = attachments_.prompt() ? std::optional{attachments_.prompt()->target.pane_id} : std::nullopt;
+  const auto *const pane = target ? session().findPane(*target) : nullptr;
   if (pane == nullptr || !pane->attached || pane->exited) {
     return;
   }

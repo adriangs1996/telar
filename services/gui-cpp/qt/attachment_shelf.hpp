@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "../application/dependencies.hpp"
 #include "attachment_preview.hpp"
 #include "../attachments/types.hpp"
@@ -137,7 +138,8 @@ private:
   std::optional<AttachmentPrompt> capture_prompt_;
   std::optional<AttachmentSource> source_;
   Delivery delivery_;
-  AttachmentCatalog<ApplicationAllocator, Delivery> catalog_;
+  // The catalog delivers through the delivery stored beside it.
+  tbc::view<AttachmentCatalog<ApplicationAllocator, Delivery>, tbc::lt::self> catalog_;
   ClipboardImages worker_;
 };
 

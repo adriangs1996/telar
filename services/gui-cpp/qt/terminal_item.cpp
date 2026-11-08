@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "terminal_item.hpp"
 #include "application.hpp"
 #include "../application/dependencies.hpp"
@@ -160,7 +161,8 @@ void TerminalItem::setApplication(QObject *application) {
     application_->disconnect(this);
   }
 
-  application_ = next;
+  // QML owns the application; this item registers with it and unregisters before it changes.
+  application_ = tbc::raw(next);
   prepared_frame_.pane = {};
   prepared_frame_.links.reset();
   presented_frame_id_ = 0;

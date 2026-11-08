@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "application.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -92,10 +93,29 @@ protected:
   void geometryChange(const QRectF &current, const QRectF &previous) override;
 
 private:
+  // The body wraps the message stored beside it, so a content stays where it is.
   struct Content {
+    Content() = default;
+    ~Content() = default;
+    Content(const Content &) = delete;
+    Content &operator=(const Content &) = delete;
+    Content(Content &&) = delete;
+    Content &operator=(Content &&) = delete;
+
+    void clear() {
+      id = {};
+      message.assign({});
+      body = {};
+      record.clear();
+      width = 0;
+      height = 0;
+      action_advance = 0;
+      action_line_height = 0;
+    }
+
     NotificationId id{};
     runtime::FixedText<max_notification_message_bytes> message;
-    NotificationText body;
+    tbc::view<NotificationText, tbc::lt::self> body;
     QVariantMap record;
     float width = 0;
     float height = 0;
@@ -110,8 +130,15 @@ private:
   void rebuild();
   void refreshFonts();
   Content &content(const NotificationItem &item, float width);
-  QVariantMap contentRecord(const NotificationItem &item, Content &content);
-  [[nodiscard]] float measure(std::string_view text, std::uint16_t pixels, bool emphasized);
+  struct ContentRecord {
+    QVariantMap record;
+    float action_advance = 0;
+    float action_line_height = 0;
+  };
+
+  [[nodiscard]] ContentRecord contentRecord(const NotificationItem &item, const Content &content) const;
+  // Measures through the window's catalog and the resident fonts, apart from the layout's state.
+  [[nodiscard]] static float measure(WindowFontCatalog &catalog, ResidentFonts &fonts, std::string_view text, std::uint16_t pixels, bool emphasized);
 
   QPointer<Application> controller_;
   QPointer<WindowAnimationClock> clock_;
@@ -119,7 +146,7 @@ private:
   QMetaObject::Connection font_connection_;
   ListModel cards_;
   NotificationStack stack_;
-  std::array<Content, NotificationCenter::capacity> contents_;
+  tbc::view<std::array<Content, NotificationCenter::capacity>, tbc::lt::self> contents_;
   std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
   ChromeMetrics chrome_;

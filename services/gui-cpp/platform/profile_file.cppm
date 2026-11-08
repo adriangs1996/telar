@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 #include <cstring>
@@ -255,7 +256,8 @@ public:
 };
 
 template <Allocator Memory>
-[[nodiscard]] std::optional<Vector<Byte, Memory>> readProfileSource(Memory &memory, int directory, std::string_view name) {
+// The source bytes are allocated from memory, region `a`.
+[[nodiscard]] tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> readProfileSource(tbc::view<Memory &, tbc::lt::a> memory, int directory, std::string_view name) {
   Vector<Byte, Memory> bytes{AllocatorRef<Byte, Memory>{memory}};
   try {
     if (!runtime::readPrivateFile(directory, name, bytes, MachineLimits::file_bytes)) {
@@ -283,7 +285,7 @@ public:
   ~ProfileFileTransaction() = default;
 
   template <Allocator Memory>
-  [[nodiscard]] inline std::optional<Vector<Byte, Memory>> read(Memory &memory) const {
+  [[nodiscard]] inline tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> read(tbc::view<Memory &, tbc::lt::a> memory) const {
     return readProfileSource(memory, parent_.get(), name_.data());
   }
 
@@ -302,7 +304,7 @@ public:
   explicit ProfileFile(std::string_view path, std::stop_token stop = {});
 
   template <Allocator Memory>
-  [[nodiscard]] inline std::optional<Vector<Byte, Memory>> read(Memory &memory) const {
+  [[nodiscard]] inline tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> read(tbc::view<Memory &, tbc::lt::a> memory) const {
     return readProfileSource(memory, AT_FDCWD, path());
   }
 

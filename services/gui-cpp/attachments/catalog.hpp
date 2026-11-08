@@ -162,9 +162,10 @@ public:
   }
 
   bool remove(std::uint64_t id) noexcept {
-    for (auto &slot : slots_) {
+    for (std::size_t index = 0; index < slots_.size(); ++index) {
+      const auto &slot = slots_[index];
       if (slot && slot->capture.request.capture.id == id && !slot->retired) {
-        retire(*slot);
+        retire(index);
 
         return true;
       }
@@ -175,9 +176,10 @@ public:
 
   std::size_t removeVisible(AttachmentTarget target) noexcept {
     std::size_t count = 0;
-    for (auto &slot : slots_) {
+    for (std::size_t index = 0; index < slots_.size(); ++index) {
+      const auto &slot = slots_[index];
       if (slot && slot->owns(target)) {
-        retire(*slot);
+        retire(index);
         ++count;
       }
     }
@@ -255,9 +257,10 @@ public:
     }
 
     std::size_t removed = 0;
-    for (auto &slot : slots_) {
+    for (std::size_t index = 0; index < slots_.size(); ++index) {
+      const auto &slot = slots_[index];
       if (slot && slot->marker && slot->owns(target) && !markerPresent(*slot, screen)) {
-        retire(*slot);
+        retire(index);
         ++removed;
       }
     }
@@ -301,9 +304,9 @@ public:
   void removeAll() noexcept {
     deletion_pending_.reset();
     modal_.reset();
-    for (auto &slot : slots_) {
-      if (slot && !slot->retired) {
-        retire(*slot);
+    for (std::size_t index = 0; index < slots_.size(); ++index) {
+      if (slots_[index] && !slots_[index]->retired) {
+        retire(index);
       }
     }
 
@@ -533,7 +536,8 @@ private:
     return oldest;
   }
 
-  void retire(Slot &slot) noexcept {
+  void retire(std::size_t index) noexcept {
+    auto &slot = *slots_[index];
     delivery_.retire(slot.delivery);
     slot.retired = true;
     if (modal_ == slot.capture.request.capture.id) {

@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
@@ -116,7 +117,7 @@ private:
   bool compact_ = true;
   bool animation_notification_pending_ = false;
   QPointer<WindowAnimationClock> clock_;
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
 };
 
 }

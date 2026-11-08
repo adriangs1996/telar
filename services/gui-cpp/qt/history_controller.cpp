@@ -316,7 +316,8 @@ void Application::setHistoryFilters(const QVariantMap &filters) {
     }
 
     history_filters_ = next;
-    searchHistory(history_query_);
+    const auto query = history_query_;
+    searchHistory(query);
   });
 }
 

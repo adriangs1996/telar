@@ -125,7 +125,8 @@ void Application::applyMachineProfiles() {
 }
 
 void Application::reconcileMachines() {
-  const auto &profiles = machine_profiles_.profiles();
+  // A copy: reconciling mutates the application that owns the profiles, which are few and bounded.
+  const auto profiles = machine_profiles_.profiles();
   const auto hostname = bytes(hostname_);
   const auto local_label = profiles.localLabel().value_or(hostname);
   if (machines_.row(Machines::local_slot).label.view() != local_label) {
@@ -195,13 +196,17 @@ void Application::reconcileMachine(const MachineProfile &profile) {
 }
 
 void Application::admitMachine(Machines::Slot slot) {
-  auto &client = createClient(slot);
-  const auto &row = machines_.row(slot);
-  client.identity = WindowIdentity::remote(clientAt(Machines::local_slot).identity, row.destination.view());
-  client.session.setRestoreLayout(restore_layout_);
+  {
+    auto &created = createClient(slot);
+    created.identity = WindowIdentity::remote(clientAt(Machines::local_slot).identity, machines_.row(slot).destination.view());
+    created.session.setRestoreLayout(restore_layout_);
+  }
+
   synchronizeWorkbenchGeometry();
+  auto &client = clientAt(slot);
+  const auto &row = machines_.row(slot);
   client.connection.openRemote({.destination = toQString(row.destination.view()), .program = toQString(row.program.view()), .local_endpoint = machine_control_endpoint_, .prepare_directory = prepare_machine_directory_});
-  summarizeMachine(client);
+  summarizeMachine(client.key);
 }
 
 void Application::retireMachine(Machines::Slot slot, MachineRetirement reason) {
@@ -220,7 +225,7 @@ void Application::retireMachine(Machines::Slot slot, MachineRetirement reason) {
     static_cast<void>((*client)->session.settlePresentation());
     (*client)->phase = MachinePhase::stopped;
     (*client)->needs_setup = false;
-    summarizeMachine(**client);
+    summarizeMachine((*client)->key);
   }
 }
 

@@ -97,7 +97,7 @@ bool KeyBindings::prefixPending() const noexcept {
   return router_.prefixPending();
 }
 
-ModeHints KeyBindings::modeHints() const noexcept {
+tbc::view<ModeHints, tbc::lt::static_storage> KeyBindings::modeHints() const noexcept {
   return ModeHints::resolve(router_);
 }
 

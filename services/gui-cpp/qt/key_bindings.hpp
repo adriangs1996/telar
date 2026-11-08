@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -53,7 +54,7 @@ public:
   [[nodiscard]] std::optional<KeyChord> prefixedKeyForAction(const BindingAction &action) const noexcept;
   [[nodiscard]] std::uint64_t nowNanoseconds() const noexcept;
   [[nodiscard]] bool prefixPending() const noexcept;
-  [[nodiscard]] ModeHints modeHints() const noexcept;
+  [[nodiscard]] tbc::view<ModeHints, tbc::lt::static_storage> modeHints() const noexcept;
   // Keys typed while a Lua binding runs on the Lua thread wait for its result, so a key
   // never reaches a pane the binding was about to leave.
   using Hold = std::uint64_t;

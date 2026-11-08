@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "ancestor_geometry.hpp"
 #include "cell_text_grid.hpp"
 #include "../core/memory.hpp"
@@ -98,7 +99,7 @@ private:
 
   SystemAllocator memory_;
   fonts::CellTextLayout<SystemAllocator, maximum_text_bytes> layout_;
-  AncestorGeometry ancestors_;
+  tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
   std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
   QPointer<WindowFontCatalog> catalog_;

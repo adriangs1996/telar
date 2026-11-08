@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
@@ -46,7 +47,8 @@ class FontCache {
 public:
   static constexpr std::size_t scale_capacity = 8;
 
-  explicit FontCache(Memory &memory) noexcept
+  // The cache allocates its generations from memory, region `a`.
+  explicit FontCache(tbc::view<Memory &, tbc::lt::a> memory) noexcept
       : memory_(memory),
         generation_(nullptr, AllocationDeleter<Generation, Memory>{memory}) {}
 
@@ -68,10 +70,11 @@ public:
 private:
   struct Generation {
     FontConfiguration configuration;
-    FontSource<Memory> source;
-    fonts::Face face;
+    tbc::view<FontSource<Memory>, tbc::lt::a> source;
+    // The face reads the bytes its source holds.
+    tbc::view<fonts::Face, tbc::lt::self> face;
 
-    explicit Generation(Memory &memory, const FontConfiguration &font)
+    explicit Generation(tbc::view<Memory &, tbc::lt::a> memory, const FontConfiguration &font)
         : configuration(font),
           source(memory, font),
           face(source.bytes(), source.match()) {}
@@ -108,8 +111,8 @@ private:
     return stored;
   }
 
-  Memory &memory_;
-  Owned<Generation, Memory> generation_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  tbc::view<Owned<Generation, Memory>, tbc::lt::a> generation_;
   std::array<Entry, scale_capacity> entries_{};
   std::size_t next_slot_ = 0;
 };

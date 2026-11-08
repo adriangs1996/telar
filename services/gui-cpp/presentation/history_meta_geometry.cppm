@@ -648,8 +648,9 @@ public:
     return owned_tail_ && index + 1 == count_ ? tail_.view() : lines_[index];
   }
 
+  // The lines view the wrapped text, region `a`, but for a shortened last line, which the text owns.
   template <LabelMeasure Measure>
-  inline void wrap(std::string_view text, float width, Measure &measure) {
+  inline void wrap(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure &measure) {
     *this = {};
     auto remaining = trimStart(text);
     const auto last = remaining.find_last_not_of(whitespace);
@@ -706,7 +707,7 @@ private:
   }
 
   template <LabelMeasure Measure>
-  inline void fitTail(std::string_view paragraph, bool following_paragraph, float width, Measure &measure) {
+  inline void fitTail(tbc::view<std::string_view, tbc::lt::a> paragraph, bool following_paragraph, float width, Measure &measure) {
     BoundedText<TextFit::maximum_bytes> continuation;
     auto label = paragraph;
     if (following_paragraph) {
@@ -728,7 +729,7 @@ private:
     ++count_;
   }
 
-  std::array<std::string_view, maximum_lines> lines_{};
+  tbc::view<std::array<std::string_view, maximum_lines>, tbc::lt::a> lines_{};
   runtime::FixedText<TextFit::maximum_bytes> tail_;
   std::size_t count_ = 0;
   bool owned_tail_ = false;

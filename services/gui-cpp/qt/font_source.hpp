@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
@@ -51,7 +52,8 @@ std::optional<FontData> loadFallbackFontData(const fonts::FontQuery &query);
 template <Allocator Memory>
 class FontSource {
 public:
-  explicit FontSource(Memory &memory, const FontConfiguration &font)
+  // The source reads the font into memory, region `a`, and keeps nothing of the configuration.
+  explicit FontSource(tbc::view<Memory &, tbc::lt::a> memory, const FontConfiguration &font)
       : bytes_(AllocatorRef<std::uint8_t, Memory>{memory}) {
     const auto data = loadFontData(font);
     bytes_.assign(data.bytes.cbegin(), data.bytes.cend());
@@ -67,7 +69,7 @@ public:
   }
 
 private:
-  Vector<std::uint8_t, Memory> bytes_;
+  tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> bytes_;
   fonts::FontMatch match_{};
 };
 

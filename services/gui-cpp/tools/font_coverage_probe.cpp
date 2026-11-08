@@ -4,6 +4,8 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
+#include <vector>
 #include "../core/memory.hpp"
 #include <array>
 #include <bit>
@@ -67,7 +69,8 @@ fonts::FontMatch matchVariant(std::string_view variant) {
   return match;
 }
 
-Vector<std::uint8_t, SystemAllocator> coverage(const fonts::Face &face, SystemAllocator &memory) {
+// The bitmap is allocated from memory, region `a`.
+tbc::view<Vector<std::uint8_t, SystemAllocator>, tbc::lt::a> coverage(const fonts::Face &face, tbc::view<SystemAllocator &, tbc::lt::a> memory) {
   Vector<std::uint8_t, SystemAllocator> result(bitmap_bytes + outside_unicode.size(), 0, AllocatorRef<std::uint8_t, SystemAllocator>{memory});
   for (std::size_t scalar = 0; scalar < unicode_count; ++scalar) {
     if (face.covers(static_cast<char32_t>(scalar))) {
@@ -85,9 +88,18 @@ Vector<std::uint8_t, SystemAllocator> coverage(const fonts::Face &face, SystemAl
 void exerciseFace(fonts::Face &face, std::uint16_t height) {
   static_cast<void>(face.metrics(height));
   constexpr std::string_view text = "AV fi e\u0301 \u4e2d \uf07b \U0001f600";
-  const auto run = face.shape(text, height);
-  for (std::size_t index = 0; index < run.size(); ++index) {
-    static_cast<void>(face.rasterize({.index = run.glyph(index).index, .pixel_height = height, .style = {}}));
+  // Rasterizing reaches the face, so the shaped glyphs are copied first.
+  std::vector<std::uint32_t> glyphs;
+  {
+    const auto run = face.shape(text, height);
+    glyphs.reserve(run.size());
+    for (std::size_t index = 0; index < run.size(); ++index) {
+      glyphs.push_back(run.glyph(index).index);
+    }
+  }
+
+  for (const auto glyph : glyphs) {
+    static_cast<void>(face.rasterize({.index = glyph, .pixel_height = height, .style = {}}));
   }
 }
 

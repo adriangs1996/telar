@@ -106,12 +106,12 @@ MachineClient &Application::createClient(Machines::Slot slot) {
 
   clients_[slot] = std::move(owned);
   machines_.setLive(slot, true);
-  connectMachine(*client);
+  connectMachine(slot);
   if (replacing_active) {
     emit machineChanged();
   }
 
-  return *client;
+  return clientAt(slot);
 }
 
 MachineClient &Application::clientAt(Machines::Slot slot) const noexcept {
@@ -149,7 +149,8 @@ const RuntimeConnection &Application::connection() const noexcept {
   return clientAt(machines_.active()).connection;
 }
 
-void Application::connectMachine(MachineClient &client) {
+void Application::connectMachine(Machines::Slot slot) {
+  auto &client = clientAt(slot);
   const auto key = client.key;
   connect(&client.connection, &RuntimeConnection::discovered, this, [this, key](const RemoteDiscovery &discovery) {
     if (auto *source = findClient(key)) {
@@ -164,7 +165,7 @@ void Application::connectMachine(MachineClient &client) {
       source->phase = MachinePhase::connected;
       source->needs_setup = false;
       source->session.connected(source->identity);
-      summarizeMachine(*source);
+      summarizeMachine(source->key);
       if (key.machine.slot == machines_.active()) {
         emit stateChanged();
         emit hostMetricsChanged();
@@ -204,7 +205,7 @@ void Application::connectMachine(MachineClient &client) {
     if (auto *source = findClient(key)) {
       source->phase = source->connection.link().phase;
       source->needs_setup = source->connection.link().setup_repairs;
-      summarizeMachine(*source);
+      summarizeMachine(source->key);
       if (key.machine.slot == machines_.active()) {
         emit runtimeLinkChanged();
       }
@@ -278,12 +279,14 @@ void Application::forgetMachineView() {
   }
 }
 
-void Application::summarizeMachine(const MachineClient &client) {
-  const auto slot = client.key.machine.slot;
-  if (findClient(client.key) == nullptr) {
+void Application::summarizeMachine(MachineClientKey key) {
+  const auto slot = key.machine.slot;
+  const auto *const found = findClient(key);
+  if (found == nullptr) {
     return;
   }
 
+  const auto &client = *found;
   const auto &summary = machines_.row(slot);
   const auto &sample = client.session.hostMetrics().sample();
   MachineObservation observation{

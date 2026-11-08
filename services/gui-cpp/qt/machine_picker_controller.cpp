@@ -220,7 +220,7 @@ void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
       client.phase = MachinePhase::connecting;
       client.needs_setup = false;
       client.connection.retryNow();
-      summarizeMachine(client);
+      summarizeMachine(client.key);
     }
 
     selectMachine(token);

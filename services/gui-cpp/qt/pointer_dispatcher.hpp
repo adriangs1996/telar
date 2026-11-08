@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 
+#include "tbc/view.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -110,7 +111,7 @@ private:
 
   Application &application_;
   NativePointerEvents native_events_;
-  ActiveHistoryScrollEvents history_scroll_events_;
+  tbc::view<ActiveHistoryScrollEvents, tbc::lt::self> history_scroll_events_;
   QPointer<QQuickWindow> window_;
   QPointer<TerminalItem> terminal_scroll_owner_;
   std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
