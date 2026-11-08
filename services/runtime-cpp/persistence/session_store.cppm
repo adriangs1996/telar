@@ -944,6 +944,9 @@ public:
     }
   }
 
+  SessionStore(const SessionStore &) = delete;
+  SessionStore &operator=(const SessionStore &) = delete;
+
   inline void configure(RuntimeModel<Memory> &model, Panes &panes, ClientLayouts<Memory> &layouts, Options options) {
     if (options.path.empty()) {
       return;
@@ -1046,7 +1049,8 @@ private:
   Memory &memory_;
   Snapshot<Memory, Agents> snapshot_;
   Vector<Byte, Memory> buffer_;
-  std::optional<ObservationWorker<FileStore<Memory>>> worker_;
+  // The worker stores the encoded buffer above until its result is collected, so the store stays put.
+  tbc::view<std::optional<ObservationWorker<FileStore<Memory>>>, tbc::lt::self> worker_;
   Clock::time_point due_{};
   bool dirty_ = false;
   bool pending_ = false;

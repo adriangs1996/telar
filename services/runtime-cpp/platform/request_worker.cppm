@@ -16,6 +16,7 @@ module;
 #include <sys/types.h>
 #include <unistd.h>
 #include "telar_base/diagnostics/config.hpp"
+#include "tbc/view.hpp"
 
 export module telar.runtime.platform.request_worker;
 
@@ -51,9 +52,14 @@ concept ObservationService = requires(Service &service, const typename Service::
 // Runs a service on its own thread. The worker owns the service, built in place from the arguments,
 // as a Rust thread owns what its closure moves in: the caller's thread never reaches it again. A
 // reference type as `Service` lends the worker a service its caller keeps instead.
+//
+// The request, the service and the result cross threads only under the mutex: a request is taken
+// when the worker is idle, and its result, which may view the service, is consumed before the next
+// request is accepted. That protocol is audited here, as the unsafe code behind a Rust channel is, so
+// the worker is TBC_SHARED; callers still see that it keeps what they submit.
 template <typename Service>
   requires ObservationService<std::remove_reference_t<Service>>
-class ObservationWorker {
+class TBC_SHARED ObservationWorker {
   using Request = typename std::remove_reference_t<Service>::Request;
   using Result = typename std::remove_reference_t<Service>::Result;
 
@@ -86,12 +92,13 @@ public:
   ObservationWorker(const ObservationWorker &) = delete;
   ObservationWorker &operator=(const ObservationWorker &) = delete;
 
-  inline bool submit(const Request &request) {
+  // The worker keeps the request, region `a`, until its result is collected.
+  inline bool submit(tbc::view<Request, tbc::lt::a> request) {
     const std::lock_guard lock{mutex_};
     if (busy_ || stopping_) {
       return false;
     }
-    request_ = request;
+    request_ = std::move(request);
     busy_ = true;
     ready_.notify_one();
     return true;
@@ -152,17 +159,17 @@ private:
 
   inline void run() noexcept {
     for (;;) {
-      std::optional<Request> request;
       {
         std::unique_lock lock{mutex_};
         ready_.wait(lock, [&] { return stopping_ || request_.has_value(); });
         if (stopping_) {
           return;
         }
-        request = std::move(request_);
+        processing_ = std::move(request_);
         request_.reset();
       }
-      auto result = service_.observe(*request);
+      // A result may view the request it answers, which stays here until the next one is accepted.
+      auto result = service_.observe(*processing_);
       {
         const std::lock_guard lock{mutex_};
         result_ = std::move(result);
@@ -183,7 +190,9 @@ private:
   std::mutex mutex_;
   std::condition_variable ready_;
   std::condition_variable completed_;
-  std::optional<Request> request_;
+  tbc::view<std::optional<Request>, tbc::lt::a> request_;
+  // Only the worker's thread touches the request it is answering.
+  tbc::view<std::optional<Request>, tbc::lt::a> processing_;
   std::optional<Result> result_;
   bool busy_ = false;
   std::atomic<bool> result_ready_{false};
@@ -348,7 +357,15 @@ public:
 
     auto &job = requests_.emplace(memory_, client, message.request_id);
     try {
-      job.context = context;
+      // The job owns its texts; the views the caller's context carries are rebuilt from them when it runs.
+      job.context = RequestContext{
+          .location = context.location,
+          .history_session = context.history_session,
+          .received_at_ms = context.received_at_ms,
+          .editor_candidates = context.editor_candidates,
+          .editor_candidate_count = context.editor_candidate_count,
+          .persistent_client = context.persistent_client,
+      };
       if constexpr (std::same_as<Message, QueryHistory>) {
         job.history_query.emplace(message, context.persistent_client);
       }
@@ -623,10 +640,11 @@ private:
       }
 
       if constexpr (requires { service_.process(job.request, job.reply, job.context); }) {
-        job.context.workspace_path = job.workspace_path;
-        job.context.prompt = job.prompt;
-        job.context.cancelled = &active_cancelled_;
-        service_.process(job.request, job.reply, job.context);
+        auto context = job.context;
+        context.workspace_path = job.workspace_path;
+        context.prompt = job.prompt;
+        context.cancelled = &active_cancelled_;
+        service_.process(job.request, job.reply, context);
       } else {
         service_.process(job.request, job.reply);
       }

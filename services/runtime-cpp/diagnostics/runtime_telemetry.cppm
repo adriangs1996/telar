@@ -38,6 +38,7 @@ module;
 
 #if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
 #include <mach/mach.h>
+#include "tbc/view.hpp"
 #endif
 
 export module telar.runtime.diagnostics.runtime_telemetry;
@@ -367,6 +368,9 @@ public:
     }
   }
 
+  LogSession(const LogSession &) = delete;
+  LogSession &operator=(const LogSession &) = delete;
+
   template <typename Format>
   inline void sample(Format &&format) noexcept {
     if (!worker_) {
@@ -396,7 +400,8 @@ private:
   }
 
   Line line_;
-  std::optional<ObservationWorker<LogWriter>> worker_;
+  // The worker writes the line above until its result is collected, so the session stays put.
+  tbc::view<std::optional<ObservationWorker<LogWriter>>, tbc::lt::self> worker_;
   bool pending_ = false;
   bool failed_ = false;
 };
