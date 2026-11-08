@@ -1902,7 +1902,12 @@ namespace tbc_lint {
 
       void store(const write_targets &where, const loans &incoming, state &current) {
         for (const auto &target : where.places) {
-          checkRetention(*target.variable, incoming, write_site_);
+          // A parameter passed by value is the callee's own copy: writing it, not what it designates,
+          // keeps nothing for the caller.
+          const bool local_copy = llvm::isa<clang::ParmVarDecl>(target.variable) && !target.designated && !target.variable->getType()->isReferenceType();
+          if (!local_copy) {
+            checkRetention(*target.variable, incoming, write_site_);
+          }
           if (target.designated) {
             current.designated[target.variable].merge(heldAt(incoming, target.fields));
             continue;
