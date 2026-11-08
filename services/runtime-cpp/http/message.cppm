@@ -61,18 +61,19 @@ class HttpContentCodec {
   };
 
 public:
-  inline explicit HttpContentCodec(Memory &memory) noexcept : memory_(memory) {}
+  // A body it produces is storage of the allocator, region `a`, not of the codec.
+  inline explicit HttpContentCodec(tbc::view<Memory &, tbc::lt::a> memory) noexcept : memory_(memory) {}
 
-  inline auto decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> DecodedBody<Memory> {
+  inline auto decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     return transform(input, encoding, limit, false);
   }
 
-  inline auto encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> DecodedBody<Memory> {
+  inline auto encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     return transform(input, encoding, limit, true);
   }
 
 private:
-  inline auto transform(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit, bool encode) -> DecodedBody<Memory> {
+  inline auto transform(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     if (limit == 0 || limit > maximum_bytes || input.size() > maximum_bytes) {
       throw std::length_error{"Invalid HTTP content limit"};
     }
@@ -115,7 +116,7 @@ private:
     throw std::invalid_argument{"Unsupported HTTP content coding"};
   }
 
-  inline auto one(std::span<const std::uint8_t> input, Coding selected, std::size_t limit, bool encode) -> DecodedBody<Memory> {
+  inline auto one(std::span<const std::uint8_t> input, Coding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     DecodedBody<Memory> result{memory_, limit + 1};
     auto output = result.storage.bytes();
     if (selected == Coding::gzip || selected == Coding::deflate) {
@@ -216,7 +217,7 @@ private:
   static constexpr int gzip_window_offset = 16;
   static constexpr int maximum_window_log = 23;
   static constexpr unsigned brotli_quality = 4;
-  Memory &memory_;
+  tbc::view<Memory &, tbc::lt::a> memory_;
 };
 
 }
@@ -233,7 +234,8 @@ class HttpFields {
 public:
   class Field {
   public:
-    inline Field(Memory &memory, std::string_view name, std::string_view value) : storage_(memory, name.size() + value.size()), name_bytes_(name.size()) {
+    // The field copies its name and value into storage of the allocator, region `a`.
+    inline Field(tbc::view<Memory &, tbc::lt::a> memory, std::string_view name, std::string_view value) : storage_(memory, name.size() + value.size()), name_bytes_(name.size()) {
       auto bytes = storage_.bytes();
       std::ranges::copy(name, bytes.begin());
       std::ranges::copy(value, bytes.begin() + name.size());
@@ -248,7 +250,7 @@ public:
       return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
     }
 
-    SensitiveAllocation<Memory> storage_;
+    tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage_;
     std::size_t name_bytes_;
   };
 

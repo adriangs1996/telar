@@ -17,6 +17,7 @@ module;
 
 
 #include <cassert>
+#include "tbc/view.hpp"
 
 export module telar.runtime.exchange_capture.producer;
 
@@ -36,8 +37,10 @@ import telar.platform.primitives;
 export {
 namespace telar::runtime {
 
+// The allocator a C codec calls back through its context pointer. Its blocks stay valid whatever is
+// allocated after them, as the erasing allocator and the block table it wraps keep theirs.
 template <Allocator Memory>
-class DecoderMemory {
+class TBC_SHARED DecoderMemory {
 public:
   inline explicit DecoderMemory(Memory &memory) noexcept : memory_(memory), blocks_(memory_) {}
 
@@ -180,37 +183,43 @@ public:
     // Capture in the reference consumes these checksums without validating them.
     // Parsing the envelope separately preserves that best-effort observation contract.
     input = input.subspan(*offset);
-    stream_.next_in = const_cast<Bytef *>(input.data());
-    stream_.avail_in = static_cast<uInt>(input.size());
-    stream_.next_out = output.data();
-    stream_.avail_out = static_cast<uInt>(output.size());
-    auto kind = blockKind(input, 0);
-    // Finishing one complete block lets zlib skip allocating its retained history window.
-    const bool single_block = !input.empty() && (input.front() & final_block_flag) != 0;
-    const auto flush = single_block ? Z_FINISH : Z_BLOCK;
-    for (;;) {
-      const auto previous_input = stream_.total_in;
-      const auto previous_output = stream_.total_out;
-      const auto status = inflate(&stream_, flush);
-      if (status != Z_OK && status != Z_STREAM_END && status != Z_BUF_ERROR) {
-        return std::nullopt;
-      }
+    // zlib holds the caller's buffers only for this call, so the stream lets go of them before it returns.
+    const auto produced = [&]() noexcept -> std::optional<std::size_t> {
+      stream_.next_in = const_cast<Bytef *>(input.data());
+      stream_.avail_in = static_cast<uInt>(input.size());
+      stream_.next_out = output.data();
+      stream_.avail_out = static_cast<uInt>(output.size());
+      auto kind = blockKind(input, 0);
+      // Finishing one complete block lets zlib skip allocating its retained history window.
+      const bool single_block = !input.empty() && (input.front() & final_block_flag) != 0;
+      const auto flush = single_block ? Z_FINISH : Z_BLOCK;
+      for (;;) {
+        const auto previous_input = stream_.total_in;
+        const auto previous_output = stream_.total_out;
+        const auto status = inflate(&stream_, flush);
+        if (status != Z_OK && status != Z_STREAM_END && status != Z_BUF_ERROR) {
+          return std::nullopt;
+        }
 
-      const auto produced = output.size() - stream_.avail_out;
-      if (stream_.avail_out == 0 || (kind == BlockKind::stored && produced >= requested)) {
-        return produced;
+        const auto written = output.size() - stream_.avail_out;
+        if (stream_.avail_out == 0 || (kind == BlockKind::stored && written >= requested)) {
+          return written;
+        }
+        if (status == Z_STREAM_END) {
+          return stream_.avail_in >= FlateEnvelope::footerSize(container) ? std::optional{written} : std::nullopt;
+        }
+        if (previous_input == stream_.total_in && previous_output == stream_.total_out) {
+          return std::nullopt;
+        }
+        if ((stream_.data_type & block_boundary) != 0 && (stream_.data_type & final_block) == 0) {
+          const auto bit_offset = stream_.total_in * bits_per_byte - (stream_.data_type & unused_bits_mask);
+          kind = blockKind(input, bit_offset);
+        }
       }
-      if (status == Z_STREAM_END) {
-        return stream_.avail_in >= FlateEnvelope::footerSize(container) ? std::optional{produced} : std::nullopt;
-      }
-      if (previous_input == stream_.total_in && previous_output == stream_.total_out) {
-        return std::nullopt;
-      }
-      if ((stream_.data_type & block_boundary) != 0 && (stream_.data_type & final_block) == 0) {
-        const auto bit_offset = stream_.total_in * bits_per_byte - (stream_.data_type & unused_bits_mask);
-        kind = blockKind(input, bit_offset);
-      }
-    }
+    }();
+    stream_.next_in = nullptr;
+    stream_.next_out = nullptr;
+    return produced;
   }
 
 private:
@@ -612,8 +621,11 @@ CaptureContentDecoder(Memory &memory) -> CaptureContentDecoder<Memory>;
 export {
 namespace telar::runtime {
 
+// Proxy threads start and publish halves while the receiver drains them: the limits are fixed once
+// built, and what changes after is atomic or the synchronized channel, so the halves that borrow its
+// quota stay valid whatever is done through it.
 template <ConcurrentAllocator Memory>
-class CaptureProducer {
+class TBC_SHARED CaptureProducer {
 public:
   using Half = typename CapturedExchange<Memory>::Half;
 

@@ -28,7 +28,9 @@ import telar.base.diagnostics;
 export {
 namespace telar::runtime {
 
-class CaptureQuota {
+// Threads reserve and release bytes atomically, so a reference to the quota stays valid whatever is
+// done through it.
+class TBC_SHARED CaptureQuota {
 public:
   inline explicit CaptureQuota(std::size_t limit) noexcept : limit_(limit) {}
 
@@ -219,7 +221,8 @@ namespace telar::runtime {
 template <Allocator Memory>
 class CaptureHalf {
 public:
-  inline explicit CaptureHalf(Memory &memory, CaptureQuota &quota, const ProxyCaptureLimits &limits, CaptureStart start)
+  // The half keeps the allocator and the quota, region `a`, and copies what it starts from.
+  inline explicit CaptureHalf(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<CaptureQuota &, tbc::lt::a> quota, const ProxyCaptureLimits &limits, CaptureStart start)
       : key(start.key), side(start.side), protocol(start.protocol), started_at_ms(start.started_at_ms),
         head(memory, quota, limits.part_bytes), body(memory, quota, limits.part_bytes), maximum_bytes_(std::max(std::size_t{1}, limits.exchange_bytes / 2)) {
     host_.append(start.host);
@@ -319,8 +322,8 @@ public:
   std::uint16_t status_code = 0;
   bool body_decoded = false;
   CaptureTruncation truncation;
-  CaptureBuffer<Memory> head;
-  CaptureBuffer<Memory> body;
+  tbc::view<CaptureBuffer<Memory>, tbc::lt::a> head;
+  tbc::view<CaptureBuffer<Memory>, tbc::lt::a> body;
 
 private:
   template <std::size_t Capacity>

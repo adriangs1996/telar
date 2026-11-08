@@ -1086,7 +1086,7 @@ public:
       if (changed) { session.replace(plan(uid, identity)); }
       for (std::size_t index = 0; index < count_; ++index) {
         if (descriptors[index + 3].revents & POLLIN) {
-          accept(*listeners_[index], uid);
+          accept(index, uid);
         }
       }
       for (std::size_t index = 0; index < pending_.size(); ++index) {
@@ -1101,12 +1101,14 @@ public:
         if (descriptors[pending_offset + index].revents & (POLLOUT | POLLERR | POLLHUP)) {
           int failure = 0;
           socklen_t length = sizeof(failure);
-          if (::getsockopt(pending->connection.origin.get(), SOL_SOCKET, SO_ERROR, &failure, &length) == 0 && failure == 0) {
-            handoff(pending->connection, pending->flow, uid);
-          } else if (flows_[pending->flow]->incoming) {
+          // The connection leaves the pending table before the handoff, which updates the flows.
+          auto connected = std::move(*pending);
+          pending.reset();
+          if (::getsockopt(connected.connection.origin.get(), SOL_SOCKET, SO_ERROR, &failure, &length) == 0 && failure == 0) {
+            handoff(connected.connection, connected.flow, uid);
+          } else if (flows_[connected.flow]->incoming) {
             std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror(failure ? failure : errno));
           }
-          pending.reset();
         } else if (std::chrono::steady_clock::now() >= pending->deadline) {
           if (flows_[pending->flow]->incoming) { std::fprintf(stderr, "telar redirect: incoming origin connection timed out\n"); }
           pending.reset();
@@ -1116,10 +1118,15 @@ public:
         discover(session, uid, identity);
       }
       if (packet_log_) {
+        // A logged packet and its metadata are copied out of the log before discovery updates the flows.
+        std::array<Byte, 65540> copied;
         for (std::size_t count = 0; count < maximum_accept_batch; ++count) {
-          auto packet = packet_log_->receive();
-          if (packet.empty()) { break; }
-          discovered(session, uid, identity, packet, &packet_log_->metadata());
+          const auto logged = packet_log_->receive();
+          if (logged.empty()) { break; }
+          if (logged.size() > copied.size()) { continue; }
+          std::ranges::copy(logged, copied.begin());
+          const auto metadata = packet_log_->metadata();
+          discovered(session, uid, identity, std::span{copied}.first(logged.size()), &metadata);
         }
       }
     }
@@ -1188,9 +1195,10 @@ private:
     }
   }
 
-  inline void accept(const Listener &listener, uid_t uid) {
+  // The listener is named by its index, as accepting updates the pending and flow tables beside it.
+  inline void accept(std::size_t listener, uid_t uid) {
     for (std::size_t round = 0; round < maximum_accept_batch; ++round) {
-      auto child = listener.accept();
+      auto child = listeners_[listener]->accept();
       if (!child) {
         return;
       }
@@ -1198,7 +1206,7 @@ private:
       if (slot == pending_.end()) {
         continue;
       }
-      const auto target = listener.mapping().target;
+      const auto target = listeners_[listener]->mapping().target;
       const auto flow = std::ranges::find_if(flows_, [&](const auto &value) { return value && !value->bypass && !value->accepted && FlowKey::same(value->key.destination, target) && NatLookup::peerMatches(child.get(), value->key); });
       if (flow == flows_.end() || !nat_->matches(child.get(), (*flow)->key)) {
         std::fprintf(stderr, "telar redirect: rejected connection without selected NAT state\n");

@@ -101,9 +101,20 @@ public:
       case State::writing_head:
       case State::writing_body:
       case State::writing_line: {
-        // A borrowed body fragment stays stable through every write retry.
+        // A borrowed body fragment stays in the source, stable through every write retry, until it is
+        // consumed; everything else waits in the relay's own storage.
         const bool body_pending = state_ == State::writing_body;
-        continued = writePending(destination, observer);
+        std::span<const std::uint8_t> pending = storage_.bytes().first(std::min(write_length_, storage_.bytes().size()));
+        if constexpr (BufferedByteStream<Source>) {
+          if (body_pending) {
+            pending = source.peekView(write_length_).bytes;
+          }
+        }
+        if (pending.size() != write_length_) {
+          state_ = State::failed;
+          return active_;
+        }
+        continued = writePending(destination, observer, pending);
         if constexpr (BufferedByteStream<Source>) {
           if (body_pending && state_ != State::writing_body) {
             source.consume(write_length_);
@@ -206,7 +217,6 @@ private:
       remaining_ -= received.bytes.size();
     }
     prepareWrite(State::writing_body, received.bytes.size());
-    write_data_ = received.bytes.data();
     return true;
   }
 
@@ -239,8 +249,8 @@ private:
   }
 
   template <ByteStream Destination, Http1Observer Observer>
-  inline bool writePending(Destination &destination, Observer &observer) noexcept {
-    const auto sent = destination.write({write_data_ + write_offset_, write_length_ - write_offset_});
+  inline bool writePending(Destination &destination, Observer &observer, std::span<const std::uint8_t> pending) noexcept {
+    const auto sent = destination.write(pending.subspan(write_offset_));
     if (sent.state == StreamResult::State::blocked) {
       write_waiting_ = sent.waiting;
       return false;
@@ -267,9 +277,9 @@ private:
       break;
     case State::writing_body:
       if constexpr (requires { { observer.chunkSeparator(std::span<const std::uint8_t>{}) } noexcept -> std::same_as<void>; }) {
-        if (body_stage_ == BodyStage::chunk_separator) { observer.chunkSeparator({write_data_, write_length_}); }
+        if (body_stage_ == BodyStage::chunk_separator) { observer.chunkSeparator(pending); }
       }
-      observer.payload(body_stage_ == BodyStage::chunk_separator ? std::span<const std::uint8_t>{} : std::span{write_data_, write_length_});
+      observer.payload(body_stage_ == BodyStage::chunk_separator ? std::span<const std::uint8_t>{} : pending);
       finishBodyBuffer();
       break;
     case State::writing_line:
@@ -371,7 +381,6 @@ private:
     state_ = state;
     write_offset_ = 0;
     write_length_ = length;
-    write_data_ = storage_.bytes().data();
   }
 
   inline void beginLine(BodyStage stage) noexcept {
@@ -393,7 +402,6 @@ private:
   std::size_t remaining_ = 0;
   std::size_t write_length_ = 0;
   std::size_t write_offset_ = 0;
-  const std::uint8_t *write_data_ = nullptr;
   StreamReadiness read_waiting_ = StreamReadiness::readable;
   StreamReadiness write_waiting_ = StreamReadiness::writable;
   State state_ = State::reading_head;
