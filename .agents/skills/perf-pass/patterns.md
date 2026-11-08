@@ -1,35 +1,34 @@
 # Patterns
 
-Each pattern names where it paid off in telar; reuse the shape, re-prove the
-equivalence.
+Reuse the shape, re-prove the equivalence.
 
 ## Layout
 
 - **Hot/cold split.** Put what every iteration reads in a dense array and
-  move the rest to a parallel one. Retained GUI cells keep background plus
-  first ink quad (160 B stride) apart from 22 overflow quads; metadata carries
-  a `background` flag so warm draws skip geometry entirely.
+  move the rest to a parallel one, so a warm pass touches only the hot
+  stride and a flag tells it when to skip the cold data.
 - **Dense keys.** Search a compact key array plus an occupancy bit set, not
-  the aggregates. `agent.Repository` scanned 64 × 8,360 B slots per lookup.
-- **Row views.** Take a row slice once and iterate it, instead of computing an
-  index and a bounds check per element.
+  the aggregates; a lookup that scans whole slots pays their full size per
+  probe.
+- **Row views.** Take a row `std::span` once and iterate it, instead of
+  computing an index and a bounds check per element.
 
 ## Comparison
 
-- **Canonical representation.** Make every byte defined (extern structs,
-  constructors that zero unused bytes, no padding) so equality is a byte
-  compare. Assert `std.meta.hasUniqueRepresentation` at comptime. Byte
-  equality must imply value equality; the reverse only costs redundant work.
+- **Canonical representation.** Make every byte defined (trivially copyable
+  structs, constructors that zero unused bytes, no padding) so equality is a
+  byte compare. `static_assert(std::has_unique_object_representations_v<T>)`.
+  Byte equality must imply value equality; the reverse only costs redundant
+  work.
 - **Compare in place.** Mutating a copy of an element splits it into scalars;
-  compare against the source pointer and copy only the elements that change.
+  compare against the source and copy only the elements that change.
 
 ## Retained work
 
 - **Content-keyed caches.** Key on a fingerprint of the content plus every
   layout input (width, font identity and revision, metrics, flags). Exclude
-  entries whose result depends on outside state (message heights skip
-  anything mentioning `mermaid`). Test cached against fresh through the
-  changes the key must catch.
+  entries whose result depends on outside state. Test cached against fresh
+  through the changes the key must catch.
 - **Fast path, same arithmetic.** A shortcut for the common case (one-byte
   ASCII glyphs) reuses the exact formulas of the general path, and a test
   compares both over the whole small domain.
@@ -41,15 +40,14 @@ equivalence.
 
 ## Formatting and copies
 
-- Format integers into the writer's unused slice instead of `std.fmt`; fall
-  back to `print` near a full buffer.
+- Format integers with `std::to_chars` into the writer's unused span instead
+  of `std::format`; fall back to the general path near a full buffer.
 - Replace per-element variable-length copies with whole-element stores only
-  if the paired run agrees; it changed loop codegen and regressed sparse
-  draws once.
+  if the paired run agrees: the change alters loop codegen and can regress
+  sparse work.
 
 ## Correctness first
 
-A pass also fixes correctness bugs it finds (the unbounded tombstone loop in
-`GenericSlotIndex`), each with a regression test that fails on the old code.
-Gains that change semantics (sampling `tcgetpgrp` elsewhere) are reported
-with their measured cost and left for the user.
+A pass also fixes correctness bugs it finds, each with a regression test that
+fails on the old code. Gains that change semantics (sampling `tcgetpgrp`
+elsewhere) are reported with their measured cost and left for the user.

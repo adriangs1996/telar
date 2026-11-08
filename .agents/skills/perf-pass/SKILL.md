@@ -10,20 +10,21 @@ an oracle proves the output did not change.
 
 ## Steps
 
-1. **Freeze a baseline.** Before editing anything, build the baseline binaries
-   into a scratch prefix (`A`) with ReleaseFast. Done when `A/bin` holds the
-   probe and benchmark binaries and you can name what earlier passes already
-   tried. Commands: [measurement.md](measurement.md).
+1. **Freeze a baseline.** Before editing anything, build the baseline runtime
+   and GUI in Release into a scratch directory (`A`). Done when `A` holds the
+   executables and probes the workload needs and you can name what earlier
+   passes already tried. Commands: [measurement.md](measurement.md).
 
-2. **Map the hot paths.** Profile the workload (`sample`), and for a wide
-   pass fan out one read-only audit per process: runtime (PTY → VT → blit →
-   damage → encode), client/TUI (decode → model → compose → diff → emit), GUI
-   (renderer, text, widgets) and model/state (per-keystroke and per-frame
-   lookups). Every finding carries file:line, work per frame or per event
-   (bytes touched, iterations, complexity) and how to measure it. Re-read the
-   code behind every agent claim before acting on it: audits find real bugs
-   and also overestimate costs by an order of magnitude. Done when each
-   candidate is verified and ranked by measured or computed cost.
+2. **Map the hot paths.** Profile the workload (`sample` on macOS, `perf` on
+   Linux), and for a wide pass fan out one read-only audit per area: runtime
+   (PTY → VT → frame → encode → socket), client transport and session
+   (decode → state → scene), GUI rendering (Qt scene graph, text, glyphs) and
+   per-keystroke or per-frame lookups. Every finding carries file:line, work
+   per frame or per event (bytes touched, iterations, complexity) and how to
+   measure it. Re-read the code behind every agent claim before acting on it:
+   audits find real bugs and also overestimate costs by an order of magnitude.
+   Done when each candidate is verified and ranked by measured or computed
+   cost.
 
 3. **Run each candidate as an experiment**, one at a time:
    1. Pick or build the **oracle** first: digest comparison, reference model,
@@ -40,16 +41,16 @@ an oracle proves the output did not change.
 
 4. **Cross the architectures.** For every construct whose lowering depends on
    the target (vector reductions, wide loads, bit tricks), compile the kernel
-   for `aarch64`, `x86_64` baseline and `x86_64_v3` and compare. Select per
-   architecture at comptime when the best forms diverge. Run the touched
-   tests as x86-64 under Rosetta. Done when each such construct has a
-   verified lowering on all three targets.
+   for `aarch64`, `x86-64` baseline and `x86-64-v3` and compare. Select per
+   architecture at compile time (`if constexpr`, target macros) when the best
+   forms diverge. Done when each such construct has a verified lowering on
+   all three targets.
 
-5. **Validate the tree.** `zig build check`, `cross`, `codestyle`,
-   `check-client-boundaries`, `check-model-boundaries`, `check-programs`, and
-   every new oracle test. Done when all are green and the final build is
-   re-measured against `A` across every mode and benchmark, including those
-   you did not target.
+5. **Validate the tree.** `just runtime-test`, `just gui-test`,
+   `just runtime-lint`, `just gui-lint`, `just runtime-lifetime`,
+   `just gui-lifetime`, `python3 tools/check-cpp-modules.py`, and every new
+   oracle test. Done when all are green and the final build is re-measured
+   against `A` across every workload, including those you did not target.
 
 6. **Write the report**: changes,
    paired tables with win counts, disassembly findings, rejected variants,
