@@ -618,8 +618,22 @@ namespace telar::runtime {
 
 using LaunchDirectoryScope = std::variant<std::monostate, WorkspaceLocation, TabLocation>;
 
+// Storage for a launch's working directory taken from the model, so that the launch borrows none of
+// the model a launch then changes.
+using LaunchDirectory = FixedText<4096>;
+
+// Points a launch at a copy of a directory.
+inline void ownDirectory(tbc::view<Launch &, tbc::lt::a> launch, tbc::view<LaunchDirectory &, tbc::lt::a> storage, std::string_view directory) {
+  if (directory.size() > 4096) {
+    throw RequestError{FailureCode::invalid_request, "working directory is too long"};
+  }
+  storage.assign(directory);
+  launch.cwd = storage.view();
+}
+
+// The launch with the directory of the pane it names as its source, copied into `directory`.
 template <Allocator Memory>
-Launch resolveLaunchDirectory(const RuntimeModel<Memory> &model, const ClientSession<Memory> &client, Launch launch, LaunchDirectoryScope scope = {}) {
+tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel<Memory> &model, const ClientSession<Memory> &client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory &, tbc::lt::a> directory, LaunchDirectoryScope scope = {}) {
   if (launch.cwd_source == 0) {
     return launch;
   }
@@ -641,7 +655,7 @@ Launch resolveLaunchDirectory(const RuntimeModel<Memory> &model, const ClientSes
     throw RequestError{FailureCode::invalid_request, "cwd source pane is unavailable"};
   }
 
-  launch.cwd = pane->cwd;
+  ownDirectory(launch, directory, pane->cwd);
   launch.cwd_source = 0;
   return launch;
 }
@@ -755,7 +769,7 @@ public:
   }
 
   // The colors of a workspace's geometry owner, which its new panes take.
-  inline static const ConfigureTerminalColors *ownerColors(const WorkspaceStore<Memory> &workspaces, const ClientStore<Memory> &clients, std::uint64_t workspace) noexcept {
+  inline static tbc::view<const ConfigureTerminalColors *, tbc::lt::a> ownerColors(const WorkspaceStore<Memory> &workspaces, tbc::view<const ClientStore<Memory> &, tbc::lt::a> clients, std::uint64_t workspace) noexcept {
     const auto *found = workspaces.find(workspace);
     const auto *owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
     return owner == nullptr ? nullptr : &owner->colors;
@@ -778,7 +792,8 @@ public:
         throw RequestError{FailureCode::invalid_request, "default pane launch is missing"};
       }
 
-      auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), *request.launch);
+      LaunchDirectory directory;
+      auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), *request.launch, directory);
       const Workspace<Memory> *workspace = nullptr;
       for (const auto *candidate : model.workspaces.items()) {
         if (candidate != nullptr && candidate->path == launch.cwd) {
@@ -809,7 +824,8 @@ public:
   }
 
   inline void createWorkspace(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const CreateWorkspace &request) {
-    auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch);
+    LaunchDirectory directory;
+    auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch, directory);
     if (request.create_cwd && request.launch.cwd_source == 0) {
       createDirectories(launch.cwd);
     }
@@ -822,7 +838,8 @@ public:
     if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, request.workspace))) {
       throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
     }
-    const auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch, request.workspace);
+    LaunchDirectory directory;
+    const auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch, directory, request.workspace);
     auto &workspace = require(model.workspaces, request.workspace);
     if (workspace.tabs.size() == maximum_tabs) {
       throw RequestError{FailureCode::resource_limit, "Workspace tab limit reached"};
@@ -868,8 +885,9 @@ public:
     workspace.tabs.emplace_back(memory_, tab_id, request.label);
     try {
       auto launch = request.launch;
+      LaunchDirectory directory;
       if (launch.cwd.empty()) {
-        launch.cwd = workspace.path;
+        ownDirectory(launch, directory, workspace.path);
       }
 
       const auto pane = panes.launch(model, owner_colors, launch, TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, request.size).id;
@@ -1288,13 +1306,14 @@ private:
       throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
     }
 
-    launch = resolveLaunchDirectory(model, client, launch, location);
+    LaunchDirectory directory;
+    launch = resolveLaunchDirectory(model, client, launch, directory, location);
     if (requireTab(model.workspaces, location).panes.size() == maximum_panes_per_tab) {
       throw RequestError{FailureCode::resource_limit, "Tab pane limit reached"};
     }
 
     if (launch.cwd.empty()) {
-      launch.cwd = require(model.workspaces, location.workspace).path;
+      ownDirectory(launch, directory, require(model.workspaces, location.workspace).path);
     }
 
     const auto pane = panes.launch(model, &client.colors, launch, location, size).id;
@@ -1415,7 +1434,8 @@ public:
     std::uint64_t pane = 0;
     try {
       auto launch = request.launch;
-      launch.cwd = require(model.worktrees, request.worktree).path;
+      LaunchDirectory directory;
+      ownDirectory(launch, directory, require(model.worktrees, request.worktree).path);
       launch.cwd_source = 0;
       pane = workspaces.launchBackground(model, panes, Workspaces::ownerColors(model.workspaces, clients, workspace), LaunchTab{request.request_id, workspace, request.label, request.size, launch});
     } catch (...) {

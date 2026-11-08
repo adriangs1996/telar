@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tbc/view.hpp"
+
 #include "reply.hpp"
 #include <charconv>
 #include <optional>
@@ -30,7 +32,7 @@ inline std::optional<std::uint32_t> glyphCodepoint(std::string_view value) noexc
   return result;
 }
 
-inline std::optional<std::string_view> glyphOption(std::string_view options, std::string_view key) noexcept {
+inline tbc::view<std::optional<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
   std::optional<std::string_view> result;
   while (!options.empty()) {
     const auto end = options.find(';');

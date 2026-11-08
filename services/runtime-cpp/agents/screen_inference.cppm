@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <unistd.h>
 #include <new>
 #include <cerrno>
@@ -125,7 +126,8 @@ inline bool validResumeSession(AgentProvider provider, std::string_view value) n
   return true;
 }
 
-inline std::span<const std::string_view> resumeArguments(const AgentResume &resume, std::array<std::string_view, 4> &arguments) noexcept {
+// The arguments view the session and the caller's array.
+inline tbc::view<std::span<const std::string_view>, tbc::lt::a> resumeArguments(tbc::view<const AgentResume &, tbc::lt::a> resume, tbc::view<std::array<std::string_view, 4> &, tbc::lt::a> arguments) noexcept {
   if (!validResumeSession(resume.provider, resume.session.view())) {
     return {};
   }

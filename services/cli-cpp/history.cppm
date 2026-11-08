@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 #include <new>
 
@@ -1228,7 +1229,7 @@ inline void print(const HistoryResults &results) {
   writeText(output);
 }
 
-inline HistoryScopeValue scopeValue(const HistoryOptions &options, const std::string &cwd) {
+inline tbc::view<HistoryScopeValue, tbc::lt::a> scopeValue(tbc::view<const HistoryOptions &, tbc::lt::a> options, tbc::view<const std::string &, tbc::lt::a> cwd) {
   switch (options.scope) {
   case HistoryScope::cwd:
     return std::string_view{cwd};
@@ -1244,7 +1245,7 @@ inline HistoryScopeValue scopeValue(const HistoryOptions &options, const std::st
 }
 
 template <Allocator Memory>
-HistoryResults query(ControlSession<Memory> &session, const HistoryOptions &options, const HistoryScopeValue &scope) {
+tbc::view<HistoryResults, tbc::lt::a> query(tbc::view<ControlSession<Memory> &, tbc::lt::a> session, const HistoryOptions &options, const HistoryScopeValue &scope) {
   return session.template exchange<HistoryResults>(QueryHistory{
       .query = options.query,
       .scope = options.scope,

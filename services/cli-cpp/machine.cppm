@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cstdint>
@@ -1152,7 +1153,7 @@ struct LoginPlan {
   std::string instructions;
 };
 
-inline std::optional<LoginPlan> planFor(std::string_view agent, const std::optional<std::string> &provider) {
+inline tbc::view<std::optional<LoginPlan>, tbc::lt::a> planFor(std::string_view agent, tbc::view<const std::optional<std::string> &, tbc::lt::a> provider) {
   if (agent == "claude") {
     return LoginPlan{.title = "Log in to Claude Code", .arguments = {"auth", "login"}, .hosts = {"claude.com", "claude.ai", "platform.claude.com"}, .paste = "the code the browser shows", .instructions = "open the page, sign in, and paste the code it shows into this terminal"};
   }
@@ -1266,7 +1267,7 @@ class Logins {
   static constexpr auto status_interval = std::chrono::seconds{3};
   static constexpr std::string_view records = "$HOME/.local/state/telar/setup-logins";
 
-  inline static JsonValue required(JsonValue value, std::string_view name) {
+  inline static tbc::view<JsonValue, tbc::lt::a> required(tbc::view<JsonValue, tbc::lt::a> value, std::string_view name) {
     const auto field = value.field(name);
     if (!field) {
       throw CommandError{"LoginPaneUnreadable"};

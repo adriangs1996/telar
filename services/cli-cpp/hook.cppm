@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <new>
 #include <cstdio>
@@ -180,7 +181,7 @@ export {
 namespace telar::runtime::cli::hooks {
 
 template <Allocator Memory>
-std::optional<ReportAgent> claudeLifecycle(Payload<Memory> &input, FixedText<96> &event) {
+tbc::view<std::optional<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<FixedText<96> &, tbc::lt::a> event) {
   const auto name = input.event();
   if (input.subagent()) {
     return name == "PreToolUse" || name == "PostToolUse" ? std::optional{ReportAgent{.state = AgentReportState::continuing}} : std::nullopt;
@@ -233,7 +234,7 @@ std::optional<ReportAgent> claudeLifecycle(Payload<Memory> &input, FixedText<96>
 }
 
 template <Allocator Memory>
-std::optional<ReportAgent> codexLifecycle(Payload<Memory> &input, FixedText<96> &event, std::string_view database) {
+tbc::view<std::optional<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<FixedText<96> &, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
   const auto name = input.event();
   if (input.subagent()) {
     if (name == "PreToolUse" || name == "PostToolUse") {
@@ -306,7 +307,7 @@ std::optional<ReportAgent> piLifecycle(Payload<Memory> &input) {
 }
 
 template <Allocator Memory>
-std::optional<ReportAgent> openCodeLifecycle(Payload<Memory> &input, FixedText<96> &event) {
+tbc::view<std::optional<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<FixedText<96> &, tbc::lt::a> event) {
   const auto name = input.event();
   const auto blocked = input.blockedReason();
   ReportAgent report{.session = sessionReference(input.session())};
@@ -340,7 +341,7 @@ std::optional<ReportAgent> openCodeLifecycle(Payload<Memory> &input, FixedText<9
 }
 
 template <Allocator Memory>
-std::optional<ReportAgent> cursorLifecycle(Payload<Memory> &input, FixedText<96> &event, std::string_view metadata) {
+tbc::view<std::optional<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<FixedText<96> &, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
   const auto name = input.event();
   ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= 1024 ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
   if (name == "sessionStart" || name == "stop") {
@@ -446,7 +447,7 @@ void updatePlan(Payload<Memory> &input, Reports &reports, ReportAgentProgress &r
 }
 
 template <Allocator Memory>
-std::optional<ReportAgentProgress> progressReport(Payload<Memory> &input, Reports &reports) {
+tbc::view<std::optional<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<Payload<Memory> &, tbc::lt::a> input, tbc::view<Reports &, tbc::lt::a> reports) {
   if ((input.provider != AgentProvider::claude && input.provider != AgentProvider::codex) || input.subagent()) {
     return std::nullopt;
   }
@@ -597,7 +598,7 @@ private:
     return ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) ? std::optional{std::string_view{path_.data(), static_cast<std::size_t>(length)}} : std::nullopt;
   }
 
-  inline static std::optional<std::string_view> copy(std::string_view value, std::span<char> buffer) noexcept {
+  inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> copy(std::string_view value, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     if (value.empty() || value.size() >= buffer.size() || value.contains('\0')) {
       return std::nullopt;
     }
@@ -607,7 +608,7 @@ private:
     return std::string_view{buffer.data(), value.size()};
   }
 
-  inline static std::optional<std::string_view> join(std::string_view root, std::string_view suffix, std::span<char> buffer) noexcept {
+  inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     return root.empty() ? std::nullopt : GitFiles::join(root, suffix, buffer);
   }
 

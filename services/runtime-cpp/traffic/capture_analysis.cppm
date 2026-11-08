@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -161,7 +162,7 @@ public:
     return names[static_cast<std::size_t>(transport)];
   }
 
-  inline static std::span<const Byte> encode(std::span<Byte> output, const DatagramEvent &event) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const DatagramEvent &event) {
     validate(event);
     plugins::FrameWriter writer{output};
     writer.tag(event.transport);
@@ -399,7 +400,8 @@ private:
     entry.created = Clock::now();
   }
 
-  inline static std::string_view append(Entry &entry, const Fragment &part) {
+  // The reason a fragment is refused, a literal, or empty.
+  inline static tbc::view<std::string_view, tbc::lt::static_storage> append(Entry &entry, const Fragment &part) {
     const auto end = part.offset + part.payload.size();
     if (entry.length && (end > *entry.length || (!part.more && end != *entry.length))) { return "ip_fragment_conflicting_length"; }
     for (const auto &range : std::span{entry.ranges}.first(entry.count)) {

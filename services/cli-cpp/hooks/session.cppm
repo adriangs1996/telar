@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -79,7 +80,7 @@ public:
   }
 
 private:
-  inline static std::string_view value(std::string_view item, std::string_view key) noexcept {
+  inline static tbc::view<std::string_view, tbc::lt::a> value(tbc::view<std::string_view, tbc::lt::a> item, std::string_view key) noexcept {
     const auto offset = item.find(key);
     if (offset == std::string_view::npos) {
       return {};

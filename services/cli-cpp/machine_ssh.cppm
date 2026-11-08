@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cstdint>
@@ -1255,7 +1256,7 @@ inline bool whitespace(char byte) {
   return byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' || byte == '\v' || byte == '\f';
 }
 
-inline std::string_view trim(std::string_view text, std::string_view characters = " \t\r\n") {
+inline tbc::view<std::string_view, tbc::lt::a> trim(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters = " \t\r\n") {
   const auto begin = text.find_first_not_of(characters);
   return begin == std::string_view::npos ? std::string_view{} : text.substr(begin, text.find_last_not_of(characters) + 1 - begin);
 }

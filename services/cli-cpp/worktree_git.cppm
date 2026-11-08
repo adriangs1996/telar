@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 #include <new>
 
@@ -66,7 +67,7 @@ inline std::string asciiLower(std::string_view text) {
   return result;
 }
 
-inline std::string_view trim(std::string_view text, std::string_view characters) {
+inline tbc::view<std::string_view, tbc::lt::a> trim(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters) {
   const auto first = text.find_first_not_of(characters);
   if (first == text.npos) {
     return {};

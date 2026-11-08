@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 
 #include <cstdint>
@@ -152,7 +153,7 @@ void clients(Session &session, const ClientOptions &options, Text &output) {
   throw Failure{"ClientNotFound", 2};
 }
 
-ClientCommandResult exchangeCommand(Session &session, const ClientCommand &command) {
+tbc::view<ClientCommandResult, tbc::lt::a> exchangeCommand(tbc::view<Session &, tbc::lt::a> session, const ClientCommand &command) {
   const auto reply = session.exchange<ClientCommandResult>(RequestClientCommand{command});
   if (reply.route.id != command.route.id || reply.route.generation != command.route.generation || reply.action != command.action || reply.target_id != command.target_id || reply.status == ClientCommandStatus::request) {
     throw Failure{"unexpected reply from the runtime"};

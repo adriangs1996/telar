@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -284,7 +285,7 @@ enum class EffectKind : Byte {
 class Protocol {
 public:
   template <Allocator Memory>
-  inline static std::span<const Byte> encodeExchange(std::span<Byte> output, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange, std::size_t part_limit = SIZE_MAX) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange, std::size_t part_limit = SIZE_MAX) {
     FrameWriter writer{output};
     writeExchange(writer, identity, exchange, part_limit);
     return writer.finish();
@@ -316,7 +317,7 @@ public:
     return exchange;
   }
 
-  inline static std::span<const Byte> encodeEffects(std::span<Byte> output, std::uint64_t event_id, const EffectBatch &batch) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encodeEffects(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, const EffectBatch &batch) {
     if (batch.count > Limits::effects) {
       throw EncodingError{"Tap returned too many effects"};
     }
@@ -356,7 +357,7 @@ public:
     return result;
   }
 
-  inline static std::span<const Byte> encodeError(std::span<Byte> output, std::uint64_t event_id, std::string_view message) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encodeError(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::string_view message) {
     FrameWriter writer{output};
     writer.tag(FrameKind::error);
     writer.integer(event_id);

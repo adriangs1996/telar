@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <new>
 #include <ghostty/vt.h>
@@ -123,7 +124,7 @@ public:
     return false;
   }
 
-  inline static Pane<Memory> *complete(PaneStore<Memory> &panes, ClientSession<Memory> &sender, const CompleteClipboardDesktop &completion) {
+  inline static tbc::view<Pane<Memory> *, tbc::lt::a> complete(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, ClientSession<Memory> &sender, const CompleteClipboardDesktop &completion) {
     auto *pane = panes.find(completion.ticket.pane_id);
     if (pane == nullptr || pane->generation != completion.ticket.pane_generation || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;

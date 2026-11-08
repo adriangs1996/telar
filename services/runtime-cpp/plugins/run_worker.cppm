@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <new>
@@ -728,7 +729,7 @@ public:
     }
   }
 
-  inline std::span<const Byte> finish(std::uint64_t event_id, std::span<Byte> output) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> finish(std::uint64_t event_id, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     auto &reply = *reply_;
     reply.event_id = event_id;
     reply.changed = changed_;
@@ -956,12 +957,12 @@ public:
   Host(const Host &) = delete;
   Host &operator=(const Host &) = delete;
 
-  inline std::span<const Byte> trafficSetup(std::span<Byte> output) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> trafficSetup(tbc::view<std::span<Byte>, tbc::lt::a> output) {
     if (!traffic_) { throw EncodingError{"Traffic worker is not configured"}; }
     return traffic_->finish(0, output);
   }
 
-  inline std::span<const Byte> invokeTraffic(const TrafficEvent &event, std::span<Byte> output) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> invokeTraffic(const TrafficEvent &event, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     if (!traffic_) { throw EncodingError{"Traffic worker is not configured"}; }
     lua_settop(vm_.state(), 0);
     vm_.resetBudget();
@@ -975,7 +976,7 @@ public:
     return traffic_->finish(event.event_id, output);
   }
 
-  inline std::span<const Byte> invoke(const ExchangeView &exchange, std::span<Byte> output) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> invoke(const ExchangeView &exchange, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     TELAR_TRACE("plugins.invokeExchange");
     auto *state = vm_.state();
     lua_settop(state, 0);

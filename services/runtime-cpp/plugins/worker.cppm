@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <new>
@@ -485,7 +486,7 @@ struct TrafficEvent {
 
 class TrafficProtocol {
 public:
-  inline static std::span<const Byte> setup(std::span<Byte> output, const ServiceSpec &specification) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> setup(tbc::view<std::span<Byte>, tbc::lt::a> output, const ServiceSpec &specification) {
     FrameWriter writer{output};
     writer.tag(FrameKind::traffic_setup);
     writer.integer(specification.plugin_id);
@@ -517,7 +518,7 @@ public:
     return specification;
   }
 
-  inline static std::span<const Byte> event(std::span<Byte> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped = 0) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> event(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped = 0) {
     traffic::Protocol::decode(frame);
     FrameWriter writer{output};
     writer.tag(FrameKind::traffic_event);
@@ -544,7 +545,7 @@ public:
     return event;
   }
 
-  inline static std::span<const Byte> controlEvent(std::span<Byte> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error = {}) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> controlEvent(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error = {}) {
     FrameWriter writer{output};
     writer.tag(FrameKind::traffic_control_event);
     writer.integer(event_id);
@@ -554,7 +555,7 @@ public:
     return writer.finish();
   }
 
-  inline static std::span<const Byte> reply(std::span<Byte> output, const TrafficReply &reply) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> reply(tbc::view<std::span<Byte>, tbc::lt::a> output, const TrafficReply &reply) {
     if (reply.registration_count > reply.registrations.size() || reply.decision_count > reply.decisions.size() || (!reply.changed && reply.registration_count != 0)) { throw EncodingError{"Invalid traffic worker reply"}; }
     FrameWriter writer{output};
     writer.tag(FrameKind::traffic_reply);

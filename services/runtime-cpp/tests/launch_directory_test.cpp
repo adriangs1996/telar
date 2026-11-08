@@ -136,33 +136,34 @@ static void testLaunchScopes(SystemAllocator &memory) {
   auto &pane = panes.require(model.panes, opened.pane_id);
   pane.cwd.assign("/observed/directory");
   const Launch launch{.cwd = "/explicit", .cwd_source = pane.id, .arguments = arguments};
+  LaunchDirectory directory;
 
   for (const LaunchDirectoryScope scope : {LaunchDirectoryScope{}, LaunchDirectoryScope{pane.location.workspace}, LaunchDirectoryScope{pane.location}}) {
-    const auto resolved = resolveLaunchDirectory(model, owner.session(), launch, scope);
+    const auto resolved = resolveLaunchDirectory(model, owner.session(), launch, directory, scope);
     check(resolved.cwd == pane.cwd && resolved.cwd_source == 0 && resolved.arguments.data() == arguments.data());
   }
-  check(resolveLaunchDirectory(model, outsider.session(), Launch{.cwd = "/explicit"}).cwd == "/explicit");
+  check(resolveLaunchDirectory(model, outsider.session(), Launch{.cwd = "/explicit"}, directory).cwd == "/explicit");
 
   constexpr std::string_view unavailable = "cwd source pane is unavailable";
-  expectFailure([&] { resolveLaunchDirectory(model, outsider.session(), launch); }, FailureCode::invalid_request, unavailable);
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, WorkspaceLocation{.id = pane.location.workspace.id + 1}); }, FailureCode::invalid_request, unavailable);
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, TabLocation{pane.location.workspace, pane.location.tab_id + 1}); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, outsider.session(), launch, directory); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory, WorkspaceLocation{.id = pane.location.workspace.id + 1}); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory, TabLocation{pane.location.workspace, pane.location.tab_id + 1}); }, FailureCode::invalid_request, unavailable);
 
   pane.requestClose();
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory); }, FailureCode::invalid_request, unavailable);
   pane.requestClose();
   check(pane.close_requested);
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory); }, FailureCode::invalid_request, unavailable);
   pane.close_requested = false;
   pane.exit_status = 0;
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory); }, FailureCode::invalid_request, unavailable);
   pane.exit_status.reset();
   panes.detach(model, clients, owner.session().id, pane.id);
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory); }, FailureCode::invalid_request, unavailable);
 
   owner.session().attachments.push_back(makeOwned<Attachment<SystemAllocator>>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
   panes.remove(model, clients, pane.id);
-  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch); }, FailureCode::invalid_request, unavailable);
+  expectFailure([&] { resolveLaunchDirectory(model, owner.session(), launch, directory); }, FailureCode::invalid_request, unavailable);
 }
 
 static void testEmptyDefaultTab(SystemAllocator &memory) {

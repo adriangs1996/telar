@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -166,7 +167,7 @@ public:
     http_rule = 3,
   };
 
-  inline static auto rule(std::span<Byte> output, InterceptionRule rule) -> std::span<const Byte> {
+  inline static auto rule(tbc::view<std::span<Byte>, tbc::lt::a> output, InterceptionRule rule) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     plugins::FrameWriter writer{output};
     writer.tag(rule.http ? Command::http_rule : Command::rule);
     writer.text(rule.host);
@@ -187,7 +188,7 @@ public:
     return rule;
   }
 
-  inline static auto decision(std::span<Byte> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> std::span<const Byte> {
+  inline static auto decision(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     plugins::FrameWriter writer{output};
     writer.tag(Command::decision);
     writer.integer(ticket);
@@ -716,7 +717,7 @@ public:
     refreshInterest();
   }
 
-  inline std::span<const Byte> handle(const Request &request, std::span<Byte> output, recording::Owner owner = {}) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request &request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner = {}) {
     if (output.size() < recording::Protocol::page_header_bytes) { throw EncodingError{"Recording output is too small"}; }
     std::array<Byte, 8192> validation;
     plugins::FrameWriter validated{validation};
@@ -914,7 +915,7 @@ public:
 
   inline bool listening() const noexcept { return exchange_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::exchanges); }
 
-  inline std::span<const Byte> recording(const recording::Request &request, std::span<Byte> output, recording::Owner owner = {}) { return recordings_.handle(request, output, std::move(owner)); }
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> recording(const recording::Request &request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner = {}) { return recordings_.handle(request, output, std::move(owner)); }
 
   inline void packageControl(control::PackagePort *port) noexcept { package_control_.store(port, std::memory_order_release); }
 
@@ -1526,7 +1527,7 @@ public:
     }
   }
 
-  inline std::span<const Byte> handle(const Request &request, std::span<Byte> output, const std::atomic<bool> &cancelled, const plugins::ServiceSpec *package = nullptr) {
+  inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request &request, tbc::view<std::span<Byte>, tbc::lt::a> output, const std::atomic<bool> &cancelled, const plugins::ServiceSpec *package = nullptr) {
     Reply reply;
     std::optional<SensitiveAllocation<Memory>> recording_output;
     std::array<char, 1025> error{};

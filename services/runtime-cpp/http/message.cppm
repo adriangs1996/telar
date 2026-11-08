@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 #include <cstdio>
@@ -361,7 +362,7 @@ struct HttpMessageView {
 
 class HttpMessageCodec {
 public:
-  inline static auto encode(std::span<Byte> output, const HttpMessageView &message) -> std::span<const Byte> {
+  inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const HttpMessageView &message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     validate(message);
     plugins::FrameWriter writer{output};
     writer.tag(message.version);
@@ -403,7 +404,7 @@ public:
   }
 
   template <typename Message>
-  inline static auto encodeMessage(std::span<Byte> output, const Message &message) -> std::span<const Byte> {
+  inline static auto encodeMessage(tbc::view<std::span<Byte>, tbc::lt::a> output, const Message &message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     HttpMessageView view{.version = message.version, .response = message.response, .response_to_head = message.response_to_head, .stream = message.stream, .method = message.method, .target = message.target, .reason = message.reason, .scheme = message.scheme, .authority = message.authority, .status = message.status, .body = message.body};
     for (const auto &field : message.headers.fields()) { view.headers[view.header_count++] = {field.name(), field.value()}; }
     for (const auto &field : message.trailers.fields()) { view.trailers[view.trailer_count++] = {field.name(), field.value()}; }

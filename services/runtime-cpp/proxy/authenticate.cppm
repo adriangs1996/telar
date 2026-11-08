@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <stdlib.h>
 #include <new>
 
@@ -283,8 +284,9 @@ struct ProxyRejection {
 
 using ProxyDecision = std::variant<ProxyAdmission, ProxyRejection>;
 
+// The admitted target views the request head.
 template <Allocator Memory>
-ProxyDecision authenticateProxy(const ProxySecret &secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory> &policy, std::string_view head) noexcept {
+tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy(const ProxySecret &secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory> &policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept {
   if (anonymous_tunnels && !ProxyAuthorization::present(head)) {
     const auto target = ProxyTarget::parse(head);
     if (!target) {

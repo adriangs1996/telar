@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -544,7 +545,7 @@ WorkspaceList runtimeList(ControlSession<Memory> &session) {
 }
 
 template <Allocator Memory>
-Vector<PaneRecord, Memory> paneCatalog(Memory &memory, const char *socket, const Options &options) {
+tbc::view<Vector<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory &, tbc::lt::a> memory, const char *socket, const Options &options) {
   ControlSession session{memory, socket};
   session.receiveTimeout(30);
   Vector<std::uint64_t, Memory> workspaces{AllocatorRef<std::uint64_t, Memory>{memory}};
@@ -615,7 +616,7 @@ std::uint64_t worktreeId(Memory &memory, const char *socket, std::string_view re
   throw Failure{"no tracked worktree matches that branch or title", 2};
 }
 
-inline AgentSnapshotEntry resolve(const AgentSnapshot &snapshot, std::string_view target, std::optional<std::uint64_t> worktree = std::nullopt) {
+inline tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot &, tbc::lt::a> snapshot, std::string_view target, std::optional<std::uint64_t> worktree = std::nullopt) {
   const auto wanted = target == "--current" ? std::optional{current("TELAR_PANE_ID")} : maybeUnsigned(target);
   std::optional<AgentSnapshotEntry> found;
   for (const auto &entry : snapshot.entries) {
@@ -1046,7 +1047,7 @@ inline bool finished(const ExecutionReply &reply) {
 }
 
 template <Allocator Memory>
-ExecutionReply exchange(ControlSession<Memory> &session, ExecutionRequest request) {
+tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession<Memory> &, tbc::lt::a> session, ExecutionRequest request) {
   for (;;) {
     try {
       return session.template exchange<ExecutionReply>(request);

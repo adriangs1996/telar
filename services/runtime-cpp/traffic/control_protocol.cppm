@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -103,7 +104,7 @@ public:
   static constexpr std::size_t prefix_bytes = sizeof(std::uint32_t) + sizeof(std::uint64_t);
   static constexpr std::size_t greeting_bytes = sizeof(std::uint32_t) + (2 * sizeof(Byte)) + sizeof(std::uint32_t);
 
-  inline static auto greeting(std::span<Byte> output, Role role, std::string_view filter = {}, Selection selection = Selection::packets) -> std::span<const Byte> {
+  inline static auto greeting(tbc::view<std::span<Byte>, tbc::lt::a> output, Role role, std::string_view filter = {}, Selection selection = Selection::packets) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     if (filter.size() > Limits::filter_bytes || filter.contains('\0') || (role != Role::subscribe && !filter.empty())) {
       throw EncodingError{"Invalid traffic subscription"};
     }
@@ -122,7 +123,7 @@ public:
     return fixed_bytes + event.interface.size() + event.bytes.size();
   }
 
-  inline static auto encode(std::span<Byte> output, const Event &event) -> std::span<const Byte> {
+  inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Event &event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     validate(event);
     plugins::FrameWriter writer{output};
     writer.tag(event.kind);
@@ -412,7 +413,7 @@ public:
     return output;
   }
 
-  inline static std::span<const Byte> encode(std::span<Byte> output, const Request &request) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Request &request) {
     validate(request);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::request_bytes))};
     writer.integer(request.direction != redirect::Direction::outbound ? direction_magic : request.process_count != 0 ? selection_magic : request.recording ? recording_magic : magic);
@@ -450,7 +451,7 @@ public:
     return request;
   }
 
-  inline static std::span<const Byte> encode(std::span<Byte> output, const Reply &reply) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Reply &reply) {
     validate(reply);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::reply_bytes))};
     writer.integer(reply.recording.empty() ? magic : recording_magic);
@@ -655,7 +656,7 @@ struct FlowEvent {
 
 class FlowCodec {
 public:
-  inline static auto encode(std::span<Byte> output, const FlowEvent &event) -> std::span<const Byte> {
+  inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const FlowEvent &event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     plugins::FrameWriter writer{output};
     writer.integer(event.id);
     writer.tag(event.direction);

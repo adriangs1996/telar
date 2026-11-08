@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -262,7 +263,7 @@ public:
   static constexpr std::size_t header_bytes = sizeof(std::uint32_t) + sizeof(Byte) + sizeof(std::uint32_t);
   static constexpr std::size_t tail_bytes = sizeof(std::uint16_t);
 
-  inline static std::span<const Byte> encode(std::span<Byte> output, Kind kind, const Target &target) {
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, Kind kind, const Target &target) {
     plugins::FrameWriter writer{output};
     writer.integer(magic);
     writer.tag(kind);
