@@ -377,14 +377,20 @@ public:
     inserted(lane);
   }
 
-  // Publication may append and relocate storage, but must not drive the writer.
-  // Re-encode by offset after publication so the reserved confirmation survives.
-  template <typename Message, typename Publish>
-  inline void appendConfirmation(Message message, Publish &&publish) {
+  // Appends a fixed-size confirmation whose fields are known only later, and returns where its
+  // payload starts. Appending more frames may relocate storage but keeps the offset; nothing may be
+  // written out until the confirmation is completed.
+  template <typename Message>
+  inline std::size_t reserve(const Message &message) {
     static_assert(MessageSchema<Message>::fixed_size);
     const auto offset = bytes_.size() + frame_prefix_size;
     append(message);
-    publish(message);
+    return offset;
+  }
+
+  // Re-encodes a reserved confirmation in place.
+  template <typename Message>
+  inline void complete(std::size_t offset, const Message &message) {
     std::array<Byte, MessageSchema<Message>::payload_size> payload;
     Codec::encode(message, payload);
     bytes_.overwrite(offset, payload);
@@ -598,16 +604,35 @@ public:
     return count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR);
   }
 
-  template <typename Visitor>
-  inline bool dispatch(Visitor &&visitor) {
+  // A client's buffered frames and decode storage, which the runtime takes out of the connection while
+  // the requests they carry change any client, this one included, as Rust's `mem::take` would.
+  struct Frames {
+    inline explicit Frames(Memory &memory)
+        : input(memory, input_limit),
+          decode(AllocatorRef<Byte, Memory>{memory}) {}
+
+    ByteQueue<Memory> input;
+    Vector<Byte, Memory> decode;
+  };
+
+  // Lends the connection's frames, or takes them back: the same exchange both ways.
+  inline void exchange(Frames &frames) noexcept {
+    input_.swap(frames.input);
+    decode_bytes_.swap(frames.decode);
+  }
+
+  // Hands each complete frame to a visitor while the client is ready for more, at most one batch;
+  // whether a complete frame remains.
+  template <typename Ready, typename Visitor>
+  inline static bool dispatch(Frames &frames, Ready &&ready, Visitor &&visitor) {
     constexpr unsigned messages_per_batch = 64;
 
     for (unsigned index = 0; index < messages_per_batch; ++index) {
-      if (read_paused) {
-        return input_.size() >= frame_prefix_size;
+      if (!ready()) {
+        return frames.input.size() >= frame_prefix_size;
       }
 
-      auto bytes = input_.readable();
+      auto bytes = frames.input.readable();
       if (bytes.size() < frame_prefix_size) {
         return false;
       }
@@ -621,18 +646,12 @@ public:
         return false;
       }
 
-      DecodeStorage storage{decode_bytes_};
+      DecodeStorage storage{frames.decode};
       visitor(bytes.first(length), storage);
-      input_.consume(frame_prefix_size + length);
+      frames.input.consume(frame_prefix_size + length);
     }
 
-    return input_.size() >= frame_prefix_size;
-  }
-
-  template <typename Visitor>
-  inline void replay(std::span<const Byte> payload, Visitor &&visitor) {
-    DecodeStorage storage{decode_bytes_};
-    visitor(payload, storage);
+    return frames.input.size() >= frame_prefix_size;
   }
 
   template <DeferredResponseEncoder Encoder = RejectDeferredResponse>
@@ -679,9 +698,15 @@ public:
     return false;
   }
 
-  template <typename Message, typename Publish>
-  inline void sendConfirmation(Message message, Publish &&publish) {
-    output_.appendConfirmation(message, std::forward<Publish>(publish));
+  // A confirmation reserved now and completed by its offset once its fields are known.
+  template <typename Message>
+  inline std::size_t reserve(const Message &message) {
+    return output_.reserve(message);
+  }
+
+  template <typename Message>
+  inline void complete(std::size_t offset, const Message &message) {
+    output_.complete(offset, message);
   }
 
   inline void sendPayload(std::span<const Byte> payload) {

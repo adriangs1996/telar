@@ -2897,6 +2897,7 @@ private:
   inline void run() noexcept {
     setThreadName("telar.proxy");
     try {
+      std::array<Event, Poller::event_capacity> ready{};
       auto reap_at = Policy::Clock::now() + reap_interval;
       while (!stopping_.load(std::memory_order_acquire)) {
         const auto now = Policy::Clock::now();
@@ -2934,7 +2935,7 @@ private:
           reap_at = now + reap_interval;
         }
 
-        const auto events = poller_.wait(wake_at - Policy::Clock::now());
+        const auto events = poller_.wait(wake_at - Policy::Clock::now(), ready);
         for (const auto &event : events) {
           if (stopping_.load(std::memory_order_acquire)) {
             break;

@@ -203,7 +203,9 @@ struct ProcessSnapshot {
   pid_t terminal_foreground = 0;
 };
 
-class ProcessInspector {
+// Reads the operating system's process table: every query is const and keeps no state, so threads
+// share one inspector.
+class TBC_SHARED ProcessInspector {
 public:
   inline explicit ProcessInspector(const AgentManifests &manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept
       : manifests_(manifests), uid_(uid) {}
@@ -363,8 +365,9 @@ concept ProcessProbeInspector = requires(const Inspector &inspector, pid_t proce
   { inspector.identifyGroup(process, AgentProvider::unknown) } noexcept -> std::same_as<IdentifiedProcess>;
 };
 
+// A stateless view of an inspector, shared as the inspector is.
 template <ProcessProbeInspector Inspector>
-class ProcessProbe {
+class TBC_SHARED ProcessProbe {
 public:
   static constexpr std::size_t batch_capacity = 16;
 

@@ -254,9 +254,11 @@ static void testRestore(SystemAllocator &memory) {
   std::array<Byte, 4096> buffer;
   const auto fixture = checkpointFixture(buffer);
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
-  ClientLayouts layouts{memory, model};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+  ClientLayouts layouts{memory};
   checkpoint::Restore restore{memory, model, panes, layouts, false};
   restore.apply(fixture);
   check(model.panes.size() == 2);
@@ -284,7 +286,7 @@ static void testAtomicFile(SystemAllocator &memory) {
   std::array<Byte, 4096> buffer;
   const auto fixture = checkpointFixture(buffer);
   {
-    ObservationWorker worker{file};
+    ObservationWorker<decltype(file) &> worker{std::in_place, file};
     check(worker.submit(fixture));
     worker.wait([](int error) { check(error == 0); });
   }
@@ -328,14 +330,16 @@ struct SnapshotAgents {
 
 static void testSnapshotChanges(SystemAllocator &memory) {
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<SystemAllocator> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
-  ClientLayouts layouts{memory, model};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+  ClientLayouts layouts{memory};
   SnapshotAgents agents;
-  checkpoint::Snapshot snapshot{model, layouts, agents};
+  checkpoint::Snapshot<SystemAllocator, SnapshotAgents> snapshot;
   const auto expect = [&](bool changed) {
-    check(snapshot.changed() == changed);
-    check(!snapshot.changed());
+    check(snapshot.changed(model, layouts, agents) == changed);
+    check(!snapshot.changed(model, layouts, agents));
   };
   expect(true);
 
@@ -382,10 +386,10 @@ static void testSnapshotChanges(SystemAllocator &memory) {
 
   constexpr std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-  const auto first = panes.launch(command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+  const auto first = panes.launch(model, nullptr, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
   expect(true);
   model.panes.erase(first);
-  const auto replacement = panes.launch(command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+  const auto replacement = panes.launch(model, nullptr, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
   check(replacement != first);
   expect(true);
   model.panes.erase(replacement);
@@ -400,16 +404,19 @@ static void testLargePaneIdentity(SystemAllocator &memory) {
   constexpr char arguments[] = "/bin/sh\0-c\0printf 'restored'; read value\0";
   writer.append(checkpoint::PaneRecord{identity, 1, 1, "/tmp", 80, 24, 3, {arguments, sizeof(arguments) - 1}});
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
-  ClientLayouts layouts{memory, model};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+  ClientLayouts layouts{memory};
   checkpoint::Restore restore{memory, model, panes, layouts, false};
   restore.apply(writer.finish());
   auto *pane = model.panes.find(identity);
   check(pane != nullptr && pane->id == identity);
   check(model.panes.nextId() == identity + 1);
 
-  const auto events = poller.wait(std::chrono::seconds{2});
+  std::array<Event, decltype(poller)::event_capacity> ready{};
+  const auto events = poller.wait(std::chrono::seconds{2}, ready);
   check(!events.empty());
   check(eventSource(events.front().token) == EventSource::pane);
   check(model.panes.findHandle(eventIdentity(events.front().token)) == pane);

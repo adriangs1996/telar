@@ -167,6 +167,16 @@ static void testUnreadOutputShutdown() {
   check(WIFEXITED(status) && WEXITSTATUS(status) == 0);
 }
 
+// Dispatches a connection's frames as the runtime does: lent out of it while the visitor runs.
+template <typename Link, typename Visitor>
+static bool dispatchFrames(SystemAllocator &memory, Link &connection, Visitor &&visit) {
+  typename Link::Frames frames{memory};
+  connection.exchange(frames);
+  const bool remaining = Link::dispatch(frames, [&] { return !connection.read_paused; }, visit);
+  connection.exchange(frames);
+  return remaining;
+}
+
 static void testFraming(SystemAllocator &memory) {
   int sockets[2];
   check(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
@@ -186,12 +196,12 @@ static void testFraming(SystemAllocator &memory) {
     check(HandshakeCodec::decode<ClientHello>(payload).schema == handshake::schema_id);
     connection.send(RequestCompleted{.request_id = 17});
   };
-  check(!connection.dispatch(dispatch));
+  check(!dispatchFrames(memory, connection, dispatch));
   check(!received);
   check(::write(peer.get(), prefix.data() + 2, 2) == 2);
   check(::write(peer.get(), hello.data(), hello.size()) == static_cast<ssize_t>(hello.size()));
   check(connection.read());
-  connection.dispatch(dispatch);
+  dispatchFrames(memory, connection, dispatch);
   check(received);
   connection.write();
   std::array<Byte, 64> response{};
@@ -213,12 +223,12 @@ static void testFraming(SystemAllocator &memory) {
     ++requests;
     connection.read_paused = true;
   };
-  check(connection.dispatch(pause_after_request));
+  check(dispatchFrames(memory, connection, pause_after_request));
   check(requests == 1);
-  check(connection.dispatch(pause_after_request));
+  check(dispatchFrames(memory, connection, pause_after_request));
   check(requests == 1);
   connection.read_paused = false;
-  check(!connection.dispatch(pause_after_request));
+  check(!dispatchFrames(memory, connection, pause_after_request));
   check(requests == 2);
 }
 
@@ -369,6 +379,7 @@ static void testChildExitNotification() {
   {
     NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
     poller.watchSignal(SIGCHLD);
+    std::array<Event, decltype(poller)::event_capacity> ready{};
     const auto child = ::fork();
     check(child >= 0);
     if (child == 0) {
@@ -378,7 +389,7 @@ static void testChildExitNotification() {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
     bool observed = false;
     while (!observed && std::chrono::steady_clock::now() < deadline) {
-      for (const auto &event : poller.wait(std::chrono::milliseconds{100})) {
+      for (const auto &event : poller.wait(std::chrono::milliseconds{100}, ready)) {
         observed |= event.kind == EventKind::signal && event.descriptor == SIGCHLD;
       }
     }

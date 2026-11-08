@@ -188,7 +188,8 @@ static void testGraphicsProjection(SystemAllocator &memory) {
 
 static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
   RuntimeModel model{memory};
-  ClientPeer peer{memory, model, ClientRole::control};
+  ClientStore<SystemAllocator> clients{memory};
+  ClientPeer peer{memory, model, clients, ClientRole::control};
   auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   auto &terminal = *media->terminal();
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
@@ -265,7 +266,8 @@ static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
 
 static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::size_t placement_count) {
   RuntimeModel model{memory};
-  ClientPeer peer{memory, model, ClientRole::control};
+  ClientStore<SystemAllocator> clients{memory};
+  ClientPeer peer{memory, model, clients, ClientRole::control};
   auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   using StageResult = decltype(sync)::StageResult;

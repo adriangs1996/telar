@@ -140,7 +140,7 @@ static void testGenerator(SystemAllocator &memory) {
   DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::seconds{60}}};
   const auto started = std::chrono::steady_clock::now();
   {
-    ObservationWorker worker{generator};
+    ObservationWorker<decltype(generator) &> worker{std::in_place, generator};
     check(worker.submit(request));
     std::this_thread::sleep_for(std::chrono::milliseconds{30});
   }

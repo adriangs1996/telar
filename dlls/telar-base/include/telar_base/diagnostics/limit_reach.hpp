@@ -1,22 +1,18 @@
 #pragma once
 
-#include "tbc/view.hpp"
-
 #include <cstdint>
 #include <optional>
 #include <string_view>
 
 namespace telar {
 
-  using StaticText = tbc::view<std::string_view, tbc::lt::static_storage>;
-
-  // A limit the program declares, named by literals, so a notice can be kept anywhere.
+  // A limit's names view literals where the program declares it, or the frame or row it was read from.
   struct LimitReach {
-    StaticText name{};
-    StaticText noun{};
+    std::string_view name{};
+    std::string_view noun{};
     std::uint64_t value = 0;
     std::optional<std::uint64_t> requested{};
-    StaticText route{};
+    std::string_view route{};
   };
 
 }

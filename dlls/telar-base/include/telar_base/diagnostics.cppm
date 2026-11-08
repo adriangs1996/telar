@@ -58,6 +58,7 @@ public:
   struct Recorded {
     const Row &row;
     bool show;
+    std::size_t slot;
   };
 
   inline Recorded record(const LimitReach &reach, std::uint32_t hits) {
@@ -91,7 +92,7 @@ public:
       row->shown = now;
     }
 
-    return {*row, show};
+    return {*row, show, static_cast<std::size_t>(row - rows_.data())};
   }
 
   inline std::span<const Row> rows() const noexcept {

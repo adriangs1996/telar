@@ -106,25 +106,28 @@ static void waitUntil(Condition &&condition) {
 void testDescent() {
   SystemAllocator memory;
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
   auto &pane = *model.panes.find(1);
   GatedLineageInspector inspector;
-  DescentService service{model, inspector};
-  ClientPeer first{memory, model, ClientRole::control};
-  ClientPeer second{memory, model, ClientRole::control};
+  DescentService<SystemAllocator, decltype(inspector)> service{inspector};
+  ClientPeer first{memory, model, clients, ClientRole::control};
+  ClientPeer second{memory, model, clients, ClientRole::control};
   first.session().peer_identity = ProcessIdentity{41};
   second.session().peer_identity = ProcessIdentity{42};
-  service.verify(first.session(), VerifyPaneDescent{1, 1, 1});
+  service.verify(model.panes, first.session(), VerifyPaneDescent{1, 1, 1});
+  service.schedule(clients);
   waitUntil([&] { return inspector.calls.load(std::memory_order_acquire) == 1; });
-  service.verify(second.session(), VerifyPaneDescent{2, 1, 1});
+  service.verify(model.panes, second.session(), VerifyPaneDescent{2, 1, 1});
+  service.schedule(clients);
   check(first.session().connection.read_paused && first.session().descent_running);
   check(second.session().connection.read_paused && !second.session().descent_running);
   ++pane.generation;
   inspector.released.store(true, std::memory_order_release);
   waitUntil([&] {
-    service.collect();
+    service.collect(clients, model.panes);
     return !first.session().pending_descent && !second.session().pending_descent;
   });
   check(first.receive<RequestFailed>().code == FailureCode::pane_not_found);
@@ -133,13 +136,15 @@ void testDescent() {
   check(!first.session().connection.read_paused && !second.session().connection.read_paused);
 
   inspector.released.store(false, std::memory_order_release);
-  service.verify(first.session(), VerifyPaneDescent{3, 1, pane.generation});
+  service.verify(model.panes, first.session(), VerifyPaneDescent{3, 1, pane.generation});
+  service.schedule(clients);
   waitUntil([&] { return inspector.calls.load(std::memory_order_acquire) == 3; });
   first.session().connection.closing = true;
-  service.verify(second.session(), VerifyPaneDescent{4, 1, pane.generation});
+  service.verify(model.panes, second.session(), VerifyPaneDescent{4, 1, pane.generation});
+  service.schedule(clients);
   inspector.released.store(true, std::memory_order_release);
   waitUntil([&] {
-    service.collect();
+    service.collect(clients, model.panes);
     return !first.session().pending_descent && !second.session().pending_descent;
   });
   check(!first.session().connection.hasOutput() && first.session().verified_pane == 0);

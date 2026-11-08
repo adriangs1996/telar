@@ -102,7 +102,12 @@ extern "C" std::size_t evaluate(const Operation *operations, std::size_t count, 
         accepted = notify();
         break;
       case 5:
-        queue.appendConfirmation(NotificationShown{.request_id = operation.value}, [&](auto &reply) { reply.delivered_clients = notify(); });
+      {
+        NotificationShown reply{.request_id = operation.value};
+        const auto offset = queue.reserve(reply);
+        reply.delivered_clients = notify();
+        queue.complete(offset, reply);
+      }
         break;
       default:
         std::abort();

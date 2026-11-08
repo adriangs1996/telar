@@ -115,7 +115,7 @@ namespace {
 struct Agents {
   std::uint64_t revision() const { return version; }
 
-  void query(ClientSession<SystemAllocator> &client) {
+  void query(const RuntimeModel<SystemAllocator> &, ClientSession<SystemAllocator> &client) {
     client.connection.send(AgentSnapshot{.revision = version});
     client.agent_revision = version;
     client.agent_workspace_revision = workspace_revision;
@@ -166,16 +166,18 @@ void clipboardOwnership() {
 void currentState() {
   SystemAllocator memory;
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/client-delivery.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientLayouts layouts{memory, model};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/client-delivery.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientLayouts layouts{memory};
   Agents agents;
   Metrics metrics;
   ProxyClientConfiguration proxy;
   StateProjection source{workspaces, agents, metrics, layouts, proxy};
   ClientDelivery delivery{memory, model};
-  ClientPeer peer{memory, model, ClientRole::interactive};
+  ClientPeer peer{memory, model, clients, ClientRole::interactive};
   auto &client = peer.session();
   client.subscribed = true;
   client.agent_snapshot_requested = true;
@@ -243,18 +245,20 @@ void drainSocket(int descriptor, std::size_t bytes) {
 void attachmentRotation() {
   SystemAllocator memory;
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/attachment-delivery.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer peer{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/attachment-delivery.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer peer{memory, model, clients, ClientRole::interactive};
   auto &client = peer.session();
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
-  workspaces.open(client, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = launch});
+  workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = launch});
   const auto first = peer.receive<PaneOpened>();
   std::array<std::uint64_t, 3> ids{first.pane_id};
   for (unsigned index = 1; index < ids.size(); ++index) {
-    workspaces.createPane(client, CreatePane{.request_id = index + 1, .location = first.location, .size = {80, 24, 0, 0}, .launch = launch});
+    workspaces.createPane(model, panes, clients, client.id, CreatePane{.request_id = index + 1, .location = first.location, .size = {80, 24, 0, 0}, .launch = launch});
     ids[index] = peer.receive<PaneOpened>().pane_id;
   }
 
@@ -275,8 +279,8 @@ void attachmentRotation() {
     check(peer.receive<PaneCwd>().pane_id == ids[index]);
   }
 
-  panes.release(client, ids[1]);
-  auto &reattached = panes.attach(client, panes.require(ids[1]), {80, 24, 0, 0});
+  panes.release(model, clients, client.id, ids[1]);
+  auto &reattached = panes.attach(model, client, ids[1], {80, 24, 0, 0});
   check(reattached.slot == 1 && client.next_attachment == 1);
   AttachmentDelivery rotated{model, client};
   check(rotated.prepare(DeliveryLane::foreground, now, timeout));
@@ -285,7 +289,7 @@ void attachmentRotation() {
   check(peer.receive<PaneCwd>().pane_id == ids[1] && client.next_attachment == 2);
 
   for (auto &attachment : client.attachments) {
-    auto &pane = panes.require(attachment->pane_id);
+    auto &pane = panes.require(model.panes, attachment->pane_id);
     attachment->foreground_revision = pane.foreground_revision;
     pane.terminal.refresh();
     const auto payload = attachment->frames.prepare(pane.terminal.screen);
@@ -300,7 +304,7 @@ void attachmentRotation() {
 
   ClientDelivery delivery{memory, model};
   NoState state;
-  auto &pane = panes.require(ids[0]);
+  auto &pane = panes.require(model.panes, ids[0]);
   const auto blocked_bytes = fillSocket(client.connection.descriptor());
   client.connection.send(RequestCompleted{55});
   delivery.write(client, state, now);
@@ -333,9 +337,9 @@ void attachmentRotation() {
   check(completed.detach_pane == pane.id && !client.connection.writing());
   check(peer.receive<PaneExited>().pane_id == pane.id);
   check(!delivery.write(client, state, now).detach_pane);
-  panes.detachAll(client);
+  panes.detachAll(model, clients, client.id);
   for (const auto id : ids) {
-    panes.remove(id);
+    panes.remove(model, clients, id);
   }
 }
 

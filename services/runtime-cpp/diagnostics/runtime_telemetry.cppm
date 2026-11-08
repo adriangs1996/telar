@@ -351,11 +351,11 @@ private:
 
 class LogSession {
 public:
-  inline explicit LogSession(std::string_view endpoint) noexcept
-      : writer_(prepare(endpoint)) {
-    if (writer_.available()) {
+  inline explicit LogSession(std::string_view endpoint) noexcept {
+    LogWriter writer{prepare(endpoint)};
+    if (writer.available()) {
       try {
-        worker_.emplace(writer_);
+        worker_.emplace(std::in_place, std::move(writer));
       } catch (...) {
       }
     }
@@ -395,7 +395,6 @@ private:
     return endpoint;
   }
 
-  LogWriter writer_;
   Line line_;
   std::optional<ObservationWorker<LogWriter>> worker_;
   bool pending_ = false;
@@ -507,7 +506,7 @@ export {
 namespace telar::runtime::diagnostics {
 
 template <Allocator Memory>
-void writeRuntimeSample(Line &line, RuntimeModel<Memory> &model) {
+void writeRuntimeSample(Line &line, RuntimeModel<Memory> &model, const ClientStore<Memory> &clients) {
   std::size_t tabs = 0;
   std::size_t attachments = 0;
   std::size_t outstanding_frames = 0;
@@ -531,7 +530,7 @@ void writeRuntimeSample(Line &line, RuntimeModel<Memory> &model) {
     }
   }
 
-  for (const auto *client : model.clients.items()) {
+  for (const auto *client : clients.items()) {
     if (client == nullptr) {
       continue;
     }
@@ -565,7 +564,7 @@ void writeRuntimeSample(Line &line, RuntimeModel<Memory> &model) {
     terminal_storage.merge(pane->terminal.storageMetrics());
   }
 
-  line.field("client_count", model.clients.size());
+  line.field("client_count", clients.size());
   line.field("workspace_count", model.workspaces.size());
   line.field("tab_count", tabs);
   line.field("pane_count", model.panes.size());
@@ -608,7 +607,7 @@ public:
       : session_(endpoint), proxy_(proxy) {}
 
   template <Allocator Memory, typename Captures, typename Background>
-  inline std::chrono::nanoseconds tick(RuntimeModel<Memory> &model, Memory &memory, const Captures &captures, const Background &background, Clock::time_point now) noexcept {
+  inline std::chrono::nanoseconds tick(RuntimeModel<Memory> &model, const ClientStore<Memory> &clients, Memory &memory, const Captures &captures, const Background &background, Clock::time_point now) noexcept {
     if (now < next_sample_) {
       return next_sample_ - now;
     }
@@ -618,7 +617,7 @@ public:
       line.field("ts_ms", std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
       line.field("uptime_ms", std::chrono::duration_cast<std::chrono::milliseconds>(now - started_).count());
       line.literal("role", "\"runtime\"");
-      writeRuntimeSample(line, model);
+      writeRuntimeSample(line, model, clients);
       model.metrics.write(line);
       line.field("proxy_active", proxy_.active);
       line.field("proxy_port", std::optional<std::uint64_t>{proxy_.port});

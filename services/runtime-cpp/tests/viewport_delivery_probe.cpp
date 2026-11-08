@@ -125,17 +125,19 @@ void requestViewport(Sync &sync) {
 int main() {
   SystemAllocator memory;
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<SystemAllocator> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/viewport-delta.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer first{memory, model, ClientRole::interactive};
-  ClientPeer second{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/viewport-delta.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer first{memory, model, clients, ClientRole::interactive};
+  ClientPeer second{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
-  workspaces.open(first.session(), OpenPane{.request_id = 1, .size = {82, 21, 0, 0}, .launch = launch});
+  workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {82, 21, 0, 0}, .launch = launch});
   const auto opened = first.receive<PaneOpened>();
-  auto &pane = panes.require(opened.pane_id);
-  panes.attach(second.session(), pane, {82, 21, 0, 0});
+  auto &pane = panes.require(model.panes, opened.pane_id);
+  panes.attach(model, second.session(), pane.id, {82, 21, 0, 0});
   std::string corpus;
   for (unsigned row = 0; row < 200; ++row) {
     corpus += std::to_string(row) + " \x1b[32mviewport\x1b[0m \x1b]8;;https://example.test/" + std::to_string(row) + "\x1b\\link\x1b]8;;\x1b\\\r\n";
@@ -217,8 +219,8 @@ int main() {
   deliver(first, true, false);
   select(second, 0);
   deliver(second, true, false);
-  panes.detachAll(first.session());
-  panes.detachAll(second.session());
-  panes.remove(pane.id);
+  panes.detachAll(model, clients, first.session().id);
+  panes.detachAll(model, clients, second.session().id);
+  panes.remove(model, clients, pane.id);
   std::printf("frames=%llu snapshots=%llu\n", static_cast<unsigned long long>(frames), static_cast<unsigned long long>(snapshots));
 }

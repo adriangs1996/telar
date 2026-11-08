@@ -173,12 +173,13 @@ void testCapacityAndReservation() {
   queue.clear();
   check(queue.responseDepth() == 0 && queue.responseHighWater() == 128);
 
-  queue.appendConfirmation(NotificationShown{.request_id = 1}, [&](auto &reply) {
-    for (unsigned index = 0; index < 127; ++index) {
-      queue.append(RequestCompleted{.request_id = index + 2});
-    }
-    reply.delivered_clients = 7;
-  });
+  NotificationShown reply{.request_id = 1};
+  const auto offset = queue.reserve(reply);
+  for (unsigned index = 0; index < 127; ++index) {
+    queue.append(RequestCompleted{.request_id = index + 2});
+  }
+  reply.delivered_clients = 7;
+  queue.complete(offset, reply);
   const auto batch = queue.prepare(4096);
   auto payload = batch.subspan(frame_prefix_size, MessageSchema<NotificationShown>::payload_size);
   std::array<Byte, 64> scratch;

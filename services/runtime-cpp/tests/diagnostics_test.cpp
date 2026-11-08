@@ -512,10 +512,11 @@ void testRuntimeSample() {
   SynchronizedAllocator memory{budget};
   {
     RuntimeModel model{memory};
+    ClientStore<decltype(memory)> clients{memory};
     model.metrics.panes.pty_bytes = 72;
     model.metrics.client_messages = 9;
     RuntimeTelemetry telemetry{endpoint, {}};
-    telemetry.tick(model, memory, 0, 0, RuntimeTelemetry::Clock::now() + std::chrono::seconds{2});
+    telemetry.tick(model, clients, memory, 0, 0, RuntimeTelemetry::Clock::now() + std::chrono::seconds{2});
   }
 
   const auto contents = readFile(path);

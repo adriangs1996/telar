@@ -129,6 +129,16 @@ public:
   ByteQueue(const ByteQueue &) = delete;
   ByteQueue &operator=(const ByteQueue &) = delete;
 
+  // Exchanges contents with a queue of the same allocator, as Rust's `mem::swap` moves buffers.
+  inline void swap(ByteQueue &other) noexcept {
+    assert(&memory_ == &other.memory_);
+    std::swap(limit_, other.limit_);
+    std::swap(bytes_, other.bytes_);
+    std::swap(capacity_, other.capacity_);
+    std::swap(written_, other.written_);
+    std::swap(consumed_, other.consumed_);
+  }
+
   inline std::span<const std::uint8_t> readable() const noexcept {
     return {bytes_ == nullptr ? nullptr : bytes_ + consumed_, size()};
   }

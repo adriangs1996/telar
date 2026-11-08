@@ -48,21 +48,20 @@ import telar.runtime.terminal.control;
 export {
 namespace telar::runtime {
 
+// Desktop clipboard routing between panes and their attached clients.
 template <Allocator Memory>
 class ClipboardService {
 public:
-  inline explicit ClipboardService(RuntimeModel<Memory> &model) : model_(model) {}
-
   inline static bool eligible(const ClientSession<Memory> &client, const Pane<Memory> &pane) noexcept {
     const auto *attachment = client.attachment(pane.id);
     return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
-  inline void configure(Pane<Memory> &pane) {
+  inline static void configure(const ClientStore<Memory> &clients, Pane<Memory> &pane) {
     std::array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
     std::size_t count = 0;
     const ClientSession<Memory> *preferred = nullptr;
-    for (const auto *client : model_.clients.items()) {
+    for (const auto *client : clients.items()) {
       if (client == nullptr || !eligible(*client, pane)) {
         continue;
       }
@@ -77,11 +76,11 @@ public:
     pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? std::optional{control::ClipboardRoute{preferred->id, preferred->generation}} : std::nullopt);
   }
 
-  inline bool advance(Pane<Memory> &pane, std::chrono::steady_clock::time_point now) {
+  inline static bool advance(ClientStore<Memory> &clients, Pane<Memory> &pane, std::chrono::steady_clock::time_point now) {
     auto &clipboard = pane.terminal.clipboardControl();
     clipboard.expire(now);
     if (const auto cancellation = clipboard.cancellation()) {
-      auto *client = model_.clients.find(cancellation->route.client);
+      auto *client = clients.find(cancellation->route.client);
       if (client == nullptr || client->generation != cancellation->route.generation || client->connection.closing) {
         clipboard.cancelled();
       } else {
@@ -95,9 +94,9 @@ public:
     }
     const auto route = clipboard.route();
     if (route) {
-      auto *client = model_.clients.find(route->client);
+      auto *client = clients.find(route->client);
       if (client == nullptr || client->generation != route->generation || !eligible(*client, pane)) {
-        configure(pane);
+        configure(clients, pane);
       } else {
         try {
           if (const auto request = clipboard.request(pane.id, pane.generation)) {
@@ -124,8 +123,8 @@ public:
     return false;
   }
 
-  inline Pane<Memory> *complete(ClientSession<Memory> &sender, const CompleteClipboardDesktop &completion) {
-    auto *pane = model_.panes.find(completion.ticket.pane_id);
+  inline static Pane<Memory> *complete(PaneStore<Memory> &panes, ClientSession<Memory> &sender, const CompleteClipboardDesktop &completion) {
+    auto *pane = panes.find(completion.ticket.pane_id);
     if (pane == nullptr || pane->generation != completion.ticket.pane_generation || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
     }
@@ -149,7 +148,6 @@ private:
     return candidate_input != current_input ? candidate_input > current_input : candidate.id < current.id;
   }
 
-  RuntimeModel<Memory> &model_;
 };
 
 }
@@ -565,7 +563,7 @@ private:
     const auto panes = model_.panes.items();
     for (std::size_t slot = 0; slot < panes.size(); ++slot) {
       const auto *pane = panes[slot];
-      if (pane == nullptr || pane->exit_status || pane->close_requested || (pane->observers & model_.clientBit(client.id)) != 0) {
+      if (pane == nullptr || pane->exit_status || pane->close_requested || (pane->observers & client.observerBit()) != 0) {
         continue;
       }
 
@@ -600,19 +598,19 @@ public:
       : workspaces_(workspaces), agents_(agents), metrics_(metrics), layouts_(layouts), proxy_(proxy) {}
 
   template <Allocator Memory>
-    requires requires(Workspaces &workspaces, Agents &agents, Metrics &metrics, Layouts &layouts, const Proxy &proxy, ClientSession<Memory> &client) {
-      workspaces.publishList(client);
-      agents.query(client);
+    requires requires(Workspaces &workspaces, Agents &agents, Metrics &metrics, Layouts &layouts, const Proxy &proxy, const RuntimeModel<Memory> &model, ClientSession<Memory> &client) {
+      workspaces.publishList(model, client);
+      agents.query(model, client);
       { agents.revision() } -> std::convertible_to<std::uint64_t>;
       metrics.publish(client);
-      layouts.publish(client);
+      layouts.publish(model, client);
       { proxy.status() } -> std::convertible_to<ProxyStatus>;
     }
   inline bool prepare(ClientSession<Memory> &client, const RuntimeModel<Memory> &model, DeliveryLane lane) {
     switch (lane) {
     case DeliveryLane::layout:
       if (client.subscribed && !client.layout_sent) {
-        layouts_.publish(client);
+        layouts_.publish(model, client);
         client.layout_sent = true;
         return true;
       }
@@ -626,7 +624,7 @@ public:
       return false;
     case DeliveryLane::agents:
       if (client.agent_snapshot_requested || (client.subscribed && (client.agent_revision != agents_.revision() || client.agent_workspace_revision != model.workspace_revision))) {
-        agents_.query(client);
+        agents_.query(model, client);
         client.agent_snapshot_requested = false;
         return true;
       }
@@ -638,7 +636,7 @@ public:
     }
     case DeliveryLane::workspaces:
       if (client.subscribed && client.workspace_revision != model.workspace_revision) {
-        workspaces_.publishList(client);
+        workspaces_.publishList(model, client);
         return true;
       }
       return false;

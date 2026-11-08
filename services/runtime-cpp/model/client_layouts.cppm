@@ -120,6 +120,9 @@ struct Attachment {
   FramePacer pacer;
 };
 
+// The clients a runtime serves at once; a client's slot is its bit in what a pane is observed by.
+inline constexpr std::size_t client_capacity = 32;
+
 template <Allocator Memory>
 class ClientSession {
 public:
@@ -150,6 +153,11 @@ public:
       throw std::bad_alloc{};
     }
     return std::countr_zero(~occupied);
+  }
+
+  // The bit its slot sets in a pane's observers; none before the client is stored.
+  inline std::uint32_t observerBit() const noexcept {
+    return event_identity == 0 ? 0 : std::uint32_t{1} << (event_identity % client_capacity);
   }
 
   inline Attachment<Memory> *attachment(std::uint64_t pane_id) const noexcept {
@@ -661,7 +669,7 @@ public:
     return entries_.find(identity);
   }
 
-  inline auto items() noexcept {
+  inline auto items() const noexcept {
     return entries_.items();
   }
 
@@ -714,30 +722,54 @@ private:
 export {
 namespace telar::runtime {
 
+// The runtime's tables. Functions take the ones they read or change, so the borrows they keep of one
+// table are not disturbed by another, as Rust's disjoint field borrows are.
+template <Allocator Memory>
+using PaneStore = SlotStore<Pane<Memory>, 256, Memory>;
+template <Allocator Memory>
+using ClientStore = SlotStore<ClientSession<Memory>, client_capacity, Memory>;
+template <Allocator Memory>
+using WorkspaceStore = SlotStore<Workspace<Memory>, 64, Memory>;
+
+// The bit a stored client's slot sets in what a pane is observed by.
+template <Allocator Memory>
+inline std::uint32_t clientBit(const ClientStore<Memory> &clients, std::uint64_t identity) noexcept {
+  const auto slot = clients.slotOf(identity);
+  return slot ? std::uint32_t{1} << *slot : 0;
+}
+
+// Whether a live client holds a tab.
+template <Allocator Memory>
+inline bool tabHeld(const ClientStore<Memory> &clients, TabLocation location) noexcept {
+  for (const auto *client : clients.items()) {
+    if (client != nullptr && !client->connection.closing && client->held_tabs.contains(location)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// The stored client with an identity, which a request names.
+template <Allocator Memory>
+inline ClientSession<Memory> &requireClient(ClientStore<Memory> &clients, std::uint64_t identity) {
+  auto *client = clients.find(identity);
+  if (client == nullptr) {
+    throw RequestError{FailureCode::invalid_request, "Client does not exist"};
+  }
+  return *client;
+}
+
+// The runtime's data apart from its clients, whose table is separate so that a call can borrow one
+// client and the model at once, as Rust borrows two fields of a struct.
 template <Allocator Memory>
 struct RuntimeModel {
   inline explicit RuntimeModel(Memory &memory, GraphicsLimits graphics = {})
       : graphics_limits(graphics),
         media_budget(graphics.global_bytes),
         panes(memory),
-        clients(memory),
         workspaces(memory),
         worktrees(memory) {}
-
-  inline std::uint32_t clientBit(std::uint64_t identity) const noexcept {
-    const auto slot = clients.slotOf(identity);
-    return slot ? std::uint32_t{1} << *slot : 0;
-  }
-
-  inline bool tabHeld(TabLocation location) const noexcept {
-    for (const auto *client : clients.items()) {
-      if (client != nullptr && !client->connection.closing && client->held_tabs.contains(location)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
 
   GraphicsLimits graphics_limits;
   RuntimeLimits limits;
@@ -746,9 +778,8 @@ struct RuntimeModel {
   AgentManifests manifests = builtin_manifests;
   std::string_view cli_executable;
   bool capture_output = false;
-  SlotStore<Pane<Memory>, 256, Memory> panes;
-  SlotStore<ClientSession<Memory>, 32, Memory> clients;
-  SlotStore<Workspace<Memory>, 64, Memory> workspaces;
+  PaneStore<Memory> panes;
+  WorkspaceStore<Memory> workspaces;
   Worktrees<Memory> worktrees;
   ExitedPanes exited_panes;
   std::shared_ptr<PaneObserver<Memory>> retired_observers;
@@ -772,13 +803,12 @@ namespace telar::runtime {
 template <Allocator Memory>
 class ClientLayouts {
 public:
-  inline explicit ClientLayouts(Memory &memory, const RuntimeModel<Memory> &model)
-      : model_(model),
-        records_(AllocatorRef<Record, Memory>{memory}) {
+  inline explicit ClientLayouts(Memory &memory)
+      : records_(AllocatorRef<Record, Memory>{memory}) {
     records_.reserve(maximum_identities);
   }
 
-  inline void retain(std::uint64_t identity, const UpdateClientLayout &update) {
+  inline void retain(const RuntimeModel<Memory> &model, std::uint64_t identity, const UpdateClientLayout &update) {
     if (identity == 0) {
       throw RequestError{FailureCode::invalid_request, "Client layout requires a subscribed identity"};
     }
@@ -786,7 +816,7 @@ public:
     bool active_valid = false;
     for (const auto &tab : update.tabs) {
       if (sameLocation(tab.location, update.active_tab)) {
-        active_valid = current(tab);
+        active_valid = current(model, tab);
       }
     }
 
@@ -806,11 +836,11 @@ public:
     if (existing != nullptr) {
       for (std::size_t index = 0; index < existing->tab_count; ++index) {
         auto tab = existing->tabAt(index);
-        if (!current(tab) || std::ranges::any_of(update.tabs, [&](const auto &incoming) { return current(incoming) && sameLocation(incoming.location, tab.location); })) {
+        if (!current(model, tab) || std::ranges::any_of(update.tabs, [&](const auto &incoming) { return current(model, incoming) && sameLocation(incoming.location, tab.location); })) {
           continue;
         }
 
-        if (std::ranges::any_of(update.tabs, [&](const auto &incoming) { return incoming.workspace_active && sameWorkspace(incoming.location.workspace, tab.location.workspace) && current(incoming); })) {
+        if (std::ranges::any_of(update.tabs, [&](const auto &incoming) { return incoming.workspace_active && sameWorkspace(incoming.location.workspace, tab.location.workspace) && current(model, incoming); })) {
           tab.workspace_active = false;
         }
 
@@ -819,7 +849,7 @@ public:
     }
 
     for (const auto &tab : update.tabs) {
-      if (current(tab)) {
+      if (current(model, tab)) {
         replacement.append(tab);
       }
     }
@@ -837,7 +867,7 @@ public:
     ++clock_;
   }
 
-  inline void publish(ClientSession<Memory> &client) {
+  inline void publish(const RuntimeModel<Memory> &model, ClientSession<Memory> &client) {
     auto *record = find(client.identity);
     if (record == nullptr) {
       client.connection.send(ClientLayoutSnapshot{});
@@ -849,7 +879,7 @@ public:
     std::optional<TabLocation> active;
     for (std::size_t index = 0; index < record->tab_count; ++index) {
       const auto tab = record->tabAt(index);
-      if (!current(tab)) {
+      if (!current(model, tab)) {
         continue;
       }
 
@@ -892,14 +922,14 @@ public:
   }
 
   template <typename Consumer>
-  inline void exportRecords(Consumer &&consume) const {
+  inline void exportRecords(const RuntimeModel<Memory> &model, Consumer &&consume) const {
     std::array<ClientTabLayout, maximum_tabs> tabs;
     for (const auto &record : records_) {
       std::size_t count = 0;
       bool active_valid = false;
       for (std::size_t index = 0; index < record.tab_count; ++index) {
         const auto tab = record.tabAt(index);
-        if (!current(tab)) {
+        if (!current(model, tab)) {
           continue;
         }
 
@@ -964,8 +994,8 @@ private:
     return sameWorkspace(left.workspace, right.workspace) && left.tab_id == right.tab_id;
   }
 
-  inline bool current(const ClientTabLayout &layout) const noexcept {
-    auto *workspace = model_.workspaces.find(layout.location.workspace.id);
+  inline static bool current(const RuntimeModel<Memory> &model, const ClientTabLayout &layout) noexcept {
+    auto *workspace = model.workspaces.find(layout.location.workspace.id);
     auto *tab = workspace == nullptr ? nullptr : workspace->tab(layout.location.tab_id);
     if (layout.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
       return false;
@@ -978,7 +1008,7 @@ private:
         continue;
       }
 
-      if (model_.panes.find(leaf->pane_id) == nullptr || std::ranges::find(tab->panes, leaf->pane_id) == tab->panes.end()) {
+      if (model.panes.find(leaf->pane_id) == nullptr || std::ranges::find(tab->panes, leaf->pane_id) == tab->panes.end()) {
         return false;
       }
 
@@ -998,7 +1028,6 @@ private:
     return nullptr;
   }
 
-  const RuntimeModel<Memory> &model_;
   Vector<Record, Memory> records_;
   std::uint64_t clock_ = 0;
 };

@@ -153,11 +153,11 @@ public:
   std::atomic<bool> released{false};
 };
 
-static void collect(WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector> &service) {
+static void collect(RuntimeModel<SystemAllocator> &model, WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector &> &service) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
   check(::poll(&completion, 1, 1000) == 1);
   for (unsigned attempt = 0; attempt < 1000; ++attempt) {
-    service.collect();
+    service.collect(model);
     if (::poll(&completion, 1, 0) == 0) {
       return;
     }
@@ -169,33 +169,34 @@ static void collect(WorktreeDetectionService<SystemAllocator, GatedWorktreeDetec
 static void testDetectionLifecycle() {
   SystemAllocator memory;
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
   auto &pane = *model.panes.find(1);
   GatedWorktreeDetector probe;
-  WorktreeDetectionService service{model, probe};
-  service.tick();
+  WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector &> service{probe};
+  service.tick(model);
   pane.cwd = "/tmp/changed";
   ++pane.cwd_revision;
   probe.release();
-  collect(service);
+  collect(model, service);
   check(model.workspaces.size() == 0 && model.worktrees.containing("/tmp") == nullptr);
 
   probe.released = false;
-  service.tick();
+  service.tick(model);
   ++pane.generation;
   probe.release();
-  collect(service);
+  collect(model, service);
   check(model.worktrees.containing(pane.cwd) == nullptr);
   ++pane.cwd_revision;
-  service.tick();
-  collect(service);
+  service.tick(model);
+  collect(model, service);
   const auto *entry = model.worktrees.containing(pane.cwd);
   check(entry != nullptr && entry->source == 7 && entry->branch.view() == "external" && entry->origin == WorktreeOrigin::external);
   const auto revision = model.workspace_revision;
   ++pane.cwd_revision;
-  service.tick();
+  service.tick(model);
   check(model.workspace_revision == revision);
 
   for (unsigned index = 0; index < 47; ++index) {
@@ -204,8 +205,8 @@ static void testDetectionLifecycle() {
   }
   pane.cwd = "/tmp/another";
   ++pane.cwd_revision;
-  service.tick();
-  collect(service);
+  service.tick(model);
+  collect(model, service);
   check(model.worktrees.containing(pane.cwd) == nullptr);
   for (unsigned index = 0; index < 16; ++index) {
     const auto path = "/managed/" + std::to_string(index);

@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <stdlib.h>
 #include <ghostty/vt.h>
@@ -498,7 +499,7 @@ public:
         try {
           std::array<Byte, 64 * 1024> scratch;
           DecodeStorage storage{scratch};
-          layouts_.retain(record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
+          layouts_.retain(model_, record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
         } catch (const std::exception &) {
         }
       }
@@ -568,8 +569,10 @@ private:
     const auto arguments = direct ? resumed : std::span<const std::string_view>{original}.first(record.argument_count);
     Command command{memory_, Launch{.cwd = record.cwd, .arguments = arguments}};
     const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
-    auto &pane = panes_.launch(command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id);
-    tab->panes.push_back(pane.id);
+    // Launching changes the model: the tab is found again, and the pane by its identity.
+    const auto identity = panes_.launch(model_, nullptr, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
+    model_.workspaces.find(record.workspace)->tab(record.tab)->panes.push_back(identity);
+    auto &pane = *model_.panes.find(identity);
     pane.launch.restore(record.arguments, record.argument_count);
     pane.restored_agent = resume;
 
@@ -823,17 +826,15 @@ concept AgentSource = requires(const Source &source, std::uint64_t identity) {
   { source.revision() } noexcept -> std::same_as<std::uint64_t>;
 };
 
+// Encodes the session the model, the layouts and the agents describe, which each call lends. It keeps
+// only the stamps that tell whether the session changed.
 template <Allocator Memory, AgentSource Agents>
 class Snapshot {
 public:
-  inline explicit Snapshot(RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents)
-      : model_(model),
-        layouts_(layouts),
-        agents_(agents) {}
-
-  inline std::span<const Byte> encode(std::span<Byte> buffer) {
-    Writer writer{buffer, Counters{model_.workspaces.nextCounter(), model_.next_tab_id, model_.panes.nextCounter(), model_.next_pane_generation}};
-    for (const auto *workspace : model_.workspaces.items()) {
+  // The bytes view the buffer.
+  inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t &dropped) {
+    Writer writer{buffer, Counters{model.workspaces.nextCounter(), model.next_tab_id, model.panes.nextCounter(), model.next_pane_generation}};
+    for (const auto *workspace : model.workspaces.items()) {
       if (workspace == nullptr || workspace->tabs.empty()) {
         continue;
       }
@@ -846,7 +847,7 @@ public:
       }
     }
 
-    for (const auto *worktree : model_.worktrees.items()) {
+    for (const auto *worktree : model.worktrees.items()) {
       if (worktree == nullptr) {
         continue;
       }
@@ -855,13 +856,13 @@ public:
       writer.append(WorktreeRecord{entry.worktree, entry.workspace.value_or(0), RegisterWorktree{.source = entry.source, .created_by = entry.created_by, .origin = entry.origin, .path = entry.path, .branch = entry.branch, .base = entry.base, .title = entry.title, .brief = entry.brief, .dispatched_from = entry.dispatched_from, .coordinator = entry.coordinator}});
     }
 
-    for (const auto *pane : model_.panes.items()) {
+    for (const auto *pane : model.panes.items()) {
       if (pane == nullptr || pane->output_closed || pane->exit_status || pane->close_requested || pane->launch.count() == 0) {
         continue;
       }
 
       PaneRecord record{pane->id, pane->location.workspace.id, pane->location.tab_id, pane->cwd, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->launch.count(), pane->launch.bytes()};
-      if (const auto *agent = agents_.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
+      if (const auto *agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
         record.provider = agent->provider;
         record.session = agent->session.view();
         if (!agent->title.view().empty() && agent->title_source != AgentTitleSource::telar) {
@@ -881,18 +882,18 @@ public:
     }
 
     std::array<Byte, 16 * 1024> payload;
-    layouts_.exportRecords([&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout &layout) {
+    layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout &layout) {
       writer.append(LayoutRecord{identity, last_used, Codec::encode(layout, payload)});
     });
     dropped = writer.dropped;
     return writer.finish();
   }
 
-  inline bool changed() noexcept {
-    const std::array revisions{model_.workspace_revision, layouts_.revision(), agents_.revision()};
+  inline bool changed(const RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents) noexcept {
+    const std::array revisions{model.workspace_revision, layouts.revision(), agents.revision()};
     bool changed = revisions != revisions_;
     revisions_ = revisions;
-    const auto panes = model_.panes.items();
+    const auto panes = model.panes.items();
     for (std::size_t index = 0; index < panes.size(); ++index) {
       const auto *pane = panes[index];
       const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->output_closed || pane->exit_status.has_value() || pane->close_requested};
@@ -902,8 +903,6 @@ public:
 
     return changed;
   }
-
-  std::size_t dropped = 0;
 
 private:
   struct PaneStamp {
@@ -916,9 +915,6 @@ private:
     bool operator==(const PaneStamp &) const = default;
   };
 
-  RuntimeModel<Memory> &model_;
-  const ClientLayouts<Memory> &layouts_;
-  const Agents &agents_;
   std::array<std::uint64_t, 3> revisions_{};
   std::array<PaneStamp, 256> stamps_{};
 };
@@ -935,12 +931,10 @@ class SessionStore {
   using Clock = std::chrono::steady_clock;
 
 public:
-  inline explicit SessionStore(Memory &memory, RuntimeModel<Memory> &model, PaneService<Memory, Poller, History> &panes, ClientLayouts<Memory> &layouts, const Agents &agents)
+  using Panes = PaneService<Memory, Poller, History>;
+
+  inline explicit SessionStore(Memory &memory)
       : memory_(memory),
-        model_(model),
-        panes_(panes),
-        layouts_(layouts),
-        snapshot_(model, layouts, agents),
         buffer_(AllocatorRef<Byte, Memory>{memory}) {}
 
   inline ~SessionStore() {
@@ -949,37 +943,37 @@ public:
     }
   }
 
-  inline void configure(Options options) {
+  inline void configure(RuntimeModel<Memory> &model, Panes &panes, ClientLayouts<Memory> &layouts, Options options) {
     if (options.path.empty()) {
       return;
     }
 
-    file_.emplace(memory_, options.path);
+    FileStore<Memory> file{memory_, options.path};
     try {
-      if (file_->load(buffer_)) {
+      if (file.load(buffer_)) {
         Reader validation{buffer_};
         validation.read([](const auto &) {});
-        Restore restore{memory_, model_, panes_, layouts_, options.resume_agents};
+        Restore restore{memory_, model, panes, layouts, options.resume_agents};
         restore.apply(buffer_);
       }
     } catch (const EncodingError &) {
-      file_->quarantine();
+      file.quarantine();
     } catch (const std::exception &) {
     }
 
     buffer_.resize(maximum_bytes);
-    worker_.emplace(*file_);
+    worker_.emplace(std::in_place, std::move(file));
     dirty_ = true;
     due_ = Clock::now() + debounce;
   }
 
-  inline std::chrono::nanoseconds tick(Clock::time_point now) {
+  inline std::chrono::nanoseconds tick(const RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents, Clock::time_point now) {
     if (!worker_) {
       return std::chrono::seconds{1};
     }
 
     collect();
-    if (snapshot_.changed()) {
+    if (snapshot_.changed(model, layouts, agents)) {
       dirty_ = true;
       due_ = now + debounce;
     }
@@ -993,7 +987,7 @@ public:
 
     try {
       TELAR_TRACE("checkpoint.encode");
-      const auto bytes = snapshot_.encode(buffer_);
+      const auto bytes = Snapshot<Memory, Agents>::encode(model, layouts, agents, buffer_, dropped_records);
       pending_ = worker_->submit(bytes);
       dirty_ = !pending_;
     } catch (const std::exception &) {
@@ -1010,15 +1004,15 @@ public:
     }
   }
 
-  inline void finish() noexcept {
+  inline void finish(const RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents) noexcept {
     if (!worker_) {
       return;
     }
 
     try {
       worker_->wait([&](int error) { completed(error); });
-      if (snapshot_.changed() || dirty_) {
-        const auto bytes = snapshot_.encode(buffer_);
+      if (snapshot_.changed(model, layouts, agents) || dirty_) {
+        const auto bytes = Snapshot<Memory, Agents>::encode(model, layouts, agents, buffer_, dropped_records);
         if (worker_->submit(bytes)) {
           worker_->wait([&](int error) { completed(error); });
         }
@@ -1034,6 +1028,7 @@ public:
 
   std::uint64_t write_failures = 0;
   std::uint64_t encoding_failures = 0;
+  std::size_t dropped_records = 0;
 
 private:
   static constexpr std::chrono::milliseconds debounce{500};
@@ -1048,12 +1043,8 @@ private:
   }
 
   Memory &memory_;
-  RuntimeModel<Memory> &model_;
-  PaneService<Memory, Poller, History> &panes_;
-  ClientLayouts<Memory> &layouts_;
   Snapshot<Memory, Agents> snapshot_;
   Vector<Byte, Memory> buffer_;
-  std::optional<FileStore<Memory>> file_;
   std::optional<ObservationWorker<FileStore<Memory>>> worker_;
   Clock::time_point due_{};
   bool dirty_ = false;

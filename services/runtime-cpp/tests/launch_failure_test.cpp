@@ -184,10 +184,12 @@ struct FailingPoller : NativeEventLoop<Memory> {
 template <ConcurrentAllocator Memory>
 void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   RuntimeModel model{memory};
+  ClientStore<Memory> clients{memory};
+  LimitService<Memory> limits;
   FailingPoller poller{memory, model};
   RequestWorker worker{memory, service};
   QueuedHistory history{worker};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/launch-failure.sock"}, history};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/launch-failure.sock"}, history};
   constexpr TabLocation location{.workspace = {.id = 7}, .tab_id = 11};
   constexpr TerminalSize size{80, 24, 0, 0};
   constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -199,7 +201,7 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
     history.accepting = accepting;
     bool failed = false;
     try {
-      panes.launch(launch, location, size);
+      panes.launch(model, nullptr, launch, location, size);
     } catch (const SystemError &error) {
       failed = error.code() == ENOMEM;
     }
@@ -213,24 +215,24 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   check(history.submissions == 2 && model.next_pane_generation == 3);
   history.accepting = true;
   poller.fail = false;
-  auto &pane = panes.launch(launch, location, size);
+  auto &pane = panes.launch(model, nullptr, launch, location, size);
   check(model.panes.size() == 1 && pane.generation == 3 && history.submissions == 2);
   const auto retained_process = pane.process->processId();
   Command command{memory, launch};
   bool registration_failed = false;
   try {
-    panes.launch(command, location, size, pane.id);
+    panes.launch(model, nullptr, command, location, size, pane.id);
   } catch (const std::bad_alloc &) {
     registration_failed = true;
   }
   check(registration_failed && history.submissions == 3 && model.panes.size() == 1);
-  check(panes.require(pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
-  panes.remove(pane.id);
+  check(panes.require(model.panes, pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
+  panes.remove(model, clients, pane.id);
 
   constexpr std::array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};
   bool missing_rejected = false;
   try {
-    panes.launch(Launch{.cwd = "/", .arguments = missing}, location, size);
+    panes.launch(model, nullptr, Launch{.cwd = "/", .arguments = missing}, location, size);
   } catch (const std::exception &) {
     missing_rejected = true;
   }

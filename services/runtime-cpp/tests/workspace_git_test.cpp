@@ -173,13 +173,13 @@ public:
   Result next;
 };
 
-using GitService = WorkspaceGitService<SystemAllocator, ControlledGitProbe>;
+using GitService = WorkspaceGitService<SystemAllocator, ControlledGitProbe &>;
 
-static void collect(GitService &service, GitService::Clock::time_point now) {
+static void collect(RuntimeModel<SystemAllocator> &model, GitService &service, GitService::Clock::time_point now) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
   check(::poll(&completion, 1, 1000) == 1);
   for (unsigned attempt = 0; attempt < 1000; ++attempt) {
-    service.collect(now);
+    service.collect(model, now);
     if (::poll(&completion, 1, 0) == 0) {
       return;
     }
@@ -191,9 +191,10 @@ static void collect(GitService &service, GitService::Clock::time_point now) {
 static void testObservationLifecycle() {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  LimitService limits{model};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   ControlledGitProbe probe;
-  GitService service{model, limits, probe};
+  GitService service{limits, probe};
   auto first = makeOwned<Workspace<SystemAllocator>>(memory, memory, 7, "/first", "first");
   auto second = makeOwned<Workspace<SystemAllocator>>(memory, memory, 9, "/second", "second");
   auto &workspace = *first;
@@ -204,15 +205,15 @@ static void testObservationLifecycle() {
   probe.next.branch.assign("main");
   probe.next.dirty = true;
   probe.release();
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
   check(workspace.git_branch.view() == "main" && workspace.git_dirty && model.workspace_revision == 2);
   check(workspace.git_checked_at == now);
 
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
   check(probe.started == 9 && model.workspaces.find(9)->git_dirty && model.workspace_revision == 3);
-  check(service.tick(now + std::chrono::seconds{1}) == std::chrono::seconds{4});
+  check(service.tick(model, now + std::chrono::seconds{1}) == std::chrono::seconds{4});
   model.workspaces.erase(9);
   ++model.workspace_revision;
 
@@ -220,16 +221,17 @@ static void testObservationLifecycle() {
   probe.next.dirty.reset();
   probe.next.timed_out = true;
   now += GitService::probe_interval;
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
   check(workspace.git_dirty && workspace.git_branch.view() == "changed" && workspace.git_timed_out);
   const auto changed_revision = model.workspace_revision;
   now += GitService::probe_interval;
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
   check(model.workspace_revision == changed_revision);
 
-  ClientPeer client{memory, model, ClientRole::control};
+  ClientPeer client{memory, model, clients, ClientRole::control};
+  limits.deliver(model, clients);
   limits.query(client.session(), QueryLimits{.request_id = 1});
   auto recorded = client.receive<LimitList>();
   check(recorded.entries.size() == 1 && recorded.entries[0].hits == 1);
@@ -238,13 +240,14 @@ static void testObservationLifecycle() {
   probe.next.timed_out = false;
   probe.next.dirty = false;
   now += GitService::probe_interval;
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
   check(!workspace.git_dirty && !workspace.git_timed_out);
   probe.next.timed_out = true;
   now += GitService::probe_interval;
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
+  limits.deliver(model, clients);
   limits.query(client.session(), QueryLimits{.request_id = 2});
   recorded = client.receive<LimitList>();
   check(recorded.entries.size() == 1 && recorded.entries[0].hits == 2);
@@ -252,8 +255,8 @@ static void testObservationLifecycle() {
   probe.next.present = false;
   probe.next.timed_out = false;
   now += GitService::probe_interval;
-  service.tick(now);
-  collect(service, now);
+  service.tick(model, now);
+  collect(model, service, now);
   check(workspace.git_branch.view().empty() && !workspace.git_dirty);
 
   {
@@ -261,11 +264,11 @@ static void testObservationLifecycle() {
     probe.released = false;
   }
   now += GitService::probe_interval;
-  service.tick(now);
+  service.tick(model, now);
   model.workspaces.erase(7);
   const auto revision_before_completion = model.workspace_revision;
   probe.release();
-  collect(service, now);
+  collect(model, service, now);
   check(model.workspace_revision == revision_before_completion);
 }
 

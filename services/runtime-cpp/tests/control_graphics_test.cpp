@@ -347,7 +347,7 @@ void mediaAcknowledgements(SystemAllocator &memory) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   auto media = std::make_shared<PaneMedia<SystemAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
   MediaProcessor<SystemAllocator> processor;
-  ObservationWorker worker{processor};
+  ObservationWorker<decltype(processor) &> worker{std::in_place, processor};
 #if TELAR_DIAGNOSTICS
   bool initial = true;
 #endif
@@ -477,7 +477,7 @@ void mediaAllocationFailure() {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   auto media = std::make_shared<PaneMedia<FailingResponseAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
   MediaProcessor<FailingResponseAllocator> processor;
-  ObservationWorker worker{processor};
+  ObservationWorker<decltype(processor) &> worker{std::in_place, processor};
   const auto process = [&] {
     check(media->seal());
     MediaProcessor<FailingResponseAllocator>::Request request;
@@ -548,7 +548,7 @@ void cancelBusyMedia() {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   auto media = std::make_shared<PaneMedia<FailingResponseAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
   MediaProcessor<FailingResponseAllocator> processor;
-  ObservationWorker worker{processor};
+  ObservationWorker<decltype(processor) &> worker{std::in_place, processor};
   constexpr std::string_view command = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
   const auto submit = [&] {
     check(media->seal());
@@ -648,15 +648,16 @@ void orderedResizeFailure() {
   for (bool start_worker : {false, true}) {
     SystemAllocator memory;
     RuntimeModel model{memory};
+    ClientStore<SystemAllocator> clients{memory};
+    LimitService<SystemAllocator> limits;
     NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-    PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
-    LimitService limits{model};
-    MediaService service{model, panes, poller, limits};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
+    MediaService<SystemAllocator, decltype(poller), decltype(limits)> service{poller, limits};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
     const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-    auto &failed = panes.launch(launch, location, {80, 24, 9, 18});
-    auto &healthy = panes.launch(launch, location, {80, 24, 9, 18});
+    auto &failed = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
     failed.media->resize({80, 25, 9, 18});
     for (unsigned index = 0; index < MediaBatch::event_capacity / 2; ++index) {
       failed.media->output(bytes("x"));
@@ -667,18 +668,18 @@ void orderedResizeFailure() {
     failed.resize({80, 26, 9, 18});
     check(failed.media->failed() && failed.pty_responses->closed() && !failed.output_closed);
     if (start_worker) {
-      service.start();
+      service.start(model, clients, panes);
     } else {
       panes.flushInput(failed);
     }
     check(failed.output_closed && failed.close_requested && !failed.terminal.hasPendingControl());
     healthy.terminal.feed(bytes("\x1b[5n"));
     check(!healthy.output_closed && healthy.terminal.responses().size() == 4);
-    service.finish();
+    service.finish(model);
     const auto failed_id = failed.id;
     const auto healthy_id = healthy.id;
-    panes.remove(failed_id);
-    panes.remove(healthy_id);
+    panes.remove(model, clients, failed_id);
+    panes.remove(model, clients, healthy_id);
   }
 }
 
@@ -688,13 +689,15 @@ void semanticFailureDuringResume() {
   SynchronizedAllocator memory{budget};
   {
     RuntimeModel model{memory};
+    ClientStore<decltype(memory)> clients{memory};
+    LimitService<decltype(memory)> limits;
     NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-    PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
     const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-    auto &failed = panes.launch(launch, location, {80, 24, 9, 18});
-    auto &healthy = panes.launch(launch, location, {80, 24, 9, 18});
+    auto &failed = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
     for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
       failed.terminal.feed(bytes("\x1b[5n"));
     }
@@ -716,8 +719,8 @@ void semanticFailureDuringResume() {
     check(!healthy.output_closed && std::string_view{reinterpret_cast<const char *>(reply.data()), reply.size()} == "\x1b[0n");
     const auto failed_id = failed.id;
     const auto healthy_id = healthy.id;
-    panes.remove(failed_id);
-    panes.remove(healthy_id);
+    panes.remove(model, clients, failed_id);
+    panes.remove(model, clients, healthy_id);
   }
   check(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
 }

@@ -66,31 +66,30 @@ concept SessionFileObserver = requires(Agents &agents, const SessionFileResult &
   { agents.completeSessionFile(result, now) } -> std::same_as<void>;
 };
 
+// Reads agents' session files on a worker; the agents are lent to each call.
 template <ConcurrentAllocator Memory, SessionFileObserver Agents>
 class AgentFileService {
 public:
-  inline explicit AgentFileService(Memory &memory, Agents &agents)
-      : agents_(agents),
-        reader_(memory),
-        worker_(reader_) {}
+  inline explicit AgentFileService(Memory &memory)
+      : worker_(std::in_place, memory) {}
 
-  inline void tick(std::chrono::steady_clock::time_point now) {
-    collect();
+  inline void tick(Agents &agents, std::chrono::steady_clock::time_point now) {
+    collect(agents);
     if (!pending_) {
-      if (const auto request = agents_.nextSessionFile(now)) {
+      if (const auto request = agents.nextSessionFile(now)) {
         pending_ = worker_.submit(*request);
       }
     }
   }
 
-  inline void collect() {
+  inline void collect(Agents &agents) {
     if (!pending_) {
       return;
     }
 
     worker_.collect([&](const SessionFileResult &result) {
       pending_ = false;
-      agents_.completeSessionFile(result, std::chrono::steady_clock::now());
+      agents.completeSessionFile(result, std::chrono::steady_clock::now());
     });
   }
 
@@ -99,8 +98,6 @@ public:
   }
 
 private:
-  Agents &agents_;
-  SessionFileReader<Memory> reader_;
   ObservationWorker<SessionFileReader<Memory>> worker_;
   bool pending_ = false;
 };
@@ -112,17 +109,16 @@ private:
 export {
 namespace telar::runtime {
 
+// Requests between clients. Each call is given the client table and the requester's identity, and
+// looks up the clients it reaches, as two elements of one Rust map are borrowed one after the other.
 template <Allocator Memory>
 class ClientControl {
 public:
-  inline explicit ClientControl(RuntimeModel<Memory> &model) noexcept
-      : model_(model) {}
-
-  inline void list(ClientSession<Memory> &requester, const QueryClients &request) const {
-    std::array<ClientDescriptor, 32> entries;
+  inline static void list(ClientStore<Memory> &clients, std::uint64_t requester_id, const QueryClients &request) {
+    std::array<ClientDescriptor, client_capacity> entries;
     std::size_t count = 0;
 
-    for (const auto *client : model_.clients.items()) {
+    for (const auto *client : clients.items()) {
       if (!routable(client)) {
         continue;
       }
@@ -137,13 +133,14 @@ public:
       };
     }
 
-    requester.connection.send(ClientList{.request_id = request.request_id,
-                                         .entries = std::span{entries}.first(count)});
+    requireClient(clients, requester_id).connection.send(ClientList{.request_id = request.request_id,
+                                                            .entries = std::span{entries}.first(count)});
   }
 
-  inline void detach(ClientSession<Memory> &requester, const DetachClient &request) {
+  inline static void detach(ClientStore<Memory> &clients, std::uint64_t requester_id, const DetachClient &request) {
+    auto &requester = requireClient(clients, requester_id);
     requireRole(requester, ClientRole::control);
-    auto *target = resolve(ClientRoute{request.client_id, request.client_generation});
+    auto *target = resolve(clients, ClientRoute{request.client_id, request.client_generation});
     if (!routable(target) || target == &requester) {
       throw RequestError{FailureCode::invalid_request, "Interactive client is absent, closing, or stale"};
     }
@@ -152,13 +149,14 @@ public:
     target->connection.closing = true;
   }
 
-  inline void requestCommand(ClientSession<Memory> &requester, const RequestClientCommand &request) {
+  inline static void requestCommand(ClientStore<Memory> &clients, std::uint64_t requester_id, const RequestClientCommand &request) {
+    auto &requester = requireClient(clients, requester_id);
     requireRole(requester, ClientRole::control);
     if (request.status != ClientCommandStatus::request || requester.pending_command) {
       throw RequestError{FailureCode::invalid_request, "Invalid or already pending client command"};
     }
 
-    auto *target = resolve(request.route);
+    auto *target = resolve(clients, request.route);
     if (!routable(target)) {
       throw RequestError{FailureCode::invalid_request, "Interactive client is absent, closing, or stale"};
     }
@@ -173,9 +171,10 @@ public:
     requester.pending_command = PendingClientCommand{target->id, request.request_id, request.action, request.target_id};
   }
 
-  inline void completeCommand(ClientSession<Memory> &sender, const CompleteClientCommand &completion) {
+  inline static void completeCommand(ClientStore<Memory> &clients, std::uint64_t sender_id, const CompleteClientCommand &completion) {
+    const auto &sender = requireClient(clients, sender_id);
     requireRole(sender, ClientRole::interactive);
-    auto *requester = resolve(completion.route);
+    auto *requester = resolve(clients, completion.route);
     if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_command) {
       return;
     }
@@ -192,9 +191,10 @@ public:
     requester->pending_command.reset();
   }
 
-  inline void requestFocus(ClientSession<Memory> &requester, const RequestPaneFocus &request) {
+  inline static void requestFocus(const PaneStore<Memory> &panes, ClientStore<Memory> &clients, std::uint64_t requester_id, const RequestPaneFocus &request) {
+    auto &requester = requireClient(clients, requester_id);
     requireRole(requester, ClientRole::control);
-    const auto *pane = model_.panes.find(request.pane_id);
+    const auto *pane = panes.find(request.pane_id);
     if (pane == nullptr || pane->generation != request.pane_generation) {
       throw RequestError{FailureCode::pane_not_found, "Pane does not exist or its generation is stale"};
     }
@@ -207,7 +207,7 @@ public:
       throw RequestError{FailureCode::invalid_request, "A pane focus request is already pending"};
     }
 
-    auto *target = focusOrigin(pane->id);
+    auto *target = focusOrigin(clients, pane->id);
     if (target == nullptr) {
       throw RequestError{FailureCode::invalid_request, "No interactive client originated input for this pane"};
     }
@@ -222,9 +222,10 @@ public:
     requester.pending_focus = PendingPaneFocus{target->id, request.request_id, pane->id, pane->generation};
   }
 
-  inline void completeFocus(ClientSession<Memory> &sender, const CompletePaneFocus &completion) {
+  inline static void completeFocus(ClientStore<Memory> &clients, std::uint64_t sender_id, const CompletePaneFocus &completion) {
+    const auto &sender = requireClient(clients, sender_id);
     requireRole(sender, ClientRole::interactive);
-    auto *requester = resolve(completion.requester);
+    auto *requester = resolve(clients, completion.requester);
     if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_focus) {
       return;
     }
@@ -241,18 +242,22 @@ public:
     requester->connection.closing = true;
   }
 
-  inline void notify(ClientSession<Memory> &requester, const ShowNotification &request) {
-    requester.connection.sendConfirmation(NotificationShown{.request_id = request.request_id}, [&](NotificationShown &confirmation) {
-      confirmation.delivered_clients = publish(request.notification);
-    });
+  // Shows a notification on the interactive clients and tells the requester how many received it. The
+  // confirmation takes its place in the requester's queue first, so a full queue refuses the request
+  // before anything is shown; its count is filled in by offset once the clients are reached.
+  inline static void notify(ClientStore<Memory> &clients, std::uint64_t requester_id, const ShowNotification &request) {
+    NotificationShown confirmation{.request_id = request.request_id};
+    const auto offset = requireClient(clients, requester_id).connection.reserve(confirmation);
+    confirmation.delivered_clients = publish(clients, request.notification);
+    requireClient(clients, requester_id).connection.complete(offset, confirmation);
   }
 
-  inline std::uint8_t publish(const NotificationBody &body) {
+  inline static std::uint8_t publish(ClientStore<Memory> &clients, const NotificationBody &body) {
     std::uint8_t delivered = 0;
     Notification notification;
     static_cast<NotificationBody &>(notification) = body;
 
-    for (auto *client : model_.clients.items()) {
+    for (auto *client : clients.items()) {
       if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive) {
         continue;
       }
@@ -266,8 +271,8 @@ public:
     return delivered;
   }
 
-  inline void abandon(std::uint64_t departed) noexcept {
-    for (auto *client : model_.clients.items()) {
+  inline static void abandon(ClientStore<Memory> &clients, std::uint64_t departed) noexcept {
+    for (auto *client : clients.items()) {
       if (client == nullptr || client->id == departed) {
         continue;
       }
@@ -296,18 +301,18 @@ private:
     return client != nullptr && !client->connection.closing && client->role == ClientRole::interactive && client->identity != 0;
   }
 
-  inline ClientSession<Memory> *resolve(ClientRoute target) const noexcept {
-    auto *client = model_.clients.find(target.id);
+  inline static ClientSession<Memory> *resolve(ClientStore<Memory> &clients, ClientRoute target) noexcept {
+    auto *client = clients.find(target.id);
     return client != nullptr && client->generation == target.generation ? client : nullptr;
   }
 
-  inline ClientRoute route(const ClientSession<Memory> &client) const noexcept {
+  inline static ClientRoute route(const ClientSession<Memory> &client) noexcept {
     return ClientRoute{client.id, client.generation};
   }
 
-  inline ClientSession<Memory> *focusOrigin(std::uint64_t pane_id) const noexcept {
+  inline static ClientSession<Memory> *focusOrigin(ClientStore<Memory> &clients, std::uint64_t pane_id) noexcept {
     ClientSession<Memory> *selected = nullptr;
-    for (auto *client : model_.clients.items()) {
+    for (auto *client : clients.items()) {
       if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive || client->last_input_pane != pane_id || client->attachment(pane_id) == nullptr || client->last_input_sequence == 0) {
         continue;
       }
@@ -330,7 +335,6 @@ private:
     }
   }
 
-  RuntimeModel<Memory> &model_;
 };
 
 }
@@ -362,31 +366,39 @@ concept ReporterAgents = requires(const Agents &agents, std::uint64_t pane, std:
   { agents.find(pane, generation) } -> std::convertible_to<const Agent *>;
 };
 
+// Holds a report back until the pane's process is checked again. A held report keeps its payload in
+// its client; the runtime takes it out to replay it.
 template <Allocator Memory, ReporterAgents Agents>
 class DeferredReports {
 public:
-  inline explicit DeferredReports(RuntimeModel<Memory> &model, const Agents &agents) noexcept
-      : model_(model),
-        agents_(agents) {}
+  // The clients whose held reports are due, in the order they were held.
+  struct Due {
+    std::array<std::uint64_t, client_capacity> clients{};
+    std::size_t count = 0;
 
-  inline ReportDecision evaluate(ClientSession<Memory> &client, ReporterIdentity reporter, std::span<const Byte> payload) {
+    inline std::span<const std::uint64_t> ids() const noexcept {
+      return std::span{clients}.first(count);
+    }
+  };
+
+  inline ReportDecision evaluate(PaneStore<Memory> &panes, const Agents &agents, ClientSession<Memory> &client, ReporterIdentity reporter, std::span<const Byte> payload) {
     if (reporter.provider == AgentProvider::unknown) {
       return ReportDecision::accepted;
     }
 
-    auto *pane = model_.panes.find(reporter.pane);
+    auto *pane = panes.find(reporter.pane);
     if (pane == nullptr || pane->generation != reporter.generation || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
     }
     if (client.verified_pane != pane->id || client.verified_generation != pane->generation) {
       throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
     }
-    if (accepts(reporter)) {
+    if (accepts(agents, reporter)) {
       return ReportDecision::accepted;
     }
 
     auto &report = client.deferred_report;
-    const auto rejection = reportingRejection(client, *pane);
+    const auto rejection = reportingRejection(agents, client, *pane);
     if (report.answering) {
       if (report.answer_rechecked && rejection) {
         pane->rejected_reporter = rejection;
@@ -417,60 +429,64 @@ public:
     }
   }
 
-  template <typename Consumer>
-  inline void answerDue(ObservationTime now, Consumer &&consume) {
+  // Marks whether each due report's process was checked again.
+  inline Due due(ClientStore<Memory> &clients, const PaneStore<Memory> &panes, const Agents &agents, ObservationTime now) const {
+    Due due;
     if (pending_ == 0) {
-      return;
+      return due;
     }
 
-    std::array<ClientSession<Memory> *, 32> due;
-    std::size_t count = 0;
-    for (auto *client : model_.clients.items()) {
+    std::array<const ClientSession<Memory> *, client_capacity> ready;
+    for (auto *client : clients.items()) {
       if (client == nullptr || !client->deferred_report.pending) {
         continue;
       }
 
       auto &report = client->deferred_report;
-      const auto *pane = model_.panes.find(report.reporter.pane);
+      const auto *pane = panes.find(report.reporter.pane);
       const bool gone = pane == nullptr || pane->generation != report.reporter.generation || pane->exit_status;
       const bool timed_out = now.nanoseconds - report.observed.nanoseconds >= report_timeout.count();
       const bool rechecked = !gone && report.rechecked(pane->process_rechecks);
-      const bool accepted = !gone && accepts(report.reporter);
+      const bool accepted = !gone && accepts(agents, report.reporter);
       if (gone || timed_out || rechecked || accepted) {
         report.answer_rechecked = rechecked || accepted;
-        due[count++] = client;
+        ready[due.count++] = client;
       }
     }
 
-    auto ordered = std::span{due}.first(count);
+    auto ordered = std::span{ready}.first(due.count);
     std::ranges::sort(ordered, [](const auto *left, const auto *right) {
       return std::bit_cast<std::int64_t>(left->deferred_report.sequence - right->deferred_report.sequence) < 0;
     });
-    for (auto *client : ordered) {
-      auto &report = client->deferred_report;
-      cancel(*client);
-      report.answering = true;
-      client->connection.read_paused = false;
-      try {
-        if (!client->connection.closing) {
-          consume(*client, std::span<const Byte>{report.payload});
-        }
-      } catch (...) {
-        client->connection.closeImmediately();
-      }
-      report.answering = false;
-      report.payload.clear();
+    for (std::size_t index = 0; index < due.count; ++index) {
+      due.clients[index] = ordered[index]->id;
     }
+    return due;
+  }
+
+  // Releases a due report to be answered and hands over its payload.
+  inline Vector<Byte, Memory> open(ClientSession<Memory> &client) noexcept {
+    cancel(client);
+    client.deferred_report.answering = true;
+    client.connection.read_paused = false;
+    return std::move(client.deferred_report.payload);
+  }
+
+  // Ends the answer and gives the payload's storage back to the client.
+  inline static void close(ClientSession<Memory> &client, Vector<Byte, Memory> &&payload) noexcept {
+    payload.clear();
+    client.deferred_report.payload = std::move(payload);
+    client.deferred_report.answering = false;
   }
 
 private:
-  inline bool accepts(ReporterIdentity reporter) const noexcept {
-    const auto *agent = agents_.find(reporter.pane, reporter.generation);
+  inline static bool accepts(const Agents &agents, ReporterIdentity reporter) noexcept {
+    const auto *agent = agents.find(reporter.pane, reporter.generation);
     return agent == nullptr || agent->evidence.accepts(reporter.provider);
   }
 
-  inline std::optional<RejectedReporter> reportingRejection(const ClientSession<Memory> &client, const Pane<Memory> &pane) const noexcept {
-    const auto *agent = agents_.find(pane.id, pane.generation);
+  inline static std::optional<RejectedReporter> reportingRejection(const Agents &agents, const ClientSession<Memory> &client, const Pane<Memory> &pane) noexcept {
+    const auto *agent = agents.find(pane.id, pane.generation);
     if (agent == nullptr || !agent->agent_identity || !agent->process_identity) {
       return std::nullopt;
     }
@@ -494,8 +510,6 @@ private:
   }
 
   static constexpr std::chrono::nanoseconds report_timeout = std::chrono::seconds{2};
-  RuntimeModel<Memory> &model_;
-  const Agents &agents_;
   std::uint64_t sequence_ = 0;
   std::size_t pending_ = 0;
 };
@@ -507,16 +521,16 @@ private:
 export {
 namespace telar::runtime {
 
+// Checks on a worker that a client's process descends from a pane. A request is held in its client
+// until the caller schedules the held checks.
 template <ConcurrentAllocator Memory, LineageInspector Inspector>
 class DescentService {
 public:
-  inline explicit DescentService(RuntimeModel<Memory> &model, const Inspector &inspector)
-      : model_(model),
-        probe_(inspector),
-        worker_(probe_) {}
+  inline explicit DescentService(const Inspector &inspector)
+      : worker_(std::in_place, inspector) {}
 
-  inline void verify(ClientSession<Memory> &client, const VerifyPaneDescent &request) {
-    const auto *pane = model_.panes.find(request.pane_id);
+  inline static void verify(const PaneStore<Memory> &panes, ClientSession<Memory> &client, const VerifyPaneDescent &request) {
+    const auto *pane = panes.find(request.pane_id);
     if (pane == nullptr || request.pane_generation == 0 || pane->generation != request.pane_generation || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
     }
@@ -533,35 +547,34 @@ public:
 
     client.pending_descent = DescentCheck{client.id, client.generation, pane->id, pane->generation, request.request_id, *client.peer_identity, pane->process->processId()};
     client.connection.read_paused = true;
-    schedule();
   }
 
-  inline void collect() {
+  inline void collect(ClientStore<Memory> &clients, const PaneStore<Memory> &panes) {
     if (!pending_) {
       return;
     }
 
-    worker_.collect([this](const typename DescentProbe<Inspector>::Result &result) {
+    worker_.collect([&](const typename DescentProbe<Inspector>::Result &result) {
       pending_ = false;
       for (const auto &completed : std::span{result.checks}.first(result.count)) {
-        finish(completed);
+        finish(clients, panes, completed);
       }
-      schedule();
     });
+    schedule(clients);
   }
 
   inline int descriptor() const noexcept {
     return worker_.descriptor();
   }
 
-private:
-  inline void schedule() {
+  // Submits the held checks no worker runs yet.
+  inline void schedule(ClientStore<Memory> &clients) {
     if (pending_) {
       return;
     }
 
     typename DescentProbe<Inspector>::Request request;
-    for (auto *client : model_.clients.items()) {
+    for (auto *client : clients.items()) {
       if (client != nullptr && client->pending_descent && !client->descent_running && !client->connection.closing) {
         request.checks[request.count++] = *client->pending_descent;
       }
@@ -572,13 +585,14 @@ private:
 
     pending_ = true;
     for (const auto &check : std::span{request.checks}.first(request.count)) {
-      model_.clients.find(check.client)->descent_running = true;
+      clients.find(check.client)->descent_running = true;
     }
   }
 
-  inline void finish(const typename DescentProbe<Inspector>::Completion &completed) noexcept {
+private:
+  inline static void finish(ClientStore<Memory> &clients, const PaneStore<Memory> &panes, const typename DescentProbe<Inspector>::Completion &completed) noexcept {
     const auto &check = completed.check;
-    auto *client = model_.clients.find(check.client);
+    auto *client = clients.find(check.client);
     if (client == nullptr || client->generation != check.client_generation) {
       return;
     }
@@ -591,7 +605,7 @@ private:
     }
 
     try {
-      const auto *pane = model_.panes.find(check.pane);
+      const auto *pane = panes.find(check.pane);
       if (pane == nullptr || pane->generation != check.pane_generation || pane->exit_status) {
         client->connection.send(RequestFailed{.request_id = check.request_id, .code = FailureCode::pane_not_found, .message = "Pane not found"});
       } else if (!completed.lineage.descends) {
@@ -607,8 +621,6 @@ private:
     }
   }
 
-  RuntimeModel<Memory> &model_;
-  DescentProbe<Inspector> probe_;
   ObservationWorker<DescentProbe<Inspector>> worker_;
   bool pending_ = false;
 };
@@ -620,14 +632,18 @@ private:
 export {
 namespace telar::runtime {
 
-template <HostMetricsProbe Probe>
+// Samples the host on the metrics worker. It owns its probe, built from the arguments; a reference
+// type as `Probe` lends one instead.
+template <typename Probe>
+  requires HostMetricsProbe<std::remove_reference_t<Probe>>
 class HostMetricsReader {
 public:
   using Request = HostSampler;
   using Result = HostSampler;
 
-  inline explicit HostMetricsReader(Probe &probe) noexcept
-      : probe_(probe) {}
+  template <typename... Arguments>
+  inline explicit HostMetricsReader(Arguments &&...probe) noexcept
+      : probe_(std::forward<Arguments>(probe)...) {}
 
   inline Result observe(const Request &previous) noexcept {
     auto next = previous;
@@ -644,18 +660,19 @@ public:
   inline void stop() noexcept {}
 
 private:
-  Probe &probe_;
+  Probe probe_;
 };
 
-template <HostMetricsProbe Probe>
+template <typename Probe>
+  requires HostMetricsProbe<std::remove_reference_t<Probe>>
 class HostMetricsService {
 public:
   using Clock = std::chrono::steady_clock;
   static constexpr auto sample_interval = std::chrono::seconds{2};
 
-  inline explicit HostMetricsService(Probe &probe, Clock::time_point started = Clock::now())
-      : reader_(probe),
-        worker_(reader_),
+  template <typename... Arguments>
+  inline explicit HostMetricsService(Clock::time_point started, Arguments &&...probe)
+      : worker_(std::in_place, std::forward<Arguments>(probe)...),
         next_sample_(started + sample_interval) {}
 
   inline std::chrono::nanoseconds tick(Clock::time_point now) {
@@ -704,7 +721,6 @@ public:
 #endif
 
 private:
-  HostMetricsReader<Probe> reader_;
   ObservationWorker<HostMetricsReader<Probe>> worker_;
   HostSampler sampler_;
   Clock::time_point next_sample_;
@@ -729,28 +745,27 @@ concept ObservationLimitSink = requires(Limits &limits, const LimitReach &reach)
   { limits.report(reach) } -> std::same_as<void>;
 };
 
+// Observes pane screens and processes on a worker. The model and the agents are lent to each call.
 template <ConcurrentAllocator Memory, typename Agents, ObservationLimitSink Limits, PaneProcessProbe Probe, HistoryEventSink History>
   requires AgentObservationSink<Agents, Memory>
 class PaneObservationService {
   using Processor = ObservationProcessor<Memory, Probe, History>;
 
 public:
-  inline explicit PaneObservationService(RuntimeModel<Memory> &model, Agents &agents, Limits &limits, Probe &probe, History &history)
-      : model_(model),
-        agents_(agents),
-        limits_(limits),
-        processor_(model.manifests, probe, history),
-        worker_(processor_) {}
+  inline explicit PaneObservationService(Limits &limits, const AgentManifests &manifests, Probe &probe, History &history)
+      : limits_(limits),
+        worker_(std::in_place, manifests, probe, history) {}
 
-  inline void refresh() {
-    collect();
+  inline void refresh(RuntimeModel<Memory> &model, Agents &agents) {
+    collect(model, agents);
     if (pending_) {
       return;
     }
 
     typename Processor::Request request;
-    enqueueRetired(request);
-    const auto panes = model_.panes.items();
+    enqueueRetired(model, request);
+    const auto panes = model.panes.items();
+    const bool sole = model.panes.size() == 1;
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
       const auto slot = next_slot_++ % panes.size();
       auto *pane = panes[slot];
@@ -758,7 +773,7 @@ public:
         continue;
       }
 
-      enqueue(request, *pane);
+      enqueue(request, agents, *pane, sole);
       if (request.count == request.entries.size()) {
         break;
       }
@@ -769,28 +784,29 @@ public:
     }
   }
 
-  inline void observe(Pane<Memory> &pane) {
-    collect();
-    if (pending_) {
+  inline void observe(RuntimeModel<Memory> &model, Agents &agents, std::uint64_t pane_id) {
+    collect(model, agents);
+    auto *pane = model.panes.find(pane_id);
+    if (pending_ || pane == nullptr) {
       return;
     }
 
     typename Processor::Request request;
-    enqueue(request, pane);
+    enqueue(request, agents, *pane, model.panes.size() == 1);
     if (request.count != 0) {
       pending_ = worker_.submit(request);
     }
   }
 
-  inline void collect() {
+  inline void collect(RuntimeModel<Memory> &model, Agents &agents) {
     if (!pending_) {
       return;
     }
 
-    worker_.collect([&](const typename Processor::Result &result) { apply(result); });
+    worker_.collect([&](const typename Processor::Result &result) { apply(model, agents, result); });
   }
 
-  inline void finish() noexcept {
+  inline void finish(RuntimeModel<Memory> &model) noexcept {
     for (;;) {
       worker_.wait([&](const typename Processor::Result &result) {
         pending_ = false;
@@ -800,7 +816,7 @@ public:
       });
 
       typename Processor::Request request;
-      for (auto *pane : model_.panes.items()) {
+      for (auto *pane : model.panes.items()) {
         if (pane != nullptr && pane->observer->seal()) {
           request.entries[request.count++].observer = pane->observer;
           if (request.count == request.entries.size()) {
@@ -809,7 +825,7 @@ public:
         }
       }
 
-      enqueueRetired(request);
+      enqueueRetired(model, request);
       if (request.count == 0) {
         return;
       }
@@ -823,19 +839,19 @@ public:
   }
 
 private:
-  inline void apply(const typename Processor::Result &result) {
+  inline void apply(RuntimeModel<Memory> &model, Agents &agents, const typename Processor::Result &result) {
     pending_ = false;
     for (const auto &entry : std::span{result.entries}.first(result.count)) {
       entry.observer->complete();
     }
 
     for (const auto &entry : std::span{result.entries}.first(result.count)) {
-      TELAR_DIAGNOSTIC(model_.metrics.observation.merge(entry.screen.metrics));
+      TELAR_DIAGNOSTIC(model.metrics.observation.merge(entry.screen.metrics));
       if (entry.screen.failed) {
         limits_.report(LimitReach{.name = "history.observation_failures", .noun = "failed observations", .route = "history"});
       }
 
-      auto *pane = model_.panes.find(entry.pane);
+      auto *pane = model.panes.find(entry.pane);
       if (pane == nullptr || pane->generation != entry.generation || pane->exit_status) {
         continue;
       }
@@ -856,25 +872,25 @@ private:
       }
 
       if (entry.process_result && entry.process_result->inspected) {
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.agent_process_inspections));
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
-        applyProcess(*pane, *entry.process_result);
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
+        applyProcess(agents, *pane, *entry.process_result);
       }
 
       if (entry.screen.signal) {
-        agents_.observeScreen(*pane, *entry.screen.signal, entry.screen.time);
+        agents.observeScreen(*pane, *entry.screen.signal, entry.screen.time);
       }
     }
   }
 
-  inline void enqueueRetired(typename Processor::Request &request) noexcept {
-    auto *link = &model_.retired_observers;
+  inline static void enqueueRetired(RuntimeModel<Memory> &model, typename Processor::Request &request) noexcept {
+    auto *link = &model.retired_observers;
     while (*link && request.count < request.entries.size()) {
       auto &observer = **link;
       if (observer.idle()) {
         auto next = std::move(observer.retired_next);
         *link = std::move(next);
-        --model_.retired_observer_count;
+        --model.retired_observer_count;
         continue;
       }
 
@@ -886,7 +902,8 @@ private:
     }
   }
 
-  inline void enqueue(typename Processor::Request &request, Pane<Memory> &pane) {
+  // A sole pane discovers its foreground group on the worker; others read it here.
+  inline void enqueue(typename Processor::Request &request, const Agents &agents, Pane<Memory> &pane, bool sole) {
     if (auto drop = pane.observer->takeDrop()) {
       limits_.report(*drop);
     }
@@ -901,13 +918,13 @@ private:
     entry.input_revision = pane.input_revision;
     entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process->processId(), 0};
     entry.process_request.cache = pane.process_cache;
-    if (const auto *agent = agents_.find(pane.id, pane.generation)) {
+    if (const auto *agent = agents.find(pane.id, pane.generation)) {
       entry.provider = agent->provider;
       entry.tracked_agent = true;
     }
 
     if (probe_process) {
-      entry.process_request.discover_foreground = model_.panes.size() == 1;
+      entry.process_request.discover_foreground = sole;
       if (!entry.process_request.discover_foreground) {
         entry.process_request.foreground = pane.process->foregroundProcessGroup().value_or(0);
       }
@@ -918,7 +935,7 @@ private:
     }
   }
 
-  inline void applyProcess(Pane<Memory> &pane, const ProcessProbeResult &observation) {
+  inline static void applyProcess(Agents &agents, Pane<Memory> &pane, const ProcessProbeResult &observation) {
     if (pane.generation != observation.request.generation || pane.exit_status || pane.process->processId() != observation.request.root || pane.process->foregroundProcessGroup().value_or(0) != observation.request.foreground) {
       return;
     }
@@ -929,13 +946,10 @@ private:
       ++pane.foreground_revision;
     }
 
-    agents_.observeProcess(pane, observation);
+    agents.observeProcess(pane, observation);
   }
 
-  RuntimeModel<Memory> &model_;
-  Agents &agents_;
   Limits &limits_;
-  Processor processor_;
   ObservationWorker<Processor> worker_;
   std::size_t next_slot_ = 0;
   bool pending_ = false;
@@ -968,12 +982,15 @@ public:
   using Clock = std::chrono::steady_clock;
   static constexpr auto transfer_timeout = std::chrono::seconds{30};
 
-  inline explicit RuntimeClipboardService(RuntimeModel<Memory> &model)
-      : model_(model),
-        worker_(reader_) {}
+  // The reader is built in place on its worker from the arguments.
+  template <typename... Arguments>
+  inline explicit RuntimeClipboardService(Arguments &&...reader)
+      : worker_(std::in_place, std::forward<Arguments>(reader)...) {}
 
-  inline void read(ClientSession<Memory> &client, const ReadRuntimeClipboard &request) {
-    expire(Clock::now());
+  // A transfer whose owner left, closed or timed out ends before the request is weighed.
+  inline void read(ClientStore<Memory> &clients, std::uint64_t client_id, const ReadRuntimeClipboard &request) {
+    expire(clients, Clock::now());
+    auto &client = requireClient(clients, client_id);
     if (request.transfer_id != 0) {
       if (pending_ || owner_ != client.id || generation_ != client.generation ||
           transfer_ != request.transfer_id || offset_ != request.offset) {
@@ -994,10 +1011,10 @@ public:
     expires_ = Clock::now() + transfer_timeout;
   }
 
-  inline void collect() {
+  inline void collect(ClientStore<Memory> &clients) {
     worker_.collect([&](typename Reader::Result &result) {
       pending_ = false;
-      auto *client = model_.clients.find(owner_);
+      auto *client = clients.find(owner_);
       if (client == nullptr || client->generation != generation_ || client->connection.closing || Clock::now() >= expires_) {
         clear();
         return;
@@ -1018,9 +1035,9 @@ public:
     });
   }
 
-  inline void expire(Clock::time_point now) noexcept {
+  inline void expire(const ClientStore<Memory> &clients, Clock::time_point now) noexcept {
     if (!pending_ && owner_ != 0) {
-      const auto *client = model_.clients.find(owner_);
+      const auto *client = clients.find(owner_);
       if (now >= expires_ || client == nullptr || client->generation != generation_ || client->connection.closing) {
         clear();
       }
@@ -1059,8 +1076,6 @@ private:
     offset_ = 0;
   }
 
-  RuntimeModel<Memory> &model_;
-  Reader reader_;
   ObservationWorker<Reader> worker_;
   clipboard::content content_;
   std::uint64_t owner_ = 0;
@@ -1081,22 +1096,23 @@ namespace telar::runtime {
 template <Allocator Memory, WorktreeDetector Probe>
 class WorktreeDetectionService {
 public:
-  inline explicit WorktreeDetectionService(RuntimeModel<Memory> &model, Probe &probe)
-      : model_(model),
-        worker_(probe) {}
+  // The probe is built in place on its worker from the arguments.
+  template <typename... Arguments>
+  inline explicit WorktreeDetectionService(Arguments &&...probe)
+      : worker_(std::in_place, std::forward<Arguments>(probe)...) {}
 
-  inline void tick() {
-    collect();
+  inline void tick(RuntimeModel<Memory> &model) {
+    collect(model);
     if (pending_) {
       return;
     }
 
-    for (auto *pane : model_.panes.items()) {
+    for (auto *pane : model.panes.items()) {
       if (pane == nullptr || pane->worktree_checked_cwd == pane->cwd_revision) {
         continue;
       }
       pane->worktree_checked_cwd = pane->cwd_revision;
-      if (pane->exit_status || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace || !pane->cwd.starts_with('/') || model_.worktrees.containing(pane->cwd) != nullptr) {
+      if (pane->exit_status || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace || !pane->cwd.starts_with('/') || model.worktrees.containing(pane->cwd) != nullptr) {
         continue;
       }
 
@@ -1111,22 +1127,22 @@ public:
     }
   }
 
-  inline void collect() {
+  inline void collect(RuntimeModel<Memory> &model) {
     worker_.collect([&](const WorktreeDetectionResult &result) {
       pending_ = false;
-      auto *pane = model_.panes.find(result.pane);
+      auto *pane = model.panes.find(result.pane);
       if (pane == nullptr || pane->generation != result.generation || pane->cwd_revision != result.cwd_revision || result.root_length == 0 || result.root_length > pane->cwd.size() || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
         return;
       }
 
       try {
-        const auto registered = model_.worktrees.registerEntry(RegisterWorktree{
-            .source = model_.worktrees.sourceFor(pane->location.workspace.id),
+        const auto registered = model.worktrees.registerEntry(RegisterWorktree{
+            .source = model.worktrees.sourceFor(pane->location.workspace.id),
             .origin = WorktreeOrigin::external,
             .path = std::string_view{pane->cwd}.substr(0, result.root_length),
             .branch = result.branch.view(),
         });
-        model_.workspace_revision += registered.created;
+        model.workspace_revision += registered.created;
       } catch (const RequestError &) {
       }
     });
@@ -1137,7 +1153,6 @@ public:
   }
 
 private:
-  RuntimeModel<Memory> &model_;
   ObservationWorker<Probe> worker_;
   bool pending_ = false;
 };

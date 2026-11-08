@@ -113,19 +113,21 @@ using namespace telar::runtime;
 
 static void testLimits(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  LimitService limits{model};
-  ClientPeer reporter{memory, model, ClientRole::control};
-  ClientPeer observer{memory, model, ClientRole::interactive};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
+  ClientPeer reporter{memory, model, clients, ClientRole::control};
+  ClientPeer observer{memory, model, clients, ClientRole::interactive};
   const ReportLimit report{.reach = {.name = "test.capacity",
                                      .noun = "items",
                                      .value = 10,
                                      .requested = 11,
                                      .route = "testing"},
                            .hits = 3};
-  limits.receive(reporter.session(), report);
+  limits.receive(model.limits, reporter.session(), report);
+  limits.deliver(model, clients);
   check(observer.receive<Notification>().message == "test.capacity: 11 items; limit 10 (3 times)");
   for (unsigned index = 0; index < 32; ++index) {
-    limits.receive(reporter.session(), report);
+    limits.receive(model.limits, reporter.session(), report);
   }
 
   limits.query(reporter.session(), QueryLimits{.request_id = 1});
@@ -166,11 +168,12 @@ static void testWorktreeOwnership(SystemAllocator &memory) {
 
 static void testExecutions(SystemAllocator &memory) {
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  LimitService limits{model};
-  ExecutionService executions{memory, model, poller, limits};
-  ClientPeer owner{memory, model, ClientRole::control};
-  ClientPeer outsider{memory, model, ClientRole::control};
+  ExecutionService executions{memory, poller, limits};
+  ClientPeer owner{memory, model, clients, ClientRole::control};
+  ClientPeer outsider{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat; printf error >&2; exit 17"};
   ExecutionRequest request{.request_id = 1,
                            .action = ExecutionAction::start,
@@ -178,15 +181,15 @@ static void testExecutions(SystemAllocator &memory) {
                            .stdin_open = true,
                            .cwd = "/tmp",
                            .arguments = arguments};
-  executions.request(owner.session(), request);
+  executions.request(model, owner.session(), request);
   check(owner.receive<ExecutionReply>().state == ExecutionState::starting);
   request.request_id = 2;
-  executions.request(owner.session(), request);
+  executions.request(model, owner.session(), request);
   check(owner.receive<ExecutionReply>().execution_id == 73);
   request.cwd = "/";
   bool conflict = false;
   try {
-    executions.request(owner.session(), request);
+    executions.request(model, owner.session(), request);
   } catch (const RequestError &error) {
     conflict = error.code() == FailureCode::invalid_request;
   }
@@ -199,21 +202,22 @@ static void testExecutions(SystemAllocator &memory) {
   request.bytes = bytes;
   bool refused = false;
   try {
-    executions.request(outsider.session(), request);
+    executions.request(model, outsider.session(), request);
   } catch (const RequestError &) {
     refused = true;
   }
   check(refused);
-  executions.request(owner.session(), request);
+  executions.request(model, owner.session(), request);
   check(owner.receive<ExecutionReply>().input_offset == bytes.size());
-  executions.request(owner.session(), request);
+  executions.request(model, owner.session(), request);
   check(owner.receive<ExecutionReply>().input_offset == bytes.size());
   executions.disconnect(owner.session().id);
 
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
-  while (executions.refresh()) {
+  std::array<Event, decltype(poller)::event_capacity> ready{};
+  while (executions.refresh(model)) {
     check(std::chrono::steady_clock::now() < deadline);
-    for (const auto &event : poller.wait(std::chrono::milliseconds{10})) {
+    for (const auto &event : poller.wait(std::chrono::milliseconds{10}, ready)) {
       executions.event(event);
     }
   }
@@ -221,18 +225,18 @@ static void testExecutions(SystemAllocator &memory) {
   request = {.request_id = 4,
              .action = ExecutionAction::status,
              .execution_id = 73};
-  executions.request(outsider.session(), request);
+  executions.request(model, outsider.session(), request);
   const auto result = outsider.receive<ExecutionReply>();
   check(result.state == ExecutionState::exited && result.exit_code == 17);
   check(std::string_view{reinterpret_cast<const char *>(result.stdout_bytes.data()), result.stdout_bytes.size()} == "hello\n");
   check(std::string_view{reinterpret_cast<const char *>(result.stderr_bytes.data()), result.stderr_bytes.size()} == "error");
   check(!result.stdin_open);
   request.action = ExecutionAction::forget;
-  executions.request(outsider.session(), request);
+  executions.request(model, outsider.session(), request);
   outsider.receive<ExecutionReply>();
   request.action = ExecutionAction::list;
   request.execution_id = 0;
-  executions.request(outsider.session(), request);
+  executions.request(model, outsider.session(), request);
   check(outsider.receive<ExecutionReply>().execution_id == 0);
 
   RetainedStream retained{memory, 4};

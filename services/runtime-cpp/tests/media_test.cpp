@@ -120,7 +120,7 @@ static void testMediaBatches(SystemAllocator &memory) {
   {
     auto media = std::make_shared<PaneMedia<SystemAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16});
     MediaProcessor<SystemAllocator> processor;
-    ObservationWorker worker{processor};
+    ObservationWorker<decltype(processor) &> worker{std::in_place, processor};
     media->output(mediaBytes("\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"));
     check(media->seal());
     MediaProcessor<SystemAllocator>::Request request;

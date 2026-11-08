@@ -48,11 +48,24 @@ concept ObservationService = requires(Service &service, const typename Service::
   { service.stop() } noexcept -> std::same_as<void>;
 };
 
-template <ObservationService Service>
+// Runs a service on its own thread. The worker owns the service, built in place from the arguments,
+// as a Rust thread owns what its closure moves in: the caller's thread never reaches it again. A
+// reference type as `Service` lends the worker a service its caller keeps instead.
+template <typename Service>
+  requires ObservationService<std::remove_reference_t<Service>>
 class ObservationWorker {
+  using Request = typename std::remove_reference_t<Service>::Request;
+  using Result = typename std::remove_reference_t<Service>::Result;
+
 public:
-  inline explicit ObservationWorker(Service &service, CompletionSignal *completion = nullptr)
-      : service_(service),
+  template <typename... Arguments>
+  inline explicit ObservationWorker(std::in_place_t, Arguments &&...arguments)
+      : ObservationWorker(nullptr, std::in_place, std::forward<Arguments>(arguments)...) {}
+
+  // The completion is signaled after every result, besides the worker's own descriptor.
+  template <typename... Arguments>
+  inline ObservationWorker(CompletionSignal *completion, std::in_place_t, Arguments &&...arguments)
+      : service_(std::forward<Arguments>(arguments)...),
         completion_(completion) {
     const auto error = ::pthread_create(&thread_, nullptr, &start, this);
     if (error != 0) {
@@ -73,7 +86,7 @@ public:
   ObservationWorker(const ObservationWorker &) = delete;
   ObservationWorker &operator=(const ObservationWorker &) = delete;
 
-  inline bool submit(const typename Service::Request &request) {
+  inline bool submit(const Request &request) {
     const std::lock_guard lock{mutex_};
     if (busy_ || stopping_) {
       return false;
@@ -90,7 +103,7 @@ public:
       return;
     }
 
-    std::optional<typename Service::Result> result;
+    std::optional<Result> result;
     {
       const std::unique_lock lock{mutex_, std::try_to_lock};
       if (!lock.owns_lock()) {
@@ -113,7 +126,7 @@ public:
 
   template <typename Consumer>
   inline void wait(Consumer &&consume) {
-    std::optional<typename Service::Result> result;
+    std::optional<Result> result;
     {
       std::unique_lock lock{mutex_};
       if (!busy_) {
@@ -139,7 +152,7 @@ private:
 
   inline void run() noexcept {
     for (;;) {
-      std::optional<typename Service::Request> request;
+      std::optional<Request> request;
       {
         std::unique_lock lock{mutex_};
         ready_.wait(lock, [&] { return stopping_ || request_.has_value(); });
@@ -163,15 +176,15 @@ private:
     }
   }
 
-  Service &service_;
+  Service service_;
   CompletionSignal *completion_;
   CompletionSignal signal_;
   pthread_t thread_{};
   std::mutex mutex_;
   std::condition_variable ready_;
   std::condition_variable completed_;
-  std::optional<typename Service::Request> request_;
-  std::optional<typename Service::Result> result_;
+  std::optional<Request> request_;
+  std::optional<Result> result_;
   bool busy_ = false;
   std::atomic<bool> result_ready_{false};
   bool stopping_ = false;

@@ -1,4 +1,6 @@
 module;
+#include "tbc/view.hpp"
+#include <cassert>
 #include <time.h>
 #include <signal.h>
 #include <cstddef>
@@ -150,7 +152,9 @@ struct Event {
 };
 
 #if defined(__APPLE__)
-class Kqueue {
+// Registering and removing descriptors invalidates nothing the queue hands out: events land in the
+// caller's buffer, so many objects may keep the queue.
+class TBC_SHARED Kqueue {
 public:
   Kqueue();
 
@@ -161,26 +165,29 @@ public:
   void writeInterest(int descriptor, std::uint64_t token, bool enabled);
   void remove(int descriptor) noexcept;
   void watchSignal(int signal_number);
-  std::span<const Event> wait(std::chrono::nanoseconds timeout);
+
+  static constexpr std::size_t event_capacity = 128;
+  // Fills the caller's buffer, which holds event_capacity events, so registering descriptors while
+  // the events are handled leaves them valid.
+  tbc::view<std::span<const Event>, tbc::lt::a> wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events);
 
 private:
   void change(const struct kevent &event);
 
   FileDescriptor queue_;
-  static constexpr std::size_t batch_capacity = 128;
-  std::array<struct kevent, batch_capacity> kernel_events_{};
-  std::array<Event, batch_capacity> events_{};
+  std::array<struct kevent, event_capacity> kernel_events_{};
 };
 
 #endif
 
 template <typename Poller>
-concept EventLoop = requires(Poller &poller, int descriptor, std::uint64_t token, std::chrono::nanoseconds timeout) {
+concept EventLoop = requires(Poller &poller, int descriptor, std::uint64_t token, std::chrono::nanoseconds timeout, std::span<Event> events) {
   { poller.watch(descriptor, token) } -> std::same_as<void>;
   { poller.readInterest(descriptor, token, true) } -> std::same_as<void>;
   { poller.writeInterest(descriptor, token, true) } -> std::same_as<void>;
   { poller.remove(descriptor) } noexcept -> std::same_as<void>;
-  { poller.wait(timeout) } -> std::same_as<std::span<const Event>>;
+  { Poller::event_capacity } -> std::convertible_to<std::size_t>;
+  { poller.wait(timeout, events) } -> std::same_as<std::span<const Event>>;
 };
 
 #if defined(__APPLE__)
@@ -223,8 +230,10 @@ inline void notify(int number) noexcept {
 
 }
 
+// Registering and removing descriptors invalidates nothing the queue hands out: events land in the
+// caller's buffer, so many objects may keep the queue.
 template <Allocator Memory>
-class Epoll {
+class TBC_SHARED Epoll {
   struct Interest {
     std::uint64_t token = 0;
     std::uint32_t mask = 0;
@@ -322,7 +331,12 @@ public:
     signals_[number] = true;
   }
 
-  inline std::span<const Event> wait(std::chrono::nanoseconds timeout) {
+  static constexpr std::size_t event_capacity = 384;
+
+  // Fills the caller's buffer, which holds event_capacity events, so registering descriptors while
+  // the events are handled leaves them valid.
+  inline tbc::view<std::span<const Event>, tbc::lt::a> wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events) {
+    assert(events.size() >= event_capacity);
     timeout = std::max(timeout, std::chrono::nanoseconds::zero());
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const timespec duration{.tv_sec = seconds.count(), .tv_nsec = (timeout - seconds).count()};
@@ -353,7 +367,7 @@ public:
         (void)ignored;
         for (int number = 1; number < NSIG; ++number) {
           if (signals_[number] && linux_signals::registrations[number].pending.exchange(false)) {
-            events_[produced++] = {EventKind::signal, number, 0, false};
+            events[produced++] = {EventKind::signal, number, 0, false};
           }
         }
         continue;
@@ -361,14 +375,14 @@ public:
 
       const bool closed = (event.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0;
       if ((interest.mask & EPOLLIN) && ((event.events & EPOLLIN) || closed)) {
-        events_[produced++] = {EventKind::readable, descriptor, interest.token, closed};
+        events[produced++] = {EventKind::readable, descriptor, interest.token, closed};
       }
       if ((interest.mask & EPOLLOUT) && ((event.events & EPOLLOUT) || closed)) {
-        events_[produced++] = {EventKind::writable, descriptor, interest.token, closed};
+        events[produced++] = {EventKind::writable, descriptor, interest.token, closed};
       }
     }
 
-    return std::span<const Event>{events_}.first(produced);
+    return std::span<const Event>{events}.first(produced);
   }
 
 private:
@@ -416,7 +430,7 @@ private:
   std::array<struct sigaction, NSIG> previous_signals_{};
   std::array<bool, NSIG> signals_{};
   std::array<epoll_event, batch_capacity> kernel_events_{};
-  std::array<Event, batch_capacity * 3> events_{};
+  static_assert(event_capacity == batch_capacity * 3);
 };
 
 static_assert(EventLoop<Epoll<SystemAllocator>>);

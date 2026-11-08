@@ -356,43 +356,44 @@ static void testConnectionPolicy() {
 static void testSocketWatch() {
   SystemAllocator memory;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  std::array<Event, NativeEventLoop<std::remove_reference_t<decltype(memory)>>::event_capacity> ready{};
   SocketPair sockets;
   SocketWatch watch;
   watch.update(poller, sockets.local.get(), 512, {.readable = true});
   sendBytes(sockets.remote.get(), "event");
-  const auto first = poller.wait(std::chrono::seconds{1});
+  const auto first = poller.wait(std::chrono::seconds{1}, ready);
   check(first.size() == 1 && watch.matches(first.front()));
   const auto stale = first.front();
   watch.update(poller, sockets.local.get(), 1024, {.readable = true});
   check(!watch.matches(stale));
-  const auto second = poller.wait(std::chrono::seconds{1});
+  const auto second = poller.wait(std::chrono::seconds{1}, ready);
   check(second.size() == 1 && watch.matches(second.front()) && second.front().token == 1024);
 
   watch.update(poller, sockets.local.get(), 1024, {.readable = true, .writable = true});
-  const auto both = poller.wait(std::chrono::seconds{1});
+  const auto both = poller.wait(std::chrono::seconds{1}, ready);
   check(both.size() == 2);
   check(both[0].kind != both[1].kind && watch.matches(both[0]) && watch.matches(both[1]));
 
   watch.update(poller, sockets.local.get(), 1024, {.readable = true});
-  const auto readable = poller.wait(std::chrono::seconds{1});
+  const auto readable = poller.wait(std::chrono::seconds{1}, ready);
   check(readable.size() == 1 && watch.matches(readable.front()) && readable.front().kind == EventKind::readable);
   check(receiveBytes(sockets.local.get()) == "event");
 
   watch.update(poller, sockets.local.get(), 1024, {.writable = true});
-  const auto writable = poller.wait(std::chrono::seconds{1});
+  const auto writable = poller.wait(std::chrono::seconds{1}, ready);
   check(writable.size() == 1 && watch.matches(writable.front()) && writable.front().kind == EventKind::writable);
   watch.remove(poller);
-  check(poller.wait(std::chrono::nanoseconds{0}).empty() && !watch.matches(stale));
+  check(poller.wait(std::chrono::nanoseconds{0}, ready).empty() && !watch.matches(stale));
 
   watch.update(poller, sockets.local.get(), 2048, {.readable = true});
   sendBytes(sockets.remote.get(), "retiring");
-  const auto retiring = poller.wait(std::chrono::seconds{1}).front();
+  const auto retiring = poller.wait(std::chrono::seconds{1}, ready).front();
   SocketPair replacement;
   const int reused_descriptor = sockets.local.get();
   watch.remove(poller);
   sockets.local.reset();
   check(!watch.matches(retiring));
-  check(poller.wait(std::chrono::nanoseconds{0}).empty());
+  check(poller.wait(std::chrono::nanoseconds{0}, ready).empty());
   check(::dup2(replacement.local.get(), reused_descriptor) == reused_descriptor);
   sockets.local.reset(reused_descriptor);
   replacement.local.reset();
@@ -400,12 +401,12 @@ static void testSocketWatch() {
   watch.update(poller, reused_descriptor, 4096, {.readable = true});
   check(!watch.matches(retiring));
   sendBytes(replacement.remote.get(), "replacement");
-  const auto replaced = poller.wait(std::chrono::seconds{1});
+  const auto replaced = poller.wait(std::chrono::seconds{1}, ready);
   check(replaced.size() == 1 && watch.matches(replaced.front()) && replaced.front().token == 4096);
   check(receiveBytes(reused_descriptor) == "replacement");
   watch.remove(poller);
   sockets.local.reset();
-  check(poller.wait(std::chrono::nanoseconds{0}).empty());
+  check(poller.wait(std::chrono::nanoseconds{0}, ready).empty());
   bool rejected = false;
   try {
     watch.update(poller, reused_descriptor, 8192, {.readable = true, .writable = true});
@@ -415,7 +416,7 @@ static void testSocketWatch() {
 
   check(rejected);
   watch.remove(poller);
-  check(poller.wait(std::chrono::nanoseconds{0}).empty());
+  check(poller.wait(std::chrono::nanoseconds{0}, ready).empty());
 }
 
 void testProxyTransport() {

@@ -131,26 +131,29 @@ static void testProgramLabels() {
 static void testDeferredClosure(bool worktree) {
   SystemAllocator memory;
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/closure-fixture.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer owner{memory, model, ClientRole::interactive};
-  ClientPeer observer{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/closure-fixture.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer owner{memory, model, clients, ClientRole::interactive};
+  ClientPeer observer{memory, model, clients, ClientRole::interactive};
   constexpr TerminalSize size{80, 24, 0, 0};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
-  workspaces.open(owner.session(), OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
+  workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
   const auto opened = owner.receive<PaneOpened>();
-  auto &pane = panes.require(opened.pane_id);
-  panes.attach(observer.session(), pane, size);
+  auto &pane = panes.require(model.panes, opened.pane_id);
+  panes.attach(model, observer.session(), pane.id, size);
   constexpr std::string_view final_output = "retained final output";
   pane.terminal.feed({reinterpret_cast<const Byte *>(final_output.data()), final_output.size()});
 
   if (worktree) {
-    workspaces.closeWorkspace(opened.location.workspace.id);
+    workspaces.closeWorkspace(model, clients, opened.location.workspace.id);
     const auto notification = observer.receive<TabClosed>();
     check(notification.request_id == 0 && notification.workspace_closed && notification.location.tab_id == opened.location.tab_id);
   } else {
-    workspaces.closeTab(owner.session(), CloseTab{.request_id = 2, .location = opened.location});
+    workspaces.closeTab(model, owner.session(), CloseTab{.request_id = 2, .location = opened.location});
+    workspaces.deliverNotices(clients);
     check(observer.session().workspace_resync.has_value());
   }
   const auto response = owner.receive<TabClosed>();
@@ -162,11 +165,11 @@ static void testDeferredClosure(bool worktree) {
 
   pane.output_closed = true;
   pane.exit_status = SIGKILL;
-  workspaces.collectExited();
+  workspaces.collectExited(model, panes, clients);
   check(model.panes.find(opened.pane_id) != nullptr);
-  panes.release(owner.session(), opened.pane_id);
-  panes.release(observer.session(), opened.pane_id);
-  workspaces.collectExited();
+  panes.release(model, clients, owner.session().id, opened.pane_id);
+  panes.release(model, clients, observer.session().id, opened.pane_id);
+  workspaces.collectExited(model, panes, clients);
   check(model.panes.find(opened.pane_id) == nullptr);
   check(!owner.session().workspace && !observer.session().workspace);
   const auto *retained = model.exited_panes.find(opened.pane_id, opened.pane_generation);

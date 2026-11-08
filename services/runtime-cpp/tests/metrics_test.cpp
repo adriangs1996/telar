@@ -116,7 +116,7 @@ static void testProjection() {
   check(sampler.latest()->cpu_percent == 100 && sampler.latest()->memory_used_decigib == 65535);
 
   FakeHostMetrics probe;
-  HostMetricsReader reader{probe};
+  HostMetricsReader<FakeHostMetrics &> reader{probe};
   const auto retained = reader.observe(sampler);
   check(retained.latest() == sampler.latest() && retained.revision() == sampler.revision());
 #if TELAR_DIAGNOSTICS
@@ -128,11 +128,12 @@ static void testProjection() {
 static void testDelivery() {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  ClientPeer client{memory, model, ClientRole::interactive};
+  ClientStore<SystemAllocator> clients{memory};
+  ClientPeer client{memory, model, clients, ClientRole::interactive};
   FakeHostMetrics probe;
   probe.next = HostCounters{.busy_ticks = 2, .total_ticks = 10, .memory_used_bytes = 4 * gib, .memory_total_bytes = 16 * gib, .cpu_count = 8, .battery_percent = 81};
   const HostMetricsService<FakeHostMetrics>::Clock::time_point started{};
-  HostMetricsService metrics{probe, started};
+  HostMetricsService<FakeHostMetrics &> metrics{started, probe};
   metrics.publish(client.session());
   check(client.session().metrics_revision == 0);
   client.session().subscribed = true;

@@ -1,4 +1,5 @@
 module;
+#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <sys/stat.h>
@@ -78,36 +79,87 @@ import telar.runtime.terminal.control;
 export {
 namespace telar::runtime {
 
+// Limits the runtime and its clients reach. Any service may report one: a report is copied into a
+// fixed queue, and the runtime delivers the queue once no client is borrowed, recording each limit and
+// showing it to interactive clients. Nothing the service holds moves, so many services keep it.
 template <Allocator Memory>
-class LimitService {
+class TBC_SHARED LimitService {
 public:
-  inline explicit LimitService(RuntimeModel<Memory> &model) noexcept
-      : model_(model) {}
-
-  inline void receive(ClientSession<Memory> &client, const ReportLimit &message) {
-    if (!admit(client)) {
+  // Records a client's report at once, so a query in the same batch sees it; a control client's report
+  // that is due is shown at the next delivery.
+  inline void receive(RuntimeLimits &limits, ClientSession<Memory> &client, const ReportLimit &message) {
+    if (!admit(limits, client)) {
       return;
     }
 
-    const auto recorded = model_.limits.clients.record(message.reach, message.hits);
+    const auto recorded = limits.clients.record(message.reach, message.hits);
     if (recorded.show && client.role == ClientRole::control) {
-      show(recorded.row);
+      queueShow(Ledger::clients, recorded.slot);
     }
   }
 
-  inline void report(const LimitReach &reach) {
-    const auto recorded = model_.limits.runtime.record(reach, 1);
-    if (recorded.show) {
-      show(recorded.row);
+  inline void report(const LimitReach &reach) noexcept {
+    if (reports_ == reached_.size()) {
+      dropped_ = saturatedAdd(dropped_, 1);
+      return;
     }
+
+    auto &copy = reached_[reports_++];
+    copy.name.assign(reach.name);
+    copy.noun.assign(reach.noun);
+    copy.route.assign(reach.route);
+    copy.value = reach.value;
+    copy.requested = reach.requested;
   }
 
-  inline void query(ClientSession<Memory> &client, const QueryLimits &request) {
+  inline static void query(ClientSession<Memory> &client, const QueryLimits &request) {
     client.connection.defer(request);
   }
 
+  // Records the reported limits and shows those that are due.
+  inline void deliver(RuntimeModel<Memory> &model, ClientStore<Memory> &clients) noexcept {
+    for (const auto &reached : std::span{reached_}.first(reports_)) {
+      const auto recorded = model.limits.runtime.record({reached.name.view(), reached.noun.view(), reached.value, reached.requested, reached.route.view()}, 1);
+      if (recorded.show) {
+        queueShow(Ledger::runtime, recorded.slot);
+      }
+    }
+    reports_ = 0;
+    if (dropped_ != 0) {
+      model.limits.refused_reports = saturatedAdd(model.limits.refused_reports, dropped_);
+      dropped_ = 0;
+    }
+
+    for (const auto &[ledger, slot] : std::span{shown_}.first(shows_)) {
+      const auto rows = (ledger == Ledger::clients ? model.limits.clients : model.limits.runtime).rows();
+      if (slot < rows.size()) {
+        show(clients, rows[slot]);
+      }
+    }
+    shows_ = 0;
+  }
+
 private:
-  inline bool admit(ClientSession<Memory> &client) noexcept {
+  enum class Ledger : std::uint8_t {
+    runtime,
+    clients,
+  };
+
+  struct Reached {
+    FixedText<64> name;
+    FixedText<32> noun;
+    FixedText<32> route;
+    std::uint64_t value = 0;
+    std::optional<std::uint64_t> requested;
+  };
+
+  inline void queueShow(Ledger ledger, std::size_t slot) noexcept {
+    if (shows_ < shown_.size()) {
+      shown_[shows_++] = {ledger, slot};
+    }
+  }
+
+  inline static bool admit(RuntimeLimits &limits, ClientSession<Memory> &client) noexcept {
     const auto now = std::chrono::steady_clock::now();
     if (now - client.limit_report_window >= std::chrono::seconds{1}) {
       client.limit_report_window = now;
@@ -115,7 +167,7 @@ private:
     }
 
     if (client.limit_reports == reports_per_second) {
-      model_.limits.refused_reports = saturatedAdd(model_.limits.refused_reports, 1);
+      limits.refused_reports = saturatedAdd(limits.refused_reports, 1);
       return false;
     }
 
@@ -123,7 +175,7 @@ private:
     return true;
   }
 
-  inline void show(const LimitLedger::Row &row) noexcept {
+  inline static void show(ClientStore<Memory> &clients, const LimitLedger::Row &row) noexcept {
     std::array<char, 256> text{};
     const auto reach = row.reach();
     const char *separator = reach.noun.empty() ? "" : " ";
@@ -144,7 +196,7 @@ private:
                                                      .duration_ms = 8000,
                                                      .title = "Limit reached",
                                                      .message = {text.data(), static_cast<std::size_t>(length)}}};
-    for (auto *client : model_.clients.items()) {
+    for (auto *client : clients.items()) {
       if (client == nullptr || client->role != ClientRole::interactive || client->connection.closing) {
         continue;
       }
@@ -158,11 +210,12 @@ private:
   }
 
   static constexpr unsigned reports_per_second = 32;
-  RuntimeModel<Memory> &model_;
+  std::array<Reached, 32> reached_{};
+  std::size_t reports_ = 0;
+  std::uint64_t dropped_ = 0;
+  std::array<std::pair<Ledger, std::size_t>, 64> shown_{};
+  std::size_t shows_ = 0;
 };
-
-template <Allocator Memory>
-LimitService(RuntimeModel<Memory> &model) -> LimitService<Memory>;
 
 }
 }
@@ -174,22 +227,21 @@ namespace telar::runtime {
 template <Allocator Memory, EventLoop Poller>
 class ClientAdmission {
 public:
-  inline explicit ClientAdmission(RuntimeModel<Memory> &model, Poller &poller, LimitService<Memory> &limits)
-      : model_(model),
-        poller_(poller),
+  inline explicit ClientAdmission(Poller &poller, LimitService<Memory> &limits)
+      : poller_(poller),
         limits_(limits) {}
 
   inline ~ClientAdmission() {
     clear();
   }
 
-  inline void begin(FileDescriptor descriptor) {
-    constexpr std::size_t maximum_clients = 32;
+  inline void begin(std::size_t clients, FileDescriptor descriptor) {
+    constexpr std::size_t maximum_clients = client_capacity;
     std::size_t reserved = 0;
     for (const auto &pending : pending_) {
       reserved += pending && pending->reservesClient();
     }
-    const auto requested = model_.clients.size() + reserved + 1;
+    const auto requested = clients + reserved + 1;
     const bool refused = requested > maximum_clients;
     if (refused) {
       limits_.report({"clients.max_clients", "clients", maximum_clients, requested, {}});
@@ -289,7 +341,6 @@ private:
   std::array<std::optional<ClientHandshake>, capacity> pending_;
   std::array<std::uint64_t, capacity> generations_{};
   std::size_t count_ = 0;
-  RuntimeModel<Memory> &model_;
   Poller &poller_;
   LimitService<Memory> &limits_;
 };
@@ -302,8 +353,8 @@ export {
 namespace telar::runtime {
 
 template <Allocator Memory>
-void notifyWorkspaceObservers(RuntimeModel<Memory> &model, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept {
-  for (auto *client : model.clients.items()) {
+void notifyWorkspaceObservers(ClientStore<Memory> &clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept {
+  for (auto *client : clients.items()) {
     if (client != nullptr && client->id != origin && client->connection.negotiated && !client->connection.closing && client->workspace == workspace) {
       client->workspace_resync = ResyncRequired{.workspace = {.id = workspace}, .previous_workspace = previous};
     }
@@ -311,8 +362,8 @@ void notifyWorkspaceObservers(RuntimeModel<Memory> &model, std::uint64_t workspa
 }
 
 template <Allocator Memory>
-std::optional<std::uint64_t> previousWorkspace(const RuntimeModel<Memory> &model, std::uint64_t identity) noexcept {
-  const auto items = model.workspaces.items();
+std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore<Memory> &workspaces, std::uint64_t identity) noexcept {
+  const auto items = workspaces.items();
   for (std::size_t index = 0; index < items.size(); ++index) {
     if (items[index] == nullptr || items[index]->id != identity) {
       continue;
@@ -337,15 +388,16 @@ std::optional<std::uint64_t> previousWorkspace(const RuntimeModel<Memory> &model
 export {
 namespace telar::runtime {
 
+// The panes of a workspace whose geometry a client takes follow that client's colors.
 template <Allocator Memory>
-bool acquireGeometry(RuntimeModel<Memory> &model, const ClientSession<Memory> &client, Workspace<Memory> &workspace) {
+bool acquireGeometry(PaneStore<Memory> &panes, [[maybe_unused]] diagnostics::RuntimeCounters &metrics, const ClientSession<Memory> &client, Workspace<Memory> &workspace) {
   if (workspace.geometry_client) {
-    TELAR_DIAGNOSTIC(if (*workspace.geometry_client != client.id) { diagnostics::accumulate(model.metrics.geometry_rejections); });
+    TELAR_DIAGNOSTIC(if (*workspace.geometry_client != client.id) { diagnostics::accumulate(metrics.geometry_rejections); });
     return *workspace.geometry_client == client.id;
   }
 
   workspace.geometry_client = client.id;
-  for (auto *pane : model.panes.items()) {
+  for (auto *pane : panes.items()) {
     if (pane != nullptr && pane->location.workspace.id == workspace.id) {
       if (!pane->desktop_theme) {
         pane->terminal.configureColors(client.colors);
@@ -358,18 +410,18 @@ bool acquireGeometry(RuntimeModel<Memory> &model, const ClientSession<Memory> &c
 }
 
 template <Allocator Memory>
-void releaseGeometry(RuntimeModel<Memory> &model, std::uint64_t client, Workspace<Memory> &workspace) noexcept {
+void releaseGeometry(ClientStore<Memory> &clients, std::uint64_t client, Workspace<Memory> &workspace) noexcept {
   if (workspace.geometry_client == client) {
     workspace.geometry_client.reset();
-    notifyWorkspaceObservers(model, workspace.id, client);
+    notifyWorkspaceObservers(clients, workspace.id, client);
   }
 }
 
 template <Allocator Memory>
-void releaseAllGeometry(RuntimeModel<Memory> &model, std::uint64_t client) noexcept {
-  for (auto *workspace : model.workspaces.items()) {
+void releaseAllGeometry(WorkspaceStore<Memory> &workspaces, ClientStore<Memory> &clients, std::uint64_t client) noexcept {
+  for (auto *workspace : workspaces.items()) {
     if (workspace != nullptr) {
-      releaseGeometry(model, client, *workspace);
+      releaseGeometry(clients, client, *workspace);
     }
   }
 }
@@ -434,17 +486,17 @@ struct IgnorePaneInput {
 template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
 class PaneService {
 public:
-  inline explicit PaneService(Memory &memory, RuntimeModel<Memory> &model, Poller &poller, PaneLaunchOptions options, History &history = discarded_history)
+  inline explicit PaneService(Memory &memory, Poller &poller, LimitService<Memory> &limits, PaneLaunchOptions options, History &history = discarded_history)
       : memory_(memory),
-        model_(model),
         poller_(poller),
+        limits_(limits),
         history_(history),
         socket_path_(options.socket),
         proxy_(options.proxy),
         control_policy_(options.control_policy) {}
 
-  inline Pane<Memory> &require(std::uint64_t identity) const {
-    auto *pane = model_.panes.find(identity);
+  inline static Pane<Memory> &require(PaneStore<Memory> &panes, std::uint64_t identity) {
+    auto *pane = panes.find(identity);
     if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane does not exist"};
     }
@@ -452,8 +504,8 @@ public:
     return *pane;
   }
 
-  inline Pane<Memory> &requireGeneration(std::uint64_t identity, std::uint64_t generation) const {
-    auto &pane = require(identity);
+  inline static Pane<Memory> &requireGeneration(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) {
+    auto &pane = require(panes, identity);
     if (generation != 0 && pane.generation != generation) {
       throw RequestError{FailureCode::pane_not_found, "Pane generation no longer exists"};
     }
@@ -461,22 +513,23 @@ public:
     return pane;
   }
 
-  inline Pane<Memory> &launch(const Launch &launch, TabLocation location, TerminalSize size) {
-    const auto identity = allocateIdentity();
+  // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
+  inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, const Launch &launch, TabLocation location, TerminalSize size) {
+    const auto identity = allocateIdentity(model);
     if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
       throw RequestError{FailureCode::invalid_request, "custom pane environment is not supported"};
     }
 
     Command command{memory_, launch};
-    return launchPrepared(command, location, size, identity);
+    return launchPrepared(model, owner_colors, command, location, size, identity);
   }
 
-  inline Pane<Memory> &launch(Command<Memory> &command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
-    return launchPrepared(command, location, size, allocateIdentity(restored_identity));
+  inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, Command<Memory> &command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
+    return launchPrepared(model, owner_colors, command, location, size, allocateIdentity(model, restored_identity));
   }
 
-  inline Attachment<Memory> &attach(ClientSession<Memory> &client, Pane<Memory> &pane, TerminalSize size) {
-    auto *workspace = model_.workspaces.find(pane.location.workspace.id);
+  inline tbc::view<Attachment<Memory> &, tbc::lt::a> attach(RuntimeModel<Memory> &model, tbc::view<ClientSession<Memory> &, tbc::lt::a> client, std::uint64_t pane_id, TerminalSize size) {
+    auto *workspace = model.workspaces.find(require(model.panes, pane_id).location.workspace.id);
     if (workspace == nullptr) {
       throw RequestError{FailureCode::workspace_not_found, "Workspace does not exist"};
     }
@@ -485,7 +538,8 @@ public:
       throw EncodingError{"Client must leave its workspace before attaching another"};
     }
 
-    const bool controls_geometry = acquireGeometry(model_, client, *workspace);
+    const bool controls_geometry = acquireGeometry(model.panes, model.metrics, client, *workspace);
+    auto &pane = require(model.panes, pane_id);
     if (controls_geometry) {
       pane.resize(size);
     }
@@ -503,84 +557,112 @@ public:
     auto &result = *attachment;
     client.attachments.push_back(std::move(attachment));
     client.workspace = workspace->id;
-    pane.observers |= model_.clientBit(client.id);
+    pane.observers |= client.observerBit();
     return result;
   }
 
-  inline void detach(ClientSession<Memory> &client, std::uint64_t identity) noexcept {
-    if (release(client, identity) && client.attachments.empty()) {
-      detachAll(client);
+  inline void detach(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
+    if (!release(model, clients, client_id, identity)) {
+      return;
+    }
+    if (const auto *client = clients.find(client_id); client != nullptr && client->attachments.empty()) {
+      detachAll(model, clients, client_id);
     }
   }
 
-  inline bool release(ClientSession<Memory> &client, std::uint64_t identity) noexcept {
-    const auto removed = std::erase_if(client.attachments, [identity](const auto &attachment) {
+  // Drops a client's attachment to a pane; whether it had one.
+  inline bool release(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
+    auto *client = clients.find(client_id);
+    if (client == nullptr) {
+      return false;
+    }
+
+    const auto bit = client->observerBit();
+    const auto removed = std::erase_if(client->attachments, [identity](const auto &attachment) {
       return attachment->pane_id == identity;
     });
 
-    if (auto *pane = model_.panes.find(identity)) {
-      pane->observers &= ~model_.clientBit(client.id);
-      refreshAfterDetach(*pane);
+    if (auto *pane = model.panes.find(identity)) {
+      pane->observers &= ~bit;
+      refreshAfterDetach(model, clients, identity);
     }
 
     return removed != 0;
   }
 
-  inline void detachAll(ClientSession<Memory> &client) noexcept {
-    for (const auto &attachment : client.attachments) {
-      if (auto *pane = model_.panes.find(attachment->pane_id)) {
-        pane->observers &= ~model_.clientBit(client.id);
-        attachment->desktop.reset();
-        refreshAfterDetach(*pane);
+  inline void detachAll(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id) noexcept {
+    auto *client = clients.find(client_id);
+    if (client == nullptr) {
+      return;
+    }
+
+    const auto bit = client->observerBit();
+    std::array<std::uint64_t, ClientSession<Memory>::attachment_capacity> detached{};
+    std::size_t count = 0;
+    for (const auto &attachment : client->attachments) {
+      attachment->desktop.reset();
+      if (auto *pane = model.panes.find(attachment->pane_id)) {
+        pane->observers &= ~bit;
+        detached[count++] = pane->id;
       }
     }
 
-    if (client.workspace) {
-      if (auto *workspace = model_.workspaces.find(*client.workspace)) {
-        releaseGeometry(model_, client.id, *workspace);
+    const auto workspace = client->workspace;
+    client->attachments.clear();
+    client->workspace.reset();
+    if (workspace) {
+      if (auto *leased = model.workspaces.find(*workspace)) {
+        releaseGeometry(clients, client_id, *leased);
       }
     }
 
-    client.attachments.clear();
-    client.workspace.reset();
+    for (const auto pane : std::span{detached}.first(count)) {
+      refreshAfterDetach(model, clients, pane);
+    }
   }
 
-  inline void remove(std::uint64_t identity) noexcept {
-    auto *pane = model_.panes.find(identity);
+  inline void remove(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t identity) noexcept {
+    auto *pane = model.panes.find(identity);
     if (pane == nullptr) {
       return;
     }
 
-    for (auto *client : model_.clients.items()) {
-      if (client != nullptr) {
-        release(*client, identity);
+    bool released = false;
+    for (auto *client : clients.items()) {
+      if (client != nullptr && std::erase_if(client->attachments, [identity](const auto &attachment) { return attachment->pane_id == identity; }) != 0) {
+        pane->observers &= ~client->observerBit();
+        released = true;
       }
     }
-
-    poller_.remove(pane->process->descriptor());
-    if (pane->exit_status && !pane->exit_observed) {
-      pane->observer->shellExit(*pane->exitCode());
-      pane->exit_observed = true;
+    if (released) {
+      refreshAfterDetach(model, clients, identity);
     }
 
-    pane->observer->finishSession();
-    pane->media->cancel();
-    pane->observer->retired_next = std::move(model_.retired_observers);
-    model_.retired_observers = pane->observer;
-    ++model_.retired_observer_count;
-    pane->media->retired_next = std::move(model_.retired_media);
-    model_.retired_media = pane->media;
-    ++model_.retired_media_count;
-    model_.panes.erase(identity);
+    auto &removed = require(model.panes, identity);
+    poller_.remove(removed.process->descriptor());
+    if (removed.exit_status && !removed.exit_observed) {
+      removed.observer->shellExit(*removed.exitCode());
+      removed.exit_observed = true;
+    }
+
+    removed.observer->finishSession();
+    removed.media->cancel();
+    removed.observer->retired_next = std::move(model.retired_observers);
+    model.retired_observers = removed.observer;
+    ++model.retired_observer_count;
+    removed.media->retired_next = std::move(model.retired_media);
+    model.retired_media = removed.media;
+    ++model.retired_media_count;
+    model.panes.erase(identity);
   }
 
   template <typename Observer = IgnorePaneInput>
-  inline void input(ClientSession<Memory> &client, const PaneInput &request, const Observer &observe = {}) {
-    if (client.attachment(request.pane_id) == nullptr) {
+  inline void input(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, const PaneInput &request, const Observer &observe = {}) {
+    if (const auto *client = clients.find(client_id); client == nullptr || client->attachment(request.pane_id) == nullptr) {
       return;
     }
 
-    auto &pane = require(request.pane_id);
+    auto &pane = require(model.panes, request.pane_id);
     if (pane.output_closed) {
       return;
     }
@@ -592,8 +674,8 @@ public:
       flushInput(pane);
     }
 
-    recordInputOrigin(client, pane.id);
-    ClipboardService{model_}.configure(pane);
+    recordInputOrigin(model, clients, client_id, request.pane_id);
+    ClipboardService<Memory>::configure(clients, require(model.panes, request.pane_id));
   }
 
   inline bool admitInput(Pane<Memory> &pane, std::size_t bytes) {
@@ -602,25 +684,24 @@ public:
     }
 
     TELAR_DIAGNOSTIC(diagnostics::accumulate(pane.input_dropped_bytes, bytes));
-    LimitService{model_}.report(LimitReach{.name = "panes.input_queue_capacity",
-                                           .noun = "queued input bytes",
-                                           .value = Pane<Memory>::input_limit,
-                                           .requested = saturatedAdd(pane.input.size(), bytes)});
+    limits_.report(LimitReach{.name = "panes.input_queue_capacity",
+                              .noun = "queued input bytes",
+                              .value = Pane<Memory>::input_limit,
+                              .requested = saturatedAdd(pane.input.size(), bytes)});
     return false;
   }
 
-  inline void resize(ClientSession<Memory> &client, const PaneResize &request) {
+  inline void resize(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const PaneResize &request) {
     if (client.attachment(request.pane_id) == nullptr) {
       return;
     }
 
-    auto &pane = require(request.pane_id);
-    auto *workspace = model_.workspaces.find(pane.location.workspace.id);
-    if (workspace == nullptr || !acquireGeometry(model_, client, *workspace)) {
+    auto *workspace = model.workspaces.find(require(model.panes, request.pane_id).location.workspace.id);
+    if (workspace == nullptr || !acquireGeometry(model.panes, model.metrics, client, *workspace)) {
       return;
     }
 
-    pane.resize(request.size);
+    require(model.panes, request.pane_id).resize(request.size);
   }
 
   inline void flushInput(Pane<Memory> &pane) {
@@ -652,10 +733,11 @@ public:
     poller_.remove(pane.process->descriptor());
   }
 
-  inline void configureDesktop(ClientSession<Memory> &client, const ConfigurePaneDesktop &request) {
-    auto &pane = requireGeneration(request.pane_id, request.pane_generation);
-    auto *attachment = client.attachment(pane.id);
-    if (attachment == nullptr || client.connection.closing) {
+  inline void configureDesktop(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, const ConfigurePaneDesktop &request) {
+    const auto pane = requireGeneration(model.panes, request.pane_id, request.pane_generation).id;
+    auto *client = clients.find(client_id);
+    auto *attachment = client == nullptr ? nullptr : client->attachment(pane);
+    if (attachment == nullptr || client->connection.closing) {
       throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
     }
     if (attachment->desktop == request) {
@@ -663,60 +745,18 @@ public:
     }
 
     attachment->desktop = request;
-    refreshDesktop(pane);
-    flushInput(pane);
+    refreshDesktop(model, clients, pane);
+    flushInput(require(model.panes, pane));
   }
 
-  // Visibility is the union of explicit live reports. The oldest visible
-  // reporter supplies theme facts; focus and the geometry lease cannot steal it.
-  inline void refreshDesktop(Pane<Memory> &pane) {
-    control::ClientFacts facts;
-    const ConfigurePaneDesktop *theme = nullptr;
-    std::uint64_t theme_client = UINT64_MAX;
-    for (const auto *client : model_.clients.items()) {
-      if (client == nullptr || client->connection.closing) {
-        continue;
-      }
-      const auto *attachment = client->attachment(pane.id);
-      if (attachment == nullptr || !attachment->desktop || attachment->desktop->pane_generation != pane.generation) {
-        continue;
-      }
-      const auto &desktop = *attachment->desktop;
-      facts.visible |= desktop.visible;
-      facts.focused |= desktop.focused && desktop.visible;
-      if (desktop.visible && client->id < theme_client) {
-        theme_client = client->id;
-        theme = &desktop;
-      }
-    }
-
-    if (theme != nullptr) {
-      facts.light = theme->light;
-      const auto &previous = pane.desktop_theme;
-      if (!previous || previous->foreground != theme->foreground || previous->background != theme->background || previous->palette != theme->palette || previous->cursor != theme->cursor) {
-        pane.terminal.configureColors({theme->foreground, theme->background, theme->palette});
-        pane.terminal.configureCursorColor(theme->cursor);
-      }
-      pane.desktop_theme = *theme;
-    } else if (pane.desktop_theme) {
-      pane.desktop_theme.reset();
-      const auto *workspace = model_.workspaces.find(pane.location.workspace.id);
-      const auto *owner = workspace != nullptr && workspace->geometry_client ? model_.clients.find(*workspace->geometry_client) : nullptr;
-      pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
-      pane.terminal.configureCursorColor(std::nullopt);
-    }
-    pane.terminal.configureClientFacts(facts);
-    ClipboardService{model_}.configure(pane);
-  }
-
-  inline void configureColors(ClientSession<Memory> &client, const ConfigureTerminalColors &request) {
+  inline void configureColors(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const ConfigureTerminalColors &request) {
     if (client.colors.foreground == request.foreground && client.colors.background == request.background && client.colors.palette == request.palette) {
       return;
     }
 
     client.colors = request;
-    for (auto *pane : model_.panes.items()) {
-      const auto *workspace = pane == nullptr ? nullptr : model_.workspaces.find(pane->location.workspace.id);
+    for (auto *pane : model.panes.items()) {
+      const auto *workspace = pane == nullptr ? nullptr : model.workspaces.find(pane->location.workspace.id);
       if (workspace != nullptr && workspace->geometry_client == client.id && !pane->desktop_theme) {
         pane->terminal.configureColors(request);
         flushInput(*pane);
@@ -724,16 +764,16 @@ public:
     }
   }
 
-  inline void readText(ClientSession<Memory> &client, const ReadPane &request) {
+  inline static void readText(ClientSession<Memory> &client, const ReadPane &request) {
     client.connection.defer(request);
   }
 
-  inline void copySelection(ClientSession<Memory> &client, const CopySelection &request) {
+  inline void copySelection(PaneStore<Memory> &panes, ClientSession<Memory> &client, const CopySelection &request) {
     if (client.attachment(request.pane_id) == nullptr) {
       return;
     }
 
-    auto &pane = require(request.pane_id);
+    auto &pane = require(panes, request.pane_id);
     constexpr std::size_t clipboard_limit = 1024 * 1024;
     TextReader reader{memory_, pane.terminal, clipboard_limit};
     reader.copy(request);
@@ -745,8 +785,8 @@ public:
   }
 
   template <typename Observer = IgnorePaneInput>
-  inline void sendText(ClientSession<Memory> &client, const SendPaneText &request, std::string_view prefix = {}, const Observer &observe = {}) {
-    auto &pane = requireGeneration(request.pane_id, request.pane_generation);
+  inline void sendText(PaneStore<Memory> &panes, ClientSession<Memory> &client, const SendPaneText &request, std::string_view prefix = {}, const Observer &observe = {}) {
+    auto &pane = requireGeneration(panes, request.pane_id, request.pane_generation);
     if (pane.output_closed) {
       throw RequestError{FailureCode::pane_exited, "Pane process has exited"};
     }
@@ -793,15 +833,16 @@ public:
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  inline void pasteClipboard(ClientSession<Memory> &client, const PastePaneClipboard &request) {
-    auto &pane = requireGeneration(request.pane_id, request.pane_generation);
-    if (!ClipboardService<Memory>::eligible(client, pane) || pane.output_closed) {
+  inline void pasteClipboard(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, const PastePaneClipboard &request) {
+    auto &pane = requireGeneration(model.panes, request.pane_id, request.pane_generation);
+    auto *client = clients.find(client_id);
+    if (client == nullptr || !ClipboardService<Memory>::eligible(*client, pane) || pane.output_closed) {
       throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
     }
     if (request.listing_only) {
       // A listing begun before a mode reset completes without reading text.
       if (pane.terminal.pasteEvents()) {
-        if (!pane.terminal.clipboardControl().paste({client.id, client.generation}, request.primary, request.available)) {
+        if (!pane.terminal.clipboardControl().paste({client->id, client->generation}, request.primary, request.available)) {
           throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
         }
         pane.terminal.resumeControl();
@@ -821,13 +862,15 @@ public:
         pane.enqueueInput(end);
       }
     }
-    recordInputOrigin(client, pane.id);
-    flushInput(pane);
-    client.connection.send(RequestCompleted{.request_id = request.request_id});
+    recordInputOrigin(model, clients, client_id, request.pane_id);
+    flushInput(require(model.panes, request.pane_id));
+    if (auto *current = clients.find(client_id)) {
+      current->connection.send(RequestCompleted{.request_id = request.request_id});
+    }
   }
 
-  inline void search(ClientSession<Memory> &client, const SearchPane &request) {
-    auto &pane = require(request.pane_id);
+  inline static void search(PaneStore<Memory> &panes, ClientSession<Memory> &client, const SearchPane &request) {
+    auto &pane = require(panes, request.pane_id);
     if (client.interactive && client.attachment(pane.id) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
     }
@@ -840,13 +883,13 @@ public:
     client.search.emplace(request, pane.terminal.contentRevision());
   }
 
-  inline bool advanceSearch(ClientSession<Memory> &client) {
+  inline static bool advanceSearch(PaneStore<Memory> &panes, ClientSession<Memory> &client) {
     if (!client.search) {
       return false;
     }
 
     try {
-      auto &pane = require(client.search->pane_id);
+      auto &pane = require(panes, client.search->pane_id);
       if (client.search->advance(pane.terminal.handle(), pane.terminal.contentRevision())) {
         client.connection.send(client.search->result());
         client.search.reset();
@@ -862,19 +905,64 @@ public:
   }
 
 private:
-  inline void recordInputOrigin(ClientSession<Memory> &client, std::uint64_t pane) noexcept {
-    ++model_.input_sequence;
-    if (model_.input_sequence == 0) {
-      for (auto *session : model_.clients.items()) {
+  inline static void recordInputOrigin(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, std::uint64_t pane) noexcept {
+    ++model.input_sequence;
+    if (model.input_sequence == 0) {
+      for (auto *session : clients.items()) {
         if (session != nullptr) {
           session->last_input_sequence = 0;
         }
       }
-      model_.input_sequence = 1;
+      model.input_sequence = 1;
     }
 
-    client.last_input_pane = pane;
-    client.last_input_sequence = model_.input_sequence;
+    if (auto *client = clients.find(client_id)) {
+      client->last_input_pane = pane;
+      client->last_input_sequence = model.input_sequence;
+    }
+  }
+
+  // Visibility is the union of explicit live reports. The oldest visible
+  // reporter supplies theme facts; focus and the geometry lease cannot steal it.
+  inline static void refreshDesktop(RuntimeModel<Memory> &model, const ClientStore<Memory> &clients, std::uint64_t identity) {
+    auto &pane = require(model.panes, identity);
+    control::ClientFacts facts;
+    const ConfigurePaneDesktop *theme = nullptr;
+    std::uint64_t theme_client = UINT64_MAX;
+    for (const auto *client : clients.items()) {
+      if (client == nullptr || client->connection.closing) {
+        continue;
+      }
+      const auto *attachment = client->attachment(pane.id);
+      if (attachment == nullptr || !attachment->desktop || attachment->desktop->pane_generation != pane.generation) {
+        continue;
+      }
+      const auto &desktop = *attachment->desktop;
+      facts.visible |= desktop.visible;
+      facts.focused |= desktop.focused && desktop.visible;
+      if (desktop.visible && client->id < theme_client) {
+        theme_client = client->id;
+        theme = &desktop;
+      }
+    }
+
+    if (theme != nullptr) {
+      facts.light = theme->light;
+      const auto &previous = pane.desktop_theme;
+      if (!previous || previous->foreground != theme->foreground || previous->background != theme->background || previous->palette != theme->palette || previous->cursor != theme->cursor) {
+        pane.terminal.configureColors({theme->foreground, theme->background, theme->palette});
+        pane.terminal.configureCursorColor(theme->cursor);
+      }
+      pane.desktop_theme = *theme;
+    } else if (pane.desktop_theme) {
+      pane.desktop_theme.reset();
+      const auto *workspace = model.workspaces.find(pane.location.workspace.id);
+      const auto *owner = workspace != nullptr && workspace->geometry_client ? clients.find(*workspace->geometry_client) : nullptr;
+      pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
+      pane.terminal.configureCursorColor(std::nullopt);
+    }
+    pane.terminal.configureClientFacts(facts);
+    ClipboardService<Memory>::configure(clients, pane);
   }
 
   struct Identity {
@@ -882,20 +970,20 @@ private:
     std::uint64_t generation;
   };
 
-  inline Identity allocateIdentity(std::uint64_t restored_identity = 0) {
-    if (model_.panes.size() + std::max(model_.retired_observer_count, model_.retired_media_count) >= pane_capacity) {
+  inline static Identity allocateIdentity(RuntimeModel<Memory> &model, std::uint64_t restored_identity = 0) {
+    if (model.panes.size() + std::max(model.retired_observer_count, model.retired_media_count) >= pane_capacity) {
       throw RequestError{FailureCode::resource_limit, "Pane capacity is occupied by active processes or pending observations"};
     }
-    if (model_.next_pane_generation == 0 || model_.next_pane_generation == UINT64_MAX || (restored_identity == 0 && model_.panes.nextCounter() == 0)) {
+    if (model.next_pane_generation == 0 || model.next_pane_generation == UINT64_MAX || (restored_identity == 0 && model.panes.nextCounter() == 0)) {
       throw RequestError{FailureCode::spawn_failed, "could not start the command"};
     }
 
-    const auto identity = restored_identity == 0 ? model_.panes.nextId() : restored_identity;
-    model_.panes.advanceCounter(identity + 1);
-    return {identity, model_.next_pane_generation++};
+    const auto identity = restored_identity == 0 ? model.panes.nextId() : restored_identity;
+    model.panes.advanceCounter(identity + 1);
+    return {identity, model.next_pane_generation++};
   }
 
-  inline Pane<Memory> &launchPrepared(Command<Memory> &command, TabLocation location, TerminalSize size, Identity identity) {
+  inline tbc::view<Pane<Memory> &, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, Command<Memory> &command, TabLocation location, TerminalSize size, Identity identity) {
     const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
       std::array<char, 32> text{};
       const auto converted = std::to_chars(text.data(), text.data() + text.size(), value);
@@ -906,28 +994,26 @@ private:
     setIdentity("TELAR_WORKSPACE_ID", location.workspace.id);
     setIdentity("TELAR_TAB_ID", location.tab_id);
     command.setEnvironment("TELAR_SOCKET_PATH", socket_path_);
-    if (!model_.cli_executable.empty()) {
-      command.setEnvironment("TELAR_BIN_PATH", model_.cli_executable);
+    if (!model.cli_executable.empty()) {
+      command.setEnvironment("TELAR_BIN_PATH", model.cli_executable);
     }
     proxy_.apply(command);
-    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model_.media_budget, model_.graphics_limits});
-    TELAR_DIAGNOSTIC(pane->counters = &model_.metrics.panes);
+    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits});
+    TELAR_DIAGNOSTIC(pane->counters = &model.metrics.panes);
     pane->generation = identity.generation;
     pane->terminal.controlPolicy() = control_policy_;
-    const auto *workspace = model_.workspaces.find(location.workspace.id);
+    const auto *workspace = model.workspaces.find(location.workspace.id);
     const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
     auto &result = *pane;
     auto phase = LaunchPhase::pane_registration;
     bool registered = false;
     try {
-      if (workspace != nullptr && workspace->geometry_client) {
-        if (const auto *owner = model_.clients.find(*workspace->geometry_client)) {
-          pane->terminal.configureColors(owner->colors);
-        }
+      if (owner_colors != nullptr) {
+        pane->terminal.configureColors(*owner_colors);
       }
 
-      pane->observer->configureHistory(session, model_.capture_output);
-      result.event_identity = model_.panes.insert(identity.id, std::move(pane));
+      pane->observer->configureHistory(session, model.capture_output);
+      result.event_identity = model.panes.insert(identity.id, std::move(pane));
       registered = true;
       if (result.event_identity > maximum_event_identity) {
         throw RequestError{FailureCode::resource_limit, "Pane event identity space exhausted"};
@@ -939,7 +1025,7 @@ private:
       history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = session, .finished_at_ms = ObservationTime::now().milliseconds, .failure = {identity.generation, phase, launchFailureCause(error)}});
       if (registered) {
         poller_.remove(result.process->descriptor());
-        model_.panes.erase(identity.id);
+        model.panes.erase(identity.id);
       }
 
       throw;
@@ -948,20 +1034,22 @@ private:
     return result;
   }
 
-  inline void refreshAfterDetach(Pane<Memory> &pane) noexcept {
+  inline void refreshAfterDetach(RuntimeModel<Memory> &model, const ClientStore<Memory> &clients, std::uint64_t identity) noexcept {
     try {
-      refreshDesktop(pane);
-      flushInput(pane);
+      refreshDesktop(model, clients, identity);
+      flushInput(require(model.panes, identity));
     } catch (...) {
-      pane.requestClose();
+      if (auto *pane = model.panes.find(identity)) {
+        pane->requestClose();
+      }
     }
   }
 
   static constexpr std::size_t pane_capacity = 256;
 
   Memory &memory_;
-  RuntimeModel<Memory> &model_;
   Poller &poller_;
+  LimitService<Memory> &limits_;
   History &history_;
   std::string_view socket_path_;
   ProxyClientConfiguration proxy_;
@@ -978,9 +1066,8 @@ namespace telar::runtime {
 template <Allocator Memory, EventLoop Poller>
 class ExecutionService {
 public:
-  inline explicit ExecutionService(Memory &memory, RuntimeModel<Memory> &model, Poller &poller, LimitService<Memory> &limits)
+  inline explicit ExecutionService(Memory &memory, Poller &poller, LimitService<Memory> &limits)
       : memory_(memory),
-        model_(model),
         poller_(poller),
         limits_(limits),
         executions_(memory) {}
@@ -993,7 +1080,7 @@ public:
     }
   }
 
-  inline void request(ClientSession<Memory> &client, const ExecutionRequest &request) {
+  inline void request(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const ExecutionRequest &request) {
     TELAR_TRACE("execution.request");
     if (request.action == ExecutionAction::list) {
       list(client, request);
@@ -1007,7 +1094,7 @@ public:
         throw RequestError{FailureCode::invalid_request, "ExecutionNotFound"};
       }
 
-      execution = &start(client.id, request);
+      execution = &start(model, client.id, request);
     }
 
     if (request.action == ExecutionAction::start && !execution->matches(request)) {
@@ -1082,7 +1169,7 @@ public:
     }
   }
 
-  inline bool refresh() noexcept {
+  inline bool refresh(RuntimeModel<Memory> &model) noexcept {
     bool running = false;
     for (auto *execution : executions_.items()) {
       if (execution == nullptr || execution->state != ExecutionState::running) {
@@ -1108,7 +1195,7 @@ public:
       closeInput(*execution);
     }
 
-    releaseAdministration();
+    releaseAdministration(model);
     return running;
   }
 
@@ -1133,15 +1220,15 @@ private:
     return nullptr;
   }
 
-  inline Execution<Memory> &start(std::uint64_t client_id, const ExecutionRequest &request) {
+  inline Execution<Memory> &start(RuntimeModel<Memory> &model, std::uint64_t client_id, const ExecutionRequest &request) {
     if (executions_.size() == capacity) {
       limits_.report(LimitReach{.name = "executions.capacity", .noun = "retained executions", .value = capacity, .requested = capacity + 1});
       throw RequestError{FailureCode::resource_limit, "ExecutionLimitReached"};
     }
 
     const auto token = executions_.nextId();
-    const auto workspace_id = request.workspace_id == 0 ? administration() : request.workspace_id;
-    const auto *workspace = model_.workspaces.find(workspace_id);
+    const auto workspace_id = request.workspace_id == 0 ? administration(model) : request.workspace_id;
+    const auto *workspace = model.workspaces.find(workspace_id);
     if (workspace == nullptr) {
       throw RequestError{FailureCode::invalid_request, "WorkspaceNotFound"};
     }
@@ -1164,8 +1251,8 @@ private:
     return *result;
   }
 
-  inline std::uint64_t administration() {
-    if (model_.workspaces.find(administration_) != nullptr) {
+  inline std::uint64_t administration(RuntimeModel<Memory> &model) {
+    if (model.workspaces.find(administration_) != nullptr) {
       return administration_;
     }
 
@@ -1174,15 +1261,15 @@ private:
       throw RequestError{FailureCode::invalid_request, "DestinationHomeUnavailable"};
     }
 
-    const auto identity = model_.workspaces.nextId();
+    const auto identity = model.workspaces.nextId();
     auto workspace = makeOwned<Workspace<Memory>>(memory_, memory_, identity, home, "Administration");
-    model_.workspaces.insert(identity, std::move(workspace));
+    model.workspaces.insert(identity, std::move(workspace));
     administration_ = identity;
-    ++model_.workspace_revision;
+    ++model.workspace_revision;
     return identity;
   }
 
-  inline void releaseAdministration() noexcept {
+  inline void releaseAdministration(RuntimeModel<Memory> &model) noexcept {
     if (administration_ == 0) {
       return;
     }
@@ -1193,10 +1280,10 @@ private:
       }
     }
 
-    const auto *workspace = model_.workspaces.find(administration_);
+    const auto *workspace = model.workspaces.find(administration_);
     if (workspace != nullptr && workspace->tabs.empty()) {
-      model_.workspaces.erase(administration_);
-      ++model_.workspace_revision;
+      model.workspaces.erase(administration_);
+      ++model.workspace_revision;
     }
 
     administration_ = 0;
@@ -1333,7 +1420,6 @@ private:
 
   static constexpr std::size_t capacity = 32;
   Memory &memory_;
-  RuntimeModel<Memory> &model_;
   Poller &poller_;
   LimitService<Memory> &limits_;
   SlotStore<Execution<Memory>, capacity, Memory> executions_;

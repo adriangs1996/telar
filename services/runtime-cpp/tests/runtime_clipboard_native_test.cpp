@@ -87,16 +87,17 @@ using namespace telar::runtime;
 void nativeClipboardTests(SystemAllocator &memory) {
     telar::gui::test::PrivateClipboard isolated;
     RuntimeModel model{memory};
-    ClientPeer client{memory, model, ClientRole::control};
-    RuntimeClipboardService service{model};
+    ClientStore<SystemAllocator> clients{memory};
+    ClientPeer client{memory, model, clients, ClientRole::control};
+    RuntimeClipboardService<SystemAllocator> service;
     auto collect = [&] {
       pollfd ready{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
       check(::poll(&ready, 1, 2000) == 1);
-      service.collect();
+      service.collect(clients);
     };
     isolated.clear();
     isolated.setText("Text: á\n");
-    service.read(client.session(), {.request_id = 1});
+    service.read(clients, client.session().id, {.request_id = 1});
     collect();
     auto chunk = client.receive<RuntimeClipboardChunk>();
     const std::string_view expected = "Text: á\n";
@@ -106,7 +107,7 @@ void nativeClipboardTests(SystemAllocator &memory) {
     isolated.clear();
     std::vector<Byte> image(runtime_clipboard_chunk_bytes * 2 + 73, 0x55);
     isolated.setPng(std::as_bytes(std::span{image}));
-    service.read(client.session(), {.request_id = 2});
+    service.read(clients, client.session().id, {.request_id = 2});
     collect();
     std::size_t offset = 0;
     do {
@@ -115,7 +116,7 @@ void nativeClipboardTests(SystemAllocator &memory) {
       check(std::equal(chunk.bytes.begin(), chunk.bytes.end(), image.begin() + offset));
       offset += chunk.bytes.size();
       if (offset < image.size()) {
-        service.read(client.session(), {.request_id = 3, .transfer_id = 2, .offset = offset});
+        service.read(clients, client.session().id, {.request_id = 3, .transfer_id = 2, .offset = offset});
       }
     } while (offset < image.size());
     std::puts("Native macOS clipboard worker and multi-chunk transfer passed. System clipboard unchanged.");

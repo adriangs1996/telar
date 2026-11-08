@@ -81,9 +81,10 @@ using telar::runtime::control::Policy;
 export {
 namespace telar::runtime::config {
 
+// The notices view the names of the limits they are told about, usually literals, in region `a`.
 class LimitNotices {
 public:
-  inline void add(const LimitReach &reach) noexcept {
+  inline void add(tbc::view<const LimitReach &, tbc::lt::a> reach) noexcept {
     for (auto &entry : std::span{entries_}.first(count_)) {
       if (entry.name == reach.name) {
         if (reach.requested) {
@@ -118,7 +119,7 @@ public:
   }
 
 private:
-  std::array<LimitReach, 16> entries_{};
+  tbc::view<std::array<LimitReach, 16>, tbc::lt::a> entries_{};
   std::size_t count_ = 0;
 };
 
@@ -173,7 +174,7 @@ inline void printableUiText(const lua::Value &source, std::string_view text, boo
   }
 }
 
-inline tbc::view<std::string_view, tbc::lt::a> fittedUiText(tbc::view<std::string_view, tbc::lt::a> text, LimitReach reach, LimitNotices &limits) {
+inline tbc::view<std::string_view, tbc::lt::a> fittedUiText(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices &, tbc::lt::b> limits) {
   if (text.size() > reach.value) {
     reach.requested = text.size();
     limits.add(reach);
@@ -215,7 +216,7 @@ namespace telar::runtime::config {
 class NamedDefinitionsValidator {
 public:
   template <typename Validator>
-  inline static void validate(const lua::Value &table, LimitReach reach, LimitNotices &limits, Validator &&validate_definition) {
+  inline static void validate(const lua::Value &table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices &, tbc::lt::b> limits, Validator &&validate_definition) {
     if (!table.present()) {
       return;
     }
@@ -608,7 +609,7 @@ namespace telar::runtime::config {
 template <CommandTabStore Commands>
 class BasicActionValidator {
 public:
-  inline explicit BasicActionValidator(const ClientDefinitions &definitions, LimitNotices &limits, Commands &commands)
+  inline explicit BasicActionValidator(const ClientDefinitions &definitions, tbc::view<LimitNotices &, tbc::lt::b> limits, Commands &commands)
       : definitions_(definitions),
         limits_(limits),
         commands_(commands) {}
@@ -797,7 +798,7 @@ private:
     Codec::encode(ShowNotification{.request_id = 1, .notification = body}, storage);
   }
 
-  inline tbc::view<std::string_view, tbc::lt::a> fitted(tbc::view<std::string_view, tbc::lt::a> text, LimitReach limit) const {
+  inline tbc::view<std::string_view, tbc::lt::a> fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit) const {
     if (text.size() > limit.value) {
       limit.requested = text.size();
       limits_.add(limit);
@@ -806,7 +807,7 @@ private:
   }
 
   const ClientDefinitions &definitions_;
-  LimitNotices &limits_;
+  tbc::view<LimitNotices &, tbc::lt::b> limits_;
   Commands &commands_;
 };
 

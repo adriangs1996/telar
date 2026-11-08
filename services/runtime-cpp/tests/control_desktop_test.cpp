@@ -187,119 +187,125 @@ void ptyReports(auto &pane, auto &panes, std::string_view expected) {
 
 void paletteNotification(SystemAllocator &memory) {
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-notifications.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer client{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-notifications.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer client{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
-  workspaces.open(client.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-  auto &pane = panes.require(client.receive<PaneOpened>().pane_id);
+  workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
   termios settings{};
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
   check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
   ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
-  panes.configureDesktop(client.session(), desktop);
+  panes.configureDesktop(model, clients, client.session().id, desktop);
   query(pane.terminal, "\x1b[?2031h");
   ptyReports(pane, panes, "");
 
   desktop.palette = std::array<Byte, 48>{};
   (*desktop.palette)[0] = 17;
-  panes.configureDesktop(client.session(), desktop);
+  panes.configureDesktop(model, clients, client.session().id, desktop);
   ptyReports(pane, panes, "\x1b[?997;2n");
   check(query(pane.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\").empty());
   ptyReports(pane, panes, "");
-  panes.remove(pane.id);
+  panes.remove(model, clients, pane.id);
 }
 
 void notificationTransitions(SystemAllocator &memory) {
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-notification-transitions.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer first{memory, model, ClientRole::interactive};
-  ClientPeer second{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-notification-transitions.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer first{memory, model, clients, ClientRole::interactive};
+  ClientPeer second{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
-  workspaces.open(first.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-  auto &pane = panes.require(first.receive<PaneOpened>().pane_id);
+  workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(model.panes, first.receive<PaneOpened>().pane_id);
   check(!pane.terminal.hasPendingControl());
   termios settings{};
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
   check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
   ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
-  panes.configureDesktop(first.session(), one);
+  panes.configureDesktop(model, clients, first.session().id, one);
   constexpr std::string_view subscriptions = "\x1b[?2031;2033;1004;2048h";
   pane.terminal.feed({reinterpret_cast<const Byte *>(subscriptions.data()), subscriptions.size()});
   ptyReports(pane, panes, "\x1b[?999;1n\x1b[O\x1b[48;24;80;432;720t");
-  panes.attach(second.session(), pane, {80, 24, 9, 18});
+  panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
   ptyReports(pane, panes, "");
 
   auto two = one;
   two.light = false;
   two.focused = true;
-  panes.configureDesktop(second.session(), two);
+  panes.configureDesktop(model, clients, second.session().id, two);
   ptyReports(pane, panes, "\x1b[I");
-  panes.resize(second.session(), PaneResize{.pane_id = pane.id, .size = {100, 30, 8, 16}});
+  panes.resize(model, second.session(), PaneResize{.pane_id = pane.id, .size = {100, 30, 8, 16}});
   ptyReports(pane, panes, "");
-  panes.resize(first.session(), PaneResize{.pane_id = pane.id, .size = {100, 30, 8, 16}});
+  panes.resize(model, first.session(), PaneResize{.pane_id = pane.id, .size = {100, 30, 8, 16}});
   ptyReports(pane, panes, "\x1b[48;30;100;480;800t");
 
   one.visible = false;
-  panes.configureDesktop(first.session(), one);
+  panes.configureDesktop(model, clients, first.session().id, one);
   ptyReports(pane, panes, "\x1b[?997;1n");
   one.visible = true;
-  panes.configureDesktop(first.session(), one);
+  panes.configureDesktop(model, clients, first.session().id, one);
   ptyReports(pane, panes, "\x1b[?997;2n");
   two.visible = false;
-  panes.configureDesktop(second.session(), two);
+  panes.configureDesktop(model, clients, second.session().id, two);
   ptyReports(pane, panes, "\x1b[O");
   two.visible = true;
-  panes.configureDesktop(second.session(), two);
+  panes.configureDesktop(model, clients, second.session().id, two);
   ptyReports(pane, panes, "\x1b[I");
-  panes.detach(first.session(), pane.id);
+  panes.detach(model, clients, first.session().id, pane.id);
   ptyReports(pane, panes, "\x1b[?997;1n");
-  panes.resize(second.session(), PaneResize{.pane_id = pane.id, .size = {100, 40, 8, 16}});
+  panes.resize(model, second.session(), PaneResize{.pane_id = pane.id, .size = {100, 40, 8, 16}});
   ptyReports(pane, panes, "\x1b[48;40;100;640;800t");
 
   second.session().connection.closing = true;
-  panes.detachAll(second.session());
+  panes.detachAll(model, clients, second.session().id);
   ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;2n\x1b[O");
   check(query(pane.terminal, "\x1b[18t") == "\x1b[8;40;100t");
-  ClientPeer reconnected{memory, model, ClientRole::interactive};
-  panes.attach(reconnected.session(), pane, {100, 40, 8, 16});
+  ClientPeer reconnected{memory, model, clients, ClientRole::interactive};
+  panes.attach(model, reconnected.session(), pane.id, {100, 40, 8, 16});
   check(!pane.terminal.hasPendingControl());
   ptyReports(pane, panes, "\x1b[?997;1n");
-  panes.resize(reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 50, 8, 16}});
+  panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 50, 8, 16}});
   ptyReports(pane, panes, "\x1b[48;50;120;800;960t");
   auto three = two;
   three.focused = false;
-  panes.configureDesktop(reconnected.session(), three);
+  panes.configureDesktop(model, clients, reconnected.session().id, three);
   ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;1n");
 
   check(query(pane.terminal, "\x1b[?2031;2033;1004;2048l").empty());
   three.visible = false;
-  panes.configureDesktop(reconnected.session(), three);
-  panes.resize(reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 60, 8, 16}});
+  panes.configureDesktop(model, clients, reconnected.session().id, three);
+  panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 60, 8, 16}});
   ptyReports(pane, panes, "");
   check(query(pane.terminal, "\x1b[?2031h").empty());
   ConfigureTerminalColors colors{.foreground = std::array<Byte, 3>{22, 33, 44}};
-  panes.configureColors(reconnected.session(), colors);
+  panes.configureColors(model, reconnected.session(), colors);
   ptyReports(pane, panes, "\x1b[?997;1n");
-  panes.configureColors(reconnected.session(), colors);
+  panes.configureColors(model, reconnected.session(), colors);
   ptyReports(pane, panes, "");
-  panes.remove(pane.id);
+  panes.remove(model, clients, pane.id);
 }
 
 void interruptedResponseWrites(SystemAllocator &memory) {
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-interrupted-writes.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer client{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-interrupted-writes.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer client{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
-  workspaces.open(client.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-  auto &pane = panes.require(client.receive<PaneOpened>().pane_id);
+  workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
   termios settings{};
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
@@ -374,23 +380,25 @@ void interruptedResponseWrites(SystemAllocator &memory) {
   pane.write();
   check(!pane.hasInput() && pane.pty_responses->snapshot().dropped == 0);
   ptyReports(pane, panes, expected);
-  panes.remove(pane.id);
+  panes.remove(model, clients, pane.id);
 }
 
 void multipleClients(SystemAllocator &memory) {
   RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-desktop.sock"}};
-  WorkspaceService workspaces{memory, model, panes};
-  ClientPeer first{memory, model, ClientRole::interactive};
-  ClientPeer second{memory, model, ClientRole::interactive};
-  ClientPeer outsider{memory, model, ClientRole::interactive};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-desktop.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer first{memory, model, clients, ClientRole::interactive};
+  ClientPeer second{memory, model, clients, ClientRole::interactive};
+  ClientPeer outsider{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
-  workspaces.open(first.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = launch});
+  workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = launch});
   const auto opened = first.receive<PaneOpened>();
-  auto &pane = panes.require(opened.pane_id);
-  panes.attach(second.session(), pane, {80, 24, 9, 18});
+  auto &pane = panes.require(model.panes, opened.pane_id);
+  panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
   auto *workspace = model.workspaces.find(pane.location.workspace.id);
   check(workspace != nullptr);
   workspace->geometry_client = second.session().id;
@@ -409,37 +417,37 @@ void multipleClients(SystemAllocator &memory) {
   DecodeStorage storage{arena};
   const auto decoded = Codec::decode<ConfigurePaneDesktop>(Codec::encode(one, encoded), storage);
   check(decoded == one);
-  panes.configureDesktop(first.session(), decoded);
+  panes.configureDesktop(model, clients, first.session().id, decoded);
   auto two = one;
   two.light = false;
   two.focused = true;
   two.cursor = std::array<Byte, 3>{4, 5, 6};
-  panes.configureDesktop(second.session(), two);
+  panes.configureDesktop(model, clients, second.session().id, two);
   check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\") == "\x1b[?997;2n\x1b[?999;1n\x1b]12;rgb:0101/0202/0303\x1b\\");
 
   bool stale = false;
   auto old = one;
   ++old.pane_generation;
   try {
-    panes.configureDesktop(first.session(), old);
+    panes.configureDesktop(model, clients, first.session().id, old);
   } catch (const RequestError &) {
     stale = true;
   }
   check(stale);
   bool unattached = false;
   try {
-    panes.configureDesktop(outsider.session(), one);
+    panes.configureDesktop(model, clients, outsider.session().id, one);
   } catch (const RequestError &) {
     unattached = true;
   }
   check(unattached);
 
-  panes.release(first.session(), pane.id);
+  panes.release(model, clients, first.session().id, pane.id);
   check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\") == "\x1b[?997;1n\x1b[?999;1n\x1b]12;rgb:0404/0505/0606\x1b\\");
   second.session().connection.closing = true;
-  panes.detachAll(second.session());
+  panes.detachAll(model, clients, second.session().id);
   check(query(pane.terminal, "\x1b[?996n\x1b[?998n") == "\x1b[?997;1n\x1b[?999;2n");
-  panes.remove(pane.id);
+  panes.remove(model, clients, pane.id);
 }
 }
 

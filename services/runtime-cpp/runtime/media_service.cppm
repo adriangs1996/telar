@@ -100,8 +100,7 @@ public:
         history_(memory, history),
         editor_(memory, editor),
         suggestions_(memory, suggestions),
-        worktree_service_(memory),
-        worktrees_(worktree_service_) {
+        worktrees_(std::in_place, memory) {
   }
 
   inline std::array<int, 5> descriptors() const noexcept {
@@ -203,7 +202,6 @@ private:
   RequestWorker<Memory, History> history_;
   RequestWorker<Memory, Editor> editor_;
   RequestWorker<Memory, Suggestions> suggestions_;
-  Worktrees worktree_service_;
   ObservationWorker<Worktrees> worktrees_;
   std::atomic<std::uint64_t> history_submission_failures_{0};
 };
@@ -370,12 +368,10 @@ BackgroundService(Memory &memory, const char *history_path, const HistoryFilters
 export {
 namespace telar::runtime {
 
+// Which agents' sessions get a generated title. It holds no agents; each call is given the registry.
 template <Allocator Memory>
 class DescriptionQueue {
 public:
-  inline explicit DescriptionQueue(AgentRegistry<Memory> &agents)
-      : agents_(agents) {}
-
   inline void enable(bool enabled) noexcept {
     descriptions_enabled_ = enabled;
   }
@@ -384,18 +380,20 @@ public:
     return descriptions_enabled_;
   }
 
-  inline void project(Agent &agent) noexcept {
-    if (descriptions_enabled_ && agent.description_phase == DescriptionPhase::waiting_work) {
-      const auto pending = std::ranges::count_if(agents_.records(), [](const auto &entry) { return entry->hasPendingDescription(); });
-      if (static_cast<std::size_t>(pending) < description_queue_capacity) {
-        agent.queueDescription();
-      }
+  // How many descriptions are pending, which project reads before it changes an agent.
+  inline static std::size_t pending(const AgentRegistry<Memory> &agents) noexcept {
+    return static_cast<std::size_t>(std::ranges::count_if(agents.records(), [](const auto &entry) { return entry->hasPendingDescription(); }));
+  }
+
+  inline void project(std::size_t pending, Agent &agent) noexcept {
+    if (descriptions_enabled_ && agent.description_phase == DescriptionPhase::waiting_work && pending < description_queue_capacity) {
+      agent.queueDescription();
     }
   }
 
-  inline std::optional<DescriptionRequest> nextDescription() {
+  inline std::optional<DescriptionRequest> nextDescription(AgentRegistry<Memory> &agents) {
     std::size_t pending = 0;
-    for (const auto &agent : agents_.records()) {
+    for (const auto &agent : agents.records()) {
       if (agent->description_phase == DescriptionPhase::running) {
         return std::nullopt;
       }
@@ -403,14 +401,14 @@ public:
       pending += agent->hasPendingDescription();
     }
 
-    for (auto &agent : agents_.records()) {
+    for (auto &agent : agents.records()) {
       if (pending < description_queue_capacity && agent->queueDescription()) {
         ++pending;
-        agents_.changed();
+        agents.changed();
       }
     }
 
-    for (auto &agent : agents_.records()) {
+    for (auto &agent : agents.records()) {
       if (agent->description_phase != DescriptionPhase::queued) {
         continue;
       }
@@ -425,15 +423,15 @@ public:
         agent->description_capture.clear();
         agent->description_phase = DescriptionPhase::failed;
         agent->title_state = AgentTitleState::failed;
-        agents_.changed();
+        agents.changed();
       }
     }
 
     return std::nullopt;
   }
 
-  inline std::optional<HistorySessionTitle> completeDescription(const DescriptionResult &result) {
-    auto *agent = agents_.find(result.identity.pane, result.identity.generation);
+  inline std::optional<HistorySessionTitle> completeDescription(AgentRegistry<Memory> &agents, const DescriptionResult &result) {
+    auto *agent = agents.find(result.identity.pane, result.identity.generation);
     if (agent == nullptr || agent->description_phase != DescriptionPhase::running || agent->session_id != result.identity.session || agent->description_revision != result.identity.revision) {
       return std::nullopt;
     }
@@ -457,13 +455,12 @@ public:
     }
 
     agent->title_state = finished.state;
-    agents_.changed();
+    agents.changed();
     return finished;
   }
 
 private:
   static constexpr std::size_t description_queue_capacity = 8;
-  AgentRegistry<Memory> &agents_;
   std::uint64_t description_revision_ = 0;
   bool descriptions_enabled_ = false;
 };
@@ -482,40 +479,42 @@ concept DescriptionObserver = requires(Agents &agents, const DescriptionResult &
   { agents.completeDescription(result) } -> std::same_as<std::optional<HistorySessionTitle>>;
 };
 
+// Generates session descriptions on a worker; the agents it describes are lent to each call.
 template <ConcurrentAllocator Memory, DescriptionObserver Agents, HistoryEventSink History>
 class DescriptionService {
 public:
-  inline explicit DescriptionService(Memory &memory, Agents &agents, History &history, const DescriptionOptions &options)
-      : agents_(agents),
-        history_(history),
-        generator_(memory, options) {
-    agents_.enableDescriptions(!options.arguments.empty());
+  inline explicit DescriptionService(Memory &memory, History &history, const DescriptionOptions &options)
+      : history_(history) {
     if (!options.arguments.empty()) {
-      worker_.emplace(generator_);
+      worker_.emplace(std::in_place, memory, options);
     }
   }
 
-  inline void tick() {
+  inline bool enabled() const noexcept {
+    return worker_.has_value();
+  }
+
+  inline void tick(Agents &agents) {
     if (!worker_) {
       return;
     }
 
-    collect();
+    collect(agents);
     if (!pending_) {
-      if (auto request = agents_.nextDescription()) {
+      if (auto request = agents.nextDescription()) {
         pending_ = worker_->submit(*request);
       }
     }
   }
 
-  inline void collect() {
+  inline void collect(Agents &agents) {
     if (!pending_) {
       return;
     }
 
     worker_->collect([&](const DescriptionResult &result) {
       pending_ = false;
-      if (const auto title = agents_.completeDescription(result)) {
+      if (const auto title = agents.completeDescription(result)) {
         history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::session_title, .session = {}, .title = *title});
       }
     });
@@ -526,9 +525,7 @@ public:
   }
 
 private:
-  Agents &agents_;
   History &history_;
-  DescriptionGenerator<Memory> generator_;
   std::optional<ObservationWorker<DescriptionGenerator<Memory>>> worker_;
   bool pending_ = false;
 };
@@ -540,26 +537,26 @@ private:
 export {
 namespace telar::runtime {
 
+// Decodes pane media on a worker. The model, the clients and the pane service are lent to each call.
 template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History = DiscardedHistory>
 class MediaService {
   using Processor = MediaProcessor<Memory>;
+  using Panes = PaneService<Memory, Poller, History>;
 
 public:
-  inline explicit MediaService(RuntimeModel<Memory> &model, PaneService<Memory, Poller, History> &panes, Poller &poller, Limits &limits)
-      : model_(model),
-        panes_(panes),
-        poller_(poller),
+  inline explicit MediaService(Poller &poller, Limits &limits)
+      : poller_(poller),
         limits_(limits),
-        worker_(processor_) {}
+        worker_(std::in_place) {}
 
-  inline void start() {
+  inline void start(RuntimeModel<Memory> &model, const ClientStore<Memory> &clients, Panes &service) {
     if (pending_) {
       return;
     }
 
     typename Processor::Request request;
-    enqueueRetired(request);
-    const auto panes = model_.panes.items();
+    enqueueRetired(model, request);
+    const auto panes = model.panes.items();
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
       auto *pane = panes[next_slot_++ % panes.size()];
       if (pane == nullptr) {
@@ -567,13 +564,13 @@ public:
       }
       if (pane->media->failed()) {
         if (!pane->output_closed) {
-          panes_.failOutput(*pane);
+          service.failOutput(*pane);
         }
         continue;
       }
 
       if (!pane->media->busy()) {
-        pane->media->discardUnwantedTransfers([&](ImageKey key, bool shared) { return wanted(*pane, key, shared); });
+        pane->media->discardUnwantedTransfers([&](ImageKey key, bool shared) { return wanted(clients, pane->id, key, shared); });
       }
       if (pane->media->seal()) {
         request.entries[request.count++] = {pane->id, pane->generation, pane->media};
@@ -585,9 +582,9 @@ public:
     }
   }
 
-  inline void collect() {
+  inline void collect(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, Panes &service) {
     if (pending_) {
-      worker_.collect([&](const typename Processor::Result &result) { apply(result); });
+      worker_.collect([&](const typename Processor::Result &result) { apply(model, clients, service, result); });
     }
   }
 
@@ -603,13 +600,13 @@ public:
     }
   }
 
-  inline void finish() noexcept {
-    for (auto *pane : model_.panes.items()) {
+  inline void finish(RuntimeModel<Memory> &model) noexcept {
+    for (auto *pane : model.panes.items()) {
       if (pane != nullptr) {
         pane->media->cancel();
       }
     }
-    for (auto media = model_.retired_media; media; media = media->retired_next) {
+    for (auto media = model.retired_media; media; media = media->retired_next) {
       media->cancel();
     }
     for (;;) {
@@ -621,8 +618,8 @@ public:
       });
 
       typename Processor::Request request;
-      enqueueRetired(request);
-      for (auto *pane : model_.panes.items()) {
+      enqueueRetired(model, request);
+      for (auto *pane : model.panes.items()) {
         if (request.count == request.entries.size()) {
           break;
         }
@@ -642,9 +639,9 @@ public:
   }
 
 private:
-  inline bool wanted(const Pane<Memory> &pane, ImageKey key, bool shared) const noexcept {
-    for (const auto *client : model_.clients.items()) {
-      const auto *attachment = client == nullptr ? nullptr : client->attachment(pane.id);
+  inline static bool wanted(const ClientStore<Memory> &clients, std::uint64_t pane, ImageKey key, bool shared) noexcept {
+    for (const auto *client : clients.items()) {
+      const auto *attachment = client == nullptr ? nullptr : client->attachment(pane);
       if (attachment != nullptr && attachment->graphics.wantsImage(key, shared)) {
         return true;
       }
@@ -652,14 +649,14 @@ private:
     return false;
   }
 
-  inline void enqueueRetired(typename Processor::Request &request) noexcept {
-    auto *link = &model_.retired_media;
+  inline static void enqueueRetired(RuntimeModel<Memory> &model, typename Processor::Request &request) noexcept {
+    auto *link = &model.retired_media;
     while (*link && request.count < request.entries.size()) {
       auto &media = **link;
       if (media.idle()) {
         auto next = std::move(media.retired_next);
         *link = std::move(next);
-        --model_.retired_media_count;
+        --model.retired_media_count;
         continue;
       }
 
@@ -670,25 +667,25 @@ private:
     }
   }
 
-  inline void apply(const typename Processor::Result &result) {
+  inline void apply(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, Panes &service, const typename Processor::Result &result) {
     pending_ = false;
     for (const auto &entry : std::span{result.entries}.first(result.count)) {
       entry.media->complete();
-      TELAR_DIAGNOSTIC(model_.metrics.media.merge(entry.metrics));
+      TELAR_DIAGNOSTIC(model.metrics.media.merge(entry.metrics));
     }
 
     for (const auto &entry : std::span{result.entries}.first(result.count)) {
-      auto *pane = model_.panes.find(entry.pane);
+      auto *pane = model.panes.find(entry.pane);
       if (pane == nullptr || pane->generation != entry.generation) {
         continue;
       }
       if (entry.media->failed()) {
-        panes_.failOutput(*pane);
+        service.failOutput(*pane);
         continue;
       }
 
       if (entry.reset) {
-        for (auto *client : model_.clients.items()) {
+        for (auto *client : clients.items()) {
           if (auto *attachment = client == nullptr ? nullptr : client->attachment(pane->id)) {
             attachment->graphics.requestSnapshot();
           }
@@ -696,31 +693,30 @@ private:
       }
 
       if (auto *terminal = pane->media->terminal()) {
-        reportLimits(*terminal);
-        stageTransfers(*pane, terminal->graphics);
-
+        reportLimits(model.graphics_limits, *terminal);
+        stageTransfers(clients, model.metrics, pane->id, terminal->graphics);
       }
       if (!pane->output_closed) {
-        panes_.flushInput(*pane);
+        service.flushInput(*pane);
       }
       updateReadInterest(*pane);
     }
   }
 
-  inline void stageTransfers(Pane<Memory> &pane, const GraphicsStorage<MediaAllocator<Memory>> &storage) {
+  inline static void stageTransfers(ClientStore<Memory> &clients, [[maybe_unused]] diagnostics::RuntimeCounters &metrics, std::uint64_t pane, const GraphicsStorage<MediaAllocator<Memory>> &storage) {
     if (storage.revision() == 0) {
       return;
     }
 
-    for (auto *client : model_.clients.items()) {
-      if (auto *attachment = client == nullptr ? nullptr : client->attachment(pane.id)) {
-        TELAR_DIAGNOSTIC(attachment->graphics.bindCounters(model_.metrics.graphics));
+    for (auto *client : clients.items()) {
+      if (auto *attachment = client == nullptr ? nullptr : client->attachment(pane)) {
+        TELAR_DIAGNOSTIC(attachment->graphics.bindCounters(metrics.graphics));
         attachment->graphics.stageAtMediaBoundary(storage);
       }
     }
   }
 
-  inline void reportLimits(MediaTerminal<MediaAllocator<Memory>> &terminal) {
+  inline void reportLimits(const GraphicsLimits &graphics, MediaTerminal<MediaAllocator<Memory>> &terminal) {
     auto &storage = terminal.graphics;
     if (const auto images = storage.takeTrimmedImages()) {
       limits_.report(LimitReach{.name = "graphics.images_per_screen", .noun = "images", .value = graphics_image_count, .requested = images});
@@ -734,15 +730,12 @@ private:
       limits_.report(LimitReach{.name = "graphics.max_chunks_per_image", .noun = "chunks", .value = GraphicsLimits::maximum_chunks_per_image});
     }
     if (uploads.bytes) {
-      limits_.report(LimitReach{.name = "graphics.max_image_bytes_per_screen", .noun = "bytes", .value = model_.graphics_limits.screenBytes()});
+      limits_.report(LimitReach{.name = "graphics.max_image_bytes_per_screen", .noun = "bytes", .value = graphics.screenBytes()});
     }
   }
 
-  RuntimeModel<Memory> &model_;
-  PaneService<Memory, Poller, History> &panes_;
   Poller &poller_;
   Limits &limits_;
-  Processor processor_;
   ObservationWorker<Processor> worker_;
   std::size_t next_slot_ = 0;
   bool pending_ = false;
@@ -853,10 +846,8 @@ private:
     inline explicit Slot(Memory &memory, CompletionSignal &completion, std::uint64_t client)
         : client(client),
           index(memory),
-          build_task(index),
-          query_task(memory, index),
-          build_worker(build_task, &completion),
-          query_worker(query_task, &completion) {}
+          build_worker(&completion, std::in_place, index),
+          query_worker(&completion, std::in_place, memory, index) {}
 
     std::uint64_t client;
     std::uint64_t used = 0;
@@ -868,8 +859,6 @@ private:
     bool answered_partial = false;
     bool abandoned = false;
     Index index;
-    PathBuildTask<Index> build_task;
-    PathQueryTask<Memory, Index> query_task;
     ObservationWorker<PathBuildTask<Index>> build_worker;
     ObservationWorker<PathQueryTask<Memory, Index>> query_worker;
   };
@@ -951,24 +940,25 @@ public:
   using Clock = std::chrono::steady_clock;
   static constexpr auto probe_interval = std::chrono::seconds{5};
 
-  inline explicit WorkspaceGitService(RuntimeModel<Memory> &model, LimitService<Memory> &limits, Probe &probe)
-      : model_(model),
-        limits_(limits),
-        worker_(probe) {}
+  // The probe is built in place on its worker from the arguments.
+  template <typename... Arguments>
+  inline explicit WorkspaceGitService(LimitService<Memory> &limits, Arguments &&...probe)
+      : limits_(limits),
+        worker_(std::in_place, std::forward<Arguments>(probe)...) {}
 
-  inline std::chrono::nanoseconds tick(Clock::time_point now) {
-    collect(now);
+  inline std::chrono::nanoseconds tick(RuntimeModel<Memory> &model, Clock::time_point now) {
+    collect(model, now);
     if (pending_) {
       return probe_interval;
     }
-    if (now < next_check_ && checked_revision_ == model_.workspace_revision) {
+    if (now < next_check_ && checked_revision_ == model.workspace_revision) {
       return next_check_ - now;
     }
 
     Workspace<Memory> *oldest = nullptr;
     next_check_ = now + probe_interval;
-    checked_revision_ = model_.workspace_revision;
-    for (auto *workspace : model_.workspaces.items()) {
+    checked_revision_ = model.workspace_revision;
+    for (auto *workspace : model.workspaces.items()) {
       if (workspace == nullptr) {
         continue;
       }
@@ -992,7 +982,7 @@ public:
     return next_check_ - now;
   }
 
-  inline void collect(Clock::time_point now) {
+  inline void collect(RuntimeModel<Memory> &model, Clock::time_point now) {
     worker_.collect([&](const WorkspaceGitResult &result) {
       if (pending_ != result.identity) {
         return;
@@ -1000,7 +990,7 @@ public:
 
       pending_.reset();
       next_check_ = now;
-      auto *workspace = model_.workspaces.find(result.identity);
+      auto *workspace = model.workspaces.find(result.identity);
       if (workspace == nullptr) {
         return;
       }
@@ -1015,7 +1005,7 @@ public:
       if (workspace->git_branch.view() != branch || workspace->git_dirty != dirty) {
         workspace->git_branch.assign(branch);
         workspace->git_dirty = dirty;
-        ++model_.workspace_revision;
+        ++model.workspace_revision;
       }
     });
   }
@@ -1025,7 +1015,6 @@ public:
   }
 
 private:
-  RuntimeModel<Memory> &model_;
   LimitService<Memory> &limits_;
   ObservationWorker<Probe> worker_;
   std::optional<std::uint64_t> pending_;

@@ -216,7 +216,7 @@ template <ConcurrentAllocator Memory, typename Tap, CaptureClock Clock = Capture
 class CapturePipeline {
 public:
   inline explicit CapturePipeline(Memory &memory, CaptureProducer<Memory> &producer, ProxyCaptureLimits limits, Tap &tap)
-      : tap_(tap), receiver_(producer), joiner_(memory, limits.join_timeout), worker_(receiver_) {
+      : tap_(tap), joiner_(memory, limits.join_timeout), worker_(std::in_place, producer) {
     worker_.submit({tap_.listening()});
   }
 
@@ -248,7 +248,6 @@ public:
 
 private:
   Tap &tap_;
-  CaptureReceiver<Memory> receiver_;
   CaptureJoiner<Memory> joiner_;
   ObservationWorker<CaptureReceiver<Memory>> worker_;
 };

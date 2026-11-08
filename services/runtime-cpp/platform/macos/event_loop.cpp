@@ -1,4 +1,6 @@
 module;
+#include "tbc/view.hpp"
+#include <cassert>
 #include <time.h>
 #include <errno.h>
 #include <cstddef>
@@ -93,7 +95,8 @@ void Kqueue::watchSignal(int signal_number) {
   ::signal(signal_number, signal_number == SIGCHLD ? +[](int) {} : SIG_IGN);
 }
 
-std::span<const Event> Kqueue::wait(std::chrono::nanoseconds timeout) {
+tbc::view<std::span<const Event>, tbc::lt::a> Kqueue::wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events) {
+  assert(events.size() >= event_capacity);
   timeout = std::max(timeout, std::chrono::nanoseconds::zero());
   const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
   const timespec duration{.tv_sec = seconds.count(),
@@ -110,7 +113,7 @@ std::span<const Event> Kqueue::wait(std::chrono::nanoseconds timeout) {
 
   for (int index = 0; index < count; ++index) {
     const auto &source = kernel_events_[index];
-    events_[index] = Event{
+    events[index] = Event{
         .kind = source.filter == EVFILT_SIGNAL ? EventKind::signal : source.filter == EVFILT_WRITE ? EventKind::writable
                                                                                                    : EventKind::readable,
         .descriptor = static_cast<int>(source.ident),
@@ -119,7 +122,7 @@ std::span<const Event> Kqueue::wait(std::chrono::nanoseconds timeout) {
     };
   }
 
-  return std::span<const Event>{events_}.first(static_cast<std::size_t>(count));
+  return std::span<const Event>{events}.first(static_cast<std::size_t>(count));
 }
 
 }
