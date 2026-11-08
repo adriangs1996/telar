@@ -575,18 +575,19 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
   poller.watchSignal(SIGTERM);
   poller.watchSignal(SIGINT);
   poller.watchSignal(SIGCHLD);
-  Runtime runtime{memory, poller, background, RuntimeOptions{
-                                                  .socket = paths.socket,
-                                                  .cli_executable = cli.view(),
-                                                  .session = {.path = paths.session, .resume_agents = options.resume_agents},
-                                                  .fresh = options.fresh,
-                                                  .capture_output = configuration.capture_output,
-                                                  .manifests = &configuration.manifests,
-                                                  .descriptions = {.arguments = std::span{description_arguments}.first(configuration.descriptions.arguments.size()), .timeout = configuration.descriptions.timeout},
-                                                  .graphics = configuration.graphics,
-                                                  .control_policy = configuration.control_policy,
-                                              },
-                  proxy.clientConfiguration()};
+  // The runtime keeps views of these options, so they live as long as it does.
+  const RuntimeOptions runtime_options{
+      .socket = paths.socket,
+      .cli_executable = cli.view(),
+      .session = {.path = paths.session, .resume_agents = options.resume_agents},
+      .fresh = options.fresh,
+      .capture_output = configuration.capture_output,
+      .manifests = &configuration.manifests,
+      .descriptions = {.arguments = std::span{description_arguments}.first(configuration.descriptions.arguments.size()), .timeout = configuration.descriptions.timeout},
+      .graphics = configuration.graphics,
+      .control_policy = configuration.control_policy,
+  };
+  Runtime runtime{memory, poller, background, runtime_options, proxy.clientConfiguration()};
   runtime.run(proxy, plugin_service);
 }
 

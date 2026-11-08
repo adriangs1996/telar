@@ -17,6 +17,7 @@ module;
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include "tbc/view.hpp"
 
 export module telar.runtime.editors.remote_editor;
 
@@ -36,6 +37,22 @@ namespace telar::runtime {
 
 template <Allocator Memory>
 class RemoteEditor {
+private:
+  using Clock = std::chrono::steady_clock;
+
+  // One open request: what it asks, the budgets it spends, and the candidate it opened, which views
+  // the request's context. The editor keeps only the buffers every request reuses.
+  struct Session {
+    const OpenEditor &request;
+    tbc::view<const RequestContext &, tbc::lt::a> context;
+    EditorKind kind;
+    Clock::time_point deadline;
+    unsigned entries_left = 128;
+    unsigned endpoints_left = 32;
+    unsigned commands_left = 128;
+    tbc::view<const EditorCandidate *, tbc::lt::a> opened = nullptr;
+  };
+
 public:
   inline explicit RemoteEditor(Memory &memory)
       : memory_(memory),
@@ -48,8 +65,6 @@ public:
 
   inline void open(const OpenEditor &request, const RequestContext &context, EncodedReply<Memory> &reply) {
     TELAR_TRACE("editor.open");
-    request_ = &request;
-    context_ = &context;
     path_.assign(request.path);
     editor_.assign(request.editor);
     struct stat status{};
@@ -61,33 +76,28 @@ public:
       return;
     }
 
-    kind_ = identifyEditor(request.editor);
-    deadline_ = Clock::now() + std::chrono::seconds{3};
-    entries_left_ = 128;
-    endpoints_left_ = 32;
-    commands_left_ = 128;
-    opened_ = nullptr;
+    Session session{.request = request, .context = context, .kind = identifyEditor(request.editor), .deadline = Clock::now() + std::chrono::seconds{3}};
     try {
       if (context.editor_candidate_count != 0) {
-        switch (kind_) {
+        switch (session.kind) {
         case EditorKind::neovim:
-          discoverNeovim();
+          discoverNeovim(session);
           break;
         case EditorKind::vim:
-          discoverVim();
+          discoverVim(session);
           break;
         case EditorKind::emacs:
-          discoverEmacs();
+          discoverEmacs(session);
           break;
         case EditorKind::unsupported:
           break;
         }
       }
 
-      if (opened_ != nullptr) {
+      if (session.opened != nullptr) {
         result.outcome = EditorOutcome::opened;
-        result.pane_id = opened_->pane;
-        result.pane_generation = opened_->generation;
+        result.pane_id = session.opened->pane;
+        result.pane_generation = session.opened->generation;
       }
     } catch (...) {
       result.outcome = EditorOutcome::failed;
@@ -97,15 +107,14 @@ public:
   }
 
 private:
-  using Clock = std::chrono::steady_clock;
   static constexpr std::size_t output_limit = 16 * 1024;
 
-  inline std::string_view command(std::span<const std::string_view> arguments) {
-    if (commands_left_-- == 0 || Clock::now() >= deadline_) {
+  inline std::string_view command(Session &session, std::span<const std::string_view> arguments) {
+    if (session.commands_left-- == 0 || Clock::now() >= session.deadline) {
       throw RequestError{FailureCode::resource_limit, "Editor command limit reached"};
     }
     Command launch{memory_, Launch{.cwd = "/", .arguments = arguments}, CommandPurpose::administration};
-    if (output_.run(launch, deadline_, false, context_->cancelled) != 0) {
+    if (output_.run(launch, session.deadline, false, session.context.cancelled) != 0) {
       throw RequestError{FailureCode::internal, "Editor command failed"};
     }
     return output_.text();
@@ -124,8 +133,8 @@ private:
     return path[0] == '/' && ::lstat(path, &status) == 0 && status.st_uid == ::geteuid() && (status.st_mode & 0022) == 0 && (directory ? S_ISDIR(status.st_mode) : S_ISSOCK(status.st_mode));
   }
 
-  inline void scan(std::string_view root, bool descend) {
-    if (opened_ != nullptr || root.size() >= PATH_MAX) {
+  inline void scan(Session &session, std::string_view root, bool descend) {
+    if (session.opened != nullptr || root.size() >= PATH_MAX) {
       return;
     }
     std::array<char, PATH_MAX> directory{};
@@ -142,12 +151,12 @@ private:
       return;
     }
     descriptor.release();
-    while (entries_left_ != 0 && endpoints_left_ != 0 && opened_ == nullptr) {
+    while (session.entries_left != 0 && session.endpoints_left != 0 && session.opened == nullptr) {
       const auto *entry = ::readdir(stream.get());
       if (entry == nullptr) {
         break;
       }
-      --entries_left_;
+      --session.entries_left;
       if (std::string_view{entry->d_name} == "." || std::string_view{entry->d_name} == "..") {
         continue;
       }
@@ -157,66 +166,70 @@ private:
         continue;
       }
       if (descend && ownedPath(path.data(), true)) {
-        scan(path.data(), false);
+        scan(session, path.data(), false);
       } else if (ownedPath(path.data(), false)) {
-        --endpoints_left_;
-        if (kind_ == EditorKind::emacs) {
-          emacsEndpoint(path.data());
+        --session.endpoints_left;
+        if (session.kind == EditorKind::emacs) {
+          emacsEndpoint(session, path.data());
         } else if (std::string_view{entry->d_name}.starts_with("nvim.")) {
-          vimEndpoint(path.data());
+          vimEndpoint(session, path.data());
         }
       }
     }
   }
 
-  inline void discoverNeovim() {
+  inline void discoverNeovim(Session &session) {
     if (const char *root = std::getenv("XDG_RUNTIME_DIR")) {
-      scan(root, true);
+      scan(session, root, true);
     }
-    const char *user = std::getenv("USER");
-    if (opened_ != nullptr || user == nullptr || *user == '\0' || std::strchr(user, '/') != nullptr) {
+    // A later lookup may overwrite what getenv returned, so the name is copied first.
+    const char *found = std::getenv("USER");
+    std::array<char, 256> user{};
+    if (session.opened != nullptr || found == nullptr || *found == '\0' || std::strchr(found, '/') != nullptr || std::strlen(found) >= user.size()) {
       return;
     }
+    std::strcpy(user.data(), found);
     const char *temporary = std::getenv("TMPDIR");
     for (const char *root : {temporary, "/tmp"}) {
       if (root == nullptr) {
         continue;
       }
       std::array<char, PATH_MAX> directory{};
-      const int count = std::snprintf(directory.data(), directory.size(), "%s/nvim.%s", root, user);
+      const int count = std::snprintf(directory.data(), directory.size(), "%s/nvim.%s", root, user.data());
       if (count > 0 && static_cast<std::size_t>(count) < directory.size()) {
-        scan(directory.data(), true);
+        scan(session, directory.data(), true);
       }
     }
   }
 
-  inline void discoverVim() {
+  inline void discoverVim(Session &session) {
     const std::array<std::string_view, 2> arguments{editor_, "--serverlist"};
     String<Memory> names{AllocatorRef<char, Memory>{memory_}};
     try {
-      names.assign(command(arguments));
+      names.assign(command(session, arguments));
     } catch (...) {
       return;
     }
     std::string_view remaining = names;
-    while (!remaining.empty() && endpoints_left_ != 0 && opened_ == nullptr) {
+    while (!remaining.empty() && session.endpoints_left != 0 && session.opened == nullptr) {
       const auto split = remaining.find('\n');
       const auto endpoint = trim(remaining.substr(0, split));
       remaining = split == std::string_view::npos ? std::string_view{} : remaining.substr(split + 1);
       if (endpoint.empty()) {
         continue;
       }
-      --endpoints_left_;
-      vimEndpoint(endpoint);
+      --session.endpoints_left;
+      vimEndpoint(session, endpoint);
     }
   }
 
-  inline const EditorCandidate *candidate(pid_t pid) const noexcept {
+  // A candidate of the session's context, region `a`.
+  inline tbc::view<const EditorCandidate *, tbc::lt::a> candidate(const Session &session, pid_t pid) const noexcept {
     const auto current = inspector_.identity(pid);
     if (!current) {
       return nullptr;
     }
-    for (const auto &candidate : std::span{context_->editor_candidates}.first(context_->editor_candidate_count)) {
+    for (const auto &candidate : std::span{session.context.editor_candidates}.first(session.context.editor_candidate_count)) {
       if ((pid == candidate.process.pid || current->parent == candidate.process.pid) && inspector_.identity(candidate.process.pid) == candidate.process) {
         return &candidate;
       }
@@ -245,12 +258,12 @@ private:
     expression_.append(bytes.data(), result.ptr);
   }
 
-  inline void vimEndpoint(std::string_view endpoint) {
-    const std::string_view option = kind_ == EditorKind::neovim ? "--server" : "--servername";
+  inline void vimEndpoint(Session &session, std::string_view endpoint) {
+    const std::string_view option = session.kind == EditorKind::neovim ? "--server" : "--servername";
     const std::array<std::string_view, 5> identity_arguments{editor_, option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()"};
     std::string_view identity;
     try {
-      identity = command(identity_arguments);
+      identity = command(session, identity_arguments);
     } catch (...) {
       return;
     }
@@ -267,7 +280,7 @@ private:
     if (::gethostname(host.data(), host.size() - 1) != 0 || trim(identity.substr(split)) != host.data()) {
       return;
     }
-    const auto *target = candidate(pid);
+    const auto *target = candidate(session, pid);
     if (target == nullptr) {
       return;
     }
@@ -277,32 +290,32 @@ private:
     expression_ += " && hostname() == ";
     quote(host.data(), false);
     expression_ += " ? [execute('drop ' . fnameescape(";
-    quote(request_->path, false);
+    quote(session.request.path, false);
     expression_ += "))";
-    if (request_->line != 0) {
+    if (session.request.line != 0) {
       expression_ += ", cursor(";
-      number(request_->line);
+      number(session.request.line);
       expression_ += ", ";
-      number(std::max(request_->column, 1u));
+      number(std::max(session.request.column, 1u));
       expression_ += ')';
     }
     expression_ += ", 1][-1] : 0";
     const std::array<std::string_view, 5> arguments{editor_, option, endpoint, "--remote-expr", expression_};
-    if (trim(command(arguments)) != "1") {
+    if (trim(command(session, arguments)) != "1") {
       throw RequestError{FailureCode::internal, "Editor rejected open"};
     }
-    opened_ = target;
+    session.opened = target;
   }
 
-  inline void discoverEmacs() {
+  inline void discoverEmacs(Session &session) {
     if (const char *socket = std::getenv("EMACS_SOCKET_NAME"); socket != nullptr && ownedPath(socket, false)) {
-      emacsEndpoint(socket);
+      emacsEndpoint(session, socket);
     }
     if (const char *root = std::getenv("XDG_RUNTIME_DIR")) {
       std::array<char, PATH_MAX> path{};
       const int count = std::snprintf(path.data(), path.size(), "%s/emacs", root);
       if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
-        scan(path.data(), false);
+        scan(session, path.data(), false);
       }
     }
     const char *temporary = std::getenv("TMPDIR");
@@ -313,22 +326,22 @@ private:
       std::array<char, PATH_MAX> path{};
       const int count = std::snprintf(path.data(), path.size(), "%s/emacs%u", root, ::getuid());
       if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
-        scan(path.data(), false);
+        scan(session, path.data(), false);
       }
     }
   }
 
-  inline void emacsEndpoint(std::string_view endpoint) {
-    if (opened_ != nullptr) {
+  inline void emacsEndpoint(Session &session, std::string_view endpoint) {
+    if (session.opened != nullptr) {
       return;
     }
-    const auto slash = request_->editor.rfind('/');
-    editor_.assign(slash == std::string_view::npos ? std::string_view{} : request_->editor.substr(0, slash + 1));
+    const auto slash = session.request.editor.rfind('/');
+    editor_.assign(slash == std::string_view::npos ? std::string_view{} : session.request.editor.substr(0, slash + 1));
     editor_ += "emacsclient";
     const std::array<std::string_view, 6> identity_arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)"};
     std::string_view identity;
     try {
-      identity = trim(command(identity_arguments));
+      identity = trim(command(session, identity_arguments));
     } catch (...) {
       return;
     }
@@ -341,7 +354,7 @@ private:
     if (::gethostname(host.data(), host.size() - 1) != 0) {
       return;
     }
-    for (const auto &target : std::span{context_->editor_candidates}.first(context_->editor_candidate_count)) {
+    for (const auto &target : std::span{session.context.editor_candidates}.first(session.context.editor_candidate_count)) {
       if (inspector_.identity(target.process.pid) != target.process) {
         continue;
       }
@@ -356,20 +369,20 @@ private:
       expression_ += ")) (let ((f (catch 'found (dolist (f (frame-list)) (when (and (not (display-graphic-p f)) (equal (terminal-name (frame-terminal f)) (concat \"/dev/\" ";
       quote(terminal.view().substr(sizeof("/dev/") - 1), true);
       expression_ += "))) (throw 'found f)))))) (if f (with-selected-frame f (find-file (concat \"/:\" ";
-      quote(request_->path, true);
+      quote(session.request.path, true);
       expression_ += "))";
-      if (request_->line != 0) {
+      if (session.request.line != 0) {
         expression_ += " (goto-char (point-min)) (forward-line ";
-        number(request_->line - 1);
+        number(session.request.line - 1);
         expression_ += ") (move-to-column ";
-        number(request_->column == 0 ? 0 : request_->column - 1);
+        number(session.request.column == 0 ? 0 : session.request.column - 1);
         expression_ += ')';
       }
       expression_ += " 1) 0)) 0)";
       const std::array<std::string_view, 6> arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression_};
-      const auto result = trim(command(arguments));
+      const auto result = trim(command(session, arguments));
       if (result == "1") {
-        opened_ = &target;
+        session.opened = &target;
         return;
       }
       if (result != "0") {
@@ -384,14 +397,6 @@ private:
   String<Memory> path_;
   String<Memory> editor_;
   ProcessInspector inspector_;
-  const OpenEditor *request_ = nullptr;
-  const RequestContext *context_ = nullptr;
-  const EditorCandidate *opened_ = nullptr;
-  EditorKind kind_ = EditorKind::unsupported;
-  Clock::time_point deadline_{};
-  unsigned entries_left_ = 0;
-  unsigned endpoints_left_ = 0;
-  unsigned commands_left_ = 0;
 };
 
 }

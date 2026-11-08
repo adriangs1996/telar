@@ -72,8 +72,11 @@ struct IgnoreEvents {
 export {
 namespace telar::runtime::plugins {
 
+// Proxy threads submit exchanges and the runtime collects results while the trust monitor revokes
+// workers: the workers are fixed once built, and what changes after is atomic or a synchronized
+// channel, so every borrow the service lends stays valid whatever is done through it.
 template <ConcurrentAllocator Memory>
-class Service {
+class TBC_SHARED Service {
 public:
   inline explicit Service(Memory &memory, std::span<const ServiceSpec> specifications, const char *executable, std::string_view trace_prefix = {}, traffic::PackagePort *traffic = nullptr)
       : memory_(memory), workers_(AllocatorRef<Owned<Worker<Memory>, Memory>, Memory>{memory}) {
@@ -103,7 +106,7 @@ public:
 
   inline void watchTrust(std::string_view path) {
     if (workers_.empty()) { return; }
-    if (stopped_ || trust_monitor_.joinable() || path.empty()) { throw std::invalid_argument{"Invalid plugin trust monitor"}; }
+    if (stopped_.load(std::memory_order_acquire) || trust_monitor_.joinable() || path.empty()) { throw std::invalid_argument{"Invalid plugin trust monitor"}; }
     trust_path_.assign(path);
     refreshTrust();
     trust_monitor_ = std::jthread{[this] {
@@ -118,10 +121,9 @@ public:
   }
 
   inline void stop() noexcept {
-    if (stopped_) {
+    if (stopped_.exchange(true, std::memory_order_acq_rel)) {
       return;
     }
-    stopped_ = true;
     if (cancellation_) {
       cancellation_->request();
     }
@@ -138,7 +140,7 @@ public:
   inline void submit(CapturedExchange<Memory> &captured) noexcept {
     TELAR_TRACE("plugins.submitExchange");
     auto owned = std::move(captured);
-    if (!listening() || stopped_) {
+    if (!listening() || stopped_.load(std::memory_order_acquire)) {
       return;
     }
     auto charged = budget_.charge(SharedExchange<Memory>::capturedBytes(owned));
@@ -200,7 +202,7 @@ private:
   FixedText<PATH_MAX> trust_path_;
   std::jthread trust_monitor_;
   std::atomic<std::uint64_t> next_event_{1};
-  bool stopped_ = false;
+  std::atomic<bool> stopped_{false};
 };
 
 template <ConcurrentAllocator Memory>
