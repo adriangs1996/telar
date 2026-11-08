@@ -275,7 +275,7 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   const bool intercepted = scenario != ProxyServiceScenario::opaque;
   const bool http2 = scenario == ProxyServiceScenario::http2 || scenario == ProxyServiceScenario::http2_decode_failure;
   AuthorityDirectory directory;
-  const auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local);
+  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   const auto issuer = CertificatePair::authority("Fixture origin CA", CertificatePair::private_lifetime);
   const auto leaf = issuer.mint("origin.test");
   TlsTrustStore trust{memory, library};
@@ -315,7 +315,7 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   check(server_context != nullptr && client_context != nullptr);
   check(SSL_CTX_use_certificate(server_context.get(), leaf.certificate.get()) == 1);
   check(SSL_CTX_use_PrivateKey(server_context.get(), leaf.key.get()) == 1);
-  check(X509_STORE_add_cert(SSL_CTX_get_cert_store(client_context.get()), authority.certificate()) == 1);
+  check(X509_STORE_add_cert(SSL_CTX_get_cert_store(client_context.get()), authority->certificate()) == 1);
   SSL_CTX_set_verify(client_context.get(), SSL_VERIFY_PEER, nullptr);
   check(SSL_CTX_set_num_tickets(server_context.get(), 0) == 1);
   AlpnSelection server_selection;
@@ -393,7 +393,7 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
 
 static void checkAdmissionAndStop(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
   AuthorityDirectory directory;
-  const auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local);
+  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};

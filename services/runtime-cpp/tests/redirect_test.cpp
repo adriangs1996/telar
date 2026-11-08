@@ -682,7 +682,7 @@ static void loopbackLeases(SystemAllocator &memory) {
 
 static void relay(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, const std::string &path) {
   AuthorityDirectory directory;
-  const auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local);
+  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
@@ -754,7 +754,7 @@ static void relay(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &librar
 
 static void opaqueTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
   AuthorityDirectory directory;
-  const auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local);
+  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
@@ -914,7 +914,7 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   const auto [trusted_origin, http, numeric_ipv6, edit, http2, mode] = scenario;
   const bool excluded = mode == TransparentTlsMode::excluded_pinned;
   AuthorityDirectory directory;
-  const auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local);
+  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   auto issuer = CertificatePair::authority("Transparent origin", CertificatePair::private_lifetime);
   const auto hostname = numeric_ipv6 ? "::1" : "origin.test";
   auto leaf = issuer.mint(hostname);
@@ -941,7 +941,7 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   check(SSL_CTX_use_certificate(server_context.get(), leaf.certificate.get()) == 1);
   check(SSL_CTX_use_PrivateKey(server_context.get(), leaf.key.get()) == 1);
   check(SSL_CTX_add1_chain_cert(server_context.get(), issuer.certificate.get()) == 1);
-  check(X509_STORE_add_cert(SSL_CTX_get_cert_store(client_context.get()), excluded ? issuer.certificate.get() : authority.certificate()) == 1);
+  check(X509_STORE_add_cert(SSL_CTX_get_cert_store(client_context.get()), excluded ? issuer.certificate.get() : authority->certificate()) == 1);
   SSL_CTX_set_verify(client_context.get(), SSL_VERIFY_PEER, nullptr);
   AlpnSelection selection;
   if (http2) {
@@ -993,7 +993,7 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
     check(service.counters().read(ProxyCounter::passthrough_connection) == 1);
   } else {
     check(X509_cmp(SSL_get0_peer_certificate(client.get()), leaf.certificate.get()) != 0);
-    check(X509_check_issued(authority.certificate(), SSL_get0_peer_certificate(client.get())) == X509_V_OK);
+    check(X509_check_issued(authority->certificate(), SSL_get0_peer_certificate(client.get())) == X509_V_OK);
   }
   if (http2) {
     exchangeHttp2Tls(memory, client.get(), server.get());

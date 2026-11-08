@@ -117,7 +117,7 @@ static void transferThrough(TlsSession<TlsTestMemory> &session, SSL *source, SSL
 
 static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, SessionCase scenario) {
   AuthorityDirectory directory;
-  auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local);
+  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   auto issuer = CertificatePair::authority("Origin fixture CA", CertificatePair::private_lifetime);
   auto leaf = issuer.mint("origin.test");
   if (scenario == SessionCase::expired_origin) {
@@ -137,7 +137,7 @@ static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   check(SSL_CTX_add1_chain_cert(server_context.get(), issuer.certificate.get()) == 1);
   check(SSL_CTX_set_num_tickets(server_context.get(), 0) == 1);
   if (scenario != SessionCase::untrusted_child) {
-    check(X509_STORE_add_cert(SSL_CTX_get_cert_store(client_context.get()), authority.certificate()) == 1);
+    check(X509_STORE_add_cert(SSL_CTX_get_cert_store(client_context.get()), authority->certificate()) == 1);
   }
   SSL_CTX_set_verify(client_context.get(), SSL_VERIFY_PEER, nullptr);
   if (scenario == SessionCase::tls12 || scenario == SessionCase::tls13) {

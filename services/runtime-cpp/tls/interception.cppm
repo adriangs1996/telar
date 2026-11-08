@@ -37,6 +37,7 @@ module;
 #endif
 #include <unistd.h>
 #include <cstdlib>
+#include "tbc/view.hpp"
 
 
 
@@ -97,7 +98,7 @@ public:
         const auto expected = (std::size_t{bytes_[1]} << 16) | (std::size_t{bytes_[2]} << 8) | bytes_[3];
         if (expected > maximum_hello_bytes - 4 || bytes_[0] != client_hello) { return Read::complete; }
         if (collected >= expected + 4) {
-          parse(std::span{bytes_}.first(expected + 4));
+          parseStored(expected + 4);
           return Read::complete;
         }
       }
@@ -105,8 +106,27 @@ public:
     return incomplete(available);
   }
 
+  // Parses a handshake by copying it into the offer, which keeps where its protocols lie.
   inline void parse(std::span<const std::uint8_t> handshake) noexcept {
-    protocols_ = {};
+    if (handshake.size() > bytes_.size()) {
+      parseStored(0);
+      return;
+    }
+    std::ranges::copy(handshake, bytes_.begin());
+    parseStored(handshake.size());
+  }
+
+  inline bool tls() const noexcept { return tls_; }
+  inline bool valid() const noexcept { return valid_; }
+  inline bool encrypted() const noexcept { return encrypted_; }
+  inline std::string_view serverName() const noexcept { return server_name_.view(); }
+
+  inline std::span<const std::uint8_t> encoded() const noexcept { return std::span{bytes_}.subspan(protocols_offset_, protocols_size_); }
+
+private:
+  inline void parseStored(std::size_t size) noexcept {
+    const auto handshake = std::span<const std::uint8_t>{bytes_}.first(size);
+    protocols_offset_ = protocols_size_ = 0;
     valid_ = false;
     encrypted_ = false;
     server_name_.assign({});
@@ -145,14 +165,6 @@ public:
     valid_ = true;
   }
 
-  inline bool tls() const noexcept { return tls_; }
-  inline bool valid() const noexcept { return valid_; }
-  inline bool encrypted() const noexcept { return encrypted_; }
-  inline std::string_view serverName() const noexcept { return server_name_.view(); }
-
-  inline std::span<const std::uint8_t> encoded() const noexcept { return protocols_; }
-
-private:
   class Cursor {
   public:
     inline explicit Cursor(std::span<const std::uint8_t> bytes) noexcept
@@ -224,7 +236,8 @@ private:
       names.take(length);
       if (names.failed() || length == 0) { return false; }
     }
-    protocols_ = extension.subspan(2);
+    protocols_offset_ = static_cast<std::size_t>(extension.data() - bytes_.data()) + 2;
+    protocols_size_ = extension.size() - 2;
     return true;
   }
 
@@ -242,7 +255,8 @@ private:
   bool tls_ = false;
   bool valid_ = false;
   bool encrypted_ = false;
-  std::span<const std::uint8_t> protocols_;
+  std::size_t protocols_offset_ = 0;
+  std::size_t protocols_size_ = 0;
 };
 
 }
@@ -438,11 +452,12 @@ public:
     mint
   };
 
-  inline explicit TlsSession(const TlsContexts<Memory> &contexts, const CertificateAuthority<Memory> &authority, TunnelSockets sockets, std::string_view hostname, std::shared_ptr<const CertificateAuthority<Memory>> owner = {})
+  // The session shares the authority it mints from, so a rotation that replaces it leaves this one valid.
+  inline explicit TlsSession(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname)
       : contexts_(contexts),
-        authority_owner_(std::move(owner)),
-        authority_(authority),
+        authority_(std::move(authority)),
         sockets_(sockets) {
+    requireTls(authority_ != nullptr, "TLS authority is unavailable");
     requireTls(TlsHostname::valid(hostname), "Invalid TLS session hostname");
     hostname_.assign(hostname);
   }
@@ -605,8 +620,8 @@ private:
     }
 
     failure_ = Failure::mint;
-    const auto leaf = authority_.mint(hostname_.view());
-    requireTls(SSL_use_certificate(child_.get(), leaf.certificate.get()) == 1 && SSL_use_PrivateKey(child_.get(), leaf.key.get()) == 1 && SSL_add1_chain_cert(child_.get(), authority_.certificate()) == 1, "Configure TLS child certificate");
+    const auto leaf = authority_->mint(hostname_.view());
+    requireTls(SSL_use_certificate(child_.get(), leaf.certificate.get()) == 1 && SSL_use_PrivateKey(child_.get(), leaf.key.get()) == 1 && SSL_add1_chain_cert(child_.get(), authority_->certificate()) == 1, "Configure TLS child certificate");
     state_ = State::offer;
   }
 
@@ -652,9 +667,8 @@ private:
   StreamReadBuffer<read_capacity> child_input_;
   StreamReadBuffer<read_capacity> origin_input_;
 
-  const TlsContexts<Memory> &contexts_;
-  std::shared_ptr<const CertificateAuthority<Memory>> authority_owner_;
-  const CertificateAuthority<Memory> &authority_;
+  tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts_;
+  tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority_;
   TunnelSockets sockets_;
   FixedText<ProxyHostname::maximum_bytes> hostname_;
   AlpnOffer offer_;
@@ -677,26 +691,21 @@ namespace telar::runtime {
 template <ConcurrentAllocator Memory>
 class TlsInterception {
 public:
-  inline explicit TlsInterception(const TlsContexts<Memory> &contexts, const CertificateAuthority<Memory> &authority) noexcept
-      : contexts_(contexts), authority_(&authority) {}
-
-  inline explicit TlsInterception(const TlsContexts<Memory> &contexts, std::shared_ptr<const CertificateAuthority<Memory>> authority) noexcept
+  // A session it opens keeps the contexts and the allocator it is built in, region `a`.
+  inline explicit TlsInterception(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept
       : contexts_(contexts), replacement_(std::move(authority)) {}
 
-  inline Owned<TlsSession<Memory>, Memory> open(Memory &memory, TunnelSockets sockets, std::string_view hostname) const {
+  inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory &, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
-    auto current = snapshot();
-    const auto *authority = current ? current.get() : authority_;
-    requireTls(authority != nullptr, "TLS authority is unavailable");
-    return makeOwned<TlsSession<Memory>>(memory, contexts_, *authority, sockets, hostname, std::move(current));
+    return makeOwned<TlsSession<Memory>>(memory, contexts_, snapshot(), sockets, hostname);
   }
 
-  inline std::shared_ptr<const CertificateAuthority<Memory>> snapshot() const noexcept {
+  inline tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> snapshot() const noexcept {
     std::lock_guard lock{mutex_};
     return replacement_;
   }
 
-  inline void replace(std::shared_ptr<const CertificateAuthority<Memory>> authority) noexcept {
+  inline void replace(tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept {
     std::lock_guard lock{mutex_};
     replacement_.swap(authority);
   }
@@ -704,10 +713,9 @@ public:
   inline bool suspended() const noexcept { return suspended_.load(std::memory_order_acquire); }
 
 private:
-  const TlsContexts<Memory> &contexts_;
-  const CertificateAuthority<Memory> *authority_ = nullptr;
+  tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts_;
   mutable std::mutex mutex_;
-  std::shared_ptr<const CertificateAuthority<Memory>> replacement_;
+  tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> replacement_;
   std::atomic<bool> suspended_{false};
 };
 

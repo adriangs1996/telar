@@ -206,7 +206,7 @@ private:
       read_waiting_ = received.waiting;
       return false;
     }
-    if (received.state != StreamResult::State::data || received.bytes.empty()) {
+    if (received.state != StreamResult::State::data || received.bytes == 0) {
       state_ = body_stage_ == BodyStage::until_close ? State::complete : State::failed;
       return false;
     }
@@ -214,19 +214,20 @@ private:
     active_ = true;
     read_waiting_ = StreamReadiness::readable;
     if (body_stage_ != BodyStage::until_close) {
-      remaining_ -= received.bytes.size();
+      remaining_ -= received.bytes;
     }
-    prepareWrite(State::writing_body, received.bytes.size());
+    prepareWrite(State::writing_body, received.bytes);
     return true;
   }
 
+  // How much body arrived: in the source until it is consumed, or read into the relay's storage.
   template <ByteStream Source>
-  inline tbc::view<StreamView, tbc::lt::a> bodyInput(tbc::view<Source &, tbc::lt::a> source, std::size_t maximum) noexcept {
+  inline StreamResult bodyInput(Source &source, std::size_t maximum) noexcept {
     if constexpr (BufferedByteStream<Source>) {
-      return source.peekView(maximum);
+      const auto peeked = source.peekView(maximum);
+      return {peeked.state, peeked.bytes.size(), peeked.waiting};
     } else {
-      const auto received = source.read(storage_.bytes().first(maximum));
-      return {received.state, storage_.bytes().first(received.bytes), received.waiting};
+      return source.read(storage_.bytes().first(maximum));
     }
   }
 

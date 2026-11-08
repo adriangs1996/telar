@@ -1016,13 +1016,14 @@ private:
     }
   }
 
-  inline void rename(const char *source, const char *destination) {
+  // The file operations change the directory, not the authority, so they lend nothing of it.
+  inline void rename(const char *source, const char *destination) const {
     if (renameAt(directory_, source, directory_, destination, RenameMode::create_only) != 0) {
       throw SystemError{"Activate proxy authority"};
     }
   }
 
-  inline bool savePrevious(const char *source, const Filename &destination) {
+  inline bool savePrevious(const char *source, const Filename &destination) const {
     if (renameAt(directory_, source, directory_, destination.data(), RenameMode::create_only) == 0) {
       return true;
     }
@@ -1033,13 +1034,13 @@ private:
     throw SystemError{"Preserve previous proxy authority"};
   }
 
-  inline void restore(const Filename &temporary, const char *canonical) noexcept {
+  inline void restore(const Filename &temporary, const char *canonical) const noexcept {
     if (::renameat(directory_, canonical, directory_, temporary.data()) != 0) {
       std::fprintf(stderr, "telar proxy trust: could not roll back %s: %s\n", canonical, std::strerror(errno));
     }
   }
 
-  inline void restorePrevious(const Filename &previous, const char *canonical) noexcept {
+  inline void restorePrevious(const Filename &previous, const char *canonical) const noexcept {
     if (::renameat(directory_, previous.data(), directory_, canonical) != 0) {
       std::fprintf(stderr, "telar proxy trust: could not restore %s: %s\n", canonical, std::strerror(errno));
     }
