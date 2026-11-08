@@ -106,6 +106,19 @@ namespace declarations {
   private:
     text_a text_;
   };
+  // Hands out blocks of an arena it shares with the object that holds both.
+  class lender {
+  public:
+    explicit lender(arena &memory)
+        : memory_(memory) {}
+
+    char *take() {
+      return memory_.allocate(8);
+    }
+
+  private:
+    arena &memory_;
+  };
 } // namespace declarations
 
 // CASE: declaration.static_literal
@@ -251,6 +264,115 @@ void declarationRetainedCopy(declarations::notices &kept) {
 std::size_t declarationRetainedReference(declarations::holder &kept) {
   kept.hold(std::string{"temporary"}); // expected-error [tbc-dangling-borrow]
   return kept.size();
+}
+
+// END CASE
+
+// CASE: declaration.receiver_shared
+// PAIR: declaration.receiver_fields
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: Runtime::handle
+// STATUS: implemented
+// CONTRACT: A method called on `this` borrows every field of the object, as a Rust method takes `&self` or `&mut self` whole.
+// SCENARIO: A const method reads a field passed to it, so both borrows are shared; accept.
+namespace declarations {
+  class reader {
+  public:
+    [[nodiscard]] std::size_t total() const {
+      return measure(items_);
+    }
+
+  private:
+    [[nodiscard]] std::size_t measure(const std::vector<int> &items) const {
+      return items.size();
+    }
+
+    std::vector<int> items_;
+  };
+}
+
+std::size_t declarationReceiverShared(const declarations::reader &counted) {
+  return counted.total();
+}
+
+// END CASE
+
+// CASE: declaration.receiver_exclusive
+// PAIR: declaration.receiver_fields
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: Runtime::handle
+// STATUS: implemented
+// CONTRACT: A method called on `this` borrows every field of the object, as a Rust method takes `&self` or `&mut self` whole.
+// SCENARIO: A mutating method is passed one of the fields it may change; reject at that argument.
+namespace declarations {
+  class writer {
+  public:
+    void grow() {
+      append(items_); // expected-error [tbc-invalidated-borrow]
+    }
+
+  private:
+    void append(std::vector<int> &items) {
+      items.push_back(static_cast<int>(items.size()));
+    }
+
+    std::vector<int> items_;
+  };
+}
+
+void declarationReceiverExclusive(declarations::writer &counted) {
+  counted.grow();
+}
+
+// END CASE
+
+// CASE: declaration.shared_sibling_pinned
+// PAIR: declaration.shared_sibling
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
+// STATUS: implemented
+// CONTRACT: A field may keep a TBC_SHARED sibling only while their object can be neither copied nor moved, as Rust shares through `Pin`.
+// SCENARIO: A lender keeps the arena beside it in a pinned object; accept.
+namespace declarations {
+  class pinned_pool {
+  public:
+    pinned_pool()
+        : lender_(memory_) {}
+
+    pinned_pool(const pinned_pool &) = delete;
+    pinned_pool &operator=(const pinned_pool &) = delete;
+
+  private:
+    arena memory_;
+    lender lender_;
+  };
+}
+
+void declarationSharedSiblingPinned() {
+  const declarations::pinned_pool pool;
+  static_cast<void>(&pool);
+}
+
+// END CASE
+
+// CASE: declaration.shared_sibling_copied
+// PAIR: declaration.shared_sibling
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
+// STATUS: implemented
+// CONTRACT: A field may keep a TBC_SHARED sibling only while their object can be neither copied nor moved, as Rust shares through `Pin`.
+// SCENARIO: The object holding the lender and its arena can be copied; reject where the constructor lends the arena.
+namespace declarations {
+  class copied_pool {
+  public:
+    copied_pool()
+        : lender_(memory_) {} // expected-error [tbc-dangling-borrow]
+
+  private:
+    arena memory_;
+    lender lender_;
+  };
+}
+
+void declarationSharedSiblingCopied() {
+  const declarations::copied_pool pool;
+  static_cast<void>(&pool);
 }
 
 // END CASE

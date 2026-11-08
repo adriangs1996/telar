@@ -180,6 +180,22 @@ releaseGeometry(state, state.workspaces.front()); // the workspace lies inside t
 
 Pass disjoint parts, or an index the callee looks up.
 
+Inside a method, a call to another method of the same object lends that object
+whole, as `self.method(..)` lends `&self` or `&mut self`: `this` counts as every
+field, so a mutating method may not also be passed one of them.
+
+```cpp
+class tally {
+  void grow() {
+    append(items_); // tbc-invalidated-borrow: append may mutate items_ through this
+  }
+  void append(std::vector<int> &items);
+  std::vector<int> items_;
+};
+```
+
+Make such a helper `static`, or a free function, and pass it the fields it needs.
+
 Project headers are checked too. Template definitions are analyzed in their
 instantiated forms; an uninstantiated dependent template has not been verified.
 Diagnostics are emitted after summary convergence, not from provisional states.
@@ -495,6 +511,26 @@ class TBC_SHARED SynchronizedAllocator {
 
 A pointer a shared type's method returns, such as an allocated block, is fresh
 storage, unchecked like a `new` expression's.
+
+A field may keep a reference to a sibling of a shared type, as services keep the
+allocator or the limit queue of the object that holds them. That borrow is internal
+to the object, so the object only has to keep its address: it must be neither
+copyable nor movable, as Rust shares such a field behind `Pin`
+(`tbc-dangling-borrow` otherwise). A sibling of any other type still needs the
+`lt::self` label.
+
+```cpp
+class pool {
+public:
+  pool() : lender_(memory_) {}   // accepted: arena is TBC_SHARED and pool is pinned
+  pool(const pool &) = delete;
+  pool &operator=(const pool &) = delete;
+
+private:
+  arena memory_;
+  lender lender_;
+};
+```
 
 ## Constructing factories
 

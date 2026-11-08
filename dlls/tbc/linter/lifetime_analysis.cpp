@@ -1859,6 +1859,15 @@ namespace tbc_lint {
             continue;
           }
           if (source.kind == origin_kind::receiver) {
+            // A sibling of a shared type tolerates every alias; its object only has to keep its address.
+            const auto *sibling = llvm::dyn_cast_or_null<clang::FieldDecl>(source.variable);
+            const auto *record = llvm::dyn_cast<clang::CXXMethodDecl>(&function_) != nullptr ? llvm::cast<clang::CXXMethodDecl>(function_).getParent() : nullptr;
+            if (sibling != nullptr && sharedType(sibling->getType()) && record != nullptr) {
+              if (relocatable(*record)) {
+                report(issue::relocated_self, where, &source);
+              }
+              continue;
+            }
             if (field == nullptr || !selfBorrowing(*field)) {
               report(issue::self_borrow, where, &source);
             }
@@ -3913,7 +3922,20 @@ namespace tbc_lint {
         }
         const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(callee);
         if (const auto *object = receiver(call); object != nullptr && method != nullptr && method->isInstance() && !sharedType(objectType(*object))) {
-          result.push_back({.argument = object, .places = invalidationTargets(*object, current), .exclusive = !method->isConst()});
+          call_input input{.argument = object, .places = {}, .exclusive = !method->isConst()};
+          if (llvm::isa<clang::CXXThisExpr>(clean(object))) {
+            // `this` is every field of the object, as a method of it borrows each.
+            if (const auto *record = method->getParent()->getDefinition()) {
+              llvm::SmallVector<const clang::FieldDecl *, 8> fields;
+              recordFields(*record, fields);
+              for (const auto *field : fields) {
+                input.places.push_back({.variable = field});
+              }
+            }
+          } else {
+            input.places = invalidationTargets(*object, current);
+          }
+          result.push_back(std::move(input));
         }
         const auto offset = argumentOffset(call);
         for (unsigned index = 0; index < callee->getNumParams() && index + offset < call.getNumArgs(); ++index) {
@@ -3950,9 +3972,10 @@ namespace tbc_lint {
       // by lending one exclusive borrow at a time. Nor may a view it receives point into storage that the
       // call itself invalidates.
       void checkOverlap(const clang::CallExpr &call, llvm::ArrayRef<call_input> inputs, const state &current) {
+        // Once per pair, at the later argument, which is never the receiver.
         for (std::size_t first = 0; first < inputs.size(); ++first) {
-          for (std::size_t second = 0; second < inputs.size(); ++second) {
-            if (first == second || !inputs[first].exclusive) {
+          for (std::size_t second = first + 1; second < inputs.size(); ++second) {
+            if (!inputs[first].exclusive && !inputs[second].exclusive) {
               continue;
             }
             for (const auto &outer : inputs[first].places) {
