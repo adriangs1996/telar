@@ -203,6 +203,37 @@ struct ProcessSnapshot {
   pid_t terminal_foreground = 0;
 };
 
+// The lowest distinct TCP ports a process group listens on, ascending.
+struct ListeningPorts {
+  std::array<std::uint16_t, max_listed_ports> values{};
+  std::uint8_t count = 0;
+
+  inline void add(std::uint16_t port) noexcept {
+    const auto end = values.begin() + count;
+    const auto at = std::lower_bound(values.begin(), end, port);
+    if (port == 0 || (at != end && *at == port) || (count == values.size() && at == end)) {
+      return;
+    }
+
+    if (count == values.size()) {
+      std::move_backward(at, end - 1, end);
+    } else {
+      std::move_backward(at, end, end + 1);
+      ++count;
+    }
+
+    *at = port;
+  }
+
+  [[nodiscard]] inline std::span<const std::uint16_t> view() const noexcept {
+    return std::span{values}.first(count);
+  }
+
+  inline bool operator==(const ListeningPorts &other) const noexcept {
+    return std::ranges::equal(view(), other.view());
+  }
+};
+
 // Reads the operating system's process table: every query is const and keeps no state, so threads
 // share one inspector.
 class TBC_SHARED ProcessInspector {
@@ -221,6 +252,7 @@ public:
   FixedText<4096> directory(pid_t process) const noexcept;
   FixedText<4096> terminal(pid_t process) const noexcept;
   IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
+  ListeningPorts listeningPorts(pid_t group) const noexcept;
 
 private:
   // The arguments view the caller's buffer.
@@ -341,6 +373,7 @@ struct ProcessProbeRequest {
   ProcessCache cache{};
   bool recheck = false;
   bool discover_foreground = false;
+  bool ports = false;
 };
 
 struct ProcessProbeResult {
@@ -354,7 +387,9 @@ struct ProcessProbeResult {
   SessionHost session_host = SessionHost::unknown;
   bool hooks_installed = false;
   ProcessCache cache{};
+  ListeningPorts ports;
   bool inspected = false;
+  bool ports_inspected = false;
 };
 
 template <typename Inspector>
@@ -363,6 +398,7 @@ concept ProcessProbeInspector = requires(const Inspector &inspector, pid_t proce
   { inspector.snapshot(process) } noexcept -> std::same_as<std::optional<ProcessSnapshot>>;
   { inspector.directory(process) } noexcept -> std::same_as<FixedText<4096>>;
   { inspector.identifyGroup(process, AgentProvider::unknown) } noexcept -> std::same_as<IdentifiedProcess>;
+  { inspector.listeningPorts(process) } noexcept -> std::same_as<ListeningPorts>;
 };
 
 // A stateless view of an inspector, shared as the inspector is.
@@ -414,6 +450,11 @@ public:
       observation.hooks_installed = observation.cache.hooks_installed;
       observation.name = identified.name;
       observation.cwd = inspector_.directory(pane.root);
+      if (pane.ports) {
+        observation.ports = inspector_.listeningPorts(foreground_group);
+        observation.ports_inspected = true;
+      }
+
       observation.shell_foreground = pane.root == foreground_group && observation.provider == AgentProvider::unknown;
       if (inspector_.identity(pane.root) == root->identity && (foreground_group == pane.root || inspector_.identity(foreground_group) == foreground)) {
         ++result.count;

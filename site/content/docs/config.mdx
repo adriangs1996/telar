@@ -1,0 +1,940 @@
+Telar works without a config file. To change themes, fonts, keybindings or
+anything else on this page, write a Lua file that returns one table. Omitted
+fields keep their defaults, and unknown fields are errors, so a typo never
+goes unnoticed.
+
+## Config file location
+
+The window loads the first of these that applies, on macOS and Linux alike:
+
+1. The file given with `--config PATH`.
+2. `$XDG_CONFIG_HOME/telar/config.lua`.
+3. `~/.config/telar/config.lua`, when `XDG_CONFIG_HOME` is unset.
+
+If the default file does not exist, Telar starts with its defaults. Create
+the directory and the file to begin:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/telar"
+$EDITOR "${XDG_CONFIG_HOME:-$HOME/.config}/telar/config.lua"
+```
+
+Other options on the `telar` command change what is loaded:
+
+| Option | Effect |
+| --- | --- |
+| `--config PATH` | Load this file instead of the default one. |
+| `--no-config` | Load no config at all and use every default. Useful to recover from a broken file. |
+| `--profile NAME` | Overlay the named [profile](#profiles) on the base config. |
+| `--theme NAME` | Use this theme preset whatever the config says. It stays in effect across reloads. |
+
+The file must be a regular file of at most 1 MiB.
+
+## File format
+
+The file is Lua and must return a table with `api_version = 2`:
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  theme = "vesper",
+  gui = {
+    font = { size = 16 },
+  },
+  client = {
+    keybindings = {
+      telar.bind({ "s" }, telar.action.toggle_sidebar()),
+    },
+  },
+})
+```
+
+`require("telar")` returns the configuration API: `telar.bind`,
+`telar.action.*`, `telar.theme` and the rest of this page. `telar.config` and
+`telar.theme` return their argument unchanged; they only make the file easier
+to read. Any other `require` name loads a module from the config directory:
+`require("theme.colors")` loads `theme/colors.lua`, or
+`theme/colors/init.lua` when that file does not exist.
+
+The root table accepts these fields:
+
+| Field | Contents |
+| --- | --- |
+| `api_version` | Required. Must be `2`. |
+| `theme` | The [theme](#theme). |
+| `gui` | [Fonts](#fonts), [window](#window), [cursor](#cursor) and [sidebar](#sidebar) appearance. |
+| `client` | [Keybindings](#keybindings), sidebar visibility, [notifications](#notifications), [history search](#history), [bars](#bars-and-panels). |
+| `runtime` | Settings the runtime reads when it starts: [history](#history), [agents](#agents), [proxy](#proxy) and [more](#runtime). |
+| `plugins` | The [plugin packages](#plugins) to load. |
+| `profiles` | Named [profiles](#profiles). |
+
+The Lua environment is sandboxed. It has the base, `coroutine`, `math`,
+`string`, `table` and `utf8` libraries, plus `os.time`, `os.clock` and
+`os.date`. There is no `io`, no other `os` function and no way to load native
+code. Loading the file may use 256 MiB of memory, 50 million instructions and
+2 seconds. `telar.json.decode(text)` turns JSON into Lua tables, for render
+callbacks that read a command's output.
+
+### Profiles
+
+A profile is a named set of fields applied over the base config. It may hold
+`theme`, `client`, `gui`, `runtime` and `plugins`:
+
+```lua
+return {
+  api_version = 2,
+  gui = { font = { size = 15 } },
+  profiles = {
+    presentation = {
+      gui = { font = { size = 22 } },
+      client = { sidebar = { visible = false } },
+    },
+  },
+}
+```
+
+Select it when you open a window:
+
+```sh
+telar --profile presentation
+```
+
+The profile overrides only the fields it sets. A profile that sets
+`client.keybindings` replaces the base list of bindings; one that does not
+inherits it. Profile names use letters, digits, `-` and `_`, up to 64
+characters.
+
+## Reloading
+
+The window checks the config file and the modules it loaded once a second.
+When you save, it validates the whole new file before using any of it. A
+valid file takes effect at once: theme, fonts, keybindings, bars and the
+other `client` and `gui` settings change in the open window.
+
+An invalid file changes nothing. The window keeps the previous working
+config and shows the error in a diagnostic chip in the status bar. Fix the
+file and save again.
+
+Two exceptions:
+
+- If no config file existed when the window opened, it has nothing to watch.
+  Reopen the window after creating the file.
+- `runtime` settings are read only when the runtime starts. A window reload
+  does not change a running runtime. To apply them, stop the runtime with
+  `telar server stop` and open Telar again. Stopping the runtime ends the
+  processes in its panes.
+
+To reload a window on demand, or to see what it adopted, use its client ID
+from `telar client list`:
+
+```sh
+telar config reload --client 1
+telar config show --client 1 --section theme
+```
+
+`--section` accepts `client` (the default), `theme`, `gui`, `input`,
+`runtime` and `binding` (with `--index N`).
+
+## Check a config
+
+`telar config check` loads a config, its plugins and its keybindings without
+starting anything:
+
+```sh
+telar config check
+telar config check ~/trial.lua --profile presentation
+```
+
+Without a path it checks the file a window would load. On success it prints
+`telar config: OK` and exits 0. On an error it prints a diagnostic on stderr
+that names the field, and exits 1. The check cannot tell whether a font named
+in `gui.font.family` is installed.
+
+Some keys only meant something to Telar's retired terminal client:
+`client.sidebar.renderer`, `client.notifications.delivery = "terminal"`,
+`client.input.escape_timeout_ms` and `client.icons`. A file that sets one
+still loads; `telar config check` warns that they are ignored.
+
+A config that passes a fixed bound, such as more than 256 keybindings, still
+loads with what fits. `telar diagnostics limits` lists every bound reached.
+
+## Theme
+
+A theme sets the colors of Telar's own interface (the chrome), of the
+terminal and of syntax-highlighted code.
+
+### `theme`
+
+A preset name, or a table built with `telar.theme`. The default is
+`cybervenom`.
+
+```lua
+theme = "kanagawa"
+```
+
+The presets are:
+
+| Preset | Notes |
+| --- | --- |
+| `cybervenom` | The default: a `#211b2f` background with `#aa87f5` accents. |
+| `shade` | Neutral grays with green accents. `osaka-jade` is an alias. |
+| `vesper` | |
+| `catppuccin` | Catppuccin Mocha. `catppuccin-mocha` and `mocha` are aliases. |
+| `tokyo-night` | `tokyonight` is an alias. |
+| `kanagawa` | Kanagawa Wave. `kanagawa-wave` is an alias. |
+| `kanagawa-dragon` | |
+| `pierre-dark` | |
+| `pierre-dark-soft` | |
+| `terminal` | A neutral palette. `default` is an alias. |
+
+Names are case-insensitive. Set the theme either at the root or as
+`client.theme`, not both.
+
+To start from a preset and change parts of it, pass a table to
+`telar.theme`. Every field is optional:
+
+```lua
+theme = telar.theme({
+  base = "vesper",
+  colors = { accent = "#a8c98c" },
+  terminal = { background = "#111c18", cursor_color = "#a8c98c" },
+  syntax = {
+    keyword = "#a0a0a0",
+    parameter = { fg = "#add0c5", italic = true },
+  },
+})
+```
+
+### `theme.base`
+
+The preset the table starts from. Setting `base` replaces the whole theme
+before the other fields apply. Without `base`, the table changes the theme
+already selected, so a profile can change one color without repeating the
+rest.
+
+### `theme.colors`
+
+Colors of the chrome, by role. Each value is `"#RRGGBB"` or `"default"`.
+The roles are:
+
+`accent`, `panel_bg`, `surface0`, `surface1`, `surface_dim`, `overlay0`,
+`overlay1`, `text`, `subtext0`, `mauve`, `green`, `yellow`, `red`, `blue`,
+`teal`, `peach`.
+
+### `theme.terminal`
+
+Colors of the terminal. Each value must be an explicit `"#RRGGBB"`.
+
+| Field | Meaning |
+| --- | --- |
+| `foreground` | Default text color. |
+| `background` | Default background color. |
+| `palette` | Exactly 16 colors: the eight normal ANSI colors, then the eight bright ones. |
+| `cursor_color` | Cursor color. |
+| `cursor_text_color` | Color of the text under a block cursor. |
+
+Programs in the pane can still set their own colors with truecolor and OSC
+sequences.
+
+### `theme.syntax`
+
+Colors for syntax-highlighted code, by role. A value is a color string, or a
+table with `fg`, `italic` and `bold`. The roles are:
+
+`plain`, `keyword`, `string`, `number`, `comment`, `constant`,
+`builtin_constant`, `builtin`, `func`, `type`, `parameter`, `property`,
+`namespace`, `operator`, `punctuation`.
+
+### `client.appearance`
+
+Separate themes for the system's light and dark appearance. Telar switches
+between them when the system appearance changes. Each side takes the same
+value as `theme`, applied over the base theme:
+
+```lua
+client = {
+  appearance = {
+    light = "catppuccin",
+    dark = "kanagawa-dragon",
+  },
+}
+```
+
+`--theme` on the command line overrides both.
+
+## Fonts
+
+### `gui.font.size`
+
+Number. Font size in logical pixels, which match points on macOS. Default
+`15`, from `6` to `96`. Decimals are allowed.
+
+### `gui.font.family`
+
+String, at most 256 bytes. The font family for the terminal. The default is
+Telar Forma, which is bundled, as is JetBrains Mono. Any other name must be
+installed: Telar finds it through CoreText on macOS and Fontconfig on Linux.
+A family that is not installed makes the window refuse the config.
+
+```lua
+gui = { font = { family = "JetBrains Mono", size = 14 } }
+```
+
+### `gui.font.style`
+
+String, at most 256 bytes. The face to use within the family, by the style
+name the font lists, such as `Light` or `Medium`. Empty by default, which
+means the regular face. The bundled Telar Forma has only `Regular`. A style
+the family does not have makes the window refuse the config with
+`FontStyleNotFound`.
+
+### `gui.font.line_height`
+
+Number. A multiplier of the font's line height. Default `1`, from `0.75` to
+`3`.
+
+### `gui.font.letter_spacing`
+
+Number. Extra logical pixels added to each cell's width. Default `0`, from
+`-5` to `20`.
+
+### `gui.font.thicken`
+
+Boolean. Thicker glyph strokes through macOS font smoothing. Default `false`.
+(macOS only)
+
+### `gui.font.thicken_strength`
+
+Integer. How strong `thicken` is, from `0` (lightest) to `255` (the
+default). Has an effect only with `thicken = true`. (macOS only)
+
+## Keybindings
+
+Telar's bindings follow tmux: press the prefix, `ctrl+b`, then a key. The
+defaults are listed under [default bindings](#default-bindings), and each
+page of these docs lists the ones it covers.
+
+### `client.prefix`
+
+String. The prefix key chord. Default `"ctrl+b"`. Changing it moves every
+prefixed binding, defaults included, to the new prefix:
+
+```lua
+client = { prefix = "ctrl+s" }
+```
+
+After a prefix, Telar waits for the next key without a time limit. `escape`
+cancels.
+
+### `client.keybindings`
+
+A list of bindings. Each one comes from one of four functions:
+
+| Function | Keys | Action |
+| --- | --- | --- |
+| `telar.bind(keys, action)` | The prefix, then `keys` | An action or a callback. |
+| `telar.bind_global(keys, action)` | `keys` alone, no prefix | An action or a callback. |
+| `telar.bind_expr(keys, callback)` | The prefix, then `keys` | A callback that returns [input](#input-callbacks). |
+| `telar.bind_expr_global(keys, callback)` | `keys` alone | A callback that returns input. |
+
+`keys` is a list of key chords pressed in sequence. A prefixed binding takes 1
+to 4 keys after the prefix; a global binding takes 1 to 5 keys.
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    keybindings = {
+      telar.bind({ "v" }, telar.action.split_pane({ direction = "horizontal" })),
+      telar.bind_global({ "cmd+p" }, "goto-picker"),
+      telar.bind_global({ "alt+up" }, telar.action.scroll_pane({ direction = "up" })),
+    },
+  },
+})
+```
+
+Your bindings add to the defaults. A binding of yours replaces any default it
+conflicts with, meaning the same key sequence or one that starts the other;
+the other defaults stay. The keymap holds 256 bindings in all.
+
+### Key syntax
+
+A chord is modifiers and one key joined by `+`, such as `ctrl+alt+b`.
+
+- Modifiers: `ctrl` (or `control`), `alt`, `shift`, `super`. `cmd` and
+  `command` are aliases for `super`, the Command key on macOS.
+- Named keys: `up`, `down`, `left`, `right`, `home`, `end`, `delete`
+  (`del`), `pageup` (`page-up`), `pagedown` (`page-down`), `enter`
+  (`return`), `escape` (`esc`), `backspace`, `tab`, `backtab`, `space`,
+  `plus`.
+- Any other key is a single character, such as `s`, `%` or `[`.
+
+`shift` combines with letters, `space` and named keys. `shift+s` is the same
+as `S`. Shifted symbols are written as the symbol itself: `%`, not
+`shift+5`. `ctrl+shift` with a letter is rejected; use another combination,
+such as `ctrl+alt+b`. Run `telar config check` to test a chord.
+
+### `client.input.sequence_timeout_ms`
+
+Integer. How long Telar waits for the next key of a multi-key global
+binding before it sends the keys typed so far to the pane. Default `1000`,
+from `10` to `10000`. Sequences after the prefix never time out.
+
+### Actions
+
+An action is a string with a built-in action name, a value from a
+`telar.action` function, or a Lua function. These names work as strings:
+
+| Action | What it does |
+| --- | --- |
+| `split-horizontal`, `split-vertical` | Split the focused pane right or down. |
+| `focus-left`, `focus-right`, `focus-up`, `focus-down` | Move focus to the neighboring pane. |
+| `navigate-left`, `navigate-right`, `navigate-up`, `navigate-down` | Like `focus-*`, but when the focused pane runs `nvim`, send it `ctrl+h`, `ctrl+l`, `ctrl+k` or `ctrl+j` instead. |
+| `resize-left`, `resize-right`, `resize-up`, `resize-down` | Move the nearest split edge. |
+| `scroll-pane-up`, `scroll-pane-down` | Scroll the focused pane one wheel step. |
+| `toggle-pane-fullscreen` | Make the focused pane fill the tab, or restore it. |
+| `close-pane` | Close the focused pane. |
+| `new-tab`, `rename-tab`, `close-tab` | Create, rename or close a tab. |
+| `next-tab`, `previous-tab` | Select the next or previous tab. |
+| `move-tab-previous`, `move-tab-next` | Move the active tab left or right. |
+| `select-tab-N`, `select-workspace-N` | Select a tab or workspace by position, from 1. |
+| `new-workspace`, `rename-workspace` | Create or rename a workspace. |
+| `leave-worktree` | Go from a worktree's tab back to its project workspace. |
+| `forget-gone-worktrees` | Forget worktrees whose directories are gone. |
+| `toggle-sidebar` | Show or hide the sidebar. |
+| `resize-sidebar-left`, `resize-sidebar-right` | Narrow or widen the sidebar. |
+| `toggle-workspace-list` | Records a legacy preference that the window does not use. |
+| `copy-mode` | Enter copy mode in the focused pane. |
+| `goto-picker` | Open the goto picker. |
+| `history-palette` | Search command history. |
+| `path-picker` | Insert a path from the pane's directory. |
+| `suggest-command` | Ask the runtime's [engine](#runtimeengine) for a command. |
+| `machine-picker`, `next-machine`, `previous-machine`, `add-machine` | Switch or add machines. |
+| `close-panel`, `refresh-panel` | Close or refresh the open [panel](#bars-and-panels). |
+| `detach` | Detach the window from the runtime. |
+
+`telar.action` also has a function without arguments for many of these
+names, with dashes turned into underscores: `toggle_pane_fullscreen`,
+`toggle_sidebar`, `toggle_workspace_list`, `leave_worktree`,
+`new_workspace`, `rename_workspace`, `close_pane`, `new_tab`, `rename_tab`,
+`close_tab`, `detach`, `copy_mode`, `history_palette`, `path_picker`,
+`suggest_command`, `close_panel`, `refresh_panel`, `next_machine`,
+`previous_machine`, `machine_picker` and `add_machine`. For example,
+`telar.action.toggle_sidebar()` is the same as `"toggle-sidebar"`. These
+functions take arguments:
+
+| Function | Argument |
+| --- | --- |
+| `telar.action.split_pane({ direction })` | `"horizontal"` or `"vertical"`. |
+| `telar.action.focus_pane({ direction })` | `"left"`, `"right"`, `"up"` or `"down"`. |
+| `telar.action.navigate_pane({ direction })` | `"left"`, `"right"`, `"up"` or `"down"`. |
+| `telar.action.resize_pane({ direction })` | `"left"`, `"right"`, `"up"` or `"down"`. |
+| `telar.action.resize_sidebar({ direction })` | `"left"` or `"right"`. |
+| `telar.action.scroll_pane({ direction })` | `"up"` or `"down"`. |
+| `telar.action.move_tab({ direction })` | `"previous"` or `"next"`. |
+| `telar.action.select_tab({ index })` | Tab position, `1` to `256`. |
+| `telar.action.select_workspace({ index })` | Workspace position, `1` to `256`. |
+| `telar.action.select_tab_offset({ offset })` | Tabs to move, `-128` to `127`. |
+| `telar.action.command_tab({ command, label })` | Open a tab running `command`, a list of up to 32 arguments and 4096 bytes. `label` is at most 32 bytes. |
+| `telar.action.notification({ title, body, level, duration_ms })` | Show a toast. `level` is `info`, `success`, `warning` or `failure`; `duration_ms` is `500` to `60000`, default `4000`. Optionally one of `pane_id`, `tab_id` or `workspace_id` to open on click. |
+| `telar.action.open_panel("name")` | Open a [panel](#bars-and-panels). |
+| `telar.action.pick("name")` | Open a [pick](#bars-and-panels). |
+| `telar.action.plugin({ plugin, action })` | Run a [plugin](#plugins) action. |
+
+### Callbacks
+
+A Lua function as the action runs when you press the keys. It receives a
+read-only table with `sidebar_visible`, `tab_count`, `active_tab_index`
+(from 1), `pane_count` and `focused_pane_id`, and returns one action, a list
+of actions, or an empty table for nothing:
+
+```lua
+telar.bind({ "n" }, function(ctx)
+  return telar.action.notification({
+    title = "Pane " .. ctx.focused_pane_id,
+    level = "info",
+  })
+end)
+```
+
+### Input callbacks
+
+`telar.bind_expr` and `telar.bind_expr_global` take a function that decides
+what reaches the pane. It returns one of:
+
+| Value | Effect |
+| --- | --- |
+| `telar.input.consume()` | Drop the keys. |
+| `telar.input.forward()` | Send the keys to the pane unchanged. |
+| `telar.input.key("left")` | Send one key. |
+| `telar.input.keys({ "left", "enter" })` | Send several keys. |
+| `telar.input.paste("text")` | Paste text. |
+
+Raw escape sequences are not part of the API.
+
+### Default bindings
+
+All defaults follow the prefix, `ctrl+b` unless you change it.
+
+| Keys | Action |
+| --- | --- |
+| `%` | `split-horizontal` |
+| `"` | `split-vertical` |
+| `left` `right` `up` `down` | `focus-left`, `focus-right`, `focus-up`, `focus-down` |
+| `shift+left` `shift+right` `shift+up` `shift+down` | `resize-left`, `resize-right`, `resize-up`, `resize-down` |
+| `-` `=` | `scroll-pane-up`, `scroll-pane-down` |
+| `z` | `toggle-pane-fullscreen` |
+| `x` | `close-pane` |
+| `s` | `toggle-sidebar` |
+| `alt+left` `alt+right` | `resize-sidebar-left`, `resize-sidebar-right` |
+| `w` | `toggle-workspace-list` |
+| `u` | `leave-worktree` |
+| `N` | `new-workspace` |
+| `W` | `rename-workspace` |
+| `c` | `new-tab` |
+| `n` `p` | `next-tab`, `previous-tab` |
+| `1` to `9` | `select-tab-1` to `select-tab-9` |
+| `T` | `rename-tab` |
+| `X` | `close-tab` |
+| `,` `.` | `move-tab-previous`, `move-tab-next` |
+| `[` | `copy-mode` |
+| `g` | `goto-picker` |
+| `/` | `history-palette` |
+| `f` | `path-picker` |
+| `?` | `suggest-command` |
+| `d` | `detach` |
+
+## Window
+
+### `gui.window.background_opacity`
+
+Number. Opacity of the window background, from `0` (transparent) to `1` (the
+default).
+
+### `gui.window.background_blur`
+
+Integer. Blur radius behind a translucent window, from `0` (no blur) to
+`255`. Default `20`. `true` means `20` and `false` means `0`. It has no
+visible effect at `background_opacity = 1`. On Linux, blur needs a Wayland
+compositor that supports background effects.
+
+```lua
+gui = {
+  window = { background_opacity = 0.9, background_blur = 30 },
+}
+```
+
+### `gui.opacity`
+
+Table. Background opacity per surface, from `0` to `1`, overriding
+`background_opacity` for that surface. The surfaces are `sidebar`, `topbar`,
+`bottombar`, `workspace` (the area behind and between panes) and `pane`:
+
+```lua
+gui = {
+  window = { background_opacity = 0.95 },
+  opacity = { sidebar = 0.6, pane = 1 },
+}
+```
+
+### `gui.window.titlebar`
+
+Boolean. Show the system title bar. Default `false` on macOS, where the
+window controls share Telar's top bar, and `true` on Linux.
+
+### `gui.window.padding.x`
+
+Number. Space in logical pixels between the window's left and right edges
+and the terminal. Default `0`, from `0` to `256`.
+
+### `gui.window.padding.y`
+
+Number. Space at the top and bottom edges. Default `0`, from `0` to `256`.
+
+### `gui.chrome.scale`
+
+Number. Scales the text of Telar's interface (tabs, sidebar, bars) without
+changing the terminal. Default `1`, from `0.5` to `2`.
+
+### `gui.max_fps`
+
+Integer. The most frames per second the window draws, from `30` to `240`.
+By default it follows the refresh rate of the display the window is on. A
+lower value saves power.
+
+### `client.window_title`
+
+String, at most 128 bytes. The window title, with these tokens replaced:
+`{workspace}`, `{tab}`, `{pane_title}` and `{hostname}`. The default title is
+`Telar`.
+
+```lua
+client = { window_title = "{workspace} — {tab}" }
+```
+
+### `client.pane_gaps`
+
+Boolean. Leave a gap between panes. Default `true`.
+
+## Cursor
+
+### `gui.cursor.style`
+
+String: `"block"` (the default), `"bar"`, `"underline"` or `"hollow"`.
+
+### `gui.cursor.blink`
+
+Boolean. Whether the cursor blinks. Default `true`.
+
+### `gui.cursor.blink_interval_ms`
+
+Integer. How long each blink phase lasts. Default `600`, from `100` to
+`5000`.
+
+## Sidebar
+
+### `client.sidebar.visible`
+
+Boolean. Whether the sidebar is shown when the window opens. Default `true`.
+`ctrl+b` `s` toggles it.
+
+### `gui.sidebar.width`
+
+Number. The sidebar's width in logical pixels. Default `240`, from `220` to
+`800`. Dragging the sidebar's edge or using `resize-sidebar-*` changes the
+width of the open window only; this value is where a new window starts.
+
+## Notifications
+
+### `client.notifications.delivery`
+
+String. `"telar"` (the default) shows notifications as toasts in the window.
+`"system"` also posts each one as a system notification.
+
+### `client.sound.enabled`
+
+Boolean. Play sounds when agents change state. Default `true`. Set it to
+`false` to silence both sounds below.
+
+### `client.sound.ready`
+
+Boolean. Play a sound when an agent finishes its work. Default `true`.
+
+### `client.sound.needs_input`
+
+Boolean. Play a sound when an agent stops to ask for input. Default `true`.
+
+On macOS the sounds play with `afplay`. On Linux Telar tries
+`canberra-gtk-play`, `paplay`, `pw-play`, `ffplay` and `mpv`, in that order.
+
+## History
+
+`client.history` controls the [history](/docs/history) search in the window.
+`runtime.history` controls what the runtime records.
+
+### `client.history.enter`
+
+String. What `enter` does on a result: `"paste"` (the default) pastes the
+command into the pane, `"run"` pastes and runs it.
+
+### `client.history.match`
+
+String. How the search matches: `"fuzzy"` (the default) or `"fts"`, full-text
+search.
+
+### `client.history.show_agent_commands`
+
+Boolean. Include commands that agents ran. Default `false`.
+
+### `runtime.history.path`
+
+String. The history database. Default `$XDG_DATA_HOME/telar/history.db`, or
+`~/.local/share/telar/history.db`. A relative path is resolved against the
+config file's directory, and its parent directory must exist.
+
+### `runtime.history.output`
+
+String. `"off"` (the default) records commands only. `"bounded"` also
+records a bounded copy of each command's output, which `telar history show`
+prints.
+
+### `runtime.history.secrets_filter`
+
+Boolean. Skip commands that look like they contain a secret, such as tokens
+starting with `ghp_`, `github_pat_`, `sk_live_`, `xoxb-` or `AKIA`,
+private keys, Slack webhook URLs, or assignments like `password=` and
+`token=`. Default `true`.
+
+### `runtime.history.command_filters`
+
+List of strings. Commands containing any of these substrings are not
+recorded. At most 64 patterns of up to 256 bytes each.
+
+```lua
+runtime = {
+  history = { command_filters = { "vault login" }, cwd_filters = { "/secrets/" } },
+}
+```
+
+### `runtime.history.cwd_filters`
+
+List of strings. Commands run in a directory whose path contains any of these
+substrings are not recorded. Same limits as `command_filters`.
+
+## Agents
+
+### `runtime.agents`
+
+A list of agent manifests: how Telar recognizes a coding agent in a pane and
+how it shows it. Telar ships manifests for `claude`, `codex`, `pi`, `cursor`
+and `opencode`. An entry with one of those names changes only the fields it
+sets. Any other name adds a new agent, up to 27.
+
+```lua
+runtime = {
+  agents = {
+    {
+      name = "gemini",
+      display_name = "Gemini CLI",
+      process_names = { "gemini" },
+      working = { "esc to cancel" },
+      blocked = { "allow this tool?" },
+    },
+    { name = "claude", display_name = "Claude" },
+  },
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Required. 1 to 32 characters: lowercase letters, digits, `-`, `_` and `.`. |
+| `display_name` | The name shown in the sidebar, at most 32 bytes. Defaults to `name`. |
+| `placeholder` | The title before the agent has one, at most 96 bytes. |
+| `icon` | One glyph, one cell wide, at most 8 bytes. |
+| `process_names` | Executable names that identify the agent. |
+| `process_paths` | Path fragments of the entry script, for agents started through an interpreter such as `node`. |
+| `brand`, `identity` | Phrases on screen that name the agent. |
+| `working`, `blocked`, `ready_prompt` | Phrases on screen that show the agent is working, waiting for you, or idle. |
+| `command_tools` | Up to 8 `{ tool = "Bash", field = "command" }` pairs: which hook tool runs shell commands, and which input field holds the command, for [history](/docs/history). |
+| `attachments` | How the agent's prompt marks pasted images: `"none"`, `"ordered"`, `"stable_number"` or `"pasted_path"`. |
+
+Phrases match the visible screen, ignoring case. Process lists hold up to 8
+entries of 128 bytes, and phrase lists up to 16 entries of 64 bytes; entries
+past those bounds are left out and reported. See [Agents](/docs/agents) for
+how Telar tracks agents.
+
+### `runtime.agent_descriptions`
+
+Table with `command` and `timeout_ms`. A command Telar runs to write a short
+title for each agent session from its first request. Off unless you set it,
+since the request leaves the runtime for that command. `command` is a list of
+1 to 32 arguments, at most 4096 bytes, run without a shell. `timeout_ms`
+defaults to `15000`, from `1000` to `60000`.
+
+### `runtime.engine`
+
+Table with `command`, `timeout_ms` and `idle_timeout_ms`. A headless agent
+the runtime keeps running to answer `suggest-command` (`ctrl+b` `?`) and
+`telar command suggest`. `command` and `timeout_ms` follow the same bounds as
+`agent_descriptions`. The process stops after `idle_timeout_ms` without work:
+default `300000`, from `10000` to `3600000`.
+
+## Bars and panels
+
+`client.bars` builds the status bar from components that Telar draws in the
+theme's colors. The bottom bar has three slots, `left`, `center` and
+`right`, and exactly one of them must hold `telar.bar.tabs()`.
+
+```lua
+local telar = require("telar")
+local ui = telar.ui
+
+return telar.config({
+  api_version = 2,
+  client = {
+    bars = {
+      bottom = {
+        left = telar.bar.static({ ui.clock("%H:%M"), ui.metrics({ "cpu", "memory" }) }),
+        right = telar.bar.tabs(),
+      },
+    },
+  },
+})
+```
+
+A slot takes one source:
+
+| Source | Content |
+| --- | --- |
+| `telar.bar.tabs()` | The tabs. |
+| `telar.bar.metrics()` | CPU, memory and battery of the machine the window shows. |
+| `telar.bar.machines()` | One chip per machine the window holds. |
+| `telar.bar.static(content)` | Fixed components. |
+| `telar.bar.dynamic({ every_ms, render })` | Calls `render(ctx)` every `every_ms`. |
+| `telar.bar.command({ command, every_ms, timeout_ms, render })` | Runs `command` every `every_ms` and passes its output to `render` as `ctx.output`. |
+
+`every_ms` defaults to `1000`, from `100` to `3600000`. A command's
+`timeout_ms` defaults to `2000`, from `100` to `10000`.
+
+Components come from `telar.ui`: `label`, `icon`, `mark`, `meter`,
+`sparkline`, `badge`, `clock`, `metric`, `metrics` and `group`. A `group`
+takes a `tooltip`, an `on_click` action or a `url`. Tones are `neutral`,
+`muted`, `accent`, `success`, `warning` and `danger`.
+
+`client.panels` names panels built with `telar.panel({ title, width,
+command, every_ms, render })`, which open above the bar with
+`telar.action.open_panel("name")`. `width` defaults to `420`, from `240` to
+`720`. `client.picks` names option lists built with `telar.pick({ title,
+items, command, on_select })`, which open in the command palette with
+`telar.action.pick("name")` and run `on_select` with the choice. A config
+holds at most 16 panels and 16 picks.
+
+## Mods
+
+`client.components` replaces pieces of the interface with your own Lua. It
+maps a slot name to a function that receives the context and the item and
+returns an element. The slots are `top_bar`, `bottom_bar`, `tab`,
+`pane_header`, `agent_card`, `tab_cards`, `tab_title`, `tab_path`,
+`tab_activity`, `pane_mark`, `pane_program`, `pane_context`, `pane_status`,
+`pane_progress`, `pane_actions`, `agent_mark`, `agent_title`,
+`agent_project` and `agent_status`.
+
+## Plugins
+
+### `plugins`
+
+A list of plugin packages, each built with `telar.plugin({ path, enabled })`.
+`path` is the package directory, relative to the config file's directory or
+absolute, at most 512 bytes. `enabled` defaults to `true`. A config holds at
+most 32 plugins.
+
+```lua
+plugins = {
+  telar.plugin({ path = "/Users/me/.local/share/telar/plugins/dev.example.tool/<digest>" }),
+},
+```
+
+Install and trust a package with the `telar plugin` commands:
+
+```sh
+telar plugin inspect ./my-plugin
+telar plugin install ./my-plugin
+telar plugin trust ./my-plugin --capability notifications
+```
+
+`telar plugin install` prints the installed directory to use as `path`.
+Installing does not enable a package, and trusting grants capabilities to one
+exact version of it. The capabilities are `workspace.read`,
+`workspace.write`, `process.spawn`, `network`, `clipboard.read`,
+`clipboard.write`, `notifications`, `history.read`, `history.write`,
+`proxy.tap` and `runtime.control`. Bind a plugin's action with
+`telar.action.plugin({ plugin = "dev.example.tool", action = "run" })`.
+
+## Runtime
+
+These settings apply when the runtime starts.
+
+### `runtime.session.persist`
+
+Boolean. Save the session (workspaces, tabs and panes) so the next runtime
+restores it. Default `true`.
+
+### `runtime.session.resume_agents`
+
+Boolean. Resume agent sessions when a saved session is restored. Default
+`true`.
+
+### `runtime.session.path`
+
+String. The session checkpoint file. Default `session.ckpt` next to the
+history database. A relative path is resolved against the config file's
+directory.
+
+### `runtime.graphics.pane_mib`
+
+Integer. Memory for decoded images per pane, in MiB. Default `256`, from `2`
+to `256`.
+
+### `runtime.graphics.global_mib`
+
+Integer. Memory for decoded images across the runtime, in MiB. Default
+`512`, from `2` to `512`, and at least `pane_mib`.
+
+### `runtime.control_queries`
+
+Table. What programs in a pane may ask the terminal for:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `clipboard_read` | `"ask"` | Reading the clipboard through OSC 52: `"deny"`, `"ask"` or `"allow"`. `"ask"` prompts first. |
+| `clipboard_write` | `"allow"` | Writing the clipboard: `"deny"`, `"ask"` or `"allow"`. |
+| `title_report` | `false` | Answer requests for the window title. |
+| `checksum_report` | `false` | Answer screen checksum requests. |
+| `color_format` | `"16-bit"` | Format of color query replies: `"none"`, `"8-bit"` or `"16-bit"`. |
+| `answerback` | `""` | The reply to ENQ, at most 1024 bytes. |
+
+## Proxy
+
+`runtime.proxy` configures the [TLS proxy](/docs/proxy). The runtime reads it
+only when it starts.
+
+### `runtime.proxy.enabled`
+
+Boolean. Run the proxy and point new panes at it. Default `false`.
+
+### `runtime.proxy.intercept_hosts`
+
+List of strings. The hosts whose TLS the proxy decrypts: exact names,
+`*.example.com` for subdomains, or `*` for every host. Empty by default, so
+nothing is intercepted. At most 256 entries.
+
+### `runtime.proxy.ca_dir`
+
+String. The directory for the proxy's CA, secret and port files. Default
+`$XDG_DATA_HOME/telar/proxy`, or `~/.local/share/telar/proxy`. A relative
+path is resolved against the config file's directory. Pass the same absolute
+path to `telar proxy trust --ca-dir`.
+
+### `runtime.proxy.anonymous_tunnels`
+
+Boolean. Admit connections that carry no proxy credential, for hosts outside
+`intercept_hosts` only. Default `false`. Any local user can then open tunnels
+through the proxy.
+
+### `runtime.proxy.capture.enabled`
+
+Boolean. Copy intercepted exchanges for tap plugins. Default `false`.
+
+### `runtime.proxy.capture.max_part_bytes`
+
+Integer. The most bytes kept of each captured head or body. Default 16 MiB
+(`16777216`).
+
+### `runtime.proxy.capture.max_exchange_bytes`
+
+Integer. The most bytes kept of one exchange, split evenly between request
+and response. Default 32 MiB (`33554432`), at most 64 MiB.
+
+### `runtime.proxy.capture.max_total_bytes`
+
+Integer. The most bytes all captures hold at once. Default 128 MiB
+(`134217728`), at most 1 GiB. The three limits must satisfy
+`max_part_bytes <= max_exchange_bytes <= max_total_bytes`.
+
+### `runtime.proxy.capture.join_timeout_ms`
+
+Integer. How long a captured request waits for its response before it is
+passed on alone. Default `900000` (15 minutes), at most `3600000`.
+
+### Traffic plugin options
+
+`runtime.proxy` also accepts `network_capture`, `network_control`,
+`transparent_redirect`, `transparent_tls` and `stream_interception`. They
+serve the plugin traffic API and are all `false` by default.
+`network_control` requires `network_capture`; `transparent_redirect`
+requires `enabled`; `transparent_tls` requires `transparent_redirect`; and
+`stream_interception` requires `enabled` and `network_capture`.

@@ -530,6 +530,10 @@ private:
       }
     }
 
+    if (queued_lane <= DeliveryLane::panes || paneList(client, now)) {
+      return;
+    }
+
     for (const auto lane : {DeliveryLane::cwd, DeliveryLane::foreground, DeliveryLane::title, DeliveryLane::progress, DeliveryLane::exit, DeliveryLane::graphics}) {
       if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
         return;
@@ -572,6 +576,41 @@ private:
       return true;
     }
     return false;
+  }
+
+  inline bool paneList(ClientSession<Memory> &client, Clock::time_point now) {
+    if (!client.subscribed || (client.pane_revision == model_.pane_revision && client.pane_workspace_revision == model_.workspace_revision)) {
+      return false;
+    }
+
+    std::array<PaneListEntry, max_pane_list_entries> entries;
+    std::size_t count = 0;
+    for (const auto *pane : model_.panes.items()) {
+      if (pane == nullptr || pane->exit_status || pane->close_requested) {
+        continue;
+      }
+
+      if (count == entries.size()) {
+        break;
+      }
+
+      const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - pane->foreground_since).count();
+      const auto name = pane->foreground.view();
+      entries[count++] = {
+          .pane_id = pane->id,
+          .pane_generation = pane->generation,
+          .location = pane->location,
+          .foreground = name.empty() ? "shell" : name,
+          .foreground_age_s = static_cast<std::uint32_t>(std::clamp<std::int64_t>(age, 0, UINT32_MAX)),
+          .shell = pane->foreground_shell,
+          .ports = pane->listening_ports.view(),
+      };
+    }
+
+    client.connection.send(PaneList{model_.pane_revision + model_.workspace_revision, std::span{entries}.first(count)});
+    client.pane_revision = model_.pane_revision;
+    client.pane_workspace_revision = model_.workspace_revision;
+    return true;
   }
 
   inline bool foreground(ClientSession<Memory> &client) {

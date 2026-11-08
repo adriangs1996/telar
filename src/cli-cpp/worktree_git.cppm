@@ -214,6 +214,10 @@ public:
   }
 
   inline std::string read(std::initializer_list<std::string_view> arguments) {
+    return read(std::span{arguments.begin(), arguments.size()});
+  }
+
+  inline std::string read(std::span<const std::string_view> arguments) {
     auto [status, output] = execute(arguments, true);
     if (status != 0) {
       throw std::runtime_error{"GitFailed"};
@@ -222,8 +226,10 @@ public:
     return std::string{trim(output, " \r\n")};
   }
 
-  inline void bundle(std::string_view ref, int descriptor) {
-    const std::array args{std::string_view{"bundle"}, std::string_view{"create"}, std::string_view{"-"}, ref};
+  // `revisions` are rev-list arguments: the ref, then any exclusions.
+  inline void bundle(std::span<const std::string_view> revisions, int descriptor) {
+    std::vector<std::string_view> args{"bundle", "create", "-"};
+    args.insert(args.end(), revisions.begin(), revisions.end());
     auto command = makeCommand(args);
     configure(command);
     CommandOutput output{memory_, max_git_output};
@@ -256,7 +262,11 @@ private:
   }
 
   inline std::pair<int, std::string> execute(std::initializer_list<std::string_view> arguments, bool bounded) {
-    auto command = makeCommand(std::span{arguments.begin(), arguments.size()});
+    return execute(std::span{arguments.begin(), arguments.size()}, bounded);
+  }
+
+  inline std::pair<int, std::string> execute(std::span<const std::string_view> arguments, bool bounded) {
+    auto command = makeCommand(arguments);
     configure(command);
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};

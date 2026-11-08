@@ -89,9 +89,20 @@ protected:
 
 private:
   enum class Mode : std::uint8_t {
-    switcher,
+    list,
     segment,
     facts,
+  };
+
+  // The tab strip shows at most three cards of a stack; a machine row does too.
+  static constexpr std::size_t stack_cards = 3;
+
+  // One agent that works or waits on a machine other than the active one.
+  struct StackCard {
+    std::uint8_t provider = 0;
+    std::uint8_t status = 0;
+
+    bool operator==(const StackCard &) const = default;
   };
 
   struct Source {
@@ -103,9 +114,11 @@ private:
     bool live = false;
     MachinePhase phase = MachinePhase::connecting;
     std::optional<std::uint8_t> cpu_percent = std::nullopt;
+    std::array<StackCard, stack_cards> cards{};
+    std::size_t card_count = 0;
 
     bool operator==(const Source &other) const noexcept {
-      return token == other.token && label.view() == other.label.view() && color.view() == other.color.view() && active == other.active && attention == other.attention && live == other.live && phase == other.phase && cpu_percent == other.cpu_percent;
+      return token == other.token && label.view() == other.label.view() && color.view() == other.color.view() && active == other.active && attention == other.attention && live == other.live && phase == other.phase && cpu_percent == other.cpu_percent && card_count == other.card_count && cards == other.cards;
     }
   };
 
@@ -115,12 +128,13 @@ private:
   void bindWindow();
   void rebuild();
   [[nodiscard]] qreal segmentRecords(Rect area, QList<QVariantMap> &records);
-  qreal switcherRecords(Rect area, QList<QVariantMap> &records);
+  qreal listRecords(Rect area, QList<QVariantMap> &records);
+  [[nodiscard]] QVariantMap listRecord(const Source &source, const MachineChromeGeometry::ListRow &row) const;
+  void collectCards(Machines::Slot slot, Source &source) const;
   qreal factsRecords(Rect area, QList<QVariantMap> &records);
   [[nodiscard]] QVariantMap factRecord(const Source &source, const MachineFacts::Geometry &geometry) const;
   [[nodiscard]] float measure(std::string_view text, bool emphasized) const;
   [[nodiscard]] QVariantMap controlRecord(const Source &source, Rect bounds, float advance) const;
-  [[nodiscard]] QVariantMap foldRecord(Rect bounds, std::size_t count);
   [[nodiscard]] QVariantMap geometryRecord(const MachineChromeGeometry::Control &geometry) const;
   [[nodiscard]] QColor ink(std::string_view written) const;
   [[nodiscard]] QColor fill(CellColor value) const;
@@ -135,7 +149,7 @@ private:
   ChromeMetrics chrome_;
   qreal density_ = 1;
   qreal preferred_width_ = 0;
-  Mode mode_ = Mode::switcher;
+  Mode mode_ = Mode::list;
   bool shown_ = false;
   bool attention_elsewhere_ = false;
 };

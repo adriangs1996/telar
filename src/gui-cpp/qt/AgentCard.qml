@@ -29,15 +29,41 @@ ActivityFrame {
         ratio: root.ratio
     }
 
+    // A process card's listening ports, at the end of the title row.
+    NativeRoundedRectangle {
+        id: portChip
+        objectName: "processPorts"
+        readonly property bool shown: !root.drawn && (root.record.ports ?? "").length > 0
+        readonly property real reserved: shown ? width + root.geometry.gap : 0
+        x: root.width - root.geometry.padding - width
+        y: root.geometry.padding + (root.geometry.agentTitleRow - height) / 2
+        width: portLabel.implicitWidth + 8 * root.ratio
+        height: Math.round(root.geometry.agentTitleRow * 0.8)
+        radius: height / 2
+        color: Qt.alpha(root.colors.green, 0.16)
+        visible: shown
+
+        ChromeText {
+            id: portLabel
+            anchors.centerIn: parent
+            width: implicitWidth
+            height: parent.height
+            text: root.record.ports ?? ""
+            color: root.colors.green
+            pixelSize: root.typography.small
+            elide: Text.ElideNone
+        }
+    }
+
     ChromeText {
         objectName: "agentTitleLabel"
         x: root.geometry.padding + root.geometry.tileWidth + root.geometry.gap
         y: root.geometry.padding
-        width: Math.max(0, root.width - x - root.geometry.padding)
+        width: Math.max(0, root.width - x - root.geometry.padding - portChip.reserved)
         height: root.geometry.agentTitleRow
         visible: !root.drawn && root.elements.agent_title === undefined
         text: root.record.title
-        color: root.colors.chromeText
+        color: root.record.dim ? root.colors.overlay1 : root.colors.chromeText
         pixelSize: root.typography.body
         emphasized: true
     }
@@ -161,5 +187,5 @@ ActivityFrame {
         }
     }
 
-    Accessible.name: record.project + " " + record.title + " " + status.statusText + " " + record.detail
+    Accessible.name: record.project + " " + record.title + " " + (record.ports ?? "") + " " + status.statusText + " " + record.detail
 }

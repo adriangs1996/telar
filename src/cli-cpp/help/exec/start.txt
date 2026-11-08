@@ -21,7 +21,9 @@ Arguments:
 
 Effects: the runtime spawns PROGRAM in its own process group with the runtime's
 environment (minus the pane variables and SSH_AUTH_SOCK), and keeps its result.
-Starts the local runtime when none runs. In the foreground this process copies
+A foreground start that delivers the exit and every output byte then forgets the
+execution, unless the child exited 124 or 125; a detached, timed-out or
+disconnected one stays until `forget`. Starts the local runtime when none runs. In the foreground this process copies
 stdin to the child and the child's stdout and stderr to its own, byte for byte, with
 no metadata; stdin closes at EOF, on timeout or on disconnect, never cancelling.
 

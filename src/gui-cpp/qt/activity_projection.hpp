@@ -87,4 +87,61 @@ QVariantMap commandRecord(const Worktree<Memory> &task, const AgentRecordContext
   };
 }
 
+// The lowest listening port, and how many more there are: `:3000`, `:3000 +2`.
+inline QString portsLabel(std::span<const std::uint16_t> ports) {
+  if (ports.empty()) {
+    return {};
+  }
+
+  auto label = QLatin1Char(':') + QString::number(ports.front());
+  if (ports.size() > 1) {
+    label += QStringLiteral(" +") + QString::number(ports.size() - 1);
+  }
+
+  return label;
+}
+
+// A pane no agent holds: its foreground program, where it runs, how long it has held the terminal
+// and the ports it listens on.
+inline QVariantMap processRecord(const ListedPane &pane, std::string_view workspace, const AgentRecordContext &context) {
+  const auto name = pane.foreground.view();
+  const auto mark = ApplicationMark::forApplication(name);
+  AgentCardLabels::Project project;
+
+  return {
+      {QStringLiteral("process"), true},
+      {QStringLiteral("title"), toQString(name)},
+      {QStringLiteral("provider"), toQString(name)},
+      {QStringLiteral("project"), toQString(AgentCardLabels::project(workspace, context.machine, false, project))},
+      {QStringLiteral("detail"), QString{}},
+      {QStringLiteral("statusWord"), context.connected ? QString{} : QStringLiteral("offline")},
+      {QStringLiteral("statusGlyph"), QString{}},
+      {QStringLiteral("statusColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(AgentStatus::ready))])},
+      {QStringLiteral("working"), false},
+      {QStringLiteral("statusCode"), static_cast<int>(AgentStatus::ready)},
+      {QStringLiteral("blockedReason"), static_cast<int>(AgentBlockedReason::none)},
+      {QStringLiteral("statusClock"), statusAgeValue(pane.age)},
+      {QStringLiteral("providerMark"), 0},
+      {QStringLiteral("glyph"), toQString(mark.glyph)},
+      {QStringLiteral("tile"), toQString(mark.tile)},
+      {QStringLiteral("ink"), toQString(mark.ink)},
+      {QStringLiteral("dim"), pane.shell},
+      {QStringLiteral("ports"), portsLabel(pane.ports())},
+      {QStringLiteral("selected"), context.connected && context.selected},
+      {QStringLiteral("enabled"), context.connected},
+      {QStringLiteral("startsProject"), false},
+      {QStringLiteral("depth"), qulonglong{0}},
+  };
+}
+
+inline QVariantMap processHeaderRecord(qsizetype count) {
+  return {
+      {QStringLiteral("key"), QStringLiteral("processes")},
+      {QStringLiteral("header"), true},
+      {QStringLiteral("title"), QStringLiteral("Processes")},
+      {QStringLiteral("count"), QString::number(count)},
+      {QStringLiteral("enabled"), false},
+  };
+}
+
 }

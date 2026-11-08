@@ -14,7 +14,8 @@ Commands:
 An execution is a runtime-owned command with pipes, not a pane: literal argv, no
 shell, no PTY, stdout and stderr kept apart. Its id and bounded output outlive the
 connection that started it and the workspace it ran in, for one runtime lifetime,
-until `forget`. Timeouts and disconnects leave it running. For a command that needs
+until `forget`; a foreground start that delivers its whole result forgets it
+itself. Timeouts and disconnects leave it running. For a command that needs
 a terminal use `telar workspace create -- COMMAND` or `telar worktree exec`.
 
 Ids are the destination runtime's: with `telar --machine LABEL exec`, that machine's.

@@ -4,6 +4,7 @@
 #include "../codecs/telar_value_codec.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
 
+#include <algorithm>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
@@ -135,6 +136,7 @@ namespace telar {
     clipboard_desktop_execute = 0xb8,
     clipboard_desktop_cancel = 0xb9,
     runtime_clipboard_chunk = 0xba,
+    pane_list = 0xbb,
   };
 
   struct RequestRuntimeState {
@@ -473,6 +475,21 @@ namespace telar {
   struct PaneForeground {
     std::uint64_t pane_id = 0;
     std::string_view name{};
+  };
+
+  inline constexpr std::size_t max_listed_ports = 4;
+
+  // A live pane and the process holding its terminal. `shell` is set while the pane's root
+  // process holds it and still runs a shell, as at a prompt. `ports` are the lowest TCP ports
+  // the foreground process group listens on, ascending.
+  struct PaneListEntry {
+    std::uint64_t pane_id = 0;
+    std::uint64_t pane_generation = 0;
+    TabLocation location{};
+    std::string_view foreground{};
+    std::uint32_t foreground_age_s = 0;
+    bool shell = false;
+    std::span<const std::uint16_t> ports{};
   };
 
   // What a client shows for a pane of a tab it has not loaded. `cwd` is empty until the runtime observes one.
@@ -872,6 +889,22 @@ namespace telar {
       : Serializer<Field<&TabPane::pane_id, NonzeroU64, "pane_id">,
                    Field<&TabPane::foreground, Text16<48, false>, "foreground">,
                    Field<&TabPane::cwd, Text16<4096>, "cwd">> {};
+
+  template <>
+  struct BodySchema<PaneListEntry>
+      : Serializer<Field<&PaneListEntry::pane_id, NonzeroU64, "pane_id">,
+                   Field<&PaneListEntry::pane_generation, NonzeroU64, "pane_generation">,
+                   Field<&PaneListEntry::location, ValueCodec<TabLocation>, "location">,
+                   Field<&PaneListEntry::foreground, Text16<48, false>, "foreground">,
+                   Field<&PaneListEntry::foreground_age_s, u32, "foreground_age_s">,
+                   Field<&PaneListEntry::shell, BoolByte, "shell">,
+                   Field<&PaneListEntry::ports, CountedSpan<u8, BoundedInteger<u16, 1>, max_listed_ports>, "ports">> {
+    static void validate(const PaneListEntry &value) {
+      if (std::ranges::adjacent_find(value.ports, std::ranges::greater_equal{}) != value.ports.end()) {
+        throw EncodingError{"Listening ports must ascend without repeats"};
+      }
+    }
+  };
 
   template <>
   struct BodySchema<TabDescriptor>

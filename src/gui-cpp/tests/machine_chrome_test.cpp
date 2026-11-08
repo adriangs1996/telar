@@ -61,58 +61,22 @@ void colorNamesKeepWrittenSemantics() {
   }
 }
 
-void machineRowsReserveTheirFoldAndKeepSlotOrder() {
-  using Geometry = MachineChromeGeometry;
-  constexpr float more_advance = 24;
-  const ChromeMetrics chrome;
-  constexpr std::array advances{30.0F, 80.0F};
-
-  struct Case {
-    Rect bounds{};
-    std::size_t count = 0;
-    std::size_t hidden = 0;
-    Rect first{};
-    Rect second{};
-    Rect fold{};
-  };
-
-  constexpr std::array cases{
-      Case{.bounds = {.width = 300, .height = 17}, .count = 2, .hidden = 0, .first = {.width = 57, .height = 17}, .second = {.x = 61, .width = 107, .height = 17}},
-      Case{.bounds = {.width = 150, .height = 17}, .count = 1, .hidden = 1, .first = {.width = 57, .height = 17}, .fold = {.x = 61, .width = 40, .height = 17}},
-      Case{.bounds = {.width = 20, .height = 17}, .count = 0, .hidden = 2, .fold = {.width = 20, .height = 17}},
-  };
-  for (const auto &expected : cases) {
-    const auto row = Geometry::switcher(expected.bounds, chrome, advances, more_advance);
-    require(row.count == expected.count && row.hidden == expected.hidden && row.controls[0] == expected.first && row.controls[1] == expected.second && row.fold == expected.fold, "machine rows retain measured source order, bounded fold reservation and exact geometry");
-  }
-
-  require(Geometry::switcher(cases.front().bounds, chrome, std::span{advances}.first(1), more_advance).count == 0, "single-machine windows must keep their original chrome");
-  std::array<float, MachineLimits::window_slots + 1> too_many{};
-  bool rejected = false;
-  try {
-    static_cast<void>(Geometry::switcher(cases.front().bounds, chrome, too_many, more_advance));
-  } catch (const std::length_error &) {
-    rejected = true;
-  }
-
-  require(rejected, "machine chrome cannot exceed the shared bounded machine capacity");
-}
-
-void switcherPreferredWidthFitsEveryControl() {
+void machineListRowsPlaceDiscLabelAndStack() {
   using Geometry = MachineChromeGeometry;
   const ChromeMetrics chrome;
-  constexpr std::array<float, 2> advances{30, 300};
-  constexpr float more_advance = 20;
-  constexpr float expected_width = 217;
-  const auto width = Geometry::preferredSwitcher(chrome, advances, more_advance);
-  require(width == expected_width, "switcher intrinsic width must reserve the original control caps, gaps and fold budget");
-  const Rect bounds{.width = width, .height = 26};
-  const auto complete = Geometry::switcher(bounds, chrome, advances, more_advance);
-  require(complete.count == advances.size() && complete.hidden == 0, "the preferred width must show every machine");
-  auto narrow = bounds;
-  --narrow.width;
-  require(Geometry::switcher(narrow, chrome, advances, more_advance).hidden == 1, "the preferred width must use the existing switcher fitting boundary");
-  require(Geometry::preferredSwitcher(chrome, {}, more_advance) == 0 && Geometry::preferredSwitcher(chrome, std::span{advances}.first(1), more_advance) == 0, "a switcher with at most one machine must remain absent");
+  constexpr Rect area{.x = 8, .y = 40, .width = 224, .height = 64};
+  const auto first = Geometry::listRow(area, chrome, 0, true);
+  constexpr Rect bounds{.x = 8, .y = 40, .width = 224, .height = 32};
+  constexpr Rect disc{.x = 16, .y = 52.5F, .width = 7, .height = 7};
+  constexpr Rect stack{.x = 182, .y = 40, .width = 42, .height = 32};
+  constexpr Rect label{.x = 31, .y = 40, .width = 143, .height = 32};
+  require(first.bounds == bounds && first.disc == disc && first.stack == stack && first.label == label, "a machine row keeps its disc, label and agent stack apart");
+  const auto second = Geometry::listRow(area, chrome, 1, false);
+  constexpr Rect wide_label{.x = 31, .y = 72, .width = 193, .height = 32};
+  require(second.bounds.y == 72 && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its label");
+  require(Geometry::listHeight(chrome, 3) == 96, "machine rows stack at their fixed height");
+  constexpr float label_advance = 100;
+  require(Geometry::listNaturalWidth(chrome, label_advance, false) == 131 && Geometry::listNaturalWidth(chrome, label_advance, true) == 181, "the natural width holds the whole label and, when shown, the stack");
 }
 
 void inlineMachineFactsKeepOriginalStateAndGeometry() {
@@ -183,9 +147,8 @@ void machineControlInkAreasKeepOriginalInsets() {
 int main() {
   try {
     colorNamesKeepWrittenSemantics();
-    machineRowsReserveTheirFoldAndKeepSlotOrder();
+    machineListRowsPlaceDiscLabelAndStack();
     machineControlInkAreasKeepOriginalInsets();
-    switcherPreferredWidthFitsEveryControl();
     inlineMachineFactsKeepOriginalStateAndGeometry();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

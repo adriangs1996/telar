@@ -8,12 +8,96 @@ MachineChromeLayout {
     id: root
 
     required property var colors
+    property var typography: ({})
 
     visible: shown
     clip: true
 
     Repeater {
-        model: root.inlineFacts ? [] : root.items
+        model: !root.inlineFacts && !root.segment ? root.items : []
+
+        delegate: AbstractButton {
+            id: row
+            objectName: "machineListRow"
+            required property var record
+
+            x: record.bounds.x
+            y: record.bounds.y
+            width: record.bounds.width
+            height: record.bounds.height
+            enabled: record.enabled
+            hoverEnabled: true
+            focusPolicy: Qt.TabFocus
+            padding: 0
+            contentItem: null
+            background: NativeRoundedRectangle {
+                color: row.hovered || row.visualFocus ? root.style.hoverBackground : "transparent"
+                radius: root.style.rowRadius
+                borderColor: root.colors.accent
+                borderAlpha: ChromeStyle.focusAlpha
+                borderWidth: row.visualFocus ? 1 / Screen.devicePixelRatio : 0
+            }
+            onClicked: root.activate(record.key)
+
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
+
+            NativeRoundedRectangle {
+                x: row.record.discBounds.x - row.record.bounds.x
+                y: row.record.discBounds.y - row.record.bounds.y
+                width: row.record.discBounds.width
+                height: row.record.discBounds.height
+                radius: Math.max(width, height)
+                color: row.record.ink.a > 0 ? row.record.ink : root.colors.accent
+            }
+
+            ChromeText {
+                objectName: "machineListLabel"
+                x: row.record.labelBounds.x - row.record.bounds.x
+                width: row.record.labelBounds.width
+                height: row.height
+                text: row.record.text
+                color: row.enabled ? root.colors.text : root.colors.overlay1
+                pixelSize: root.style.pixelSize
+                Accessible.ignored: true
+            }
+
+            Item {
+                objectName: "machineAgentStack"
+                x: row.record.stackBounds.x - row.record.bounds.x
+                width: row.record.stackBounds.width
+                height: row.height
+                visible: width > 0
+
+                Repeater {
+                    model: row.record.cards
+                    delegate: ApplicationTile {
+                        required property var modelData
+                        x: modelData.x
+                        y: (row.height - height) / 2 + modelData.y
+                        z: modelData.layer
+                        width: root.style.tileWidth
+                        height: root.style.tileHeight
+                        rotation: modelData.rotation
+                        scale: modelData.scale
+                        radius: root.style.tileRadius
+                        mark: modelData
+                        attentionColor: modelData.attentionColor
+                        colors: root.colors
+                        typography: root.typography
+                        borderColor: "#0a0810"
+                        borderAlpha: 0.72
+                        borderWidth: 1
+                    }
+                }
+            }
+
+            Accessible.name: record.accessible
+            Accessible.role: Accessible.Button
+        }
+    }
+
+    Repeater {
+        model: root.segment ? root.items : []
 
         delegate: AbstractButton {
             id: control

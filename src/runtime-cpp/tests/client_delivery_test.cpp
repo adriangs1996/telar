@@ -157,7 +157,14 @@ void currentState() {
   client.agent_workspace_revision = 7;
   delivery.write(client, source, now);
   check(peer.receive<WorkspaceList>().revision == 7);
+  delivery.write(client, source, now);
+  const auto listed = peer.receive<PaneList>();
+  check(listed.revision == model.pane_revision + model.workspace_revision && listed.entries.empty());
+  check(client.pane_revision == model.pane_revision && client.pane_workspace_revision == model.workspace_revision);
   check(delivery.write(client, source, now).timeout == std::chrono::nanoseconds::max());
+  ++model.pane_revision;
+  delivery.write(client, source, now);
+  check(peer.receive<PaneList>().revision == model.pane_revision + model.workspace_revision);
 
   client.subscribed = false;
   client.agent_snapshot_requested = true;

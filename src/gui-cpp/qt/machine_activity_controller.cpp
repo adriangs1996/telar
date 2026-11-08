@@ -107,9 +107,47 @@ QString activityIdentity(const MachineActivityTarget &target) {
     return prefix + QStringLiteral(":agent:") + QString::number(agent->key.pane_id) + QLatin1Char(':') + QString::number(agent->key.pane_generation) + QLatin1Char(':') + QString::fromLatin1(session.toHex());
   }
 
+  if (const auto *process = std::get_if<MachineActivityTarget::Process>(&target.owner)) {
+    return prefix + QStringLiteral(":process:") + QString::number(process->pane_id) + QLatin1Char(':') + QString::number(process->pane_generation);
+  }
+
   const auto command = std::get<MachineActivityTarget::Command>(target.owner);
 
   return prefix + QStringLiteral(":command:") + QString::number(command.worktree) + QLatin1Char(':') + QString::number(command.workspace);
+}
+
+struct ListedProcess {
+  std::size_t source;
+  const ListedPane *pane;
+};
+
+// Programs before idle shells; inside each, the newest foreground first. Ages sampled at different
+// moments compare as `age_a - sampled_a < age_b - sampled_b`, rearranged to stay unsigned.
+bool precedes(const ListedProcess &left, const ListedProcess &right) noexcept {
+  if (left.pane->shell != right.pane->shell) {
+    return !left.pane->shell;
+  }
+
+  const auto left_age = left.pane->age.age_ns + right.pane->age.sampled_ns;
+  const auto right_age = right.pane->age.age_ns + left.pane->age.sampled_ns;
+  if (left_age != right_age) {
+    return left_age < right_age;
+  }
+
+  return std::tie(left.source, left.pane->pane_id) < std::tie(right.source, right.pane->pane_id);
+}
+
+std::string_view workspaceName(const GuiSession &session, const ListedPane &pane) {
+  if (pane.location.workspace.kind != WorkspaceLocation::Kind::workspace) {
+    return {};
+  }
+
+  const auto &workspaces = session.workspaceList().entries();
+  const auto found = std::ranges::find_if(workspaces, [&](const auto &workspace) {
+    return sameWorkspace(workspace.location, pane.location.workspace);
+  });
+
+  return found == workspaces.end() ? std::string_view{} : std::string_view{found->name};
 }
 
 QVariantMap activityRecord(const GuiSession &session, const Order::Entry &entry, AgentRecordContext context, bool active_source) {
@@ -139,12 +177,16 @@ QVariantMap activityRecord(const GuiSession &session, const Order::Entry &entry,
 }
 
 void Application::refreshAgents() {
+  // The top bar names the active machine, so only cards from other machines repeat theirs.
+  const auto machineLabel = [this](const ActivitySourceVersion &version, Machines::Slot slot) {
+    return slot == machines_.active() ? std::string_view{} : version.label.view();
+  };
   std::array<std::optional<ActivitySourceVersion>, Machines::capacity> versions;
   for (std::size_t index = 0; index < clients_.size(); ++index) {
     const auto &client = clients_[index];
     const auto &row = machines_.row(static_cast<Machines::Slot>(index));
     if (row.used && row.live && client) {
-      versions[index] = ActivitySourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .connected = row.enabled && (*client)->phase == MachinePhase::connected && (*client)->session.ready(), .label = row.label};
+      versions[index] = ActivitySourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == MachinePhase::connected && (*client)->session.ready(), .label = row.label};
     }
   }
 
@@ -185,7 +227,7 @@ void Application::refreshAgents() {
 
     const auto target = activityTarget(source, entry);
     const auto identity = activityIdentity(target);
-    const AgentRecordContext context{.machine = version->label.view(), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
+    const AgentRecordContext context{.machine = machineLabel(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
     auto record = activityRecord(source.session, entry, context, slot == machines_.active());
     record.insert(QStringLiteral("key"), identity);
     if (element_slots_.active()) {
@@ -196,10 +238,60 @@ void Application::refreshAgents() {
     targets.push_back({.identity = identity, .target = target});
   }
 
+  const auto agent_count = static_cast<int>(records.size());
+  Vector<ListedProcess, ApplicationAllocator> processes{AllocatorRef<ListedProcess, ApplicationAllocator>{memory_}};
+  // Processes are the active machine's; the other machines are summarized by their sidebar row.
+  for (std::size_t index = 0; index < sources.size(); ++index) {
+    if (sources[index].slot != machines_.active()) {
+      continue;
+    }
+
+    const auto &session = clientAt(sources[index].slot).session;
+    for (const auto &pane : session.paneList()) {
+      const auto held = std::ranges::any_of(session.agents(), [&](const auto &agent) {
+        return agent.pane_id == pane.pane_id && agent.pane_generation == pane.pane_generation;
+      });
+      if (!held) {
+        processes.push_back({.source = index, .pane = &pane});
+      }
+    }
+  }
+
+  std::ranges::sort(processes, precedes);
+  if (!processes.empty()) {
+    records.append(processHeaderRecord(static_cast<qsizetype>(processes.size())));
+  }
+
+  records.reserve(records.size() + static_cast<qsizetype>(processes.size()));
+  targets.reserve(targets.size() + processes.size());
+  for (const auto &process : processes) {
+    const auto slot = sources[process.source].slot;
+    const auto &source = clientAt(slot);
+    const auto &version = *versions[slot];
+    const auto &pane = *process.pane;
+    const MachineActivityTarget target{.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Process{.pane_id = pane.pane_id, .pane_generation = pane.pane_generation}};
+    const auto identity = activityIdentity(target);
+    const auto *tab = slot == machines_.active() ? source.session.activeTab() : nullptr;
+    const AgentRecordContext context{.machine = machineLabel(version, slot), .selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location), .connected = version.connected};
+    auto record = processRecord(pane, workspaceName(source.session, pane), context);
+    record.insert(QStringLiteral("key"), identity);
+    records.append(std::move(record));
+    targets.push_back({.identity = identity, .target = target});
+  }
+
   activity_targets_ = std::move(targets);
   agents_.reconcile(std::move(records));
+  fitSidebarWhenReady();
   activity_versions_ = std::move(versions);
   activity_selection_ = selection;
+  if (activity_agent_count_ != agent_count) {
+    activity_agent_count_ = agent_count;
+    emit activityCountChanged();
+  }
+}
+
+int Application::activityAgentCount() const noexcept {
+  return activity_agent_count_;
 }
 
 bool Application::activityAvailable(const MachineActivityTarget &target) const {
@@ -211,6 +303,12 @@ bool Application::activityAvailable(const MachineActivityTarget &target) const {
   if (const auto *agent = std::get_if<MachineActivityTarget::Agent>(&target.owner)) {
     return std::ranges::any_of(client->session.agents(), [&](const auto &candidate) {
       return candidate.pane_id == agent->key.pane_id && candidate.pane_generation == agent->key.pane_generation && candidate.session_id == agent->session;
+    });
+  }
+
+  if (const auto *process = std::get_if<MachineActivityTarget::Process>(&target.owner)) {
+    return std::ranges::any_of(client->session.paneList(), [&](const auto &pane) {
+      return pane.pane_id == process->pane_id && pane.pane_generation == process->pane_generation;
     });
   }
 
@@ -257,6 +355,8 @@ void Application::settleActivity() {
     } else {
       static_cast<void>(session().focusAgent(agent->key.pane_id, agent->key.pane_generation));
     }
+  } else if (const auto *process = std::get_if<MachineActivityTarget::Process>(&pending.target.owner)) {
+    static_cast<void>(session().focusListedPane(process->pane_id, process->pane_generation));
   } else {
     static_cast<void>(session().openWorktree(std::get<MachineActivityTarget::Command>(pending.target.owner).worktree));
   }

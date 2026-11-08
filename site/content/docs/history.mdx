@@ -1,0 +1,251 @@
+The runtime records the commands you run in your shells and the shell commands
+your agents run, with where and when they ran and how they ended. The history
+palette searches that record and pastes a command back into the focused pane.
+The same history is available from the `telar history` CLI.
+
+History is not a complete audit log. It holds what Telar could detect, minus
+what its filters keep out.
+
+## Search history
+
+Press `ctrl+b` `/`. The palette lists recent commands, newest at the bottom,
+grouped by day. Type to filter them, move to a command and press `enter` to
+paste it into the focused pane. By default, pasting does not run it;
+`shift+enter` pastes and runs it.
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+b` `/` | Open the history palette |
+| `up` / `down` | Select an older or newer command |
+| `ctrl+k` / `ctrl+j` | Select an older or newer command |
+| `pageup` / `pagedown` | Load a page of older or newer results |
+| `enter` or `ctrl+l` | Paste the command |
+| `shift+enter` | Paste the command and run it |
+| `alt+enter` | Go to the pane that ran the command |
+| `ctrl+o` | Show or hide the command's details |
+| `ctrl+c` or `cmd+c` | Copy the command to the clipboard |
+| `ctrl+d` or `cmd+backspace` | Delete the command from history |
+| `tab` | Change the scope |
+| `shift+tab` | Change the author filter |
+| `escape` or `ctrl+h` | Close the details, or close the palette |
+
+On macOS, `ctrl` in this table is the Control key. With text selected in the
+search field, `ctrl+c` and `cmd+c` copy that text instead. Deleting removes
+the entry from the database at once, without asking.
+
+The footer shows the keys for the selected command. You can also click the
+scope, author and **Failed** controls at the top, and the actions on a row.
+
+### Filters
+
+Two filters narrow the list, and both apply before your search text.
+
+`tab` cycles the scope through:
+
+- **global**: every recorded command.
+- **workspace**: commands run in the current workspace.
+- **cwd**: commands run in the focused pane's working directory.
+- **pane**: commands run in the focused pane.
+
+`shift+tab` cycles the author through your commands, agents' commands and
+both. The palette opens on global scope with your own commands only; set
+`client.history.show_agent_commands` to open it on both.
+
+Start the search with `!` to see only failed commands: `!make` lists failed
+commands that match `make`. The **Failed** control does the same.
+
+### Match modes
+
+`client.history.match` chooses how the search text matches.
+
+- `fuzzy` (the default) matches commands that contain your characters in
+  order, ignoring ASCII case, so `gco` finds `git checkout`. Results rank by
+  how early and how tightly the characters match, then by recency. Telar
+  scores the 10,000 most recent commands that pass the filters.
+- `fts` matches commands that contain your text as written, ignoring case,
+  newest first.
+
+The search text is at most 128 bytes.
+
+### Paste or run
+
+`client.history.enter` decides what `enter` does. With `"paste"`, the
+default, `enter` pastes and `shift+enter` pastes and runs. With `"run"`, the
+two swap. The footer labels follow the setting.
+
+The command is sent as a bracketed paste when the program in the pane has
+enabled bracketed paste.
+
+## Inspect a command
+
+`ctrl+o` opens the selected command's details: when and where it ran, its tab
+and pane, its duration, exit status, author and, for an agent's command, its
+provider. Below them is the command's captured output, when Telar recorded
+any. `pageup` and `pagedown` scroll it. `ctrl+o` or `escape` returns to the
+list.
+
+Output is captured only when `runtime.history.output` is `"bounded"`. Telar
+then keeps the last 64 KiB of each command's output.
+
+## What gets recorded
+
+Telar records a shell command when you press `enter` at a shell prompt in a
+pane: it reads the command line from the terminal and follows the command
+until it finishes. If your shell emits OSC 133 semantic prompt marks, Telar
+takes the exit status from them; otherwise the status is unknown. A command
+is kept up to 64 KiB.
+
+For each command, history keeps:
+
+- the command line,
+- the working directory, the workspace and the pane,
+- when it started and how long it ran,
+- its exit status, or whether it was interrupted or is still running,
+- whether you or an agent ran it, and the agent's provider,
+- its output, when capture is on.
+
+Agents' commands come from the agents' own hooks, so they need the agent's
+integration. See [Agents](/docs/agents).
+
+### What is never recorded
+
+Telar skips a command when:
+
+- it starts with a space (shell commands only),
+- it contains text that looks like a secret,
+- it contains one of your `runtime.history.command_filters` patterns,
+- its working directory contains one of your `runtime.history.cwd_filters`
+  patterns.
+
+The secret filter is on by default. It catches AWS access key ids, GitHub,
+npm, Stripe and Slack tokens, Slack webhook URLs, PEM blocks (`-----BEGIN`)
+and assignments to `password=`, `passwd=`, `token=`, `secret=` and
+`api_key=`. Set `runtime.history.secrets_filter = false` to turn it off.
+
+The filters apply to commands as Telar records them. `telar history import`
+adds a histfile's lines as they are.
+
+## The database
+
+History lives in a SQLite database owned by the runtime. By default it is
+`$XDG_DATA_HOME/telar/history.db`, or `~/.local/share/telar/history.db` when
+`XDG_DATA_HOME` is unset. `runtime.history.path` moves it; a relative path is
+resolved beside `config.lua`, and its parent directory must exist. Without
+that setting, the `TELAR_HISTORY` environment variable of the runtime also
+sets the path.
+
+## CLI
+
+`telar history` queries the runtime and starts one when none runs. Each
+subcommand takes the same filters: one scope among `--cwd`,
+`--workspace PATH` and `--pane ID`, plus `--failed`, `--author all|human|agent`
+and `--limit N` (default 20, up to 1000).
+
+```sh
+telar history list --limit 10
+telar history search "git" --cwd
+telar history list --failed --author agent
+```
+
+`list` and `search` print one line per command, newest first:
+`#ID  DATE TIMEZ  STATUS  DURATIONms  CWD  [provider] COMMAND`. STATUS is
+`RUN`, `INT`, the exit code or `?`. `search` finds commands that contain the
+text, up to 1024 bytes.
+
+| Command | What it does |
+| --- | --- |
+| `telar history list` | Show recent commands |
+| `telar history search QUERY` | Search commands by text |
+| `telar history show ID` | Print the output captured for one entry |
+| `telar history import [auto\|zsh\|bash\|fish]` | Import a shell histfile |
+| `telar history delete ID` | Remove one entry, without asking |
+| `telar history prune` | Remove every entry matching the filters, after a preview and a confirmation |
+| `telar history stats` | Count commands and show the most frequent ones |
+
+### Import a shell history
+
+Import your existing shell history once to search it alongside new commands.
+Running the import again adds only new lines.
+
+```sh
+telar history import zsh --file "$HOME/.zsh_history"
+```
+
+Without a kind or `--file`, Telar picks the format from the file name, or
+looks for `~/.zsh_history`, `~/.bash_history` and then fish's history. A file
+past 32 MiB keeps its newest lines, and a command past 63 KiB is skipped.
+Imported commands have no directory, exit status or output.
+
+### Prune
+
+`prune` previews how many entries match, asks you to type `yes`, then removes
+them. `--match TEXT` limits it to commands containing TEXT and `--before DATE`
+to entries before a `YYYY-MM-DD` date (UTC) or a Unix time. `--dry-run` only
+previews; `--yes` skips the confirmation. `--author` is not applied.
+
+```sh
+telar history prune --match "curl -u" --dry-run
+```
+
+### Stats
+
+```sh
+telar history stats --period week --cwd
+```
+
+`stats` prints the number of commands, the number of unique ones and the 10
+most frequent. `--period` takes `today`, `week`, `month`, `year` or `all`
+(the default).
+
+### Open the palette from the CLI
+
+`telar client open history` opens the history palette in an attached window:
+
+```sh
+telar client list
+telar client open history --client 1
+```
+
+## Configuration
+
+The window's settings live in `client.history`; what the runtime records
+lives in `runtime.history`.
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    history = {
+      enter = "paste",
+      match = "fuzzy",
+      show_agent_commands = false,
+    },
+  },
+  runtime = {
+    history = {
+      output = "bounded",
+      secrets_filter = true,
+      command_filters = { "vault login" },
+      cwd_filters = { "/secrets/" },
+    },
+  },
+})
+```
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `client.history.enter` | `"paste"` | `"paste"` or `"run"`: what `enter` does |
+| `client.history.match` | `"fuzzy"` | `"fuzzy"` or `"fts"`: how the search matches |
+| `client.history.show_agent_commands` | `false` | Open the palette with agents' commands included |
+| `runtime.history.output` | `"off"` | `"bounded"` captures the last 64 KiB of each command's output |
+| `runtime.history.secrets_filter` | `true` | Skip commands that look like they hold a secret |
+| `runtime.history.command_filters` | none | Skip commands containing any of these substrings |
+| `runtime.history.cwd_filters` | none | Skip commands whose directory contains any of these substrings |
+| `runtime.history.path` | see [The database](#the-database) | Where the database lives |
+
+Each filter list holds at most 64 patterns of up to 256 bytes. A list past
+that refuses the configuration rather than recording what a dropped pattern
+would hide. Runtime settings take effect when the runtime starts. See
+[Config](/docs/config#history).

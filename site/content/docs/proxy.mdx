@@ -1,0 +1,242 @@
+Telar's runtime can run a local HTTPS proxy for the processes in its panes.
+Every new pane gets `HTTPS_PROXY` pointing at it. For the hosts you list, the
+proxy terminates TLS with a local certificate authority, so it can read the
+HTTP requests and responses that pass through. Traffic to every other host
+goes through as an opaque tunnel.
+
+The proxy is off by default. It belongs to the runtime, not to a pane or a
+workspace: once it is on, every pane started afterwards uses it. Telar has no
+built-in traffic viewer. What the proxy reads goes to the capture pipeline,
+and from there to the tap plugins you install.
+
+## Enable the proxy
+
+Add a `runtime.proxy` table to your [config file](/docs/config) and name the
+hosts you want to inspect:
+
+```lua
+return {
+  api_version = 2,
+  runtime = {
+    proxy = {
+      enabled = true,
+      intercept_hosts = { "api.example.com" },
+    },
+  },
+}
+```
+
+The runtime reads `runtime.proxy` only when it starts, and a config reload in
+the window does not change it. To apply the change, finish the work in your
+panes, stop the runtime from a terminal outside Telar, then open Telar again:
+
+```sh
+telar server stop
+telar
+```
+
+Stopping the runtime ends the processes in its panes. If you open Telar with
+`--config` or `--profile`, pass the same options again. Then check that the
+proxy is running:
+
+```sh
+telar runtime status
+```
+
+The output includes a `Proxy:` line that says `active` with the port, the
+interception scope and whether system trust is installed, or `disabled`.
+
+While the proxy is active, a **TLS** chip appears at the right end of the
+status bar. Its color tells you how wide the interception is:
+
+| Color | Meaning |
+| --- | --- |
+| Peach | The proxy is active and every `intercept_hosts` entry is an exact host name. |
+| Red | The proxy is active and at least one entry is a wildcard (`*.example.com` or `*`). |
+| Yellow | The proxy is off, but its system-trust certificate is still installed. |
+
+## Choose hosts to intercept
+
+`intercept_hosts` is the only thing that decides what the proxy decrypts. It
+is empty by default, so an enabled proxy with no hosts intercepts nothing.
+
+- An exact name, such as `api.example.com`, matches that host only.
+- A leading wildcard, such as `*.example.com`, matches every subdomain of
+  `example.com` but not `example.com` itself.
+- `*` alone matches every host.
+- Partial labels such as `*example.com` and wildcards in the middle of a name
+  are rejected.
+
+The list holds at most 256 entries. Case does not matter, and duplicates are
+removed when the runtime starts.
+
+## How panes use the proxy
+
+When the proxy is active, the runtime adds these variables to the environment
+of each pane it starts:
+
+| Variable | Value |
+| --- | --- |
+| `HTTPS_PROXY`, `https_proxy` | The proxy URL, with a secret in its user info. |
+| `NODE_USE_ENV_PROXY` | `1`, so Node.js uses `HTTPS_PROXY`. |
+| `NODE_EXTRA_CA_CERTS` | Telar's active CA certificate. |
+| `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `AWS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE` | A bundle with the system's root certificates plus Telar's CA. |
+| `TELAR_PROXY_TLS` | `1`. |
+
+OpenSSL, curl, Python Requests, Node.js, the AWS CLI, Git and the Google Cloud
+CLI read these variables, so they trust Telar's CA without any change to the
+system. Telar does not set `HTTP_PROXY`, so plain HTTP traffic does not go
+through the proxy.
+
+Processes that were already running keep the environment they started with.
+Open a new pane, or restart the program, after you turn the proxy on or off.
+
+The proxy listens on the loopback interface, on a port between 45100 and 45227.
+Each runtime remembers its port and tries to take it again on the next start,
+so programs that inherited `HTTPS_PROXY` keep reaching it across restarts.
+
+## Trust the CA
+
+The environment variables above cover most command-line tools. A program that
+ignores them reports certificate errors for the intercepted hosts. For those
+programs, install Telar's CA into the system trust store:
+
+```sh
+telar proxy trust install
+```
+
+On macOS this adds the certificate to your login keychain with
+`security add-trusted-cert`. On Linux you must name the trust backend:
+
+```sh
+telar proxy trust install --linux update-ca-certificates
+telar proxy trust install --linux trust
+```
+
+Use `update-ca-certificates` on Debian-family systems and `trust` on systems
+with p11-kit. Both run through `sudo`. Telar prints each command before it
+runs it.
+
+The installed certificate belongs to a separate authority, valid for 30 days.
+When the runtime starts with less than a day left, it replaces the certificate
+and updates the trust store. The runtime chooses which authority signs
+intercepted connections when it starts, so restart it after you install or
+remove system trust.
+
+Check and remove the installation with:
+
+```sh
+telar proxy trust status
+telar proxy trust uninstall
+```
+
+`uninstall` removes only the certificate Telar recorded at install time.
+Firefox keeps its own certificate store, which these commands do not change.
+
+<Note>
+
+The CA lives in `$XDG_DATA_HOME/telar/proxy`, or `~/.local/share/telar/proxy`
+when that variable is unset. If you set
+[`runtime.proxy.ca_dir`](/docs/config#runtimeproxyca_dir), pass the same
+absolute path to every trust command with `--ca-dir PATH`.
+
+</Note>
+
+## Capture exchanges
+
+Interception alone relays the traffic without keeping it. To hand complete
+HTTP exchanges to plugins, turn on capture:
+
+```lua
+runtime = {
+  proxy = {
+    enabled = true,
+    intercept_hosts = { "api.example.com" },
+    capture = { enabled = true },
+  },
+},
+```
+
+Capture copies the request and response of each intercepted exchange, over
+HTTP/1.1 or HTTP/2, without changing the bytes the proxy forwards. Each head
+and body stops growing at `max_part_bytes` (16 MiB by default), each exchange
+at `max_exchange_bytes` (32 MiB) and all captures together at
+`max_total_bytes` (128 MiB). A capture that hits a limit is cut, and the
+traffic itself continues unchanged.
+
+Captured exchanges go only to tap plugins. Without one, the runtime counts
+them and drops them: nothing is written to disk.
+
+### Tap plugins
+
+A tap plugin is a plugin package that declares the `proxy.tap` capability and
+returns an `on_exchange` function. The runtime calls it with each completed
+exchange, and the function can return up to 16 notifications. To run one:
+
+1. Inspect and install the package, then grant it the capability:
+
+   ```sh
+   telar plugin inspect ./my-tap
+   telar plugin install ./my-tap
+   telar plugin trust ./my-tap --capability proxy.tap
+   ```
+
+2. Add the installed path to [`plugins`](/docs/config#plugins) in your config.
+3. Restart the runtime. Tap plugins load only when it starts.
+
+<Warning>
+
+`proxy.tap` gives the plugin full access to the intercepted traffic: headers
+and bodies arrive unredacted, including `authorization` headers, cookies and
+API keys. Grant it only to code you have read.
+
+</Warning>
+
+## Safety and limits
+
+- Hosts outside `intercept_hosts` are never decrypted or captured. The proxy
+  forwards their bytes as they are, and the program checks the origin's
+  certificate against its own trust store.
+- For an intercepted host, the proxy connects to the origin first and verifies
+  its certificate and host name against the system's roots before it answers
+  the program.
+- Every connection must present the proxy secret from `HTTPS_PROXY`. A missing
+  or wrong secret gets `407 Proxy Authentication Required`. The secret is
+  stored in `proxy-secret` in the CA directory; delete the file to rotate it on
+  the next runtime start. The secret proves that a process inherited Telar's
+  environment, not which pane it came from.
+- [`runtime.proxy.anonymous_tunnels`](/docs/config#runtimeproxyanonymous_tunnels)
+  admits connections that send no credential, for programs that drop it, but
+  only to hosts the proxy does not intercept. Any local account can then open
+  tunnels through the port, so turn it on only on machines where you trust
+  every user.
+- The CA directory and its key files are owner-only. Turning the proxy on never
+  changes the system trust store; only `telar proxy trust install` does.
+- The proxy accepts 256 connections at once across all panes.
+
+## Turn the proxy off
+
+Set `enabled = false` in `runtime.proxy`, or remove the table, and restart the
+runtime. If you installed system trust, remove it too:
+
+```sh
+telar proxy trust uninstall
+```
+
+## CLI
+
+| Command | What it does |
+| --- | --- |
+| `telar proxy trust install` | Create the 30-day system CA and add it to the system trust store. Linux needs `--linux update-ca-certificates` or `--linux trust`. |
+| `telar proxy trust uninstall` | Remove the certificate recorded at install time. |
+| `telar proxy trust status` | Print `absent`, `installed` or `stale` with the fingerprint and store. |
+| `telar proxy watch` | Stream the proxy's status events as JSON lines. `--count N` stops after N events. |
+| `telar runtime status` | Show whether the proxy is active, its port and its scope. |
+
+The trust commands take `--ca-dir PATH` and never contact the runtime.
+`telar proxy watch` reports status only, never captured traffic.
+
+## Related configuration
+
+Every proxy option is listed under [Proxy](/docs/config#proxy) in the config
+reference.

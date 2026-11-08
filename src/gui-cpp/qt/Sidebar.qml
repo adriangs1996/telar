@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Telar.Gui
 
 NativeRoundedRectangle {
@@ -24,8 +25,77 @@ NativeRoundedRectangle {
     replaceBackground: true
     clip: true
 
+    // The machines other than the active one; the top bar names the active one.
+    AbstractButton {
+        id: machinesHeader
+        objectName: "sidebarMachinesHeader"
+        readonly property bool collapsed: root.controller?.machineListCollapsed ?? false
+        readonly property bool attention: root.controller?.machineContext?.attention ?? false
+        x: root.regions.machinesHeader?.x ?? 0
+        y: root.regions.machinesHeader?.y ?? 0
+        width: root.regions.machinesHeader?.width ?? 0
+        height: root.regions.machinesHeader?.height ?? 0
+        visible: root.expanded && height > 0
+        hoverEnabled: true
+        focusPolicy: Qt.TabFocus
+        padding: 0
+        contentItem: null
+        background: null
+        Accessible.role: Accessible.Button
+        Accessible.name: "Machines, " + machineCount.text + (collapsed ? ", collapsed" : ", expanded") + (collapsed && attention ? ", one needs attention" : "")
+        onClicked: {
+            if (root.controller) root.controller.toggleMachineList();
+        }
+
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+
+        ChromeIcon {
+            id: chevron
+            x: root.headerInset
+            width: 10 * root.ratio
+            height: parent.height
+            glyph: machinesHeader.collapsed ? "\uf054" : "\uf078"
+            color: root.colors.subtext0
+            pixelSize: 9 * root.ratio
+        }
+
+        ChromeText {
+            id: machinesTitle
+            x: chevron.x + chevron.width + 6 * root.ratio
+            width: implicitWidth
+            height: parent.height
+            text: "Machines"
+            color: root.colors.chromeText
+            pixelSize: root.typography.body
+            emphasized: true
+            elide: Text.ElideNone
+        }
+
+        NativeRoundedRectangle {
+            objectName: "machinesAttention"
+            x: machinesTitle.x + machinesTitle.width + 6 * root.ratio
+            y: (parent.height - height) / 2
+            width: 6 * root.ratio
+            height: width
+            radius: width / 2
+            color: root.colors.yellow
+            visible: machinesHeader.collapsed && machinesHeader.attention
+        }
+
+        ChromeText {
+            id: machineCount
+            x: parent.width - width - root.headerInset
+            width: implicitWidth
+            height: parent.height
+            text: Math.max(0, (root.controller?.machineCount ?? 1) - 1)
+            color: root.colors.subtext0
+            pixelSize: root.typography.small
+            elide: Text.ElideNone
+        }
+    }
+
     MachineChrome {
-        objectName: "sidebarMachineSwitcher"
+        objectName: "sidebarMachineList"
         controller: root.controller
         segment: false
         x: root.regions.machines?.x ?? 0
@@ -33,7 +103,8 @@ NativeRoundedRectangle {
         width: root.regions.machines?.width ?? 0
         height: root.regions.machines?.height ?? 0
         colors: root.colors
-        visible: root.expanded && shown
+        typography: root.typography
+        visible: root.expanded && shown && height > 0
     }
 
     Item {
@@ -48,7 +119,7 @@ NativeRoundedRectangle {
             x: root.headerInset
             width: Math.max(0, parent.width - x - root.headerInset)
             height: parent.height
-            text: "Activity"
+            text: "Agents"
             color: root.colors.chromeText
             pixelSize: root.typography.body
             emphasized: true
@@ -59,7 +130,7 @@ NativeRoundedRectangle {
             x: parent.width - width - root.headerInset
             width: implicitWidth
             height: parent.height
-            text: activityList.count
+            text: root.controller?.activityAgentCount ?? activityList.count
             color: root.colors.subtext0
             pixelSize: root.typography.small
             elide: Text.ElideNone
@@ -81,6 +152,7 @@ NativeRoundedRectangle {
         colors: root.colors
         typography: root.typography
         geometry: root.regions.cards
+        headerHeight: root.regions.activityHeader.height
         ratio: root.ratio
         textScale: root.textScale
         visible: root.expanded
@@ -109,6 +181,9 @@ NativeRoundedRectangle {
             if (pressed) {
                 root.sidebarResized(startWidth + mapToGlobal(mouse.x, mouse.y).x - startX);
             }
+        }
+        onDoubleClicked: {
+            if (root.controller) root.controller.fitSidebar();
         }
     }
 }

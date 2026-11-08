@@ -465,6 +465,9 @@ struct Configuration {
   float padding_y = 0;
   float chrome_scale = 1;
   float sidebar_width = default_sidebar_width;
+  // `sidebar.width = "auto"`: the window fits the sidebar to its content when it opens, on a
+  // reload and on a double click of its edge.
+  bool sidebar_width_auto = true;
   std::uint16_t max_fps = 0;
   bool sidebar_visible = true;
   bool pane_gaps = true;

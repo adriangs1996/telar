@@ -49,7 +49,7 @@ struct ApplicationMark {
   std::string_view ink = "#5fb095";
 
   [[nodiscard]] inline bool followsTheme() const noexcept {
-    return provider == AgentProvider::codex || provider == AgentProvider::cursor || provider == AgentProvider::opencode;
+    return provider == AgentProvider::codex || provider == AgentProvider::pi || provider == AgentProvider::cursor || provider == AgentProvider::opencode;
   }
 
   [[nodiscard]] inline static ApplicationMark forApplication(std::string_view name) noexcept {

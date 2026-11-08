@@ -1,0 +1,180 @@
+The command palette is one searchable list with four modes. Navigate lists
+your workspaces, the tabs of the current workspace and the running agents.
+Actions lists Telar's commands with their shortcuts. Machines lists the
+machines the window can connect to. Suggest asks a configured engine for a
+shell command.
+
+## Open the palette
+
+Press `ctrl+b` `g`. The palette opens in Navigate mode with the search field
+focused.
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+b` `g` | Open the palette in Navigate mode |
+| `ctrl+b` `?` | Open the palette in Suggest mode |
+
+Clicking the workspace and machine name in the window's top bar opens the
+palette in Machines mode.
+
+## Modes
+
+The tabs under the search field switch modes: **Navigate**, **Actions** and
+**Machines**. The first character of the search text also selects a mode, so
+you can switch without leaving the keyboard:
+
+| Prefix | Mode |
+| --- | --- |
+| `@` | Navigate |
+| `>` | Actions |
+| `:` | Machines |
+| `?` | Suggest |
+
+Replace the field's contents with `>split` to search actions for "split".
+Clicking a mode tab swaps the prefix and keeps the rest of your text.
+
+### Navigate
+
+Navigate lists three groups. Workspaces appear under **Contexts**, with
+their Git branch beside the name. **Tabs** lists the tabs of the current
+workspace in their order, by label or by the program running in them.
+**Agents** lists each agent by its title, with its provider and workspace
+below.
+
+Choosing a workspace or a tab selects it. Choosing an agent focuses its pane.
+See [Workspaces](/docs/workspaces), [Tabs](/docs/tabs) and
+[Agents](/docs/agents).
+
+### Actions
+
+Actions lists Telar's built-in commands. The right column shows the shortcut
+each one has in your active keymap, so a changed prefix or a custom binding
+shows up here. Only bindings that use the prefix are shown; an action bound
+only to a global key, or not bound at all, has no shortcut label.
+
+| Action | Default keys |
+| --- | --- |
+| Split right | `ctrl+b` `%` |
+| Split down | `ctrl+b` `"` |
+| Focus pane left, right, up, down | `ctrl+b` and an arrow key |
+| Toggle pane fullscreen | `ctrl+b` `z` |
+| Close pane | `ctrl+b` `x` |
+| New tab | `ctrl+b` `c` |
+| Rename tab | `ctrl+b` `T` |
+| Close tab | `ctrl+b` `X` |
+| Next tab | `ctrl+b` `n` |
+| Previous tab | `ctrl+b` `p` |
+| Move tab left | `ctrl+b` `,` |
+| Move tab right | `ctrl+b` `.` |
+| New context | `ctrl+b` `N` |
+| Rename context | `ctrl+b` `W` |
+| Toggle sidebar | `ctrl+b` `s` |
+| Toggle context list | `ctrl+b` `w` |
+| Leave worktree for its project | `ctrl+b` `u` |
+| Forget gone worktrees | none |
+| Enter copy mode | `ctrl+b` `[` |
+| Search command history | `ctrl+b` `/` |
+| Suggest a command… | `ctrl+b` `?` |
+| Insert a path | `ctrl+b` `f` |
+| Switch machine | none |
+| Next machine | none |
+| Previous machine | none |
+| Add machine | none |
+
+The list is fixed. Configuration and plugins cannot add rows to it. A
+configured pick (`telar.pick`) opens its own filterable list instead; see
+[Config](/docs/config#bars-and-panels).
+
+### Machines
+
+Machines lists every configured machine with its destination and state, such
+as `connected`, `connecting` or `unreachable · enter retries`. The last row,
+**Add machine…**, opens the form for a new machine.
+
+| Keys | Action |
+| --- | --- |
+| `enter` | Show the machine, or retry or set it up when its state says so |
+| `shift+enter` | Enable or disable the machine |
+| `ctrl+r` | Rename the machine |
+| `ctrl+d` | Remove the machine |
+
+The local machine cannot be renamed or removed. See
+[Remote Machines](/docs/remote-machines).
+
+### Suggest
+
+Suggest turns a description into one shell command. It needs an engine,
+configured with `runtime.engine`; without one, the palette says so. Open it
+with `ctrl+b` `?`, or choose **Suggest a command…** in Actions.
+
+Describe the command and press `enter`. Telar sends the focused pane's
+working directory, the last 24 rows of its screen and your request to the
+engine. When the answer arrives, the palette shows it; press `enter` again to
+paste it into the focused pane. Telar never runs it: review the command, then
+press `enter` in the shell yourself.
+
+The request is at most 512 bytes. `escape` cancels. If you came from the
+Actions list, `escape` returns to it with your earlier search.
+
+<Warning>
+
+The engine receives what is on the pane's screen. Do not ask for a
+suggestion while the screen shows something you would not send to that
+engine.
+
+</Warning>
+
+## Search and select
+
+Typing filters the current mode. A row matches when the characters you type
+appear in its name in the same order, ignoring ASCII case: `nt` matches
+"New tab". Rows where the match starts earlier and has fewer gaps rank
+higher. The search text is at most 512 bytes.
+
+| Keys | Action |
+| --- | --- |
+| `up` / `down` | Move the selection |
+| `enter` | Open or run the selected row |
+| `escape` | Close the palette |
+
+Clicking a row also opens or runs it.
+
+## CLI
+
+`telar client open goto` opens the palette in an attached window. Get the
+window's id from `telar client list`:
+
+```sh
+telar client list
+telar client open goto --client 1
+```
+
+`telar command suggest` asks the same engine as Suggest mode and prints the
+answer without typing it anywhere:
+
+```sh
+telar command suggest --current "find files larger than 100 MB"
+```
+
+## Configuration
+
+The palette's actions are bindable. `"goto-picker"` opens Navigate mode,
+`telar.action.machine_picker()` opens Machines mode and
+`telar.action.suggest_command()` opens Suggest mode. This binds the palette
+to `cmd+p` without the prefix:
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    keybindings = {
+      telar.bind_global({ "cmd+p" }, "goto-picker"),
+    },
+  },
+})
+```
+
+See [Config](/docs/config#keybindings) for chords, the prefix and
+`runtime.engine`.

@@ -295,6 +295,47 @@ void sessionUsesTheInjectedClock() {
   require(session.agents().front().status_clock.interval().sampled_ns == FakeClock::current, "session disconnect must retire the previous clock source");
 }
 
+void paneListRevisions() {
+  SystemAllocator memory;
+  telar::gui::test::Transport transport;
+  Session<SystemAllocator, telar::gui::test::Transport, FakeClock> session{memory, transport};
+  const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+  const std::array<std::uint16_t, 2> ports{3000, 9229};
+  std::array entries{
+      PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .foreground_age_s = initial_age, .ports = ports},
+      PaneListEntry{.pane_id = 2, .pane_generation = 1, .location = location, .foreground = "zsh", .shell = true},
+  };
+  FakeClock::current = second;
+  telar::gui::test::deliver(session, PaneList{.revision = 2, .entries = entries});
+  const auto listed = session.paneList();
+  require(session.paneListRevision() == 2 && listed.size() == 2 && listed.front().foreground.view() == "node" && listed.back().shell, "the pane list must replace the replica");
+  require(listed.front().age.seconds(2 * second) == initial_age + 1, "a foreground age must advance from its arrival");
+  require(std::ranges::equal(listed.front().ports(), ports) && listed.back().ports().empty(), "listening ports must follow their pane");
+  const std::array<std::uint16_t, 2> unordered{9229, 3000};
+  bool unsorted = false;
+  try {
+    telar::gui::test::deliver(session, PaneList{.revision = 3, .entries = std::array{PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .ports = unordered}}});
+  } catch (const EncodingError &) {
+    unsorted = true;
+  }
+
+  require(unsorted && session.paneListRevision() == 2, "unordered ports must be rejected");
+  telar::gui::test::deliver(session, PaneList{.revision = 2, .entries = {}});
+  require(session.paneList().size() == 2, "a stale revision must not replace the pane list");
+  entries.back().pane_id = 1;
+  bool rejected = false;
+  try {
+    telar::gui::test::deliver(session, PaneList{.revision = 3, .entries = entries});
+  } catch (const std::invalid_argument &) {
+    rejected = true;
+  }
+
+  require(rejected && session.paneListRevision() == 2 && session.paneList().back().pane_id == 2, "a duplicate pane must preserve the previous list");
+  session.disconnected();
+  telar::gui::test::deliver(session, PaneList{.revision = 1, .entries = std::span{entries}.first(1)});
+  require(session.paneListRevision() == 1 && session.paneList().size() == 1, "a replacement runtime may restart its revision counter");
+}
+
 void animationBoundaries() {
   constexpr auto interval = AgentAnimation::pulse_interval_ns;
   require(AgentAnimation::deadline(AgentStatus::working, true, interval) == 2 * interval, "working animation must request the next global 120 ms boundary");
@@ -315,6 +356,7 @@ int main() try {
   allocationFailurePreservesTheReplica();
   warmedSnapshotsReuseStorage();
   sessionUsesTheInjectedClock();
+  paneListRevisions();
   animationBoundaries();
 
   return 0;

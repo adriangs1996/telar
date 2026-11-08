@@ -116,6 +116,67 @@ The runtime pane position remains immutable in `agents.Snapshot`. When the
 active client layout has a different local display order, the sidebar derives
 that pane index while rendering. No widget rewrites the runtime replica.
 
+## Machines
+
+The top bar names the active machine beside the telar mark, as `machine /
+workspace` on one line. Clicking the machine opens the machine picker and
+clicking the workspace opens the workspace picker; when the line is narrow the
+machine elides first.
+
+With more than one machine, the sidebar lists the others under `Machines`,
+above the agents. A row shows the machine's color disc, its label and, on the
+right, a stack of its agents that work or wait on the person, in attention
+order, at most three. The cards are the tab strip's: the same tiles, provider
+colors and resting poses. A row has no focused pane, so a waiting agent's card
+is tinted even when it is in front. Clicking a row switches to that machine.
+Rows that do not fit leave whole, so the agents keep at least two headers of
+room.
+
+The header collapses the list. A collapsed header shows a yellow dot when
+another machine needs attention. The collapse belongs to the window, not to
+any machine's runtime, since the list spans every connected machine.
+
+The agent list holds every agent and tracked command of the active machine,
+and only the agents that wait on the person (`blocked`, `failed`) from the
+others: their working agents are the row's stack, and a waiting agent keeps a
+card because the stack does not show what it asks and clicking the card goes
+straight to its pane. Cards from the active machine name only their workspace;
+a waiting agent from another machine prefixes it with `machine · `.
+
+## Processes
+
+The runtime publishes `PaneList`, every live pane with its id, generation,
+tab location, foreground name (at most 48 bytes, `shell` when unknown), the
+seconds since that process took the terminal, up to four TCP ports its
+process group listens on (the lowest, ascending), and `shell`, set while the
+pane's root process holds the terminal and still runs a shell (`bash`,
+`zsh`, `ksh`, `sh`, `dash` or `fish`). A command pane execs its program in
+place of the launching shell, so it is not a shell. The list holds at most
+256 entries, the runtime's pane capacity. Its revision is the pane revision,
+which advances when a pane joins or leaves the list or its foreground group,
+name, shell state or ports change, plus the workspace revision, so tab moves
+resend it.
+
+The observation worker reads the ports when the foreground changes and every
+2 seconds while a program holds the terminal; idle shells and agent panes
+are not read. On
+macOS it walks the group's socket descriptors through `libproc`. On Linux it
+matches the inodes of the user's listening sockets in `/proc/net/tcp` and
+`tcp6` against the group's `/proc/PID/fd` links. A program that detaches into
+another process group is not counted.
+
+Under `Processes`, the sidebar lists every pane of the active machine that no
+agent snapshot entry holds by `(pane_id, generation)`, so agents and processes
+together cover every pane of that machine; the other machines are their rows
+under `Machines`. Programs come before idle shells, and
+the newest foreground comes first inside each group. A card shows the
+program's mark (a terminal glyph when the program is unknown), its name,
+its workspace and the foreground age, which advances locally between
+revisions. A program that listens shows its lowest port in a green chip at
+the end of the title row (`:3000`, or `:3000 +2` with more). Idle shells dim
+their name. Clicking a card visits its pane the
+way an agent card does; a process card has no peek.
+
 ## Rendering boundary
 
 The window draws the sidebar in device pixels. The terminal client's cell

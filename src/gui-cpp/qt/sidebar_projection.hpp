@@ -65,8 +65,8 @@ inline QVariantMap agentCardGeometryRecord(const DisplayMetrics &display, float 
       {QStringLiteral("agentDetailY"), (geometry.px(AgentCardGeometry::vertical_padding) + geometry.title_row + geometry.px(AgentCardGeometry::title_gap)) / density},
       {QStringLiteral("agentDetailRow"), geometry.small_row / density},
       {QStringLiteral("padding"), geometry.px(AgentCardGeometry::horizontal_padding) / density},
-      {QStringLiteral("tileWidth"), chrome.px(18) / density},
-      {QStringLiteral("tileHeight"), chrome.px(14) / density},
+      {QStringLiteral("tileWidth"), chrome.px(AgentCardGeometry::tile_width) / density},
+      {QStringLiteral("tileHeight"), chrome.px(AgentCardGeometry::tile_height) / density},
       {QStringLiteral("compactPadding"), geometry.px(AgentCardGeometry::compact_vertical_padding) / density},
       {QStringLiteral("taskIndent"), geometry.px(AgentCardGeometry::task_indent) / density},
       {QStringLiteral("planCellWidth"), geometry.px(TaskCardLabels::plan_cell_width) / density},
@@ -90,12 +90,13 @@ inline QVariantMap agentCardGeometryRecord(const DisplayMetrics &display, float 
   };
 }
 
-inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display, std::size_t count, bool machines_shown = false) {
+inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display, std::size_t count, SidebarMachines machines = {}) {
   const auto &chrome = display.chrome;
   const auto density = display.density;
-  const auto geometry = SidebarGeometry::measure(area, chrome, count, machines_shown);
+  const auto geometry = SidebarGeometry::measure(area, chrome, count, machines);
 
   return {
+      {QStringLiteral("machinesHeader"), toQRectF(geometry.machines_header, density)},
       {QStringLiteral("machines"), toQRectF(geometry.machines, density)},
       {QStringLiteral("projectsHeader"), toQRectF(geometry.projects_header, density)},
       {QStringLiteral("projects"), toQRectF(geometry.projects, density)},

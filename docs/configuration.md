@@ -379,7 +379,7 @@ gui = {
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
   chrome = { scale = 1 },
-  sidebar = { width = 240 },
+  sidebar = { width = "auto" },
   max_fps = 60, -- omit to present at the display's refresh rate
 }
 ```
@@ -401,7 +401,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
-| `sidebar.width` | `240` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
+| `sidebar.width` | `"auto"` | `"auto"` fits the band to its content: the longest card and machine row, at most a third of the window and never below 220. It fits when the window first has its agents, on a reload and when the sidebar's edge is double-clicked, never while agents change, since every width change resizes each pane's terminal. A number is the width in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
@@ -1203,7 +1203,8 @@ default bindings are `prefix`, then `alt+left` or `alt+right`. Drag the sidebar'
 right edge to resize it. The native window preserves at least 20 terminal
 columns beside the sidebar; when there is not enough room for the full sidebar,
 it shows a narrow workspace rail if space permits. `gui.sidebar.width` sets
-the preferred width in logical pixels.
+the preferred width in logical pixels, or `"auto"` to fit the content.
+Double-click the sidebar's right edge to fit it to its content again.
 
 `telar.action.leave_worktree()` returns from a worktree's tab to the project
 workspace the worktree hangs from; outside a worktree it does nothing. The

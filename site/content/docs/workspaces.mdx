@@ -1,0 +1,185 @@
+A workspace is a directory and the ordered tabs the runtime keeps for it.
+Use one workspace per project: its tabs, its panes and the agents running in
+them stay together, and switching workspaces swaps the whole set. A workspace
+does not need Git. The runtime holds at most 64 workspaces.
+
+The top bar shows the current workspace's name, with the machine it runs on
+below it. At the right of the top bar, the workspace switcher shows one
+lettered mark per workspace.
+
+## Create a workspace
+
+Press `ctrl+b` `N` (`shift+n` after the prefix) to open the **New workspace**
+form, which creates the workspace and selects it.
+
+- **Name** is optional. It defaults to the folder's name.
+- **Working directory** is where the workspace's first pane starts. A
+  relative path is resolved against the focused pane's directory. On your
+  own machine, the form suggests folders as you type: `up` and `down` choose a
+  suggestion and `tab` accepts it.
+
+When you leave the directory empty, the workspace starts in the focused
+pane's directory, and you must give it a name. When the folder does not exist,
+the form asks once; submit again to create the folder along with the
+workspace.
+
+## Switch workspaces
+
+Click a mark in the workspace switcher to show that workspace. Hover a mark to
+see the workspace's name and directory. A dot on a mark means an agent there
+wants your attention. When the marks do not fit, an overflow button opens the
+goto picker.
+
+`ctrl+b` `g` opens the goto picker, which finds workspaces, tabs and agents
+by name. See [Command Palette](/docs/command-palette).
+
+When you return to a workspace, the window focuses the pane you used last
+there.
+
+## Rename a workspace
+
+Press `ctrl+b` `W` (`shift+w` after the prefix) and type the new name. Every
+attached window shows the new name.
+
+## The sidebar
+
+The sidebar on the left lists the activity of the agents running in your
+panes. Click an agent to jump to its pane. See [Agents](/docs/agents).
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+b` `s` | Show or hide the sidebar |
+| `ctrl+b` `alt+left` | Make the sidebar narrower |
+| `ctrl+b` `alt+right` | Make the sidebar wider |
+
+Each resize press changes the width by two terminal columns. You can also
+drag the sidebar's right edge, or toggle it with the button at the left of the
+top bar. The sidebar is between 220 and 800 logical pixels wide. The window
+always keeps at least 20 terminal columns for the panes: when the window is
+too narrow for that, the sidebar is hidden.
+
+<Note>
+
+`ctrl+b` `w` toggles a workspace-list preference that the native window does
+not use. Pressing it has no visible effect.
+
+</Note>
+
+## Worktrees
+
+A worktree gives a task its own Git checkout on its own branch, usually for
+an agent. Telar tracks each worktree with a workspace of its own that hangs
+from the repository's workspace.
+
+```sh
+telar worktree create fix-tests --title "Fix failing tests" -- claude
+telar worktree open fix-tests
+```
+
+`telar worktree create` adds the checkout, by default under
+`<repo>-worktrees/<branch>` next to the repository, and runs the command in a
+pane of the worktree's workspace. `telar worktree open` shows that workspace
+in the window you typed in last.
+
+Inside a worktree's workspace, press `ctrl+b` `u` to go back to the
+repository's workspace. Outside a worktree, it does nothing.
+
+`telar worktree remove BRANCH` closes the worktree's tabs and removes its
+checkout. It refuses when the checkout has uncommitted changes, unless you
+pass `--force` and confirm. [Agents](/docs/agents) covers running agents in
+worktrees.
+
+## Detach and reconnect
+
+Press `ctrl+b` `d` to detach: the window closes and disconnects from the
+runtime. Closing the window any other way does the same. Every pane, agent and
+command keeps running.
+
+To reconnect, run `telar` again or open the application. The window connects
+to the runtime that is already running and restores the layout the runtime
+kept for it: the split tree, the focused pane, the fullscreen state and the
+sidebar.
+
+To detach a window from another terminal:
+
+```sh
+telar client list
+telar client detach 3
+```
+
+## Restarts
+
+The runtime saves your workspaces to a session checkpoint: each workspace's
+directory and name, its tabs and their names, each pane's command and
+directory, the window layouts and the worktrees. It writes the checkpoint
+shortly after each change and when it stops. The checkpoint lives next to the
+history database, by default in `~/.local/share/telar/session.ckpt`, or under
+`$XDG_DATA_HOME/telar/` when that variable is set.
+
+When the runtime starts again, it restores that session. Each pane runs its
+command again in its directory. A resumable agent resumes its session; other
+programs start from the beginning, not where they left off.
+
+`telar server stop` writes the checkpoint, ends the processes in every pane
+and stops the runtime. To start without the saved session, run `telar --fresh`
+while no runtime is running. It keeps the previous checkpoint as
+`session.ckpt.previous`.
+
+## Control workspaces from the CLI
+
+`telar workspace` works on the runtime's workspaces. `--current` names the
+workspace of the pane you run it in. `select` acts through a window, named
+with `--client ID` from `telar client list`.
+
+| Command | What it does |
+| --- | --- |
+| `telar workspace create --directory DIR` | Open a workspace on an existing directory, with a shell in its first pane |
+| `telar workspace create --worktree BRANCH` | Open a workspace on a new worktree |
+| `telar workspace list` | List workspaces with id, name, directory, tab count, branch and Git state |
+| `telar workspace get ID` | Show one workspace |
+| `telar workspace rename ID NAME` | Rename a workspace |
+| `telar workspace select ID --client ID` | Show a workspace in a window |
+
+```sh
+telar workspace create --directory ~/src/api --name api
+telar workspace list
+telar workspace select 4 --client 3
+```
+
+`telar workspace create` attaches no window and changes no focus. Pass a
+command after `--` to run it in the first pane instead of your shell.
+
+`telar sidebar show`, `hide` and `get` control a window's sidebar, also with
+`--client ID`.
+
+## Configuration
+
+The workspace and sidebar bindings can be changed. See
+[Config](/docs/config#keybindings). The actions are `new_workspace`,
+`rename_workspace`, `toggle_sidebar`, `leave_worktree`,
+`telar.action.resize_sidebar({ direction = "left" })` or `"right"`, and
+`telar.action.select_workspace({ index = N })`, which shows the workspace at
+that position (from 1) and has no default binding.
+
+`client.sidebar.visible` (default `true`) chooses whether the sidebar starts
+visible, and `gui.sidebar.width` (default 240, from 220 to 800) sets its
+preferred width in logical pixels.
+
+`runtime.session` controls the checkpoint: `persist = false` turns it off,
+`path` moves it, and `resume_agents = false` restarts agents without resuming
+their sessions. The runtime reads these settings when it starts.
+
+```lua
+return {
+  api_version = 2,
+  client = {
+    sidebar = { visible = false },
+  },
+  gui = {
+    sidebar = { width = 320 },
+  },
+  runtime = {
+    session = { resume_agents = false },
+  },
+}
+```

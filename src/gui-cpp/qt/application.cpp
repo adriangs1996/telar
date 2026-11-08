@@ -227,6 +227,9 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
     configureClients();
     synchronizeFontMetrics();
+    // A reload sets the sidebar back to its configured width, so an automatic one fits again.
+    sidebar_fit_pending_ = true;
+    fitSidebarWhenReady();
 
     emit configurationChanged();
     emit historyChanged();
@@ -251,9 +254,9 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
 
   connect(&refresh_timer_, &QTimer::timeout, this, &Application::refresh);
   connect(this, &Application::machinesChanged, this, [this] {
-    const bool shown = machines_.count() > 1;
-    if (shown != sidebar_machine_row_shown_) {
-      sidebar_machine_row_shown_ = shown;
+    const auto machines = sidebarMachines();
+    if (machines != sidebar_machines_) {
+      sidebar_machines_ = machines;
       emit sidebarGeometryChanged();
     }
 

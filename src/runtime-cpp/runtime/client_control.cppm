@@ -55,6 +55,7 @@ import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
+import telar.runtime.platform.launch_program;
 import telar.runtime.terminal.control;
 
 // Interface: runtime/agent_file_service.cppm
@@ -768,6 +769,7 @@ public:
     enqueueRetired(model, request);
     const auto panes = model.panes.items();
     const bool sole = model.panes.size() == 1;
+    const auto now = std::chrono::steady_clock::now();
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
       const auto slot = next_slot_++ % panes.size();
       auto *pane = panes[slot];
@@ -775,7 +777,7 @@ public:
         continue;
       }
 
-      enqueue(request, agents, *pane, sole);
+      enqueue(request, agents, *pane, sole, now);
       if (request.count == request.entries.size()) {
         break;
       }
@@ -794,7 +796,7 @@ public:
     }
 
     typename Processor::Request request;
-    enqueue(request, agents, *pane, model.panes.size() == 1);
+    enqueue(request, agents, *pane, model.panes.size() == 1, std::chrono::steady_clock::now());
     if (request.count != 0) {
       pending_ = worker_.submit(request);
     }
@@ -876,7 +878,11 @@ private:
       if (entry.process_result && entry.process_result->inspected) {
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
-        applyProcess(agents, *pane, *entry.process_result);
+        model.pane_revision += applyProcess(agents, *pane, *entry.process_result);
+      }
+
+      if (entry.process_result && entry.process_result->ports_inspected) {
+        model.pane_revision += applyPorts(*pane, *entry.process_result);
       }
 
       if (entry.screen.signal) {
@@ -905,14 +911,18 @@ private:
     }
   }
 
-  // A sole pane discovers its foreground group on the worker; others read it here.
-  inline void enqueue(tbc::view<typename Processor::Request &, tbc::lt::a> request, const Agents &agents, tbc::view<Pane<Memory> &, tbc::lt::a> pane, bool sole) {
+  // A sole pane discovers its foreground group on the worker; others read it here. A program's
+  // listening ports are read again every `ports_interval`, output or not.
+  inline void enqueue(tbc::view<typename Processor::Request &, tbc::lt::a> request, const Agents &agents, tbc::view<Pane<Memory> &, tbc::lt::a> pane, bool sole, std::chrono::steady_clock::time_point now) {
     if (auto drop = pane.observer->takeDrop()) {
       limits_.report(*drop);
     }
 
     const bool probe_process = !pane.exit_status;
-    if (!pane.observer->seal(!pane.exit_status && pane.process_recheck_requested)) {
+    // An agent's card shows no ports, so its pane is not read for them.
+    const auto *agent = agents.find(pane.id, pane.generation);
+    const bool ports_due = probe_process && agent == nullptr && !pane.foreground_shell && now - pane.ports_checked >= ports_interval;
+    if (!pane.observer->seal(probe_process && (pane.process_recheck_requested || ports_due))) {
       return;
     }
 
@@ -921,7 +931,7 @@ private:
     entry.input_revision = pane.input_revision;
     entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process->processId(), 0};
     entry.process_request.cache = pane.process_cache;
-    if (const auto *agent = agents.find(pane.id, pane.generation)) {
+    if (agent != nullptr) {
       entry.provider = agent->provider;
       entry.tracked_agent = true;
     }
@@ -933,24 +943,63 @@ private:
       }
 
       entry.process_request.recheck = pane.process_recheck_requested;
+      entry.process_request.ports = ports_due;
       pane.process_recheck_running = pane.process_recheck_requested;
       pane.process_recheck_requested = false;
+      if (ports_due) {
+        pane.ports_checked = now;
+      }
     }
   }
 
-  inline static void applyProcess(Agents &agents, Pane<Memory> &pane, const ProcessProbeResult &observation) {
-    if (pane.generation != observation.request.generation || pane.exit_status || pane.process->processId() != observation.request.root || pane.process->foregroundProcessGroup().value_or(0) != observation.request.foreground) {
-      return;
+  inline static bool observes(const Pane<Memory> &pane, const ProcessProbeResult &observation) {
+    return pane.generation == observation.request.generation && !pane.exit_status && pane.process->processId() == observation.request.root && pane.process->foregroundProcessGroup().value_or(0) == observation.request.foreground;
+  }
+
+  // Whether the pane list changed.
+  inline static bool applyPorts(Pane<Memory> &pane, const ProcessProbeResult &observation) {
+    if (!observes(pane, observation) || pane.listening_ports == observation.ports) {
+      return false;
+    }
+
+    pane.listening_ports = observation.ports;
+
+    return true;
+  }
+
+  // Whether the pane list changed.
+  inline static bool applyProcess(Agents &agents, Pane<Memory> &pane, const ProcessProbeResult &observation) {
+    if (!observes(pane, observation)) {
+      return false;
     }
 
     pane.process_cache = observation.cache;
+    bool listed = false;
     if (!observation.name.view().empty() && pane.foreground.view() != observation.name.view()) {
       pane.foreground = observation.name;
       ++pane.foreground_revision;
+      listed = true;
+    }
+
+    // A command pane execs its program in place of the launching shell, so the root holding the
+    // terminal is an idle shell only while it still runs one.
+    const auto shell = observation.request.foreground == observation.request.root && !loginShellScript(pane.foreground.view()).empty();
+    if (listed || pane.foreground_group != observation.request.foreground || pane.foreground_shell != shell) {
+      // The ports belonged to the previous program; the next observation reads the new one's.
+      pane.foreground_since = std::chrono::steady_clock::now();
+      pane.foreground_group = observation.request.foreground;
+      pane.foreground_shell = shell;
+      pane.listening_ports = {};
+      pane.ports_checked = {};
+      listed = true;
     }
 
     agents.observeProcess(pane, observation);
+
+    return listed;
   }
+
+  static constexpr std::chrono::seconds ports_interval{2};
 
   Limits &limits_;
   ObservationWorker<Processor> worker_;

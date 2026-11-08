@@ -109,32 +109,33 @@ Official sources and usage terms:
 Telar's own brand is a weaver: a spider whose body is a terminal with a
 `>_` face and whose feet end in cursors, hanging from the thread it spins.
 Telar pulls the threads of many sessions, panes and machines, as the spider
-does with its web. The colors are Pierre Dark's: the `#0a0a0a`..`#1d1d1d`
-neutrals, `#bdbdbd`..`#e5e5e5` for the spider and `#009fff` for what is
-live. The three sources are drawn for different sizes:
+does with its web. The colors are Cybervenom's, Telar's default theme: the
+`#1a1627`..`#312b3e` surfaces, `#aba8b6`..`#e5e3ee` for the spider and the
+`#aa87f5` accent for what is live. The three sources are drawn for different
+sizes:
 
 - `telar-icon.svg` (SHA-256
-  `4299a72132ff33504735c3d94d4b41f534bb8f793b192bec1da23f4b487f960d`), the
-  weaver in her web with three caught terminals, the live one in blue, for
+  `07940315b2ffc3672ba2745ff2d93fd6234c7edbdbb3559eaf0f809a797126b5`), the
+  weaver in her web with three caught terminals, the live one in violet, for
   128 px and up.
 - `telar-mark.svg` (SHA-256
-  `b58f8b63681a9cd3832db7340f511495c8aa531e5bce5848438ae2902d243dc8`), the
+  `0d7c5158152fd5242707a7a6d963ba0b77a9da8afe8eea796277a67cd838bcf2`), the
   weaver alone with heavier legs and outline, for 64 px and down.
 - `telar-mark-mono.svg` (SHA-256
-  `3037f817667d85158f3bae784ccfde081a9c0256bfe1a7149f9afc6103edbc73`), the
+  `e7c26f2fe3836ac663dd4e74a6eebe5c231545a34c2f9f43fe6b1b4fb8a19ab3`), the
   weaver in one color without a container.
 
 `telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
-`355173b38b9f442bb593b0ebf41ba201d5220bf497ddcd4032cb28f112d84209`, and
+`b962458d3f1e80a99a42b81548267d4d79590d2b79a9bda2e69db0878cca7514`, and
 `telar-mark-64.rgba` its raw straight-alpha RGBA, SHA-256
-`82605b49a3d7c37188a923e2e3daa79483f085b912ba73e3b903c08fe19e8c52`. The top
+`be1a5a76d396faec7de27dbb6a4e2f12808f84f8d5abdd16ba91b6126c780e90`. The top
 bar box-filters it into the icon atlas at cell size, sixteen
 premultiplied-alpha bilinear taps per pixel, and keeps its alpha so the host
 composes it over whatever it paints behind the bar.
 
 `tools/build_brand_icons.py` renders both, the macOS `.icns` (16 to 64 px
 from the mark, 128 to 1024 px from the icon), the Linux PNG and the site's
-brand files from these sources. The hashes above come from librsvg 2.63.0
+brand files from these sources. The hashes above come from librsvg 2.63.2
 and Pillow 12.2.0:
 
 ```sh
@@ -145,12 +146,11 @@ uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
 
 `provider-symbols-320x64.rgba` contains five 64 × 64 RGBA symbols in
 Claude, OpenAI, Pi, Cursor, OpenCode order. Its SHA-256 is
-`4be9ed259a5eff22249ade14ea174b4ccc503bf05c8dc857863206185dab4b05`.
-The window embeds this 81,920-byte atlas. Its first four slots are byte for
-byte those of the previous four-symbol atlas. The GUI box-filters the symbols
+`1bb36717ae9900fb25e81487f93de8993af5fbeefd2ae99a7a3884e842861dc0`.
+The window embeds this 81,920-byte atlas. The GUI box-filters the symbols
 into its existing sprite page, premultiplies them, and draws them at 60%
-opacity. OpenAI, Cursor and OpenCode follow the theme's `text` color; Claude
-and Pi retain their source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
+opacity. OpenAI, Pi, Cursor and OpenCode follow the theme's `text` color;
+Claude retains its source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
 or upload the symbols. Workspace favicons retain their own colors.
 
 `Claude-symbol.svg` and `OpenAI-symbol.svg` preserve the path and viewBox of
@@ -159,8 +159,11 @@ or upload the symbols. Workspace favicons retain their own colors.
 retrieved on 2026-09-14. The retrieved file SHA-256 is
 `d5e70eeecb8d930c4976f1d302b401c90ac0d78cc2becb4d23e522a7ed8b2354`.
 OpenAI uses white for tinting and Claude retains its orange fill. The complete
-upstream MIT notice is in `T3-Icons-LICENSE.txt`. `Pi-symbol.svg` matches `PiAgentIcon` in the same
-revision, including its black background and 160-unit corner radius.
+upstream MIT notice is in `T3-Icons-LICENSE.txt`. `Pi-symbol.svg` preserves the mark paths of `PiAgentIcon` in the same
+revision. Telar drops the black rounded background, which made the tinted mark
+a solid square, paints the mark white for tinting and crops the viewBox to the
+mark so it fills the cell like the other symbols; the file's SHA-256 is
+`53a65a8947d702bd8dac5b5f78920bf017044e984f272feb9519ad51b81601f5`.
 
 `Cursor-symbol.svg` preserves the path and viewBox of the 2D cube from
 Cursor's official brand kit, `General Logos/Cube/SVG/CUBE_2D_DARK.svg` in

@@ -27,11 +27,11 @@ const serif = Instrument_Serif({
 export const metadata: Metadata = {
   title: "telar",
   description:
-    "A terminal runtime for coding agents. It owns the pty, the TLS path and the history of every agent you start. Close the lid, kill the client, come back: the runtime kept the work.",
+    "A terminal emulator and multiplexer for coding agents. A runtime keeps your shells, editors and agents running in workspaces, tabs and panes, and the sidebar tells you which agent needs you.",
   metadataBase: new URL("https://telar.dev"),
   openGraph: {
     title: "telar",
-    description: "A terminal runtime for coding agents. Your agents run inside it, not beside it.",
+    description: "One place to rule them all, and in the web bind them.",
     type: "website",
   },
 };
@@ -39,14 +39,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${martian.variable} ${instrument.variable} ${serif.variable}`}>
-      <body className="desk">
-        {/* Apply the stored theme before the first paint so a returning visitor never sees Vesper flash. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              'try{var t=localStorage.getItem("telar.theme");if(t&&/^(vesper|catppuccin|tokyo-night|terminal)$/.test(t))document.documentElement.dataset.theme=t}catch(e){}',
-          }}
-        />
+      <body>
         {children}
       </body>
     </html>

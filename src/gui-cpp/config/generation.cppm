@@ -618,7 +618,17 @@ private:
 
     const auto sidebar = gui.field("sidebar");
     if (sidebar.present()) {
-      configuration.sidebar_width = static_cast<float>(sidebar.field("width").boundedNumber(configuration.sidebar_width, Configuration::minimum_sidebar_width, Configuration::maximum_sidebar_width));
+      const auto width = sidebar.field("width");
+      if (width.is(LUA_TSTRING)) {
+        if (width.string() != "auto") {
+          width.fail("must be a number or \"auto\"");
+        }
+
+        configuration.sidebar_width_auto = true;
+      } else if (width.present()) {
+        configuration.sidebar_width = static_cast<float>(width.boundedNumber(configuration.sidebar_width, Configuration::minimum_sidebar_width, Configuration::maximum_sidebar_width));
+        configuration.sidebar_width_auto = false;
+      }
     }
 
     const auto fps = gui.field("max_fps");

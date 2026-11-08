@@ -1,0 +1,392 @@
+/* The landing page. Colors are the Cybervenom tokens from globals.css. */
+
+main a:not(.button):not(.topic) {
+  color: var(--accent-soft);
+}
+
+main a:not(.button):not(.topic):hover {
+  color: var(--bright);
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-soft);
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: center;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 88px 32px 80px;
+  background-image: radial-gradient(circle at 76% 48%, var(--glow), transparent 40%);
+}
+
+.hero-title {
+  margin: 18px 0 20px;
+  font-size: clamp(36px, 4.6vw, 60px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: var(--bright);
+}
+
+.hero-title em {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  color: var(--accent-soft);
+}
+
+.hero-lead {
+  max-width: 36rem;
+  margin: 0 0 28px;
+  font-size: 18.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.hero-meta {
+  margin-top: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--subtext);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 56px 16px 48px;
+  }
+}
+
+/* The weaver scene (components/landing/Weaver.tsx). */
+
+.weaver {
+  position: relative;
+  height: 430px;
+}
+
+.weaver-web {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.weaver-web polygon,
+.weaver-web path {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.weaver-web .weaver-thread {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-dasharray: 6 8;
+  animation: weaver-flow 1.6s linear infinite;
+}
+
+.weaver-mascot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 168px;
+  height: 168px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 40px var(--glow));
+  animation: weaver-hang 5s ease-in-out infinite;
+}
+
+.weaver-term {
+  width: 184px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.weaver-term b {
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--bright);
+}
+
+.weaver-term span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.weaver-term i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--overlay-1);
+}
+
+.weaver-term[data-tone="working"] i {
+  background: var(--green);
+}
+
+.weaver-term[data-tone="done"] i {
+  background: var(--teal);
+}
+
+.weaver-term[data-tone="lit"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 34px var(--glow);
+}
+
+.weaver-term[data-tone="lit"] i {
+  background: var(--accent);
+  animation: weaver-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes weaver-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes weaver-hang {
+  50% {
+    transform: translate(-50%, calc(-50% + 6px));
+  }
+}
+
+@keyframes weaver-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 900px) {
+  .weaver {
+    height: 380px;
+  }
+  .weaver-term {
+    width: 150px;
+    font-size: 10px;
+  }
+}
+
+/* ---------- bands ---------- */
+
+.band {
+  max-width: 1240px;
+  margin: 0 auto;
+  border-top: 1px solid var(--line);
+  padding: 80px 32px;
+}
+
+.band.split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 48px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .band {
+    padding: 56px 16px;
+  }
+  .band.split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+.band-title {
+  margin: 12px 0 14px;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--bright);
+}
+
+.band-lead {
+  max-width: 40rem;
+  margin: 0;
+  color: var(--text);
+}
+
+/* The runtime diagram (components/landing/RuntimeDiagram.tsx). */
+
+.runtime-diagram {
+  width: 100%;
+  height: auto;
+}
+
+.runtime-diagram .box {
+  fill: var(--panel);
+  stroke: var(--line);
+}
+
+.runtime-diagram .box.live {
+  stroke: var(--accent);
+}
+
+.runtime-diagram text {
+  fill: var(--subtext);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.runtime-diagram text.name {
+  fill: var(--bright);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.runtime-diagram .wire {
+  fill: none;
+  stroke: var(--overlay-0);
+  stroke-width: 1.2;
+}
+
+.runtime-diagram .wire.cut {
+  stroke-dasharray: 4 5;
+}
+
+.runtime-diagram .wire.ssh {
+  stroke: var(--accent);
+  stroke-dasharray: 5 6;
+  animation: weaver-flow 1.6s linear infinite;
+}
+
+/* The app screenshot. */
+
+.screen {
+  margin: 32px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.4);
+}
+
+.screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The docs topics. */
+
+.topics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.topic {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 16px 18px;
+  transition: border-color 160ms ease;
+}
+
+.topic:hover {
+  border-color: var(--accent);
+}
+
+.topic-group {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-soft);
+}
+
+.topic b {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--bright);
+}
+
+.topic-lead {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--subtext);
+}
+
+/* Agents and code. */
+
+.agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.agents span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 9px 14px;
+  font-size: 14.5px;
+  color: var(--bright);
+}
+
+.agents img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.code {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 20px 22px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--bright);
+}
+
+.code .comment {
+  color: var(--subtext);
+}
+
+/* Grid children may shrink below their content; long code lines scroll inside
+   their block instead of widening the page. */
+.hero > *,
+.band > *,
+.band.split > * {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .code {
+    font-size: 11.5px;
+    padding: 16px;
+  }
+}

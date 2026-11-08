@@ -5,7 +5,9 @@ static_assert(true);
 
 
 #include "machine_chrome_layout.hpp"
+#include "agent_projection.hpp"
 #include "application.hpp"
+#include "machine_client.hpp"
 #include <string_view>
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
@@ -60,12 +62,16 @@ static_assert(true);
 #include "core/memory.hpp"
 
 
+import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;
 import telar.gui.fonts.row_text_layout;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
+import telar.gui.presentation.activity_order;
+import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
+import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.history_filter_geometry;
@@ -136,7 +142,7 @@ void MachineChromeLayout::setController(Application *controller) {
 }
 
 void MachineChromeLayout::setSegment(bool segment) {
-  setMode(segment ? Mode::segment : Mode::switcher);
+  setMode(segment ? Mode::segment : Mode::list);
 }
 
 bool MachineChromeLayout::inlineFacts() const noexcept {
@@ -144,7 +150,7 @@ bool MachineChromeLayout::inlineFacts() const noexcept {
 }
 
 void MachineChromeLayout::setInlineFacts(bool enabled) {
-  setMode(enabled ? Mode::facts : Mode::switcher);
+  setMode(enabled ? Mode::facts : Mode::list);
 }
 
 void MachineChromeLayout::setMode(Mode mode) {
@@ -176,6 +182,9 @@ void MachineChromeLayout::observeSources() {
       if (controller_->machines_.shown(slot)) {
         const auto &row = controller_->machines_.row(slot);
         incoming[index] = Source{.token = controller_->machines_.token(slot), .label = row.label, .color = row.color, .active = slot == controller_->machines_.active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
+        if (mode_ == Mode::list && !incoming[index]->active) {
+          collectCards(slot, *incoming[index]);
+        }
       }
     }
   }
@@ -213,7 +222,7 @@ float MachineChromeLayout::measure(std::string_view text, bool emphasized) const
   const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
   // The window owns its catalog; this layout only observes it.
   tbc::raw(catalog_.data())->request(text, role);
-  const auto size = mode_ == Mode::segment ? chrome_.body : chrome_.small;
+  const auto size = mode_ == Mode::facts ? chrome_.small : chrome_.body;
 
   return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts_, text, {.pixel_height = size, .preferred = role}));
 }
@@ -260,22 +269,6 @@ QVariantMap MachineChromeLayout::controlRecord(const Source &source, Rect bounds
   return record;
 }
 
-QVariantMap MachineChromeLayout::foldRecord(Rect bounds, std::size_t count) {
-  const auto text = QStringLiteral("+") + QString::number(count);
-  const auto utf8 = text.toUtf8();
-  const auto advance = measure({utf8.constData(), static_cast<std::size_t>(utf8.size())}, false);
-  auto record = geometryRecord(MachineChromeGeometry::control(bounds, chrome_, MachineChromeGeometry::Kind::fold, advance, false));
-  record.insert(QStringLiteral("key"), QStringLiteral("machine:picker"));
-  record.insert(QStringLiteral("text"), text);
-  record.insert(QStringLiteral("accessible"), QStringLiteral("Switch machine"));
-  record.insert(QStringLiteral("active"), false);
-  record.insert(QStringLiteral("bold"), false);
-  record.insert(QStringLiteral("ink"), QColor{Qt::transparent});
-  record.insert(QStringLiteral("enabled"), true);
-
-  return record;
-}
-
 void MachineChromeLayout::rebuild() {
   if (controller_ == nullptr || window() == nullptr || !shown_ || height() <= 0) {
     items_.reconcile({});
@@ -304,7 +297,11 @@ void MachineChromeLayout::rebuild() {
       {QStringLiteral("hoverBackground"), hover_background},
       {QStringLiteral("activeText"), toQColor(theme.chromeColor(PaletteRole::text))},
       {QStringLiteral("attention"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
-      {QStringLiteral("pixelSize"), (mode_ == Mode::segment ? chrome_.body : chrome_.small) / density_},
+      {QStringLiteral("pixelSize"), (mode_ == Mode::facts ? chrome_.small : chrome_.body) / density_},
+      {QStringLiteral("rowRadius"), chrome_.px(gui::ChromeStyle::control_radius) / density_},
+      {QStringLiteral("tileWidth"), chrome_.px(TabStripGeometry::tile_width) / density_},
+      {QStringLiteral("tileHeight"), chrome_.px(TabStripGeometry::tile_height) / density_},
+      {QStringLiteral("tileRadius"), chrome_.px(TabStripGeometry::tile_radius) / density_},
   };
   QList<QVariantMap> records;
   const Rect area = isVisible() ? Rect{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)} : Rect{};
@@ -316,8 +313,8 @@ void MachineChromeLayout::rebuild() {
   case Mode::segment:
     preferred = segmentRecords(area, records);
     break;
-  case Mode::switcher:
-    preferred = switcherRecords(area, records);
+  case Mode::list:
+    preferred = listRecords(area, records);
     break;
   }
 
@@ -350,27 +347,87 @@ qreal MachineChromeLayout::segmentRecords(Rect area, QList<QVariantMap> &records
   return 0;
 }
 
-qreal MachineChromeLayout::switcherRecords(Rect area, QList<QVariantMap> &records) {
-  std::array<float, MachineLimits::window_slots> advances{};
-  std::array<const Source *, MachineLimits::window_slots> ordered{};
+void MachineChromeLayout::collectCards(Machines::Slot slot, Source &source) const {
+  const auto &client = controller_->clients_[slot];
+  if (!client || (*client)->phase != MachinePhase::connected || !(*client)->session.ready()) {
+    return;
+  }
+
+  const auto agents = std::span{(*client)->session.agents()};
+  std::array<std::size_t, AgentOrder::maximum_agents> chosen{};
   std::size_t count = 0;
-  for (const auto &source : sources_) {
-    if (source) {
-      ordered[count] = &*source;
-      advances[count++] = measure(source->label.view(), source->active);
+  for (std::size_t index = 0; index < agents.size() && count < chosen.size(); ++index) {
+    if (AgentOrder::stacked(agents[index].status)) {
+      chosen[count++] = index;
     }
   }
 
-  const auto row = MachineChromeGeometry::switcher(area, chrome_, std::span{advances}.first(count), measure("+99", false));
-  for (std::size_t index = 0; index < row.count; ++index) {
-    records.append(controlRecord(*ordered[index], row.controls[index], advances[index]));
+  const auto shown = std::min(count, stack_cards);
+  std::partial_sort(chosen.begin(), chosen.begin() + static_cast<std::ptrdiff_t>(shown), chosen.begin() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
+    return AgentOrder::priority(agents[left]) < AgentOrder::priority(agents[right]);
+  });
+  for (std::size_t rank = 0; rank < shown; ++rank) {
+    const auto &agent = agents[chosen[rank]];
+    source.cards[rank] = {.provider = static_cast<std::uint8_t>(agent.provider_kind), .status = static_cast<std::uint8_t>(agent.status)};
   }
 
-  if (row.hidden != 0 && !row.fold.empty()) {
-    records.append(foldRecord(row.fold, row.hidden));
+  source.card_count = shown;
+}
+
+QVariantMap MachineChromeLayout::listRecord(const Source &source, const MachineChromeGeometry::ListRow &row) const {
+  QVariantList cards;
+  for (std::size_t rank = 0; rank < source.card_count; ++rank) {
+    const auto card = source.cards[rank];
+    const auto status = static_cast<AgentStatus>(card.status);
+    const auto &pose = TabCardMotion::rest[rank];
+    auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
+    record.insert(QStringLiteral("x"), chrome_.px(pose.x) / density_);
+    record.insert(QStringLiteral("y"), chrome_.px(pose.y) / density_);
+    record.insert(QStringLiteral("rotation"), pose.rotation);
+    record.insert(QStringLiteral("scale"), pose.scale);
+    record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
+    // The row has no focused pane, so whichever card waits on the person is tinted, front one included.
+    record.insert(QStringLiteral("attentionColor"), AgentOrder::attention(status) == AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
+    cards.append(std::move(record));
   }
 
-  return MachineChromeGeometry::preferredSwitcher(chrome_, std::span{advances}.first(count), measure("+99", false)) / density_;
+  const auto label = toQString(source.label.view());
+
+  return {
+      {QStringLiteral("key"), machineKey(source.token)},
+      {QStringLiteral("bounds"), toQRectF(row.bounds, density_)},
+      {QStringLiteral("discBounds"), toQRectF(row.disc, density_)},
+      {QStringLiteral("labelBounds"), toQRectF(row.label, density_)},
+      {QStringLiteral("stackBounds"), toQRectF(row.stack, density_)},
+      {QStringLiteral("text"), label},
+      {QStringLiteral("ink"), ink(source.color.view())},
+      {QStringLiteral("enabled"), source.live},
+      {QStringLiteral("attention"), source.attention},
+      {QStringLiteral("cards"), cards},
+      {QStringLiteral("accessible"), label + (source.attention ? QStringLiteral(", needs attention") : QString{}) + (source.card_count == 0 ? QString{} : QStringLiteral(", ") + QString::number(source.card_count) + QStringLiteral(" agents active"))},
+  };
+}
+
+qreal MachineChromeLayout::listRecords(Rect area, QList<QVariantMap> &records) {
+  using Geometry = MachineChromeGeometry;
+  float widest = 0;
+  std::size_t index = 0;
+  for (const auto &source : sources_) {
+    if (!source || source->active) {
+      continue;
+    }
+
+    const bool stacked = source->card_count != 0;
+    widest = std::max(widest, Geometry::listNaturalWidth(chrome_, measure(source->label.view(), false), stacked));
+    // The sidebar sizes the area to the rows that fit; the item clips the rest.
+    if (!area.empty()) {
+      records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked)));
+    }
+
+    ++index;
+  }
+
+  return std::ceil(widest) / density_;
 }
 
 QVariantMap MachineChromeLayout::factRecord(const Source &source, const MachineFacts::Geometry &geometry) const {

@@ -1,0 +1,120 @@
+A tab belongs to one workspace and holds one or more [panes](/docs/panes).
+The tab strip in the middle of the top bar shows the tabs of the current
+workspace. A workspace holds at most 64 tabs.
+
+## Create and switch tabs
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+b` `c` | Create a tab and select it |
+| `ctrl+b` `n` | Select the next tab |
+| `ctrl+b` `p` | Select the previous tab |
+| `ctrl+b` `1` … `ctrl+b` `9` | Select the tab at that position |
+
+A new tab is added at the end of the strip. Its first pane opens in the
+focused pane's current directory and runs your shell, or the command you
+passed to `telar` when you opened the window. The **+** button at the right
+of the top bar also creates a tab.
+
+`ctrl+b` `n` and `ctrl+b` `p` wrap around at either end. `ctrl+b` `1` selects
+the first tab; a number past the last tab does nothing. While the prefix is
+pending, the strip shows each tab's number.
+
+## Rename a tab
+
+Press `ctrl+b` `T` (`shift+t` after the prefix) and type a name, or
+double-click the tab. A name holds up to 128 bytes.
+
+A tab without a name takes its caption from what runs in it: the agent's
+session title when an agent runs in the focused pane, otherwise the name of
+the focused pane's program. Next to that caption, the strip shows the focused
+pane's directory. A name you give replaces both.
+
+## Reorder tabs
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+b` `,` | Move the active tab one position left |
+| `ctrl+b` `.` | Move the active tab one position right |
+
+At either end, the move does nothing. You can also drag a tab along the strip
+to a new position.
+
+## Close a tab
+
+Press `ctrl+b` `X` (`shift+x` after the prefix), or middle-click the tab.
+Closing a tab closes every pane in it and ends their processes. Telar does
+not ask for confirmation.
+
+Closing the last tab of a workspace closes the workspace too, and the window
+switches to another workspace. When it was the last workspace, the window
+closes.
+
+## The tab strip
+
+Each tab shows small marks for the programs running in its panes, its
+caption, and an indicator of agent activity or reported progress. Click a
+tab to select it.
+
+When the tabs do not fit, the strip shows a **+N** counter with the number of
+hidden tabs. Click it to select the nearest hidden tab.
+
+## Control tabs from the CLI
+
+`telar tab` works on the tabs of a workspace. `--workspace` defaults to the
+workspace of the pane you run it in, and `--current` names that pane's tab.
+Tab positions are zero-based. Commands that select a tab act through a
+window, named with `--client ID` from `telar client list`.
+
+| Command | What it does |
+| --- | --- |
+| `telar tab list` | List the tabs with id, position, pane count and label |
+| `telar tab get ID` | Show a tab's panes |
+| `telar tab create --background` | Open a tab no window shows, running your login shell |
+| `telar tab create --client ID` | Open a tab in a window and select it |
+| `telar tab rename ID LABEL` | Rename a tab |
+| `telar tab move ID previous\|next` | Move a tab one position, or before or after another with `--relative-to ID` |
+| `telar tab close ID` | Close a tab and its panes |
+| `telar tab select ID --client ID` | Select a tab in a window |
+| `telar tab next --client ID` | Select the next tab, wrapping around |
+| `telar tab previous --client ID` | Select the previous tab, wrapping around |
+
+For example, from inside a pane:
+
+```sh
+telar tab list
+telar tab rename --current "api server"
+telar tab move --current next
+telar tab create --background --label build
+```
+
+A tab created with `--background` opens in the workspace's directory, and no
+window attaches to it, so `telar pane send-keys` can type into it right away.
+Use it for automation instead of typing into a pane someone is looking at.
+
+## Configuration
+
+The tab bindings can be changed or extended. See
+[Config](/docs/config#keybindings) for the syntax. The tab actions are
+`new_tab`, `next_tab`, `previous_tab`, `rename_tab`, `close_tab`,
+`telar.action.select_tab({ index = N })` (from 1),
+`telar.action.select_tab_offset({ offset = N })` and
+`telar.action.move_tab({ direction = "previous" })` or `"next"`.
+
+For example, to reach a tenth tab with `ctrl+b` `0`:
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    keybindings = {
+      telar.bind({ "0" }, telar.action.select_tab({ index = 10 })),
+    },
+  },
+})
+```
+
+`telar.action.command_tab({ command = argv, label = text })` opens a new tab
+that runs a command instead of your shell.

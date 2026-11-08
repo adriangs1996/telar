@@ -656,6 +656,7 @@ public:
     model.retired_media = removed.media;
     ++model.retired_media_count;
     model.panes.erase(identity);
+    ++model.pane_revision;
   }
 
   template <typename Observer = IgnorePaneInput>
@@ -1016,6 +1017,7 @@ private:
       pane->observer->configureHistory(session, model.capture_output);
       const auto handle = model.panes.insert(identity.id, std::move(pane));
       registered = true;
+      ++model.pane_revision;
       // The pane now lives in the table, where it is found again.
       auto &inserted = *model.panes.find(identity.id);
       inserted.event_identity = handle;
@@ -1030,6 +1032,7 @@ private:
       if (registered) {
         poller_.remove(model.panes.find(identity.id)->process->descriptor());
         model.panes.erase(identity.id);
+        ++model.pane_revision;
       }
 
       throw;

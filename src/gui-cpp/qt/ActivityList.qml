@@ -8,6 +8,7 @@ ListView {
     required property var colors
     required property var typography
     required property var geometry
+    property real headerHeight: 0
     property real ratio: 1
     property real textScale: 1
     property var controller: null
@@ -26,8 +27,8 @@ ListView {
         id: entry
         required property var record
         required property int index
-        readonly property real groupGap: index > 0 && record.startsProject ? root.geometry.groupGap : 0
-        readonly property real cardHeight: record.compact ? root.geometry.compactHeight : record.command || record.task ? root.geometry.height : root.geometry.agentHeight
+        readonly property real groupGap: index > 0 && (record.startsProject || record.header) ? root.geometry.groupGap : 0
+        readonly property real cardHeight: record.header ? root.headerHeight : record.compact ? root.geometry.compactHeight : record.command || record.task ? root.geometry.height : root.geometry.agentHeight
         readonly property real indentation: Math.min(root.geometry.width / 3, (record.depth ?? 0) * root.geometry.taskIndent)
         readonly property bool animate: y + height > root.contentY && y < root.contentY + root.height
 
@@ -39,7 +40,36 @@ ListView {
             y: entry.groupGap
             width: Math.max(0, root.geometry.width - x)
             height: entry.cardHeight
-            sourceComponent: entry.record.command ? commandCard : entry.record.task ? taskCard : agentCard
+            sourceComponent: entry.record.header ? sectionHeader : entry.record.command ? commandCard : entry.record.task ? taskCard : agentCard
+        }
+
+        Component {
+            id: sectionHeader
+
+            Item {
+                objectName: "activitySectionHeader"
+
+                ChromeText {
+                    x: 8 * root.ratio
+                    width: Math.max(0, parent.width - x - sectionCount.width - 16 * root.ratio)
+                    height: parent.height
+                    text: entry.record.title
+                    color: root.colors.chromeText
+                    pixelSize: root.typography.body
+                    emphasized: true
+                }
+
+                ChromeText {
+                    id: sectionCount
+                    x: parent.width - width - 8 * root.ratio
+                    width: implicitWidth
+                    height: parent.height
+                    text: entry.record.count
+                    color: root.colors.subtext0
+                    pixelSize: root.typography.small
+                    elide: Text.ElideNone
+                }
+            }
         }
 
         Component {

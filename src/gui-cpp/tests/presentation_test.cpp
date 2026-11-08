@@ -150,8 +150,14 @@ void sidebarListsFollowTheReferenceBands() {
   require(geometry.activity == expected_activity, "activity must receive the remaining sidebar height");
   const auto crowded = SidebarGeometry::measure(sidebar, chrome, 128);
   require(crowded.activity == geometry.activity, "project count must not reduce the activity viewport");
-  const auto machines = SidebarGeometry::measure(sidebar, chrome, 128, true);
-  require(machines.machines == expected_heading && machines.activity_header.y == 40 && machines.activity.y == 72, "machine switching must remain above the activity section");
+  const auto machines = SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 2});
+  constexpr Rect expected_rows{.x = 8, .y = 40, .width = 264, .height = 64};
+  require(machines.machines_header == expected_heading && machines.machines == expected_rows && machines.activity_header.y == 104 && machines.activity.y == 136, "the other machines must list above the activity section");
+  const auto collapsed = SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 0});
+  require(collapsed.machines_header == expected_heading && collapsed.machines.empty() && collapsed.activity_header.y == 40, "a collapsed machine list keeps only its header");
+  constexpr Rect cramped_area{.width = sidebar.width, .height = 150};
+  const auto cramped = SidebarGeometry::measure(cramped_area, chrome, 1, {.shown = true, .rows = 4});
+  require(cramped.machines.height == 32 && cramped.activity.height >= 32, "machine rows that do not fit stay out whole, so activity keeps its room");
   constexpr Rect short_area{.width = sidebar.width, .height = 60};
   const auto short_sidebar = SidebarGeometry::measure(short_area, chrome, 1);
   require(short_sidebar.projects.empty() && !short_sidebar.activity_header.empty(), "short sidebars must give room to activity and leave project navigation to the top bar");

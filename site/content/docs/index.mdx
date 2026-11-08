@@ -1,0 +1,34 @@
+Telar is a terminal emulator and multiplexer for macOS and Linux. It brings
+shells, editors and coding agents into workspaces, tabs and split panes, with a
+sidebar that shows which agents are working, waiting for input or finished.
+
+The window connects to a separate runtime that owns the processes and their
+terminals. Close the window and the work keeps running. Reopen it to reconnect,
+or connect over SSH to a runtime on another machine.
+
+## Get Telar
+
+Telar is in early development and has no published release yet. Build it from
+source:
+
+```sh
+git clone https://github.com/adriangs1996/telar.git
+cd telar
+tools/cpp bootstrap
+export PATH="$PWD/.toolchain/bin:$PATH"
+just app
+```
+
+`just app` builds the runtime, the `telar` CLI and the window, then opens the
+window on a development runtime. The
+[build guide](https://github.com/adriangs1996/telar/blob/main/docs/build/cpp-modules.md)
+lists the platform requirements.
+
+## The prefix key
+
+Telar's keybindings follow tmux: press the prefix, `ctrl+b`, release it, then
+press the next key. `ctrl+b` then `%` splits the focused pane. Every page lists
+the bindings it covers, and [Config](/docs/config#keybindings) explains how to
+change them.
+
+<DocCards />

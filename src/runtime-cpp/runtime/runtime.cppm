@@ -2493,6 +2493,7 @@ private:
       }
       if (pane != nullptr && !pane->exit_status) {
         pane->exit_status = pane->process->reap();
+        model_.pane_revision += pane->exit_status.has_value();
       }
 
       if (pane != nullptr && pane->exit_status && pane->output_closed && !pane->exit_observed) {

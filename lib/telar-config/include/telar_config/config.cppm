@@ -2987,7 +2987,14 @@ private:
   inline static void sidebar(const lua::Value &table) {
     if (table.present()) {
       table.onlyFields({"width"});
-      table.field("width").boundedNumber(284, 220, 800);
+      const auto width = table.field("width");
+      if (width.is(LUA_TSTRING)) {
+        if (width.string() != "auto") {
+          width.fail("must be a number or \"auto\"");
+        }
+      } else {
+        width.boundedNumber(284, 220, 800);
+      }
     }
   }
 };

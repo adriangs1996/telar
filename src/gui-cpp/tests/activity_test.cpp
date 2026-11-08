@@ -169,6 +169,8 @@ void crossMachineAliasesResolveDeterministically() {
   rows.front().coordinator = coordinatorReference(1);
   const std::array parent_reports{agentSnapshotEntry()};
   auto report = parent_reports.front();
+  // Other machines contribute only the agents that wait on the person.
+  report.status = AgentStatus::blocked;
   report.session_id = coordinatorReference(1).session_id;
   const std::array identified_parents{report};
   report.pane_id = 2;
@@ -189,6 +191,46 @@ void crossMachineAliasesResolveDeterministically() {
   Order::Plan plan;
   Order::write(sources, 0, plan);
   require(plan.count == 3 && plan.entries[1].source == 2 && plan.entries[1].parent == 0 && plan.entries[2].source == 1, "aliased runtime identities must choose the first exact coordinator without hiding either alias");
+}
+
+void otherMachinesListOnlyAgentsThatWait() {
+  SystemAllocator memory;
+  WorkspaceReplica workspaces{memory};
+  AgentReplica agents{memory};
+  const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+  std::array rows{worktreeEntry()};
+  rows.front().worktree = command_worktree_id;
+  rows.front().workspace.reset();
+  rows.front().command_state = CommandState::running;
+  rows.front().command_label = "test";
+  require(workspaces.apply({.revision = 1, .entries = projects, .worktrees = rows}), "workspaces must commit");
+  std::array reports{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
+  reports[0].status = AgentStatus::working;
+  reports[1].pane_id = 2;
+  reports[1].status = AgentStatus::blocked;
+  reports[2].pane_id = 3;
+  reports[2].status = AgentStatus::failed;
+  require(agents.apply({.revision = 1, .entries = reports}, 0), "agents must commit");
+  using Order = ActivityOrder<SystemAllocator>;
+  const std::array sources{
+      Order::Source{.slot = 0, .agents = agents.entries(), .workspaces = workspaces},
+      Order::Source{.slot = 1, .agents = agents.entries(), .workspaces = workspaces},
+  };
+  Order::Plan plan;
+  Order::write(sources, 0, plan);
+  std::size_t active = 0;
+  std::size_t other = 0;
+  for (const auto &entry : plan.view()) {
+    if (entry.source == 0) {
+      ++active;
+      continue;
+    }
+
+    ++other;
+    require(entry.agent && AgentOrder::attention(agents.entries()[*entry.agent].status) == AgentOrder::Attention::needs_input, "another machine lists only agents that wait on the person");
+  }
+
+  require(active == 4 && other == 2, "the active machine keeps every agent and command; another keeps its blocked and failed agents");
 }
 
 void commandNavigationUsesTheCurrentWorkspace() {
@@ -221,6 +263,7 @@ int main() try {
   activityNestsTasksAndCommands();
   exactReferencesAndCycles();
   crossMachineAliasesResolveDeterministically();
+  otherMachinesListOnlyAgentsThatWait();
   commandNavigationUsesTheCurrentWorkspace();
   std::cout << "gui-activity: passed\n";
 

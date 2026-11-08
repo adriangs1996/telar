@@ -75,6 +75,13 @@ struct AgentOrder {
     }
   }
 
+  // An agent that works or waits on the person: what a stack of agent cards shows.
+  [[nodiscard]] inline static bool stacked(AgentStatus status) noexcept {
+    const auto group = attention(status);
+
+    return group == Attention::needs_input || group == Attention::working;
+  }
+
   template <Allocator Memory>
   // The row is one of the replica's, region `a`; the agent only names it.
   [[nodiscard]] inline static tbc::view<const Worktree<Memory> *, tbc::lt::a> taskRow(tbc::view<const WorkspaceReplica<Memory> &, tbc::lt::a> workspaces, const Agent<Memory> &agent) noexcept {
@@ -290,10 +297,17 @@ private:
         throw std::length_error{"TooManyAgents"};
       }
 
-      const auto fleet = AgentOrder::arrange(source.agents, source.workspaces, source.slot == active_slot ? source.focused : std::nullopt);
+      // Another machine's row in the sidebar stacks its working agents, so its cards here are
+      // only the agents that wait on the person; its tracked commands stay on that machine.
+      const bool active = source.slot == active_slot;
+      const auto fleet = AgentOrder::arrange(source.agents, source.workspaces, active ? source.focused : std::nullopt);
       const auto &worktrees = source.workspaces.worktrees();
       std::array<bool, WorkspaceReplica<Memory>::maximum_worktrees> represented{};
       for (const auto &entry : fleet.view()) {
+        if (!active && AgentOrder::attention(source.agents[entry.agent].status) != AgentOrder::Attention::needs_input) {
+          continue;
+        }
+
         auto &node = nodes_[count_++];
         node = {.source = source_index, .agent = entry.agent, .project = entry.project, .card = entry.card};
         if (const auto *row = AgentOrder::taskRow(source.workspaces, source.agents[entry.agent])) {
@@ -303,7 +317,7 @@ private:
         }
       }
 
-      for (std::size_t index = 0; index < worktrees.size(); ++index) {
+      for (std::size_t index = 0; index < worktrees.size() && active; ++index) {
         const auto &row = worktrees[index];
         if (!represented[index] && row.command_state != CommandState::none) {
           nodes_[count_++] = {.source = source_index, .worktree = index, .project = row.source, .card = ActivityCard::task_full};
@@ -1163,8 +1177,11 @@ struct TaskCardLabels {
     const auto status = commandState(task, connected);
     storage.truncate(0);
     try {
-      storage.append(machine);
-      storage.append(" · ");
+      if (!machine.empty()) {
+        storage.append(machine);
+        storage.append(" · ");
+      }
+
       storage.append(task.handle());
       storage.append(" · ");
       storage.append(status);

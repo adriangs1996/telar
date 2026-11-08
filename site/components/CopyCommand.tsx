@@ -7,7 +7,7 @@ type Props = { command: string; className?: string; prompt?: string };
 // A shell line with a copy button. The button confirms for a moment and the
 // text never wraps, so what the user copies is exactly what they read.
 //
-//   <CopyCommand command="zig build run" />
+//   <CopyCommand command="just app" />
 export default function CopyCommand({ command, className = "", prompt = "$" }: Props) {
   const [copied, setCopied] = useState(false);
 
@@ -25,7 +25,7 @@ export default function CopyCommand({ command, className = "", prompt = "$" }: P
     <div className={`flex items-stretch overflow-hidden rounded-md border border-line bg-panel font-mono text-[13.5px] ${className}`}>
       <pre className="min-w-0 flex-1 px-4 py-3 whitespace-pre-wrap break-all text-text">
         <code>
-          <span className="text-peach">{prompt} </span>
+          <span className="text-accent">{prompt} </span>
           {command}
         </code>
       </pre>

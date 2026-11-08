@@ -252,7 +252,8 @@ namespace telar::runtime::cli {
 struct RepositoryOptions {
   enum class Action {
     prepare,
-    receive
+    receive,
+    tips
   };
   Action action;
   std::optional<std::string_view> machine = std::nullopt;
@@ -271,11 +272,11 @@ struct RepositoryOptions {
     }
 
     const std::string_view action = words.front();
-    if (action != "prepare" && action != "receive") {
+    if (action != "prepare" && action != "receive" && action != "tips") {
       throw std::invalid_argument{"UnknownRepositoryAction"};
     }
 
-    RepositoryOptions self{.action = action == "prepare" ? Action::prepare : Action::receive};
+    RepositoryOptions self{.action = action == "prepare" ? Action::prepare : action == "receive" ? Action::receive : Action::tips};
     Cursor cursor{words.subspan(1)};
     while (const auto word = cursor.next()) {
       const std::string_view arg = *word;
@@ -291,7 +292,7 @@ struct RepositoryOptions {
         self.from = value;
       } else if (arg == "--workspace") {
         self.workspace = value;
-      } else if (arg == "--identity" && self.action == Action::receive) {
+      } else if (arg == "--identity" && self.action != Action::prepare) {
         self.identity = value;
       } else if (arg == "--transport" && self.action == Action::receive) {
         self.transport = value;
@@ -308,6 +309,10 @@ struct RepositoryOptions {
 
     if (self.action == Action::prepare && !self.machine) {
       throw std::invalid_argument{"MissingMachineLabel"};
+    }
+
+    if (self.action == Action::tips && self.identity.empty()) {
+      throw std::invalid_argument{"MissingRepositoryIdentity"};
     }
 
     return self;
@@ -502,6 +507,57 @@ PreparedRepository receive(Memory &memory, const RepositoryOptions &options) {
 export {
 namespace telar::runtime::cli::repository {
 
+inline constexpr std::size_t max_transfer_tips = 256;
+
+// The destination side of the history negotiation: the newest ref tips of
+// the clone `receive` would update, one per line, or nothing without a clone.
+template <Allocator Memory>
+std::string tips(Memory &memory, const RepositoryOptions &options) {
+  const auto found = find(memory, options.identity, options.workspace);
+  if (!found) {
+    return {};
+  }
+
+  Git git{memory, *found};
+  auto listing = git.read({"for-each-ref", "--sort=-committerdate", std::format("--count={}", max_transfer_tips), "--format=%(objectname)"});
+  if (!listing.empty()) {
+    listing += '\n';
+  }
+
+  return listing;
+}
+
+inline void appendHashes(std::vector<std::string> &hashes, std::string_view listing) {
+  for (const auto line : std::views::split(listing, '\n')) {
+    const std::string_view hash{line.begin(), line.end()};
+    if (hashes.size() < max_transfer_tips && validCommit(hash)) {
+      hashes.emplace_back(hash);
+    }
+  }
+}
+
+// What the bundle leaves out: the machine's tips, which its clone holds with
+// all their history. When they already reach `commit`, its parents instead,
+// since Git refuses an empty bundle. Only hashes pass, never an option.
+template <Allocator Memory>
+std::vector<std::string> exclusions(Git<Memory> &git, std::string_view commit, std::string_view listing) {
+  std::vector<std::string> tips;
+  appendHashes(tips, listing);
+  if (tips.empty()) {
+    return tips;
+  }
+
+  std::vector<std::string_view> count{"rev-list", "--count", "--ignore-missing", commit, "--not"};
+  count.insert(count.end(), tips.begin(), tips.end());
+  if (git.read(count) != "0") {
+    return tips;
+  }
+
+  std::vector<std::string> parents;
+  appendHashes(parents, git.read({"rev-parse", std::string{commit} + "^@"}));
+  return parents;
+}
+
 template <Allocator Memory>
 PreparedRepository parsePrepared(Memory &memory, std::string_view output, std::string_view commit, std::string_view identity) {
   const auto result = JsonNode<Memory>::parse(memory, output);
@@ -517,9 +573,10 @@ PreparedRepository parsePrepared(Memory &memory, std::string_view output, std::s
   return {.path = std::string{path->text()}, .commit = std::string{commit}, .repository = std::string{identity}, .reused = reused->text() == "true"};
 }
 
-// Repository preparation: bundles `options.from` and has the other
-// machine's telar receive it. `capture` runs the given telar words there with
-// the bundle as stdin and returns their stdout.
+// Repository preparation: bundles `options.from`, less what the other
+// machine's clone already holds, and has that machine's telar receive it.
+// `capture` runs the given telar words there with the descriptor as stdin
+// (-1 for none) and returns their stdout.
 template <Allocator Memory, typename Capture>
 PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std::string_view remote_program, Capture &&capture) {
   const auto cwd = std::filesystem::canonical(".").string();
@@ -542,6 +599,20 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
     writeText(std::format("telar repository: {} uncommitted files stay on this machine\n", dirty), STDERR_FILENO);
   }
 
+  std::vector<std::string_view> query{"repository", "tips", "--identity", identity};
+  if (options.workspace) {
+    query.push_back("--workspace");
+    query.push_back(*options.workspace);
+  }
+
+  // Without an answer the whole history travels, as to a new clone.
+  std::string listing;
+  try {
+    listing = capture(std::span<const std::string_view>{query}, -1);
+  } catch (const std::exception &) {
+  }
+
+  const auto excluded = exclusions(git, commit, listing);
   const ProcessEnvironment environment;
   const auto base = environment.lookup("TMPDIR");
   const auto temporary = std::format("{}/telar-transfer-{:016x}{:016x}", base.empty() ? "/tmp" : base, randomIdentity(), randomIdentity());
@@ -571,7 +642,13 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
     }
   };
   try {
-    git.bundle(ref, bundle.get());
+    std::vector<std::string_view> revisions{ref};
+    if (!excluded.empty()) {
+      revisions.insert(revisions.end(), {"--ignore-missing", "--not"});
+      revisions.insert(revisions.end(), excluded.begin(), excluded.end());
+    }
+
+    git.bundle(revisions, bundle.get());
     struct stat inode{};
     if (::fstat(bundle.get(), &inode) != 0) {
       throw std::runtime_error{file_transfer::fileError(errno)};
@@ -609,6 +686,8 @@ int run(Memory &memory, const RepositoryOptions &options) {
   try {
     if (options.action == RepositoryOptions::Action::receive) {
       writeText(receive(memory, options).json(true));
+    } else if (options.action == RepositoryOptions::Action::tips) {
+      writeText(tips(memory, options));
     } else {
       const auto profile = machine::resolve(memory, *options.machine);
       if (!profile) {

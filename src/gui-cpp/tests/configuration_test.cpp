@@ -175,6 +175,23 @@ void windowTitlePreferences() {
   }
 }
 
+void sidebarWidthPreferences() {
+  const auto defaults = read({.source = R"(return {api_version=2})", .profile = {}});
+  require(defaults.sidebar_width_auto, "the sidebar fits its content unless a width is configured");
+  const auto fixed = read({.source = R"(return {api_version=2,gui={sidebar={width=320}},profiles={automatic={gui={sidebar={width="auto"}}}}})", .profile = {}});
+  require(!fixed.sidebar_width_auto && fixed.sidebar_width == 320, "a numeric width fixes the sidebar");
+  const auto automatic = read({.source = R"(return {api_version=2,gui={sidebar={width=320}},profiles={automatic={gui={sidebar={width="auto"}}}}})", .profile = "automatic"});
+  require(automatic.sidebar_width_auto, "a profile can return the sidebar to its automatic width");
+  bool rejected = false;
+  try {
+    read({.source = R"(return {api_version=2,gui={sidebar={width="wide"}}})", .profile = {}});
+  } catch (const std::exception &) {
+    rejected = true;
+  }
+
+  require(rejected, "a sidebar width is a number or \"auto\"");
+}
+
 void keymapProfilesAndCallbacks() {
   SystemAllocator system;
   constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
@@ -288,6 +305,7 @@ int main() {
     independentBackgroundOpacity();
     editorPreferences();
     windowTitlePreferences();
+    sidebarWidthPreferences();
     keymapProfilesAndCallbacks();
     inputExpressions();
     invalidCallbacksAndRecovery();

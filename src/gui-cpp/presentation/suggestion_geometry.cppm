@@ -76,11 +76,18 @@ struct MachineChromeGeometry {
     fold,
   };
 
-  struct Row {
-    std::array<Rect, MachineLimits::window_slots> controls{};
-    std::size_t count = 0;
-    std::size_t hidden = 0;
-    Rect fold;
+  static constexpr float list_row = 32;
+  static constexpr float list_padding = 8;
+  static constexpr float list_disc = 7;
+  static constexpr float list_gap = 8;
+  // The tab strip's front card and the two slivers behind it, with room for their tilt.
+  static constexpr float stack_width = 42;
+
+  struct ListRow {
+    Rect bounds;
+    Rect disc;
+    Rect label;
+    Rect stack;
   };
 
   struct Control {
@@ -91,55 +98,35 @@ struct MachineChromeGeometry {
     float radius = 0;
   };
 
-  [[nodiscard]] inline static Row switcher(Rect area, const ChromeMetrics &chrome, std::span<const float> advances, float more_advance) {
-    if (advances.size() > MachineLimits::window_slots) {
-      throw std::length_error{"TooManyMachineControls"};
+  // The sidebar lists the machines other than the active one, one row each: the machine's
+  // disc, its label and, on the right, the stack of its agents that work or wait.
+  [[nodiscard]] inline static float listHeight(const ChromeMetrics &chrome, std::size_t rows) noexcept {
+    return chrome.px(list_row) * static_cast<float>(rows);
+  }
+
+  // The width that shows a row's whole label.
+  [[nodiscard]] inline static float listNaturalWidth(const ChromeMetrics &chrome, float label_advance, bool stacked) noexcept {
+    return chrome.px((2 * list_padding) + list_disc + list_gap) + (stacked ? chrome.px(list_gap + stack_width) : 0) + label_advance;
+  }
+
+  [[nodiscard]] inline static ListRow listRow(Rect area, const ChromeMetrics &chrome, std::size_t index, bool stacked) noexcept {
+    const auto height = chrome.px(list_row);
+    const auto padding = chrome.px(list_padding);
+    const auto disc = chrome.px(list_disc);
+    const auto gap = chrome.px(list_gap);
+    ListRow row;
+    row.bounds = {.x = area.x, .y = area.y + (height * static_cast<float>(index)), .width = area.width, .height = height};
+    row.disc = {.x = area.x + padding, .y = row.bounds.y + ((height - disc) / 2), .width = disc, .height = disc};
+    if (stacked) {
+      const auto width = chrome.px(stack_width);
+      row.stack = {.x = area.right() - padding - width, .y = row.bounds.y, .width = width, .height = height};
     }
 
-    Row row;
-    if (advances.size() <= 1 || area.empty()) {
-      return row;
-    }
-
-    const auto more_reserve = more_advance + chrome.px(2 * switcher_padding);
-    auto left = area.x;
-    for (const auto advance : advances) {
-      const auto width = switcherControlWidth(chrome, advance);
-      if (row.hidden != 0 || left + width > area.right() - more_reserve) {
-        ++row.hidden;
-        continue;
-      }
-
-      row.controls[row.count++] = {.x = left, .y = area.y, .width = width, .height = area.height};
-      left += width + chrome.px(switcher_gap);
-    }
-
-    if (row.hidden != 0) {
-      row.fold = {.x = left, .y = area.y, .width = std::max(0.0F, std::min(more_reserve, area.right() - left)), .height = area.height};
-    }
+    const auto left = row.disc.right() + gap;
+    const auto right = stacked ? row.stack.x - gap : area.right() - padding;
+    row.label = {.x = left, .y = row.bounds.y, .width = std::max(0.0F, right - left), .height = height};
 
     return row;
-  }
-
-  [[nodiscard]] inline static float switcherControlWidth(const ChromeMetrics &chrome, float advance) noexcept {
-    return std::min(advance + chrome.px((2 * switcher_padding) + switcher_disc + switcher_gap), chrome.px(maximum_control));
-  }
-
-  [[nodiscard]] inline static float preferredSwitcher(const ChromeMetrics &chrome, std::span<const float> advances, float more_advance) {
-    if (advances.size() > MachineLimits::window_slots) {
-      throw std::length_error{"TooManyMachineControls"};
-    }
-
-    if (advances.size() <= 1) {
-      return 0;
-    }
-
-    float width = more_advance + chrome.px(2 * switcher_padding);
-    for (const auto advance : advances) {
-      width += switcherControlWidth(chrome, advance) + chrome.px(switcher_gap);
-    }
-
-    return width - chrome.px(switcher_gap);
   }
 
   [[nodiscard]] inline static float preferredSegment(const ChromeMetrics &chrome, float advance) noexcept {
@@ -371,10 +358,19 @@ private:
 export {
 namespace telar::gui {
 
+// Whether the sidebar shows its machine section, and how many machine rows it lists.
+struct SidebarMachines {
+  bool shown = false;
+  std::size_t rows = 0;
+
+  bool operator==(const SidebarMachines &) const = default;
+};
+
 struct SidebarGeometry {
   static constexpr float margin = 8;
   static constexpr float workspace_vertical_padding = 20;
 
+  Rect machines_header;
   Rect machines;
   Rect projects_header;
   Rect projects;
@@ -385,7 +381,7 @@ struct SidebarGeometry {
     return ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.px(workspace_vertical_padding);
   }
 
-  [[nodiscard]] inline static SidebarGeometry measure(Rect area, const ChromeMetrics &chrome, std::size_t, bool machines_shown = false) noexcept {
+  [[nodiscard]] inline static SidebarGeometry measure(Rect area, const ChromeMetrics &chrome, std::size_t, SidebarMachines machines = {}) noexcept {
     const auto inset = chrome.px(margin);
     Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
     const auto header = chrome.pane_header;
@@ -396,10 +392,17 @@ struct SidebarGeometry {
     }
 
     constexpr float minimum_machine_headers = 3;
-    if (machines_shown && content.height >= minimum_machine_headers * header) {
-      geometry.machines = {.x = content.x, .y = content.y, .width = content.width, .height = header};
-      content.y += header + gap;
-      content.height -= header + gap;
+    if (machines.shown && content.height >= minimum_machine_headers * header) {
+      geometry.machines_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};
+      content.y += header;
+      content.height -= header;
+      // Activity keeps two headers of room; machine rows that do not fit stay out whole.
+      const auto row = chrome.px(MachineChromeGeometry::list_row);
+      const auto room = std::max(0.0F, content.height - ((minimum_machine_headers - 1) * header));
+      const auto rows = std::min(static_cast<float>(machines.rows), std::floor(room / row));
+      geometry.machines = {.x = content.x, .y = content.y, .width = content.width, .height = rows * row};
+      content.y += geometry.machines.height + gap;
+      content.height -= geometry.machines.height + gap;
     }
 
     geometry.activity_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};

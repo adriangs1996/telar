@@ -1796,6 +1796,29 @@ namespace telar {
                SpanItemsField<&AgentSnapshot::entries, ValueCodec<AgentSnapshotEntry>, "entries">> {
   };
 
+  // Every live pane, so a client can list the ones it has not opened. Bounded by the runtime's
+  // pane capacity.
+  inline constexpr std::size_t max_pane_list_entries = 256;
+
+  struct PaneList {
+    std::uint64_t revision{};
+    std::span<const PaneListEntry> entries{};
+  };
+
+  template <>
+  struct MessageSchema<PaneList>
+      : Schema<Direction::server,
+               ServerTag::pane_list,
+               Field<&PaneList::revision, u64, "revision">,
+               SpanCountField<&PaneList::entries,
+                              u16,
+                              ValueCodec<PaneListEntry>,
+                              max_pane_list_entries,
+                              "entry_count",
+                              0>,
+               SpanItemsField<&PaneList::entries, ValueCodec<PaneListEntry>, "entries">> {
+  };
+
   struct WorkspaceList {
     std::uint64_t revision{};
     std::span<const WorkspaceListEntry> entries{};

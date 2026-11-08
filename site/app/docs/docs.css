@@ -1,0 +1,390 @@
+.docs {
+  min-height: 100vh;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.docs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Three columns: navigation, the page, its headings. */
+
+.docs-body {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 220px;
+  gap: 48px;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.docs-rail {
+  position: sticky;
+  top: 60px;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+  padding: 32px 0;
+}
+
+.docs-main {
+  min-width: 0;
+  max-width: 760px;
+  padding: 40px 0 96px;
+}
+
+@media (max-width: 1100px) {
+  .docs-body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .docs-rail-end {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .docs-body {
+    display: block;
+    padding: 0 16px;
+  }
+  .docs-rail {
+    position: static;
+    height: auto;
+    border-bottom: 1px solid var(--line);
+    padding: 20px 0;
+  }
+}
+
+/* Sidebar and table of contents */
+
+.docs-sidebar,
+.docs-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.docs-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 22px;
+}
+
+.docs-sidebar-heading {
+  margin: 0 0 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--subtext);
+}
+
+.docs-sidebar-link {
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--subtext);
+}
+
+.docs-sidebar-link:hover {
+  background: var(--panel);
+  color: var(--bright);
+}
+
+.docs-sidebar-link[data-active="true"] {
+  background: var(--surface);
+  color: var(--bright);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.docs-toc a {
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  padding: 4px 0 4px 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--subtext);
+}
+
+.docs-toc a[data-depth="3"] {
+  padding-left: 24px;
+}
+
+.docs-toc a:hover {
+  color: var(--bright);
+}
+
+.docs-toc a[data-active="true"] {
+  border-left-color: var(--accent);
+  color: var(--accent-soft);
+}
+
+/* Page heading */
+
+.docs-heading {
+  margin-bottom: 36px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 28px;
+}
+
+.docs-breadcrumbs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--subtext);
+}
+
+.docs-breadcrumbs a:hover {
+  color: var(--bright);
+}
+
+.docs-heading h1 {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--bright);
+}
+
+.docs-lead {
+  margin: 12px 0 0;
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.docs-edit {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--accent) !important;
+}
+
+/* Page body */
+
+.doc {
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.doc > :first-child {
+  margin-top: 0;
+}
+
+.doc h2,
+.doc h3,
+.doc h4 {
+  scroll-margin-top: 80px;
+  color: var(--bright);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.doc h2 {
+  margin: 48px 0 14px;
+  font-size: 26px;
+}
+
+.doc h3 {
+  margin: 32px 0 10px;
+  font-size: 20px;
+}
+
+.doc h4 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+}
+
+.docs-anchor {
+  margin-left: 10px;
+  font-weight: 400;
+  color: var(--overlay-0) !important;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.doc h2:hover .docs-anchor,
+.doc h3:hover .docs-anchor,
+.doc h4:hover .docs-anchor {
+  opacity: 1;
+}
+
+.doc p,
+.doc ul,
+.doc ol {
+  margin: 0 0 16px;
+}
+
+.doc ul,
+.doc ol {
+  padding-left: 22px;
+}
+
+.doc ul {
+  list-style: disc;
+}
+
+.doc ol {
+  list-style: decimal;
+}
+
+.doc li {
+  margin: 4px 0;
+}
+
+.doc li::marker {
+  color: var(--overlay-0);
+}
+
+.doc strong {
+  color: var(--bright);
+  font-weight: 600;
+}
+
+.doc a {
+  color: var(--accent-soft);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.doc a:hover {
+  color: var(--bright);
+  text-decoration-color: var(--accent);
+}
+
+.doc :not(pre) > code {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  color: var(--accent-soft);
+}
+
+.doc pre {
+  margin: 0 0 20px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px 18px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--bright);
+}
+
+.doc pre code {
+  font-family: inherit;
+}
+
+.docs-table {
+  margin: 0 0 20px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+}
+
+.doc th {
+  background: var(--panel);
+  text-align: left;
+  font-weight: 600;
+  color: var(--bright);
+}
+
+.doc th,
+.doc td {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 14px;
+  vertical-align: top;
+}
+
+.doc tr:last-child td {
+  border-bottom: 0;
+}
+
+.doc hr {
+  margin: 40px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Callouts */
+
+.docs-callout {
+  margin: 0 0 20px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--callout);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--callout) 7%, var(--ink));
+  padding: 14px 18px 2px;
+}
+
+.docs-callout[data-kind="note"] {
+  --callout: var(--blue);
+}
+
+.docs-callout[data-kind="tip"] {
+  --callout: var(--green);
+}
+
+.docs-callout[data-kind="warning"] {
+  --callout: var(--peach);
+}
+
+.docs-callout-label {
+  margin: 0 0 6px !important;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--callout);
+}
+
+/* Overview cards */
+
+.docs-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.docs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 16px 18px;
+  text-decoration: none !important;
+  transition: border-color 120ms ease;
+}
+
+.docs-card:hover {
+  border-color: var(--accent);
+}
+
+.docs-card-title {
+  font-weight: 600;
+  color: var(--bright);
+}
+
+.docs-card-lead {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--subtext);
+}

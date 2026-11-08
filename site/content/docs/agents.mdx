@@ -1,0 +1,352 @@
+Telar recognizes the coding agents you run in its panes. The sidebar lists each
+one with its status, so you can see which agents are working, which wait for
+you and which have finished. The runtime keeps track of the agents, so the
+status survives closing the window, and you can watch, prompt and interrupt
+any agent from the `telar` CLI.
+
+Telar runs the agent's own CLI in a terminal pane. Install the agent and sign
+in to it as you normally would; Telar does not provide accounts or API access.
+
+## Supported agents
+
+| Agent | Integration name | Command to run in a pane |
+| --- | --- | --- |
+| Claude Code | `claude` | `claude` |
+| Codex | `codex` | `codex --no-daemon` |
+| Pi | `pi` | `pi` |
+| Cursor Agent | `cursor` | `cursor-agent` |
+| OpenCode | `opencode` | `opencode` |
+
+The integration name is what `telar integration` accepts. Telar detects these
+agents without an integration, but an integration makes their status exact.
+See [Detection without an integration](#detection-without-an-integration).
+
+## Install an integration
+
+An integration registers Telar's hooks, or a Telar extension or plugin, with
+the agent. The agent then reports its lifecycle to the runtime: when it starts
+a turn, when it asks for permission or an answer, when it finishes, and which
+shell commands it runs.
+
+```sh
+telar integration install claude
+```
+
+Start a new agent session afterwards. A session that was already running does
+not load the new hooks.
+
+Each integration writes into the agent's own configuration directory
+(`$CLAUDE_CONFIG_DIR`, `$CODEX_HOME`, `$PI_CODING_AGENT_DIR`,
+`$XDG_CONFIG_HOME/opencode`; Cursor Agent always uses your home directory):
+
+| Agent | What Telar writes |
+| --- | --- |
+| Claude Code | Hooks in `~/.claude/settings.json` |
+| Codex | Hooks in `~/.codex/hooks.json` |
+| Cursor Agent | Hooks in `~/.cursor/hooks.json` |
+| Pi | An extension, `~/.pi/agent/extensions/telar.ts` |
+| OpenCode | A plugin, `~/.config/opencode/plugins/telar.ts` |
+
+Next to those files Telar also writes two skills,
+`skills/telar/SKILL.md` and `skills/telar-coordinator/SKILL.md`. See
+[Skills](#skills).
+
+Installing keeps every hook that is not Telar's. Running it again rewrites
+Telar's own entries, so reinstall after updating Telar. `--settings PATH`
+writes to another absolute path instead of the default file.
+
+Inspect or remove an integration with the same name:
+
+```sh
+telar integration status claude
+telar integration uninstall claude
+```
+
+`status` reads the files and reports each hook, extension or skill as
+installed or absent. It does not tell you whether a running session loaded
+them. `uninstall` removes only Telar's entries and files.
+
+The hooks run `telar hook AGENT` with the Telar executable of the pane's
+runtime (`TELAR_BIN_PATH`), falling back to the executable that installed
+them. They do nothing outside a Telar pane, and they exit successfully on any
+error, so a missing runtime never stalls the agent.
+
+### Codex
+
+Run Codex as `codex --no-daemon` inside Telar. Codex must run without its
+daemon for its session and hooks to belong to the pane it was started in.
+
+## Agent status
+
+Toggle the sidebar with `ctrl+b` `s`. Each agent appears as a card with its
+status:
+
+| Status | Sidebar shows | Meaning |
+| --- | --- | --- |
+| `working` | `Working` and how long | Running, or waiting on its model. |
+| `blocked` | `Approval`, `Question`, `Review plan` or `Needs input` | Showing a permission prompt, a question, a plan to review or another prompt. |
+| `done` | `Done` | Finished a turn nobody has looked at yet. |
+| `ready` | How long it has been idle | Idle, and its last turn was seen. |
+| `failed` | `Failed` | Its last model request failed. |
+| `unknown` | `Unknown` | Telar does not have enough evidence to tell. |
+
+`done` says that a turn ended, not that the task succeeded. Read the agent's
+output before you accept the result.
+
+Focusing the agent's pane marks a `done` turn as seen, and the status becomes
+`ready`. `telar agent acknowledge` does the same from the CLI.
+
+### Cards
+
+The first line of a card names the machine and the workspace, and shows the
+status. The second line is the session title. While the agent works, the
+third line shows its latest event, such as the tool call it is running;
+otherwise it shows the workspace's Git branch.
+
+A new session is titled after its agent, for example `New Codex session`. When
+you name the session inside the agent, for example with `/name` in Pi, the
+integration reports that name and the card shows it. Telar can also generate
+titles from your first request with `runtime.agent_descriptions`; see
+[Config](/docs/config#runtimeagent_descriptions).
+
+### Order
+
+Cards are grouped by project, in the order of the workspace list. Inside a
+project, agents that need you come first:
+
+1. `blocked` and `failed`
+2. `working`
+3. `done`
+4. `ready`
+5. `unknown`
+
+Within each group, the agent whose status changed most recently comes first.
+An agent working in a [worktree task](#worktrees-for-agent-tasks) appears
+under the agent that created the task.
+
+The sidebar lists the agents of every machine the window is connected to. When
+a machine's connection drops, its cards show `offline`. See
+[Remote Machines](/docs/remote-machines).
+
+### Detection without an integration
+
+Without an integration, Telar infers an agent from the pane's foreground
+process and its screen. It recognizes the process by name (`claude`,
+`claude-code`, `codex`, `pi`, `cursor-agent`, `opencode`) or by the package
+path the agent was installed from. On screen, it looks for each agent's
+permission prompts, working indicators and input prompt.
+
+This is best effort. A report from an integration always outranks what Telar
+infers. When Telar has seen only the process, Codex, Pi, Cursor Agent and
+OpenCode show `unknown` until their screen or an integration says more.
+Cursor Agent's approval screens are read from its screen even with the
+integration installed.
+
+## Go to an agent
+
+Click a card to go to its agent. Telar switches to the agent's machine,
+workspace and tab, and focuses its pane.
+
+`ctrl+b` `g` opens the goto picker, which searches workspaces, tabs and agents
+by name. See [Command Palette](/docs/command-palette).
+
+### Peek
+
+Right-click a card to peek at the agent without leaving the current pane. The
+peek shows the agent's screen and a field to message it:
+
+| Input | Action |
+| --- | --- |
+| Text, then `enter` | Send the text to the agent as a prompt. |
+| `enter` on an empty field, or `/open` | Go to the agent's pane. |
+| `/stop` | Interrupt the agent's turn. |
+| `/diff` | Open a tab with the diff of the agent's worktree task. |
+| `escape` | Close the peek. |
+
+## Notifications
+
+When an agent becomes `blocked`, `done` or `failed`, the window shows a toast:
+"Agent needs input", "Agent done" or "Agent failed". Click it to open the
+agent's pane. Telar does not show the toast when that pane is already visible
+in the active tab.
+
+The window shows at most two toasts at a time. When one update changes more
+agents than fit, the first three get their own toast and the rest are folded
+into one "More agents changed" toast that counts them by status.
+
+Telar also plays a sound when an agent finishes a turn it was working on, and
+a different one when an agent starts waiting for input. Each window decides
+whether to play them with `client.sound`:
+
+```lua
+return {
+  api_version = 2,
+  client = {
+    sound = { enabled = true, ready = true, needs_input = false },
+  },
+}
+```
+
+All three fields default to `true`. `ready` is the finished-turn sound and
+`needs_input` the waiting sound; `enabled = false` turns both off.
+
+`client.notifications.delivery = "system"` also posts each notification
+through the operating system. The default, `"telar"`, shows it only in the
+window. See [Config](/docs/config#clientnotificationsdelivery).
+
+## Resume after a restart
+
+When the runtime starts, it restores the previous session's workspaces, tabs
+and panes. For an agent whose session id it knows, it relaunches the pane's
+shell and types the agent's own resume command:
+
+| Agent | Resume command |
+| --- | --- |
+| Claude Code | `claude --resume ID` |
+| Codex | `codex resume --no-daemon ID` |
+| Pi | `pi --session ID` |
+| Cursor Agent | `cursor-agent --resume ID` |
+| OpenCode | `opencode --session ID` |
+
+The integrations report the session id on their own. Without one, report it
+yourself from inside the agent's pane:
+
+```sh
+telar agent report-session --current SESSION_ID
+```
+
+To start without restoring the previous session, pass `--fresh` when no
+runtime is running:
+
+```sh
+telar --fresh
+```
+
+## Control agents from the CLI
+
+`telar agent` reads and drives the agents the runtime knows about. It does not
+need a window.
+
+```sh
+telar agent list --json
+```
+
+Commands that act on one agent take a target:
+
+- a pane id, as `agent list` prints it;
+- `--current`, the pane the command runs in;
+- `worktree:BRANCH` or `worktree:TITLE`, the agent working in that
+  [worktree](#worktrees-for-agent-tasks);
+- the agent's session title, case-insensitive, when no other agent shares it.
+
+| Command | What it does |
+| --- | --- |
+| `list` | List the agents, at most 64. |
+| `get TARGET` | Show one agent. |
+| `read TARGET` | Print recent text from the agent's pane. |
+| `wait TARGET` | Block until the agent reaches a status. |
+| `prompt TARGET TEXT` | Type a prompt into the agent's pane and press Enter. |
+| `interrupt TARGET` | Stop the agent's turn with its interrupt key. |
+| `acknowledge TARGET` | Mark a `done` turn as seen. |
+
+For example, from another pane:
+
+```sh
+telar agent read worktree:fix-tests --lines 60
+telar agent wait worktree:fix-tests --until finished --timeout 600s --json
+telar agent prompt worktree:fix-tests "Summarize the changes and the tests you ran" --wait --timeout 600 --json
+telar agent interrupt worktree:fix-tests
+```
+
+`wait` waits for `done` unless you pass `--until`. `finished` accepts `done`
+or `ready`, so it also returns at once for an agent that is already idle. The
+timeout defaults to 30 seconds and can be up to 86400. A timeout exits with
+status 3 and leaves the agent running.
+
+`prompt` sends the text as one paste followed by Enter. It refuses an agent
+that is `blocked`: answer its prompt first. When `prompt` runs inside a pane,
+the agent sees `[telar: from NAME, pane N]` before the text. One pane can send
+at most 8 prompts per 60 seconds to another. `--interrupt` stops the current
+turn first, and `--wait` blocks until the agent finishes the turn, blocks or
+fails.
+
+`interrupt` presses the key the agent uses to stop a turn: `ctrl+c` for Claude
+Code, `escape` for the others (twice for OpenCode).
+
+`prompt` and `interrupt` refuse a pane that someone has focused in a window
+(`pane_focused`), because a person may be typing there. Focus another pane
+first.
+
+The commands share exit codes: 0 on success, 2 when the agent, pane or
+worktree is gone or unknown, 3 when a wait timed out, and 1 for anything
+else, with the reason on standard error. `telar agent COMMAND --help` explains
+each command.
+
+## Worktrees for agent tasks
+
+A worktree task gives an agent its own Git checkout and branch, in a workspace
+of its own. Create one from inside a Git repository with at least one commit:
+
+```sh
+telar worktree create fix-tests --title "Fix failing tests" -- claude
+```
+
+Telar runs `git worktree add` for the branch `fix-tests`, starting from the
+main checkout's current branch unless you pass `--from REF`, and launches the
+command in a new pane of the worktree's workspace. A command after `--`
+requires `--title`. The checkout goes to `<repo parent>/<repo>-worktrees/<branch>`
+unless you pass `--directory`. Only committed history is in the new checkout.
+
+Nothing in the window moves to the new pane. Show it with:
+
+```sh
+telar worktree open fix-tests
+```
+
+Follow the task from anywhere:
+
+```sh
+telar worktree list --json
+telar worktree diff fix-tests --stat
+telar worktree exec fix-tests --wait -- git status --short
+```
+
+`worktree exec` runs a command in a new tab of the worktree; `--wait` prints
+what the terminal showed and returns the command's exit status.
+
+When you are done with the task, remove its checkout:
+
+```sh
+telar worktree remove fix-tests
+```
+
+This closes the worktree's tabs and keeps the branch. It refuses a checkout
+with uncommitted changes. `--delete-branch` also deletes the branch, asking on
+the terminal first when the branch is not merged. `--force` discards local
+changes after asking on the terminal.
+
+In the window, `ctrl+b` `u` leaves a worktree's workspace for its project's.
+To run a task on another machine, see
+[Remote Machines](/docs/remote-machines#worktrees-on-another-machine).
+
+## Skills
+
+Telar ships two skills that teach an agent to use it. `telar --skill` prints
+them:
+
+```sh
+telar --skill telar
+telar --skill coordinator
+```
+
+`telar` is the discovery guide: how to find and drive Telar from inside a
+pane. `coordinator` covers delegating tasks to agents in worktrees. Installing
+an integration writes both as skills for that agent.
+
+## Other agents
+
+`runtime.agents` describes an agent Telar does not know: its process names or
+paths, and the phrases its screen shows while it works, blocks or waits for
+input. Telar then detects it like the built-in agents, without an
+integration. A configuration can add up to 27 agents. See
+[Config](/docs/config#runtimeagents).

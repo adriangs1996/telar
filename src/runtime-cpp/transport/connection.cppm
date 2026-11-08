@@ -227,6 +227,7 @@ enum class DeliveryLane : std::uint8_t {
   agents,
   metrics,
   workspaces,
+  panes,
   cwd,
   foreground,
   title,
@@ -257,6 +258,8 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
     return DeliveryLane::metrics;
   case ServerTag::workspace_list:
     return DeliveryLane::workspaces;
+  case ServerTag::pane_list:
+    return DeliveryLane::panes;
   case ServerTag::pane_cwd:
     return DeliveryLane::cwd;
   case ServerTag::pane_foreground:

@@ -1101,6 +1101,16 @@ void list(ControlSession<Memory> &session) {
   writeText(output);
 }
 
+// Forgets a finished execution; a refusal leaves it retained, as before.
+template <Allocator Memory>
+void release(ControlSession<Memory> &session, ExecutionRequest request) noexcept {
+  request.action = ExecutionAction::forget;
+  try {
+    exchange(session, request);
+  } catch (...) {
+  }
+}
+
 template <Allocator Memory>
 int observe(ControlSession<Memory> &session, ExecutionRequest request, ExecutionReply reply, const ExecutionOptions &options) {
   const auto started = std::chrono::steady_clock::now();
@@ -1122,7 +1132,16 @@ int observe(ControlSession<Memory> &session, ExecutionRequest request, Execution
           writeText("telar exec: " + std::string{textBytes(reply.failure)} + "\n", STDERR_FILENO);
         }
 
-        return std::clamp(reply.exit_code, 0, 255);
+        const auto status = std::clamp(reply.exit_code, 0, 255);
+        // The whole result reached this process: keeping it would only fill
+        // the runtime's bounded table. A status equal to telar's own 124/125
+        // stays, so `exec status` can still tell them apart. `reply` views
+        // the session buffer, so the exchange comes after its last read.
+        if (options.action == ExecutionOptions::Action::start && status != timeout_status && status != failure_status) {
+          release(session, request);
+        }
+
+        return status;
       }
 
       if (options.timeout_seconds != 0 && std::chrono::steady_clock::now() - started >= std::chrono::seconds{options.timeout_seconds}) {

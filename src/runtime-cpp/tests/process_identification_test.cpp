@@ -19,6 +19,9 @@ static_assert(true);
 #include <mach-o/dyld.h>
 #endif
 #include <csignal>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 import std;
 import telar.base.memory;
@@ -210,6 +213,12 @@ struct LeaderlessGroupInspector {
     ++identifications;
     return {.identity = ProcessIdentity{21, 1, 1, 0, group}, .provider = AgentProvider::claude};
   }
+
+  ListeningPorts listeningPorts(pid_t) const noexcept {
+    ListeningPorts ports;
+    ports.add(3000);
+    return ports;
+  }
 };
 
 static void testLeaderlessGroup() {
@@ -225,6 +234,11 @@ static void testLeaderlessGroup() {
   request.panes[0].cache = result.panes[0].cache;
   result = probe.observe(request);
   check(result.count == 1 && !result.panes[0].inspected && inspector.identifications == 1);
+  check(!result.panes[0].ports_inspected && result.panes[0].ports.count == 0);
+  request.panes[0].ports = true;
+  result = probe.observe(request);
+  check(result.panes[0].ports_inspected && result.panes[0].ports.view().size() == 1 && result.panes[0].ports.view().front() == 3000);
+  request.panes[0].ports = false;
   request.panes[0].recheck = true;
   check(probe.observe(request).panes[0].inspected && inspector.identifications == 2);
   request.panes[0].foreground = 0;
@@ -232,6 +246,34 @@ static void testLeaderlessGroup() {
   result = probe.observe(request);
   check(result.count == 1 && result.panes[0].request.foreground == 20);
   check(result.panes[0].identity->pid == 20 && result.panes[0].agent_identity->pid == 21);
+}
+
+static void testListeningPortsOrder() {
+  ListeningPorts ports;
+  for (const std::uint16_t port : {8080, 0, 3000, 8080, 5173, 22, 9000}) {
+    ports.add(port);
+  }
+
+  check(std::ranges::equal(ports.view(), std::array<std::uint16_t, 4>{22, 3000, 5173, 8080}));
+}
+
+// The runtime's own process group holds a socket listening on an ephemeral port.
+static void testListeningPorts() {
+  FileDescriptor listener{::socket(AF_INET, SOCK_STREAM, 0)};
+  check(static_cast<bool>(listener));
+  sockaddr_in address{};
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  check(::bind(listener.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+  socklen_t length = sizeof(address);
+  check(::getsockname(listener.get(), reinterpret_cast<sockaddr *>(&address), &length) == 0);
+  const auto port = ntohs(address.sin_port);
+  const ProcessInspector inspector;
+  const auto unlistened = inspector.listeningPorts(::getpgrp());
+  check(std::ranges::find(unlistened.view(), port) == unlistened.view().end());
+  check(::listen(listener.get(), 1) == 0);
+  const auto listened = inspector.listeningPorts(::getpgrp());
+  check(std::ranges::find(listened.view(), port) != listened.view().end() || listened.count == max_listed_ports);
 }
 
 static void testTerminalForegroundSnapshot(SystemAllocator &memory) {
@@ -303,6 +345,8 @@ void testProcessIdentification() {
   testSharedServerEvidence();
   testProcessCache();
   testLeaderlessGroup();
+  testListeningPortsOrder();
+  testListeningPorts();
   testTerminalForegroundSnapshot(memory);
   testGroupMembers(memory, root);
   std::filesystem::remove_all(root);

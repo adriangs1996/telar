@@ -98,6 +98,7 @@ public:
         tabs_(AllocatorRef<Owned<Tab<Memory>, Memory>, Memory>{memory}),
         workspaces_(memory),
         agents_(memory),
+        pane_list_(memory),
         history_(memory),
         peek_(memory),
         decode_(AllocatorRef<Byte, Memory>{memory}),
@@ -233,6 +234,7 @@ public:
     ready_ = false;
     graphics_pauses_.reset();
     agents_.resetSource();
+    pane_list_.resetSource();
     workspaces_.resetSource();
     copy_mode_.reset();
     copy_search_request_ = 0;
@@ -332,6 +334,8 @@ public:
       return dispatch.template operator()<PaneText>();
     case ServerTag::agent_snapshot:
       return dispatch.template operator()<AgentSnapshot>();
+    case ServerTag::pane_list:
+      return dispatch.template operator()<PaneList>();
     case ServerTag::agent_sound:
       return dispatch.template operator()<AgentSoundNotification>();
     case ServerTag::history_results:
@@ -973,7 +977,11 @@ public:
       const auto agent = std::ranges::find_if(agents_, [&](const auto &entry) {
         return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
       });
-      const auto fallback = agent != agents_.end() && agent->location.workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{agent->location.workspace.id} : std::nullopt;
+      const auto listed = std::ranges::find_if(pane_list_.entries(), [&](const auto &entry) {
+        return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
+      });
+      const auto location = agent != agents_.end() ? std::optional{agent->location} : listed != pane_list_.entries().end() ? std::optional{listed->location} : std::nullopt;
+      const auto fallback = location && location->workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{location->workspace.id} : std::nullopt;
       handoffPane(pane_id, fallback);
     }
   }
@@ -983,6 +991,16 @@ public:
       return entry.pane_id == pane_id && entry.pane_generation == generation;
     });
     if (agent == agents_.entries().end()) {
+      return false;
+    }
+
+    visitPane(pane_id, generation);
+
+    return true;
+  }
+
+  inline bool focusListedPane(std::uint64_t pane_id, std::uint64_t generation) {
+    if (pane_list_.find(pane_id, generation) == nullptr) {
       return false;
     }
 
@@ -1369,6 +1387,14 @@ public:
 
   [[nodiscard]] inline std::uint64_t agentRevision() const noexcept {
     return agents_.revision();
+  }
+
+  [[nodiscard]] inline std::span<const ListedPane> paneList() const noexcept {
+    return pane_list_.entries();
+  }
+
+  [[nodiscard]] inline std::uint64_t paneListRevision() const noexcept {
+    return pane_list_.revision();
   }
 
   [[nodiscard]] inline const auto &history() const noexcept {
@@ -3231,6 +3257,10 @@ private:
     return Change::model;
   }
 
+  Change apply(const PaneList &message) {
+    return pane_list_.apply(message, Clock::nowNanoseconds()) ? Change::model : Change::none;
+  }
+
   Change apply(const HistoryResults &message) {
     if (!history_.apply(message)) {
       return Change::none;
@@ -3924,6 +3954,7 @@ private:
   tbc::view<Vector<Owned<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
   tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
   tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
+  tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
   AgentAcknowledgement agent_acknowledgement_;
   NotificationCenter notifications_;
   std::uint64_t notification_revision_ = 0;

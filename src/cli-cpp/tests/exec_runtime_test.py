@@ -256,7 +256,11 @@ def execution(f):
     common = ("--socket", str(f.socket))
     data = bytes(range(256)) * 257
     program = "import sys; d=sys.stdin.buffer.read();sys.stdout.buffer.write(d);sys.stderr.buffer.write(d[::-1]);sys.exit(7)"
-    result = f.invoke("exec/streams", "exec", "--id", "1001", *common, "--", sys.executable, "-c", program, data=data, code=7)
+    result = f.invoke("exec/released", "exec", "--id", "1000", *common, "--", sys.executable, "-c", program, data=data, code=7)
+    assert result.stdout == data and result.stderr == data[::-1]
+    f.invoke("exec/released-status", "exec", "status", "1000", socket=True, code=125)
+    # An exit equal to telar's own 125 stays retained for `exec status`.
+    result = f.invoke("exec/streams", "exec", "--id", "1001", *common, "--", sys.executable, "-c", program.replace("exit(7)", "exit(125)"), data=data, code=125)
     assert result.stdout == data and result.stderr == data[::-1]
     status = json.loads(f.invoke("exec/status", "exec", "status", "1001", socket=True).stdout)
     assert status["state"] == "exited" and status["stdin_bytes"] == len(data)

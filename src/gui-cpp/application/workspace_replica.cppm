@@ -933,6 +933,104 @@ private:
 }
 }
 
+// Interface: application/pane_list_replica.cppm
+export {
+namespace telar::gui {
+
+// A live pane of the runtime and the process holding its terminal.
+struct ListedPane {
+  static constexpr std::size_t foreground_capacity = 48;
+
+  std::uint64_t pane_id = 0;
+  std::uint64_t pane_generation = 0;
+  TabLocation location;
+  runtime::FixedText<foreground_capacity> foreground;
+  // How long the foreground process has held the terminal, as of its arrival.
+  StatusAgeInterval age;
+  std::array<std::uint16_t, max_listed_ports> port_values{};
+  std::uint8_t port_count = 0;
+  bool shell = false;
+
+  [[nodiscard]] inline std::span<const std::uint16_t> ports() const noexcept {
+    return std::span{port_values}.first(port_count);
+  }
+};
+
+// The runtime's pane list, replaced whole by each newer revision.
+template <Allocator Memory>
+class PaneListReplica {
+public:
+  static constexpr std::size_t capacity = max_pane_list_entries;
+
+  inline explicit PaneListReplica(Memory &memory)
+      : entries_(AllocatorRef<ListedPane, Memory>{memory}) {}
+
+  [[nodiscard]] inline std::span<const ListedPane> entries() const noexcept {
+    return entries_;
+  }
+
+  [[nodiscard]] inline std::uint64_t revision() const noexcept {
+    return revision_;
+  }
+
+  [[nodiscard]] inline const ListedPane *find(std::uint64_t pane_id, std::uint64_t generation) const noexcept {
+    const auto found = std::ranges::find_if(entries_, [&](const auto &entry) {
+      return entry.pane_id == pane_id && entry.pane_generation == generation;
+    });
+
+    return found == entries_.end() ? nullptr : &*found;
+  }
+
+  inline void resetSource() noexcept {
+    revision_ = 0;
+  }
+
+  inline bool apply(const PaneList &list, std::uint64_t now_ns) {
+    if (list.revision <= revision_) {
+      return false;
+    }
+
+    if (list.entries.size() > capacity) {
+      throw std::length_error{"TooManyListedPanes"};
+    }
+
+    for (std::size_t index = 0; index < list.entries.size(); ++index) {
+      const auto &entry = list.entries[index];
+      for (const auto &previous : list.entries.first(index)) {
+        if (previous.pane_id == entry.pane_id) {
+          throw std::invalid_argument{"DuplicateListedPane"};
+        }
+      }
+    }
+
+    // Reserving first keeps the previous list whole when storage runs out.
+    entries_.reserve(list.entries.size());
+    entries_.clear();
+    for (const auto &entry : list.entries) {
+      auto &pane = entries_.emplace_back();
+      pane.pane_id = entry.pane_id;
+      pane.pane_generation = entry.pane_generation;
+      pane.location = entry.location;
+      pane.foreground.assign(entry.foreground);
+      pane.age = {.age_ns = std::uint64_t{entry.foreground_age_s} * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = now_ns};
+      pane.shell = entry.shell;
+      pane.port_count = static_cast<std::uint8_t>(std::min(entry.ports.size(), pane.port_values.size()));
+      std::ranges::copy(entry.ports.first(pane.port_count), pane.port_values.begin());
+    }
+
+    revision_ = list.revision;
+
+    return true;
+  }
+
+private:
+  Vector<ListedPane, Memory> entries_;
+  std::uint64_t revision_ = 0;
+};
+
+}
+}
+
 // Interface: application/workspace_replica.cppm
 export {
 namespace telar::gui {

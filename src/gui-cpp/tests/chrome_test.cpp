@@ -415,9 +415,9 @@ private:
       QVERIFY(name->isVisible() && machine->isVisible());
       const auto name_bounds = name->mapRectToItem(navigation.get(), name->boundingRect());
       const auto machine_bounds = machine->mapRectToItem(navigation.get(), machine->boundingRect());
-      QVERIFY(name_bounds.left() >= 80);
-      QVERIFY(name_bounds.bottom() <= machine_bounds.top());
-      QVERIFY(machine_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
+      QVERIFY(machine_bounds.left() >= 80);
+      QVERIFY(machine_bounds.right() <= name_bounds.left());
+      QVERIFY(name_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
     }
   }
 

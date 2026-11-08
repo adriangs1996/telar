@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rasterize the provider SVGs into the sidebar atlas.
 
-Claude and Pi retain their colors. OpenAI, Cursor and OpenCode are white so the
+Claude retains its colors. OpenAI, Pi, Cursor and OpenCode are white so the
 renderer can tint them with the theme's foreground color.
 
 Requires rsvg-convert and Pillow. Run from any directory; output is reproducible

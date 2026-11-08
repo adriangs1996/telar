@@ -28,9 +28,15 @@ struct MachineActivityTarget {
     std::uint64_t workspace;
   };
 
+  // A pane no agent holds, listed by the process in its foreground.
+  struct Process {
+    std::uint64_t pane_id;
+    std::uint64_t pane_generation;
+  };
+
   MachineClientKey source;
   std::uint64_t runtime_generation;
-  std::variant<Agent, Command> owner;
+  std::variant<Agent, Command, Process> owner;
 };
 
 }

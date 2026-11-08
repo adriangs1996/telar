@@ -27,7 +27,7 @@ NativeRoundedRectangle {
     readonly property real padding: 8 * ratio
     readonly property real toggleSide: 28 * ratio
     readonly property real controlGap: 8 * ratio
-    readonly property real contextMaximum: 160 * ratio
+    readonly property real contextMaximum: 280 * ratio
     readonly property real tabsShare: 0.64
     readonly property real tabsMinimum: identity.x + identity.width + 2 * controlGap
     readonly property real tabsMaximum: projects.x - (projects.width > 0 ? 2 * controlGap : controlGap)
@@ -67,56 +67,24 @@ NativeRoundedRectangle {
         onClicked: root.sidebarToggled()
     }
 
-    ChromeButton {
+    WorkspaceIdentity {
         id: identity
         objectName: "topBarIdentity"
         visible: root.drawn === null
         x: toggle.x + toggle.width + root.controlGap
         y: (parent.height - height) / 2
-        width: Math.min(root.contextRoom, Math.max(contextName.implicitWidth, machineName.implicitWidth) + 8 * root.ratio + (root.machineContext.attention ? 12 * root.ratio : 0))
-        height: Math.min(parent.height, (root.typography.bodyRow ?? root.typography.body * 1.25) + (root.typography.smallRow ?? root.typography.small * 1.25))
+        width: Math.min(root.contextRoom, preferredWidth)
+        height: Math.min(parent.height, root.toggleSide)
         colors: root.colors
-        pixelSize: root.typography.body
-        cornerRadius: ChromeStyle.controlRadius * root.ratio
-        Accessible.name: contextName.text + ", " + machineName.text + ", switch machine"
-        onClicked: {
+        typography: root.typography
+        ratio: root.ratio
+        machine: root.machineContext.label || ""
+        workspace: root.workspace.name || "workspace"
+        attention: root.rail && (root.machineContext.attention ?? false)
+        onMachineRequested: {
             if (root.controller) root.controller.execute(GuiController.Action.machine_picker);
         }
-        contentItem: Item {
-            ChromeText {
-                id: contextName
-                objectName: "workspaceContextName"
-                x: 4 * root.ratio
-                width: Math.max(0, parent.width - x - 4 * root.ratio - (root.machineContext.attention ? 12 * root.ratio : 0))
-                height: parent.height * 0.55
-                text: root.workspace.name || "workspace"
-                color: root.colors.chromeText
-                pixelSize: root.typography.body + 2 * root.ratio
-                emphasized: true
-            }
-
-            ChromeText {
-                id: machineName
-                objectName: "topBarMachineLabel"
-                x: contextName.x
-                y: contextName.height
-                width: contextName.width
-                height: parent.height - y
-                text: root.machineContext.label || ""
-                color: root.colors.text
-                pixelSize: root.typography.small + root.ratio
-            }
-
-            NativeRoundedRectangle {
-                x: Math.max(0, parent.width - width - 4 * root.ratio)
-                y: (parent.height - height) / 2
-                width: 6 * root.ratio
-                height: width
-                radius: width / 2
-                color: root.colors.yellow
-                visible: root.machineContext.attention ?? false
-            }
-        }
+        onWorkspaceRequested: root.workspacePickerRequested()
     }
 
     ProjectSwitcher {
@@ -228,32 +196,17 @@ NativeRoundedRectangle {
 
     Component {
         id: identityPiece
-        Control {
-            implicitWidth: Math.max(contextLabel.implicitWidth, machineLabel.implicitWidth) + 8 * root.ratio
-            implicitHeight: (root.typography.bodyRow ?? root.typography.body * 1.25) + (root.typography.smallRow ?? root.typography.small * 1.25)
-            Accessible.name: contextLabel.text + ", switch machine"
-            onClicked: {
+        WorkspaceIdentity {
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            machine: root.machineContext.label || ""
+            workspace: root.workspace.name || "workspace"
+            attention: root.rail && (root.machineContext.attention ?? false)
+            onMachineRequested: {
                 if (root.controller) root.controller.execute(GuiController.Action.machine_picker);
             }
-            contentItem: Column {
-                ChromeText {
-                    id: contextLabel
-                    width: parent.width
-                    height: parent.height * 0.55
-                    text: root.workspace.name || "workspace"
-                    color: root.colors.chromeText
-                    pixelSize: root.typography.body + 2 * root.ratio
-                    emphasized: true
-                }
-                ChromeText {
-                    id: machineLabel
-                    width: parent.width
-                    height: parent.height * 0.45
-                    text: root.machineContext.label || ""
-                    color: root.colors.text
-                    pixelSize: root.typography.small + root.ratio
-                }
-            }
+            onWorkspaceRequested: root.workspacePickerRequested()
         }
     }
 

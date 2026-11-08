@@ -171,6 +171,8 @@ class Application final : public QObject {
   Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
   Q_PROPERTY(QVariantMap workspaceContext READ workspaceContext NOTIFY stateChanged)
   Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
+  Q_PROPERTY(bool machineListCollapsed READ machineListCollapsed NOTIFY sidebarGeometryChanged)
+  Q_PROPERTY(int machineCount READ machineCount NOTIFY machinesChanged)
   Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY configurationChanged)
   Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY configurationChanged)
   Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY configurationChanged)
@@ -196,6 +198,7 @@ class Application final : public QObject {
   Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
   Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
   Q_PROPERTY(QString activityHover READ activityHover NOTIFY activityHoverChanged)
+  Q_PROPERTY(int activityAgentCount READ activityAgentCount NOTIFY activityCountChanged)
   Q_PROPERTY(QVariantMap paletteState READ paletteState NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap paletteGeometry READ paletteGeometry NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
@@ -265,12 +268,15 @@ public:
   [[nodiscard]] QVariantMap machinePromptState() const;
   [[nodiscard]] QVariantMap machinePromptGeometry() const;
   Q_INVOKABLE void peekActivity(const QString &identity);
+  Q_INVOKABLE void toggleMachineList();
+  Q_INVOKABLE void fitSidebar();
   Q_INVOKABLE void searchPeek(const QString &text);
   Q_INVOKABLE void submitPeek(const QString &revision);
   Q_INVOKABLE void reportPeekLimit(qulonglong requested_bytes);
   [[nodiscard]] QVariantMap peekState() const;
   [[nodiscard]] QVariantMap peekGeometry() const;
   [[nodiscard]] QString activityHover() const;
+  [[nodiscard]] int activityAgentCount() const noexcept;
   Q_INVOKABLE void hoverActivity(const QString &identity, QQuickItem *card = nullptr);
 
   enum class HistoryAction : quint8 {
@@ -437,6 +443,9 @@ public:
   [[nodiscard]] QVariantMap sidebarGeometry() const;
   [[nodiscard]] QVariantMap workspaceContext() const;
   [[nodiscard]] QVariantMap machineContext() const;
+  [[nodiscard]] bool machineListCollapsed() const noexcept;
+  [[nodiscard]] int machineCount() const noexcept;
+  [[nodiscard]] SidebarMachines sidebarMachines() const noexcept;
   [[nodiscard]] bool sidebarVisible() const;
   [[nodiscard]] qreal sidebarWidth() const;
   [[nodiscard]] bool workspaceListCollapsed() const;
@@ -493,6 +502,7 @@ signals:
   void machinePromptChanged();
   void peekChanged();
   void activityHoverChanged();
+  void activityCountChanged();
   void machineLaunchFailed(const QString &error);
 
 private:
@@ -707,6 +717,8 @@ private:
   [[nodiscard]] std::string_view historyTabName(const Pane<ApplicationAllocator> *pane) const;
   void refresh();
   void refreshAgents();
+  void fitSidebarWhenReady();
+  [[nodiscard]] float sidebarNaturalWidth() const;
   [[nodiscard]] bool activityAvailable(const MachineActivityTarget &target) const;
   void selectActivity(const QString &identity, bool peek = false);
   void settleActivity();
@@ -787,11 +799,12 @@ private:
     std::uint64_t runtime_generation;
     std::uint64_t agents;
     std::uint64_t workspaces;
+    std::uint64_t panes;
     bool connected;
     runtime::FixedText<MachineLimits::label_bytes> label;
 
     bool operator==(const ActivitySourceVersion &other) const noexcept {
-      return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && connected == other.connected && label.view() == other.label.view();
+      return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && panes == other.panes && connected == other.connected && label.view() == other.label.view();
     }
   };
 
@@ -827,6 +840,7 @@ private:
   std::optional<PeekOrigin> peek_origin_;
   QString peek_editor_;
   QString activity_hover_;
+  int activity_agent_count_ = 0;
   QPointer<QQuickItem> activity_hover_card_;
   std::optional<QPointF> activity_pointer_position_;
   bool activity_hover_pending_ = false;
@@ -861,7 +875,9 @@ private:
   QTimer machine_retry_;
   QString machine_control_endpoint_;
   bool prepare_machine_directory_ = false;
-  bool sidebar_machine_row_shown_ = false;
+  SidebarMachines sidebar_machines_{};
+  bool machine_list_collapsed_ = false;
+  bool sidebar_fit_pending_ = true;
   bool restore_layout_ = true;
   std::optional<WindowFramePacer<>> frame_pacer_;
   tbc::view<KeyBindings, tbc::lt::self> key_bindings_;

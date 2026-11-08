@@ -60,6 +60,8 @@ struct AgentCardGeometry {
   static constexpr float radius = ChromeStyle::surface_radius;
   static constexpr float gap = 6;
   static constexpr float mark_side = 14;
+  static constexpr float tile_width = 18;
+  static constexpr float tile_height = 14;
   static constexpr float project_label_gap = 4;
   static constexpr float project_label_minimum = 24;
   static constexpr float title_gap = 4;
@@ -101,6 +103,11 @@ struct AgentCardGeometry {
 
   [[nodiscard]] inline float cardWidth(float list_width) const noexcept {
     return std::max(0.0F, list_width - (scrollbar_width * scale) - px(spacing));
+  }
+
+  // The list width whose cards are `card_width` wide.
+  [[nodiscard]] inline float listWidth(float card_width) const noexcept {
+    return card_width + (scrollbar_width * scale) + px(spacing);
   }
 
   [[nodiscard]] inline Rect row(Rect bounds, Row role) const noexcept {

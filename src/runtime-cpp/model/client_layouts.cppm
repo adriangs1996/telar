@@ -209,6 +209,8 @@ public:
   std::chrono::nanoseconds frame_interval{1'000'000'000 / 60};
   std::uint64_t workspace_revision = 0;
   std::uint64_t agent_workspace_revision = 0;
+  std::uint64_t pane_revision = 0;
+  std::uint64_t pane_workspace_revision = 0;
   std::optional<ResyncRequired> workspace_resync;
   std::array<ForegroundStamp, 256> foregrounds;
   std::optional<TextSearch> search;
@@ -429,6 +431,13 @@ public:
   std::uint64_t input_revision = 0;
   FixedText<48> foreground;
   std::uint64_t foreground_revision = 1;
+  // The process group holding the terminal and since when, as the pane list reports them.
+  pid_t foreground_group = 0;
+  std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
+  bool foreground_shell = true;
+  // The TCP ports that process group listens on, and when they were last read.
+  ListeningPorts listening_ports;
+  std::chrono::steady_clock::time_point ports_checked{};
   bool output_closed = false;
   bool exit_published = false;
   bool exit_observed = false;
@@ -790,6 +799,8 @@ struct RuntimeModel {
   std::size_t retired_media_count = 0;
   std::uint64_t next_tab_id = 1;
   std::uint64_t workspace_revision = 1;
+  // Advances when a pane joins or leaves the pane list or its foreground process changes.
+  std::uint64_t pane_revision = 1;
   std::uint64_t next_pane_generation = 1;
   std::uint64_t input_sequence = 0;
   bool stopping = false;

@@ -1,0 +1,252 @@
+A Telar window can show the runtime of another machine. The connection runs
+over SSH: the shells, agents, files and history stay on that machine, and the
+window only displays them. Closing the window or losing the connection leaves
+everything running there.
+
+One window holds the local runtime and every saved machine you have enabled,
+and shows one of them at a time. The sidebar lists the agents of all of them.
+
+## Requirements
+
+Telar connects with `ssh` in batch mode, so SSH must log in without asking
+for a password or a host-key confirmation. Connect once by hand to accept the
+host key, then check that batch mode works:
+
+```sh
+ssh dev@box
+ssh -o BatchMode=yes dev@box true
+```
+
+If the second command fails, set up an SSH key or an SSH agent first. Do not
+turn off host-key checking to get past it.
+
+The machine also needs the same Telar build as yours, with `telar-runtime`
+installed beside `telar`. Telar runs `telar` through a non-interactive
+`/bin/sh`, so `telar` must be on the PATH of a non-interactive SSH session,
+unless [`telar machine setup`](#set-up-a-machine) installed it and recorded
+its path. A window refuses a runtime that speaks a wire schema it does not
+support.
+
+The machine needs no display and no window. Telar starts its runtime the first
+time you connect.
+
+## Open a window on another machine
+
+```sh
+telar gui --remote dev@box
+```
+
+`DESTINATION` is anything `ssh` accepts: `user@host` or a host from
+`~/.ssh/config`. The window shows that machine first. A command after the
+options runs in a pane on that machine:
+
+```sh
+telar gui --remote dev@box htop
+```
+
+`--remote` does not save the machine. It cannot be combined with `--machine`
+or `--fresh`.
+
+## Save a machine
+
+A saved machine has a label you use everywhere else:
+
+```sh
+telar machine add box dev@box --check
+```
+
+`--check` reaches the machine first and refuses to save one it cannot reach;
+it starts the machine's runtime. Without it, `add` only writes the profile.
+`--color COLOR` (`#RRGGBB` or a lowercase name) colors the machine in the
+window, and `--disabled` saves it without windows connecting to it.
+
+Open a window that shows a saved machine first:
+
+```sh
+telar gui --machine box
+```
+
+Every window connects to the local runtime and to each enabled saved machine.
+
+| Command | What it does |
+| --- | --- |
+| `telar machine list` | List this machine and the saved ones. |
+| `telar machine check LABEL` | Reach the machine and compare wire schemas. |
+| `telar machine rename LABEL NEW_LABEL` | Change the label. |
+| `telar machine disable LABEL` | Stop windows from connecting to it. |
+| `telar machine enable LABEL` | Let windows connect to it again. |
+| `telar machine remove LABEL` | Forget the machine. |
+
+`remove` changes nothing on the machine: its runtime and files stay.
+`disable` affects windows only; [`--machine`](#run-commands-on-a-machine)
+still works.
+
+Profiles live in `machines.json` under `$XDG_CONFIG_HOME/telar`, or
+`~/.config/telar` when that variable is unset. They hold the label, the SSH
+destination, the color, whether windows connect, and after setup where the
+machine's `telar` is. They never hold credentials. You can save up to 16
+machines. A label is 1 to 32 letters, digits, `.`, `_` and `-`.
+
+## Set up a machine
+
+`telar machine setup` makes a machine ready: it installs this Telar build,
+the agents and their integrations, copies part of your configuration and
+starts each agent's login.
+
+```sh
+telar machine setup box --binary /path/to/telar-for-box
+```
+
+The machine can be a saved label, or a new SSH destination that setup saves
+under `--label`. Setup installs Telar under `~/.local/share/telar/versions`
+on the machine, without `sudo`, links `~/.local/bin/telar`, and records the
+path in the profile.
+
+A development build has no release to download, so it needs `--binary`: a
+`telar` built for the machine's operating system and architecture, with
+`telar-runtime` and `telar-config-check` beside it. A release build downloads
+the matching release on the machine and checks its SHA-256 sum.
+
+`--skip agents,config,login` leaves out any of those steps. The configuration
+step copies an allowlist of settings and no secrets. When the machine runs a
+runtime of another build, setup stops it only after you answer `y` on the
+terminal, so save its work first. `--confirm` asks before changing anything.
+Each step is idempotent, so you can run setup again.
+
+## Switch machines in the window
+
+Click the workspace and machine name in the top bar to open the machine
+picker. The [command palette](/docs/command-palette) has the same picker as
+"Switch machine", along with "Next machine", "Previous machine" and "Add
+machine". Typing `:` at the start of the palette searches machines.
+
+Each row shows the machine's state:
+
+| State | Meaning |
+| --- | --- |
+| `shown` | The window shows this machine. |
+| `connected`, or its CPU use | Connected. |
+| `connecting` | Connecting. |
+| `unreachable · enter retries` | The connection dropped; Telar keeps retrying. |
+| `failed · enter retries` | Telar stopped retrying. |
+| `no telar for this build · enter sets it up` | The machine lacks this build of Telar. |
+| `disabled · enter enables` | Windows do not connect to it. |
+
+A filled dot before the label marks a machine with agents that need you.
+
+| Keys | Action |
+| --- | --- |
+| `enter` | Show the machine, retry it, set it up or enable it, as its state says. |
+| `shift+enter` | Enable or disable the machine. |
+| `ctrl+r` | Rename the machine. |
+| `ctrl+d` | Remove the machine. |
+
+The last row, "Add machine…", asks for a label and then an SSH destination.
+Setting a machine up from the picker opens a tab on this machine that runs
+`telar machine setup` for it with `--confirm`.
+
+With more than one machine in the window, the expanded sidebar also shows one
+control per machine. Click one to show that machine.
+
+### Keybindings
+
+The machine actions have no default keys. Bind them in your configuration:
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    keybindings = {
+      telar.bind({ "m" }, telar.action.machine_picker()),
+    },
+  },
+})
+```
+
+Here `ctrl+b` `m` opens the picker. The other actions are
+`telar.action.next_machine()`, `telar.action.previous_machine()` and
+`telar.action.add_machine()`. See [Config](/docs/config#keybindings) for keys and
+bindings.
+
+## Reconnection
+
+When a connection drops, the window retries it on its own. The first retry
+comes after half a second, and the delay doubles up to 30 seconds. A
+connection that stayed up for a minute starts again from the shortest delay.
+While it retries, the window shows "Reconnecting to LABEL (attempt N)…".
+
+Telar stops retrying when retrying cannot help: the host key was rejected,
+authentication failed, `telar` is missing on the machine, or its build is
+incompatible. Fix the cause, then choose the machine in the picker to retry,
+or to set it up when it lacks this build.
+
+## Run commands on a machine
+
+Put `--machine LABEL` first to run one `telar` command on that machine's
+runtime:
+
+```sh
+telar --machine box agent list --json
+telar --machine box workspace list --json
+telar --machine box exec --no-stdin -- pwd
+```
+
+The command's input, output and exit status pass through. Every id it prints
+or takes belongs to that machine, so a local pane id means nothing there.
+Nothing falls back to this machine: a failure there is a failure, and an SSH
+failure exits with status 255. The local machine's label runs the command
+here.
+
+`--machine` is not inherited by the panes or by the next command; pass it on
+each command meant for the other machine. `telar --machine box` with no
+command opens a window that shows that machine.
+
+## Worktrees on another machine
+
+Run a [worktree task](/docs/agents#worktrees-for-agent-tasks) on a saved
+machine from your local repository:
+
+```sh
+telar worktree create fix-tests --machine box --title "Fix tests remotely" -- claude
+```
+
+Telar prepares a clone of the repository on the machine, pushes the branch's
+commits into it and creates the worktree there. Only commits travel:
+uncommitted files stay here. The ids in the reply are the machine's.
+
+Follow the task on the machine, then bring the branch back:
+
+```sh
+telar --machine box worktree diff fix-tests --stat
+telar worktree fetch fix-tests --machine box
+```
+
+`fetch` stores the branch as `refs/remotes/box/fix-tests` in your local
+repository. It does not touch your branches; review and merge it yourself.
+
+## SSH connections
+
+Every connection uses these `ssh` options:
+
+| Option | Value |
+| --- | --- |
+| `BatchMode` | `yes` |
+| `ServerAliveInterval` | `15` |
+| `ServerAliveCountMax` | `4` |
+| `ForwardAgent` | `no` |
+| `ControlMaster` | `auto` |
+| `ControlPersist` | `600` |
+
+`ControlMaster` keeps one SSH session per machine and shares it between
+connections. Its control socket lives beside the local runtime's socket.
+Windows use control sockets of their own, so a window never waits behind a
+transfer that the CLI or Git is making over SSH.
+
+## Configuration on each side
+
+The window uses your local configuration for its appearance, keybindings,
+sounds and notification delivery. The machine's runtime reads the
+configuration on that machine, so runtime settings such as history belong to
+it. See [Config](/docs/config).

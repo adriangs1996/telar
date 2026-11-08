@@ -1,0 +1,181 @@
+Telar gives you two ways to reach files without typing their names. The path
+picker searches the files and directories under the focused pane's working
+directory and types the one you choose at the prompt. File links turn paths
+printed in a pane, such as `src/main.cpp:42`, into links that open in your
+editor.
+
+## Insert a path
+
+Press `ctrl+b` `f`. The picker opens at the cursor of the focused pane and
+lists the paths under that pane's working directory. Type to filter them,
+select one and press `enter`: Telar types the path into the pane, relative to
+the working directory. It does not press `enter` for you, so you can keep
+editing the command line.
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+b` `f` | Open the path picker |
+| `up` / `down` or `ctrl+k` / `ctrl+j` | Move the selection |
+| `enter` or `ctrl+l` | Insert the relative path |
+| `alt+enter` or `shift+enter` | Insert the absolute path |
+| `tab` | Open the selected directory |
+| `shift+tab` | Go to the parent directory |
+| `escape` or `ctrl+h` | Close the picker |
+
+On macOS, `ctrl` in this table is the Control key. Clicking a row inserts
+its relative path.
+
+The picker opens only when the focused pane is running and Telar knows its
+working directory. Its header shows the name of the directory being searched; the footer
+shows how many paths it indexed and the keys above.
+
+### Browse directories
+
+`tab` on a directory makes it the picker's root and clears the search.
+`shift+tab` moves the root up one level. Inserted paths stay relative to the
+pane's working directory, not to the picker's root. When the root is above
+the working directory, the picker inserts absolute paths.
+
+### Matching
+
+A path matches when the characters you type appear in it in the same order,
+ignoring ASCII case. The whole path relative to the root counts, so `srmain`
+finds `src/main.cpp`. The matched characters are highlighted. Better matches
+come first: consecutive characters and matches at the start of a name rank
+higher, then shorter paths, then alphabetical order.
+
+With an empty search, the picker lists shallow paths first, directories before
+files. It shows up to 50 results, and the search text is at most 64 bytes.
+
+### What it indexes
+
+Inside a Git repository, the picker lists the files Git tracks plus untracked
+files that are not ignored, so it follows your `.gitignore`. Elsewhere it walks
+the directory tree and skips:
+
+- names that start with `.`,
+- directories named `node_modules`, `target`, `zig-out` and `__pycache__`.
+
+Symbolic links are listed but not followed. The runtime builds the index each
+time you open the picker or change its root, and results arrive while it is
+still indexing; the footer reads `indexing` until it finishes. An index holds
+at most 524,288 paths. Past that, the footer count ends in `+`.
+
+### What gets typed
+
+The path is typed as one shell word. A path made only of letters, digits and
+`_ - . / + @ % , :` is typed as is. Anything else is wrapped in single quotes,
+with embedded quotes escaped. A path that starts with `-` gets a `./` prefix
+so a command does not read it as an option. When the program in the pane has
+enabled bracketed paste, the path arrives as a paste.
+
+## Open file links
+
+Telar recognizes paths and links in terminal output. Over a link, the pointer
+turns into a hand; click to open it.
+
+| Mouse | Action |
+| --- | --- |
+| Click a URL | Open it |
+| `cmd`+click a path (macOS), `ctrl`+click a path (Linux) | Open the file in your editor |
+| Right-click a link or path | Copy it to the clipboard |
+| `shift`+click | Open a link while the program in the pane uses the mouse |
+
+URLs are links without a modifier. Plain paths become links only while you
+hold `cmd` on macOS or `ctrl` on Linux, so ordinary clicks still select text.
+When the program in the pane tracks the mouse, such as an editor or a pager,
+a click goes to that program; add `shift` to open the link instead.
+
+### What counts as a link
+
+- Hyperlinks a program sends with OSC 8.
+- Markdown links: `[label](https://example.com)`.
+- URLs that start with `https://`, `http://`, `file://`, `mailto:`, `ftp://`,
+  `ssh:`, `git://`, `tel:`, `magnet:`, `ipfs://`, `ipns://`, `gemini://`,
+  `gopher://` or `news:`.
+- Paths that start with `/`, `~/`, `./` or `../`.
+- Relative paths with a directory and a file extension, such as
+  `src/main.cpp`.
+- A file name with an extension followed by a line number, such as
+  `main.cpp:42`.
+
+A path may end in `:LINE` or `:LINE:COLUMN`. Relative paths resolve against
+the working directory of the pane they appear in, and `~/` against your home
+directory.
+
+### Where links open
+
+URLs open with the host's default handler: `open` on macOS, `xdg-open` on
+Linux. Files open in your editor:
+
+- If the same editor already runs in a pane of the current tab, Telar tries
+  to open the file in it and focuses that pane. This works for Neovim, Vim
+  and Emacs.
+- Otherwise, or when that editor cannot be reached, Telar splits the pane
+  you clicked in and starts the editor in a new pane to its right.
+
+If the file does not exist, a notice says so.
+
+Telar passes the line and column in the form each editor expects:
+
+| Editor | Arguments for `file:12:3` |
+| --- | --- |
+| `nvim`, `vim`, `vi` | `+call cursor(12, 3) file` |
+| `emacs`, `emacsclient`, `kak`, `micro` | `+12:3 file` |
+| `nano` | `+12,3 file` |
+| `hx`, `helix` | `file:12:3` |
+| `code`, `code-insiders`, `codium`, `cursor` | `-g file:12:3` |
+| any other | `file` |
+
+With only a line, Vim-family editors get `+12`.
+
+### Choose the editor
+
+`client.editor` names the editor. Without it, Telar uses `$EDITOR` from the
+window's environment. If neither is set, opening a file shows
+`EditorUnavailable`.
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    editor = "/opt/homebrew/bin/nvim",
+  },
+})
+```
+
+The value is one executable name or path. Telar runs it directly, without a
+shell, so flags, shell syntax and `~` in it are not interpreted. A window
+started from the desktop may not inherit your shell's `$EDITOR`; set
+`client.editor` to be sure.
+
+### From the CLI
+
+`telar client open-link` opens a URI through an attached window, as if you
+had clicked it in the window's focused pane:
+
+```sh
+telar client list
+telar client open-link "file:///etc/hosts" --client 1
+```
+
+## Configuration
+
+The picker is bindable as `telar.action.path_picker()`:
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    keybindings = {
+      telar.bind_global({ "ctrl+alt+f" }, telar.action.path_picker()),
+    },
+  },
+})
+```
+
+See [Config](/docs/config#keybindings) for keybindings and `client.editor`.

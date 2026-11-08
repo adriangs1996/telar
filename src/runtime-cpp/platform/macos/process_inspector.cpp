@@ -7,7 +7,9 @@ module;
 #include <sys/types.h>
 #include <unistd.h>
 #include <cstdio>
+#include <arpa/inet.h>
 #include <libproc.h>
+#include <sys/proc_info.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -98,6 +100,39 @@ FixedText<4096> ProcessInspector::executable(pid_t process) noexcept {
     result.assign(path.data());
   }
   return result;
+}
+
+ListeningPorts ProcessInspector::listeningPorts(pid_t group) const noexcept {
+  constexpr std::size_t maximum_group_processes = 64;
+  // Listening sockets open early; a busy server's later descriptors past this bound are connections.
+  constexpr std::size_t maximum_descriptors = 1024;
+  ListeningPorts ports;
+  std::array<pid_t, maximum_group_processes> members;
+  std::array<proc_fdinfo, maximum_descriptors> descriptors;
+  for (const auto member : std::span{members}.first(groupMembers(group, members))) {
+    const auto bytes = ::proc_pidinfo(member, PROC_PIDLISTFDS, 0, descriptors.data(), static_cast<int>(sizeof(descriptors)));
+    if (bytes <= 0) {
+      continue;
+    }
+
+    for (const auto &descriptor : std::span{descriptors}.first(std::min(descriptors.size(), static_cast<std::size_t>(bytes) / sizeof(proc_fdinfo)))) {
+      if (descriptor.proc_fdtype != PROX_FDTYPE_SOCKET) {
+        continue;
+      }
+
+      socket_fdinfo information{};
+      if (::proc_pidfdinfo(member, descriptor.proc_fd, PROC_PIDFDSOCKETINFO, &information, sizeof(information)) != sizeof(information)) {
+        continue;
+      }
+
+      const auto &socket = information.psi;
+      if (socket.soi_kind == SOCKINFO_TCP && socket.soi_proto.pri_tcp.tcpsi_state == TSI_S_LISTEN) {
+        ports.add(ntohs(static_cast<std::uint16_t>(socket.soi_proto.pri_tcp.tcpsi_ini.insi_lport)));
+      }
+    }
+  }
+
+  return ports;
 }
 
 std::size_t ProcessInspector::groupMembers(pid_t group, std::span<pid_t> members) noexcept {
