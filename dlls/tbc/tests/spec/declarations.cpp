@@ -376,3 +376,38 @@ void declarationSharedSiblingCopied() {
 }
 
 // END CASE
+
+// CASE: declaration.lending_output_live
+// PAIR: declaration.lending_output
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: AgentService::authorize
+// STATUS: implemented
+// CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
+// SCENARIO: The entry found in a live table is read; accept.
+namespace declarations {
+  tbc::view<entry &, tbc::lt::a> firstEntry(tbc::view<std::vector<entry> &, tbc::lt::a> entries);
+}
+
+std::size_t declarationLendingOutputLive(std::vector<declarations::entry> &entries) {
+  const auto &found = declarations::firstEntry(entries);
+  return found.text.size();
+}
+
+// END CASE
+
+// CASE: declaration.lending_output_dead
+// PAIR: declaration.lending_output
+// SOURCE: services/runtime-cpp/runtime/runtime.cppm :: AgentService::authorize
+// STATUS: implemented
+// CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
+// SCENARIO: The table dies while the entry found in it is still read; reject where it dies.
+std::size_t declarationLendingOutputDead(const std::string &text) {
+  const declarations::entry *found = nullptr;
+  {
+    std::vector<declarations::entry> entries;
+    entries.emplace_back(text, 1);
+    found = &declarations::firstEntry(entries);
+  } // expected-error [tbc-invalidated-borrow]
+  return found->text.size();
+}
+
+// END CASE

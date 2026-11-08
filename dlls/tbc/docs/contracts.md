@@ -120,6 +120,10 @@ uses only the callee's signature:
 - The result borrows what elision or the result's label names. A returned
   reference designates some part of what it borrows, at fields the declaration
   does not name. A returned value borrows what that input owns and what it holds.
+  A labeled non-const reference to a type that holds borrows is an output
+  parameter, which receives borrows of its region; when the result names that
+  region too, it also lends, as `fn find<'a>(store: &'a mut Store) -> &'a Entry`
+  lends the store.
 - The callee keeps an argument only where its declaration says so: a parameter
   and a receiver field that share a label, a labeled output parameter, a
   parameter whose type the class template's own parameters spell, as `T` in

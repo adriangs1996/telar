@@ -2901,7 +2901,9 @@ namespace tbc_lint {
         for (unsigned index = 0; index < callee->getNumParams() && index + offset < call.getNumArgs(); ++index) {
           const auto *parameter = callee->getParamDecl(index);
           const auto annotation = parameterAnnotation(*parameter, context_);
-          if (!annotation.present || outputParameter(*parameter)) {
+          // An output parameter receives borrows; it also lends when the result names its region, as
+          // `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
+          if (!annotation.present || (outputParameter(*parameter) && (selected_region == nullptr || annotation.region != selected_region))) {
             continue;
           }
           if (selected_region != nullptr) {
@@ -3163,10 +3165,11 @@ namespace tbc_lint {
         return result;
       }
 
+      // Whether a parameter can supply a result in the region, an output parameter included.
       bool hasMatchingParameter(const clang::FunctionDecl &callee, const clang::Type *region) const {
         for (const auto *parameter : callee.parameters()) {
           const auto annotation = parameterAnnotation(*parameter, context_);
-          if (annotation.present && annotation.region == region && !outputParameter(*parameter)) {
+          if (annotation.present && annotation.region == region) {
             return true;
           }
         }
