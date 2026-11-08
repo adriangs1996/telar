@@ -1,0 +1,5 @@
+{
+  "build_directory": "out",
+  "linter": "../tbc/out/release/tbc-lint",
+  "header_translation_unit": "main.cpp"
+}

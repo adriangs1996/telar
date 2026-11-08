@@ -108,6 +108,13 @@ separate contract language.
 cmake --build --preset debug --target lifetime-check
 ```
 
+Several sources are checked in parallel, one per physical core unless `-j N`
+says otherwise; each source's diagnostics are printed together. Consumer projects
+name the optimized checker in their `.tbc.json`, which `just lifetime-checker`
+builds at `out/release/tbc-lint`. `just runtime-lifetime` checks the runtime, the
+CLI and the telar libraries, `just gui-lifetime` the GUI, and the `lifetime-check`
+target each standalone library and the auth daemon.
+
 The compilation database supplies C++23 flags, includes, definitions, and the
 macOS SDK. For an isolated source file, arguments after `--` replace the database:
 
@@ -230,7 +237,7 @@ cmake --build --preset debug --target spec-check
 
 The first command validates fixture syntax/metadata, the runner, and implemented
 regressions. `spec-check` deliberately fails on unmet pending specifications.
-The corpus has 243 cases: 196 implemented regressions and 47 explicitly pending
+The corpus has 291 cases: 244 implemented regressions and 47 explicitly pending
 requirements. Fixtures are never linked or executed. Provenance validation requires the surrounding Telar checkout.
 
 ## Format and static analysis

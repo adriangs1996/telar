@@ -94,6 +94,15 @@ add_custom_target(gui-lint
   VERBATIM)
 add_dependencies(gui-lint gui-posix gui-themes gui-glyphs telar-gui-command)
 
+add_custom_target(gui-lifetime
+  COMMAND "${CMAKE_COMMAND}"
+    "-DGUI_BUILD_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}"
+    "-DTBC_LINTER=${TBC_LINTER}"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lifetime.cmake"
+  USES_TERMINAL
+  VERBATIM)
+add_dependencies(gui-lifetime gui-posix gui-themes gui-glyphs telar-gui-command)
+
 add_library(gui-config INTERFACE)
 set(GHOSTTY_VT_ROOT "" CACHE PATH "Installed libghostty-vt prefix")
 find_path(GHOSTTY_VT_INCLUDE_DIR ghostty/vt/unicode.h HINTS "${GHOSTTY_VT_ROOT}/include" REQUIRED)

@@ -161,6 +161,21 @@ runtime-lint jobs="2" directory="out": (runtime-configure directory "Debug")
 gui-lint: (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lint
 
+# Build the optimized lifetime checker that each project's .tbc.json names.
+lifetime-checker:
+    "{{ justfile_directory() }}/tools/cpp" configure tbc -B dlls/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+    "{{ justfile_directory() }}/tools/cpp" build tbc -B dlls/tbc/out/release -- --target tbc-lint
+
+# Check the lifetimes of the production runtime, CLI and telar library sources.
+[working-directory: "services/runtime-cpp"]
+runtime-lifetime directory="out": lifetime-checker (runtime-configure directory "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lifetime.cmake
+
+# Check the lifetimes of the GUI sources.
+[working-directory: "services/gui-cpp"]
+gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lifetime
+
 # Package a Release Telar C++ Preview.app, install it under APPS and link its `telar` into BIN.
 [macos]
 install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" no_tests) (gui-configure "out-release" "Release" no_tests)

@@ -4,7 +4,8 @@ include_guard(GLOBAL)
 # generated headers, module providers, dyndep/modmap files and the BMIs of
 # CMake's synthetic module targets. clang-tidy analyses each database entry of
 # a source, and an entry whose BMI is missing parses into an invalid AST that
-# checks then walk. Sets <patterns> to run-clang-tidy file patterns.
+# checks then walk. Sets <patterns> to run-clang-tidy file patterns and, when
+# given, <sources> to the selected source paths.
 function(telar_lint_prepare build_directory include_regex exclude_regex jobs patterns)
   # Let Ninja refresh CMake's database first, including after a new target or module.
   execute_process(COMMAND "${CMAKE_COMMAND}" --build "${build_directory}" --parallel "${jobs}" --target build.ninja
@@ -13,6 +14,7 @@ function(telar_lint_prepare build_directory include_regex exclude_regex jobs pat
   string(JSON count LENGTH "${commands}")
   set(objects)
   set(selected)
+  set(paths)
   if(count GREATER 0)
     math(EXPR last "${count} - 1")
     foreach(index RANGE ${last})
@@ -32,6 +34,7 @@ function(telar_lint_prepare build_directory include_regex exclude_regex jobs pat
         message(FATAL_ERROR "Object output outside the build directory: ${output}")
       endif()
       list(APPEND objects "${object}")
+      list(APPEND paths "${source}")
       # run-clang-tidy treats positional filenames as Python regular expressions.
       string(REGEX REPLACE "([][+.*()?^$\\\\|])" "\\\\\\1" pattern "${source}")
       list(APPEND selected "^${pattern}$")
@@ -39,10 +42,14 @@ function(telar_lint_prepare build_directory include_regex exclude_regex jobs pat
   endif()
   list(REMOVE_DUPLICATES objects)
   list(REMOVE_DUPLICATES selected)
+  list(REMOVE_DUPLICATES paths)
   if(NOT objects)
     message(FATAL_ERROR "No translation units in ${build_directory} match ${include_regex}")
   endif()
   execute_process(COMMAND "${CMAKE_COMMAND}" --build "${build_directory}" --parallel "${jobs}" --target ${objects}
     COMMAND_ERROR_IS_FATAL ANY)
   set(${patterns} "${selected}" PARENT_SCOPE)
+  if(ARGC GREATER 5)
+    set(${ARGV5} "${paths}" PARENT_SCOPE)
+  endif()
 endfunction()

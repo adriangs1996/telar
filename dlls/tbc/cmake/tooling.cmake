@@ -1,9 +1,17 @@
 cmake_minimum_required(VERSION 3.25)
 
-if(MODE STREQUAL "lint")
-  find_program(CLANG_TIDY NAMES clang-tidy HINTS "${COMPILER_DIR}")
-  if(NOT CLANG_TIDY)
-    message(FATAL_ERROR "clang-tidy was not found. Add your LLVM bin directory to PATH.")
+if(MODE STREQUAL "lint" OR MODE STREQUAL "lifetime-check")
+  if(MODE STREQUAL "lint")
+    find_program(CLANG_TIDY NAMES clang-tidy HINTS "${COMPILER_DIR}")
+    if(NOT CLANG_TIDY)
+      message(FATAL_ERROR "clang-tidy was not found. Add your LLVM bin directory to PATH.")
+    endif()
+  else()
+    include("${CMAKE_CURRENT_LIST_DIR}/tbcLifetimeCheck.cmake")
+    tbc_find_linter("${SOURCE_DIR}" TBC_LINT)
+    if(NOT EXISTS "${TBC_LINT}")
+      message(FATAL_ERROR "tbc-lint was not found at '${TBC_LINT}'. Build dlls/tbc (cmake --preset release) or set TBC_LINTER.")
+    endif()
   endif()
 
   set(database "${BINARY_DIR}/compile_commands.json")
@@ -32,8 +40,13 @@ if(MODE STREQUAL "lint")
     message(FATAL_ERROR "No project translation units were found in the compilation database.")
   endif()
 
+  if(MODE STREQUAL "lint")
+    set(command "${CLANG_TIDY}" "-p=${BINARY_DIR}" "--config-file=${SOURCE_DIR}/.clang-tidy")
+  else()
+    set(command "${TBC_LINT}" --warnings-as-errors "-p=${BINARY_DIR}")
+  endif()
   execute_process(
-    COMMAND "${CLANG_TIDY}" "-p=${BINARY_DIR}" "--config-file=${SOURCE_DIR}/.clang-tidy" ${sources}
+    COMMAND ${command} ${sources}
     WORKING_DIRECTORY "${SOURCE_DIR}"
     COMMAND_ERROR_IS_FATAL ANY)
 elseif(MODE STREQUAL "format" OR MODE STREQUAL "format-check")

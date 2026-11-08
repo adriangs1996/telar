@@ -46,18 +46,24 @@ if(PROJECT_IS_TOP_LEVEL)
   endif()
 
   get_filename_component(websock_compiler_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
-  foreach(mode IN ITEMS format format-check lint)
+  foreach(mode IN ITEMS format format-check lint lifetime-check)
     add_custom_target(${mode}
       COMMAND "${CMAKE_COMMAND}"
         "-DMODE=${mode}"
         "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
         "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
         "-DCOMPILER_DIR=${websock_compiler_directory}"
+        "-DTBC_LINTER=${TBC_LINTER}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/../tbc/cmake/tooling.cmake"
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       USES_TERMINAL
       VERBATIM)
   endforeach()
+  # The lifetime check reads the BMIs the build produces.
+  add_dependencies(lifetime-check websock)
+  if(TARGET websock-smoke)
+    add_dependencies(lifetime-check websock-smoke)
+  endif()
 endif()
 
 include(CMakePackageConfigHelpers)
