@@ -1902,7 +1902,13 @@ namespace tbc_lint {
           if (contents && (generic || ownType(*parameter, function_) || same_type || carriesRegion(parameter->getType(), region))) {
             continue;
           }
-          if (region == nullptr || parameterAnnotation(*parameter, context_).region != region) {
+          const auto *source_region = parameterAnnotation(*parameter, context_).region;
+          // A self field may carry what the object already keeps in a region of its own, as one that
+          // reads bytes a sibling allocates there: the object lives within that region anyway.
+          if (field != nullptr && selfBorrowing(*field) && source_region != nullptr && receiverHasRegion(function_, source_region)) {
+            continue;
+          }
+          if (region == nullptr || source_region != region) {
             report(issue::retention, where, &source);
           }
         }

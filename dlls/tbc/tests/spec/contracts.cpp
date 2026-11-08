@@ -363,6 +363,59 @@ void selfFieldMutation() {
 
 // END CASE
 
+// CASE: contract.self_field_region
+// PAIR: contract.self_field
+// SOURCE: services/gui-cpp/qt/font_cache.hpp :: FontCache::Generation
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
+// SCENARIO: A pinned object's labeled field reads bytes a sibling allocates in the object's own region; the object already lives within that region, so the internal borrow may carry it; accept.
+namespace contracts {
+  struct byte_pool {};
+
+  template <typename Memory>
+  class pooled_bytes {
+  public:
+    explicit pooled_bytes(tbc::view<Memory &, tbc::lt::a> memory)
+        : memory_(memory) {}
+
+    [[nodiscard]] std::span<const char> bytes() const;
+
+  private:
+    tbc::view<Memory &, tbc::lt::a> memory_;
+  };
+
+  class byte_reader {
+  public:
+    explicit byte_reader(tbc::view<std::span<const char>, tbc::lt::a> bytes)
+        : bytes_(bytes) {}
+
+  private:
+    tbc::view<std::span<const char>, tbc::lt::a> bytes_;
+  };
+
+  template <typename Memory>
+  class pooled_face {
+  public:
+    explicit pooled_face(tbc::view<Memory &, tbc::lt::a> memory)
+        : source_(memory),
+          reader_(source_.bytes()) {}
+
+    pooled_face(const pooled_face &) = delete;
+    pooled_face &operator=(const pooled_face &) = delete;
+
+  private:
+    tbc::view<pooled_bytes<Memory>, tbc::lt::a> source_;
+    tbc::view<byte_reader, tbc::lt::self> reader_;
+  };
+}
+
+void selfFieldRegion(contracts::byte_pool &memory) {
+  const contracts::pooled_face<contracts::byte_pool> face{memory};
+  static_cast<void>(face);
+}
+
+// END CASE
+
 // CASE: contract.elided_constructor_escape
 // PAIR: contract.elided_constructor
 // SOURCE: services/gui-cpp/qt/ancestor_geometry.hpp :: AncestorGeometry
