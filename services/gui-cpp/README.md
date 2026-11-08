@@ -2,8 +2,8 @@
 
 The C++23 client uses Qt Quick for the window, models and rendering. The runtime
 owns processes, PTYs and durable state; closing this client leaves them running.
-Current delivery scope and remaining work are in [DAILY_DRIVER.md](DAILY_DRIVER.md),
-[PARITY.md](PARITY.md) and [ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).
+Current delivery scope and remaining work are in [DAILY_DRIVER.md](DAILY_DRIVER.md)
+and [PARITY.md](PARITY.md).
 Before profiling or optimizing the client, read [OPTIMIZATION.md](OPTIMIZATION.md)
 for the frozen benchmark, rejected experiments and reproduction procedure.
 
@@ -37,8 +37,7 @@ Native font discovery is owned by `platform/font.h`, `platform/macos/font.m` and
 `platform/linux/font.c`. macOS optical terminal text uses the CoreText glyph
 rasterizer under `platform/macos`, borrowed font bytes and caller-owned scratch
 storage. Qt caches the resulting masks and retains glyph meshes between damaged
-frames. Font shaping and cell placement remain in `fonts` and `qt`; these font
-adapters no longer include or compile files from the Zig GUI.
+frames. Font shaping and cell placement remain in `fonts` and `qt`.
 
 `gui.font.thicken` applies to terminal text, cursor text and preedit on both
 platforms. macOS uses CoreText optical smoothing. Linux uses a centered FreeType
@@ -97,13 +96,10 @@ tools/cpp configure gui --config Release -- -DTELAR_GUI_QT_JOBS=2
 tools/cpp build gui -- --parallel 2
 ```
 
-`tools/cpp configure` also bootstraps the verified Zig compiler and VT recipe.
+`tools/cpp configure` also bootstraps the verified Zig compiler that builds the pinned libghostty-vt.
 The native Xcode SDK is required on macOS. On Linux, use the documented desktop
 SDK installer. `just app`, `just gui-test` and `just install-gui` use this same
 toolchain and managed Qt build.
-
-The GUI still generates some data from Telar Zig sources. Building Ghostty also
-uses Zig; removing those dependencies is a separate migration.
 
 ## Run and configuration
 
@@ -282,5 +278,3 @@ the current installed app available while testing it:
 python3 services/gui-cpp/tools/package_macos.py --help
 ```
 
-Packaging does not establish independence from the bundled runtime/CLI or the
-Zig-derived build inputs described in [ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).

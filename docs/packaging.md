@@ -18,20 +18,11 @@ No releases are published yet. The release, installer and Homebrew sections
 below describe packaging infrastructure; use a local build today.
 Start with the [build dependencies](development.md#build-requirements).
 
-On macOS, build the app, copy it to a location you will keep, and open it:
+On macOS, `just install-gui` builds and installs the app ([details](#macos)):
 
 ```sh
-zig build bundle -Doptimize=ReleaseFast
-mkdir -p "$HOME/Applications"
-```
-
-Use Finder to copy `zig-out/Telar.app` to `~/Applications`. If another copy
-already exists there, quit its window and decide whether to replace it. This
-does not itself stop its runtime. Then launch and link the installed executable:
-
-```sh
-open "$HOME/Applications/Telar.app"
-"$HOME/Applications/Telar.app/Contents/Resources/bin/telar" cli install --dir "$HOME/.local/bin"
+just install-gui
+open "$HOME/Applications/Telar C++ Preview.app"
 ```
 
 On Linux, build the release archives ([how](#to-reproduce-a-release-build))
@@ -56,36 +47,36 @@ Reinstall agent integrations if their executable path changed; see
 ## macOS
 
 ```sh
-zig build bundle -Doptimize=ReleaseFast   # zig-out/Telar.app
-zig build dmg -Doptimize=ReleaseFast      # zig-out/Telar.dmg
-just install-gui                          # bundle into ~/Applications, telar into ~/.local/bin
+just install-gui    # bundle into ~/Applications, telar into ~/.local/bin
 ```
 
-`just install-gui` builds the bundle in ReleaseFast, replaces
-`~/Applications/Telar.app` and links `~/.local/bin/telar` to the bundled
-executable through `telar cli install`; both directories are recipe
-parameters. On Linux the same recipe runs `zig build --prefix ~/.local` in
-ReleaseFast. A running runtime keeps its old executable until it is
-restarted, and hooks installed with `telar integration install` keep the
-path they were installed with.
+`just install-gui` builds the runtime and the GUI in Release, stages them with
+`services/gui-cpp/tools/package_macos.py`, replaces
+`~/Applications/Telar C++ Preview.app` and links `~/.local/bin/telar` to the
+bundled CLI; both directories are recipe parameters. The release bundle,
+`Telar.app`, comes from `packaging/release/macos.sh`. A running runtime keeps
+its old executable until it is restarted, and hooks installed with
+`telar integration install` keep the path they were installed with.
 
 The bundle layout:
 
 ```
 Telar.app/Contents/
   Info.plist                 packaging/macos/Info.plist.in, version from VERSION
-  MacOS/Telar                launcher, src/launcher/main.zig
+  MacOS/Telar                launcher, services/gui-cpp/tools/macos_launcher.cpp
+  MacOS/telar-gui, telar-gui-command   the C++ client and its surface helper
+  Frameworks/, PlugIns/      the managed Qt the client loads
   Resources/telar.icns       packaging/macos/telar.icns
-  Resources/bin/telar        the executable
+  Resources/bin/telar, telar-runtime, telar-config-check
   Resources/bin/telar-diagram-renderer   native Mermaid rasterizer
+  Resources/qml/             the Qt QML modules the client imports
   Resources/licenses/        notices of every library compiled in
 ```
 
-Finder starts `MacOS/Telar` with no arguments. The launcher execs
-`Resources/bin/telar gui --login-shell` and nothing else, which keeps the
-CLI's argument grammar untouched. The executable lives under `Resources`
-because macOS file systems fold case: `Telar` and `telar` cannot share
-`Contents/MacOS`.
+Finder starts `MacOS/Telar` with no arguments. The launcher runs
+`MacOS/telar-gui` through the user's login shell. The CLI lives under
+`Resources/bin` because macOS file systems fold case: `Telar` and `telar`
+cannot share `Contents/MacOS`.
 
 The icon comes from two sources drawn for different sizes:
 `assets/telar-mark.svg` for 16 to 64 px and `assets/telar-icon.svg`
@@ -97,7 +88,7 @@ brand files:
 uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
 ```
 
-`zig build` signs nothing beyond the linker's ad hoc signature, which is
+A local build signs nothing beyond the linker's ad hoc signature, which is
 enough on the machine that built it. The [release workflow](#releases) signs
 and notarizes for other Macs.
 
@@ -172,36 +163,6 @@ not one. When the default directory is not writable it says so and suggests
 
 ## Native libraries
 
-The standalone libraries link three C libraries. `build/native_libraries.zig`
-compiles each from a source archive pinned by hash in `build.zig.zon` and
-links it statically, the way `build/freetype.zig` builds FreeType and
-HarfBuzz.
-
-| Library | Pinned source | Used by |
-| --- | --- | --- |
-| brotli 1.2.0, decoder only | GitHub tag archive | `exchangecapture` |
-| nghttp2 1.70.0 | release tarball | `httprelay` |
-| SQLite 3.53.4 amalgamation, with FTS5 | sqlite.org | `sqlite`, Linux only |
-
-macOS keeps its own `/usr/lib/libsqlite3.dylib`. Every macOS ships it and
-Apple patches it with the OS. On Linux the system SQLite is often missing
-from minimal server images, and its FTS5 support depends on how the
-distribution built it, so every Linux release carries the same amalgamation.
-It is built without extension loading, which nothing in telar uses.
-`zig build cross` builds all three from source for the targets it checks.
-
-A distribution package can link system copies instead:
-
-```sh
-zig build -Dbrotli=/usr -Dnghttp2=/usr -Dsqlite=/usr
-```
-
-Each option names the prefix holding `include/` and `lib/`. Third-party C
-stays optimized in Debug builds, as the emulator does.
-
-The notices of these libraries, FreeType and HarfBuzz install under
-`share/telar/licenses` and `Telar.app/Contents/Resources/licenses`.
-
 The C++ runtime and CLI link no third-party library from the system except
 macOS's SDK zlib, SQLite and libpcap. CMake downloads the releases pinned in
 `cmake/openssl/manifest.cmake` and `cmake/native/manifest.cmake` (nghttp2,
@@ -226,9 +187,9 @@ To publish a version:
 2. Tag that commit `vX.Y.Z` and push the tag.
 3. Watch the workflow. It publishes the release once every platform built.
 
-Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml):
-`zig build` and `zig build check` on macOS arm64 and Linux x86_64, the
-headless linkage check and shellcheck on the release scripts.
+Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml),
+shellcheck on the release scripts. The C++ workflows (`runtime-cpp.yml`,
+`gui-cpp.yml`, `tbc.yml`) build and test the projects whose paths changed.
 
 ### Assets
 
@@ -261,12 +222,8 @@ The labels come from GitHub's
 Both Linux architectures build on native runners, so every archive is built
 and smoke-tested on the architecture it ships for.
 
-The macOS deployment target is 26.0 because the native client needs Metal 4.
-Left alone, Zig targets the host's exact version, which on a runner is
-whatever macOS 26.x it has. With a pinned version Zig treats the target as
-foreign and stops finding the SDK, so `packaging/macos/sdk-libc.sh` writes a
-libc file for `--libc` and `build/macos_sdk.zig` adds the SDK's frameworks
-and `usr/lib`.
+`packaging/release/macos.sh` pins the macOS deployment target to 26.0 with
+`CMAKE_OSX_DEPLOYMENT_TARGET` for the runtime and the GUI.
 
 `packaging/release/check-linkage.sh` fails the build when a binary links
 anything outside that table or asks for glibc newer than 2.38 or a
@@ -317,7 +274,7 @@ What differs from a glibc build, in this code:
 ### To reproduce a release build
 
 ```sh
-packaging/release/macos.sh build /tmp/stage   # Homebrew deps, Zig 0.17, Cargo
+packaging/release/macos.sh build /tmp/stage   # pinned C++ toolchain, libghostty-vt, Cargo
 packaging/release/sign-macos.sh /tmp/stage    # ad hoc without MACOS_SIGNING_IDENTITY
 packaging/release/macos.sh package /tmp/stage dist
 packaging/release/linux-headless.sh dist   # Alpine, after install-alpine-deps.sh

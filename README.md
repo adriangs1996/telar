@@ -39,8 +39,8 @@ The window connects to a separate runtime that owns the processes and their
 terminals. Close the window and the work keeps running. Reopen it to reconnect,
 or connect over SSH to a runtime on another machine.
 
-Telar is written in Zig and uses Ghostty's terminal emulation library,
-`libghostty-vt`, with its own window and multiplexer. The name is Spanish for
+Telar is written in C++23 and uses Ghostty's terminal emulation library,
+`libghostty-vt`, with its own Qt Quick window and multiplexer. The name is Spanish for
 *loom*.
 
 ## What you can do
@@ -68,21 +68,26 @@ from source to try it. Configuration and CLI interfaces are still evolving.
 
 | Platform | Desktop requirements |
 | --- | --- |
-| macOS | macOS 26 or later and a Metal 4 GPU |
-| Linux | Wayland and Vulkan 1.3 with the required extensions |
+| macOS | macOS 26 or later with its SDK (Xcode or Command Line Tools) |
+| Linux | The desktop SDK from `packaging/release/install-linux-deps.sh` |
 
-Install **Zig 0.16.0**, **Rust/Cargo 1.93.1 or newer**, and the
-[platform build dependencies](docs/development.md#build-requirements), then:
+Install Python 3.9+, Git, **Rust/Cargo 1.93.1 or newer** and the platform SDK.
+`tools/cpp bootstrap` installs the pinned LLVM, CMake, Ninja and Just into
+`.toolchain/`; the first configure builds the pinned `libghostty-vt` and Qt.
+The [C++ build guide](docs/build/cpp-modules.md) covers every step. Then:
 
 ```sh
 git clone https://github.com/adriangs1996/telar.git
 cd telar
-zig build -Doptimize=ReleaseFast
-./zig-out/bin/telar
+tools/cpp bootstrap
+export PATH="$PWD/.toolchain/bin:$PATH"
+just app
 ```
 
-Telar opens a window with your shell and starts its local runtime when needed.
-Run your editor or agent as you would in another terminal.
+`just app` builds the runtime, the `telar` CLI and the GUI, then opens a window
+on an isolated development runtime. On macOS, `just install-gui` installs the
+application bundle and links `telar` into `~/.local/bin`. Run your editor or
+agent as you would in another terminal.
 
 The default keybinding prefix is `Ctrl+b`: press it, release it, then press
 the next key.
@@ -95,16 +100,16 @@ the next key.
 | `s` | Toggle the sidebar |
 | `/` | Search command history |
 
-For a macOS application bundle, a Linux desktop installation or a server build
-without a GUI, see [local installation](docs/packaging.md#install-a-local-build).
+For release packages and a server build without a GUI, see
+[packaging](docs/packaging.md).
 
 ### Connect your agents
 
 Install the integration for the agent you use, then start a new agent session
-inside Telar. For Claude Code, from the checkout:
+inside Telar. For Claude Code:
 
 ```sh
-./zig-out/bin/telar integration install claude
+telar integration install claude
 ```
 
 The other integration names are `codex`, `pi`, `cursor` and `opencode`.
@@ -116,7 +121,7 @@ for details.
 The binary includes guidance for agents using Telar:
 
 ```sh
-./zig-out/bin/telar --skill
+telar --skill
 ```
 
 ### Connect to another machine
@@ -125,7 +130,7 @@ Install matching Telar builds on both machines, with `telar` available to the
 remote SSH command, then open a window connected to that host:
 
 ```sh
-./zig-out/bin/telar gui --remote dev@box
+telar gui --remote dev@box
 ```
 
 You can also [save machines](docs/remote.md#save-a-machine) for repeated use.

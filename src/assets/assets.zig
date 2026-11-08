@@ -1,9 +1,0 @@
-//! Binary assets embedded once and shared by every presentation adapter.
-//! Example: `const face = @import("assets").jetbrains_mono;`
-
-pub const jetbrains_mono: []const u8 = @embedFile("JetBrainsMono-Regular.ttf");
-pub const telar_forma: []const u8 = @embedFile("TelarForma-Regular.ttf");
-pub const nerd_symbols: []const u8 = @embedFile("SymbolsNerdFontMono-Regular.ttf");
-pub const plex_sans: []const u8 = @embedFile("IBMPlexSans-Regular.ttf");
-pub const plex_sans_semibold: []const u8 = @embedFile("IBMPlexSans-SemiBold.ttf");
-pub const provider_symbols_rgba: []const u8 = @embedFile("provider-symbols-320x64.rgba");

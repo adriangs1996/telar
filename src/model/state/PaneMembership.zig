@@ -1,4 +1,0 @@
-const core = @import("telar-core");
-
-pane_id: core.PaneId,
-attached: bool,

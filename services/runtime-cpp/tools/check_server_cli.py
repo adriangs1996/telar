@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-import argparse
-from datetime import datetime, timezone
-import hashlib
-import json
+"""Runtime server CLI checks that tests/server_cli_test.py runs against one telar binary."""
 import os
 from pathlib import Path
 import select
@@ -131,21 +127,3 @@ def check_runtime(binary, checkpoint_probe):
         finally:
             if socket.exists():
                 stop(socket)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Compare runtime server CLI behavior in isolated directories")
-    for name in ("zig", "cpp", "checkpoint-probe", "output"):
-        parser.add_argument(f"--{name}", type=Path, required=True)
-    arguments = parser.parse_args()
-    binaries = {name: getattr(arguments, name).resolve() for name in ("zig", "cpp", "checkpoint_probe")}
-    report = {"measured_at": datetime.now(timezone.utc).isoformat(),
-              "binaries": {name: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for name, path in binaries.items()}}
-    for implementation in ("zig", "cpp"):
-        report[implementation] = check_runtime(binaries[implementation], binaries["checkpoint_probe"])
-        print(f"{implementation}: server CLI checks passed", flush=True)
-    arguments.output.write_text(json.dumps(report, indent=2) + "\n")
-
-
-if __name__ == "__main__":
-    main()

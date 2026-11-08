@@ -1,5 +1,0 @@
-const core = @import("telar-core");
-
-pane_id: core.PaneId,
-location: core.TabLocation,
-size: core.TerminalSize,

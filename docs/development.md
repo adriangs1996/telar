@@ -3,114 +3,75 @@
 For an introduction and first launch, see the [README](../README.md).
 Run the commands below from the repository root.
 
-The C++ services use the [pinned module build and onboarding guide](build/cpp-modules.md),
-including development, CI, standalone libraries and release packaging.
+The [pinned module build and onboarding guide](build/cpp-modules.md) is the
+reference for the toolchain, configure/build/test commands, diagnostics
+variants, clangd, CI, standalone libraries and release packaging.
 
 ## Build requirements
 
-Use Zig 0.16.0, the version declared in [build.zig.zon](../build.zig.zon).
-The native GUI also needs Cargo and Rust 1.93.1 or newer to build the
-[diagram renderer](../tools/diagram-renderer/README.md). Rust is a build
-requirement; the installed application does not need it.
+`tools/cpp bootstrap` installs the pinned LLVM, CMake, Ninja and Just into
+`.toolchain/`. The first configure prepares the verified Zig compiler that
+only builds the pinned `libghostty-vt`, and the managed Qt, OpenSSL and
+native libraries. Building the GUI also needs Cargo and Rust 1.93.1 or newer
+for the [diagram renderer](../tools/diagram-renderer/README.md); the
+installed application does not need Rust.
 
 ### macOS
 
-The GUI requires macOS 26 and a Metal 4 GPU. Install Xcode or the Command
-Line Tools with a macOS 26 SDK, along with Zig and Rust.
-
-Brotli and nghttp2 are built from pinned sources. Telar uses macOS's SQLite;
-there is no separate Homebrew library installation required by the default
-build. Linux builds SQLite from pinned sources too. Distribution builds can
-choose system libraries with `-Dbrotli=PREFIX`, `-Dnghttp2=PREFIX` and
-`-Dsqlite=PREFIX`; see [native libraries](../build/native_libraries.zig).
+Install Xcode or the Command Line Tools with a macOS 26 SDK, Python 3.9+,
+Git and Rust.
 
 ### Linux
 
-The GUI needs a Wayland session and a Vulkan 1.3 device with the
-required extensions. Building it also requires
-Wayland protocol definitions and `wayland-scanner`, `glslc`, and development
-headers for xkbcommon, Fontconfig, Vulkan, ATK and GLib.
-
-On Ubuntu 24.04, use the dependency script used by CI, then install Zig and
-Rust separately:
+On Ubuntu 24.04, install the desktop SDK used by CI, then Rust:
 
 ```sh
 sudo packaging/release/install-linux-deps.sh
 ```
 
-On Arch Linux or Arch Linux ARM, install the platform dependencies, then
-install the Zig and Rust versions above:
-
-```sh
-sudo pacman -Syu --needed base-devel pkgconf \
-  wayland wayland-protocols libxkbcommon vulkan-headers vulkan-icd-loader shaderc \
-  fontconfig ttf-dejavu at-spi2-core glib2
-```
+The headless profile needs no graphical SDK; the
+[build guide](build/cpp-modules.md#comandos-completos) lists its packages.
 
 ### Build and launch
 
 ```sh
-zig build -Doptimize=ReleaseFast
-./zig-out/bin/telar
+tools/cpp bootstrap
+export PATH="$PWD/.toolchain/bin:$PATH"
+just app
 ```
 
-The default build installs `telar` and `telar-diagram-renderer` together in
-`zig-out/bin`. Keep both executables together when moving an installation.
-[Packaging](packaging.md) covers application bundles, desktop entries and
-installation into another prefix.
-
-For a server without a desktop, build the runtime and CLI without the GUI
-or Rust helper:
-
-```sh
-zig build -Dgui=false -Doptimize=ReleaseFast
-```
-
-This build runs `telar server` and CLI commands; it cannot open a window.
-It is different from the headless client (`zig build headless`).
+`just app` builds the runtime, the CLI and the GUI in Debug and opens a
+window on a development runtime with its own socket and history under
+`.dev/`. `just app-release` does the same with optimized builds. `just --list`
+shows every recipe. [Packaging](packaging.md) covers release archives,
+application bundles and desktop entries.
 
 ## Making changes
 
-Read the [Zig source layout](zig-source-layout.md).
-[Build navigation](../build/README.md) maps build targets to their definitions.
 The planned [Go proxy service migration](proxy-service.md) defines component
 ownership, the first IPC delivery and the native adapter validation gates.
 
-Check the tree before you commit:
+Test what you change before you commit:
 
 ```sh
-zig build check
-zig build codestyle
+just runtime-test     # runtime and CLI CTest groups
+just gui-test         # GUI tests, the integration ones against the runtime
+just runtime-lint
+just gui-lint
 ```
 
-CI runs `zig build` and `zig build check` on macOS and Linux. Optional `just`
-recipes wrap build, check and benchmark commands; see [justfile](../justfile)
-and the [CI workflow](../.github/workflows/ci.yml).
-
-[Benchmarks](benchmarks.md) documents measurement commands and historical
-results.
+Extra arguments go to CTest, for example `just runtime-test -R server-cli`.
+CI runs the C++ workflows in [`.github/workflows`](../.github/workflows).
 
 ## Development diagnostics
 
-Debug builds emit one JSON Lines sample per second without writing terminal or
-PTY contents. Logs live beside the local runtime socket:
+Debug builds, and optimized builds configured with `-DTELAR_DIAGNOSTICS=ON`,
+write per-process telemetry files beside the local runtime socket:
 
 ```text
 <socket>.runtime-<pid>.log
 <socket>.client-<pid>.log
 ```
 
-Runtime samples cover PTY throughput, folded updates, frame size, damaged rows,
-diff scans, no-op frames, VT ingestion, frame encoding, and acknowledgement
-latency. Client samples separate cell `flush_*` from `media_flush_*`, attribute
-KGP wire bytes to panes, toasts, and the sidebar, and report retained bytes for
-the Kitty store, toast textures, sidebar atlas, screen buffers, Lua VM, and
-instrumented heap. File writes run outside the interactive loop. Optimized
-builds collect this telemetry only with `-Ddiagnostics=true`.
-
-Runtime heap samples keep the aggregate `interactive_alloc*` counters and split
-them into `interactive_vt_alloc*` for terminal-emulator state growth and
-`interactive_telar_alloc*` for allocations owned by Telar's event path. Proxy
-rejections likewise distinguish missing or malformed authorization from an
-otherwise valid credential that is no longer registered, without logging
-either value.
+`telar diagnostics logs` prints their tails together with the runtime's own
+log, without contacting the runtime and without terminal content.

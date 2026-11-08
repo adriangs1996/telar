@@ -519,7 +519,7 @@ def main():
                     started_at=time.strftime('%Y-%m-%dT%H:%M:%S%z'))
     source = options.source.resolve() if options.source else Path(__file__).resolve().parent.parent
     manifest['source_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip()
-    patch = subprocess.check_output(['git', 'diff', '--', 'src', 'build', 'build.zig', 'build.zig.zon'], cwd=source)
+    patch = subprocess.check_output(['git', 'diff', '--', 'services', 'dlls', 'cmake'], cwd=source)
     (directory / 'source.patch').write_bytes(patch)
     manifest['source_patch_sha256'] = hashlib.sha256(patch).hexdigest()
     if 'ghostty' in modes:

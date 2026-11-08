@@ -1,5 +1,0 @@
-slot: u8,
-width: u32,
-height: u32,
-logical_width: f32,
-logical_height: f32,

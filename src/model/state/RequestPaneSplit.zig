@@ -1,8 +1,0 @@
-const cellgrid = @import("cellgrid");
-const core = @import("telar-core");
-const layout_support = @import("../workspace/layout_support.zig");
-
-axis: layout_support.Axis,
-area: cellgrid.Rect,
-target_pane: ?core.PaneId = null,
-arguments: []const []const u8 = &.{},

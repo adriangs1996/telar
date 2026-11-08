@@ -1,7 +1,0 @@
-const keyinput = @import("keyinput");
-const Mouse = keyinput.Mouse;
-
-event: Mouse,
-exterior_pixels: bool,
-cell_width_px: u16,
-cell_height_px: u16,

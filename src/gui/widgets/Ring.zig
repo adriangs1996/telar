@@ -1,8 +1,0 @@
-//! A stroke drawn inside an area's outline, optionally rounded. It leaves the
-//! interior untouched, so it can mark attention over a pane or a card.
-const cellgrid = @import("cellgrid");
-width: f32,
-color: cellgrid.Color,
-radius: f32 = 0,
-/// Opacity of the stroke, so a ring can fade in over animation frames.
-alpha: f32 = 1,

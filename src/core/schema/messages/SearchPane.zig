@@ -1,5 +1,0 @@
-const id = @import("../id.zig");
-/// Copy-mode text search over one attached pane's retained history.
-request_id: id.RequestId,
-pane_id: id.PaneId,
-needle: []const u8,

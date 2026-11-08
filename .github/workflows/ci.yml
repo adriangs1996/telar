@@ -12,57 +12,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  RUST_TOOLCHAIN: 1.93.1
-
 jobs:
-  build:
-    name: build (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-26, ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # The Zig client's Wayland, Vulkan, xkbcommon, Fontconfig and ATK
-      # headers, wayland-scanner and glslc for its generated sources.
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            ca-certificates curl xz-utils gcc libc6-dev pkg-config python3 binutils file \
-            libwayland-dev wayland-protocols libxkbcommon-dev libfontconfig-dev libvulkan-dev glslc \
-            libatk1.0-dev libatk-bridge2.0-dev libglib2.0-dev
-
-      - name: Install Zig
-        run: |
-          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
-          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
-
-      - name: Install Rust
-        run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup default "$RUST_TOOLCHAIN"
-
-      - name: Build
-        run: zig build
-
-      - name: Check
-        run: zig build check
-
-      # The server build is static musl: it must link nothing, and code that
-      # imports a libc struct musl's headers cannot express fails here.
-      - name: Headless build is static
-        if: runner.os == 'Linux'
-        run: |
-          zig build -Dgui=false -Dtarget=x86_64-linux-musl --prefix zig-out/headless
-          packaging/release/check-linkage.sh linux-headless zig-out/headless/bin/telar
-
   scripts:
     runs-on: ubuntu-24.04
     steps:
@@ -74,4 +24,4 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
-          shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh packaging/macos/*.sh
+          shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh

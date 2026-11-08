@@ -1,5 +1,0 @@
-const data = @import("model");
-pane: *const data.Pane,
-view: data.LayoutView,
-copy: ?data.CopyModeView = null,
-hide_cursor: bool = false,

@@ -28,4 +28,3 @@ Full parity, sustained daily stability and physical suspend are not declared
 verified. Native shutdown sanitizer failures remain recorded and unsuppressed;
 general framework exit-retention triage is deferred. Additional feature inventory
 and runtime/CLI/plugin-worker replacement are outside the performance task.
-Zig retirement remains a separate audited stage in [ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).

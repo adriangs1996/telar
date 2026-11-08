@@ -1,7 +1,0 @@
-const core = @import("telar-core");
-
-location: core.TabLocation,
-size: core.TerminalSize,
-launch: core.LaunchView,
-launch_cwd: []const u8,
-workspace_path: []const u8,

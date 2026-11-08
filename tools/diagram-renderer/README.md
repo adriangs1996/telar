@@ -7,16 +7,14 @@ browser, JavaScript runtime or external renderer at runtime.
 
 ## Build and checks
 
-Install Cargo and Rust 1.93.1 or newer, in addition to Telar's Zig and platform
-dependencies. Rust 1.93.1 is the version used to validate this helper. `zig build`
-builds the locked release helper and installs `bin/telar-diagram-renderer` beside
-`bin/telar`. The macOS bundle includes both under `Contents/Resources/bin`.
-Cross compilation requires the corresponding Rust target and linker, as well
-as the Zig target. Supported GUI targets are aarch64 and x86_64 macOS/Linux.
-
-The GUI looks beside its executable for the helper. Development executables
-under Zig's build cache can use the generated `diagram_renderer_options.helper_path`.
-Installed applications do not need Cargo or access to the build directory.
+Install Cargo and Rust 1.93.1 or newer, in addition to Telar's platform
+dependencies. Rust 1.93.1 is the version used to validate this helper.
+`just renderer` builds the locked release helper. The release packaging scripts
+install `bin/telar-diagram-renderer` beside `bin/telar`; the macOS bundle
+includes both under `Contents/Resources/bin`. Cross compilation requires the
+corresponding Rust target and linker. Supported targets are aarch64 and x86_64
+macOS/Linux. Installed applications do not need Cargo or access to the build
+directory.
 
 ## Protocol and bounds
 

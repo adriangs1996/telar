@@ -1,7 +1,0 @@
-const PathCompletionState = @import("../state/PathCompletionState.zig");
-const PathCompletionResult = @import("../state/PathCompletionResult.zig");
-/// The result the adapter delivers for one directory listing. A successful
-/// result is heap-owned by the worker's allocation and released by the
-/// controller that consumes it, so the inbox message stays small.
-execution_id: PathCompletionState.ExecutionId,
-result: anyerror!*PathCompletionResult,

@@ -126,7 +126,6 @@ suspend/resume and general native-retention triage. Preserve existing behavior;
 these deferred validations are not additional blockers for the scoped delivery.
 
 Full visual parity and sustained daily stability are not declared complete.
-Own-Zig retirement needs a separate audited clean build and runtime/CLI/plugin-worker
-replacement; see [ZIG_RETIREMENT.md](ZIG_RETIREMENT.md). Keep genuine tests/fixtures
+Keep genuine tests/fixtures
 and runners; store benchmark artifacts only in ignored outputs, with concise status
 and figures here or in the delivery documentation.

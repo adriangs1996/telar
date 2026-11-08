@@ -3,8 +3,7 @@
 
 Build services/runtime-cpp/tests/viewport_follow_probe.cpp with
 build_runtime_scroll_probe.py, adding --include-dir services/gui-cpp. Supply
-the resulting probe and one frozen runtime. For Zig, also pass --zig-wire
-from build_viewport_follow_wire.py using that runtime's source revision.
+the resulting probe and one frozen runtime.
 This checks cells and protocol behavior only; it does not measure GUI latency or presentation.
 
 Each scenario uses a fresh runtime. Reports retain semantic failures, and the
@@ -17,7 +16,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 from bench_stack import executable_identity, runtime_identity
 from benchmark_host import HostLoadGate
@@ -93,22 +91,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', type=Path, required=True)
     parser.add_argument('--probe', type=Path, required=True)
-    parser.add_argument('--zig-wire', type=Path, help='Exact-reference adapter from build_viewport_follow_wire.py')
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     runtime = args.runtime.resolve(strict=True)
     probe = args.probe.resolve(strict=True)
-    wire = None if args.zig_wire is None else args.zig_wire.resolve(strict=True)
-    client = Path(__file__).with_name('viewport_follow_zig.py')
-    command = [str(probe)] if wire is None else [sys.executable, str(client), '--wire', str(wire), '--fixture', str(probe)]
+    command = [str(probe)]
     output = args.output.resolve()
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
     save(output / 'manifest.json', dict(
         scope='PTY/wire/cell correctness only; no timing or presentation claim.',
         runtime=executable_identity(runtime), probe=executable_identity(probe),
         controller=executable_identity(Path(__file__)), scenarios=SCENARIOS,
-        zig_wire=None if wire is None else executable_identity(wire),
-        zig_client=None if wire is None else executable_identity(client),
         uptime=subprocess.check_output(['uptime'], text=True)))
     host = HostLoadGate(output / 'host-load.json')
     host.checkpoint('before-series')

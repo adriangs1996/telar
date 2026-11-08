@@ -1,5 +1,0 @@
-/// Host defaults used for terminal queries, independently of cell styling.
-/// Example: `const colors: TerminalColors = .{ .background = .{ 16, 16, 16 } };`.
-foreground: ?[3]u8 = null,
-background: ?[3]u8 = null,
-palette: ?[16][3]u8 = null,

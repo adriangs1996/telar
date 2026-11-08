@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Compare isolated plugin-worker effects against exact bytes and the Zig worker.
+"""Check isolated plugin-worker effects against exact bytes.
 
 This is a functional oracle. It never starts a runtime or contacts a real GUI.
-Pass --zig for differential checks, or omit it to check the C++ worker alone.
 Pass --output to retain generated sources and receipts; otherwise they are temporary.
 """
 import argparse
@@ -159,11 +158,10 @@ def main():
 
 def run(cleanup):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--zig', type=Path, help='Optional original-Zig reference executable')
     parser.add_argument('--cpp', type=Path, required=True)
     parser.add_argument('--output', type=Path, help='New receipt directory; defaults to a temporary directory')
     args = parser.parse_args()
-    binaries = {name: path.resolve(strict=True) for name, path in (('zig', args.zig), ('cpp', args.cpp)) if path is not None}
+    binaries = {'cpp': args.cpp.resolve(strict=True)}
     if args.output is None:
         args.output = Path(cleanup.enter_context(tempfile.TemporaryDirectory(prefix='telar-action-worker-'))) / 'receipts'
     output = args.output.resolve()

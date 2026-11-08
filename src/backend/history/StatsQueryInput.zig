@@ -1,9 +1,0 @@
-const core = @import("telar-core");
-const QueryOrigin = @import("QueryOrigin.zig");
-
-request_id: core.RequestId,
-origin: QueryOrigin,
-scope: core.HistoryScope = .global,
-scope_value: []const u8 = "",
-pane_id: core.PaneId = .invalid,
-since_ms: i64 = 0,

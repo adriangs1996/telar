@@ -30,10 +30,8 @@ The helper links `telar-config`, Lua and libghostty for agent icon width validat
 these dependencies are kept out of the hook process. Its Lua bootstrap is
 `dlls/telar-config/bootstrap.lua`, shared with the runtime and the GUI.
 
-The C++ `telar` is replacing the Zig CLI command by command;
-[parity.md](parity.md) records what each command does today and how it is
-compared with Zig. `help/` holds every help text `telar` prints, and `tools/`
-the parity and latency checks.
+[parity.md](parity.md) records what each command does today. `help/` holds
+every help text `telar` prints, and `tools/` the regression and latency checks.
 
 [Execution and runtime contracts](exec-runtime.md) documents the interfaces for
 remote machine/worktree commands, the deliberate native wire differences and
@@ -65,10 +63,10 @@ hooks ignore this variable.
 
 ## Machines and window startup
 
-Machine profiles use the same private `machines.json` format, locks and atomic
-replacement as Zig. `--machine LABEL COMMAND...` carries shell-neutral base64url
+Machine profiles live in a private `machines.json` with locks and atomic
+replacement. `--machine LABEL COMMAND...` carries shell-neutral base64url
 words over managed SSH; `dispatch-argv` restores argv and preserves standard
-streams and exit status. No command requires a Zig binary or source directory.
+streams and exit status.
 
 Machine installers, configuration filters, login orchestration and window startup
 build as the static `cli-launch` library, linked into `telar`.
@@ -86,9 +84,8 @@ that CLI, built for the target machine. Its version directory includes hash
 prefixes of all three artifacts, so changing a companion identifies a different
 build. Companion transfers verify SHA-256 before replacement, and setup repairs
 a missing companion. Release archives must contain all three artifacts; the
-installer refuses archives missing the C++ companions instead of deploying a
-monolithic Zig release. Agent assets and skills are embedded from
-`integration/assets/`; the build does not read `src/`.
+installer refuses archives missing the C++ companions. Agent assets and skills
+are embedded from `integration/assets/`.
 
 See [the port report](machines-launch-report.md) for comparisons, retained tests
 and the remaining setup verification boundaries.

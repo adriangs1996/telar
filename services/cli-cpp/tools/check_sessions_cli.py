@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Compare isolated session CLI stacks; --cpp alone retains C++ regressions.
+"""Exercise an isolated session CLI stack.
 
 Only generated identities, setup execution ids and status ages are normalized.
-Both stacks reuse the same fixture paths, rebuilt before each run.
 """
 import argparse
 import hashlib
@@ -10,7 +9,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import signal
 import subprocess
 import tempfile
@@ -135,8 +133,8 @@ def validation(binary, root):
 
 
 class Stack:
-    def __init__(self, binary, root, gui=None, zig=False):
-        self.binary, self.root, self.gui, self.zig = binary, root, gui, zig
+    def __init__(self, binary, root, gui=None):
+        self.binary, self.root, self.gui = binary, root, gui
         self.env = environment(root)
         self.socket = root / 's'
         self.repo = root / 'repo'
@@ -362,7 +360,7 @@ class Stack:
     def exercise_gui(self, wid, tid):
         env = dict(self.env, TELAR_SOCKET=str(self.socket), TELAR_SOCKET_PATH=str(self.socket))
         log = (self.root / 'gui.log').open('wb')
-        args = [str(self.binary), 'gui', '--no-config'] if self.zig else [str(self.gui), '--socket', str(self.socket), '--no-config', '--smoke-ms', '180000']
+        args = [str(self.gui), '--socket', str(self.socket), '--no-config', '--smoke-ms', '180000']
         self.window = subprocess.Popen(args, env=env, cwd=self.repo, stdout=log, stderr=log, start_new_session=True)
         log.close()
         deadline = time.monotonic() + 20
@@ -374,10 +372,8 @@ class Stack:
             # below when the independently ported CLI does not have it yet.
             if clients['status'] == 0:
                 rows = json.loads(clients['stdout'])
-            elif not self.zig:
-                rows = probe_clients(self.socket)
             else:
-                rows = []
+                rows = probe_clients(self.socket)
             if rows:
                 client = str(rows[0].get('client_id', rows[0].get('id')))
                 break
@@ -487,42 +483,27 @@ def normalized(results):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cpp', type=Path, required=True)
-    parser.add_argument('--zig', type=Path)
     parser.add_argument('--gui', type=Path)
     parser.add_argument('--scratch', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--validation-only', action='store_true')
     args = parser.parse_args()
+    binary = args.cpp.resolve()
     with tempfile.TemporaryDirectory(prefix='ses-', dir=args.scratch) as temporary:
-        root = Path(temporary).resolve()
-        report = {'binaries': {}, 'results': {}, 'differences': {}}
-        for implementation, binary in [('zig', args.zig), ('cpp', args.cpp)]:
-            if binary is None:
-                continue
-            binary = binary.resolve()
-            fixture = root / 'f'
-            if fixture.exists():
-                shutil.rmtree(fixture)
-            fixture.mkdir()
-            report['binaries'][implementation] = {'sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'path': str(binary)}
-            records = validation(binary, fixture)
-            if not args.validation_only:
-                stack = Stack(binary, fixture, args.gui, implementation == 'zig')
-                try:
-                    records.update(stack.exercise())
-                finally:
-                    stack.stop()
-            report['results'][implementation] = normalized(records)
-        if args.zig:
-            expected, actual = report['results']['zig'], report['results']['cpp']
-            report['differences'] = {name: {'zig': value, 'cpp': actual.get(name)} for name, value in expected.items() if value != actual.get(name)}
+        fixture = Path(temporary).resolve() / 'f'
+        fixture.mkdir()
+        records = validation(binary, fixture)
+        if not args.validation_only:
+            stack = Stack(binary, fixture, args.gui)
+            try:
+                records.update(stack.exercise())
+            finally:
+                stack.stop()
+        report = {'binary': {'sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'path': str(binary)}, 'results': normalized(records)}
         if args.output:
             args.output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n')
-        count = len(report['results']['cpp'])
-        print(f'{count} cases; {len(report["differences"])} differences')
-        for name, difference in report['differences'].items():
-            print(name, json.dumps(difference, ensure_ascii=False))
-        return bool(report['differences'])
+        print(f"{len(report['results'])} cases")
+        return 0
 
 
 if __name__ == '__main__':

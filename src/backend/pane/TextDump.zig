@@ -1,2 +1,0 @@
-len: usize,
-truncated: bool,
