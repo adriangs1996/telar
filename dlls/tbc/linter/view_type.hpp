@@ -88,6 +88,14 @@ namespace tbc_lint {
     return staticRegion(viewAnnotation(field.getType(), field.getASTContext()).region);
   }
 
+  // A field whose label is a lifetime of its class, as a Rust struct's lifetime parameter: one that
+  // can hold a borrow from outside the object. A field that borrows only its own object, or only
+  // static storage, declares none.
+  inline bool lifetimeField(const clang::FieldDecl &field) {
+    const auto *region = viewAnnotation(field.getType(), field.getASTContext()).region;
+    return region != nullptr && !selfRegion(region) && !staticRegion(region);
+  }
+
   // A deduced return type repeats the label of what it returns, which the declaration never stated.
   inline annotation returnAnnotation(const clang::FunctionDecl &function, const clang::ASTContext &context) {
     return viewAnnotation(contractDeclaration(function, context).getDeclaredReturnType(), context);

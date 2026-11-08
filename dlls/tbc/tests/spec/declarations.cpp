@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -545,6 +546,57 @@ namespace declarations {
 void declarationUnsharedReached(declarations::pool &memory) {
   const declarations::pooled_owner made{memory};
   static_cast<void>(&made);
+}
+
+// END CASE
+
+// CASE: declaration.self_field_elided
+// PAIR: declaration.self_field_lifetimes
+// SOURCE: services/runtime-cpp/terminal/text_reader.cppm :: Terminal (response_outbox_)
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self or lt::static_storage declares no lifetime of its class, so a constructor of a class whose other fields carry no label still keeps every argument that lends.
+// SCENARIO: A pinned recorder keeps a view of its own buffer and the caller's name, and is read while the name lives; accept.
+namespace declarations {
+  class recorder {
+  public:
+    explicit recorder(std::string_view name)
+        : name_(name),
+          cursor_(buffer_.data()) {}
+
+    recorder(const recorder &) = delete;
+    recorder &operator=(const recorder &) = delete;
+
+    [[nodiscard]] std::size_t size() const {
+      return name_.size();
+    }
+
+  private:
+    std::string_view name_;
+    std::string buffer_{"buffer"};
+    tbc::view<const char *, tbc::lt::self> cursor_;
+  };
+}
+
+std::size_t declarationSelfFieldElided(const std::string &name) {
+  const declarations::recorder kept{name};
+  return kept.size();
+}
+
+// END CASE
+
+// CASE: declaration.self_field_elided_dangling
+// PAIR: declaration.self_field_lifetimes
+// SOURCE: services/runtime-cpp/terminal/text_reader.cppm :: Terminal (response_outbox_)
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self or lt::static_storage declares no lifetime of its class, so a constructor of a class whose other fields carry no label still keeps every argument that lends.
+// SCENARIO: The recorder outlives the name it was built from; reject where the name dies.
+std::size_t declarationSelfFieldElidedDangling(declarations::arena &memory) {
+  std::unique_ptr<declarations::recorder> kept;
+  {
+    const std::string name = "local";
+    kept = declarations::make<declarations::recorder>(memory, name);
+  } // expected-error [tbc-invalidated-borrow]
+  return kept->size();
 }
 
 // END CASE

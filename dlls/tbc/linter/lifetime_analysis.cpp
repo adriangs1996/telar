@@ -1234,7 +1234,7 @@ namespace tbc_lint {
         loans result;
         const auto *definition = record != nullptr ? record->getDefinition() : nullptr;
         bool matched = false;
-        const bool labeled = definition != nullptr && llvm::any_of(definition->fields(), [&](const clang::FieldDecl *field) { return viewAnnotation(field->getType(), context_).region != nullptr; });
+        const bool labeled = definition != nullptr && llvm::any_of(definition->fields(), [](const clang::FieldDecl *field) { return lifetimeField(*field); });
         llvm::SmallVector<const clang::CXXConstructorDecl *, 4> constructors;
         if (definition != nullptr) {
           constructors.append(definition->ctor_begin(), definition->ctor_end());
@@ -1853,7 +1853,7 @@ namespace tbc_lint {
         }
         const auto *region = field != nullptr ? viewAnnotation(field->getType(), context_).region : parameterAnnotation(*output, context_).region;
         const auto *constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function_);
-        const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(constructor->getParent()->fields(), [&](const clang::FieldDecl *member) { return viewAnnotation(member->getType(), context_).region != nullptr; });
+        const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(constructor->getParent()->fields(), [](const clang::FieldDecl *member) { return lifetimeField(*member); });
         for (const auto &source : incoming.values) {
           if (source.invalidated != nullptr) {
             continue;
@@ -2516,7 +2516,7 @@ namespace tbc_lint {
       // field of the class carries a region, so that the signature promises nothing.
       bool declaredRetention(const clang::CXXConstructExpr &construction, const state &current, loans &retained) {
         const auto *constructor = constructorOf(construction);
-        if (constructor == nullptr || llvm::none_of(constructor->getParent()->fields(), [&](const auto *field) { return viewAnnotation(field->getType(), context_).region != nullptr; })) {
+        if (constructor == nullptr || llvm::none_of(constructor->getParent()->fields(), [](const auto *field) { return lifetimeField(*field); })) {
           return false;
         }
         for (unsigned index = 0; index < constructor->getNumParams() && index < construction.getNumArgs(); ++index) {

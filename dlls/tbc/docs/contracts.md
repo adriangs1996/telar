@@ -496,6 +496,10 @@ The label is a promise, like a raw pointer behind Rust's `Pin`: the checker only
 requires the type to be neither copyable nor movable, and rejects the
 initializer otherwise.
 
+Neither `lt::self` nor `lt::static_storage` is a lifetime of the class, as a
+Rust struct's lifetime parameter is: a constructor of a class whose other fields
+carry no label still keeps every argument that lends.
+
 ## Shared types
 
 A class marked `TBC_SHARED`, from `<tbc/view.hpp>`, keeps every borrow it hands
