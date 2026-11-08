@@ -553,7 +553,7 @@ private:
             close = true;
           }
         } else if (peer->monitor && (readiness & (POLLIN | POLLHUP))) {
-          close = advanceMonitor(*peer);
+          close = advanceMonitor(*peer, status_);
         }
       } catch (const std::exception &) {
         close = true;
@@ -565,16 +565,16 @@ private:
     }
   }
 
-  inline bool advanceMonitor(Peer &peer) {
+  inline static bool advanceMonitor(Peer &peer, std::atomic<MonitorState> &status) {
     for (std::size_t count = 0; count < 3; ++count) {
       Byte update;
       const auto received = ::recv(peer.socket.get(), &update, 1, 0);
       if (received < 0 && socketWouldBlock(errno)) { return false; }
       if (received != 1) { return true; }
-      if (update == static_cast<Byte>(MonitorUpdate::active) && (status() == MonitorState::starting || status() == MonitorState::stopping)) {
-        if (status() == MonitorState::starting) { status_.store(MonitorState::active, std::memory_order_release); }
+      if (update == static_cast<Byte>(MonitorUpdate::active) && (status.load(std::memory_order_acquire) == MonitorState::starting || status.load(std::memory_order_acquire) == MonitorState::stopping)) {
+        if (status.load(std::memory_order_acquire) == MonitorState::starting) { status.store(MonitorState::active, std::memory_order_release); }
       } else if (update == static_cast<Byte>(MonitorUpdate::stopped)) {
-        status_.store(MonitorState::idle, std::memory_order_release);
+        status.store(MonitorState::idle, std::memory_order_release);
         peer.monitor = false;
         return true;
       } else { return true; }

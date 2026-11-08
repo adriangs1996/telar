@@ -281,8 +281,8 @@ public:
     }
   }
 
-  inline void setMethod(std::string_view value) noexcept { setRouteField(method_, value); }
-  inline void setTarget(std::string_view value) noexcept { setRouteField(target_, value); }
+  inline void setMethod(std::string_view value) noexcept { setRouteField(head.truncated, method_, value); }
+  inline void setTarget(std::string_view value) noexcept { setRouteField(head.truncated, target_, value); }
 
   inline void setEncoding(std::string_view value) noexcept {
     encoding_.clear();
@@ -323,9 +323,9 @@ public:
 
 private:
   template <std::size_t Capacity>
-  inline void setRouteField(SensitiveText<Capacity> &field, std::string_view value) noexcept {
+  inline static void setRouteField(bool &truncated, SensitiveText<Capacity> &field, std::string_view value) noexcept {
     if (value.size() > Capacity) {
-      head.truncated = true;
+      truncated = true;
       return;
     }
     field.clear();

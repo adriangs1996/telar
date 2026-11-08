@@ -1075,7 +1075,7 @@ public:
   inline ~ExecutionService() {
     for (auto *execution : executions_.items()) {
       if (execution != nullptr) {
-        unwatch(*execution);
+        unwatch(poller_, *execution);
       }
     }
   }
@@ -1122,10 +1122,10 @@ public:
       break;
     }
 
-    flushInput(*execution);
+    flushInput(poller_, *execution);
     send(client, *execution, request, started);
     if (request.action == ExecutionAction::forget) {
-      unwatch(*execution);
+      unwatch(poller_, *execution);
       executions_.erase(execution->token);
     }
   }
@@ -1139,7 +1139,7 @@ public:
     auto &process = *execution->process;
     if (eventSource(event.token) == EventSource::execution_input) {
       if (event.descriptor == process.input()) {
-        flushInput(*execution);
+        flushInput(poller_, *execution);
       }
       return;
     }
@@ -1192,7 +1192,7 @@ public:
       execution->state = ExecutionState::exited;
       execution->eof = true;
       execution->input_owner.reset();
-      closeInput(*execution);
+      closeInput(poller_, *execution);
     }
 
     releaseAdministration(model);
@@ -1204,7 +1204,7 @@ public:
       if (execution != nullptr && execution->input_owner == client_id) {
         execution->input_owner.reset();
         execution->eof = true;
-        flushInput(*execution);
+        flushInput(poller_, *execution);
       }
     }
   }
@@ -1242,7 +1242,7 @@ private:
         poller_.watch(execution->process->error(), eventToken(EventSource::execution_error, token));
       }
     } catch (...) {
-      unwatch(*execution);
+      unwatch(poller_, *execution);
       throw;
     }
 
@@ -1317,7 +1317,7 @@ private:
     execution.input_written += request.bytes.size();
   }
 
-  inline void flushInput(Execution<Memory> &execution) {
+  inline static void flushInput(Poller &poller, Execution<Memory> &execution) {
     if (!execution.process || execution.process->input() < 0) {
       return;
     }
@@ -1334,33 +1334,33 @@ private:
     }
 
     if (execution.eof && execution.input.empty()) {
-      closeInput(execution);
+      closeInput(poller, execution);
       return;
     }
 
     const bool needed = !execution.input.empty();
     if (needed != execution.write_interest) {
-      poller_.writeInterest(execution.process->input(), eventToken(EventSource::execution_input, execution.token), needed);
+      poller.writeInterest(execution.process->input(), eventToken(EventSource::execution_input, execution.token), needed);
       execution.write_interest = needed;
     }
   }
 
-  inline void closeInput(Execution<Memory> &execution) noexcept {
+  inline static void closeInput(Poller &poller, Execution<Memory> &execution) noexcept {
     if (execution.process && execution.process->input() >= 0) {
-      poller_.remove(execution.process->input());
+      poller.remove(execution.process->input());
       execution.process->closeInput();
       execution.write_interest = false;
     }
   }
 
-  inline void unwatch(Execution<Memory> &execution) noexcept {
+  inline static void unwatch(Poller &poller, Execution<Memory> &execution) noexcept {
     if (!execution.process) {
       return;
     }
 
     for (const int descriptor : {execution.process->input(), execution.process->output(), execution.process->error()}) {
       if (descriptor >= 0) {
-        poller_.remove(descriptor);
+        poller.remove(descriptor);
       }
     }
   }
