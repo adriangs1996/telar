@@ -1929,6 +1929,18 @@ namespace tbc_lint {
         return record != nullptr && foreignRecord(*record);
       }
 
+      // A field labeled lt::self keeps borrows internal to its object, which are never the object's
+      // own: once retention is checked, its borrows of the receiver are not tracked, so no call
+      // through the object invalidates them, as a pinned self-reference is unchecked in Rust.
+      [[nodiscard]] static loans withoutInternal(const clang::ValueDecl &target, loans incoming) {
+        const auto *field = llvm::dyn_cast<clang::FieldDecl>(&target);
+        if (field != nullptr && selfBorrowing(*field)) {
+          llvm::erase_if(incoming.values, [](const origin &source) { return source.kind == origin_kind::receiver; });
+        }
+
+        return incoming;
+      }
+
       void store(const write_targets &where, const loans &incoming, state &current) {
         for (const auto &target : where.places) {
           if (rawForeignPointer(target.fields)) {
@@ -1940,15 +1952,16 @@ namespace tbc_lint {
           if (!local_copy) {
             checkRetention(*target.variable, incoming, write_site_);
           }
+          const auto kept = withoutInternal(*target.variable, incoming);
           if (target.designated) {
-            current.designated[target.variable].merge(heldAt(incoming, target.fields));
+            current.designated[target.variable].merge(heldAt(kept, target.fields));
             continue;
           }
           auto &contents = current.values[target.variable];
           if (where.replaces) {
-            replaceHeld(contents, target.variable->getType(), target.fields, incoming);
+            replaceHeld(contents, target.variable->getType(), target.fields, kept);
           } else {
-            contents.merge(heldAt(incoming, target.fields));
+            contents.merge(heldAt(kept, target.fields));
           }
           current.written.insert(target.variable);
         }
@@ -4398,7 +4411,7 @@ namespace tbc_lint {
                   markBorrowSite(source, initializer->getInit()->getBeginLoc());
                 }
                 checkRetention(*field, incoming, initializer->getSourceLocation());
-                current.values[field] = std::move(incoming);
+                current.values[field] = withoutInternal(*field, std::move(incoming));
                 current.written.insert(field);
               }
               if (transfersAllocation(field->getType())) {

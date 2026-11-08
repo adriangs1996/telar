@@ -509,8 +509,9 @@ and the code that hands the buffer to the C library answers for it.
 
 A field labeled `lt::self` is the one exception: it borrows only the object that
 holds it, as an allocator reference to a sibling arena does. Its borrows never
-count as the object's, so a `std::shared_ptr` to such an object carries none.
-The label is a promise, like a raw pointer behind Rust's `Pin`: the checker only
+count as the object's, so a `std::shared_ptr` to such an object carries none,
+and a later call that mutates the object, even from its own constructor, does
+not invalidate them. The label is a promise, like a raw pointer behind Rust's `Pin`: the checker only
 requires the type to be neither copyable nor movable, and rejects the
 initializer otherwise.
 

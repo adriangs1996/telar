@@ -317,6 +317,52 @@ void selfFieldRelocatable() {
 
 // END CASE
 
+// CASE: contract.self_field_mutation
+// PAIR: contract.self_field
+// SOURCE: services/gui-cpp/qt/application.cpp :: Application
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
+// SCENARIO: A pinned object's labeled field keeps the object and a sibling, and the constructor then mutates the object; the internal borrows are not the object's, so nothing is invalidated; accept.
+namespace contracts {
+  template <typename Host>
+  class text_watcher {
+  public:
+    text_watcher(Host &host, std::string &text)
+        : host_(host),
+          text_(text) {}
+
+  private:
+    Host &host_;
+    std::string &text_;
+  };
+
+  class watched_text {
+  public:
+    watched_text()
+        : watcher_(*this, storage_) {
+      grow();
+      grow();
+    }
+
+    watched_text(const watched_text &) = delete;
+    watched_text &operator=(const watched_text &) = delete;
+
+    void grow();
+
+  private:
+    std::string storage_{"abc"};
+    tbc::view<text_watcher<watched_text>, tbc::lt::self> watcher_;
+  };
+}
+
+void selfFieldMutation() {
+  contracts::watched_text text;
+  text.grow();
+  text.grow();
+}
+
+// END CASE
+
 // CASE: contract.elided_constructor_escape
 // PAIR: contract.elided_constructor
 // SOURCE: services/gui-cpp/qt/ancestor_geometry.hpp :: AncestorGeometry
