@@ -47,7 +47,6 @@ static_assert(true);
 #include "../terminal/cell_position.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include <chrono>
-#include "json_fixture.hpp"
 #include "../qt/list_model.hpp"
 #include <string>
 #include "../platform/window.hpp"
@@ -158,7 +157,7 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 
-
+import telar.gui.tests.json_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.components.configuration;
 import telar.gui.config.plugin_query;

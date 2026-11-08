@@ -5,7 +5,6 @@ static_assert(true);
 
 
 #include "assertions.hpp"
-#include "erasure_allocator.hpp"
 #include "../platform/clipboard_image_file.h"
 #include "../attachments/secure_erase.hpp"
 #include "../attachments/sensitive_bytes.hpp"
@@ -33,7 +32,7 @@ static_assert(true);
 #include "platform/clipboard_image_file.h"
 #include "platform/clipboard_image_source.hpp"
 
-
+import telar.gui.tests.erasure_allocator;
 import telar.gui.platform.profile_file;
 
 namespace {

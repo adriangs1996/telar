@@ -18,7 +18,6 @@ static_assert(true);
 #include <chrono>
 #include <cmath>
 #include "../core/terminal_size.hpp"
-#include "metrics_fixture.hpp"
 #include <charconv>
 #include <concepts>
 #include <cstring>
@@ -56,7 +55,7 @@ static_assert(true);
 #include "qt/projection.hpp"
 #include "qt/bundled_fonts.hpp"
 
-
+import telar.gui.tests.metrics_fixture;
 import telar.gui.application.host_effects;
 import telar.gui.core.metrics;
 import telar.gui.presentation.history_filter_geometry;

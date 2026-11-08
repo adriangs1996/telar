@@ -50,7 +50,6 @@ static_assert(true);
 
 #include "telar_client/serializers/telar_frame.hpp"
 
-#include "json_fixture.hpp"
 #include "../qt/bundled_fonts.hpp"
 #include "../qt/configuration_source.hpp"
 #include <QCoreApplication>
@@ -78,7 +77,7 @@ static_assert(true);
 #include "qt/bundled_fonts.hpp"
 #include "qt/configuration_source.hpp"
 
-
+import telar.gui.tests.json_fixture;
 import telar.gui.application.host_effects;
 import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;

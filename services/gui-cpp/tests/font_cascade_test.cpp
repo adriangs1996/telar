@@ -4,10 +4,8 @@ static_assert(true);
 #endif
 
 
-#include "allocation_gate.hpp"
 #include "assertions.hpp"
 #include "../core/memory.hpp"
-#include "font_fixture.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -41,7 +39,8 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.allocation_gate;
+import telar.gui.tests.font_fixture;
 import telar.gui.fonts.face;
 import telar.gui.fonts.font_requests;
 import telar.gui.fonts.row_text_layout;

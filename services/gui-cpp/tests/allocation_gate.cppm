@@ -1,9 +1,12 @@
-#pragma once
-
-#include "core/memory.hpp"
+module;
 #include <cstddef>
-#include <optional>
 
+export module telar.gui.tests.allocation_gate;
+
+import std;
+export import telar.gui.core.primitives;
+
+export {
 namespace telar::gui::test {
 
 template <Allocator Memory>
@@ -37,4 +40,5 @@ private:
   std::optional<std::size_t> remaining_;
 };
 
+}
 }

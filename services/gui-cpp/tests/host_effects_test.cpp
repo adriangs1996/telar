@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "allocation_gate.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <array>
@@ -45,7 +44,7 @@ static_assert(true);
 #include "qt/sound_player.hpp"
 #include "qt/system_notifier.hpp"
 
-
+import telar.gui.tests.allocation_gate;
 import telar.gui.application.host_effects;
 import telar.gui.platform.notification_commands;
 

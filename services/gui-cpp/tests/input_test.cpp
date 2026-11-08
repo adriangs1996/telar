@@ -7,25 +7,10 @@ static_assert(true);
 
 #include <cstddef>
 #include <cstdint>
-#include <array>
-#include <optional>
-#include <string_view>
-#include <utility>
-#include <algorithm>
-#include <span>
-#include <stdexcept>
-#include <tuple>
 #include <cmath>
-#include <concepts>
-#include <limits>
 #include <cstdio>
-#include <exception>
-#include <initializer_list>
-#include <iostream>
 
-
-
-
+import std;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;

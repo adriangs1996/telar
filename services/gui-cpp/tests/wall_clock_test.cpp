@@ -5,17 +5,9 @@ static_assert(true);
 
 
 #include <cstdint>
-#include <charconv>
-#include <chrono>
 #include <ctime>
-#include <exception>
-#include <iostream>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 
-
-
+import std;
 import telar.gui.platform.notification_commands;
 
 namespace {

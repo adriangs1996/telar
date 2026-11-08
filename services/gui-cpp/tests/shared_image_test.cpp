@@ -44,7 +44,6 @@ static_assert(true);
 #include <memory>
 #include "assertions.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "session_fixture.hpp"
 #include "telar_platform/random_bytes.hpp"
 #include "telar_platform/mapped_region.hpp"
 #include <cstdio>
@@ -58,8 +57,7 @@ static_assert(true);
 #include <unistd.h>
 #include <vector>
 
-
-
+import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.graphics.texture_cache;
 import telar.gui.platform.profile_file;

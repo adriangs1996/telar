@@ -1,32 +1,21 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-
-#include <algorithm>
+module;
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
-#include "../core/terminal_size.hpp"
-#include "probe_geometry.hpp"
-#include "probe_io.hpp"
-#include "probe_text.hpp"
-#include <concepts>
 
-#pragma once
+export module telar.gui.tools.probe_history_hint;
 
+import std;
+export import telar.client.protocol;
+export import telar.base.memory;
+export import telar.gui.core.primitives;
+export import telar.gui.tools.probe_geometry;
+export import telar.gui.tools.probe_io;
+export import telar.gui.tools.probe_text;
+export import telar.gui.core.metrics;
+export import telar.gui.presentation.history_meta_geometry;
 
-import telar.gui.core.metrics;
-import telar.gui.presentation.history_meta_geometry;
-
+export {
 namespace telar::gui::probe {
 
 enum class HistoryDrawEvent : std::uint8_t {
@@ -65,4 +54,5 @@ void writeHistoryHint(const HistoryHintGeometry &layout, ChromeMetrics chrome, L
   writeRect(layout.bounds);
 }
 
+}
 }

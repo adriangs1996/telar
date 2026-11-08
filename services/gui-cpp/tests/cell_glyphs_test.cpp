@@ -4,29 +4,13 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <array>
-#include <bit>
 #include <cstddef>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <span>
-#include <limits>
 
-#include <initializer_list>
-#include <concepts>
-#include <functional>
-#include <type_traits>
-#include <utility>
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;
 import telar.gui.terminal.font_grid;

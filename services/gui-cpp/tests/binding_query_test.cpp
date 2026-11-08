@@ -53,12 +53,11 @@ static_assert(true);
 #include <format>
 #include <ghostty/vt/unicode.h>
 #include <exception>
-#include "json_fixture.hpp"
 #include <iostream>
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.json_fixture;
 import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
 import telar.gui.config.gui_query;

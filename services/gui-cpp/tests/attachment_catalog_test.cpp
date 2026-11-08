@@ -1,5 +1,4 @@
 #include "assertions.hpp"
-#include "erasure_allocator.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
@@ -16,6 +15,8 @@
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+
+import telar.gui.tests.erasure_allocator;
 
 namespace {
 

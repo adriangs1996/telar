@@ -4,33 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <span>
-#include <chrono>
-#include "../input/wheel_accumulator.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <utility>
-#include <stdexcept>
-#include <tuple>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <string_view>
 
-#include "input/wheel_accumulator.hpp"
-#include "terminal/screen.hpp"
-
-
+import std;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 import telar.gui.input.copy_pointer;
 import telar.gui.terminal.font_grid;
 import telar.gui.terminal.copy_mode;

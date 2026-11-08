@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "agent_fixture.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <cstdint>
 #include "../core/memory.hpp"
@@ -82,7 +81,7 @@ static_assert(true);
 #include "qt/sidebar_projection.hpp"
 #include "qt/bundled_fonts.hpp"
 
-
+import telar.gui.tests.agent_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.platform.profile_file;

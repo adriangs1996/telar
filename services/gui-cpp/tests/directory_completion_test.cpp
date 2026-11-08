@@ -4,24 +4,12 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cstddef>
-#include <filesystem>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <vector>
 #include <cstdio>
 #include <cstdlib>
-#include <exception>
-#include <format>
-#include <fstream>
-#include <iostream>
-#include <stdexcept>
 #include <unistd.h>
 
-
-
+import std;
 import telar.gui.paths.label;
 
 namespace {

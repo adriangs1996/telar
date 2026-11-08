@@ -1,36 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <concepts>
+module;
 #include "assertions.hpp"
-#include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <ranges>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
 
-#pragma once
+export module telar.gui.tests.session_fixture;
 
+import std;
+export import telar.client.protocol;
+export import telar.gui.application.host_effects;
 
-import telar.gui.application.host_effects;
-
+export {
 namespace telar::gui::test {
 
 class Transport {
@@ -195,4 +174,5 @@ void openFirstPane(Client &client, Transport &transport) {
   deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
 }
 
+}
 }

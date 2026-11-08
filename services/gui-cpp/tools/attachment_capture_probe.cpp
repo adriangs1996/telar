@@ -4,19 +4,11 @@ static_assert(true);
 #endif
 
 
-#include "../attachments/types.hpp"
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <array>
 #include <cstddef>
-#include <exception>
-#include <iostream>
-#include <limits>
 
-#include "attachments/types.hpp"
-
-
+import std;
+import telar.gui.attachments.catalog;
 import telar.gui.attachments.marker_input;
 
 namespace {

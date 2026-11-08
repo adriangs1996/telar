@@ -4,31 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
-#include <array>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <span>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <optional>
-#include <utility>
-#include <algorithm>
-#include <limits>
 #include <cstdio>
-#include <exception>
-#include <iostream>
-#include <string>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 

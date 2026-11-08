@@ -1,42 +1,23 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-
-#include "../core/memory.hpp"
+module;
 #include <cstdint>
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <variant>
-#include <optional>
-#include <string_view>
-#include <utility>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <exception>
-#include <charconv>
 #include <limits.h>
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <bit>
 
-#pragma once
+export module telar.gui.tests.plugin_effect_cases;
 
+import std;
+export import telar.gui.core.primitives;
+export import telar.base.memory;
+export import telar.client.protocol;
+export import telar.platform.primitives;
+export import telar.gui.config.plugin_effects;
+export import telar.gui.input.copy_pointer;
+export import telar.plugins;
 
-import telar.gui.config.plugin_effects;
-import telar.gui.input.copy_pointer;
-import telar.plugins;
-
+export {
 namespace telar::gui::test {
 namespace plugin_effect_detail {
 
@@ -204,4 +185,5 @@ inline void pluginEffectCases() {
   plugin_effect_detail::authorization();
 }
 
+}
 }

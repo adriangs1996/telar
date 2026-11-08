@@ -1,21 +1,11 @@
-#include "attachments/marker_removal.hpp"
-#include "attachments/marker_screen.hpp"
-#include "attachments/numeric_markers.hpp"
-#include "attachments/path_markers.hpp"
-#include "core/memory.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string>
+
+import std;
+import telar.client.protocol;
+import telar.gui.attachments.catalog;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 
 namespace {
 

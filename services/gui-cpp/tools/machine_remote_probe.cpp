@@ -4,33 +4,18 @@ static_assert(true);
 #endif
 
 
-#include "../core/memory.hpp"
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
-#include <algorithm>
-#include <optional>
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include <span>
-#include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
 #include <cstring>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <charconv>
-#include <concepts>
-#include <system_error>
 #include <sys/param.h>
-#include "probe_io.hpp"
-#include "probe_text.hpp"
-#include <bit>
 #include <cstdio>
-#include <exception>
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.tools.probe_io;
+import telar.gui.tools.probe_text;
 import telar.gui.machines.discovery;
 import telar.gui.machines.profile_store;
 import telar.gui.platform.profile_file;

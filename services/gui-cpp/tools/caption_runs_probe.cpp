@@ -4,23 +4,13 @@ static_assert(true);
 #endif
 
 
-#include "probe_io.hpp"
-#include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <algorithm>
 #include <ghostty/vt/unicode.h>
 #include <cstdio>
-#include <exception>
-#include <iostream>
-#include <string>
 
-
-
+import std;
+import telar.gui.tools.probe_io;
 import telar.gui.text.bounded_editor;
 
 int main() try {

@@ -1,52 +1,29 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-
-#include "../core/memory.hpp"
+module;
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <array>
 #include <freetype/freetype.h>
 #include <hb.h>
-#include <memory>
-#include <string_view>
 #include "../platform/font.h"
-#include <algorithm>
 #include <cstring>
-#include "telar_client/serializers/telar_cells.hpp"
-#include <optional>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
 #include <cmath>
-#include <limits>
-#include <stdexcept>
-#include <type_traits>
-#include <bit>
-#include <concepts>
-#include <utility>
-#include "telar_base/memory/allocator.hpp"
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <filesystem>
-
-#pragma once
-
-#include "core/memory.hpp"
 #include "platform/font.h"
 #include "tbc/view.hpp"
 
+export module telar.gui.tests.font_fixture;
 
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-import telar.platform;
+import std;
+export import telar.gui.core.primitives;
+export import telar.client.protocol;
+export import telar.base.memory;
+export import telar.platform.primitives;
+export import telar.gui.fonts.face;
+export import telar.gui.fonts.font_requests;
+export import telar.platform;
 
+export {
 namespace telar::gui::test {
 
 template <Allocator Memory>
@@ -107,4 +84,5 @@ private:
   tbc::view<fonts::Face, tbc::lt::self> symbols_;
 };
 
+}
 }

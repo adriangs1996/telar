@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "allocation_gate.hpp"
 #include "../core/terminal_size.hpp"
 #include "../core/memory.hpp"
 #include <atomic>
@@ -36,7 +35,7 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.allocation_gate;
 import telar.gui.application.workspace_replica;
 import telar.gui.presentation.activity_order;
 import telar.gui.text.json_unsigned_integer;

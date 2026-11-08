@@ -4,30 +4,13 @@ static_assert(true);
 #endif
 
 
-#include "../core/memory.hpp"
-#include <algorithm>
 #include <cstdint>
-#include <limits>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include <charconv>
-#include <string_view>
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <exception>
-#include <iostream>
-#include <stdexcept>
-#include <string>
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 import telar.gui.application.sound_playback;
 import telar.gui.core.unicode_scalar;
 

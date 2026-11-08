@@ -4,28 +4,20 @@ static_assert(true);
 #endif
 
 
-#include <string_view>
 #include <cstdint>
-#include <array>
 #include <climits>
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <dirent.h>
 #include <fcntl.h>
-#include <algorithm>
 #include <cstdlib>
 #include <limits.h>
 #include <sys/stat.h>
 #include <cstdio>
-#include <filesystem>
-#include <iostream>
-#include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
 
-
-
+import std;
+import telar.platform.primitives;
 import telar.gui.platform.login_shell;
 import telar.gui.platform.private_file_stamp;
 import telar.gui.platform.notification_commands;

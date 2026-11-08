@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "agent_fixture.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
@@ -44,13 +43,13 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include <memory>
 #include "assertions.hpp"
-#include "session_fixture.hpp"
 #include <iostream>
 #include <string>
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.agent_fixture;
+import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 

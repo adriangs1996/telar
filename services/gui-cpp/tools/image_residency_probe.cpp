@@ -4,24 +4,13 @@ static_assert(true);
 #endif
 
 
-#include <atomic>
 #include <cstdint>
-#include <limits>
-#include "telar_config/graphics/limits.hpp"
-#include <algorithm>
-#include <array>
-#include <concepts>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include "probe_io.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
-#include <stdexcept>
 
-
-
+import std;
+import telar.config;
+import telar.gui.tools.probe_io;
 import telar.gui.graphics.texture_cache;
 
 namespace {

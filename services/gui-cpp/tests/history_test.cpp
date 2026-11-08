@@ -4,39 +4,17 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
-#include "../core/terminal_size.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include <span>
-#include <stdexcept>
-#include "telar_client/codecs/telar_wire.hpp"
-#include <limits>
-#include <utility>
-#include <variant>
-#include <initializer_list>
 #include <cstdio>
-#include <exception>
-#include <iostream>
 #include <new>
-#include <string>
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.gui.core.primitives;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_inspection_geometry;

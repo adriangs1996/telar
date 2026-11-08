@@ -4,42 +4,16 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cstdint>
-#include <limits>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
-#include "telar_client/serializers/telar_cells.hpp"
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
 #include <cmath>
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include <charconv>
-#include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <concepts>
-#include "../terminal/screen.hpp"
-#include <stdexcept>
-#include <type_traits>
 #include <cstdio>
-#include <exception>
-#include <iostream>
-#include <string>
 
-#include "core/memory.hpp"
-#include "terminal/screen.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 import telar.gui.application.sound_playback;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;

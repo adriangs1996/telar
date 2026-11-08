@@ -1,16 +1,9 @@
-#include "attachments/catalog.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+
+import std;
+import telar.gui.attachments.catalog;
+import telar.gui.core.primitives;
 
 namespace {
 

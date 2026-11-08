@@ -4,24 +4,15 @@ static_assert(true);
 #endif
 
 
-#include <span>
-#include <string>
-#include <string_view>
-#include <vector>
-#include <array>
 #include <cstdio>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <exception>
-#include <filesystem>
-#include <iostream>
 #include <mach-o/dyld.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
 
-
-
+import std;
 import telar.gui.platform.login_shell;
 
 namespace {

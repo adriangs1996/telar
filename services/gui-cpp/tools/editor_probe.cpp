@@ -4,27 +4,16 @@ static_assert(true);
 #endif
 
 
-#include "../core/memory.hpp"
-#include "probe_io.hpp"
-#include "probe_text.hpp"
-#include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <algorithm>
 #include <ghostty/vt/unicode.h>
 #include <cstring>
-#include <limits>
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.gui.core.primitives;
+import telar.gui.tools.probe_io;
+import telar.gui.tools.probe_text;
 import telar.gui.text.bounded_editor;
 
 namespace {

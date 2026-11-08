@@ -1,19 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-
-#include <algorithm>
+module;
 #include <cmath>
 #include <cstdint>
-#include "probe_io.hpp"
 
-#pragma once
+export module telar.gui.tools.probe_geometry;
 
+import std;
+export import telar.gui.tools.probe_io;
+export import telar.gui.core.metrics;
 
-import telar.gui.core.metrics;
-
+export {
 namespace telar::gui::probe {
 
 inline Rect readRect() {
@@ -32,4 +27,5 @@ inline void writeRect(Rect bounds) {
   write(bounds.height);
 }
 
+}
 }

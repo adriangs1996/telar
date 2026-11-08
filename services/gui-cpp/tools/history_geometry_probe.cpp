@@ -4,27 +4,17 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
-#include "../core/terminal_size.hpp"
-#include <initializer_list>
-#include "probe_geometry.hpp"
-#include "probe_io.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.tools.probe_geometry;
+import telar.gui.tools.probe_io;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.core.metrics;
 

@@ -4,17 +4,11 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cstdint>
-#include <limits>
-#include <optional>
-#include "probe_io.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.gui.tools.probe_io;
 import telar.gui.presentation.suggestion_labels;
 
 int main() try {

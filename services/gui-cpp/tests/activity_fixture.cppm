@@ -1,8 +1,12 @@
-#pragma once
-
-#include "telar_client/serializers/telar_messages.hpp"
+module;
 #include <cstdint>
 
+export module telar.gui.tests.activity_fixture;
+
+import std;
+export import telar.client.protocol;
+
+export {
 namespace telar::gui::test {
 
 inline constexpr std::uint64_t task_worktree_id = 10;
@@ -19,4 +23,5 @@ inline WorktreeListEntry worktreeEntry() {
   return {.worktree = task_worktree_id, .source = 1, .workspace = 2, .created_by = 1, .path = "/project/worktree", .branch = "worktree-fix", .title = "Fix the task"};
 }
 
+}
 }

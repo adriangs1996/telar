@@ -4,28 +4,12 @@ static_assert(true);
 #endif
 
 
-#include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <algorithm>
-#include <span>
-#include <tuple>
-#include "telar_client/serializers/telar_frame.hpp"
-#include <charconv>
-#include <limits>
-#include <system_error>
-#include <utility>
-#include "telar_client/codecs/telar_wire.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.client.protocol;
 import telar.gui.core.unicode_scalar;
 import telar.gui.input.key_encoder;
 

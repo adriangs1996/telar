@@ -5,35 +5,16 @@ static_assert(true);
 
 
 #include <cstdint>
-#include "../core/memory.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <string_view>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <algorithm>
-#include <chrono>
-#include <limits>
-#include <bit>
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include <ghostty/vt/unicode.h>
-#include <span>
-#include "probe_io.hpp"
-#include "probe_text.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.tools.probe_io;
+import telar.gui.tools.probe_text;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;

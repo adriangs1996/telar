@@ -43,13 +43,12 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include <memory>
 #include "assertions.hpp"
-#include "session_fixture.hpp"
 #include <cstdio>
 #include <iostream>
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.session_fixture;
 import telar.gui.application.sound_playback;
 import telar.gui.application.session;
 import telar.gui.links.cell_links;

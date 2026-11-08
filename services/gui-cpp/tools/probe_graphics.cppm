@@ -1,9 +1,13 @@
-#pragma once
-
-#include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+module;
 #include <cstdint>
 
+export module telar.gui.tools.probe_graphics;
+
+import std;
+export import telar.gui.tools.probe_io;
+export import telar.client.protocol;
+
+export {
 namespace telar::gui::probe {
 
 inline ImageKey readImageKey() {
@@ -73,4 +77,5 @@ inline void writePlacement(const GraphicsPlacement &placement) {
   probe::write(static_cast<std::uint8_t>(placement.location));
 }
 
+}
 }

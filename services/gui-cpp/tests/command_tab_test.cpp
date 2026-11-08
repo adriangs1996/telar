@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 
-#include "allocation_gate.hpp"
 #include "../core/terminal_size.hpp"
 #include "../core/memory.hpp"
 #include <atomic>
@@ -60,13 +59,13 @@ static_assert(true);
 #include "telar_config/terminal/control/policy.hpp"
 #include <format>
 #include <ghostty/vt/unicode.h>
-#include "session_fixture.hpp"
 #include <iostream>
 #include <new>
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.allocation_gate;
+import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.config.plugin_effects;

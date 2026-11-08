@@ -3,16 +3,8 @@
 static_assert(true);
 #endif
 
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
 
 #include "../core/memory.hpp"
-#include "plugin_catalog_cases.hpp"
-#include "plugin_effect_cases.hpp"
 #include "../qt/plugin_packages.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <cstdint>
@@ -40,13 +32,7 @@ static_assert(true);
 #include <concepts>
 #include <limits>
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #include <openssl/sha.h>
-#endif
-#if (defined(__APPLE__))
 #endif
 #include <QFile>
 #include <QIODevice>
@@ -60,25 +46,14 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "qt/plugin_packages.hpp"
-#ifdef __APPLE__
-#endif
 
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#endif
-
+import telar.gui.tests.plugin_catalog_cases;
+import telar.gui.tests.plugin_effect_cases;
 import telar.base.text;
 import telar.platform;
 import telar.plugins;
 #if (defined(__APPLE__))
 import telar.plugins;
-#endif
-#if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
 #endif
 
 namespace {

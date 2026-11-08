@@ -4,21 +4,12 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <stdexcept>
-#include "../core/memory.hpp"
-#include <array>
 #include <cstddef>
-#include <limits>
-#include <span>
-#include <exception>
-#include <iostream>
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.gui.core.primitives;
 import telar.gui.attachments.marker_input;
 import telar.gui.graphics.pauses;
 

@@ -1,10 +1,12 @@
-#pragma once
-
-#include "core/memory.hpp"
-#include <algorithm>
+module;
 #include <cstddef>
-#include <span>
 
+export module telar.gui.tests.erasure_allocator;
+
+import std;
+export import telar.gui.core.primitives;
+
+export {
 namespace telar::gui::test {
 
 struct ErasureAllocator {
@@ -36,4 +38,5 @@ struct ErasureAllocator {
   SystemAllocator upstream_;
 };
 
+}
 }

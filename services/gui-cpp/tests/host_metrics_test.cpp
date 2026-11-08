@@ -43,13 +43,12 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include <memory>
 #include "assertions.hpp"
-#include "metrics_fixture.hpp"
-#include "session_fixture.hpp"
 #include <cstdio>
 
 #include "core/memory.hpp"
 
-
+import telar.gui.tests.metrics_fixture;
+import telar.gui.tests.session_fixture;
 import telar.gui.application.host_effects;
 import telar.gui.application.session;
 import telar.gui.core.json_writer;

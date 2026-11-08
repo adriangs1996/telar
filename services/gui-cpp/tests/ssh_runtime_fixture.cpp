@@ -4,25 +4,12 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/codecs/telar_codec.hpp"
-#include <array>
 #include <cstddef>
-#include <span>
-#include <variant>
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <exception>
-#include <stdexcept>
-#include <string_view>
-#include <vector>
 
-
-
+import std;
+import telar.client.protocol;
 import telar.client;
 
 namespace {

@@ -4,35 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "../core/memory.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <span>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <string_view>
-#include "telar_base/memory/fixed_text.hpp"
-#include <limits>
-#include <array>
-#include <charconv>
-#include "telar_client/codecs/telar_cells.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
-#include <stdexcept>
-#include <vector>
 
-#include "core/memory.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
 import telar.gui.links.cell_links;
 import telar.gui.links.path_expansion;
 

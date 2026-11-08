@@ -1,10 +1,11 @@
-#pragma once
-
+module;
 #include <cstdio>
-#include <memory>
-#include <stdexcept>
-#include <type_traits>
 
+export module telar.gui.tools.probe_io;
+
+import std;
+
+export {
 namespace telar::gui::probe {
 
 template <typename Value>
@@ -26,4 +27,5 @@ void write(const Value &value) {
   }
 }
 
+}
 }

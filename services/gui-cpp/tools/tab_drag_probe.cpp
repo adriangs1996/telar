@@ -4,23 +4,14 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdint>
-#include <optional>
-#include <span>
 #include <cstddef>
-#include <limits>
-#include "probe_io.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.client.protocol;
+import telar.gui.tools.probe_io;
 import telar.gui.input.child_mouse;
 
 namespace {

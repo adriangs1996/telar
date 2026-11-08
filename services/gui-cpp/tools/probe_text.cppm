@@ -1,13 +1,14 @@
-#pragma once
-
-#include "core/memory.hpp"
-#include "probe_io.hpp"
+module;
 #include <cstdint>
 #include <cstdio>
-#include <limits>
-#include <stdexcept>
-#include <string_view>
 
+export module telar.gui.tools.probe_text;
+
+import std;
+export import telar.gui.core.primitives;
+export import telar.gui.tools.probe_io;
+
+export {
 namespace telar::gui::probe {
 
 template <Allocator Memory>
@@ -32,4 +33,5 @@ inline void writeText(std::string_view text) {
   }
 }
 
+}
 }

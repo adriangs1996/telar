@@ -4,26 +4,14 @@ static_assert(true);
 #endif
 
 
-#include <array>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <algorithm>
 #include <ghostty/vt/unicode.h>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <system_error>
 #include <cmath>
 #include <cstdio>
-#include <exception>
-#include <limits>
 
-
-
+import std;
 import telar.gui.text.bounded_editor;
 import telar.gui.text.json_unsigned_integer;
 

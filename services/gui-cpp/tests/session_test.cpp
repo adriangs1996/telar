@@ -43,7 +43,6 @@ static_assert(true);
 #include "../input/wheel_accumulator.hpp"
 #include <memory>
 #include "assertions.hpp"
-#include "session_fixture.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include <cstdio>
 #include <iostream>
@@ -53,7 +52,7 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "input/wheel_accumulator.hpp"
 
-
+import telar.gui.tests.session_fixture;
 import telar.gui.application.sound_playback;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;

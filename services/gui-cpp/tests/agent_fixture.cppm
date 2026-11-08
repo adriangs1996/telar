@@ -1,9 +1,12 @@
-#pragma once
-
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+module;
 #include <cstdint>
 
+export module telar.gui.tests.agent_fixture;
+
+import std;
+export import telar.client.protocol;
+
+export {
 namespace telar::gui::test {
 
 inline AgentSnapshotEntry agentSnapshotEntry(std::uint32_t age_seconds = 0) {
@@ -20,4 +23,5 @@ inline AgentSnapshotEntry agentSnapshotEntry(std::uint32_t age_seconds = 0) {
   };
 }
 
+}
 }

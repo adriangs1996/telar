@@ -4,29 +4,15 @@ static_assert(true);
 #endif
 
 
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
-#include <string_view>
-#include "telar_client/serializers/telar_messages.hpp"
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <algorithm>
-#include <chrono>
-#include <limits>
-#include "probe_io.hpp"
-#include "probe_text.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.client.protocol;
+import telar.gui.tools.probe_io;
+import telar.gui.tools.probe_text;
 import telar.gui.core.metrics;
 import telar.gui.presentation.history_inspection;
 

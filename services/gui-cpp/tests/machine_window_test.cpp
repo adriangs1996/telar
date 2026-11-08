@@ -3,10 +3,7 @@
 static_assert(true);
 #endif
 
-#if (defined(__APPLE__))
-#endif
 
-#include "activity_fixture.hpp"
 #include "../application/dependencies.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -32,7 +29,6 @@ static_assert(true);
 #include <concepts>
 #include <cstring>
 #include <system_error>
-#include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "../qt/application.hpp"
 #include "../qt/plugin_worker.hpp"
@@ -43,8 +39,6 @@ static_assert(true);
 #endif
 #if (defined(__APPLE__))
 #include "../qt/key_adapter.hpp"
-#endif
-#if (defined(__APPLE__))
 #endif
 #if (defined(__APPLE__))
 #include "platform/private_clipboard.hpp"
@@ -75,8 +69,6 @@ static_assert(true);
 #endif
 #if (defined(__APPLE__))
 #include <QtGui/qtestsupport_gui.h>
-#endif
-#if (defined(__APPLE__))
 #endif
 #include "../qt/external_link_opener.hpp"
 #include "../qt/list_model.hpp"
@@ -156,9 +148,8 @@ static_assert(true);
 #include "qt/terminal_item.hpp"
 #include "qt/bundled_fonts.hpp"
 
-#if (defined(__APPLE__))
-#endif
-
+import telar.gui.tests.activity_fixture;
+import telar.gui.tests.metrics_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.config.plugin_effects;
 import telar.gui.core.unicode_scalar;

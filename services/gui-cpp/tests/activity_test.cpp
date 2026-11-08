@@ -4,56 +4,24 @@ static_assert(true);
 #endif
 
 
-#include "activity_fixture.hpp"
-#include "agent_fixture.hpp"
-#include "allocation_gate.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include <cstdint>
-#include "../core/memory.hpp"
-#include <algorithm>
-#include <limits>
-#include "../core/terminal_size.hpp"
-#include <atomic>
-#include <exception>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include <array>
-#include <concepts>
-#include <utility>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
-#include "../terminal/screen.hpp"
-#include <string_view>
-#include <stdexcept>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <charconv>
 #include <cstring>
-#include <system_error>
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "../terminal/cell_position.hpp"
-#include <bit>
-#include <tuple>
 #include <cmath>
-#include "../input/wheel_accumulator.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <memory>
-#include <compare>
-#include "session_fixture.hpp"
-#include <iostream>
 #include <new>
-#include <string>
+#include "assertions.hpp"
 
-#include "core/memory.hpp"
-
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.config;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
+import telar.gui.tests.activity_fixture;
+import telar.gui.tests.agent_fixture;
+import telar.gui.tests.allocation_gate;
+import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.presentation.application_mark;

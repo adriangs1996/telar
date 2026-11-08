@@ -4,28 +4,14 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstddef>
-#include <array>
-#include <string_view>
-#include <optional>
-#include <utility>
-#include <charconv>
-#include <concepts>
 #include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <span>
-#include <variant>
-#include "probe_io.hpp"
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.gui.tools.probe_io;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.input.child_mouse;

@@ -4,25 +4,12 @@ static_assert(true);
 #endif
 
 
-#include <algorithm>
 #include <cstdint>
-#include <limits>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <array>
 #include <cstddef>
-#include <optional>
-#include <span>
-#include <variant>
-#include "telar_client/serializers/telar_messages.hpp"
-#include <memory>
-#include <stdexcept>
-#include <concepts>
 #include <cstdio>
-#include <exception>
-#include <iostream>
 
-
-
+import std;
+import telar.client.protocol;
 import telar.gui.application.sound_playback;
 
 namespace {

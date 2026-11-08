@@ -4,45 +4,27 @@ static_assert(true);
 #endif
 
 
-#include "../core/memory.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <array>
 #include <freetype/freetype.h>
 #include <hb.h>
-#include <memory>
-#include <string_view>
 #include "../platform/font.h"
-#include <algorithm>
 #include <cstring>
-#include "telar_client/serializers/telar_cells.hpp"
-#include <optional>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
 #include <cmath>
-#include <limits>
-#include <stdexcept>
-#include <type_traits>
-#include "telar_base/text/utf8.hpp"
-#include <charconv>
-#include <concepts>
-#include <system_error>
-#include <bit>
 #include <ghostty/vt/unicode.h>
-#include "telar_base/memory/allocator.hpp"
 #include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <cstdio>
 
-#include "core/memory.hpp"
 #include "platform/font.h"
 
-
+import std;
+import telar.base.memory;
+import telar.base.text;
+import telar.client.protocol;
+import telar.gui.core.primitives;
+import telar.platform.primitives;
 import telar.gui.fonts.face;
 import telar.gui.presentation.history_meta_geometry;
 import telar.platform;
