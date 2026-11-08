@@ -3,7 +3,7 @@
 #include <string_view>
 
 namespace project {
-  std::string_view opaque(std::string_view input);
+  std::string_view opaque(std::string_view first, std::string_view second);
 }
 
 // CASE: system_macro.own_expression
@@ -25,7 +25,7 @@ void systemMacroOwnExpression(std::string_view source) {
 // CONTRACT: A project expression passed to a system macro keeps its missing-contract diagnostic.
 // SCENARIO: The opaque call is spelled by the project as a macro argument.
 void systemMacroProjectExpression(std::string_view source) {
-  SYSTEM_MACRO_CONSUME(project::opaque(source)); // expected-error [tbc-missing-contract]
+  SYSTEM_MACRO_CONSUME(project::opaque(source, source)); // expected-error [tbc-missing-contract]
 }
 
 // END CASE

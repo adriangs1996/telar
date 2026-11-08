@@ -146,6 +146,7 @@ namespace inferred {
   }
 
   std::string_view opaque(std::string_view input);
+  std::string_view opaque_pair(std::string_view first, std::string_view second);
 
   struct text_list {
     std::vector<std::string_view> items;
@@ -463,10 +464,35 @@ tbc::view<std::string_view, tbc::lt::a> inferredExplicitMatch(tbc::view<std::str
 // PAIR: inference.boundary
 // SOURCE: dlls/ebnf/parser.cppm :: i_tokenizer
 // STATUS: implemented
-// CONTRACT: An unavailable implementation without a contract must not imply a static result.
-// SCENARIO: A native borrowed result crosses an opaque boundary.
-void inferredOpaqueBoundary(std::string_view source) {
-  const auto value = inferred::opaque(source); // expected-error [tbc-missing-contract]
+// CONTRACT: An unavailable implementation without a contract follows Rust's lifetime elision and never implies a static result.
+// SCENARIO: The result borrows its only input, a temporary that dies before the result is read.
+void inferredOpaqueBoundary() {
+  const auto value = inferred::opaque(std::string{"abc"}); // expected-error [tbc-dangling-borrow]
+  inferred::observe(value);
+}
+
+// END CASE
+
+// CASE: inference.opaque_elided_input
+// PAIR: inference.boundary
+// SOURCE: dlls/ebnf/parser.cppm :: i_tokenizer
+// STATUS: implemented
+// CONTRACT: An unavailable implementation without a contract follows Rust's lifetime elision and never implies a static result.
+// SCENARIO: The result borrows its only input, which outlives the result; accept.
+void inferredOpaqueElidedInput(std::string_view source) {
+  inferred::observe(inferred::opaque(source));
+}
+
+// END CASE
+
+// CASE: inference.opaque_ambiguous
+// PAIR: inference.boundary
+// SOURCE: dlls/ebnf/parser.cppm :: i_tokenizer
+// STATUS: implemented
+// CONTRACT: An unavailable implementation without a contract follows Rust's lifetime elision and never implies a static result.
+// SCENARIO: Two inputs can lend, so elision names no source, as in Rust; the declaration needs a contract.
+void inferredOpaqueAmbiguous(std::string_view first, std::string_view second) {
+  const auto value = inferred::opaque_pair(first, second); // expected-error [tbc-missing-contract]
   inferred::observe(value);
 }
 

@@ -1,3 +1,4 @@
+#include "elision.hpp"
 #include "support.hpp"
 
 using text_a = tbc::view<std::string_view, tbc::lt::a>;
@@ -178,6 +179,263 @@ contracts::statement opaqueConstructorEscape() {
 // SCENARIO: The statement borrows the caller's database and its temporary query text is not retained; accept.
 contracts::statement opaqueConstructorRetained(contracts::database &owner) {
   return contracts::statement{owner, std::string{"SELECT 1"}};
+}
+
+// END CASE
+
+// CASE: contract.elided_call_temporary
+// PAIR: contract.elided_call
+// SOURCE: services/gui-cpp/qt/application.hpp :: Application::session
+// STATUS: implemented
+// CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
+// SCENARIO: The receiver is a temporary that dies before the result is read.
+void elidedCallTemporary() {
+  const auto &label = elision::registry{}.label(); // expected-error [tbc-dangling-borrow]
+  spec::observe(std::string_view{label});
+}
+
+// END CASE
+
+// CASE: contract.elided_call_receiver
+// PAIR: contract.elided_call
+// SOURCE: services/gui-cpp/qt/application.hpp :: Application::session
+// STATUS: implemented
+// CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
+// SCENARIO: The receiver outlives the result; accept.
+void elidedCallReceiver(const elision::registry &registry) {
+  spec::observe(std::string_view{registry.label()});
+}
+
+// END CASE
+
+// CASE: contract.elided_definition_parameter
+// PAIR: contract.elided_definition
+// SOURCE: services/gui-cpp/qt/application.hpp :: Application::session
+// STATUS: implemented
+// CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
+// SCENARIO: A method returns its parameter, which callers that only see the declaration take for a borrow of the receiver.
+const std::string &elision::registry::pick(const std::string &fallback) const {
+  return fallback; // expected-error [tbc-contract-violation]
+}
+
+// END CASE
+
+// CASE: contract.elided_definition_receiver
+// PAIR: contract.elided_definition
+// SOURCE: services/gui-cpp/qt/application.hpp :: Application::session
+// STATUS: implemented
+// CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
+// SCENARIO: A method returns its receiver's field; accept.
+const std::string &elision::registry::name() const {
+  return name_;
+}
+
+// END CASE
+
+// CASE: contract.self_field_internal
+// PAIR: contract.self_field
+// SOURCE: services/gui-cpp/qt/font_asset.hpp :: FontAsset
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
+// SCENARIO: Shared pinned objects whose only borrow is internal cross an opaque two-input call without a contract; accept.
+namespace contracts {
+  class self_text {
+  public:
+    self_text()
+        : cursor_(storage_.data()) {}
+
+    self_text(const self_text &) = delete;
+    self_text &operator=(const self_text &) = delete;
+
+  private:
+    std::string storage_{"abc"};
+    tbc::view<const char *, tbc::lt::self> cursor_;
+  };
+
+  class borrowed_text {
+  public:
+    borrowed_text()
+        : cursor_(storage_.data()) {}
+
+    borrowed_text(const borrowed_text &) = delete;
+    borrowed_text &operator=(const borrowed_text &) = delete;
+
+  private:
+    std::string storage_{"abc"};
+    const char *cursor_;
+  };
+
+  std::shared_ptr<const self_text> chooseSelf(const std::shared_ptr<const self_text> &first, const std::shared_ptr<const self_text> &second);
+  std::shared_ptr<const borrowed_text> chooseBorrowed(const std::shared_ptr<const borrowed_text> &first, const std::shared_ptr<const borrowed_text> &second);
+  void keep(const std::shared_ptr<const self_text> &text);
+  void keep(const std::shared_ptr<const borrowed_text> &text);
+}
+
+void selfFieldInternal(const std::shared_ptr<const contracts::self_text> &first, const std::shared_ptr<const contracts::self_text> &second) {
+  contracts::keep(contracts::chooseSelf(first, second));
+}
+
+// END CASE
+
+// CASE: contract.self_field_unlabeled
+// PAIR: contract.self_field
+// SOURCE: services/gui-cpp/qt/font_asset.hpp :: FontAsset
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
+// SCENARIO: Without the label, the pointer may borrow anything, so the opaque two-input call needs a contract.
+void selfFieldUnlabeled(const std::shared_ptr<const contracts::borrowed_text> &first, const std::shared_ptr<const contracts::borrowed_text> &second) {
+  contracts::keep(contracts::chooseBorrowed(first, second)); // expected-error [tbc-missing-contract]
+}
+
+// END CASE
+
+// CASE: contract.self_field_relocatable
+// PAIR: contract.self_field
+// SOURCE: services/gui-cpp/qt/font_asset.hpp :: FontAsset
+// STATUS: implemented
+// CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
+// SCENARIO: A copy would carry the internal borrow away from its object; reject the labeled field's initializer.
+namespace contracts {
+  class copied_text {
+  public:
+    copied_text()
+        : cursor_(storage_.data()) {} // expected-error [tbc-dangling-borrow]
+
+  private:
+    std::string storage_{"abc"};
+    tbc::view<const char *, tbc::lt::self> cursor_;
+  };
+}
+
+void selfFieldRelocatable() {
+  const contracts::copied_text text;
+  static_cast<void>(text);
+}
+
+// END CASE
+
+// CASE: contract.elided_constructor_escape
+// PAIR: contract.elided_constructor
+// SOURCE: services/gui-cpp/qt/ancestor_geometry.hpp :: AncestorGeometry
+// STATUS: implemented
+// CONTRACT: A constructor without a visible body and without labeled fields may retain any argument that can lend.
+// SCENARIO: The object outlives the temporary text it was built from; reject.
+namespace contracts {
+  class labeled_text {
+  public:
+    explicit labeled_text(std::string_view text);
+    [[nodiscard]] std::size_t size() const;
+
+  private:
+    std::string_view text_;
+  };
+}
+
+std::size_t elidedConstructorEscape() {
+  const contracts::labeled_text text{std::string{"abc"}}; // expected-error [tbc-dangling-borrow]
+  return text.size();
+}
+
+// END CASE
+
+// CASE: contract.elided_constructor_retained
+// PAIR: contract.elided_constructor
+// SOURCE: services/gui-cpp/qt/ancestor_geometry.hpp :: AncestorGeometry
+// STATUS: implemented
+// CONTRACT: A constructor without a visible body and without labeled fields may retain any argument that can lend.
+// SCENARIO: The text outlives the object; accept.
+std::size_t elidedConstructorRetained(std::string_view source) {
+  const contracts::labeled_text text{source};
+  return text.size();
+}
+
+// END CASE
+
+// CASE: contract.library_override
+// PAIR: contract.elided_definition
+// SOURCE: services/gui-cpp/qt/native_cell_text.cpp :: NativeCellText::updatePaintNode
+// STATUS: implemented
+// CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
+// SCENARIO: An override of a library virtual takes its contract from the library, whose callers are not checked; it returns the node it was given; accept.
+library::node *elision::painted_item::update(library::node *previous) {
+  return previous;
+}
+
+// END CASE
+
+// CASE: contract.labeled_field_storage
+// PAIR: contract.labeled_field
+// SOURCE: services/gui-cpp/qt/configuration_source.hpp :: ConfigurationSource::commandTab
+// STATUS: implemented
+// CONTRACT: What a field labeled with the result's region owns lives in that region, as a field of `&'a self` does.
+// SCENARIO: The result views the string the labeled field owns; accept.
+namespace contracts {
+  class owned_label {
+  public:
+    tbc::view<std::string_view, tbc::lt::a> text() const {
+      return *text_;
+    }
+
+  private:
+    tbc::view<std::unique_ptr<std::string>, tbc::lt::a> text_ = std::make_unique<std::string>("abc");
+  };
+}
+
+// END CASE
+
+// CASE: contract.labeled_field_other
+// PAIR: contract.labeled_field
+// SOURCE: services/gui-cpp/qt/configuration_source.hpp :: ConfigurationSource::commandTab
+// STATUS: implemented
+// CONTRACT: What a field labeled with the result's region owns lives in that region, as a field of `&'a self` does.
+// SCENARIO: The result views a string an unlabeled field owns; reject.
+namespace contracts {
+  class unlabeled_owner {
+  public:
+    tbc::view<std::string_view, tbc::lt::a> text() const {
+      return *text_; // expected-error [tbc-contract-violation]
+    }
+
+  private:
+    std::unique_ptr<std::string> text_ = std::make_unique<std::string>("abc");
+  };
+}
+
+// END CASE
+
+// CASE: contract.deduced_result
+// PAIR: contract.deduced_result
+// SOURCE: services/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::reload
+// STATUS: implemented
+// CONTRACT: A deduced return type repeats the label of what it returns, which is not a contract of the deducing function.
+// SCENARIO: A lambda returns a labeled result built from what it captured; accept.
+namespace contracts {
+  text_a firstLetter(text_a source) {
+    return source.substr(0, 1);
+  }
+}
+
+std::size_t deducedResult(std::string_view source) {
+  const auto read = [&source] { return contracts::firstLetter(source); };
+  return read().size();
+}
+
+// END CASE
+
+// CASE: contract.deduced_result_escape
+// PAIR: contract.deduced_result
+// SOURCE: services/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::reload
+// STATUS: implemented
+// CONTRACT: A deduced return type repeats the label of what it returns, which is not a contract of the deducing function.
+// SCENARIO: The lambda's labeled result views a local whose scope ends before the result is read; the use is still checked.
+std::size_t deducedResultEscape() {
+  std::string_view kept;
+  {
+    const std::string source{"abc"};
+    const auto read = [&source] { return contracts::firstLetter(source); };
+    kept = read();
+  } // expected-error [tbc-invalidated-borrow]
+  return kept.size();
 }
 
 // END CASE

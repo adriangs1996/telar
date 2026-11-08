@@ -5,6 +5,18 @@
 #pragma clang system_header
 
 namespace library {
+  // A scene node an item updates through a virtual the library calls, as QQuickItem::updatePaintNode is.
+  class node {
+  public:
+    virtual ~node();
+  };
+
+  class item {
+  public:
+    virtual ~item();
+    virtual node *update(node *previous);
+  };
+
   class string {
   public:
     explicit string(const char *text);

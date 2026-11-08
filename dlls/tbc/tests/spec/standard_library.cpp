@@ -5,6 +5,8 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -564,6 +566,120 @@ std::size_t rangesFindLocal(const std::array<char, 16> &input) {
 const char *rangesFindEscape() {
   std::array<char, 16> name{};
   return std::ranges::find(name, '\0'); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: std.release_handoff
+// PAIR: std.release
+// SOURCE: services/gui-cpp/qt/scene_nodes.hpp :: adoptSceneNode
+// STATUS: implemented
+// CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
+// SCENARIO: A scene node is adopted by its parent and a reference to it is returned; accept.
+namespace standard {
+  struct scene_node {
+    int value = 0;
+  };
+
+  struct scene_parent {
+    void adopt(scene_node *child);
+  };
+}
+
+standard::scene_node &stdReleaseHandoff(standard::scene_parent &parent, std::unique_ptr<standard::scene_node> child) {
+  auto &result = *child;
+  parent.adopt(child.release());
+  return result;
+}
+
+// END CASE
+
+// CASE: std.release_kept
+// PAIR: std.release
+// SOURCE: services/gui-cpp/qt/scene_nodes.hpp :: adoptSceneNode
+// STATUS: implemented
+// CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
+// SCENARIO: Without the release, the local owner destroys the node the returned reference designates.
+standard::scene_node &stdReleaseKept(std::unique_ptr<standard::scene_node> child) {
+  auto &result = *child;
+  return result; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: std.optional_owner_transfer
+// PAIR: std.optional_owner
+// SOURCE: services/gui-cpp/qt/machine_controller.cpp :: clients_
+// STATUS: implemented
+// CONTRACT: Moving an owner into an optional slot hands its object to the slot.
+// SCENARIO: A client installed in the receiver's slot outlives the call; accept.
+namespace standard {
+  struct client_slots {
+    std::array<std::optional<std::unique_ptr<scene_node>>, 4> slots_;
+
+    scene_node &install(std::size_t slot) {
+      auto owned = std::make_unique<scene_node>();
+      auto *raw = owned.get();
+      slots_[slot] = std::move(owned);
+      return *raw;
+    }
+  };
+}
+
+// END CASE
+
+// CASE: std.optional_owner_kept
+// PAIR: std.optional_owner
+// SOURCE: services/gui-cpp/qt/machine_controller.cpp :: clients_
+// STATUS: implemented
+// CONTRACT: Moving an owner into an optional slot hands its object to the slot.
+// SCENARIO: The client stays with the local owner, which destroys it on return.
+standard::scene_node &stdOptionalOwnerKept(standard::client_slots &slots) {
+  static_cast<void>(slots);
+  auto owned = std::make_unique<standard::scene_node>();
+  auto *raw = owned.get();
+  return *raw; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: std.range_adaptor_view
+// PAIR: std.range_adaptor
+// SOURCE: services/gui-cpp/input/child_mouse.cppm :: TabDropSurface::at
+// STATUS: implemented
+// CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
+// SCENARIO: An element of a reversed span over the receiver's array is returned; accept.
+namespace standard {
+  struct drop_slots {
+    std::array<int, 4> targets{};
+    std::size_t count = 0;
+
+    const int *last(int value) const {
+      for (const auto &target : std::span{targets}.first(count) | std::views::reverse) {
+        if (target == value) {
+          return &target;
+        }
+      }
+      return nullptr;
+    }
+  };
+}
+
+// END CASE
+
+// CASE: std.range_adaptor_owning
+// PAIR: std.range_adaptor
+// SOURCE: services/gui-cpp/input/child_mouse.cppm :: TabDropSurface::at
+// STATUS: implemented
+// CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
+// SCENARIO: A reversed temporary vector is owned by the adaptor, which dies with the loop.
+const int *stdRangeAdaptorOwning(int value) {
+  for (const auto &target : std::vector<int>{1, 2, 3} | std::views::reverse) {
+    if (target == value) {
+      return &target; // expected-error [tbc-dangling-borrow]
+    }
+  }
+  return nullptr;
 }
 
 // END CASE

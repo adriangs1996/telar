@@ -22,6 +22,12 @@ namespace tbc {
     // Storage that outlives every caller: string literals and objects with static storage
     // duration. Only results take it; the referent never depends on an argument or receiver.
     struct static_storage : detail::region_tag {};
+
+    // A field that borrows only the object holding it, such as an allocator reference to a sibling
+    // arena. Its borrows are internal to that object, so they never count as the object's borrows.
+    // Like a raw pointer behind Rust's Pin, this is a promise: the checker only requires the object
+    // to be neither copyable nor movable.
+    struct self : detail::region_tag {};
   }
 
   namespace detail {

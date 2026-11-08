@@ -182,6 +182,7 @@
     "dlls/tbc/linter/lifetime_analysis.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "dlls/tbc/linter/view_type.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "dlls/tbc/tests/spec/support.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
+    "dlls/tbc/tests/spec/elision.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "dlls/tbc/tests/spec/system_library.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "dlls/tbc/tests/spec/system_macro.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "dlls/telar-base/include/telar_base/diagnostics/config.hpp": "Objective-C++ ABI",

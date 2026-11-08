@@ -2,6 +2,7 @@
 #include "view_type.hpp"
 
 #include <clang/AST/ExprCXX.h>
+#include <clang/AST/ExprObjC.h>
 #include <clang/AST/ParentMapContext.h>
 #include <clang/Analysis/CFG.h>
 #include <clang/Basic/Diagnostic.h>
@@ -42,6 +43,7 @@ namespace tbc_lint {
       ambiguous,
       missing,
       relocated_self,
+      elided_contract,
     };
 
     // How deep a borrow reaches into a variable: the variable itself, the storage it owns, such as a
@@ -1250,6 +1252,11 @@ namespace tbc_lint {
         if (!reporting_ || constructor == nullptr || !relocatable(*constructor->getParent())) {
           return;
         }
+        for (const auto *field : constructor->getParent()->fields()) {
+          if (selfBorrowing(*field)) {
+            report(issue::relocated_self, initializerLocation(*constructor, *field));
+          }
+        }
         for (const auto &[key, written] : summary_.writes) {
           const auto *field = llvm::dyn_cast<clang::FieldDecl>(key);
           if (field == nullptr) {
@@ -1410,6 +1417,9 @@ namespace tbc_lint {
           break;
         case issue::missing:
           id = diagnostics.getCustomDiagID(severity, "borrow-sensitive call to %0 has no supported lifetime summary [tbc-missing-contract]");
+          break;
+        case issue::elided_contract:
+          id = diagnostics.getCustomDiagID(severity, "callers without this body assume the result borrows only from the receiver, or from the one parameter that can lend; state another source on the declaration [tbc-contract-violation]");
           break;
         case issue::relocated_self:
           id = diagnostics.getCustomDiagID(severity, "object keeps a borrow of itself but can be copied or moved [tbc-dangling-borrow]");
@@ -1600,10 +1610,22 @@ namespace tbc_lint {
         }
         const auto *call = llvm::dyn_cast_or_null<clang::CallExpr>(expression);
         const auto *callee = call == nullptr ? nullptr : call->getDirectCallee();
-        if (callee != nullptr && call->getNumArgs() == 1 && callee->getQualifiedNameAsString() == "std::move") {
+        if (standardFunction(callee, "move") && call->getNumArgs() == 1) {
           return place(call->getArg(0));
         }
         return nullptr;
+      }
+
+      void releaseOwnership(const clang::ValueDecl &owner, state &current) {
+        for (auto *map : {&current.values, &current.references, &current.designated}) {
+          for (auto &entry : *map) {
+            for (auto &source : entry.second.values) {
+              if (source.variable == &owner && source.storage >= storage_kind::data && source.invalidated == nullptr) {
+                source = {.kind = origin_kind::static_storage, .storage = source.storage, .held = source.held};
+              }
+            }
+          }
+        }
       }
 
       // After a move, borrows of the source's allocation belong to the destination, at the given level below it.
@@ -1957,7 +1979,7 @@ namespace tbc_lint {
 
         if (const auto *call = llvm::dyn_cast<clang::CallExpr>(expression)) {
           const auto *callee = call->getDirectCallee();
-          if (callee != nullptr && (callee->getQualifiedNameAsString() == "std::move" || callee->getQualifiedNameAsString() == "std::forward")) {
+          if (standardFunction(callee, "move") || standardFunction(callee, "forward")) {
             return reference(call->getArg(0), current);
           }
           return callResult(*call, current);
@@ -2185,7 +2207,7 @@ namespace tbc_lint {
         }
         if (const auto *call = llvm::dyn_cast<clang::CallExpr>(expression)) {
           const auto *callee = call->getDirectCallee();
-          if (callee != nullptr && (callee->getQualifiedNameAsString() == "std::move" || callee->getQualifiedNameAsString() == "std::forward")) {
+          if (standardFunction(callee, "move") || standardFunction(callee, "forward")) {
             return storage(call->getArg(0), current);
           }
           // A pointer or view lends what it designates, even when a call returns a reference to it.
@@ -2387,7 +2409,7 @@ namespace tbc_lint {
         loans result;
         const auto fields = constructedFields(construction, current);
         if (!fields) {
-          if (!declaredRetention(construction, current, result)) {
+          if (!declaredRetention(construction, current, result) && !elidedRetention(construction, current, result)) {
             result.add({.kind = origin_kind::unknown, .expression = &construction});
           }
           return result;
@@ -2414,6 +2436,24 @@ namespace tbc_lint {
           const auto region = parameterAnnotation(*parameter, context_).region;
           if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*constructor, region)) {
             retained.merge(storage(construction.getArg(index), current));
+          }
+        }
+        retained = unplaced(retained);
+        return true;
+      }
+
+      // A project constructor whose body and fields state nothing may retain any argument that can
+      // lend. A Rust struct always declares its lifetimes; without such a declaration, assuming every
+      // one of them is sound and asks the caller only what the arguments already need.
+      bool elidedRetention(const clang::CXXConstructExpr &construction, const state &current, loans &retained) {
+        const auto *constructor = constructorOf(construction);
+        const auto &sources = context_.getSourceManager();
+        if (constructor == nullptr || sources.isInSystemHeader(sources.getExpansionLoc(constructor->getLocation()))) {
+          return false;
+        }
+        for (unsigned index = 0; index < constructor->getNumParams() && index < construction.getNumArgs(); ++index) {
+          if (lends(*constructor->getParamDecl(index))) {
+            retained.merge(lent(*constructor->getParamDecl(index), *construction.getArg(index), current));
           }
         }
         retained = unplaced(retained);
@@ -2565,6 +2605,92 @@ namespace tbc_lint {
         return result;
       }
 
+      // A project declaration without a contract follows Rust's lifetime elision: a result borrows from
+      // the receiver, or from the only parameter that can lend, or, with neither, from nothing. Several
+      // lending parameters leave the source unknown. The definition is checked against the same rule.
+      [[nodiscard]] static bool hasReceiver(const clang::FunctionDecl &function) {
+        const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function);
+        return method != nullptr && method->isInstance();
+      }
+
+      [[nodiscard]] static bool lends(const clang::ParmVarDecl &parameter) {
+        const auto type = parameter.getType();
+        return type->isReferenceType() || type->isPointerType() || containsViews(type);
+      }
+
+      // The parameter an elided result borrows from, or null for none; false when several can lend.
+      [[nodiscard]] static std::optional<const clang::ParmVarDecl *> elidedParameter(const clang::FunctionDecl &function) {
+        const clang::ParmVarDecl *selected = nullptr;
+        for (const auto *parameter : function.parameters()) {
+          if (!lends(*parameter)) {
+            continue;
+          }
+          if (selected != nullptr) {
+            return std::nullopt;
+          }
+          selected = parameter;
+        }
+        return selected;
+      }
+
+      std::optional<loans> elidedResult(const clang::FunctionDecl &callee, const clang::CallExpr &call, const clang::Expr *object, const state &current) {
+        const auto &sources = context_.getSourceManager();
+        if (sources.isInSystemHeader(sources.getExpansionLoc(callee.getLocation()))) {
+          return std::nullopt;
+        }
+        if (hasReceiver(callee)) {
+          return object != nullptr ? std::optional<loans>(objectStorage(*object, current)) : std::nullopt;
+        }
+        const auto parameter = elidedParameter(callee);
+        if (!parameter) {
+          return std::nullopt;
+        }
+        if (*parameter == nullptr) {
+          return loans{};
+        }
+        const auto index = (*parameter)->getFunctionScopeIndex() + argumentOffset(call);
+        if (index >= call.getNumArgs()) {
+          return std::nullopt;
+        }
+        return lent(**parameter, *call.getArg(index), current);
+      }
+
+      // What an argument lends through its parameter: the object a reference binds, or what a view or a
+      // pointer passed by value designates, never the copy the call receives.
+      loans lent(const clang::ParmVarDecl &parameter, const clang::Expr &argument, const state &current) {
+        return parameter.getType()->isReferenceType() ? reference(&argument, current) : value(&argument, current);
+      }
+
+      // Whether callers in other translation units see only this definition's declaration. An override
+      // of a library virtual takes its contract from the library, whose callers are not checked.
+      [[nodiscard]] bool outOfLine() const {
+        if (function_.isInlined() || function_.getTemplatedKind() != clang::FunctionDecl::TK_NonTemplate) {
+          return false;
+        }
+        const auto &sources = context_.getSourceManager();
+        if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && llvm::any_of(method->overridden_methods(), [&](const clang::CXXMethodDecl *base) { return sources.isInSystemHeader(sources.getExpansionLoc(base->getLocation())); })) {
+          return false;
+        }
+        const auto definition = sources.getFileID(sources.getExpansionLoc(function_.getLocation()));
+        return llvm::any_of(function_.redecls(), [&](const clang::FunctionDecl *declaration) { return sources.getFileID(sources.getExpansionLoc(declaration->getLocation())) != definition; });
+      }
+
+      // Whether a returned borrow comes from where the elided contract of an unannotated declaration says.
+      [[nodiscard]] bool elidedAllows(const origin &source) const {
+        if (source.kind == origin_kind::static_storage || source.kind == origin_kind::environment || source.kind == origin_kind::unknown) {
+          return true;
+        }
+        if (source.kind == origin_kind::receiver || source.kind == origin_kind::receiver_region) {
+          return hasReceiver(function_);
+        }
+        if (hasReceiver(function_) || !parameterOrigin(source)) {
+          return false;
+        }
+        const auto parameter = elidedParameter(function_);
+        // Several lending parameters leave callers with an unknown source, which they never trust.
+        return !parameter || (*parameter != nullptr && source.variable == *parameter);
+      }
+
       loans callResult(const clang::CallExpr &call, const state &current) {
         if (const auto cached = call_results_.find(&call); cached != call_results_.end()) {
           return cached->second;
@@ -2594,7 +2720,7 @@ namespace tbc_lint {
         if (call.getType()->isPointerType() && foreignFunction(*callee)) {
           return pointeeArguments(call, current);
         }
-        if (callee->getQualifiedNameAsString() == "std::move" || callee->getQualifiedNameAsString() == "std::forward") {
+        if (standardFunction(callee, "move") || standardFunction(callee, "forward")) {
           return call.getNumArgs() == 0 ? loans{} : reference(call.getArg(0), current);
         }
         if (object != nullptr && libraryRecord(objectType(*object)) && !standardType(objectType(*object), "function")) {
@@ -2626,6 +2752,9 @@ namespace tbc_lint {
             return result;
           }
           if (!result_annotation.present) {
+            if (auto elided = elidedResult(*callee, call, object, current)) {
+              return std::move(*elided);
+            }
             loans result;
             result.add({.kind = origin_kind::unknown, .expression = &call});
             return result;
@@ -3019,6 +3148,16 @@ namespace tbc_lint {
         if (llvm::isa<clang::CXXThisExpr>(expression)) {
           return reference(expression, current);
         }
+        // A new expression's pointer owns a fresh object no variable holds, like a released owner's:
+        // unchecked, as a raw owning pointer is in Rust. A selector names static storage, and an
+        // Objective-C message is foreign code whose results are unchecked like a C function's.
+        if (llvm::isa<clang::CXXNewExpr, clang::ObjCSelectorExpr, clang::ObjCMessageExpr>(expression)) {
+          return {};
+        }
+        // An Objective-C property access stands for the call or expression it is written as.
+        if (const auto *pseudo = llvm::dyn_cast<clang::PseudoObjectExpr>(expression); pseudo != nullptr && pseudo->getResultExpr() != nullptr) {
+          return value(pseudo->getResultExpr(), current);
+        }
 
         loans result;
         if (containsViews(expression->getType())) {
@@ -3081,7 +3220,10 @@ namespace tbc_lint {
         }
         if (source.kind == origin_kind::receiver || source.kind == origin_kind::receiver_region) {
           if (output.region != nullptr) {
-            return source.kind == origin_kind::receiver_region && source.region == output.region;
+            // What a field in the region owns lives in the region too, as a field of `&'a self` does.
+            const auto *field = llvm::dyn_cast_or_null<clang::FieldDecl>(source.variable);
+            const bool owned = source.kind == origin_kind::receiver && field != nullptr && viewAnnotation(field->getType(), context_).region == output.region;
+            return owned || (source.kind == origin_kind::receiver_region && source.region == output.region);
           }
           return llvm::isa<clang::CXXMethodDecl>(function_);
         }
@@ -3136,6 +3278,8 @@ namespace tbc_lint {
             report(issue::dangling, statement.getReturnLoc(), &source);
           } else if (output.present && source.kind != origin_kind::unknown && !allowed(source, output)) {
             report(issue::contract, statement.getReturnLoc(), &source);
+          } else if (!output.present && outOfLine() && !elidedAllows(source)) {
+            report(issue::elided_contract, statement.getReturnLoc(), &source);
           }
         }
       }
@@ -3314,6 +3458,15 @@ namespace tbc_lint {
           }
           // Resetting or reassigning a unique owner destroys its object. Only the owner itself is invalidated,
           // never an enclosing object that it was merged into.
+          // Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's
+          // Box::into_raw does: borrows of that object become unchecked, like a raw foreign pointer's.
+          if (uniqueOwner(type) && name == "release") {
+            for (const auto *target : objectTargets(*object, current)) {
+              if (sameType(target->getType(), type)) {
+                releaseOwnership(*target, current);
+              }
+            }
+          }
           if (uniqueOwner(type) && (name == "reset" || name == "operator=")) {
             for (const auto *target : objectTargets(*object, current)) {
               if (sameType(target->getType(), type)) {

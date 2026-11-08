@@ -47,7 +47,7 @@ namespace tbc_lint {
   inline const clang::FunctionDecl &contractDeclaration(const clang::FunctionDecl &function, const clang::ASTContext &context) {
     const clang::FunctionDecl *selected = &function;
     for (const auto *declaration : function.redecls()) {
-      const auto annotation = viewAnnotation(declaration->getReturnType(), context);
+      const auto annotation = viewAnnotation(declaration->getDeclaredReturnType(), context);
       if (annotation.region != nullptr) {
         return *declaration;
       }
@@ -55,7 +55,7 @@ namespace tbc_lint {
         selected = declaration;
       }
     }
-    if (!viewAnnotation(selected->getReturnType(), context).present) {
+    if (!viewAnnotation(selected->getDeclaredReturnType(), context).present) {
       for (const auto *declaration : function.redecls()) {
         for (const auto *parameter : declaration->parameters()) {
           if (viewAnnotation(parameter->getType(), context).present) {
@@ -67,13 +67,24 @@ namespace tbc_lint {
     return *selected;
   }
 
+  inline bool selfRegion(const clang::Type *region) {
+    const auto *record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
+    return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::self";
+  }
+
+  // A field labeled lt::self borrows only its own object.
+  inline bool selfBorrowing(const clang::FieldDecl &field) {
+    return selfRegion(viewAnnotation(field.getType(), field.getASTContext()).region);
+  }
+
   inline bool staticRegion(const clang::Type *region) {
     const auto *record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
     return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::static_storage";
   }
 
+  // A deduced return type repeats the label of what it returns, which the declaration never stated.
   inline annotation returnAnnotation(const clang::FunctionDecl &function, const clang::ASTContext &context) {
-    return viewAnnotation(contractDeclaration(function, context).getReturnType(), context);
+    return viewAnnotation(contractDeclaration(function, context).getDeclaredReturnType(), context);
   }
 
   inline annotation parameterAnnotation(const clang::ParmVarDecl &parameter, const clang::ASTContext &context) {
@@ -119,8 +130,10 @@ namespace tbc_lint {
     return record != nullptr && standardRecord(type) && record->getName() == name;
   }
 
+  inline bool rangeView(clang::QualType type);
+
   inline bool nativeView(clang::QualType type) {
-    return standardType(type, "basic_string_view") || standardType(type, "span") || standardType(type, "reference_wrapper") || standardType(type, "initializer_list");
+    return standardType(type, "basic_string_view") || standardType(type, "span") || standardType(type, "reference_wrapper") || standardType(type, "initializer_list") || rangeView(type);
   }
 
   inline bool standardDeclaration(const clang::Decl &declaration) {
@@ -130,6 +143,38 @@ namespace tbc_lint {
       }
     }
 
+    return false;
+  }
+
+  // A standard function by its unqualified name; its qualified spelling depends on the library's
+  // inline namespace, as libc++'s std::__1::move shows.
+  inline bool standardFunction(const clang::FunctionDecl *function, llvm::StringRef name) {
+    return function != nullptr && function->getIdentifier() != nullptr && function->getName() == name && standardDeclaration(*function);
+  }
+
+  // A standard range adaptor views the range it adapts, as std::views::reverse over a span does: its
+  // elements are that range's. One that owns its range, as std::ranges::owning_view does, is not a view.
+  inline bool rangeView(clang::QualType type) {
+    const auto *specialization = llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(type->getAsCXXRecordDecl());
+    if (specialization == nullptr || !specialization->hasDefinition() || specialization->getName() == "owning_view" || !standardDeclaration(*specialization)) {
+      return false;
+    }
+    bool adaptor = false;
+    specialization->getDefinition()->forallBases([&](const clang::CXXRecordDecl *base) {
+      adaptor = adaptor || (base->getName() == "view_interface" && standardDeclaration(*base));
+      return true;
+    });
+    if (!adaptor) {
+      return false;
+    }
+    if (specialization->getName() == "ref_view") {
+      return true;
+    }
+    for (const auto &argument : specialization->getTemplateArgs().asArray()) {
+      if (argument.getKind() == clang::TemplateArgument::Type && nativeView(argument.getAsType())) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -199,7 +244,14 @@ namespace tbc_lint {
 
   // Moving a smart pointer or an allocator-aware container hands its allocation to the destination.
   // A string is excluded: its small-buffer storage does not move with it.
+  inline clang::QualType memberType(clang::QualType owner, llvm::StringRef name);
+
   inline bool transfersAllocation(clang::QualType type) {
+    if (standardType(type, "optional")) {
+      // An optional owner hands over what the owner it holds owns.
+      const auto value = memberType(type, "value_type");
+      return !value.isNull() && transfersAllocation(value);
+    }
     return smartPointer(type) || (standardRecord(type) && !standardType(type, "basic_string") && declaresMember(type, "allocator_type"));
   }
 
@@ -356,7 +408,7 @@ namespace tbc_lint {
       }
       if (const auto *definition = record->getDefinition()) {
         for (const auto *field : definition->fields()) {
-          if (containsViews(field->getType(), seen)) {
+          if (!selfBorrowing(*field) && containsViews(field->getType(), seen)) {
             return true;
           }
         }

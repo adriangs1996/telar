@@ -192,6 +192,15 @@ outside the current checks.
 
 ## Code the project does not control
 
+Releasing a unique owner hands its object to an owner the analysis does not see,
+as Rust's `Box::into_raw` does, and a `new` expression's pointer owns a fresh
+object no variable holds: borrows of either are unchecked, like a raw pointer
+from foreign code. An Objective-C message is foreign code too. An optional owner
+hands over what the owner it holds owns. A standard range adaptor over a view,
+such as `std::views::reverse` over a span, views that range; one that owns its
+range, as `std::ranges::owning_view` does, does not. Standard functions are
+recognized by namespace, whatever inline namespace the library spells.
+
 Third-party code, such as Qt, is never reported, but its types and headers are
 used to infer what the project borrows. A library type with a trivial destructor
 cannot release memory, so it views whatever it points to, as `QStringView` does.
@@ -313,8 +322,19 @@ private:
 };
 ```
 
-A body-less constructor of a class whose fields carry no region promises
-nothing, and using what it builds is `tbc-missing-contract`.
+A body-less constructor of a class whose fields carry no region may retain any
+argument that can lend. A Rust struct always declares its lifetimes; without that
+declaration, assuming every one is retained is sound and asks callers only to
+keep those arguments alive. Labels narrow it to what the object really keeps, as
+a font face keeps its bytes but copies its match:
+
+```cpp
+explicit Face(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes, const FontMatch &match = {});
+tbc::view<std::unique_ptr<FT_FaceRec, FaceDeleter>, tbc::lt::a> face_;
+```
+
+What a field labeled with a result's region owns lives in that region too, as a
+field of `&'a self` does.
 
 A field label only matters to methods of its own class. On an aggregate without
 such methods it has no effect; the checker infers the field's dependencies from
@@ -349,6 +369,24 @@ private:
 A function's address is static storage, not a borrow of the object that keeps
 it, as a `std::unique_ptr` with a function deleter does.
 
+A field labeled `lt::self` borrows only the object that holds it, as an allocator
+reference to a sibling arena does. Its borrows never count as the object's, so a
+`std::shared_ptr` to such an object carries none. The label is a promise, like a
+raw pointer behind Rust's `Pin`: the checker only requires the type to be neither
+copyable nor movable.
+
+```cpp
+class asset {
+public:
+  asset(const asset &) = delete;
+  asset &operator=(const asset &) = delete;
+
+private:
+  SystemAllocator memory_;
+  tbc::view<Vector<std::uint8_t, SystemAllocator>, tbc::lt::self> bytes_;
+};
+```
+
 ## Elision and unavailable bodies
 
 `tbc::view<T>` uses `lt::elided`. With a visible body, the checker infers its
@@ -378,9 +416,31 @@ private:
 };
 ```
 
-An unannotated borrowed return from an opaque call produces
-`tbc-missing-contract` when used. Unsupported borrowed expressions also retain
-an unknown dependency rather than becoming an assumed static result.
+A project declaration without any annotation follows Rust's lifetime elision
+too. A method's result borrows from its receiver. A function without a receiver
+borrows from its only parameter that can lend, a reference, a pointer or a
+view; with no such parameter it borrows nothing, as Rust's `'static` output. With
+several, elision names no source, and using the result is
+`tbc-missing-contract` until the declaration labels one. A definition out of line,
+declared in another file and not inline, is checked against the same rule,
+because callers in other translation units see only the declaration:
+
+```cpp
+class registry {
+public:
+  const std::string &pick(const std::string &fallback) const;
+};
+
+const std::string &registry::pick(const std::string &fallback) const {
+  return fallback; // tbc-contract-violation: callers assume the receiver
+}
+```
+
+An override of a library virtual, such as Qt's `updatePaintNode`, takes its
+contract from the library, whose callers are not checked. A deduced return type
+repeats the label of what it returns; it is not a contract of the deducing
+function. Unsupported borrowed expressions retain an unknown dependency rather
+than becoming an assumed static result.
 
 Explicit labels state which input supplies a result when elision cannot. For
 example, a stream can return a view of a caller-supplied destination rather than
