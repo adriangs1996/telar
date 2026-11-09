@@ -591,9 +591,11 @@ export {
       public:
         inline void push(const Agent &agent) noexcept {
           if (count_ < entries_.size()) {
-            entries_[count_++] = AgentSoundNotification{.pane_id = agent.pane,
-                                                        .pane_generation = agent.generation,
-                                                        .sound = agent.status == AgentStatus::blocked ? AgentSound::needs_input : AgentSound::ready};
+            entries_[count_++] = AgentSoundNotification{
+                .pane_id = agent.pane,
+                .pane_generation = agent.generation,
+                .sound = agent.status == AgentStatus::blocked ? AgentSound::needs_input : AgentSound::ready,
+            };
           }
         }
 
