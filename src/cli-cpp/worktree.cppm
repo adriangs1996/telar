@@ -509,8 +509,9 @@ namespace telar::runtime::cli::repository {
 
 inline constexpr std::size_t max_transfer_tips = 256;
 
-// The destination side of the history negotiation: the newest ref tips of
-// the clone `receive` would update, one per line, or nothing without a clone.
+// The destination side of the history negotiation: HEAD and the newest ref
+// tips of the clone `receive` would update, one per line, or nothing without
+// a clone. A clone `receive` published has only its detached HEAD.
 template <Allocator Memory>
 std::string tips(Memory &memory, const RepositoryOptions &options) {
   const auto found = find(memory, options.identity, options.workspace);
@@ -519,9 +520,15 @@ std::string tips(Memory &memory, const RepositoryOptions &options) {
   }
 
   Git git{memory, *found};
-  auto listing = git.read({"for-each-ref", "--sort=-committerdate", std::format("--count={}", max_transfer_tips), "--format=%(objectname)"});
-  if (!listing.empty()) {
-    listing += '\n';
+  std::string listing;
+  try {
+    listing = git.read({"rev-parse", "--verify", "--quiet", "HEAD"}) + '\n';
+  } catch (const std::exception &) {
+  }
+
+  const auto refs = git.read({"for-each-ref", "--sort=-committerdate", std::format("--count={}", max_transfer_tips), "--format=%(objectname)"});
+  if (!refs.empty()) {
+    listing += refs + '\n';
   }
 
   return listing;
@@ -599,7 +606,8 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
     writeText(std::format("telar repository: {} uncommitted files stay on this machine\n", dirty), STDERR_FILENO);
   }
 
-  std::vector<std::string_view> query{"repository", "tips", "--identity", identity};
+  // Through `exec` like `receive`, so discovery there sees what it will see.
+  std::vector<std::string_view> query{"exec", "--no-stdin", "--", remote_program, "repository", "tips", "--identity", identity};
   if (options.workspace) {
     query.push_back("--workspace");
     query.push_back(*options.workspace);

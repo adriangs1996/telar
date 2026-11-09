@@ -25,7 +25,12 @@ NativeRoundedRectangle {
     signal paletteRequested()
 
     readonly property real padding: 8 * ratio
-    readonly property real toggleSide: 28 * ratio
+    // Controls and the telar mark follow the bar's height, which follows the font size:
+    // 28-point controls on the default 44-point bar.
+    readonly property real toggleSide: Math.round(height * 0.635)
+    readonly property real markSide: Math.round(toggleSide * 0.92)
+    readonly property real identityGap: Math.round(height * 0.26)
+    readonly property real glyphSide: Math.round(toggleSide * 0.6)
     readonly property real controlGap: 8 * ratio
     readonly property real contextMaximum: 280 * ratio
     readonly property real tabsShare: 0.64
@@ -57,11 +62,11 @@ NativeRoundedRectangle {
         colors: root.colors
         pixelSize: root.typography.body
         cornerRadius: ChromeStyle.controlRadius * root.ratio
-        emphasized: !root.rail
+        checked: !root.rail
         contentItem: ChromeIcon {
-            glyph: "\uf0db"
+            glyph: "\uec02"
             color: root.colors.chromeText
-            pixelSize: 18 * root.ratio
+            pixelSize: root.glyphSide
         }
         Accessible.name: "Toggle sidebar"
         onClicked: root.sidebarToggled()
@@ -71,10 +76,11 @@ NativeRoundedRectangle {
         id: identity
         objectName: "topBarIdentity"
         visible: root.drawn === null
-        x: toggle.x + toggle.width + root.controlGap
+        x: toggle.x + toggle.width + root.identityGap
         y: (parent.height - height) / 2
         width: Math.min(root.contextRoom, preferredWidth)
         height: Math.min(parent.height, root.toggleSide)
+        markSide: root.markSide
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
@@ -117,7 +123,7 @@ NativeRoundedRectangle {
         contentItem: ChromeIcon {
             glyph: "\u{f0633}"
             color: root.colors.chromeText
-            pixelSize: 16 * root.ratio
+            pixelSize: Math.round(root.glyphSide * 0.9)
         }
         Accessible.name: "Open command palette"
         onClicked: root.paletteRequested()
@@ -183,11 +189,11 @@ NativeRoundedRectangle {
     Component {
         id: togglePiece
         Control {
-            emphasized: !root.rail
+            checked: !root.rail
             contentItem: ChromeIcon {
-                glyph: "\uf0db"
+                glyph: "\uec02"
                 color: root.colors.chromeText
-                pixelSize: 18 * root.ratio
+                pixelSize: root.glyphSide
             }
             Accessible.name: "Toggle sidebar"
             onClicked: root.sidebarToggled()
@@ -197,6 +203,8 @@ NativeRoundedRectangle {
     Component {
         id: identityPiece
         WorkspaceIdentity {
+            implicitHeight: root.toggleSide
+            markSide: root.markSide
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
@@ -249,7 +257,7 @@ NativeRoundedRectangle {
             contentItem: ChromeIcon {
                 glyph: "\u{f0633}"
                 color: root.colors.chromeText
-                pixelSize: 16 * root.ratio
+                pixelSize: Math.round(root.glyphSide * 0.9)
             }
             Accessible.name: "Open command palette"
             onClicked: root.paletteRequested()

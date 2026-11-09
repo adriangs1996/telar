@@ -103,15 +103,21 @@ int main(int argc, char **argv) {
   try {
     const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
     const auto prepared = repository::prepare(memory, options, binary, [&](std::span<const std::string_view> words, int descriptor) {
-      if (::lseek(descriptor, 0, SEEK_CUR) != 0) {
-        throw std::runtime_error{"BundleWasNotRewound"};
+      std::optional<MappedBundle> bundle;
+      std::vector<std::string_view> input;
+      if (descriptor >= 0) {
+        if (::lseek(descriptor, 0, SEEK_CUR) != 0) {
+          throw std::runtime_error{"BundleWasNotRewound"};
+        }
+
+        bundle.emplace(descriptor);
+        input.push_back(bundle->text());
+        writeText("repository-prepare-probe: bundle " + std::to_string(bundle->text().size()) + " bytes\n", STDERR_FILENO);
       }
 
       std::vector<std::string_view> arguments{binary};
       arguments.insert(arguments.end(), words.begin(), words.end());
       Command command{memory, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
-      const MappedBundle bundle{descriptor};
-      const std::array input{bundle.text()};
       constexpr std::size_t max_reply = 4 * 1024 * 1024;
       CommandOutput output{memory, max_reply};
       const auto status = output.runWithInputDiagnostics(command, std::chrono::steady_clock::now() + repository::git_timeout, input, [](std::span<const Byte> bytes) {

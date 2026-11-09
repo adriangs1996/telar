@@ -86,12 +86,12 @@ QImage ProviderArtwork::image(AgentProvider provider, int side) {
   return output;
 }
 
-QImage ProviderArtwork::telar(int side) {
+QImage ProviderArtwork::telar(int side, bool monochrome) {
   if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
     return {};
   }
 
-  QSvgRenderer renderer{QStringLiteral(":/telar/fonts/telar-mark-mono.svg")};
+  QSvgRenderer renderer{monochrome ? QStringLiteral(":/telar/fonts/telar-mark-mono.svg") : QStringLiteral(":/telar/fonts/telar-mark.svg")};
   if (!renderer.isValid()) {
     return {};
   }

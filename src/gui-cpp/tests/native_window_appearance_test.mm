@@ -8,6 +8,7 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <bit>
+#include <cmath>
 #include <exception>
 #include <iostream>
 
@@ -29,6 +30,27 @@ void requireHiddenTitleLayout(NSWindow *window) {
   require(window.titleVisibility == NSWindowTitleHidden, "custom navigation must hide the native window title");
   require(window.contentLayoutRect.origin.y == 0, "hidden title must not inset the content layout");
   require(window.contentLayoutRect.size.height == window.frame.size.height, "hidden title must not reserve an invisible window-drag strip over the tabs");
+}
+
+CGFloat controlsPitch(NSWindow *window) {
+  return [window standardWindowButton:NSWindowMiniaturizeButton].frame.origin.x - [window standardWindowButton:NSWindowCloseButton].frame.origin.x;
+}
+
+// The buttons keep AppKit's spacing, sit on the navigation bar's middle line and
+// leave room before the first control drawn by Qt, even after AppKit retiles them.
+void requireNavigationControls(QQuickWindow &window, NSWindow *native, CGFloat navigation_height, CGFloat pitch) {
+  const auto middle = native.frame.size.height - (navigation_height / 2);
+  CGFloat previous = 0;
+  CGFloat trailing = 0;
+  for (const auto kind : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
+    NSButton *const button = [native standardWindowButton:kind];
+    const auto frame = [button convertRect:button.bounds toView:nil];
+    require(std::abs(NSMidY(frame) - middle) <= 1, "window controls must be vertically centered in the navigation bar");
+    require(previous == 0 || frame.origin.x - previous == pitch, "window controls must keep AppKit's spacing");
+    previous = frame.origin.x;
+    trailing = NSMaxX(frame);
+  }
+  require(telar::gui::platform::windowControls(window) > trailing, "navigation controls must start after the window controls");
 }
 
 class NavigationPointerProbe final : public QObject {
@@ -106,6 +128,7 @@ void verifyAppearance() {
   NSWindow *const native = view.window;
   NSView *const content = native.contentView;
   using telar::gui::platform::configureWindow;
+  const auto pitch = controlsPitch(native);
   const telar::gui::platform::WindowAppearance blurred{.titlebar = false, .navigation_height = 42, .background_opacity = 0.98F, .background_blur = 20};
   configureWindow(window, blurred);
   requireHiddenTitleLayout(native);
@@ -127,6 +150,7 @@ void verifyAppearance() {
   painted.exec();
   require(deadline.isActive(), "native blurred window must present a Qt frame");
   deadline.stop();
+  requireNavigationControls(window, native, blurred.navigation_height, pitch);
   verifyNavigationMouseDelivery(window);
 
   configureWindow(window, blurred);
@@ -136,6 +160,7 @@ void verifyAppearance() {
   QGuiApplication::processEvents();
   require(NSEqualRects(effect.frame, content.frame), "native blur must follow resized content");
   requireHiddenTitleLayout(native);
+  requireNavigationControls(window, native, blurred.navigation_height, pitch);
   auto titled = blurred;
   titled.titlebar = true;
   configureWindow(window, titled);

@@ -52,8 +52,8 @@ public:
 };
 
 QImage coloredMark(AgentProvider provider, int side, const QColor &color, bool telar_mark, bool monochrome) {
-  auto image = telar_mark ? ProviderArtwork::telar(side) : ProviderArtwork::image(provider, side);
-  if (!image.isNull() && (telar_mark || monochrome || ApplicationMark{.provider = provider}.followsTheme())) {
+  auto image = telar_mark ? ProviderArtwork::telar(side, monochrome) : ProviderArtwork::image(provider, side);
+  if (!image.isNull() && (monochrome || (!telar_mark && ApplicationMark{.provider = provider}.followsTheme()))) {
     QPainter painter{&image};
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
     painter.fillRect(image.rect(), color);

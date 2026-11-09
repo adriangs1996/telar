@@ -413,6 +413,21 @@ def repositories(f, prepare_probe=None):
         assert json.loads(result.stdout)["repository_ready"] and not (path / "uncommitted").exists()
         assert b"1 uncommitted files stay on this machine" in result.stderr
         assert f.git(source, "for-each-ref", "--format=%(refname)", "refs/telar/transfer/").decode().strip() == ref
+        tips = f.invoke("repository/tips", "repository", "tips", "--identity", "example.test/team/repo", "--workspace", path).stdout.split()
+        assert commit.encode() in tips
+        f.invoke("repository/tips-none", "repository", "tips", "--identity", "example.test/team/absent")
+        # The clone holds the first commit: only the second one travels.
+        (source / "second").write_bytes(os.urandom(4096))
+        f.git(source, "add", "second")
+        f.git(source, "commit", "-qm", "Second")
+        second = f.git(source, "rev-parse", "HEAD").decode().strip()
+        result = subprocess.run([str(prepare_probe), str(f.binary)], env=f.env, cwd=source, capture_output=True, timeout=20)
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        sent = int(re.search(rb"bundle (\d+) bytes", result.stderr).group(1))
+        whole = f.root / "whole.bundle"
+        f.git(source, "bundle", "create", whole, "HEAD")
+        assert sent < whole.stat().st_size, (sent, whole.stat().st_size)
+        f.git(path, "cat-file", "-e", second + "^{commit}")
     f.invoke("repository/interrupted", *args, data=content[:-1], code=1)
     f.invoke("repository/long", *args, data=content + b"x", code=1)
     assert not list(path.parent.glob("*.stage"))

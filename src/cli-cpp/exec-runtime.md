@@ -30,14 +30,21 @@ published exclusively under `$XDG_DATA_HOME/telar/repositories/SHA256(identity)`
 Discovery uses the live catalog, closed workspace paths in the history database,
 and the managed path; an ambiguous identity requires `--workspace`.
 
+`repository tips --identity HOST/PATH [--workspace PATH|ID]` is the hidden
+negotiation: through the same discovery it prints HEAD and the newest 256 ref
+tips of the clone `receive` would update, one hash per line, or nothing without a clone.
+
 `repository::prepare(memory, options, remote_program, capture)` is the source
-interface in `repository_prepare.hpp`. The callback receives a span of literal
-words beginning `exec -- REMOTE_TELAR repository receive ...` and a borrowed,
-rewound, readable bundle descriptor. It returns the receiver's stdout as an owned
-string; it must preserve stderr and must neither close the borrowed descriptor
-nor silently fall back to another machine. Preparation resolves a committed ref,
-reports omitted dirty files, creates a bounded bundle, verifies the receiver's
-JSON and removes its temporary ref/directory on success or failure.
+interface in `repository_prepare.hpp`. The callback is called twice: first with
+words beginning `exec --no-stdin -- REMOTE_TELAR repository tips ...` and
+descriptor -1 (no stdin), then with words beginning `exec -- REMOTE_TELAR
+repository receive ...` and a borrowed, rewound, readable bundle descriptor. It returns the remote stdout as an owned string; it
+must preserve stderr and must neither close the borrowed descriptor nor silently
+fall back to another machine. Preparation resolves a committed ref, reports
+omitted dirty files, bundles only what the returned tips lack (when they already
+reach the commit, the commit over its parents; a failed query sends everything),
+creates a bounded bundle, verifies the receiver's JSON and removes its temporary
+ref/directory on success or failure.
 
 The public `repository prepare --machine LABEL ...` currently resolves the
 profile by running this C++ CLI's `machine list --json`, and captures the bundle

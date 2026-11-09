@@ -140,6 +140,7 @@ KeyboardAction {
                 height: root.iconSide
                 provider: root.node.providerMark
                 telarMark: root.node.telarMark ?? false
+                monochrome: telarMark
                 color: root.node.ink
                 ratio: root.ratio
                 visible: provider !== 0 || telarMark

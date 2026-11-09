@@ -8,8 +8,10 @@ Arguments:
   --workspace X    Which clone to reuse there, when several match.
 
 Effects: checks the repository is whole (shallow or partial clones, submodules and
-LFS are refused), bundles the history up to REF (at most 256 MiB), and streams it
-to the machine through `telar exec`, where `repository receive` verifies it and
+LFS are refused), asks the machine which commits its clone holds (`repository
+tips`), bundles the history up to REF that the clone lacks (at most 256 MiB; all
+of it for a new clone), and streams it to the machine through `telar exec`, where
+`repository receive` verifies it and
 fetches into an existing clone (found by the origin's identity, branches and
 checkout preserved) or publishes a new one under its $XDG_DATA_HOME/telar/
 repositories. Only commits travel: uncommitted files stay here and are counted on

@@ -1,0 +1,8 @@
+telar repository tips: The destination side of `prepare`'s negotiation: telar runs it there
+
+Usage: telar repository tips --identity ID [--workspace PATH|ID]
+
+Prints HEAD and the newest 256 ref tips of the clone `repository receive` would
+update, one hash per line, or nothing when there is none; `prepare` then bundles only what
+they lack. Run by `telar repository prepare` on the other machine; not meant to be
+typed.

@@ -4,12 +4,15 @@
 #include <AppKit/AppKit.h>
 #include <objc/runtime.h>
 #include <QGuiApplication>
+#include <QMetaObject>
 #include <QObject>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QWindow>
 #include <QtCore/qtenvironmentvariables.h>
 #include <qpa/qplatformwindow.h>
+#include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -30,9 +33,8 @@ void deliverPendingWindowUpdate(QWindow &window) {
 
 namespace {
 
-constexpr CGFloat controls_leading = 14;
-constexpr CGFloat controls_pitch = 20;
-constexpr CGFloat controls_trailing = 10;
+constexpr CGFloat controls_leading = 16;
+constexpr CGFloat controls_trailing = 16;
 
 NSWindow *nativeWindow(const QWindow &window) {
   if (window.handle() == nullptr) {
@@ -143,6 +145,163 @@ private:
   BlurRadius radius_;
 };
 
+constexpr std::array control_kinds{NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton};
+
+// AppKit lays the title bar out again whenever it retiles the window (showing it,
+// resizing it, leaving full screen), putting the buttons back in its own 32-point
+// strip. Every relayout moves a button or the container, so their frame
+// notifications give the last word back to the navigation bar's geometry. AppKit
+// posts them from inside its own setters, which overwrite a frame set there, so the
+// layout is applied once that pass returns.
+class WindowControls final : public QObject {
+public:
+  explicit WindowControls(QWindow &window)
+      : QObject(&window),
+        window_(window) {}
+
+  ~WindowControls() override {
+    observe(nil);
+  }
+
+  WindowControls(const WindowControls &) = delete;
+  WindowControls &operator=(const WindowControls &) = delete;
+  WindowControls(WindowControls &&) = delete;
+  WindowControls &operator=(WindowControls &&) = delete;
+
+  void set(WindowAppearance appearance) {
+    height_ = appearance.navigation_height;
+    NSWindow *const window = nativeWindow(window_);
+    observe(appearance.titlebar ? nil : window);
+    apply();
+  }
+
+  [[nodiscard]] float inset() const noexcept {
+    return observed_ == nil ? 0 : static_cast<float>(controls_leading + (2 * pitch_) + side_ + controls_trailing);
+  }
+
+private:
+  void observe(NSWindow *window) {
+    if (window == observed_) {
+      return;
+    }
+
+    for (id token in tokens_) {
+      [NSNotificationCenter.defaultCenter removeObserver:token];
+    }
+    tokens_ = nil;
+    views_ = nil;
+    observed_ = window;
+    if (window == nil) {
+      return;
+    }
+
+    // Measured once, before any move: the native spacing differs between releases.
+    NSButton *const close = [window standardWindowButton:NSWindowCloseButton];
+    NSButton *const zoom = [window standardWindowButton:NSWindowZoomButton];
+    side_ = zoom.frame.size.width;
+    pitch_ = std::max(side_, (zoom.frame.origin.x - close.frame.origin.x) / 2);
+  }
+
+  // Re-registers when AppKit replaced the title bar views, and only then.
+  void track(NSArray<NSView *> *views) {
+    if ([views isEqualToArray:views_]) {
+      return;
+    }
+
+    for (id token in tokens_) {
+      [NSNotificationCenter.defaultCenter removeObserver:token];
+    }
+    views_ = views;
+    auto *const tokens = [NSMutableArray arrayWithCapacity:views.count];
+    for (NSView *view in views) {
+      view.postsFrameChangedNotifications = YES;
+      [tokens addObject:[NSNotificationCenter.defaultCenter addObserverForName:NSViewFrameDidChangeNotification object:view queue:nil usingBlock:^(NSNotification *) {
+        schedule();
+      }]];
+    }
+    tokens_ = tokens;
+  }
+
+  void schedule() {
+    if (applying_ || pending_) {
+      return;
+    }
+
+    pending_ = true;
+    QMetaObject::invokeMethod(
+        this, [this] {
+          pending_ = false;
+          apply();
+        },
+        Qt::QueuedConnection);
+  }
+
+  void apply() {
+    NSWindow *const window = observed_;
+    if (applying_ || window == nil || (window.styleMask & NSWindowStyleMaskFullScreen) != 0) {
+      return;
+    }
+
+    NSButton *const close = [window standardWindowButton:NSWindowCloseButton];
+    NSView *const container = close.superview.superview;
+    if (container == nil) {
+      return;
+    }
+
+    applying_ = true;
+    auto bar = container.frame;
+    bar.size.height = height_;
+    bar.origin.y = window.frame.size.height - height_;
+    if (!NSEqualRects(bar, container.frame)) {
+      container.frame = bar;
+    }
+
+    auto *const views = [NSMutableArray<NSView *> arrayWithObject:container];
+    CGFloat horizontal = controls_leading;
+    for (const auto kind : control_kinds) {
+      NSButton *const control = [window standardWindowButton:kind];
+      const NSPoint origin{.x = horizontal, .y = std::round((height_ - control.frame.size.height) / 2)};
+      if (!NSEqualPoints(origin, control.frame.origin)) {
+        [control setFrameOrigin:origin];
+      }
+      horizontal += pitch_;
+      [views addObject:control];
+    }
+    applying_ = false;
+    track(views);
+  }
+
+  QWindow &window_;
+  NSWindow *__weak observed_ = nil;
+  NSArray<NSView *> *views_ = nil;
+  NSArray *tokens_ = nil;
+  CGFloat height_ = WindowAppearance::default_navigation_height;
+  CGFloat pitch_ = 0;
+  CGFloat side_ = 0;
+  bool applying_ = false;
+  bool pending_ = false;
+};
+
+WindowControls *controlsOf(const QWindow &window) {
+  for (auto *child : window.children()) {
+    if (auto *controls = dynamic_cast<WindowControls *>(child)) {
+      return controls;
+    }
+  }
+
+  return nullptr;
+}
+
+void configureControls(QWindow &window, WindowAppearance appearance) {
+  if (auto *const controls = controlsOf(window)) {
+    controls->set(appearance);
+    return;
+  }
+  auto controls = std::make_unique<WindowControls>(window);
+  controls->set(appearance);
+  std::ignore = controls.release();
+}
+
 void configureBlur(QWindow &window, WindowAppearance appearance) {
   for (auto *child : window.children()) {
     if (auto *blur = dynamic_cast<WindowBlur *>(child)) {
@@ -190,10 +349,9 @@ float windowControls(const QWindow &window) noexcept {
     return 0;
   }
 
-  NSButton *const button = [native_window standardWindowButton:NSWindowZoomButton];
-  constexpr CGFloat controls_gaps = 2;
+  const auto *const controls = controlsOf(window);
 
-  return static_cast<float>(controls_leading + (controls_gaps * controls_pitch) + button.frame.size.width + controls_trailing);
+  return controls == nullptr ? 0 : controls->inset();
 }
 
 void configureWindow(QWindow &window, WindowAppearance appearance) {
@@ -223,27 +381,7 @@ void configureWindow(QWindow &window, WindowAppearance appearance) {
   }
 
   configureBlur(window, appearance);
-
-  if (!appearance.titlebar && (native_window.styleMask & NSWindowStyleMaskFullScreen) == 0) {
-    auto *const container = [native_window standardWindowButton:NSWindowCloseButton].superview.superview;
-    if (container == nil) {
-      return;
-    }
-
-    auto bar = container.frame;
-    bar.size.height = appearance.navigation_height;
-    bar.origin.y = native_window.frame.size.height - bar.size.height;
-    container.frame = bar;
-    CGFloat horizontal = controls_leading;
-    for (const auto button : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
-      NSButton *const control = [native_window standardWindowButton:button];
-      NSRect frame = control.frame;
-      frame.origin.x = horizontal;
-      frame.origin.y = std::round((appearance.navigation_height - frame.size.height) / 2);
-      horizontal += controls_pitch;
-      control.frame = frame;
-    }
-  }
+  configureControls(window, appearance);
 }
 
 }

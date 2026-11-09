@@ -16,8 +16,8 @@ Item {
     signal machineRequested()
     signal workspaceRequested()
 
-    readonly property real markSide: 18 * ratio
-    readonly property real gap: 6 * ratio
+    property real markSide: 18 * ratio
+    readonly property real gap: Math.round(markSide * 0.2)
     readonly property real inset: 4 * ratio
     readonly property real dotSide: 6 * ratio
     readonly property real dotRoom: attention ? dotSide + gap : 0

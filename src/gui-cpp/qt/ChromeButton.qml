@@ -28,7 +28,7 @@ AbstractButton {
     }
 
     background: NativeRoundedRectangle {
-        color: Qt.alpha(root.colors.text, root.down ? ChromeStyle.selectionAlpha : root.pointerHovered || root.visualFocus ? ChromeStyle.hoverAlpha : 0)
+        color: Qt.alpha(root.colors.text, root.down || root.checked ? ChromeStyle.selectionAlpha : root.pointerHovered || root.visualFocus ? ChromeStyle.hoverAlpha : 0)
         radius: root.cornerRadius
         borderColor: root.colors.accent
         borderAlpha: ChromeStyle.focusAlpha
