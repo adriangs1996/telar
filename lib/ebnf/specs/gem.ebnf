@@ -1,0 +1,313 @@
+(* gem: commands and options of RubyGems 3.6.5, checked against
+   `gem help commands` and `gem help <command>`. Unique-prefix abbreviations of
+   commands (`gem inst`) are not modelled; the aliases i, login and logout are.
+
+   OptionParser rules: a value is `--name value` or `--name=value`, `-x value` or
+   `-xvalue`; an optional value (`--document [TYPES]`) is taken from the next
+   word when it does not start with a dash. `--[no-]name` switches accept both
+   spellings. Gem names, versions and patterns are free text, so commands that
+   take them accept any word. *)
+
+gem = [ "-C" : "Run as if gem started in this directory" , @directory ] , [ command ]
+    | "-h" : "Show the help" | "--help" : "Show the help"
+    | "-v" : "Print the RubyGems version" | "--version" : "Print the RubyGems version" ;
+
+command =
+    ( "install" : "Install gems" | "i" : "Install gems" ) , { install_option | common_option | @any } , [ build_flags ]
+  | "update" : "Update installed gems to the latest version" , { update_option | common_option | @any } , [ build_flags ]
+  | "uninstall" : "Uninstall gems" , { uninstall_option | common_option | @any }
+  | "list" : "List local gems matching a pattern" , { query_option | common_option | @any }
+  | "search" : "List remote gems matching a pattern" , { query_option | common_option | @any }
+  | "info" : "Show information about a gem" , { query_option | common_option | @any }
+  | "build" : "Build a gem from a gemspec" , { build_option | common_option | @file }
+  | "push" : "Push a gem to the gem server" , { push_option | common_option | @file }
+  | "yank" : "Remove a pushed gem from the index" , { yank_option | common_option | @any }
+  | "owner" : "Manage the owners of a gem" , { owner_option | common_option | @any }
+  | "signin" : "Sign in to a gem server" , { signin_option | common_option }
+  | "login" : "Sign in to a gem server" , { signin_option | common_option }
+  | "signout" : "Sign out from all sessions" , { common_option }
+  | "logout" : "Sign out from all sessions" , { common_option }
+  | "cleanup" : "Uninstall old versions of gems" , { cleanup_option | common_option | @any }
+  | "outdated" : "List gems that have updates" , { outdated_option | common_option }
+  | "exec" : "Run a command from a gem" , { exec_option | common_option } , [ "--" ] , [ @any , { @any } ]
+  | "fetch" : "Download a gem into the current directory" , { fetch_option | common_option | @any }
+  | "which" : "Find the file a require loads" , { which_option | common_option | @any }
+  | "contents" : "List the files of installed gems" , { contents_option | common_option | @any }
+  | "dependency" : "Show the dependencies of a gem" , { dependency_option | common_option | @any }
+  | "environment" : "Show the RubyGems environment" , { common_option } , [ environment_field ]
+  | "specification" : "Show the specification of a gem" , { specification_option | common_option | @any }
+  | "sources" : "Manage the gem sources" , { sources_option | common_option }
+  | "pristine" : "Restore installed gems to their pristine state" , { pristine_option | common_option | @any }
+  | "open" : "Open the source of a gem in an editor" , { open_option | common_option | @any }
+  | "unpack" : "Unpack an installed gem into the current directory" , { unpack_option | common_option | @any }
+  | "check" : "Check the gem repository for problems" , { check_option | common_option | @any }
+  | "lock" : "Generate a lockdown list of gems" , { lock_option | common_option | @any }
+  | "cert" : "Manage certificates and signing settings" , { cert_option | common_option }
+  | "rdoc" : "Generate RDoc for installed gems" , { rdoc_option | common_option | @any }
+  | "rebuild" : "Reproduce the build of a gem" , { rebuild_option | common_option | @any }
+  | "stale" : "List gems with their access times" , { common_option }
+  | "help" : "Show help on a command" , { common_option } , [ help_topic ]
+  | "generate_index" : "Generate the index of a gem server directory" , { generate_index_option | common_option }
+  | "mirror" : "Mirror all gem files, with rubygems-mirror" , { common_option | @any }
+  | "server" : "Serve the RDoc of installed gems, with rubygems-server" , { common_option | @any } ;
+
+(* `gem install foo -- --with-foo-dir=/opt` passes the rest to the extension build. *)
+build_flags = "--" : "Build flags for gems with extensions" , { @any } ;
+
+common_option =
+    "-h" : "Show help on this command" | "--help" : "Show help on this command"
+  | "-V" : "Verbose output" | "--verbose" : "Verbose output" | "--no-verbose" : "Normal output"
+  | "-q" : "Silence the progress meter" | "--quiet" : "Silence the progress meter"
+  | "--silent" : "Silence RubyGems output"
+  | "--config-file" : "Use this config file" , @file | "--config-file=" : "Use this config file" ~ @file
+  | "--backtrace" : "Show the backtrace on errors"
+  | "--debug" : "Turn on Ruby debugging"
+  | "--norc" : "Do not load any .gemrc file" ;
+
+version =
+    "-v" : "Version of the gem" , @any | "--version" : "Version of the gem" , @any | "--version=" : "Version of the gem" ~ @any ;
+platform = "--platform" : "Platform of the gem" , @any | "--platform=" : "Platform of the gem" ~ @any ;
+prerelease = "--prerelease" : "Allow prerelease versions" | "--no-prerelease" : "Do not allow prerelease versions" ;
+http_proxy =
+    "-p" : "Use an HTTP proxy" , [ @any ] | "--http-proxy" : "Use an HTTP proxy" , [ @any ]
+  | "--http-proxy=" : "Use this HTTP proxy" ~ @any | "--no-http-proxy" : "Do not use an HTTP proxy" ;
+source =
+    "-s" : "Add a remote gem source" , @any | "--source" : "Add a remote gem source" , @any
+  | "--source=" : "Add a remote gem source" ~ @any
+  | "--clear-sources" : "Clear the gem sources" ;
+bulk = "-B" : "Threshold for bulk synchronization" , @number | "--bulk-threshold" : "Threshold for bulk synchronization" , @number
+  | "--bulk-threshold=" : "Threshold for bulk synchronization" ~ @number ;
+local_remote =
+    "-l" : "Restrict to the local domain" | "--local" : "Restrict to the local domain"
+  | "-r" : "Restrict to the remote domain" | "--remote" : "Restrict to the remote domain"
+  | "-b" : "Allow local and remote operations" | "--both" : "Allow local and remote operations"
+  | bulk | source | http_proxy ;
+update_sources =
+    "-u" : "Update the local source cache" | "--update-sources" : "Update the local source cache"
+  | "--no-update-sources" : "Do not update the local source cache" ;
+install_dir = "-i" : "Gem repository directory" , @directory | "--install-dir" : "Gem repository directory" , @directory
+  | "--install-dir=" : "Gem repository directory" ~ @directory ;
+bindir = "-n" : "Directory for executables" , @directory | "--bindir" : "Directory for executables" , @directory
+  | "--bindir=" : "Directory for executables" ~ @directory ;
+env_shebang = "-E" : "Use /usr/bin/env in shebangs" | "--env-shebang" : "Use /usr/bin/env in shebangs"
+  | "--no-env-shebang" : "Do not use /usr/bin/env in shebangs" ;
+user_install = "--user-install" : "Use the home directory instead of GEM_HOME" | "--no-user-install" : "Use GEM_HOME" ;
+format_executable = "--format-executable" : "Name executables like Ruby" | "--no-format-executable" : "Keep executable names" ;
+trust_policy = "-P" : "Gem trust policy" , trust | "--trust-policy" : "Gem trust policy" , trust
+  | "--trust-policy=" : "Gem trust policy" ~ trust ;
+trust = "HighSecurity" | "MediumSecurity" | "LowSecurity" | "AlmostNoSecurity" | "NoSecurity" ;
+key = "-k" : "Use this API key" , @any | "--key" : "Use this API key" , @any | "--key=" : "Use this API key" ~ @any ;
+otp = "--otp" : "Multifactor authentication code" , @number | "--otp=" : "Multifactor authentication code" ~ @number ;
+host = "--host" : "Use another gemcutter-compatible host" , @any | "--host=" : "Use another gemcutter-compatible host" ~ @any ;
+
+install_option =
+    install_update_option
+  | "--vendor" : "Install into the vendor directory"
+  | "--default" : "Install as a default gem" ;
+
+update_option =
+    install_update_option
+  | "--system" : "Update RubyGems itself" , [ @any ] | "--system=" : "Update RubyGems to this version" ~ @any ;
+
+install_update_option =
+    platform | version | prerelease | update_sources | install_dir | bindir | env_shebang | trust_policy
+  | user_install | format_executable | local_remote
+  | "--document" : "Generate documentation, rdoc,ri" , [ @any ] | "--document=" : "Generate these documentation types" ~ @any
+  | "--build-root" : "Temporary installation root" , @directory | "--build-root=" : "Temporary installation root" ~ @directory
+  | "-N" : "Do not generate documentation" | "--no-document" : "Do not generate documentation"
+  | "-f" : "Bypass dependency checks" | "--force" : "Bypass dependency checks" | "--no-force" : "Check dependencies"
+  | "-w" : "Use bin wrappers for executables" | "--wrappers" : "Use bin wrappers for executables"
+  | "--no-wrappers" : "Do not use bin wrappers"
+  | "--ignore-dependencies" : "Do not install dependencies"
+  | "--development" : "Install development dependencies"
+  | "--development-all" : "Install development dependencies of every gem"
+  | "--conservative" : "Do not upgrade gems that meet the requirement"
+  | "--minimal-deps" : "Do not upgrade dependencies that meet requirements"
+  | "--no-minimal-deps" : "Upgrade dependencies"
+  | "--post-install-message" : "Print post install messages" | "--no-post-install-message" : "Hide post install messages"
+  | "-g" : "Install from a gem dependencies file" , [ @file ] | "--file" : "Install from a gem dependencies file" , [ @file ]
+  | "--file=" : "Install from this gem dependencies file" ~ @file
+  | "--without" : "Omit these groups, comma separated" , @any | "--without=" : "Omit these groups, comma separated" ~ @any
+  | "--explain" : "Show which gems would be installed"
+  | "--lock" : "Create a lock file with -g" | "--no-lock" : "Do not create a lock file"
+  | "--suggestions" : "Suggest alternatives for missing gems" | "--no-suggestions" : "Do not suggest alternatives"
+  | "--target-rbconfig" : "rbconfig.rb of the target platform" , [ @file ]
+  | "--target-rbconfig=" : "rbconfig.rb of the target platform" ~ @file ;
+
+uninstall_option =
+    version | platform | install_dir | bindir | user_install | format_executable
+  | "-a" : "Uninstall all matching versions" | "--all" : "Uninstall all matching versions" | "--no-all" : "Uninstall one version"
+  | "-I" : "Ignore dependency requirements" | "--ignore-dependencies" : "Ignore dependency requirements"
+  | "--no-ignore-dependencies" : "Respect dependency requirements"
+  | "-D" : "Check development dependencies" | "--check-development" : "Check development dependencies"
+  | "--no-check-development" : "Do not check development dependencies"
+  | "-x" : "Remove executables without asking" | "--executables" : "Remove executables without asking"
+  | "--no-executables" : "Keep executables"
+  | "--force" : "Uninstall all versions" | "--no-force" : "Do not uninstall all versions"
+  | "--abort-on-dependent" : "Stop if other gems depend on it" | "--no-abort-on-dependent" : "Do not stop for dependents"
+  | "--vendor" : "Uninstall from the vendor directory" ;
+
+query_option =
+    version | prerelease | update_sources | local_remote
+  | "-i" : "Check for an installed gem" | "--installed" : "Check for an installed gem"
+  | "-I" : "Check for a gem that is not installed" | "--no-installed" : "Check for a gem that is not installed"
+  | "-d" : "Show detailed information" | "--details" : "Show detailed information" | "--no-details" : "Hide details"
+  | "--versions" : "Show versions" | "--no-versions" : "Show only gem names"
+  | "-a" : "Show all versions" | "--all" : "Show all versions"
+  | "-e" : "Match gem names exactly" | "--exact" : "Match gem names exactly" ;
+
+build_option =
+    platform
+  | "--force" : "Skip validation of the spec"
+  | "--strict" : "Treat warnings as errors"
+  | "-o" : "Write the gem to this file" , @file | "--output" : "Write the gem to this file" , @file
+  | "--output=" : "Write the gem to this file" ~ @file
+  | "-C" : "Run as if started in this directory" , @directory ;
+
+push_option =
+    key | otp | host | http_proxy
+  | "--attestation" : "Push with this sigstore attestation" , @file | "--attestation=" : "Push with this sigstore attestation" ~ @file ;
+
+yank_option = version | platform | otp | host | key ;
+
+owner_option =
+    key | otp | host | http_proxy
+  | "-a" : "Add an owner" , @any | "--add" : "Add an owner" , @any | "--add=" : "Add an owner" ~ @any
+  | "-r" : "Remove an owner" , @any | "--remove" : "Remove an owner" , @any | "--remove=" : "Remove an owner" ~ @any ;
+
+signin_option = host | otp ;
+
+cleanup_option =
+    user_install
+  | "-n" : "Do not uninstall gems" | "-d" : "Do not uninstall gems" | "--dry-run" : "Do not uninstall gems"
+  | "--dryrun" : "Do not uninstall gems"
+  | "-D" : "Check development dependencies" | "--check-development" : "Check development dependencies"
+  | "--no-check-development" : "Do not check development dependencies" ;
+
+outdated_option = platform | update_sources | local_remote ;
+
+exec_option =
+    version | prerelease
+  | "-g" : "Run the executable of this gem" , @any | "--gem" : "Run the executable of this gem" , @any
+  | "--gem=" : "Run the executable of this gem" ~ @any
+  | "--conservative" : "Prefer the installed version" ;
+
+fetch_option =
+    version | platform | prerelease | bulk | http_proxy | source
+  | "--suggestions" : "Suggest alternatives for missing gems" | "--no-suggestions" : "Do not suggest alternatives" ;
+
+which_option =
+    "-a" : "Show all matching files" | "--all" : "Show all matching files" | "--no-all" : "Show the first match"
+  | "-g" : "Search gems before non-gems" | "--gems-first" : "Search gems before non-gems"
+  | "--no-gems-first" : "Search non-gems first" ;
+
+contents_option =
+    version
+  | "--all" : "Contents of all gems"
+  | "-s" : "Search gems under these paths" , @any | "--spec-dir" : "Search gems under these paths" , @any
+  | "--spec-dir=" : "Search gems under these paths" ~ @any
+  | "-l" : "Only files in the lib directories" | "--lib-only" : "Only files in the lib directories"
+  | "--no-lib-only" : "All files"
+  | "--prefix" : "Include the install path" | "--no-prefix" : "Leave out the install path"
+  | "--show-install-dir" : "Show only the install directory" | "--no-show-install-dir" : "Show the files" ;
+
+dependency_option =
+    version | platform | prerelease | update_sources | local_remote
+  | "-R" : "Include reverse dependencies" | "--reverse-dependencies" : "Include reverse dependencies"
+  | "--no-reverse-dependencies" : "Leave out reverse dependencies"
+  | "--pipe" : "Pipe format, name --version ver" ;
+
+environment_field =
+    "home" : "The gem home" | "gemdir" : "The gem home" | "gempath" : "The gem search path" | "path" : "The gem search path"
+  | "version" : "The RubyGems version" | "remotesources" : "The remote gem sources" | "platform" : "The gem platforms"
+  | "credentials" : "The credentials file" | "creds" : "The credentials file" | "gemhome" : "The gem home" | "user_gemhome" : "The user gem home" | "user_gemdir" : "The user gem home" ;
+
+specification_option =
+    version | platform | prerelease | update_sources | local_remote
+  | "--all" : "Specifications of all versions"
+  | "--ruby" : "Ruby format" | "--yaml" : "YAML format" | "--marshal" : "Marshal format" ;
+
+sources_option =
+    http_proxy
+  | "-a" : "Add a source" , @any | "--add" : "Add a source" , @any | "--add=" : "Add a source" ~ @any
+  | "-l" : "List the sources" | "--list" : "List the sources"
+  | "-r" : "Remove a source" , @any | "--remove" : "Remove a source" , @any | "--remove=" : "Remove a source" ~ @any
+  | "-c" : "Remove all sources" | "--clear-all" : "Remove all sources"
+  | "-u" : "Update the source cache" | "--update" : "Update the source cache"
+  | "-f" : "Do not ask for confirmation" | "--force" : "Do not ask for confirmation" | "--no-force" : "Ask for confirmation" ;
+
+pristine_option =
+    version | env_shebang | install_dir | bindir
+  | "--all" : "Restore all installed gems"
+  | "--skip" : "Skip this gem with --all" , @any | "--skip=" : "Skip this gem with --all" ~ @any
+  | "--extensions" : "Restore gems with extensions" | "--no-extensions" : "Skip gems with extensions"
+  | "--only-missing-extensions" : "Only restore gems with missing extensions"
+  | "--only-executables" : "Only restore executables"
+  | "--only-plugins" : "Only restore plugins" ;
+
+open_option =
+    version
+  | "-e" : "Prepend this command to the gem path" , @any | "--editor" : "Prepend this command to the gem path" , @any
+  | "--editor=" : "Prepend this command to the gem path" ~ @any ;
+
+unpack_option =
+    version | trust_policy
+  | "--target" : "Unpack into this directory" , @directory | "--target=" : "Unpack into this directory" ~ @directory
+  | "--spec" : "Unpack the gem specification" ;
+
+check_option =
+    version
+  | "-a" : "Report unmanaged files" | "--alien" : "Report unmanaged files" | "--no-alien" : "Do not report unmanaged files"
+  | "--doctor" : "Clean up broken gems" | "--no-doctor" : "Do not clean up"
+  | "--dry-run" : "Only report what would be removed" | "--no-dry-run" : "Remove files"
+  | "--gems" : "Check installed gems" | "--no-gems" : "Do not check installed gems" ;
+
+lock_option = "-s" : "Fail on an unsatisfied dependency" | "--strict" : "Fail on an unsatisfied dependency"
+  | "--no-strict" : "Do not fail on unsatisfied dependencies" ;
+
+cert_option =
+    "-a" : "Add a trusted certificate" , @file | "--add" : "Add a trusted certificate" , @file
+  | "--add=" : "Add a trusted certificate" ~ @file
+  | "-l" : "List trusted certificates" , [ @any ] | "--list" : "List trusted certificates" , [ @any ]
+  | "--list=" : "List trusted certificates matching" ~ @any
+  | "-r" : "Remove trusted certificates" , @any | "--remove" : "Remove trusted certificates" , @any
+  | "--remove=" : "Remove trusted certificates" ~ @any
+  | "-b" : "Build a key and self-signed certificate" , @any | "--build" : "Build a key and self-signed certificate" , @any
+  | "--build=" : "Build a key and self-signed certificate" ~ @any
+  | "-C" : "Signing certificate" , @file | "--certificate" : "Signing certificate" , @file
+  | "--certificate=" : "Signing certificate" ~ @file
+  | "-K" : "Private key" , @file | "--private-key" : "Private key" , @file | "--private-key=" : "Private key" ~ @file
+  | "-A" : "Key algorithm for --build" , @any | "--key-algorithm" : "Key algorithm for --build" , @any
+  | "--key-algorithm=" : "Key algorithm for --build" ~ @any
+  | "-s" : "Sign a certificate" , @file | "--sign" : "Sign a certificate" , @file | "--sign=" : "Sign a certificate" ~ @file
+  | "-d" : "Days before the certificate expires" , @number | "--days" : "Days before the certificate expires" , @number
+  | "--days=" : "Days before the certificate expires" ~ @number
+  | "-R" : "Re-sign the certificate" | "--re-sign" : "Re-sign the certificate" ;
+
+rdoc_option =
+    version
+  | "--all" : "Documentation for all gems"
+  | "--rdoc" : "Generate RDoc HTML" | "--no-rdoc" : "Do not generate RDoc HTML"
+  | "--ri" : "Generate RI data" | "--no-ri" : "Do not generate RI data"
+  | "--overwrite" : "Overwrite installed documents" | "--no-overwrite" : "Keep installed documents" ;
+
+rebuild_option =
+    "--diff" : "Compare mismatching files with diffoscope"
+  | "--force" : "Skip validation of the spec"
+  | "--strict" : "Treat warnings as errors"
+  | "--source" : "Download the gem from this source" , @any | "--source=" : "Download the gem from this source" ~ @any
+  | "--original" : "Compare against this local gem" , @file | "--original=" : "Compare against this local gem" ~ @file
+  | "--gemspec" : "Name of the gemspec" , @file | "--gemspec=" : "Name of the gemspec" ~ @file
+  | "-C" : "Run as if started in this directory" , @directory ;
+
+generate_index_option =
+    "-d" : "Repository directory" , @directory | "--directory" : "Repository directory" , @directory
+  | "--directory=" : "Repository directory" ~ @directory
+  | "--modern" : "Generate modern indexes" | "--no-modern" : "Skip modern indexes"
+  | "--compact" : "Generate compact index files" | "--no-compact" : "Skip compact index files"
+  | "--update" : "Update the indexes with new gems" ;
+
+help_topic =
+    "commands" : "List all commands" | "options" : "Show the general options" | "examples" : "Show usage examples"
+  | "gem_dependencies" : "Gem dependencies files"
+  | "platforms" : "About platforms" | @any : "A command" ;

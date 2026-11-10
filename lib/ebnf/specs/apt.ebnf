@@ -1,0 +1,141 @@
+(* apt: every command apt accepts and the options of apt(8) and apt-get(8), checked
+   against apt 3.0.4 on Debian stable (docker image debian:stable), its man pages and
+   by running each command. Options go before or after the command. Values follow as
+   the next word or after `=` (`-o=Acquire::Retries=3`, `-t=bookworm-backports`).
+   Package arguments (`pkg`, `pkg=version`, `pkg/release`, `./file.deb`) are free words. *)
+
+apt = { common_option } , [ command ] ;
+
+command =
+    "install" : "Install packages" , { change_option | common_option | @any }
+  | "reinstall" : "Reinstall packages" , { change_option | common_option | @any }
+  | "remove" : "Remove packages" , { change_option | common_option | @any }
+  | "purge" : "Remove packages and their configuration files" , { change_option | common_option | @any }
+  | "autoremove" : "Remove automatically installed packages no longer needed" , { change_option | common_option | @any }
+  | "auto-remove" : "Remove automatically installed packages no longer needed" , { change_option | common_option | @any }
+  | "autopurge" : "Autoremove and purge their configuration files" , { change_option | common_option | @any }
+  | "update" : "Download package information from all sources" , { update_option | common_option }
+  | "upgrade" : "Upgrade installed packages without removing any" , { change_option | common_option | @any }
+  | "full-upgrade" : "Upgrade installed packages, removing some if needed" , { change_option | common_option | @any }
+  | "dist-upgrade" : "Upgrade installed packages, removing some if needed" , { change_option | common_option | @any }
+  | "satisfy" : "Satisfy dependency strings" , { change_option | common_option | @any }
+  | "list" : "List packages by name or pattern" , { list_option | common_option | @any }
+  | "search" : "Search package descriptions for a regex" , { search_option | common_option | @any }
+  | "show" : "Show package details" , { show_option | common_option | @any }
+  | "showsrc" : "Show source package records" , { common_option | @any }
+  | "depends" : "Show the dependencies of packages" , { common_option | @any }
+  | "rdepends" : "Show the reverse dependencies of packages" , { common_option | @any }
+  | "policy" : "Show priorities and candidate versions" , { common_option | @any }
+  | "source" : "Download source packages" , { change_option | source_option | common_option | @any }
+  | "build-dep" : "Install the build dependencies of source packages" , { change_option | source_option | common_option | @any }
+  | "download" : "Download binary packages into the current directory" , { common_option | @any }
+  | "changelog" : "Download and show the changelog of packages" , { common_option | @any }
+  | "clean" : "Erase downloaded package files" , { common_option }
+  | "distclean" : "Erase downloaded package files and package lists" , { common_option }
+  | "dist-clean" : "Erase downloaded package files and package lists" , { common_option }
+  | "autoclean" : "Erase package files that can no longer be downloaded" , { common_option }
+  | "auto-clean" : "Erase package files that can no longer be downloaded" , { common_option }
+  | "edit-sources" : "Edit the sources list in an editor" , { common_option | @file }
+  | "modernize-sources" : "Convert .list files to .sources files" , { common_option } ;
+
+common_option =
+    "-h" : "Show a short usage summary" | "--help" : "Show a short usage summary"
+  | "-v" : "Show the program version" | "--version" : "Show the program version"
+  | "-q" : "Quiet output for logging (-qq quieter)" | "--quiet" : "Quiet output for logging (-qq quieter)"
+  | "-o" : "Set a configuration option, as Foo::Bar=bar" , @any
+  | "-o=" : "Set a configuration option, as Foo::Bar=bar" ~ @any
+  | "--option" : "Set a configuration option, as Foo::Bar=bar" , @any
+  | "--option=" : "Set a configuration option, as Foo::Bar=bar" ~ @any
+  | "-c" : "Read this configuration file too" , @file
+  | "-c=" : "Read this configuration file too" ~ @file
+  | "--config-file" : "Read this configuration file too" , @file
+  | "--config-file=" : "Read this configuration file too" ~ @file
+  | "-t" : "Default release to pin at priority 990" , @any
+  | "-t=" : "Default release to pin at priority 990" ~ @any
+  | "--target-release" : "Default release to pin at priority 990" , @any
+  | "--target-release=" : "Default release to pin at priority 990" ~ @any
+  | "--default-release" : "Default release to pin at priority 990" , @any
+  | "--default-release=" : "Default release to pin at priority 990" ~ @any
+  | "-S" : "Snapshot to use for snapshot-enabled sources" , @any
+  | "-S=" : "Snapshot to use for snapshot-enabled sources" ~ @any
+  | "--snapshot" : "Snapshot to use for snapshot-enabled sources" , @any
+  | "--snapshot=" : "Snapshot to use for snapshot-enabled sources" ~ @any
+  | "--audit" : "Show audit and notice messages"
+  | "--color" : "Turn colors on" | "--no-color" : "Turn colors off" ;
+
+(* apt-get options of the commands that install, remove or build packages. *)
+change_option =
+    "-y" : "Assume yes to all prompts" | "--yes" : "Assume yes to all prompts"
+  | "--assume-yes" : "Assume yes to all prompts"
+  | "--assume-no" : "Assume no to all prompts"
+  | "-s" : "Simulate, do not change the system" | "--simulate" : "Simulate, do not change the system"
+  | "--just-print" : "Simulate, do not change the system" | "--dry-run" : "Simulate, do not change the system"
+  | "--recon" : "Simulate, do not change the system" | "--no-act" : "Simulate, do not change the system"
+  | "-d" : "Only download package files" | "--download-only" : "Only download package files"
+  | "-f" : "Fix broken dependencies" | "--fix-broken" : "Fix broken dependencies"
+  | "-m" : "Ignore missing packages" | "--ignore-missing" : "Ignore missing packages"
+  | "--fix-missing" : "Ignore missing packages"
+  | "--no-download" : "Use only the packages already downloaded"
+  | "-U" : "Run update before the command" | "--update" : "Run update before the command"
+  | "-V" : "Show full versions" | "--verbose-versions" : "Show full versions"
+  | "--no-install-recommends" : "Do not install recommended packages"
+  | "--install-recommends" : "Install recommended packages"
+  | "--install-suggests" : "Install suggested packages"
+  | "--no-show-upgraded" : "Do not list the packages to upgrade"
+  | "--no-list-columns" : "Do not arrange package lists in columns"
+  | "--comment" : "Add this comment to history.log" , @any
+  | "--comment=" : "Add this comment to history.log" ~ @any
+  | "--ignore-hold" : "Ignore package holds"
+  | "--with-new-pkgs" : "Allow upgrade to install new packages"
+  | "--no-upgrade" : "Do not upgrade installed packages"
+  | "--only-upgrade" : "Only upgrade installed packages"
+  | "--allow-downgrades" : "Allow downgrades without prompting"
+  | "--allow-remove-essential" : "Allow removing essential packages without prompting"
+  | "--allow-change-held-packages" : "Allow changing held packages without prompting"
+  | "--allow-unauthenticated" : "Allow packages that cannot be authenticated"
+  | "--force-yes" : "Force yes (deprecated)"
+  | "--print-uris" : "Print the URIs to fetch instead of fetching"
+  | "--purge" : "Purge instead of remove"
+  | "--reinstall" : "Reinstall packages already at the newest version"
+  | "--trivial-only" : "Only perform trivial operations"
+  | "--mark-auto" : "Mark freshly installed packages as automatic"
+  | "--no-remove" : "Abort if any package would be removed"
+  | "--auto-remove" : "Also remove unused dependencies" | "--autoremove" : "Also remove unused dependencies"
+  | "--show-progress" : "Show progress in the terminal while installing"
+  | "--with-source" : "Add this file as a metadata source" , @file
+  | "--with-source=" : "Add this file as a metadata source" ~ @file ;
+
+(* apt-get options of source and build-dep. *)
+source_option =
+    "-a" : "Architecture to build for" , @any | "-a=" : "Architecture to build for" ~ @any
+  | "--host-architecture" : "Architecture to build for" , @any
+  | "--host-architecture=" : "Architecture to build for" ~ @any
+  | "-P" : "Build profiles to activate" , @any | "-P=" : "Build profiles to activate" ~ @any
+  | "--build-profiles" : "Build profiles to activate" , @any
+  | "--build-profiles=" : "Build profiles to activate" ~ @any
+  | "-b" : "Compile source packages after downloading" | "--compile" : "Compile source packages after downloading"
+  | "--build" : "Compile source packages after downloading"
+  | "--only-source" : "Names are source packages, not binary ones"
+  | "--diff-only" : "Download only the diff file" | "--dsc-only" : "Download only the dsc file"
+  | "--tar-only" : "Download only the tar file"
+  | "--arch-only" : "Only the architecture-dependent build dependencies"
+  | "--indep-only" : "Only the architecture-independent build dependencies" ;
+
+update_option =
+    "-e" : "Fail on errors of this kind" , "any" | "-e" ~ "any"
+  | "--error-on=" : "Fail on errors of this kind" ~ "any"
+  | "--allow-insecure-repositories" : "Allow updating from insecure repositories"
+  | "--allow-releaseinfo-change" : "Allow the release information to change"
+  | "--no-list-cleanup" : "Keep old package list files" | "--list-cleanup" : "Erase old package list files" ;
+
+list_option =
+    "--installed" : "List installed packages"
+  | "--upgradable" : "List upgradable packages" | "--upgradeable" : "List upgradable packages"
+  | "--manual-installed" : "List manually installed packages"
+  | "-a" : "List all versions" | "--all-versions" : "List all versions" ;
+
+search_option =
+    "-f" : "Show full records" | "--full" : "Show full records"
+  | "-n" : "Search package names only" | "--names-only" : "Search package names only" ;
+
+show_option = "-a" : "Show all versions" | "--all-versions" : "Show all versions" ;

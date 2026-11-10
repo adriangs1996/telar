@@ -386,6 +386,22 @@ public:
 
   bool input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
   void paste(std::uint64_t pane_id, const QString &text);
+  // telar's command editor: who has the pane's keyboard, and the keys and text it takes.
+  [[nodiscard]] prompt::Surface promptSurface(std::uint64_t pane_id) const noexcept;
+  [[nodiscard]] bool editsPrompt(std::uint64_t pane_id) const noexcept;
+  [[nodiscard]] const prompt::Island *promptIsland(std::uint64_t pane_id) const noexcept;
+  [[nodiscard]] std::string_view promptSuggestion(std::uint64_t pane_id) const noexcept;
+  // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
+  [[nodiscard]] CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
+  // Shows the pane's scrollback from `row`, counted from its top.
+  void scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row);
+  // The command block selected in the pane, by index among its blocks, and selecting one, or
+  // none to go back to the live end.
+  [[nodiscard]] std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
+  void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
+  // False hands the key back to the terminal.
+  bool promptKey(std::uint64_t pane_id, const prompt::KeyPress &key);
+  bool promptText(std::uint64_t pane_id, const QString &text);
   void resize(std::uint64_t pane_id, TerminalSize size);
   void scroll(PaneScrollDelta delta);
   bool handleBindingKey(QKeyEvent &event, QQuickItem &recipient, bool captures = false);
@@ -493,6 +509,7 @@ signals:
   void sidebarGeometryChanged();
   void dialogChanged();
   void terminalChanged(qulonglong pane_id);
+  void promptChanged(qulonglong pane_id);
   void pointerModifiersChanged();
   void inputReleasing(qulonglong pane_id);
   void notification(const QString &message);
@@ -772,11 +789,19 @@ private:
   bool executePane(Action action, std::uint64_t identity);
   void executeWindowAction(Action action);
 
+  // Text the island's editor took from outside the keyboard reaches its view.
+  void publishPromptWrite() {
+    if (const auto pane_id = session().takePromptWrite()) {
+      emit promptChanged(*pane_id);
+    }
+  }
+
   template <std::invocable Mutation>
   void applyInteraction(Mutation mutate) {
     try {
       pending_activity_.reset();
       mutate();
+      publishPromptWrite();
       refresh();
     } catch (const std::exception &error) {
       if (dialog_ == QLatin1StringView("history")) {

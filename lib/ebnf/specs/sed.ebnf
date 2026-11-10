@@ -1,0 +1,41 @@
+(* sed: the union of GNU sed 4.10 (`sed --help` on Arch Linux) and BSD sed
+   (`man sed` on macOS 26). Where a short option differs between them, its
+   description names both meanings. The first operand is the script unless -e or
+   -f gives one; the rest are input files. GNU joins the -i suffix (-i.bak), BSD
+   takes it as the next word (-i '' or -i .bak); both readings are accepted. *)
+
+sed = { option | @file } , [ "--" , { @file } ] ;
+
+option =
+    "-n" : "Do not print the pattern space automatically"
+  | "--quiet" : "Do not print the pattern space automatically"
+  | "--silent" : "Do not print the pattern space automatically"
+  | "--debug" : "GNU: annotate the program's execution"
+  | "-e" : "Add this script to the commands" , @any
+  | "--expression" : "Add this script to the commands" , @any
+  | "--expression=" : "Add this script to the commands" ~ @any
+  | "-f" : "Add the script in this file to the commands" , @file
+  | "--file" : "Add the script in this file to the commands" , @file
+  | "--file=" : "Add the script in this file to the commands" ~ @file
+  | "--follow-symlinks" : "GNU: follow symbolic links when editing in place"
+  | "-i" : "Edit files in place, with a backup suffix if given"
+  | "-i" , @any
+  | "--in-place" : "Edit files in place"
+  | "--in-place=" : "Edit files in place, keeping backups with this suffix" ~ @any
+  | "-I" : "BSD: edit in place as one stream, with this backup suffix" , @any
+  | "-l" : "GNU: line wrap length for the l command; BSD: line buffered"
+  | "-l" , @number
+  | "--line-length" : "Line wrap length for the l command" , @number
+  | "--line-length=" : "Line wrap length for the l command" ~ @number
+  | "--posix" : "GNU: disable all GNU extensions"
+  | "-E" : "Use extended regular expressions"
+  | "-r" : "Use extended regular expressions"
+  | "--regexp-extended" : "Use extended regular expressions"
+  | "-s" : "GNU: treat files as separate streams" | "--separate" : "Treat files as separate streams"
+  | "--sandbox" : "GNU: disable the e, r and w commands"
+  | "-u" : "Unbuffered output" | "--unbuffered" : "Unbuffered output"
+  | "-z" : "GNU: lines are separated by NUL" | "--null-data" : "Lines are separated by NUL"
+  | "-a" : "BSD: open w files only when a w command runs"
+  | "-H" : "BSD: enhanced regular expression features"
+  | "--help" : "Print the help and exit"
+  | "--version" : "Print the version and exit" ;

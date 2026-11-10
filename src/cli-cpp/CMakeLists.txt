@@ -39,8 +39,13 @@ if(TELAR_LINKED_SQLITE)
   target_compile_definitions(cli-core PUBLIC TELAR_LINKED_SQLITE=1)
 endif()
 
-add_library(cli-launch STATIC launch_commands.cpp)
+add_library(cli-launch STATIC launch_commands.cpp completions.cpp)
 target_link_libraries(cli-launch PUBLIC cli-core)
+if(NOT TARGET ebnf-core)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../lib/ebnf" "${CMAKE_BINARY_DIR}/ebnf")
+endif()
+# `completions check` compiles a spec with the matcher the runtime uses.
+target_link_libraries(cli-launch PRIVATE ebnf::ebnf)
 
 add_executable(telar main.cpp)
 target_link_libraries(telar PRIVATE cli-core cli-launch)

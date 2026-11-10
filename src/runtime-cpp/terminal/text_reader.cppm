@@ -1163,8 +1163,15 @@ private:
     checkGhostty(ghostty_row_get(row, GHOSTTY_ROW_DATA_WRAP, &wrap));
     checkGhostty(ghostty_row_get(row, GHOSTTY_ROW_DATA_WRAP_CONTINUATION, &continuation));
     checkGhostty(ghostty_row_get(row, GHOSTTY_ROW_DATA_HYPERLINK, &hyperlinks));
+    GhosttyRowSemanticPrompt prompt = GHOSTTY_ROW_SEMANTIC_NONE;
+    checkGhostty(ghostty_row_get(row, GHOSTTY_ROW_DATA_SEMANTIC_PROMPT, &prompt));
 
     Byte flags = 0;
+    if (prompt == GHOSTTY_ROW_SEMANTIC_PROMPT) {
+      flags |= static_cast<Byte>(RowFlag::prompt);
+    } else if (prompt == GHOSTTY_ROW_SEMANTIC_PROMPT_CONTINUATION) {
+      flags |= static_cast<Byte>(RowFlag::prompt_continuation);
+    }
     if (wrap) {
       flags |= static_cast<Byte>(RowFlag::wrap);
       GhosttyCellsView cells{};

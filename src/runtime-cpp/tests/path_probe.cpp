@@ -1,5 +1,6 @@
 
 #include <cstdio>
+#include <cstdlib>
 #include <unistd.h>
 import std;
 import telar.runtime.tests.check;

@@ -169,7 +169,8 @@ namespace {
   TEST(Lexer, RejectsUnterminatedEmptyOrInvalidLiterals) {
     ebnf::parsing_ring_buffer buffer;
 
-    for (const auto source : {"'unfinished", "\"unfinished", "'", "\"", "''", "\"\"", "\"@\""}) {
+    // Literals accept printable ASCII; control characters and non-ASCII bytes stay invalid.
+    for (const auto source : {"'unfinished", "\"unfinished", "'", "\"", "''", "\"\"", "\"\x01\"", "\"\x7f\"", "\"\xc3\xa9\""}) {
       SCOPED_TRACE(source);
       EXPECT_THROW(ebnf::Lexer{}.tokenizeSourceIntoBuffer(source, buffer, buffer.size()), std::invalid_argument);
     }
@@ -178,7 +179,7 @@ namespace {
   TEST(Lexer, RejectsInvalidCharactersOutsideLiterals) {
     ebnf::parsing_ring_buffer buffer;
 
-    for (const auto source : {"@", "_name", "\\", "<", ">"}) {
+    for (const auto source : {"@", "@_name", "@1", "_name", "\\", "<", ">"}) {
       SCOPED_TRACE(source);
       EXPECT_THROW(ebnf::Lexer{}.tokenizeSourceIntoBuffer(source, buffer, buffer.size()), std::invalid_argument);
     }

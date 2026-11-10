@@ -100,6 +100,25 @@ void require(bool condition, const char *message) {
   }
 }
 
+void promptPreferences() {
+  const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", skin = "glass", motion = "none", ghost = false, max_lines = 4}}})", .profile = {}});
+  const auto &prompt = configuration.prompt;
+  require(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.skin == PromptSkin::glass && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.max_lines == 4, "every prompt field must be read");
+  require(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration{}, "the prompt stays classic by default");
+  const auto bound = read({.source = R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "submit"}, {keys = "H", action = "line_start", mode = "normal"}}}}})", .profile = {}});
+  require(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == 8, "prompt bindings must be read with their action and mode");
+  constexpr auto invalid_sources = std::to_array<std::string_view>({R"(return {api_version = 2, client = {prompt = {mode = "fancy"}}})", R"(return {api_version = 2, client = {prompt = {max_lines = 0}}})", R"(return {api_version = 2, client = {prompt = {keymap = "helix"}}})", R"(return {api_version = 2, client = {prompt = {ambient = true}}})", R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "explode"}}}}})"});
+  for (const auto source : invalid_sources) {
+    bool rejected = false;
+    try {
+      read({.source = source, .profile = {}});
+    } catch (const std::exception &) {
+      rejected = true;
+    }
+    require(rejected, "invalid prompt configuration must not be silently accepted");
+  }
+}
+
 void historyPreferences() {
   const auto configuration = read({.source = R"(return {api_version = 2, client = {history = {show_agent_commands = true, enter = "run", match = "fts"}}, profiles = {paste = {client = {history = {enter = "paste"}}}}})", .profile = "paste"});
   require(configuration.history.show_agent_commands && !configuration.history.enter_runs && configuration.history.match_fts, "history profile fields must override independently and retain inherited choices");
@@ -302,6 +321,7 @@ void invalidCallbacksAndRecovery() {
 int main() {
   try {
     historyPreferences();
+  promptPreferences();
     independentBackgroundOpacity();
     editorPreferences();
     windowTitlePreferences();

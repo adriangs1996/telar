@@ -1,0 +1,475 @@
+(* dnf: the commands of DNF5 with their options, checked against `dnf --help` and
+   `dnf <command> --help` of dnf5 5.4.6.0 on Fedora (docker image fedora:latest, with
+   the builddep, changelog, config-manager, copr, needs-restarting, repoclosure,
+   repomanage and reposync plugins it ships). Global options go before or after the
+   command. Long options with a value accept `--opt=value` and `--opt value`. Package
+   specs have no provider, so they are free words. The classic dnf 4 is not modelled. *)
+
+dnf = { global_option } , [ command ] ;
+
+command =
+    (* Software management *)
+    "install" : "Install software" , { install_option | global_option | @any }
+  | "in" : "Alias for install" , { install_option | global_option | @any }
+  | "upgrade" : "Upgrade software" , { upgrade_option | global_option | @any }
+  | "up" : "Alias for upgrade" , { upgrade_option | global_option | @any }
+  | "update" : "Alias for upgrade" , { upgrade_option | global_option | @any }
+  | "upgrade-minimal" : "Alias for upgrade --minimal" , { upgrade_option | global_option | @any }
+  | "remove" : "Remove (uninstall) software" , { remove_option | global_option | @any }
+  | "rm" : "Alias for remove" , { remove_option | global_option | @any }
+  | "reinstall" : "Reinstall software" , { resolve_option | from_option | store_option | global_option | @any }
+  | "rei" : "Alias for reinstall" , { resolve_option | from_option | store_option | global_option | @any }
+  | "downgrade" : "Downgrade software" , { resolve_option | from_option | store_option | global_option | @any }
+  | "dg" : "Alias for downgrade" , { resolve_option | from_option | store_option | global_option | @any }
+  | "distro-sync" : "Sync installed software to the latest available versions" , { resolve_option | from_option | store_option | global_option | @any }
+  | "dsync" : "Alias for distro-sync" , { resolve_option | from_option | store_option | global_option | @any }
+  | "debuginfo-install" : "Install debuginfo packages" , { resolve_option | store_option | global_option | @any }
+  | "swap" : "Remove software and install another in one transaction" , { resolve_option | from_option | store_option | global_option | @any }
+  | "mark" : "Change the reason of an installed package" , { global_option } , [ mark_command ]
+  | "autoremove" : "Remove unneeded packages installed as dependencies" , { store_option | global_option }
+  | "do" : "Run a transaction of several actions" , { do_option | resolve_option | from_option | advisory_option | store_option | global_option | @any }
+  | "provides" : "Find what package provides the given value" , { global_option | @any }
+  | "replay" : "Replay a transaction stored in a directory" , { replay_option | global_option | @directory }
+  | "check-upgrade" : "Check for available package upgrades" , { check_upgrade_option | global_option | @any }
+  | "check-update" : "Alias for check-upgrade" , { check_upgrade_option | global_option | @any }
+  | "check" : "Check for problems in the package database" , { check_option | global_option }
+    (* Queries *)
+  | "leaves" : "List installed packages no other package requires" , { global_option }
+  | "repoquery" : "Search for packages matching various criteria" , { repoquery_option | global_option | @any }
+  | "rq" : "Alias for repoquery" , { repoquery_option | global_option | @any }
+  | "search" : "Search for software matching all strings" , { search_option | global_option | @any }
+  | "se" : "Alias for search" , { search_option | global_option | @any }
+  | "list" : "List packages by their relation to the system" , { list_option | global_option | @any }
+  | "ls" : "Alias for list" , { list_option | global_option | @any }
+  | "info" : "Show details of packages" , { list_option | global_option | @any }
+  | "if" : "Alias for info" , { list_option | global_option | @any }
+    (* Subcommands *)
+  | "status" : "Show statistics about packages, groups and repositories" , { global_option }
+  | "group" : "Manage comps groups" , { global_option } , [ group_command ]
+  | "grp" : "Alias for group" , { global_option } , [ group_command ]
+  | "environment" : "Manage comps environments" , { global_option } , [ group_command ]
+  | "module" : "Manage modules" , { global_option } , [ module_command ]
+  | "history" : "Manage transaction history" , { global_option } , [ history_command ]
+  | "repo" : "Manage repositories" , { global_option } , [ repo_command ]
+  | "repolist" : "Alias for repo list" , { repo_option | global_option | @any }
+  | "repoinfo" : "Alias for repo info" , { repo_option | global_option | @any }
+  | "advisory" : "Manage advisories" , { global_option } , [ advisory_command ]
+  | "updateinfo" : "Alias for advisory" , { global_option } , [ advisory_command ]
+  | "versionlock" : "Manage the versionlock configuration" , { global_option } , [ versionlock_command ]
+  | "system-upgrade" : "Prepare the system for an upgrade to a new release" , { global_option } , [ offline_command ]
+  | "offline-upgrade" : "Store an upgrade transaction to run offline" , { global_option } , [ offline_command ]
+  | "offline-distrosync" : "Store a distro-sync transaction to run offline" , { global_option } , [ offline_command ]
+  | "offline" : "Manage offline transactions" , { global_option } , [ offline_command ]
+  | "config-manager" : "Manage configuration" , { global_option } , [ config_manager_command ]
+    (* Commands *)
+  | "clean" : "Remove or expire cached data" , { global_option | cache_type }
+  | "download" : "Download software to the current directory" , { download_option | global_option | @any }
+  | "makecache" : "Generate the metadata cache" , { global_option }
+  | "mc" : "Alias for makecache" , { global_option }
+  | "builddep" : "Install the build dependencies of a package or spec file" , { builddep_option | global_option | @any }
+  | "build-dep" : "Alias for builddep" , { builddep_option | global_option | @any }
+  | "changelog" : "Show package changelogs" , { changelog_option | global_option | @any }
+  | "copr" : "Manage Copr repositories" , { global_option } , [ copr_command ]
+  | "needs-restarting" : "Tell whether the system or services need restarting" , { needs_restarting_option | global_option }
+  | "repoclosure" : "List unresolved dependencies of repositories" , { repoclosure_option | global_option | @any }
+  | "repomanage" : "Manage a directory of rpm packages or repodata" , { repomanage_option | global_option | @any }
+  | "reposync" : "Synchronize a remote repository to a local directory" , { reposync_option | global_option | @any } ;
+
+global_option =
+    "-h" : "Print help" | "--help" : "Print help"
+  | "--version" : "Show the DNF5 version"
+  | "-c" : "Configuration file location" , @file
+  | "--config" : "Configuration file location" , @file | "--config=" : "Configuration file location" ~ @file
+  | "-q" : "Show only the relevant content" | "--quiet" : "Show only the relevant content"
+  | "-C" : "Run entirely from the system cache" | "--cacheonly" : "Run entirely from the system cache"
+  | "--color" : "Whether to use color" , color_when | "--color=" : "Whether to use color" ~ color_when
+  | "--refresh" : "Refresh metadata before running the command"
+  | "--repofrompath" : "Add a repository from REPO_ID,REPO_PATH" , @any
+  | "--repofrompath=" : "Add a repository from REPO_ID,REPO_PATH" ~ @any
+  | "--setopt" : "Set a config or repo option, [REPO_ID.]OPTION=VALUE" , @any
+  | "--setopt=" : "Set a config or repo option, [REPO_ID.]OPTION=VALUE" ~ @any
+  | "--setvar" : "Set a variable, VAR_NAME=VALUE" , @any
+  | "--setvar=" : "Set a variable, VAR_NAME=VALUE" ~ @any
+  | "-y" : "Answer yes to all questions" | "--assumeyes" : "Answer yes to all questions"
+  | "--assumeno" : "Answer no to all questions"
+  | "--best" : "Try the best available package versions"
+  | "--no-best" : "Do not limit the transaction to the best candidate" | "--nobest" : "Alias for --no-best"
+  | "--allow-vendor-change" : "Allow replacements from different vendors"
+  | "--no-allow-vendor-change" : "Do not allow replacements from different vendors"
+  | "--no-docs" : "Do not install documentation files" | "--nodocs" : "Alias for --no-docs"
+  | "-x" : "Exclude packages by name or glob" , @any
+  | "--exclude" : "Exclude packages by name or glob" , @any | "--exclude=" : "Exclude packages by name or glob" ~ @any
+  | "--enable-repo" : "Enable additional repositories" , @any | "--enable-repo=" : "Enable additional repositories" ~ @any
+  | "--enablerepo" : "Alias for --enable-repo" , @any | "--enablerepo=" : "Alias for --enable-repo" ~ @any
+  | "--disable-repo" : "Disable repositories" , @any | "--disable-repo=" : "Disable repositories" ~ @any
+  | "--disablerepo" : "Alias for --disable-repo" , @any | "--disablerepo=" : "Alias for --disable-repo" ~ @any
+  | "--repo" : "Enable just these repositories" , @any | "--repo=" : "Enable just these repositories" ~ @any
+  | "--repoid" : "Alias for --repo" , @any | "--repoid=" : "Alias for --repo" ~ @any
+  | "--no-gpgchecks" : "Disable OpenPGP signature checking" | "--nogpgcheck" : "Alias for --no-gpgchecks"
+  | "--no-plugins" : "Disable all libdnf5 plugins" | "--noplugins" : "Alias for --no-plugins"
+  | "--enable-plugin" : "Enable libdnf5 plugins by name" , @any | "--enable-plugin=" : "Enable libdnf5 plugins by name" ~ @any
+  | "--enableplugin" : "Alias for --enable-plugin" , @any | "--enableplugin=" : "Alias for --enable-plugin" ~ @any
+  | "--disable-plugin" : "Disable libdnf5 plugins by name" , @any | "--disable-plugin=" : "Disable libdnf5 plugins by name" ~ @any
+  | "--disableplugin" : "Alias for --disable-plugin" , @any | "--disableplugin=" : "Alias for --disable-plugin" ~ @any
+  | "--comment" : "Add a comment to the transaction" , @any | "--comment=" : "Add a comment to the transaction" ~ @any
+  | "--installroot" : "Install root, an absolute path" , @directory | "--installroot=" : "Install root, an absolute path" ~ @directory
+  | "--use-host-config" : "Use the host's configuration, not the installroot's"
+  | "--releasever" : "Override $releasever" , @any | "--releasever=" : "Override $releasever" ~ @any
+  | "--releasever-major" : "Override $releasever_major" , @any | "--releasever-major=" : "Override $releasever_major" ~ @any
+  | "--releasever-minor" : "Override $releasever_minor" , @any | "--releasever-minor=" : "Override $releasever_minor" ~ @any
+  | "--show-new-leaves" : "Show packages that became leaves after a transaction"
+  | "--debugsolver" : "Dump detailed solving results into files"
+  | "--dump-main-config" : "Print the main configuration values"
+  | "--dump-repo-config" : "Print the configuration of these repositories" , @any
+  | "--dump-repo-config=" : "Print the configuration of these repositories" ~ @any
+  | "--dump-variables" : "Print the variable values"
+  | "--forcearch" : "Force a different architecture" , @any | "--forcearch=" : "Force a different architecture" ~ @any
+  | "--skip-file-locks" : "Skip acquiring file locks" ;
+
+color_when = "always" | "never" | "auto" ;
+
+(* Option groups the transaction commands share. *)
+resolve_option =
+    "--allowerasing" : "Allow removing installed packages to resolve problems"
+  | "--skip-broken" : "Resolve problems by skipping packages"
+  | "--skip-unavailable" : "Skip unavailable packages"
+  | "--allow-downgrade" : "Allow downgrading dependencies"
+  | "--no-allow-downgrade" : "Do not downgrade dependencies" ;
+
+from_option =
+    "--installed-from-repo" : "Filter installed packages by their repository" , @any
+  | "--installed-from-repo=" : "Filter installed packages by their repository" ~ @any
+  | "--from-repo" : "Select the items only from these repositories" , @any
+  | "--from-repo=" : "Select the items only from these repositories" ~ @any
+  | "--from-vendor" : "Select the items only from these vendors" , @any
+  | "--from-vendor=" : "Select the items only from these vendors" ~ @any ;
+
+store_option =
+    "--downloadonly" : "Only download the packages of the transaction"
+  | "--offline" : "Store the transaction to run offline"
+  | "--store" : "Store the transaction in this directory instead" , @directory
+  | "--store=" : "Store the transaction in this directory instead" ~ @directory
+  | "--transient" : "Use a transient overlay on /usr, discarded on reboot" ;
+
+advisory_option =
+    "--advisories" : "Include the content of these advisories" , @any
+  | "--advisories=" : "Include the content of these advisories" ~ @any
+  | "--advisory" : "Alias for --advisories" , @any | "--advisory=" : "Alias for --advisories" ~ @any
+  | "--advisory-severities" : "Include advisories of these severities" , severity
+  | "--advisory-severities=" : "Include advisories of these severities" ~ severity
+  | "--bzs" : "Include advisories that fix these Bugzilla ids" , @any
+  | "--bzs=" : "Include advisories that fix these Bugzilla ids" ~ @any
+  | "--bz" : "Alias for --bzs" , @any | "--bz=" : "Alias for --bzs" ~ @any
+  | "--cves" : "Include advisories that fix these CVEs" , @any
+  | "--cves=" : "Include advisories that fix these CVEs" ~ @any
+  | "--cve" : "Alias for --cves" , @any | "--cve=" : "Alias for --cves" ~ @any
+  | "--security" : "Include security advisories"
+  | "--bugfix" : "Include bugfix advisories"
+  | "--enhancement" : "Include enhancement advisories"
+  | "--newpackage" : "Include newpackage advisories" ;
+
+severity = "critical" | "important" | "moderate" | "low" | "none" | @any ;
+
+json = "--json" : "Request JSON output" ;
+
+install_option = resolve_option | from_option | store_option | advisory_option ;
+
+upgrade_option =
+    resolve_option | from_option | store_option | advisory_option
+  | "--minimal" : "Upgrade only to the lowest versions that fix advisories"
+  | "--destdir" : "Download packages to this directory" , @directory
+  | "--destdir=" : "Download packages to this directory" ~ @directory ;
+
+remove_option =
+    "--installed-from-repo" : "Filter installed packages by their repository" , @any
+  | "--installed-from-repo=" : "Filter installed packages by their repository" ~ @any
+  | "--no-autoremove" : "Keep dependencies that are no longer used"
+  | "--noautoremove" : "Alias for --no-autoremove"
+  | "--oldinstallonly" : "Remove old installonly packages"
+  | "--duplicates" : "Remove older versions of duplicate packages"
+  | "--limit" : "Installonly versions to keep, with --oldinstallonly" , @number
+  | "--limit=" : "Installonly versions to keep, with --oldinstallonly" ~ @number
+  | store_option ;
+
+do_option =
+    "--action" : "Action on the following items" , do_action | "--action=" : "Action on the following items" ~ do_action
+  | "--type" : "Type of the following items" , do_type | "--type=" : "Type of the following items" ~ do_type ;
+do_action = "install" | "remove" | "upgrade" | "downgrade" | "reinstall" ;
+do_type = "auto" | "package" | "group" ;
+
+replay_option =
+    "--skip-broken" : "Resolve problems by skipping packages"
+  | "--skip-unavailable" : "Skip unavailable packages"
+  | "--ignore-extras" : "Do not fail on extra packages in the transaction"
+  | "--ignore-installed" : "Do not fail on mismatches with installed packages" ;
+
+check_upgrade_option =
+    advisory_option | json
+  | "--minimal" : "Report only the lowest versions that fix advisories"
+  | "--changelogs" : "Show the changelogs of the upgrades" ;
+
+check_option =
+    "--dependencies" : "Show missing dependencies and conflicts"
+  | "--duplicates" : "Show duplicated packages"
+  | "--obsoleted" : "Show obsoleted packages" ;
+
+search_option =
+    "--all" : "Search the description and URL too"
+  | "--showduplicates" : "Show all versions, not only the latest"
+  | "--name" : "Search only the Name field"
+  | "--summary" : "Search only the Summary field" ;
+
+list_option =
+    "--showduplicates" : "Show all versions, not only the latest"
+  | "--installed-from-repo" : "Filter installed packages by their repository" , @any
+  | "--installed-from-repo=" : "Filter installed packages by their repository" ~ @any
+  | "--installed" : "List installed packages"
+  | "--available" : "List available packages"
+  | "--extras" : "List installed packages no repository has"
+  | "--obsoletes" : "List installed packages obsoleted by repositories"
+  | "--recent" : "List packages recently added to the repositories"
+  | "--upgrades" : "List available upgrades" | "--updates" : "Alias for --upgrades"
+  | "--autoremove" : "List the packages autoremove would remove"
+  | json ;
+
+repoquery_option =
+    advisory_option
+  | "-i" : "Show detailed package information" | "--info" : "Show detailed package information"
+  | "-l" : "List the files of the packages" | "--list" : "List the files of the packages"
+  | "--querytags" : "List the tags --queryformat accepts"
+  | "--queryformat" : "Format of each listed package" , @any
+  | "--queryformat=" : "Format of each listed package" ~ @any
+  | "--qf" : "Alias for --queryformat" , @any | "--qf=" : "Alias for --queryformat" ~ @any
+  | "--changelogs" : "Show the changelogs of the packages"
+  | "--files" : "Like --qf %{files}" | "--sourcerpm" : "Like --qf %{sourcerpm}"
+  | "--location" : "Like --qf %{location}" | "--conflicts" : "Like --qf %{conflicts}"
+  | "--depends" : "Like --qf %{depends}" | "--enhances" : "Like --qf %{enhances}"
+  | "--obsoletes" : "Like --qf %{obsoletes}" | "--provides" : "Like --qf %{provides}"
+  | "--recommends" : "Like --qf %{recommends}" | "--requires" : "Like --qf %{requires}"
+  | "--requires-pre" : "Like --qf %{requires_pre}" | "--suggests" : "Like --qf %{suggests}"
+  | "--supplements" : "Like --qf %{supplements}"
+  | "--available" : "Query available packages" | "--installed" : "Query installed packages"
+  | "--installed-from-repo" : "Filter installed packages by their repository" , @any
+  | "--installed-from-repo=" : "Filter installed packages by their repository" ~ @any
+  | "--leaves" : "Limit to leaf packages" | "--userinstalled" : "Limit to user installed packages"
+  | "--duplicates" : "Limit to duplicated installed packages"
+  | "--unneeded" : "Limit to unneeded installed packages"
+  | "--installonly" : "Limit to installonly packages"
+  | "--extras" : "Limit to installed packages no repository has"
+  | "--upgrades" : "Limit to available upgrades"
+  | "--latest-limit" : "Limit to the N latest versions of each package" , @any
+  | "--latest-limit=" : "Limit to the N latest versions of each package" ~ @any
+  | "--whatdepends" : "Limit to packages that depend on these" , @any
+  | "--whatdepends=" : "Limit to packages that depend on these" ~ @any
+  | "--whatconflicts" : "Limit to packages that conflict with these" , @any
+  | "--whatconflicts=" : "Limit to packages that conflict with these" ~ @any
+  | "--whatenhances" : "Limit to packages that enhance these" , @any
+  | "--whatenhances=" : "Limit to packages that enhance these" ~ @any
+  | "--whatobsoletes" : "Limit to packages that obsolete these" , @any
+  | "--whatobsoletes=" : "Limit to packages that obsolete these" ~ @any
+  | "--whatprovides" : "Limit to packages that provide these" , @any
+  | "--whatprovides=" : "Limit to packages that provide these" ~ @any
+  | "--whatrecommends" : "Limit to packages that recommend these" , @any
+  | "--whatrecommends=" : "Limit to packages that recommend these" ~ @any
+  | "--whatrequires" : "Limit to packages that require these" , @any
+  | "--whatrequires=" : "Limit to packages that require these" ~ @any
+  | "--whatsupplements" : "Limit to packages that supplement these" , @any
+  | "--whatsupplements=" : "Limit to packages that supplement these" ~ @any
+  | "--whatsuggests" : "Limit to packages that suggest these" , @any
+  | "--whatsuggests=" : "Limit to packages that suggest these" ~ @any
+  | "--arch" : "Limit to these architectures" , @any | "--arch=" : "Limit to these architectures" ~ @any
+  | "-f" : "Limit to packages that own these files" , @file
+  | "--file" : "Limit to packages that own these files" , @file
+  | "--file=" : "Limit to packages that own these files" ~ @file
+  | "--exactdeps" : "Limit --whatdepends and --whatrequires to exact deps"
+  | "--recent" : "Limit to recently edited packages"
+  | "--srpm" : "Query the source rpms of the results"
+  | "--disable-modular-filtering" : "Include packages of inactive module streams"
+  | "--providers-of" : "Query the providers of this attribute" , @any
+  | "--providers-of=" : "Query the providers of this attribute" ~ @any
+  | "--recursive" : "Recurse with --whatrequires or --providers-of" ;
+
+download_option =
+    "--arch" : "Limit to these architectures" , @any | "--arch=" : "Limit to these architectures" ~ @any
+  | "--resolve" : "Resolve and download the needed dependencies"
+  | "--alldeps" : "With --resolve, download all dependencies"
+  | "--from-repo" : "Select the items only from these repositories" , @any
+  | "--from-repo=" : "Select the items only from these repositories" ~ @any
+  | "--from-vendor" : "Select the items only from these vendors" , @any
+  | "--from-vendor=" : "Select the items only from these vendors" ~ @any
+  | "--destdir" : "Download packages to this directory" , @directory
+  | "--destdir=" : "Download packages to this directory" ~ @directory
+  | "--skip-unavailable" : "Skip unavailable packages"
+  | "--srpm" : "Download the source rpm" | "--source" : "Alias for --srpm"
+  | "--debuginfo" : "Download the debuginfo package"
+  | "--debugsource" : "Download the debugsource package"
+  | "--url" : "Print the download URLs instead of downloading"
+  | "--urlprotocol" : "Protocols for --url" , url_protocol
+  | "--urlprotocol=" : "Protocols for --url" ~ url_protocol
+  | "--allmirrors" : "With --url, print the URLs of all mirrors" ;
+url_protocol = "http" | "https" | "ftp" | "file" | @any ;
+
+builddep_option =
+    "-D" : "Define an rpm macro for spec files" , @any
+  | "--define" : "Define an rpm macro for spec files" , @any
+  | "--with" : "Enable this conditional build option" , @any | "--with=" : "Enable this conditional build option" ~ @any
+  | "--without" : "Disable this conditional build option" , @any | "--without=" : "Disable this conditional build option" ~ @any
+  | "--spec" : "Treat the arguments as spec files"
+  | "--srpm" : "Treat the arguments as source rpm files"
+  | resolve_option | store_option
+  | "--from-repo" : "Select the items only from these repositories" , @any
+  | "--from-repo=" : "Select the items only from these repositories" ~ @any
+  | "--from-vendor" : "Select the items only from these vendors" , @any
+  | "--from-vendor=" : "Select the items only from these vendors" ~ @any ;
+
+changelog_option =
+    "--since" : "Show entries since this date, YYYY-MM-DD" , @any
+  | "--since=" : "Show entries since this date, YYYY-MM-DD" ~ @any
+  | "--count" : "Show this many entries per package" , @number
+  | "--count=" : "Show this many entries per package" ~ @number
+  | "--upgrades" : "Show the changelogs of available upgrades" ;
+
+needs_restarting_option =
+    "-s" : "List the systemd services that need restarting" | "--services" : "List the systemd services that need restarting"
+  | "-p" : "List the processes that need restarting" | "--processes" : "List the processes that need restarting"
+  | "-e" : "Exclude services that cannot be restarted" | "--exclude-services" : "Exclude services that cannot be restarted"
+  | "-r" : "Only report whether a reboot is needed" | "--reboothint" : "Only report whether a reboot is needed"
+  | json ;
+
+repoclosure_option =
+    "--check" : "Check only these repositories" , @any | "--check=" : "Check only these repositories" ~ @any
+  | "--arch" : "Check only these architectures" , @any | "--arch=" : "Check only these architectures" ~ @any
+  | "--newest" : "Check only the newest packages"
+  | json ;
+
+repomanage_option =
+    "-o" : "Print the older packages" | "--old" : "Print the older packages"
+  | "-n" : "Print the newest packages" | "--new" : "Print the newest packages"
+  | "-s" : "Space separated output" | "--space" : "Space separated output"
+  | "-k" : "Newest N packages to keep" , @number | "--keep" : "Newest N packages to keep" , @number
+  | "--keep=" : "Newest N packages to keep" ~ @number ;
+
+reposync_option =
+    "-a" : "Download only these architectures" , @any
+  | "--arch" : "Download only these architectures" , @any | "--arch=" : "Download only these architectures" ~ @any
+  | "--srpm" : "Download the source packages too" | "--source" : "Alias for --srpm"
+  | "-n" : "Download only the newest packages" | "--newest-only" : "Download only the newest packages"
+  | "--remote-time" : "Keep the remote timestamps of downloaded files"
+  | "--norepopath" : "Do not add the repository id to the path"
+  | "--delete" : "Delete local packages no longer in the repository"
+  | "-u" : "Print the URLs instead of downloading" | "--urls" : "Print the URLs instead of downloading"
+  | "-g" : "Remove packages that fail the signature check" | "--gpgcheck" : "Remove packages that fail the signature check"
+  | "--download-metadata" : "Download the repository metadata too"
+  | "--min-buildtime" : "Download only packages built after YYYY-MM-DD" , @any
+  | "--min-buildtime=" : "Download only packages built after YYYY-MM-DD" ~ @any
+  | "--destdir" : "Root directory for the repositories" , @directory
+  | "--destdir=" : "Root directory for the repositories" ~ @directory
+  | "-p" : "Root directory for the repositories" , @directory
+  | "--download-path" : "Root directory for the repositories" , @directory
+  | "--download-path=" : "Root directory for the repositories" ~ @directory
+  | "--safe-write-path" : "Directory where files may be written" , @directory
+  | "--safe-write-path=" : "Directory where files may be written" ~ @directory
+  | "--metadata-path" : "Root directory for the downloaded metadata" , @directory
+  | "--metadata-path=" : "Root directory for the downloaded metadata" ~ @directory ;
+
+cache_type =
+    "all" : "All cached data" | "packages" : "Cached packages" | "metadata" : "Repository metadata"
+  | "dbcache" : "Solver cache" | "expire-cache" : "Mark the metadata as expired" ;
+
+mark_command =
+    "user" : "Mark packages as user installed" , mark_rest
+  | "dependency" : "Mark packages as dependencies" , mark_rest
+  | "weak" : "Mark packages as weak dependencies" , mark_rest
+  | "group" : "Mark packages as installed by a group" , mark_rest ;
+mark_rest = { "--skip-unavailable" : "Skip unavailable packages" | store_option | global_option | @any } ;
+
+group_command =
+    "list" : "List comps groups or environments" , { group_list_option | global_option | @any }
+  | "info" : "Show details of comps groups or environments" , { group_list_option | global_option | @any }
+  | "install" : "Install groups or environments with their packages" , { group_change_option | global_option | @any }
+  | "remove" : "Remove groups or environments with their packages" , { group_change_option | global_option | @any }
+  | "upgrade" : "Upgrade groups or environments with their packages" , { group_change_option | global_option | @any } ;
+group_list_option =
+    "--available" : "Show only available groups" | "--installed" : "Show only installed groups"
+  | "--hidden" : "Show hidden groups too"
+  | "--contains-pkgs" : "Show only groups containing these packages" , @any
+  | "--contains-pkgs=" : "Show only groups containing these packages" ~ @any
+  | json ;
+group_change_option =
+    resolve_option | store_option
+  | "--with-optional" : "Include optional packages"
+  | "--no-packages" : "Change only the group, not its packages" ;
+
+module_command =
+    "list" : "List module streams" , { global_option | @any }
+  | "info" : "Show details of module streams" , { global_option | @any }
+  | "enable" : "Enable module streams" , { global_option | @any }
+  | "disable" : "Disable modules with all their streams" , { global_option | @any }
+  | "reset" : "Reset the module state" , { global_option | @any } ;
+
+history_command =
+    "list" : "List transactions" , { history_list_option | global_option | @any }
+  | "info" : "Show details of transactions" , { history_list_option | global_option | @any }
+  | "undo" : "Revert the actions of a transaction" , { replay_option | store_option | global_option | @any }
+  | "redo" : "Repeat the actions of a transaction" , { replay_option | store_option | global_option | @any }
+  | "rollback" : "Undo the transactions after this one" , { replay_option | store_option | global_option | @any }
+  | "store" : "Store a transaction to a file" , { global_option | @any } ;
+history_list_option =
+    "--reverse" : "Reverse the order of transactions"
+  | "--contains-pkgs" : "Show only transactions with these packages" , @any
+  | "--contains-pkgs=" : "Show only transactions with these packages" ~ @any
+  | json ;
+
+repo_command =
+    "list" : "List repositories" , { repo_option | global_option | @any }
+  | "info" : "Show details of repositories" , { repo_option | global_option | @any } ;
+repo_option =
+    "--all" : "Show all repositories" | "--enabled" : "Show enabled repositories"
+  | "--disabled" : "Show disabled repositories" | json ;
+
+advisory_command =
+    "list" : "List advisories" , { advisory_list_option | global_option | @any }
+  | "info" : "Show details of advisories" , { advisory_list_option | global_option | @any }
+  | "summary" : "Summarize advisories" , { advisory_list_option | global_option | @any } ;
+advisory_list_option =
+    advisory_option | json
+  | "--all" : "Show advisories of all packages"
+  | "--available" : "Show advisories of available upgrades"
+  | "--installed" : "Show advisories of installed packages"
+  | "--updates" : "Show advisories of newer packages"
+  | "--contains-pkgs" : "Show only advisories with these packages" , @any
+  | "--contains-pkgs=" : "Show only advisories with these packages" ~ @any
+  | "--with-bz" : "Show only advisories that reference a Bugzilla"
+  | "--with-cve" : "Show only advisories that reference a CVE" ;
+
+versionlock_command =
+    "add" : "Lock packages at their versions" , { global_option | @any }
+  | "exclude" : "Exclude package versions" , { global_option | @any }
+  | "clear" : "Remove every versionlock entry" , { global_option }
+  | "delete" : "Remove matching versionlock entries" , { global_option | @any }
+  | "list" : "List the versionlock entries" , { global_option } ;
+
+offline_command =
+    "download" : "Download everything the offline transaction needs" , { global_option | @any }
+  | "reboot" : "Reboot to run the stored offline transaction" , { global_option | @any }
+  | "status" : "Show the status of the offline transaction" , { global_option }
+  | "log" : "Show logs of past offline transactions" , { global_option | @any }
+  | "clean" : "Remove the stored offline transaction" , { global_option } ;
+
+config_manager_command =
+    "addrepo" : "Add repositories from a file or URL" , { global_option | @any }
+  | "setopt" : "Set configuration and repository options" , { global_option | @any }
+  | "unsetopt" : "Unset configuration and repository options" , { global_option | @any }
+  | "setvar" : "Set variables" , { global_option | @any }
+  | "unsetvar" : "Unset variables" , { global_option | @any }
+  | "enable" : "Enable repositories" , { global_option | @any }
+  | "disable" : "Disable repositories" , { global_option | @any } ;
+
+copr_command =
+    "list" : "List Copr repositories" , { copr_option | global_option | @any }
+  | "enable" : "Install the repository of a Copr project" , { copr_option | global_option | @any }
+  | "disable" : "Disable a Copr repository" , { copr_option | global_option | @any }
+  | "remove" : "Remove a Copr repository" , { copr_option | global_option | @any }
+  | "debug" : "Print system information for debugging" , { copr_option | global_option } ;
+copr_option =
+    "--hub" : "Copr hub hostname" , @any | "--hub=" : "Copr hub hostname" ~ @any ;

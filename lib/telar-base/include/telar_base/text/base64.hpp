@@ -75,7 +75,7 @@ inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std
   return written;
 }
 
-inline std::optional<std::size_t> encode(std::span<const std::uint8_t> bytes, std::span<char> destination) noexcept {
+inline constexpr std::optional<std::size_t> encode(std::span<const std::uint8_t> bytes, std::span<char> destination) noexcept {
   const auto complete_groups = bytes.size() / 3;
   const auto remaining = bytes.size() % 3;
   if (complete_groups > destination.size() / 4 || (remaining != 0 && destination.size() - complete_groups * 4 < 4)) {

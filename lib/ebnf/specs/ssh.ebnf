@@ -1,0 +1,56 @@
+(* ssh: OpenSSH 10 options, checked against `man ssh`. Options may follow the
+   destination too; everything after the remote command belongs to it. *)
+
+ssh = { option } , @ssh_host , { option } , [ @command , { @any } ] ;
+
+option =
+    "-4" : "Use IPv4 addresses only"
+  | "-6" : "Use IPv6 addresses only"
+  | "-A" : "Forward the authentication agent"
+  | "-a" : "Do not forward the authentication agent"
+  | "-B" : "Bind to the address of this interface" , @any
+  | "-b" : "Use this local address as the source" , @any
+  | "-C" : "Compress all data"
+  | "-c" : "Ciphers to use, comma separated" , @any
+  | "-D" : "Dynamic SOCKS forwarding: [bind_address:]port" , @any
+  | "-E" : "Append debug logs to this file" , @file
+  | "-e" : "Escape character, or none" , @any
+  | "-F" : "Use this configuration file" , @file
+  | "-f" : "Go to the background before running the command"
+  | "-G" : "Print the evaluated configuration and exit"
+  | "-g" : "Allow remote hosts to use local forwarded ports"
+  | "-I" : "PKCS#11 shared library" , @file
+  | "-i" : "Identity (private key) file" , @file
+  | "-J" : "Connect through these jump hosts" , @ssh_host
+  | "-K" : "Enable GSSAPI authentication and forwarding"
+  | "-k" : "Disable GSSAPI credential forwarding"
+  | "-L" : "Local forwarding: [bind_address:]port:host:hostport" , @any
+  | "-l" : "Log in as this user" , @any
+  | "-M" : "Master mode for connection sharing"
+  | "-m" : "MAC algorithms, comma separated" , @any
+  | "-N" : "Do not run a remote command"
+  | "-n" : "Read stdin from /dev/null"
+  | "-O" : "Control an active multiplexing master" , control_command
+  | "-o" : "Set a configuration option, Option=value" , @any
+  | "-P" : "Tag to select configuration" , @any
+  | "-p" : "Port on the remote host" , @number
+  | "-Q" : "Query supported algorithms and exit" , query_option
+  | "-q" : "Quiet mode"
+  | "-R" : "Remote forwarding: [bind_address:]port:host:hostport" , @any
+  | "-S" : "Control socket for connection sharing" , @file
+  | "-s" : "Request a subsystem on the remote host"
+  | "-T" : "Disable pseudo-terminal allocation"
+  | "-t" : "Force pseudo-terminal allocation"
+  | "-V" : "Print the version and exit"
+  | "-v" : "Verbose mode; repeat for more"
+  | "-W" : "Forward stdio to host:port" , @any
+  | "-w" : "Tunnel device forwarding: local_tun[:remote_tun]" , @any
+  | "-X" : "Enable X11 forwarding"
+  | "-x" : "Disable X11 forwarding"
+  | "-Y" : "Enable trusted X11 forwarding"
+  | "-y" : "Log to syslog" ;
+
+control_command = "check" | "conninfo" | "channels" | "forward" | "cancel" | "proxy" | "exit" | "stop" ;
+query_option =
+    "cipher" | "cipher-auth" | "help" | "mac" | "kex" | "key" | "key-ca-sign" | "key-cert" | "key-plain" | "key-sig"
+  | "protocol-version" | "sig" | @any : "A configuration keyword that takes an algorithm list" ;

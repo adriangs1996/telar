@@ -38,6 +38,7 @@ static_assert(true);
 #include <QList>
 #include <QPointer>
 #include <QQuickItem>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QtQml/qqmlregistration.h>
 #include <memory>
@@ -69,6 +70,18 @@ class TerminalItem : public QQuickItem {
   Q_PROPERTY(bool backgroundProvided READ backgroundProvided WRITE setBackgroundProvided NOTIFY backgroundProvidedChanged)
   Q_PROPERTY(QString hoveredLink READ hoveredLink NOTIFY linkHoverChanged)
   Q_PROPERTY(QVariantMap linkPreview READ linkPreview NOTIFY linkHoverChanged)
+  // The text an input method is composing; telar's command editor shows it at its caret.
+  Q_PROPERTY(QString preeditText READ preeditText NOTIFY preeditChanged)
+  // Where telar's command editor draws its caret, in this item's coordinates, for the input method.
+  Q_PROPERTY(QRectF promptCaret READ promptCaret WRITE setPromptCaret NOTIFY promptCaretChanged)
+  // The commands the shell ran whose prompts are on screen, each drawn as a separator over
+  // its last row; every command, for the rail beside the pane; and the row the command at
+  // the editor's prompt will have its separator on, or -1. Only while telar's editor stands
+  // in for the shell's.
+  Q_PROPERTY(QVariantList separators READ separators NOTIFY blocksChanged)
+  Q_PROPERTY(QVariantList rail READ rail NOTIFY blocksChanged)
+  Q_PROPERTY(int promptRow READ promptRow NOTIFY blocksChanged)
+  Q_PROPERTY(QSizeF cell READ cellSize NOTIFY blocksChanged)
 
 public:
   explicit TerminalItem(QQuickItem *parent = nullptr);
@@ -90,6 +103,22 @@ public:
   [[nodiscard]] QString hoveredLink() const;
   [[nodiscard]] QVariantMap linkPreview() const;
   Q_INVOKABLE void setLinkPreviewBounds(const QRectF &bounds);
+  [[nodiscard]] QString preeditText() const;
+  [[nodiscard]] QRectF promptCaret() const noexcept;
+  void setPromptCaret(const QRectF &caret);
+  [[nodiscard]] QVariantList separators() const;
+  [[nodiscard]] QVariantList rail() const;
+  [[nodiscard]] int promptRow() const noexcept;
+  // Selects the command at `index` among the rail's, oldest first, and shows it.
+  Q_INVOKABLE void selectBlock(int index);
+  // While a command the editor sent flies to its separator, the rows from its prompt down
+  // stay unpainted; released, the first screen of its output enters line by line. The
+  // command runs all along: only what is shown waits, and never longer than a moment.
+  Q_INVOKABLE void holdOutput();
+  Q_INVOKABLE void releaseOutput();
+  [[nodiscard]] bool outputHeld() const noexcept {
+    return held_from_.has_value();
+  }
   [[nodiscard]] std::optional<PresentedLink> prepareLinkPresentation() const;
 
 signals:
@@ -97,6 +126,9 @@ signals:
   void paneIdChanged();
   void backgroundProvidedChanged();
   void linkHoverChanged();
+  void preeditChanged();
+  void promptCaretChanged();
+  void blocksChanged();
 
 protected:
   void updatePolish() override;
@@ -132,6 +164,7 @@ private:
   void refreshFonts();
   void requestRowFonts(std::span<const CellValue> cells);
   void refresh();
+  void refreshBlocks();
   void presentFrame(const TerminalPreparation &preparation);
   void resizeTerminal();
   void synchronizeFocus();
@@ -180,6 +213,20 @@ private:
 
   Application *application_ = nullptr;
   std::uint64_t pane_id_ = 0;
+  std::vector<std::uint8_t> hidden_rows_;
+  QVariantList separators_;
+  QVariantList rail_;
+  int prompt_row_ = -1;
+  QSizeF shown_cell_;
+  // Output held from this row on, counted from the top of the scrollback, and then revealed
+  // from it: `reveal_rows_` rows, one every `reveal_step_ms_`.
+  std::optional<std::uint64_t> held_from_;
+  std::uint64_t reveal_from_ = 0;
+  std::uint64_t reveal_rows_ = 0;
+  qint64 reveal_step_ms_ = 0;
+  QElapsedTimer reveal_clock_;
+  std::vector<float> revealed_rows_;
+  QTimer hold_limit_;
   TerminalFont font_;
   FontGrid font_grid_;
   std::shared_ptr<const FontCollection> font_collection_;
@@ -217,6 +264,7 @@ private:
   WheelAccumulator wheel_;
   QPointF selection_position_;
   QString preedit_;
+  QRectF prompt_caret_;
   LinkHover link_hover_;
   std::shared_ptr<const LinkHit> shared_link_;
   LinkGesture link_gesture_;

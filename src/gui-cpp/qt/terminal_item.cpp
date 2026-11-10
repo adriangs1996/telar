@@ -37,6 +37,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "prompt_keys.hpp"
 #include <chrono>
 #include <cmath>
 #include <type_traits>
@@ -106,6 +107,8 @@ TerminalItem::TerminalItem(QQuickItem *parent)
     cursor_on_ = !cursor_on_;
     update();
   });
+  hold_limit_.setSingleShot(true);
+  connect(&hold_limit_, &QTimer::timeout, this, &TerminalItem::releaseOutput);
 
   connect(this, &QQuickItem::activeFocusChanged, this, &TerminalItem::synchronizeFocus);
   connect(this, &QQuickItem::windowChanged, this, [this](QQuickWindow *window) {
@@ -175,6 +178,12 @@ void TerminalItem::setApplication(QObject *application) {
     connect(application_, &Application::terminalChanged, this, [this](qulonglong pane_id) {
       if (pane_id == pane_id_) {
         refresh();
+      }
+    });
+    connect(application_, &Application::promptChanged, this, [this](qulonglong pane_id) {
+      if (pane_id == pane_id_) {
+        refreshBlocks();
+        update();
       }
     });
 
@@ -265,6 +274,8 @@ void TerminalItem::measure() {
     font_grid_ = resolved.grid;
     font_scale_ = scale;
     ++appearance_;
+    // The configuration may have changed the editor's mode, and the font the rows' height.
+    refreshBlocks();
     polish();
     update();
     refreshLinkHover();
@@ -301,6 +312,7 @@ void TerminalItem::resizeTerminal() {
 }
 
 void TerminalItem::refresh() {
+  refreshBlocks();
   cursor_on_ = true;
   synchronizeFocus();
   polish();
@@ -397,6 +409,190 @@ void TerminalItem::geometryChange(const QRectF &current, const QRectF &previous)
   refreshLinkHover();
 }
 
+QString TerminalItem::preeditText() const {
+  return preedit_;
+}
+
+QRectF TerminalItem::promptCaret() const noexcept {
+  return prompt_caret_;
+}
+
+void TerminalItem::setPromptCaret(const QRectF &caret) {
+  if (prompt_caret_ != caret) {
+    prompt_caret_ = caret;
+    if (hasActiveFocus()) {
+      QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
+    }
+    emit promptCaretChanged();
+  }
+}
+
+// The rows of the shell's prompt the cursor sits in, which telar's editor stands in for: from
+// the nearest row the shell marked as a prompt start down to the cursor. Only at the bottom of
+// the scrollback, and only while the editor has the pane.
+static std::pair<std::size_t, std::size_t> promptRows(const Screen<ApplicationAllocator> &screen, bool editing) {
+  if (!editing || screen.scroll().offset != copyGrid(screen).maximumOffset()) {
+    return {0, 0};
+  }
+  const auto &cursor = screen.cursor();
+  if (cursor.y >= screen.rows()) {
+    return {0, 0};
+  }
+  constexpr std::size_t search = 8;
+  for (std::size_t row = cursor.y + 1; row-- > 0 && cursor.y - row < search;) {
+    if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
+      return {row, static_cast<std::size_t>(cursor.y) - row + 1};
+    }
+  }
+  return {0, 0};
+}
+
+static QString blockState(CommandBlockState state) {
+  switch (state) {
+  case CommandBlockState::running:
+    return QStringLiteral("running");
+  case CommandBlockState::succeeded:
+    return QStringLiteral("succeeded");
+  case CommandBlockState::failed:
+    return QStringLiteral("failed");
+  case CommandBlockState::interrupted:
+    break;
+  }
+  return QStringLiteral("interrupted");
+}
+
+// The rows painted empty, and the separators and rail drawn for the commands the shell ran.
+// Read on the GUI thread whenever the pane or its editor changes, for the next paint.
+void TerminalItem::refreshBlocks() {
+  const auto *current = pane();
+  QVariantList separators;
+  QVariantList rail;
+  int prompt_row = -1;
+  hidden_rows_.clear();
+  if (current != nullptr && application_ != nullptr) {
+    const auto &screen = current->screen;
+    const auto rows = static_cast<std::size_t>(screen.rows());
+    hidden_rows_.assign(rows, 0);
+    const auto [first, count] = promptRows(screen, application_->promptSurface(pane_id_) == prompt::Surface::editor);
+    std::fill_n(hidden_rows_.begin() + static_cast<std::ptrdiff_t>(std::min(first, rows)), std::min(count, rows - std::min(first, rows)), std::uint8_t{1});
+    // The command's own row, where its separator will be.
+    prompt_row = count == 0 ? -1 : static_cast<int>(first + count - 1);
+    // Output held while the command flies to its separator.
+    if (held_from_ && !screen.modes().alternate_screen) {
+      const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
+      for (std::size_t row = 0; row < rows; ++row) {
+        if (top + row >= *held_from_) {
+          hidden_rows_[row] = 1;
+        }
+      }
+    }
+    const bool telar = application_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
+    const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
+    const auto selected = application_->selectedBlock(pane_id_);
+    for (std::size_t index = 0; telar && index < current->blocks.size(); ++index) {
+      const auto &block = current->blocks[index];
+      rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), selected == index}});
+      const auto begin = static_cast<std::uint64_t>(block.row);
+      const auto end = begin + block.rows;
+      if (end <= top || begin >= top + rows) {
+        continue;
+      }
+      for (auto row = std::max(begin, top); row < std::min(end, top + rows); ++row) {
+        hidden_rows_[row - top] = 1;
+      }
+      // On the command's last row: the prompt's other rows stay empty above it, as a margin.
+      if (end - 1 >= top && end - 1 < top + rows) {
+        separators.push_back(QVariantMap{
+            {QStringLiteral("row"), static_cast<int>(end - 1 - top)},
+            {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
+            {QStringLiteral("lines"), static_cast<int>(block.lines)},
+            {QStringLiteral("state"), blockState(block.state)},
+            {QStringLiteral("status"), block.status},
+            {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
+            {QStringLiteral("index"), static_cast<int>(index)},
+            {QStringLiteral("selected"), selected == index},
+        });
+      }
+    }
+  }
+  if (separators != separators_ || rail != rail_ || prompt_row != prompt_row_ || font_.cell != shown_cell_) {
+    separators_ = std::move(separators);
+    rail_ = std::move(rail);
+    prompt_row_ = prompt_row;
+    shown_cell_ = font_.cell;
+    emit blocksChanged();
+  }
+}
+
+QVariantList TerminalItem::separators() const {
+  return separators_;
+}
+
+QVariantList TerminalItem::rail() const {
+  return rail_;
+}
+
+int TerminalItem::promptRow() const noexcept {
+  return prompt_row_;
+}
+
+void TerminalItem::holdOutput() {
+  const auto *current = pane();
+  if (current == nullptr || application_ == nullptr || current->screen.modes().alternate_screen) {
+    return;
+  }
+  const auto &screen = current->screen;
+  const auto [first, count] = promptRows(screen, true);
+  const auto row = count == 0 ? static_cast<std::size_t>(screen.cursor().y) : first;
+  held_from_ = static_cast<std::uint64_t>(screen.scroll().offset) + row;
+  reveal_rows_ = 0;
+  // Never longer than a moment, whatever becomes of the flight.
+  hold_limit_.start(400);
+  refreshBlocks();
+  update();
+}
+
+void TerminalItem::releaseOutput() {
+  hold_limit_.stop();
+  const auto *current = pane();
+  const auto held = std::exchange(held_from_, std::nullopt);
+  if (!held || current == nullptr) {
+    refreshBlocks();
+    update();
+    return;
+  }
+  // What arrived while held enters line by line, at most a screen in at most 150 ms; what
+  // arrives later is drawn as it comes.
+  const auto &screen = current->screen;
+  const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
+  std::uint64_t rows = 0;
+  for (std::size_t row = 0; row < screen.rows() && !screen.modes().alternate_screen; ++row) {
+    if (top + row < *held) {
+      continue;
+    }
+    const auto cells = screen.row(row);
+    if (std::ranges::any_of(cells, [](const CellValue &cell) { return cell.utf8() != " " && !cell.utf8().empty(); })) {
+      rows = top + row - *held + 1;
+    }
+  }
+  if (rows != 0) {
+    constexpr qint64 cascade_ms = 150;
+    reveal_from_ = *held;
+    reveal_rows_ = rows;
+    reveal_step_ms_ = std::min<qint64>(12, cascade_ms / static_cast<qint64>(rows));
+    reveal_clock_.start();
+  }
+  refreshBlocks();
+  update();
+}
+
+void TerminalItem::selectBlock(int index) {
+  const auto *current = pane();
+  if (current != nullptr && application_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
+    application_->selectBlock(pane_id_, static_cast<std::size_t>(index));
+  }
+}
+
 bool TerminalItem::backgroundProvided() const noexcept {
   return background_provided_;
 }
@@ -433,12 +629,36 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
     }
   }
 
+  // A command's first lines of output enter one after another, each rising into place.
+  revealed_rows_.clear();
+  if (reveal_rows_ != 0) {
+    constexpr qint64 entrance_ms = 140;
+    const auto elapsed = reveal_clock_.elapsed();
+    const auto top = static_cast<std::uint64_t>(current->screen.scroll().offset);
+    revealed_rows_.assign(current->screen.rows(), 1.0F);
+    bool entering = false;
+    for (std::size_t row = 0; row < revealed_rows_.size(); ++row) {
+      const auto line = top + row;
+      if (line >= reveal_from_ && line < reveal_from_ + reveal_rows_) {
+        const auto progress = std::clamp(static_cast<float>(elapsed - static_cast<qint64>(line - reveal_from_) * reveal_step_ms_) / entrance_ms, 0.0F, 1.0F);
+        revealed_rows_[row] = progress;
+        entering |= progress < 1.0F;
+      }
+    }
+    if (entering) {
+      QMetaObject::invokeMethod(this, &QQuickItem::update, Qt::QueuedConnection);
+    } else {
+      reveal_rows_ = 0;
+      revealed_rows_.clear();
+    }
+  }
+  static const QString no_preedit;
   const TerminalPresentation frame{
       .screen = current->screen,
       .graphics = current->graphics,
       .configuration = application_->configuration(),
       .font = font_,
-      .preedit = preedit_,
+      .preedit = application_->editsPrompt(pane_id_) ? no_preedit : preedit_,
       .fonts = font_collection_,
       .grid = font_grid_,
       .selection = selection,
@@ -453,6 +673,8 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
       .hovered_link = link_hover_.current() ? &link_hover_.current()->match : nullptr,
       .owner = this,
       .background_provided = background_provided_,
+      .hidden_rows = hidden_rows_,
+      .revealed_rows = revealed_rows_,
   };
   auto *node = TerminalScene::synchronizeNode(previous, *window(), frame);
   prepared_frame_ = {
@@ -485,6 +707,15 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     application_->copySelection(pane_id_);
   } else if (clipboard_shortcut && event->key() == Qt::Key_V) {
     application_->paste(pane_id_, QGuiApplication::clipboard()->text());
+  } else if (preedit_.isEmpty() && application_->editsPrompt(pane_id_)) {
+    // telar's command editor takes the key; the terminal gets what it hands back, and at the
+    // prompt nothing the editor cannot use reaches the shell's own line editor.
+    QByteArray text;
+    const auto key = promptKey(*event, text);
+    const bool taken = key && application_->promptKey(pane_id_, *key);
+    if (!taken && (key || application_->promptSurface(pane_id_) != prompt::Surface::editor)) {
+      static_cast<void>(sendKeyPress(*event, current->screen.modes()));
+    }
   } else if (preedit_.isEmpty()) {
     static_cast<void>(sendKeyPress(*event, current->screen.modes()));
   }
@@ -563,10 +794,14 @@ void TerminalItem::inputMethodEvent(QInputMethodEvent *event) {
       application_->interruptBindings();
     }
 
-    sendCommittedText(event->commitString());
+    if (application_ == nullptr || !application_->promptText(pane_id_, event->commitString())) {
+      sendCommittedText(event->commitString());
+    }
   }
 
-  preedit_ = event->preeditString();
+  if (std::exchange(preedit_, event->preeditString()) != preedit_) {
+    emit preeditChanged();
+  }
   polish();
   update();
   event->accept();
@@ -600,6 +835,9 @@ QVariant TerminalItem::inputMethodQuery(Qt::InputMethodQuery query) const {
   case Qt::ImEnabled:
     return current->attached;
   case Qt::ImCursorRectangle:
+    if (application_ != nullptr && application_->editsPrompt(pane_id_) && prompt_caret_.isValid()) {
+      return prompt_caret_;
+    }
     return QRectF{cursor.x * font_.cell.width(), cursor.y * font_.cell.height(), font_.cell.width(), font_.cell.height()};
   case Qt::ImFont:
     return font_.faces[0];

@@ -306,7 +306,7 @@ retains `listing_only`. The runtime preserves that gesture type: an intervening
 mode reset cancels a listing without pasting text; an ordinary paste remains
 text even if mode5522 becomes enabled. Empty ordinary pastes emit no bracket
 delimiters. These behaviors match Surface's separate list/paste completions.
-The C++ client and runtime use schema `cqp00001`; earlier layouts are rejected.
+The C++ client and runtime use schema `cqp00002`; earlier layouts are rejected.
 This does not change the retired Zig runtime or make it wire-compatible.
 
 The bounded ACK outbox now retains non-query graphics responses without replay,

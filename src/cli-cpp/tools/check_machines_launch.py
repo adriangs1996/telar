@@ -30,7 +30,7 @@ def normalize(value, root, binary):
         value = value.replace(str(binary), '@EXECUTABLE@').replace(str(root), '@ROOT@')
         value = re.sub(r'm-[0-9a-f]{12}', 'm-@ID@', value)
         value = value.replace(socket.gethostname(), '@HOSTNAME@')
-        value = value.replace('886b480d', '@SCHEMA@').replace('cqp00001', '@SCHEMA@')
+        value = value.replace('886b480d', '@SCHEMA@').replace('cqp00002', '@SCHEMA@')
         return value
     return value
 
@@ -132,7 +132,7 @@ def outcomes(binary):
         env['PATH']=str(bindir)+':/usr/bin:/bin'
         # The isolated profile is disabled: dispatch still explicitly selects it.
         run('ssh-forward', ['--machine','box','cli','status','--dir',"space ' quote $(touch nope);\nline"])
-        schema = 'cqp00001' if b'cqp00001' in binary.read_bytes() else '886b480d'
+        schema = 'cqp00002' if b'cqp00002' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),
             ('incompatible', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" deadbeef\n'),

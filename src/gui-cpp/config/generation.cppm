@@ -661,6 +661,7 @@ private:
     }
 
     history(table.field("history"), configuration.history);
+    prompt(table.field("prompt"), configuration.prompt);
     sound(table.field("sound"), configuration.sound);
     const auto notifications = table.field("notifications");
     if (notifications.present()) {
@@ -682,6 +683,42 @@ private:
     policy.enabled = table.field("enabled").boolean(policy.enabled);
     policy.ready = table.field("ready").boolean(policy.ready);
     policy.needs_input = table.field("needs_input").boolean(policy.needs_input);
+  }
+
+  inline static void prompt(const Value &table, PromptConfiguration &prompt) {
+    if (!table.present()) {
+      return;
+    }
+
+    const auto choose = [&]<typename Choice>(std::string_view name, std::initializer_list<std::string_view> names, Choice &destination) {
+      const auto value = table.field(name.data());
+      runtime::config::optionalChoice(value, names);
+      if (value.present()) {
+        destination = static_cast<Choice>(std::ranges::find(names, value.string()) - names.begin());
+      }
+    };
+    table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
+    const auto bindings = table.field("bindings");
+    if (bindings.present()) {
+      prompt.bindings.clear();
+      for (std::size_t index = 0; index < bindings.listLength() && index < 256; ++index) {
+        const auto entry = bindings.element(static_cast<lua_Integer>(index) + 1);
+        const auto chord = runtime::config::KeyChordValidator::parse(entry.field("keys"));
+        const auto action = std::ranges::find(runtime::config::prompt_action_names, entry.field("action").string());
+        if (action == runtime::config::prompt_action_names.end()) {
+          entry.field("action").fail("names an unknown prompt action");
+        }
+        const auto mode = entry.field("mode");
+        runtime::config::optionalChoice(mode, {"insert", "normal"});
+        prompt.bindings.push_back({.key = static_cast<std::uint8_t>(chord.key), .character = chord.character, .modifiers = chord.modifiers, .action = static_cast<std::uint8_t>(action - runtime::config::prompt_action_names.begin()), .normal = mode.present() && mode.string() == "normal"});
+      }
+    }
+    choose("mode", {"classic", "telar"}, prompt.mode);
+    choose("skin", {"halo", "glass", "ink"}, prompt.skin);
+    choose("motion", {"spring", "ease", "none"}, prompt.motion);
+    choose("keymap", {"emacs", "vim"}, prompt.keymap);
+    prompt.ghost = table.field("ghost").boolean(prompt.ghost);
+    prompt.max_lines = static_cast<std::uint8_t>(table.field("max_lines").boundedInteger(prompt.max_lines, 1, PromptConfiguration::maximum_max_lines));
   }
 
   inline static void history(const Value &table, HistoryConfiguration &history) {

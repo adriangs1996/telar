@@ -73,6 +73,20 @@ struct TerminalPresentation {
   const LinkMatch *hovered_link = nullptr;
   QQuickItem *owner = nullptr;
   bool background_provided = false;
+  // Rows painted empty, one flag per row: the shell's own prompt while telar's editor stands
+  // in for it, and the prompts of the commands it ran, which their separators stand in for.
+  std::span<const std::uint8_t> hidden_rows{};
+  // How far each row has come into view, 0 to 1, while a command's first lines of output
+  // enter one after another; empty when every row is in place.
+  std::span<const float> revealed_rows{};
+
+  [[nodiscard]] bool hidden(std::size_t row) const noexcept {
+    return row < hidden_rows.size() && hidden_rows[row] != 0;
+  }
+
+  [[nodiscard]] float revealed(std::size_t row) const noexcept {
+    return row < revealed_rows.size() ? revealed_rows[row] : 1.0F;
+  }
 };
 
 class TerminalScene final : public QSGTransformNode {
@@ -90,13 +104,17 @@ public:
 
 private:
   struct Row {
-    QSGNode *text = nullptr;
-    QSGNode *background = nullptr;
+    QSGTransformNode *text = nullptr;
+    QSGTransformNode *background = nullptr;
+    QSGOpacityNode *text_opacity = nullptr;
+    QSGOpacityNode *background_opacity = nullptr;
+    float revealed = 1.0F;
     QSGNode *text_content = nullptr;
     std::uint64_t revision = 0;
     std::uint64_t appearance = 0;
     CellSelection selection{};
     std::optional<std::size_t> cursor = std::nullopt;
+    bool hidden = false;
   };
 
   void synchronizeGrid(CellRectangle visible);

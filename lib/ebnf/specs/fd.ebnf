@@ -1,0 +1,116 @@
+(* fd: fd 10.5.0, checked against `fd --help` on macOS 26 and Arch Linux
+   (identical). The first operand is the pattern, the rest are paths to search.
+   -x and -X take the rest of the line as the command, up to a `;`. *)
+
+fd = { option | @file } , [ "--" , { @any } ] ;
+
+option =
+    "-H" : "Search hidden files and directories" | "--hidden" : "Search hidden files and directories"
+  | "-I" : "Do not respect .gitignore and .fdignore files" | "--no-ignore" : "Do not respect .gitignore and .fdignore files"
+  | "--no-ignore-vcs" : "Do not respect .gitignore files"
+  | "--no-require-git" : "Respect .gitignore outside of git repositories"
+  | "--no-ignore-parent" : "Do not respect ignore files in parent directories"
+  | "-u" : "Search ignored and hidden files" | "--unrestricted" : "Search ignored and hidden files"
+  | "-s" : "Search case sensitively" | "--case-sensitive" : "Search case sensitively"
+  | "-i" : "Search case insensitively" | "--ignore-case" : "Search case insensitively"
+  | "-g" : "The pattern is a glob" | "--glob" : "The pattern is a glob"
+  | "--regex" : "The pattern is a regular expression (default)"
+  | "-F" : "The pattern is a literal string" | "--fixed-strings" : "The pattern is a literal string"
+  | "--exact" : "The pattern must match the whole name"
+  | "--and" : "Also require this pattern to match" , @any
+  | "--and=" : "Also require this pattern to match" ~ @any
+  | "-a" : "Show absolute paths" | "--absolute-path" : "Show absolute paths"
+  | "-l" : "Use a long listing format" | "--list-details" : "Use a long listing format"
+  | "-L" : "Follow symbolic links" | "--follow" : "Follow symbolic links"
+  | "-p" : "Match the pattern against the full path" | "--full-path" : "Match the pattern against the full path"
+  | "-0" : "Separate results with NUL" | "--print0" : "Separate results with NUL"
+  | "-d" : "Descend at most this many levels" , @number
+  | "--max-depth" : "Descend at most this many levels" , @number
+  | "--max-depth=" : "Descend at most this many levels" ~ @number
+  | "--min-depth" : "Only show results at least this deep" , @number
+  | "--min-depth=" : "Only show results at least this deep" ~ @number
+  | "--exact-depth" : "Only show results at exactly this depth" , @number
+  | "--exact-depth=" : "Only show results at exactly this depth" ~ @number
+  | "-E" : "Exclude entries matching this glob" , @any
+  | "--exclude" : "Exclude entries matching this glob" , @any
+  | "--exclude=" : "Exclude entries matching this glob" ~ @any
+  | "--prune" : "Do not descend into matching directories"
+  | "-t" : "Filter by type" , file_type
+  | "--type" : "Filter by type" , file_type | "--type=" : "Filter by type" ~ file_type
+  | "-e" : "Filter by file extension" , @any
+  | "--extension" : "Filter by file extension" , @any
+  | "--extension=" : "Filter by file extension" ~ @any
+  | "-S" : "Filter by size, as +10k, -1mi or 500b" , @any
+  | "--size" : "Filter by size, as +10k, -1mi or 500b" , @any
+  | "--size=" : "Filter by size, as +10k, -1mi or 500b" ~ @any
+  | "--changed-within" : "Modified after this date or within this duration" , @any
+  | "--changed-within=" : "Modified after this date or within this duration" ~ @any
+  | "--change-newer-than" : "Modified after this date or within this duration" , @any
+  | "--change-newer-than=" : "Modified after this date or within this duration" ~ @any
+  | "--newer" : "Modified after this date or within this duration" , @any
+  | "--newer=" : "Modified after this date or within this duration" ~ @any
+  | "--changed-after" : "Modified after this date or within this duration" , @any
+  | "--changed-after=" : "Modified after this date or within this duration" ~ @any
+  | "--changed-before" : "Modified before this date or longer ago than this" , @any
+  | "--changed-before=" : "Modified before this date or longer ago than this" ~ @any
+  | "--change-older-than" : "Modified before this date or longer ago than this" , @any
+  | "--change-older-than=" : "Modified before this date or longer ago than this" ~ @any
+  | "--older" : "Modified before this date or longer ago than this" , @any
+  | "--older=" : "Modified before this date or longer ago than this" ~ @any
+  | "-o" : "Filter by owner, as user, :group or user:group" , @any
+  | "--owner" : "Filter by owner, as user, :group or user:group" , @any
+  | "--owner=" : "Filter by owner, as user, :group or user:group" ~ @any
+  | "--format" : "Print results with this template, as {/}" , @any
+  | "--format=" : "Print results with this template, as {/}" ~ @any
+  | "-x" : "Run a command for each result" , exec_command
+  | "--exec" : "Run a command for each result" , exec_command
+  | "-X" : "Run a command once with all results" , exec_command
+  | "--exec-batch" : "Run a command once with all results" , exec_command
+  | "--batch-size" : "Pass at most this many results to each -X command" , @number
+  | "--batch-size=" : "Pass at most this many results to each -X command" ~ @number
+  | "--ignore-file" : "Add this ignore file" , @file
+  | "--ignore-file=" : "Add this ignore file" ~ @file
+  | "-c" : "When to use colors" , when
+  | "--color" : "When to use colors" , when | "--color=" : "When to use colors" ~ when
+  | "--hyperlink" : "Add hyperlinks to output paths"
+  | "--hyperlink=" : "When to add hyperlinks to output paths" ~ when
+  | "--ignore-contain" : "Ignore directories containing an entry of this name" , @any
+  | "--ignore-contain=" : "Ignore directories containing an entry of this name" ~ @any
+  | "-j" : "Number of threads to use" , @number
+  | "--threads" : "Number of threads to use" , @number
+  | "--threads=" : "Number of threads to use" ~ @number
+  | "--max-results" : "Stop after this many results" , @number
+  | "--max-results=" : "Stop after this many results" ~ @number
+  | "-1" : "Stop after the first result"
+  | "-q" : "Print nothing; exit status reports a match" | "--quiet" : "Print nothing; exit status reports a match"
+  | "--show-errors" : "Show file system errors"
+  | "-C" : "Change to this directory first" , @directory
+  | "--base-directory" : "Change to this directory first" , @directory
+  | "--base-directory=" : "Change to this directory first" ~ @directory
+  | "--path-separator" : "Separator to print between path components" , @any
+  | "--path-separator=" : "Separator to print between path components" ~ @any
+  | "--search-path" : "Search this path; repeat for more" , @directory
+  | "--search-path=" : "Search this path; repeat for more" ~ @directory
+  | "--strip-cwd-prefix" : "Strip the ./ prefix from results"
+  | "--strip-cwd-prefix=" : "When to strip the ./ prefix from results" ~ when
+  | "--one-file-system" : "Do not cross file systems"
+  | "-h" : "Print short help and exit" | "--help" : "Print the help and exit"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit" ;
+
+exec_command = @command , { placeholder | @any } , [ ";" : "End of the command" ] ;
+placeholder =
+    "{}" : "Path of the result" | "{/}" : "Base name" | "{//}" : "Parent directory"
+  | "{.}" : "Path without the extension" | "{/.}" : "Base name without the extension" ;
+
+when = "auto" | "always" | "never" ;
+
+file_type =
+    "f" : "Regular files" | "file" : "Regular files"
+  | "d" : "Directories" | "dir" : "Directories" | "directory" : "Directories"
+  | "l" : "Symbolic links" | "symlink" : "Symbolic links"
+  | "s" : "Sockets" | "socket" : "Sockets"
+  | "p" : "Named pipes (FIFO)" | "pipe" : "Named pipes (FIFO)"
+  | "b" : "Block devices" | "block-device" : "Block devices"
+  | "c" : "Character devices" | "char-device" : "Character devices"
+  | "x" : "Executables" | "executable" : "Executables"
+  | "e" : "Empty files or directories" | "empty" : "Empty files or directories" ;

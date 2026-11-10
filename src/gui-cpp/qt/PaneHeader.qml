@@ -68,7 +68,7 @@ PaneHeaderLayout {
         y: root.nameBounds.y
         width: Math.max(0, root.nameBounds.x + root.nameBounds.width - x)
         height: root.nameBounds.height
-        text: root.record.context ?? ""
+        text: (root.record.remote ? root.record.remote + "   " : "") + (root.record.context ?? "") + (root.record.git ? "   " + root.record.git : "")
         pixelSize: root.typography.small
         color: root.colors.subtext0
         visible: !root.elements.pane_context && width >= 4 * root.typography.body && text.length > 0

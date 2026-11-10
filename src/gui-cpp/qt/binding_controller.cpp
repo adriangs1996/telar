@@ -421,6 +421,7 @@ void Application::applyExpression(const InputExpression &expression) {
 
   if (expression.kind == InputExpression::Kind::paste) {
     session().paste(pane->id, expression.paste.view());
+    publishPromptWrite();
   } else {
     for (const auto key : std::span{expression.keys}.first(expression.length)) {
       key_bindings_.synthetic(key, pane->id, pane->screen.modes());

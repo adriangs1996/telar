@@ -264,7 +264,7 @@ tools/cpp test base
 python3 tools/check-cpp-package.py --build lib/telar-base/out
 ```
 
-También acepta `client`, `platform`, `lua`, `plugins`, `config`, `tls`, `websock`,
+También acepta `client`, `platform`, `lua`, `plugins`, `config`, `tls`, `shell`, `websock`,
 `auth`, `ebnf` y `tbc`. Las bibliotecas sin tests standalone se verifican compilando
 su interfaz y mediante consumidores de runtime/CLI/GUI. Para EBNF/TBC/auth/WebSocket,
 los presets equivalentes seleccionan el mismo toolchain: ejecutar primero el

@@ -1,0 +1,129 @@
+(* dig: checked against `dig -h` and `man dig` of BIND 9.10.6 (macOS) and the
+   dig manual of BIND 9.20 (bind9.readthedocs.io, v9.20.0; Arch Linux ships
+   9.20 but it is not installed on the Linux machine checked). Options of both
+   versions are included. Words are servers (@server), names, types, classes,
+   -options and +query options, in any order. Names are offered from the SSH
+   configuration's hosts. Unique abbreviations of +options are not
+   modelled, and unknown +options cannot be rejected: any word that
+   does not start with - may be a name. *)
+
+dig = { option | query_option | "@" : "Query this name server" ~ @ssh_host | type | class | @ssh_host : "Name to look up" } ;
+
+option =
+    "-4" : "Use IPv4 only"
+  | "-6" : "Use IPv6 only"
+  | "-b" : "Source address of the query, as address[#port]" , @any
+  | "-c" : "Query class" , class
+  | "-f" : "Batch mode: read lookups from this file" , @file
+  | "-h" : "Print the help and exit"
+  | "-i" : "Use IP6.INT for IPv6 reverse lookups (9.10)"
+  | "-k" : "Sign queries with the TSIG key in this file" , @file
+  | "-m" : "Enable memory usage debugging"
+  | "-p" : "Send queries to this port" , @number
+  | "-q" : "Name to query" , @any
+  | "-r" : "Do not read ~/.digrc (9.20)"
+  | "-t" : "Query type" , ( type | @any : "A type as ixfr=N or TYPEnn" )
+  | "-u" : "Print query times in microseconds"
+  | "-v" : "Print the version and exit"
+  | "-x" : "Reverse lookup of this address" , @any
+  | "-y" : "Sign queries with this TSIG key, as [hmac:]name:key" , @any ;
+
+query_option =
+    "+aaflag" : "Set the AA flag in the query, as +aaonly" | "+noaaflag" : "Turn off +aaflag"
+  | "+aaonly" : "Set the AA flag in the query" | "+noaaonly" : "Turn off +aaonly"
+  | "+additional" : "Show the additional section" | "+noadditional" : "Turn off +additional"
+  | "+adflag" : "Set the AD flag in the query (default on)" | "+noadflag" : "Turn off +adflag"
+  | "+all" : "Set or clear all display flags" | "+noall" : "Turn off +all"
+  | "+answer" : "Show the answer section" | "+noanswer" : "Turn off +answer"
+  | "+authority" : "Show the authority section" | "+noauthority" : "Turn off +authority"
+  | "+badcookie" : "Retry with the new server cookie on BADCOOKIE" | "+nobadcookie" : "Turn off +badcookie"
+  | "+besteffort" : "Try to print malformed messages" | "+nobesteffort" : "Turn off +besteffort"
+  | "+bufsize" : "EDNS0 UDP buffer size in bytes" | "+bufsize=" : "EDNS0 UDP buffer size in bytes" ~ @number
+  | "+cd" : "Set the CD (checking disabled) flag"
+  | "+cdflag" : "Set the CD (checking disabled) flag" | "+nocdflag" : "Turn off +cdflag"
+  | "+class" : "Show the class of records" | "+noclass" : "Turn off +class"
+  | "+cmd" : "Print the initial comment with the version and options" | "+nocmd" : "Turn off +cmd"
+  | "+comments" : "Print comment lines" | "+nocomments" : "Turn off +comments"
+  | "+cookie" : "Send an EDNS COOKIE option, with this value if given" | "+cookie=" : "Send an EDNS COOKIE option, with this value if given" ~ @any | "+nocookie" : "Turn off +cookie"
+  | "+crypto" : "Show cryptographic fields of DNSSEC records" | "+nocrypto" : "Turn off +crypto"
+  | "+defname" : "Use the search list (deprecated, as +search)" | "+nodefname" : "Turn off +defname"
+  | "+dns64prefix" : "Print the DNS64 prefixes of IPV4ONLY.ARPA" | "+nodns64prefix" : "Turn off +dns64prefix"
+  | "+dnssec" : "Request DNSSEC records (set the DO bit)" | "+nodnssec" : "Turn off +dnssec"
+  | "+do" : "Request DNSSEC records (set the DO bit)" | "+nodo" : "Turn off +do"
+  | "+domain=" : "Use only this domain as the search list" ~ @any
+  | "+edns" : "EDNS version to query with, 0 to 255" | "+edns=" : "EDNS version to query with, 0 to 255" ~ @number | "+noedns" : "Turn off +edns"
+  | "+ednsflags" : "Set the must-be-zero EDNS flag bits" | "+ednsflags=" : "Set the must-be-zero EDNS flag bits" ~ @any | "+noednsflags" : "Turn off +ednsflags"
+  | "+ednsnegotiation" : "EDNS version negotiation" | "+noednsnegotiation" : "Turn off +ednsnegotiation"
+  | "+ednsopt" : "Send this EDNS option, as code[:value]" | "+ednsopt=" : "Send this EDNS option, as code[:value]" ~ @any | "+noednsopt" : "Turn off +ednsopt"
+  | "+expire" : "Send an EDNS Expire option" | "+noexpire" : "Turn off +expire"
+  | "+fail" : "Do not try the next server on SERVFAIL" | "+nofail" : "Turn off +fail"
+  | "+fuzztime" : "Signing time for signed messages, in epoch seconds" | "+fuzztime=" : "Signing time for signed messages, in epoch seconds" ~ @number | "+nofuzztime" : "Turn off +fuzztime"
+  | "+header-only" : "Send a query with a header only" | "+noheader-only" : "Turn off +header-only"
+  | "+https" : "Use DNS over HTTPS (POST), at this endpoint if given" | "+https=" : "Use DNS over HTTPS (POST), at this endpoint if given" ~ @any | "+nohttps" : "Turn off +https"
+  | "+https-get" : "Use DNS over HTTPS with GET" | "+https-get=" : "Use DNS over HTTPS with GET" ~ @any | "+nohttps-get" : "Turn off +https-get"
+  | "+https-post" : "Use DNS over HTTPS with POST" | "+https-post=" : "Use DNS over HTTPS with POST" ~ @any | "+nohttps-post" : "Turn off +https-post"
+  | "+http-plain" : "Use DNS over plain HTTP (POST)" | "+http-plain=" : "Use DNS over plain HTTP (POST)" ~ @any | "+nohttp-plain" : "Turn off +http-plain"
+  | "+http-plain-get" : "Use DNS over plain HTTP with GET" | "+http-plain-get=" : "Use DNS over plain HTTP with GET" ~ @any | "+nohttp-plain-get" : "Turn off +http-plain-get"
+  | "+http-plain-post" : "Use DNS over plain HTTP with POST" | "+http-plain-post=" : "Use DNS over plain HTTP with POST" ~ @any | "+nohttp-plain-post" : "Turn off +http-plain-post"
+  | "+identify" : "With +short, show the server that answered" | "+noidentify" : "Turn off +identify"
+  | "+idn" : "Process internationalized domain names" | "+noidn" : "Turn off +idn"
+  | "+idnout" : "Convert IDN responses (BIND 9.10)" | "+noidnout" : "Turn off +idnout"
+  | "+ignore" : "Do not retry over TCP on truncated replies" | "+noignore" : "Turn off +ignore"
+  | "+keepalive" : "Send an EDNS Keepalive option" | "+nokeepalive" : "Turn off +keepalive"
+  | "+keepopen" : "Keep the TCP socket open between queries" | "+nokeepopen" : "Turn off +keepopen"
+  | "+multiline" : "Print records in an expanded multi-line format" | "+nomultiline" : "Turn off +multiline"
+  | "+ndots=" : "Dots a name needs to be absolute" ~ @number
+  | "+nsid" : "Request the name server id" | "+nonsid" : "Turn off +nsid"
+  | "+nssearch" : "Show the SOA of every authoritative server" | "+nonssearch" : "Turn off +nssearch"
+  | "+onesoa" : "Print only one SOA record for AXFR" | "+noonesoa" : "Turn off +onesoa"
+  | "+opcode=" : "DNS opcode of the query" ~ @any | "+noopcode" : "Turn off +opcode"
+  | "+padding=" : "Pad the query to blocks of this many bytes" ~ @number
+  | "+proxy" : "Add PROXYv2 headers, as src[#port]-dst[#port]" | "+proxy=" : "Add PROXYv2 headers, as src[#port]-dst[#port]" ~ @any | "+noproxy" : "Turn off +proxy"
+  | "+proxy-plain" : "Add PROXYv2 headers before any encryption" | "+proxy-plain=" : "Add PROXYv2 headers before any encryption" ~ @any | "+noproxy-plain" : "Turn off +proxy-plain"
+  | "+qid=" : "Query id to use" ~ @number
+  | "+qr" : "Print the query as it is sent" | "+noqr" : "Turn off +qr"
+  | "+question" : "Print the question section" | "+noquestion" : "Turn off +question"
+  | "+raflag" : "Set the RA flag in the query" | "+noraflag" : "Turn off +raflag"
+  | "+rdflag" : "Set the RD flag, as +recurse" | "+nordflag" : "Turn off +rdflag"
+  | "+recurse" : "Request recursion (the RD flag, default on)" | "+norecurse" : "Turn off +recurse"
+  | "+retry=" : "UDP and TCP retries after the first query" ~ @number
+  | "+rrcomments" : "Print per-record comments" | "+norrcomments" : "Turn off +rrcomments"
+  | "+search" : "Use the search list of resolv.conf" | "+nosearch" : "Turn off +search"
+  | "+short" : "Print only a terse answer" | "+noshort" : "Turn off +short"
+  | "+showbadcookie" : "Show BADCOOKIE messages before retrying" | "+noshowbadcookie" : "Turn off +showbadcookie"
+  | "+showsearch" : "Search and show the intermediate results" | "+noshowsearch" : "Turn off +showsearch"
+  | "+sigchase" : "Chase DNSSEC signature chains (BIND 9.10)" | "+nosigchase" : "Turn off +sigchase"
+  | "+sit" : "Send a Server Identity Token (BIND 9.10, deprecated)" | "+sit=" : "Send a Server Identity Token (BIND 9.10, deprecated)" ~ @any | "+nosit" : "Turn off +sit"
+  | "+split=" : "Split hex and base64 fields into chunks of this size" ~ @number | "+nosplit" : "Turn off +split"
+  | "+stats" : "Print query statistics" | "+nostats" : "Turn off +stats"
+  | "+subnet=" : "Send an EDNS client subnet option, as addr[/len]" ~ @any | "+nosubnet" : "Turn off +subnet"
+  | "+tcflag" : "Set the TC flag in the query" | "+notcflag" : "Turn off +tcflag"
+  | "+tcp" : "Query over TCP" | "+notcp" : "Turn off +tcp"
+  | "+time=" : "Query timeout in seconds (BIND 9.10)" ~ @number
+  | "+timeout=" : "Query timeout in seconds" ~ @number
+  | "+tls" : "Use DNS over TLS" | "+notls" : "Turn off +tls"
+  | "+tls-ca" : "Verify the server certificate, against this CA file if given" | "+tls-ca=" : "Verify the server certificate, against this CA file if given" ~ @file | "+notls-ca" : "Turn off +tls-ca"
+  | "+tls-certfile=" : "Client certificate file for TLS" ~ @file | "+notls-certfile" : "Turn off +tls-certfile"
+  | "+tls-keyfile=" : "Client key file for TLS" ~ @file | "+notls-keyfile" : "Turn off +tls-keyfile"
+  | "+tls-hostname=" : "Host name to verify the TLS certificate against" ~ @any | "+notls-hostname" : "Turn off +tls-hostname"
+  | "+topdown" : "Top-down validation with +sigchase (BIND 9.10)" | "+notopdown" : "Turn off +topdown"
+  | "+trace" : "Trace the delegation path from the root servers" | "+notrace" : "Turn off +trace"
+  | "+tries=" : "UDP and TCP attempts" ~ @number
+  | "+trusted-key=" : "Trusted keys file for +sigchase (BIND 9.10)" ~ @file
+  | "+ttlid" : "Show the TTL of records" | "+nottlid" : "Turn off +ttlid"
+  | "+ttlunits" : "Show TTLs with s, m, h, d and w units" | "+nottlunits" : "Turn off +ttlunits"
+  | "+unknownformat" : "Print all RDATA in the RFC 3597 unknown format" | "+nounknownformat" : "Turn off +unknownformat"
+  | "+vc" : "Query over TCP, as +tcp" | "+novc" : "Turn off +vc"
+  | "+yaml" : "Print responses as YAML" | "+noyaml" : "Turn off +yaml"
+  | "+zflag" : "Set the last unassigned DNS header flag" | "+nozflag" : "Turn off +zflag" ;
+
+type =
+    "A" : "IPv4 address" | "AAAA" : "IPv6 address" | "ANY" : "Every record type" | "AXFR" : "Zone transfer"
+  | "CAA" : "Certification authority authorization" | "CNAME" : "Canonical name" | "DNSKEY" : "DNSSEC public key"
+  | "DS" : "Delegation signer" | "HINFO" : "Host information" | "HTTPS" : "HTTPS service binding"
+  | "IXFR" : "Incremental zone transfer" | "MX" : "Mail exchanger" | "NS" : "Name server"
+  | "NSEC" : "Next secure record" | "PTR" : "Pointer for reverse lookups" | "RRSIG" : "DNSSEC signature"
+  | "SOA" : "Start of authority" | "SRV" : "Service locator" | "SSHFP" : "SSH key fingerprint"
+  | "SVCB" : "Service binding" | "TLSA" : "TLS certificate association" | "TXT" : "Text" ;
+
+class = "IN" : "Internet (default)" | "CH" : "Chaos" | "HS" : "Hesiod" ;

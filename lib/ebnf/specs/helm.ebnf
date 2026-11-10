@@ -1,0 +1,674 @@
+(* helm: every command `helm --help` lists, checked against `helm <command> --help`
+   of Helm v4.3.0.
+
+   Conventions:
+   - The global flags are accepted before and after the command.
+   - Options with a value accept `--name value` and `--name=value`; short ones accept
+     `-x value` and `-xvalue`.
+   - --dry-run and --wait take their value only joined (--dry-run=server, --wait=legacy),
+     as pflag reads options that have a default for the bare flag.
+   - Releases, charts, repositories and namespaces have no provider yet: @any. Commands
+     that take a chart also offer local paths.
+   - `opt_*` rules are options several commands share. *)
+
+helm = { global_option } , [ command ] ;
+
+global_option =
+    "--burst-limit" : "Client-side default throttling limit" , @any | "--burst-limit=" : "Client-side default throttling limit" ~ @any
+  | "--color" : "Use colored output (never, auto, always)" , color_value | "--color=" : "Use colored output (never, auto, always)" ~ color_value
+  | "--colour" : "Use colored output (never, auto, always)" , color_value | "--colour=" : "Use colored output (never, auto, always)" ~ color_value
+  | "--content-cache" : "Path to the directory containing cached content (e.g. charts)" , @directory | "--content-cache=" : "Path to the directory containing cached content (e.g. charts)" ~ @directory
+  | "--debug" : "Enable verbose output"
+  | "--kube-apiserver" : "The address and the port for the Kubernetes API server" , @any | "--kube-apiserver=" : "The address and the port for the Kubernetes API server" ~ @any
+  | "--kube-as-group" : "Group to impersonate for the operation" , @any | "--kube-as-group=" : "Group to impersonate for the operation" ~ @any
+  | "--kube-as-user" : "Username to impersonate for the operation" , @any | "--kube-as-user=" : "Username to impersonate for the operation" ~ @any
+  | "--kube-ca-file" : "The certificate authority file for the Kubernetes API server connection" , @file | "--kube-ca-file=" : "The certificate authority file for the Kubernetes API server connection" ~ @file
+  | "--kube-context" : "Name of the kubeconfig context to use" , @any | "--kube-context=" : "Name of the kubeconfig context to use" ~ @any
+  | "--kube-insecure-skip-tls-verify" : "The Kubernetes API server's certificate will not be checked for validity"
+  | "--kube-tls-server-name" : "Server name to use for Kubernetes API server certificate validation" , @any | "--kube-tls-server-name=" : "Server name to use for Kubernetes API server certificate validation" ~ @any
+  | "--kube-token" : "Bearer token used for authentication" , @any | "--kube-token=" : "Bearer token used for authentication" ~ @any
+  | "--kubeconfig" : "Path to the kubeconfig file" , @file | "--kubeconfig=" : "Path to the kubeconfig file" ~ @file
+  | "-n" : "Namespace scope for this request" , @any | "--namespace" : "Namespace scope for this request" , @any | "--namespace=" : "Namespace scope for this request" ~ @any
+  | "--qps" : "Queries per second to the Kubernetes API, not counting bursts" , @any | "--qps=" : "Queries per second to the Kubernetes API, not counting bursts" ~ @any
+  | "--registry-config" : "Path to the registry config file" , @file | "--registry-config=" : "Path to the registry config file" ~ @file
+  | "--repository-cache" : "Path to the directory containing cached repository indexes" , @directory | "--repository-cache=" : "Path to the directory containing cached repository indexes" ~ @directory
+  | "--repository-config" : "Path to the file containing repository names and URLs" , @file | "--repository-config=" : "Path to the file containing repository names and URLs" ~ @file ;
+
+create_option =
+    "-p" : "The name or absolute path to Helm starter scaffold" , @any | "--starter" : "The name or absolute path to Helm starter scaffold" , @any | "--starter=" : "The name or absolute path to Helm starter scaffold" ~ @any ;
+
+dependency_build_option =
+    opt_ca_file
+  | opt_cert_file
+  | opt_insecure_skip_tls_verify
+  | opt_key_file
+  | opt_keyring
+  | opt_password
+  | opt_plain_http
+  | "--skip-refresh" : "Do not refresh the local repository cache"
+  | opt_username
+  | "--verify" : "Verify the packages against signatures" ;
+
+dependency_list_option = opt_max_col_width ;
+
+dependency_command =
+    "build" : "Rebuild the charts/ directory based on the Chart.lock file" , { dependency_build_option | global_option | @any | @file }
+  | "list" : "List the dependencies for the given chart" , { dependency_list_option | global_option | @any | @file }
+  | "update" : "Update charts/ based on the contents of Chart.yaml" , { dependency_build_option | global_option | @any | @file } ;
+
+get_all_option =
+    opt_revision
+  | "--template" : "Go template for formatting the output, eg: {{.Release.Name}}" , @any | "--template=" : "Go template for formatting the output, eg: {{.Release.Name}}" ~ @any ;
+
+get_hooks_option = opt_revision ;
+
+get_metadata_option =
+    opt_output
+  | "--revision" : "Specify release revision" , @any | "--revision=" : "Specify release revision" ~ @any ;
+
+get_values_option =
+    "-a" : "Dump all (computed) values" | "--all" : "Dump all (computed) values"
+  | opt_output
+  | opt_revision ;
+
+get_command =
+    "all" : "Download all information for a named release" , { get_all_option | global_option | @any }
+  | "hooks" : "Download all hooks for a named release" , { get_hooks_option | global_option | @any }
+  | "manifest" : "Download the manifest for a named release" , { get_hooks_option | global_option | @any }
+  | "metadata" : "This command fetches metadata for a given release" , { get_metadata_option | global_option | @any }
+  | "notes" : "Download the notes for a named release" , { get_hooks_option | global_option | @any }
+  | "values" : "Download the values file for a named release" , { get_values_option | global_option | @any } ;
+
+history_option =
+    "--max" : "Maximum number of revision to include in history" , @any | "--max=" : "Maximum number of revision to include in history" ~ @any
+  | opt_output
+  | "--show-rollback-revision" : "Show the rollback revision column in table output" ;
+
+install_option =
+    opt_ca_file
+  | opt_cert_file
+  | opt_create_namespace
+  | opt_dependency_update
+  | opt_description
+  | opt_devel
+  | opt_disable_openapi_validation
+  | opt_dry_run
+  | opt_enable_dns
+  | opt_force_conflicts
+  | opt_force_replace
+  | opt_generate_name
+  | "--hide-notes" : "If set, do not show notes in install output"
+  | opt_hide_secret
+  | opt_insecure_skip_tls_verify
+  | opt_key_file
+  | opt_keyring2
+  | opt_labels
+  | opt_name_template
+  | opt_no_hooks
+  | opt_output
+  | opt_pass_credentials
+  | opt_password
+  | opt_plain_http
+  | opt_post_renderer
+  | opt_post_renderer_args
+  | opt_render_subchart_notes
+  | opt_replace
+  | opt_repo
+  | opt_rollback_on_failure
+  | opt_server_side
+  | opt_set
+  | opt_set_file
+  | opt_set_json
+  | opt_set_literal
+  | opt_set_string
+  | opt_skip_crds
+  | opt_skip_schema_validation
+  | opt_take_ownership
+  | opt_timeout
+  | opt_username
+  | opt_values
+  | opt_verify
+  | opt_version
+  | opt_wait
+  | opt_wait_for_jobs ;
+
+lint_option =
+    "--kube-version" : "Kubernetes version used for capabilities and deprecation checks" , @any | "--kube-version=" : "Kubernetes version used for capabilities and deprecation checks" ~ @any
+  | "--quiet" : "Print only warnings and errors"
+  | opt_set
+  | opt_set_file
+  | opt_set_json
+  | opt_set_literal
+  | opt_set_string
+  | opt_skip_schema_validation
+  | "--strict" : "Fail on lint warnings"
+  | opt_values
+  | "--with-subcharts" : "Lint dependent charts" ;
+
+list_option =
+    "-A" : "List releases across all namespaces" | "--all-namespaces" : "List releases across all namespaces"
+  | "-d" : "Sort by release date" | "--date" : "Sort by release date"
+  | "--deployed" : "Show deployed releases"
+  | "--failed" : "Show failed releases"
+  | "-f" : "A regular expression (Perl compatible)" , @any | "--filter" : "A regular expression (Perl compatible)" , @any | "--filter=" : "A regular expression (Perl compatible)" ~ @any
+  | "-m" : "Maximum number of releases to fetch" , @any | "--max" : "Maximum number of releases to fetch" , @any | "--max=" : "Maximum number of releases to fetch" ~ @any
+  | "--no-headers" : "Don't print headers when using the default output format"
+  | "--offset" : "Next release index in the list, used to offset from start value" , @any | "--offset=" : "Next release index in the list, used to offset from start value" ~ @any
+  | opt_output
+  | "--pending" : "Show pending releases"
+  | "-r" : "Reverse the sort order" | "--reverse" : "Reverse the sort order"
+  | "-l" : "Selector (label query) to filter on, supports '=', '==', and '!='" , @any | "--selector" : "Selector (label query) to filter on, supports '=', '==', and '!='" , @any | "--selector=" : "Selector (label query) to filter on, supports '=', '==', and '!='" ~ @any
+  | "-q" : "Output short (quiet) listing format" | "--short" : "Output short (quiet) listing format"
+  | "--superseded" : "Show superseded releases"
+  | "--time-format" : "Format time using golang time formatter" , @any | "--time-format=" : "Format time using golang time formatter" ~ @any
+  | "--uninstalled" : "Show uninstalled releases (if 'helm uninstall --keep-history' was used)"
+  | "--uninstalling" : "Show releases that are currently being uninstalled" ;
+
+package_option =
+    "--app-version" : "Set the appVersion on the chart to this version" , @any | "--app-version=" : "Set the appVersion on the chart to this version" ~ @any
+  | opt_ca_file
+  | opt_cert_file
+  | "-u" : "Update dependencies from 'Chart.yaml' to dir 'charts/' before packaging" | "--dependency-update" : "Update dependencies from 'Chart.yaml' to dir 'charts/' before packaging"
+  | opt_destination
+  | opt_insecure_skip_tls_verify
+  | opt_key
+  | opt_key_file
+  | opt_keyring3
+  | opt_passphrase_file
+  | opt_password
+  | opt_plain_http
+  | "--sign" : "Use a PGP private key to sign this package"
+  | opt_username
+  | "--version" : "Set the version on the chart to this semver version" , @any | "--version=" : "Set the version on the chart to this semver version" ~ @any ;
+
+plugin_install_option =
+    opt_ca_file
+  | opt_cert_file2
+  | "--insecure-skip-tls-verify" : "Skip tls certificate checks for the plugin download"
+  | opt_key_file2
+  | opt_keyring2
+  | "--password" : "Registry password" , @any | "--password=" : "Registry password" ~ @any
+  | "--plain-http" : "Use insecure HTTP connections for the plugin download"
+  | "--username" : "Registry username" , @any | "--username=" : "Registry username" ~ @any
+  | "--verify" : "Verify the plugin signature before installing"
+  | "--version" : "Specify a version constraint" , @any | "--version=" : "Specify a version constraint" ~ @any ;
+
+plugin_list_option = "--type" : "Plugin type" , @any | "--type=" : "Plugin type" ~ @any ;
+
+plugin_package_option =
+    "-d" : "Location to write the plugin tarball" , @directory | "--destination" : "Location to write the plugin tarball" , @directory | "--destination=" : "Location to write the plugin tarball" ~ @directory
+  | opt_key
+  | opt_keyring3
+  | opt_passphrase_file
+  | "--sign" : "Use a PGP private key to sign this plugin" ;
+
+plugin_verify_option = opt_keyring ;
+
+plugin_command =
+    "install" : "Install a Helm plugin" , { plugin_install_option | global_option | @any | @file }
+  | "list" : "List installed Helm plugins" , { plugin_list_option | global_option }
+  | "package" : "Package a plugin directory into a plugin archive" , { plugin_package_option | global_option | @any | @file }
+  | "uninstall" : "Uninstall one or more Helm plugins" , { global_option | @any }
+  | "update" : "Update one or more Helm plugins" , { global_option | @any }
+  | "verify" : "Verify that a plugin at the given path has been signed and is valid" , { plugin_verify_option | global_option | @any | @file } ;
+
+pull_option =
+    opt_ca_file
+  | opt_cert_file
+  | opt_destination
+  | opt_devel
+  | opt_insecure_skip_tls_verify
+  | opt_key_file
+  | opt_keyring2
+  | opt_pass_credentials
+  | opt_password
+  | opt_plain_http
+  | "--prov" : "Fetch the provenance file, but don't perform verification"
+  | opt_repo
+  | "--untar" : "If set to true, will untar the chart after downloading it"
+  | "--untardir" : "With --untar, the directory to expand the chart into" , @directory | "--untardir=" : "With --untar, the directory to expand the chart into" ~ @directory
+  | opt_username
+  | opt_verify
+  | opt_version ;
+
+push_option =
+    opt_ca_file
+  | opt_cert_file2
+  | "--insecure-skip-tls-verify" : "Skip tls certificate checks for the chart upload"
+  | opt_key_file2
+  | opt_password
+  | opt_plain_http2
+  | opt_username ;
+
+registry_login_option =
+    opt_ca_file
+  | opt_cert_file2
+  | "--insecure" : "Allow connections to TLS registry without certs"
+  | opt_key_file2
+  | "-p" : "Registry password or identity token" , @any | "--password" : "Registry password or identity token" , @any | "--password=" : "Registry password or identity token" ~ @any
+  | "--password-stdin" : "Read password or identity token from stdin"
+  | opt_plain_http2
+  | "-u" : "Registry username" , @any | "--username" : "Registry username" , @any | "--username=" : "Registry username" ~ @any ;
+
+registry_command =
+    "login" : "Login to a registry" , { registry_login_option | global_option | @any }
+  | "logout" : "Logout from a registry" , { global_option | @any } ;
+
+repo_add_option =
+    "--allow-deprecated-repos" : "Allow adding official repos that have been permanently deleted"
+  | opt_ca_file
+  | opt_cert_file
+  | "--force-update" : "Replace (overwrite) the repo if it already exists"
+  | "--insecure-skip-tls-verify" : "Skip tls certificate checks for the repository"
+  | opt_key_file
+  | opt_pass_credentials
+  | "--password" : "Chart repository password" , @any | "--password=" : "Chart repository password" ~ @any
+  | "--password-stdin" : "Read chart repository password from stdin"
+  | opt_timeout2
+  | "--username" : "Chart repository username" , @any | "--username=" : "Chart repository username" ~ @any ;
+
+repo_index_option =
+    "--json" : "Output in JSON format"
+  | "--merge" : "Merge the generated index into the given index" , @any | "--merge=" : "Merge the generated index into the given index" ~ @any
+  | "--url" : "Url of chart repository" , @any | "--url=" : "Url of chart repository" ~ @any ;
+
+repo_list_option =
+    "--no-headers" : "Suppress headers in the output"
+  | opt_output ;
+
+repo_update_option = opt_timeout2 ;
+
+repo_command =
+    "add" : "Add a chart repository" , { repo_add_option | global_option | @any }
+  | "index" : "Generate an index file given a directory containing packaged charts" , { repo_index_option | global_option | @any | @file }
+  | "list" : "List chart repositories" , { repo_list_option | global_option }
+  | "remove" : "Remove one or more chart repositories" , { global_option | @any }
+  | "update" : "Update information of available charts locally from chart repositories" , { repo_update_option | global_option | @any } ;
+
+rollback_option =
+    "--cleanup-on-fail" : "Delete resources this rollback created if it fails"
+  | "--description" : "Add a custom description for the rollback (max 256 characters)" , @any | "--description=" : "Add a custom description for the rollback (max 256 characters)" ~ @any
+  | opt_dry_run
+  | opt_force_conflicts
+  | opt_force_replace
+  | opt_history_max
+  | "--no-hooks" : "Prevent hooks from running during rollback"
+  | opt_server_side2
+  | opt_timeout
+  | opt_wait
+  | opt_wait_for_jobs ;
+
+search_hub_option =
+    "--endpoint" : "Hub instance to query for charts" , @any | "--endpoint=" : "Hub instance to query for charts" ~ @any
+  | opt_fail_on_no_result
+  | "--list-repo-url" : "Print charts repository URL"
+  | opt_max_col_width
+  | opt_output ;
+
+search_repo_option =
+    opt_devel
+  | opt_fail_on_no_result
+  | opt_max_col_width
+  | opt_output
+  | "-r" : "Use regular expressions for searching repositories you have added" | "--regexp" : "Use regular expressions for searching repositories you have added"
+  | "--version" : "Search with semantic version constraints" , @any | "--version=" : "Search with semantic version constraints" ~ @any
+  | "-l" : "List each version of each chart on its own line" | "--versions" : "List each version of each chart on its own line" ;
+
+search_command =
+    "hub" : "Search for charts in the Artifact Hub or your own hub instance" , { search_hub_option | global_option | @any }
+  | "repo" : "Search repositories for a keyword in charts" , { search_repo_option | global_option | @any } ;
+
+show_all_option =
+    opt_ca_file
+  | opt_cert_file
+  | opt_devel
+  | opt_insecure_skip_tls_verify
+  | opt_key_file
+  | opt_keyring2
+  | opt_pass_credentials
+  | opt_password
+  | opt_plain_http
+  | opt_repo
+  | opt_username
+  | opt_verify
+  | opt_version ;
+
+show_values_option =
+    opt_ca_file
+  | opt_cert_file
+  | opt_devel
+  | opt_insecure_skip_tls_verify
+  | "--jsonpath" : "Supply a JSONPath expression to filter the output" , @any | "--jsonpath=" : "Supply a JSONPath expression to filter the output" ~ @any
+  | opt_key_file
+  | opt_keyring2
+  | opt_pass_credentials
+  | opt_password
+  | opt_plain_http
+  | opt_repo
+  | opt_username
+  | opt_verify
+  | opt_version ;
+
+show_command =
+    "all" : "Show all information of the chart" , { show_all_option | global_option | @any | @file }
+  | "chart" : "Show the chart's definition" , { show_all_option | global_option | @any | @file }
+  | "crds" : "Show the chart's CRDs" , { show_all_option | global_option | @any | @file }
+  | "readme" : "Show the chart's README" , { show_all_option | global_option | @any | @file }
+  | "values" : "Show the chart's values" , { show_values_option | global_option | @any | @file } ;
+
+status_option =
+    opt_output
+  | "--revision" : "If set, display the status of the named release with revision" , @any | "--revision=" : "If set, display the status of the named release with revision" ~ @any ;
+
+template_option =
+    "-a" : "Kubernetes api versions used for Capabilities.APIVersions" , @any | "--api-versions" : "Kubernetes api versions used for Capabilities.APIVersions" , @any | "--api-versions=" : "Kubernetes api versions used for Capabilities.APIVersions" ~ @any
+  | opt_ca_file
+  | opt_cert_file
+  | opt_create_namespace
+  | opt_dependency_update
+  | opt_description
+  | opt_devel
+  | opt_disable_openapi_validation
+  | "--dry-run" : "Simulates the operation either client-side or server-side" | "--dry-run=" : "Simulates the operation either client-side or server-side" ~ ( "none" | "client" | "server" )
+  | opt_enable_dns
+  | opt_force_conflicts
+  | opt_force_replace
+  | opt_generate_name
+  | "--include-crds" : "Include CRDs in the templated output"
+  | opt_insecure_skip_tls_verify
+  | "--is-upgrade" : "Set .Release.IsUpgrade instead of .Release.IsInstall"
+  | opt_key_file
+  | opt_keyring2
+  | "--kube-version" : "Kubernetes version used for Capabilities.KubeVersion" , @any | "--kube-version=" : "Kubernetes version used for Capabilities.KubeVersion" ~ @any
+  | opt_labels
+  | opt_name_template
+  | opt_no_hooks
+  | "--output-dir" : "Writes the executed templates to files in output-dir instead of stdout" , @directory | "--output-dir=" : "Writes the executed templates to files in output-dir instead of stdout" ~ @directory
+  | opt_pass_credentials
+  | opt_password
+  | opt_plain_http
+  | opt_post_renderer
+  | opt_post_renderer_args
+  | "--release-name" : "Use release name in the output-dir path"
+  | opt_replace
+  | opt_repo
+  | opt_rollback_on_failure
+  | opt_server_side
+  | opt_set
+  | opt_set_file
+  | opt_set_json
+  | opt_set_literal
+  | opt_set_string
+  | "-s" : "Only show manifests rendered from the given templates" , @any | "--show-only" : "Only show manifests rendered from the given templates" , @any | "--show-only=" : "Only show manifests rendered from the given templates" ~ @any
+  | opt_skip_crds
+  | opt_skip_schema_validation
+  | "--skip-tests" : "Skip tests from templated output"
+  | opt_take_ownership
+  | opt_timeout
+  | opt_username
+  | opt_values
+  | opt_verify
+  | opt_version
+  | opt_wait
+  | opt_wait_for_jobs ;
+
+test_option =
+    "--filter" : "Select tests with name=value, or exclude them with !name=value" , @any | "--filter=" : "Select tests with name=value, or exclude them with !name=value" ~ @any
+  | "--logs" : "Dump the logs from test pods"
+  | opt_timeout ;
+
+uninstall_option =
+    "--cascade" : "Must be 'background', 'orphan', or 'foreground'" , @any | "--cascade=" : "Must be 'background', 'orphan', or 'foreground'" ~ @any
+  | opt_description
+  | "--dry-run" : "Simulate a uninstall"
+  | "--ignore-not-found" : "Treat 'release not found' as a successful uninstall"
+  | "--keep-history" : "Remove the resources but keep the release history"
+  | "--no-hooks" : "Prevent hooks from running during uninstallation"
+  | opt_timeout
+  | opt_wait ;
+
+upgrade_option =
+    opt_ca_file
+  | opt_cert_file
+  | "--cleanup-on-fail" : "Delete resources this upgrade created if it fails"
+  | "--create-namespace" : "If --install is set, create the release namespace if not present"
+  | opt_dependency_update
+  | opt_description
+  | opt_devel
+  | opt_disable_openapi_validation
+  | opt_dry_run
+  | opt_enable_dns
+  | opt_force_conflicts
+  | opt_force_replace
+  | "--hide-notes" : "If set, do not show notes in upgrade output"
+  | opt_hide_secret
+  | opt_history_max
+  | opt_insecure_skip_tls_verify
+  | "-i" : "If a release by this name doesn't already exist, run an install" | "--install" : "If a release by this name doesn't already exist, run an install"
+  | opt_key_file
+  | opt_keyring2
+  | opt_labels
+  | "--no-hooks" : "Disable pre/post upgrade hooks"
+  | opt_output
+  | opt_pass_credentials
+  | opt_password
+  | opt_plain_http
+  | opt_post_renderer
+  | opt_post_renderer_args
+  | opt_render_subchart_notes
+  | opt_repo
+  | "--reset-then-reuse-values" : "Reset to chart values, then apply the last release's and new ones"
+  | "--reset-values" : "When upgrading, reset the values to the ones built into the chart"
+  | "--reuse-values" : "Reuse the last release's values and merge in new overrides"
+  | "--rollback-on-failure" : "Roll back to the previous successful release on failure"
+  | opt_server_side2
+  | opt_set
+  | opt_set_file
+  | opt_set_json
+  | opt_set_literal
+  | opt_set_string
+  | "--skip-crds" : "Do not install CRDs when the upgrade installs the release"
+  | opt_skip_schema_validation
+  | opt_take_ownership
+  | opt_timeout
+  | opt_username
+  | opt_values
+  | opt_verify
+  | opt_version
+  | opt_wait
+  | opt_wait_for_jobs ;
+
+version_option =
+    "--short" : "Print the version number"
+  | "--template" : "Template for version string format" , @any | "--template=" : "Template for version string format" ~ @any ;
+
+command =
+    "completion" : "Generate autocompletion scripts for the specified shell" , [ "bash" : "Generate the autocompletion script for bash" | "fish" : "Generate the autocompletion script for fish" | "powershell" : "Generate the autocompletion script for powershell" | "zsh" : "Generate the autocompletion script for zsh" ] , { opt_no_descriptions | global_option }
+  | "create" : "Create a new chart with the given name" , { create_option | global_option | @any }
+  | "dependency" : "Manage a chart's dependencies" , { global_option } , [ dependency_command ]
+  | "env" : "Helm client environment information" , { global_option }
+  | "get" : "Download extended information of a named release" , { global_option } , [ get_command ]
+  | "help" : "Help about any command" , { @any }
+  | "history" : "Fetch release history" , { history_option | global_option | @any }
+  | "install" : "Install a chart" , { install_option | global_option | @any | @file }
+  | "lint" : "Examine a chart for possible issues" , { lint_option | global_option | @any | @file }
+  | "list" : "List releases" , { list_option | global_option }
+  | "package" : "Package a chart directory into a chart archive" , { package_option | global_option | @any | @file }
+  | "plugin" : "Install, list, or uninstall Helm plugins" , { global_option } , [ plugin_command ]
+  | "pull" : "Download a chart from a repository and unpack it in local directory" , { pull_option | global_option | @any }
+  | "push" : "Push a chart to remote" , { push_option | global_option | @any | @file }
+  | "registry" : "Login to or logout from a registry" , { global_option } , [ registry_command ]
+  | "repo" : "Add, list, remove, update, and index chart repositories" , { global_option } , [ repo_command ]
+  | "rollback" : "Roll back a release to a previous revision" , { rollback_option | global_option | @any }
+  | "search" : "Search for a keyword in charts" , { global_option } , [ search_command ]
+  | "show" : "Show information of a chart" , { global_option } , [ show_command ]
+  | "status" : "Display the status of the named release" , { status_option | global_option | @any }
+  | "template" : "Locally render templates" , { template_option | global_option | @any | @file }
+  | "test" : "Run tests for a release" , { test_option | global_option | @any }
+  | "uninstall" : "Uninstall a release" , { uninstall_option | global_option | @any }
+  | "upgrade" : "Upgrade a release" , { upgrade_option | global_option | @any | @file }
+  | "verify" : "Verify that a chart at the given path has been signed and is valid" , { plugin_verify_option | global_option | @any | @file }
+  | "version" : "Print the helm version information" , { version_option | global_option } ;
+
+opt_no_descriptions = "--no-descriptions" : "Disable completion descriptions" ;
+
+opt_ca_file =
+    "--ca-file" : "Verify certificates of HTTPS-enabled servers using this CA bundle" , @file | "--ca-file=" : "Verify certificates of HTTPS-enabled servers using this CA bundle" ~ @file ;
+
+opt_cert_file =
+    "--cert-file" : "Identify HTTPS client using this SSL certificate file" , @file | "--cert-file=" : "Identify HTTPS client using this SSL certificate file" ~ @file ;
+
+opt_insecure_skip_tls_verify = "--insecure-skip-tls-verify" : "Skip tls certificate checks for the chart download" ;
+
+opt_key_file =
+    "--key-file" : "Identify HTTPS client using this SSL key file" , @file | "--key-file=" : "Identify HTTPS client using this SSL key file" ~ @file ;
+
+opt_keyring =
+    "--keyring" : "Keyring containing public keys" , @file | "--keyring=" : "Keyring containing public keys" ~ @file ;
+
+opt_password =
+    "--password" : "Chart repository password where to locate the requested chart" , @any | "--password=" : "Chart repository password where to locate the requested chart" ~ @any ;
+
+opt_plain_http = "--plain-http" : "Use insecure HTTP connections for the chart download" ;
+
+opt_username =
+    "--username" : "Chart repository username where to locate the requested chart" , @any | "--username=" : "Chart repository username where to locate the requested chart" ~ @any ;
+
+opt_max_col_width =
+    "--max-col-width" : "Maximum column width for output table" , @any | "--max-col-width=" : "Maximum column width for output table" ~ @any ;
+
+opt_revision =
+    "--revision" : "Get the named release with revision" , @any | "--revision=" : "Get the named release with revision" ~ @any ;
+
+opt_output =
+    "-o" : "Prints the output in the specified format" , output_format | "--output" : "Prints the output in the specified format" , output_format | "--output=" : "Prints the output in the specified format" ~ output_format ;
+
+opt_create_namespace = "--create-namespace" : "Create the release namespace if not present" ;
+
+opt_dependency_update =
+    "--dependency-update" : "Update dependencies if they are missing before installing the chart" ;
+
+opt_description =
+    "--description" : "Add a custom description" , @any | "--description=" : "Add a custom description" ~ @any ;
+
+opt_devel = "--devel" : "Use development versions, too" ;
+
+opt_disable_openapi_validation =
+    "--disable-openapi-validation" : "Do not validate rendered templates against the OpenAPI schema" ;
+
+opt_dry_run =
+    "--dry-run" : "Simulates the operation without persisting changes" | "--dry-run=" : "Simulates the operation without persisting changes" ~ ( "none" | "client" | "server" ) ;
+
+opt_enable_dns = "--enable-dns" : "Enable DNS lookups when rendering templates" ;
+
+opt_force_conflicts = "--force-conflicts" : "If set server-side apply will force changes against conflicts" ;
+
+opt_force_replace = "--force-replace" : "Force resource updates by replacement" ;
+
+opt_generate_name =
+    "-g" : "Generate the name (and omit the NAME parameter)" | "--generate-name" : "Generate the name (and omit the NAME parameter)" ;
+
+opt_hide_secret = "--hide-secret" : "Hide Kubernetes Secrets when also using the --dry-run flag" ;
+
+opt_keyring2 =
+    "--keyring" : "Location of public keys used for verification" , @file | "--keyring=" : "Location of public keys used for verification" ~ @file ;
+
+opt_labels =
+    "-l" : "Labels that would be added to release metadata" , @any | "--labels" : "Labels that would be added to release metadata" , @any | "--labels=" : "Labels that would be added to release metadata" ~ @any ;
+
+opt_name_template =
+    "--name-template" : "Specify template used to name the release" , @any | "--name-template=" : "Specify template used to name the release" ~ @any ;
+
+opt_no_hooks = "--no-hooks" : "Prevent hooks from running during install" ;
+
+opt_pass_credentials = "--pass-credentials" : "Pass credentials to all domains" ;
+
+opt_post_renderer =
+    "--post-renderer" : "The name of a postrenderer type plugin to be used for post rendering" , @any | "--post-renderer=" : "The name of a postrenderer type plugin to be used for post rendering" ~ @any ;
+
+opt_post_renderer_args =
+    "--post-renderer-args" : "An argument to the post-renderer (can specify multiple)" , @any | "--post-renderer-args=" : "An argument to the post-renderer (can specify multiple)" ~ @any ;
+
+opt_render_subchart_notes = "--render-subchart-notes" : "If set, render subchart notes along with the parent" ;
+
+opt_replace = "--replace" : "Reuse the name of a deleted release that remains in the history" ;
+
+opt_repo =
+    "--repo" : "Chart repository url where to locate the requested chart" , @any | "--repo=" : "Chart repository url where to locate the requested chart" ~ @any ;
+
+opt_rollback_on_failure =
+    "--rollback-on-failure" : "If set, Helm will rollback (uninstall) the installation upon failure" ;
+
+opt_server_side = "--server-side" : "Object updates run in the server instead of the client" ;
+
+opt_set =
+    "--set" : "Set values on the command line" , @any | "--set=" : "Set values on the command line" ~ @any ;
+
+opt_set_file =
+    "--set-file" : "Set values from respective files specified via the command line" , @any | "--set-file=" : "Set values from respective files specified via the command line" ~ @any ;
+
+opt_set_json =
+    "--set-json" : "Set JSON values on the command line" , @any | "--set-json=" : "Set JSON values on the command line" ~ @any ;
+
+opt_set_literal =
+    "--set-literal" : "Set a literal STRING value on the command line" , @any | "--set-literal=" : "Set a literal STRING value on the command line" ~ @any ;
+
+opt_set_string =
+    "--set-string" : "Set STRING values on the command line" , @any | "--set-string=" : "Set STRING values on the command line" ~ @any ;
+
+opt_skip_crds = "--skip-crds" : "If set, no CRDs will be installed" ;
+
+opt_skip_schema_validation = "--skip-schema-validation" : "If set, disables JSON schema validation" ;
+
+opt_take_ownership = "--take-ownership" : "Take ownership of existing resources without Helm annotations" ;
+
+opt_timeout =
+    "--timeout" : "Time to wait for any individual Kubernetes operation" , @any | "--timeout=" : "Time to wait for any individual Kubernetes operation" ~ @any ;
+
+opt_values =
+    "-f" : "Specify values in a YAML file or a URL (can specify multiple)" , @file | "--values" : "Specify values in a YAML file or a URL (can specify multiple)" , @file | "--values=" : "Specify values in a YAML file or a URL (can specify multiple)" ~ @file ;
+
+opt_verify = "--verify" : "Verify the package before using it" ;
+
+opt_version =
+    "--version" : "Specify a version constraint for the chart version to use" , @any | "--version=" : "Specify a version constraint for the chart version to use" ~ @any ;
+
+opt_wait =
+    "--wait" : "Wait until resources are ready (up to --timeout)" | "--wait=" : "Wait until resources are ready (up to --timeout)" ~ ( "watcher" | "hookOnly" | "legacy" ) ;
+
+opt_wait_for_jobs = "--wait-for-jobs" : "With --wait, also wait until all Jobs have completed" ;
+
+opt_destination =
+    "-d" : "Location to write the chart" , @directory | "--destination" : "Location to write the chart" , @directory | "--destination=" : "Location to write the chart" ~ @directory ;
+
+opt_key =
+    "--key" : "Name of the key to use when signing" , @any | "--key=" : "Name of the key to use when signing" ~ @any ;
+
+opt_keyring3 =
+    "--keyring" : "Location of a public keyring" , @file | "--keyring=" : "Location of a public keyring" ~ @file ;
+
+opt_passphrase_file =
+    "--passphrase-file" : "Location of a file which contains the passphrase for the signing key" , @any | "--passphrase-file=" : "Location of a file which contains the passphrase for the signing key" ~ @any ;
+
+opt_cert_file2 =
+    "--cert-file" : "Identify registry client using this SSL certificate file" , @file | "--cert-file=" : "Identify registry client using this SSL certificate file" ~ @file ;
+
+opt_key_file2 =
+    "--key-file" : "Identify registry client using this SSL key file" , @file | "--key-file=" : "Identify registry client using this SSL key file" ~ @file ;
+
+opt_plain_http2 = "--plain-http" : "Use insecure HTTP connections for the chart upload" ;
+
+opt_timeout2 =
+    "--timeout" : "Time to wait for the index file download to complete" , @any | "--timeout=" : "Time to wait for the index file download to complete" ~ @any ;
+
+opt_history_max =
+    "--history-max" : "Limit the maximum number of revisions saved per release" , @any | "--history-max=" : "Limit the maximum number of revisions saved per release" ~ @any ;
+
+opt_server_side2 =
+    "--server-side" : "Must be 'true', 'false' or 'auto'" , @any | "--server-side=" : "Must be 'true', 'false' or 'auto'" ~ @any ;
+
+opt_fail_on_no_result = "--fail-on-no-result" : "Search fails if no results are found" ;
+
+output_format = "table" : "Human-readable table" | "json" : "JSON" | "yaml" : "YAML" ;
+
+color_value = "never" | "auto" | "always" ;

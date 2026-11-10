@@ -1,0 +1,500 @@
+(* brew: Homebrew's built-in commands, checked against `brew commands`,
+   `brew <command> --help` and `man brew` of Homebrew 7.0.12 on macOS. The everyday
+   commands carry their options; the rest, and the developer commands, take any
+   words. Options with a value accept `--opt=value` and `--opt value`. Formula,
+   cask and tap names have no provider, so they are free words. *)
+
+brew =
+    command
+  | "--version" : "Print the Homebrew version" | "-v" : "Print the Homebrew version"
+  | "-h" : "Print example usage" | "--help" : "Print example usage"
+  | "--cache" : "Print the download cache path" , { cache_option | common | @any }
+  | "--caskroom" : "Print the Caskroom path" , { common | @any }
+  | "--cellar" : "Print the Cellar path" , { common | @any }
+  | "--env" : "Summarise the build environment" , { env_option | common | @any }
+  | "--prefix" : "Print the install path" , { prefix_option | common | @any }
+  | "--repository" : "Print the repository path" , { common | @any }
+  | "--repo" : "Print the repository path" , { common | @any }
+  | "--taps" : "Print the taps path" , { common }
+  | "--config" : "Show Homebrew and system configuration" , { common }
+  | "-S" : "Search formulae and casks" , { search_option | common | @any } ;
+
+(* Every brew command takes these. *)
+common =
+    "-d" : "Display any debugging information" | "--debug" : "Display any debugging information"
+  | "-q" : "Make some output more quiet" | "--quiet" : "Make some output more quiet"
+  | "-v" : "Make some output more verbose" | "--verbose" : "Make some output more verbose"
+  | "-h" : "Show the help of the command" | "--help" : "Show the help of the command" ;
+
+command =
+    "install" : "Install a formula or cask" , { install_option | common | @any }
+  | "uninstall" : "Uninstall a formula or cask" , { uninstall_option | common | @any }
+  | "remove" : "Alias for uninstall" , { uninstall_option | common | @any }
+  | "rm" : "Alias for uninstall" , { uninstall_option | common | @any }
+  | "reinstall" : "Uninstall and reinstall a formula or cask" , { reinstall_option | common | @any }
+  | "upgrade" : "Upgrade outdated, unpinned packages" , { upgrade_option | common | @any }
+  | "update" : "Fetch the newest Homebrew and formulae" , { update_option | common }
+  | "up" : "Alias for update" , { update_option | common }
+  | "update-reset" : "Fetch and reset Homebrew and tap repositories" , { common | @any }
+  | "update-if-needed" : "Update only if the last update is too old" , { common }
+  | "outdated" : "List packages with a newer version available" , { outdated_option | common | @any }
+  | "list" : "List installed formulae and casks" , { list_option | common | @any }
+  | "ls" : "Alias for list" , { list_option | common | @any }
+  | "info" : "Show information about a formula or cask" , { info_option | common | @any }
+  | "abv" : "Alias for info" , { info_option | common | @any }
+  | "search" : "Search formulae and casks" , { search_option | common | @any }
+  | "desc" : "Show the description of a formula or cask" , { desc_option | common | @any }
+  | "home" : "Open the homepage of a formula or cask" , { type_option | common | @any }
+  | "homepage" : "Alias for home" , { type_option | common | @any }
+  | "deps" : "Show the dependencies of a formula" , { deps_option | common | @any }
+  | "uses" : "Show what depends on a formula" , { uses_option | common | @any }
+  | "leaves" : "List formulae no other installed formula depends on" , { leaves_option | common }
+  | "autoremove" : "Uninstall formulae no longer needed as dependencies" , { dry_run | common }
+  | "cleanup" : "Remove stale lock files and outdated downloads" , { cleanup_option | common | @any }
+  | "fetch" : "Download a bottle or source package" , { fetch_option | common | @any }
+  | "link" : "Symlink the files of a formula into the prefix" , { link_option | common | @any }
+  | "ln" : "Alias for link" , { link_option | common | @any }
+  | "unlink" : "Remove the symlinks of a formula from the prefix" , { dry_run | type_option | common | @any }
+  | "pin" : "Prevent a package from being upgraded" , { type_option | common | @any }
+  | "unpin" : "Allow a pinned package to be upgraded" , { type_option | common | @any }
+  | "tap" : "Tap a repository of formulae, casks or commands" , { tap_option | common | @any }
+  | "untap" : "Remove a tapped repository" , { force | common | @any }
+  | "tap-info" : "Show information about taps" , { tap_info_option | common | @any }
+  | "trust" : "Trust formulae, casks or commands of a tap" , { common | @any }
+  | "untrust" : "Stop trusting formulae, casks or commands of a tap" , { common | @any }
+  | "services" : "Manage background services" , { common } , [ services_command ]
+  | "bundle" : "Install or dump dependencies of a Brewfile" , { bundle_option | common } , [ bundle_command ]
+  | "doctor" : "Check the system for potential problems" , { doctor_option | common | @any }
+  | "dr" : "Alias for doctor" , { doctor_option | common | @any }
+  | "config" : "Show Homebrew and system configuration" , { common }
+  | "edit" : "Open a formula, cask or tap in the editor" , { edit_option | common | @any }
+  | "log" : "Show the git log of a formula or cask" , { log_option | common | @any }
+  | "options" : "Show the install options of a formula" , { options_option | common | @any }
+  | "missing" : "Check kegs for missing dependencies" , { missing_option | common | @any }
+  | "postinstall" : "Rerun the post-install steps of a formula" , { common | @any }
+  | "post_install" : "Alias for postinstall" , { common | @any }
+  | "migrate" : "Migrate renamed packages to their new names" , { common | @any }
+  | "gist-logs" : "Upload the logs of a failed build to a Gist" , { common | @any }
+  | "formulae" : "List all available formulae" , { common }
+  | "casks" : "List all available casks" , { common }
+  | "commands" : "List built-in and external commands" , { commands_option | common }
+  | "command" : "Print the path of the file of a brew command" , { common | @any }
+  | "help" : "Show help for a command" , [ @any ]
+  | "docs" : "Open Homebrew's documentation in a browser" , { common }
+  | "source" : "Open the source repository of a formula" , { common | @any }
+  | "shellenv" : "Print the export statements for Homebrew" , { common | @any }
+  | "environment" : "Alias for --env" , { env_option | common | @any }
+  | "analytics" : "Control Homebrew's anonymous analytics" , { common } , [ on_off_state ]
+  | "completions" : "Control linking of tap shell completions" , { common } , [ completions_state ]
+  | "developer" : "Control Homebrew's developer mode" , { common } , [ on_off_state ]
+  | "alias" : "Show or edit aliases" , { "--edit" : "Edit aliases in a text editor" | common | @any }
+  | "unalias" : "Remove aliases" , { common | @any }
+  | "exec" : "Run a command with formulae available" , { common | @any }
+  | "x" : "Alias for exec" , { common | @any }
+  | "as-brew-user" : "Run a command as the owner of HOMEBREW_PREFIX" , { @any }
+  | "as-console-user" : "Run a command as the macOS desktop user" , { @any }
+  | "sandbox-exec" : "Run a command in Homebrew's sandbox" , { @any }
+  | "tab" : "Edit the tab information of installed packages" , { common | @any }
+  | "readall" : "Import every item of a tap to check it" , { common | @any }
+  | "vulns" : "Check formulae for known vulnerabilities" , { common | @any }
+  | "which-formula" : "Show which formulae provide a command" , { common | @any }
+  | "version-install" : "Install a specific version of a formula" , { common | @any }
+  | "command-not-found-init" : "Print setup of the command-not-found hook" , { common }
+  | "mcp-server" : "Start the Homebrew MCP server" , { common }
+  | "nodenv-sync" : "Symlink Homebrew's Node versions for nodenv" , { common }
+  | "pyenv-sync" : "Symlink Homebrew's Python versions for pyenv" , { common }
+  | "rbenv-sync" : "Symlink Homebrew's Ruby versions for rbenv" , { common }
+  | "setup-ruby" : "Install the Ruby Homebrew needs" , { common }
+  | developer_command , { @any } ;
+
+developer_command =
+    "audit" : "Check formulae and casks for Homebrew standards"
+  | "benchmark" : "Benchmark brew with hyperfine"
+  | "bottle" : "Generate a bottle from an installed formula"
+  | "bump" : "Show outdated packages and their latest version"
+  | "bump-cask-pr" : "Open a pull request to update a cask"
+  | "bump-compatibility-version" : "Commit an increment of compatibility_version"
+  | "bump-formula-pr" : "Open a pull request to update a formula"
+  | "bump-revision" : "Commit an increment of a formula's revision"
+  | "bump-unversioned-casks" : "Check casks with unversioned URLs for updates"
+  | "cat" : "Print the source of a formula or cask"
+  | "contributions" : "Summarise contributions to Homebrew repositories"
+  | "create" : "Generate a formula or cask for a URL"
+  | "debugger" : "Run a brew command in debug mode"
+  | "extract" : "Copy an old formula version into a tap"
+  | "find-appcast" : "Find the appcast of an app bundle"
+  | "formula" : "Print the path of a formula"
+  | "generate-cask-token" : "Generate a cask token for an app"
+  | "generate-man-completions" : "Generate the manpages and shell completions"
+  | "generate-zap" : "Generate a zap stanza for a cask"
+  | "install-bundler-gems" : "Install Homebrew's Bundler gems"
+  | "irb" : "Enter the interactive Homebrew Ruby shell"
+  | "lgtm" : "Run typecheck, style and tests on changes"
+  | "linkage" : "Check the library links of kegs"
+  | "livecheck" : "Check upstream for newer versions"
+  | "lc" : "Alias for livecheck"
+  | "prof" : "Run Homebrew with a Ruby profiler"
+  | "rubocop" : "Run RuboCop on Homebrew's code"
+  | "ruby" : "Run Ruby with Homebrew's libraries loaded"
+  | "rubydoc" : "Generate Homebrew's RubyDoc documentation"
+  | "sh" : "Enter a shell in Homebrew's build environment"
+  | "style" : "Check files against Homebrew's style"
+  | "tap-new" : "Generate the template files of a new tap"
+  | "test" : "Run the test of an installed formula"
+  | "test-bot" : "Test the lifecycle of a change to a tap"
+  | "tests" : "Run Homebrew's unit and integration tests"
+  | "typecheck" : "Check for typechecking errors with Sorbet"
+  | "tc" : "Alias for typecheck"
+  | "unbottled" : "Show the unbottled dependents of formulae"
+  | "unpack" : "Unpack the files of a formula or cask"
+  | "update-perl-resources" : "Update the CPAN resources of a formula"
+  | "update-python-resources" : "Update the PyPI resources of a formula"
+  | "update-test" : "Test brew update with a new clone"
+  | "vendor-gems" : "Install and commit Homebrew's vendored gems"
+  | "verify" : "Verify the build provenance of bottles"
+  | "which-update" : "Update the which-formula database" ;
+
+(* Option groups. *)
+formula_flag =
+    "--formula" : "Treat every named argument as a formula"
+  | "--formulae" : "Treat every named argument as a formula" ;
+cask_flag =
+    "--cask" : "Treat every named argument as a cask"
+  | "--casks" : "Treat every named argument as a cask" ;
+type_option = formula_flag | cask_flag ;
+force = "-f" : "Force the operation" | "--force" : "Force the operation" ;
+dry_run = "-n" : "Show what would happen without doing it" | "--dry-run" : "Show what would happen without doing it" ;
+no_ask = "-y" : "Do not ask for confirmation" | "--yes" : "Do not ask for confirmation" | "--no-ask" : "Do not ask for confirmation" ;
+json_version = "v1" | "v2" ;
+json = "--json" : "Print JSON" | "--json=" : "Print JSON of this version" ~ json_version ;
+
+build_option =
+    "-s" : "Compile from source even if a bottle exists"
+  | "--build-from-source" : "Compile from source even if a bottle exists"
+  | "-i" : "Open a shell in the patched source"
+  | "--interactive" : "Open a shell in the patched source"
+  | "--force-bottle" : "Install from a bottle even if it may be unsuitable"
+  | "--keep-tmp" : "Keep the temporary build files"
+  | "--debug-symbols" : "Generate debug symbols on build"
+  | "--display-times" : "Print install times at the end"
+  | "--HEAD" : "Install the HEAD version"
+  | "--require-sha" : "Require every cask to have a checksum"
+  | "--skip-cask-deps" : "Skip installing cask dependencies" ;
+
+cask_dir =
+    "--appdir" : "Target location for Applications" , @directory
+  | "--appdir=" : "Target location for Applications" ~ @directory
+  | "--appimagedir" : "Target location for AppImages" , @directory
+  | "--appimagedir=" : "Target location for AppImages" ~ @directory
+  | "--keyboard-layoutdir" : "Target location for Keyboard Layouts" , @directory
+  | "--keyboard-layoutdir=" : "Target location for Keyboard Layouts" ~ @directory
+  | "--colorpickerdir" : "Target location for Color Pickers" , @directory
+  | "--colorpickerdir=" : "Target location for Color Pickers" ~ @directory
+  | "--prefpanedir" : "Target location for Preference Panes" , @directory
+  | "--prefpanedir=" : "Target location for Preference Panes" ~ @directory
+  | "--qlplugindir" : "Target location for Quick Look Plugins" , @directory
+  | "--qlplugindir=" : "Target location for Quick Look Plugins" ~ @directory
+  | "--mdimporterdir" : "Target location for Spotlight Plugins" , @directory
+  | "--mdimporterdir=" : "Target location for Spotlight Plugins" ~ @directory
+  | "--dictionarydir" : "Target location for Dictionaries" , @directory
+  | "--dictionarydir=" : "Target location for Dictionaries" ~ @directory
+  | "--fontdir" : "Target location for Fonts" , @directory
+  | "--fontdir=" : "Target location for Fonts" ~ @directory
+  | "--servicedir" : "Target location for Services" , @directory
+  | "--servicedir=" : "Target location for Services" ~ @directory
+  | "--input-methoddir" : "Target location for Input Methods" , @directory
+  | "--input-methoddir=" : "Target location for Input Methods" ~ @directory
+  | "--internet-plugindir" : "Target location for Internet Plugins" , @directory
+  | "--internet-plugindir=" : "Target location for Internet Plugins" ~ @directory
+  | "--audio-unit-plugindir" : "Target location for Audio Unit Plugins" , @directory
+  | "--audio-unit-plugindir=" : "Target location for Audio Unit Plugins" ~ @directory
+  | "--vst-plugindir" : "Target location for VST Plugins" , @directory
+  | "--vst-plugindir=" : "Target location for VST Plugins" ~ @directory
+  | "--vst3-plugindir" : "Target location for VST3 Plugins" , @directory
+  | "--vst3-plugindir=" : "Target location for VST3 Plugins" ~ @directory
+  | "--screen-saverdir" : "Target location for Screen Savers" , @directory
+  | "--screen-saverdir=" : "Target location for Screen Savers" ~ @directory
+  | "--language" : "Preferred languages of the cask, comma separated" , @any
+  | "--language=" : "Preferred languages of the cask, comma separated" ~ @any ;
+
+install_option =
+    force | dry_run | no_ask | type_option | build_option | cask_dir
+  | "--ignore-dependencies" : "Skip installing dependencies (unsupported)"
+  | "--only-dependencies" : "Install only the dependencies"
+  | "--cc" : "Compile with this compiler" , @any | "--cc=" : "Compile with this compiler" ~ @any
+  | "--include-test" : "Install the dependencies of the tests"
+  | "--fetch-HEAD" : "Fetch upstream to tell if HEAD is outdated"
+  | "--build-bottle" : "Prepare the formula for bottling"
+  | "--skip-post-install" : "Skip the post-install steps"
+  | "--skip-link" : "Skip linking the keg into the prefix"
+  | "--as-dependency" : "Mark it as installed as a dependency"
+  | "--bottle-arch" : "Optimise bottles for this architecture" , @any
+  | "--bottle-arch=" : "Optimise bottles for this architecture" ~ @any
+  | "-g" : "Create a Git repository of the source" | "--git" : "Create a Git repository of the source"
+  | "--overwrite" : "Delete files that already exist in the prefix"
+  | "--adopt" : "Adopt existing artifacts in the destination"
+  | "--zap" : "Remove all files associated with a cask" ;
+
+reinstall_option =
+    force | no_ask | type_option | build_option | cask_dir
+  | "-g" : "Create a Git repository of the source" | "--git" : "Create a Git repository of the source"
+  | "--adopt" : "Adopt existing artifacts in the destination"
+  | "--zap" : "Remove all files associated with a cask" ;
+
+severity = "low" | "medium" | "high" | "critical" ;
+vulnerable_option =
+    "--minimum-version" : "Only below this installed version" , @any
+  | "--minimum-version=" : "Only below this installed version" ~ @any
+  | "--min-version" : "Only below this installed version" , @any
+  | "--min-version=" : "Only below this installed version" ~ @any
+  | "--vulnerable" : "Only formulae with open vulnerabilities"
+  | "--severity" : "Only findings at or above this severity" , severity
+  | "--severity=" : "Only findings at or above this severity" ~ severity
+  | "-g" : "Include casks with version :latest or auto_updates"
+  | "--greedy" : "Include casks with version :latest or auto_updates"
+  | "--greedy-latest" : "Include casks with version :latest"
+  | "--greedy-auto-updates" : "Include casks with auto_updates true"
+  | "--fetch-HEAD" : "Fetch upstream to tell if HEAD is outdated" ;
+
+upgrade_option =
+    force | dry_run | no_ask | type_option | build_option | cask_dir | vulnerable_option
+  | "--overwrite" : "Delete files that already exist in the prefix"
+  | "--no-quit" : "Do not quit running cask applications" ;
+
+uninstall_option =
+    type_option
+  | "-f" : "Delete all installed versions" | "--force" : "Delete all installed versions"
+  | "--zap" : "Remove all files associated with a cask"
+  | "--ignore-dependencies" : "Do not fail if other formulae depend on it" ;
+
+update_option =
+    "-f" : "Always do a slower, full update check" | "--force" : "Always do a slower, full update check"
+  | "--auto-update" : "Run as an auto-update, skipping slower steps" ;
+
+outdated_option = type_option | json | vulnerable_option ;
+
+list_option =
+    type_option | json
+  | "--full-name" : "Print fully qualified names"
+  | "--versions" : "Show the installed versions"
+  | "--multiple" : "Only formulae with several installed versions"
+  | "--pinned" : "Only pinned packages"
+  | "--installed-on-request" : "Formulae installed on request"
+  | "--no-installed-on-request" : "Formulae not installed on request"
+  | "--poured-from-bottle" : "Formulae installed from a bottle"
+  | "--built-from-source" : "Formulae compiled from source"
+  | "-1" : "One entry per line" | "-l" : "Long format" | "-r" : "Reverse the order"
+  | "-t" : "Sort by modification time" ;
+
+info_option =
+    type_option | json
+  | "--analytics" : "Show analytics data"
+  | "--days" : "Days of analytics data" , days | "--days=" : "Days of analytics data" ~ days
+  | "--category" : "Type of analytics data" , category | "--category=" : "Type of analytics data" ~ category
+  | "--github" : "Open the GitHub source page"
+  | "--installed" : "Inventory of every installed package"
+  | "--variations" : "Include the variations hash in JSON"
+  | "--sizes" : "Show the size of installed packages" ;
+days = "30" | "90" | "365" ;
+category = "install" | "install-on-request" | "build-error" ;
+
+search_option =
+    type_option
+  | "--desc" : "Search descriptions too"
+  | "--pull-request" : "Search GitHub pull requests"
+  | "--open" : "Only open pull requests" | "--closed" : "Only closed pull requests"
+  | "--alpine" : "Search Alpine packages" | "--repology" : "Search Repology"
+  | "--macports" : "Search MacPorts" | "--fink" : "Search Fink"
+  | "--opensuse" : "Search openSUSE packages" | "--fedora" : "Search Fedora packages"
+  | "--archlinux" : "Search Arch Linux packages" | "--debian" : "Search Debian packages"
+  | "--ubuntu" : "Search Ubuntu packages" ;
+
+desc_option =
+    type_option
+  | "-s" : "Search names and descriptions" | "--search" : "Search names and descriptions"
+  | "-n" : "Search only names" | "--name" : "Search only names"
+  | "--description" : "Search only descriptions" ;
+
+dependency_kind =
+    "--include-implicit" : "Include implicit dependencies"
+  | "--include-build" : "Include build dependencies"
+  | "--include-optional" : "Include optional dependencies"
+  | "--include-test" : "Include test dependencies"
+  | "--skip-recommended" : "Skip recommended dependencies"
+  | "--installed" : "Only installed formulae"
+  | "--missing" : "Only missing dependencies" ;
+
+deps_option =
+    type_option | dependency_kind
+  | "-n" : "Sort topologically" | "--topological" : "Sort topologically"
+  | "-1" : "Only direct dependencies" | "--direct" : "Only direct dependencies"
+  | "--union" : "Union of the dependencies of several formulae"
+  | "--full-name" : "Print fully qualified names"
+  | "--include-requirements" : "Include requirements too"
+  | "--tree" : "Show the dependencies as a tree"
+  | "--prune" : "Prune parts of the tree already seen"
+  | "--graph" : "Show the dependencies as a directed graph"
+  | "--dot" : "Print a DOT description of the graph"
+  | "--annotate" : "Mark build, test, implicit and optional deps"
+  | "--brewfile" : "Use the packages of ./Brewfile"
+  | "--brewfile=" : "Use the packages of this Brewfile" ~ @file
+  | "--for-each" : "List the dependencies of each formula"
+  | "--HEAD" : "Dependencies of the HEAD version"
+  | "--os" : "For this operating system" , @any | "--os=" : "For this operating system" ~ @any
+  | "--arch" : "For this CPU architecture" , arch | "--arch=" : "For this CPU architecture" ~ arch ;
+arch = "arm" | "intel" | "all" ;
+
+uses_option =
+    type_option | dependency_kind
+  | "--recursive" : "Resolve dependencies recursively" ;
+
+leaves_option =
+    "-r" : "Only formulae installed on request" | "--installed-on-request" : "Only formulae installed on request"
+  | "-p" : "Only formulae installed as dependencies" | "--installed-as-dependency" : "Only formulae installed as dependencies" ;
+
+cleanup_option =
+    dry_run
+  | "--prune" : "Remove cache files older than this many days" , @any
+  | "--prune=" : "Remove cache files older than this many days" ~ @any
+  | "-s" : "Scrub the cache, even latest downloads" | "--scrub" : "Scrub the cache, even latest downloads"
+  | "--prune-prefix" : "Only prune symlinks and directories of the prefix" ;
+
+fetch_option =
+    force | type_option
+  | "--os" : "Download for this operating system" , @any | "--os=" : "Download for this operating system" ~ @any
+  | "--arch" : "Download for this CPU architecture" , arch | "--arch=" : "Download for this CPU architecture" ~ arch
+  | "--all-platforms" : "Download for every supported platform"
+  | "--bottle-tag" : "Download the bottle of this tag" , @any
+  | "--bottle-tag=" : "Download the bottle of this tag" ~ @any
+  | "--HEAD" : "Fetch the HEAD version"
+  | "--retry" : "Retry failed or mismatched downloads"
+  | "--deps" : "Download the dependencies too"
+  | "--test" : "Download the test resources too"
+  | "-s" : "Download the source, not a bottle" | "--build-from-source" : "Download the source, not a bottle"
+  | "--build-bottle" : "Download the source for bottling"
+  | "--force-bottle" : "Download a bottle even if unsuitable" ;
+
+link_option =
+    dry_run | force | type_option
+  | "--overwrite" : "Delete files that already exist in the prefix" ;
+
+tap_option =
+    force
+  | "--custom-remote" : "Tap or change a tap with a custom remote"
+  | "--repair" : "Add missing symlinks and migrate outdated taps" ;
+
+tap_info_option = "--installed" : "Every installed tap" | json ;
+
+doctor_option =
+    "--list-checks" : "List every audit method"
+  | "-D" : "Enable debugging and profiling of audits" | "--audit-debug" : "Enable debugging and profiling of audits" ;
+
+edit_option = type_option | "--print-path" : "Print the file path instead of editing" ;
+
+log_option =
+    type_option
+  | "-p" : "Also print the patch" | "-u" : "Also print the patch" | "--patch" : "Also print the patch"
+  | "--stat" : "Also print the diffstat"
+  | "--oneline" : "One line per commit"
+  | "-n" : "Only this many commits" , @number
+  | "--max-count" : "Only this many commits" , @number
+  | "--max-count=" : "Only this many commits" ~ @number ;
+
+options_option =
+    "--compact" : "Show all options on one line"
+  | "--installed" : "Options of the installed formulae" ;
+
+missing_option =
+    "--hide" : "Act as if these formulae were not installed" , @any
+  | "--hide=" : "Act as if these formulae were not installed" ~ @any ;
+
+commands_option =
+    "--quiet" : "List only the names" | "--include-aliases" : "Include the aliases of commands" ;
+
+cache_option =
+    type_option
+  | "--os" : "Cache file for this operating system" , @any | "--os=" : "Cache file for this operating system" ~ @any
+  | "--arch" : "Cache file for this CPU architecture" , arch | "--arch=" : "Cache file for this CPU architecture" ~ arch
+  | "--bottle-tag" : "Cache file of the bottle of this tag" , @any
+  | "--bottle-tag=" : "Cache file of the bottle of this tag" ~ @any
+  | "-s" : "Cache file of the source" | "--build-from-source" : "Cache file of the source"
+  | "--force-bottle" : "Cache file of the bottle"
+  | "--HEAD" : "Cache file of the HEAD version" ;
+prefix_option = "--unbrewed" : "List files not owned by Homebrew" | "--installed" : "Only installed formulae" ;
+env_option =
+    "--shell" : "Print export statements for this shell" , @any
+  | "--shell=" : "Print export statements for this shell" ~ @any
+  | "--plain" : "Print as a plain list" ;
+
+on_off_state = "state" : "Show the current state" | "on" : "Turn it on" | "off" : "Turn it off" ;
+completions_state = "state" : "Show the current state" | "link" : "Link tap completions" | "unlink" : "Unlink tap completions" ;
+
+(* brew services *)
+services_command =
+    "list" : "List the managed services" , { json | common | services_user }
+  | "info" : "Show information about services" , { json | all_services | common | services_user | @any }
+  | "start" : "Start a service and run it at login" , { service_file | all_services | common | services_user | @any }
+  | "run" : "Run a service without registering it" , { service_file | all_services | common | services_user | @any }
+  | "restart" : "Restart a service and run it at login" , { service_file | all_services | common | services_user | @any }
+  | "stop" : "Stop a service and unregister it" , { stop_option | all_services | common | services_user | @any }
+  | "kill" : "Stop a service but keep it registered" , { all_services | common | services_user | @any }
+  | "cleanup" : "Remove all unused services" , { common | services_user } ;
+all_services = "--all" : "Act on every service" ;
+service_file =
+    "--file" : "Use the service file at this location" , @file
+  | "--file=" : "Use the service file at this location" ~ @file ;
+stop_option =
+    "--keep" : "Keep the service registered to launch at login"
+  | "--no-wait" : "Do not wait for the service to stop"
+  | "--max-wait" : "Seconds to wait for the service to stop" , @number
+  | "--max-wait=" : "Seconds to wait for the service to stop" ~ @number ;
+services_user =
+    "--sudo-service-user" : "Run the services as this user when root" , @any
+  | "--sudo-service-user=" : "Run the services as this user when root" ~ @any ;
+
+(* brew bundle *)
+bundle_command =
+    "install" : "Install and upgrade the Brewfile's dependencies" , { bundle_option | common }
+  | "upgrade" : "Shorthand for bundle install --upgrade" , { bundle_option | common }
+  | "dump" : "Write the installed packages to a Brewfile" , { bundle_option | common }
+  | "cleanup" : "Uninstall what the Brewfile does not list" , { bundle_option | common }
+  | "check" : "Check whether the Brewfile is satisfied" , { bundle_option | common }
+  | "list" : "List the Brewfile's dependencies" , { bundle_option | common }
+  | "add" : "Add entries to the Brewfile" , { bundle_option | common | @any }
+  | "remove" : "Remove entries from the Brewfile" , { bundle_option | common | @any }
+  | "edit" : "Edit the Brewfile in an editor" , { bundle_option | common }
+  | "exec" : "Run a command in the Brewfile's environment" , { bundle_option | common } , [ @command , { @any } ]
+  | "sh" : "Run a shell in the Brewfile's environment" , { bundle_option | common }
+  | "env" : "Print the environment bundle exec would set" , { bundle_option | common } ;
+
+bundle_entry_type =
+    "formula" | "cask" | "tap" | "mas" | "vscode" | "go" | "cargo" | "uv"
+  | "flatpak" | "winget" | "krew" | "npm" ;
+
+bundle_option =
+    "--file" : "Brewfile to read or write, - for stdio" , @file
+  | "--file=" : "Brewfile to read or write, - for stdio" ~ @file
+  | "-g" : "Use the global Brewfile" | "--global" : "Use the global Brewfile"
+  | "--install" : "Run install before the subcommand"
+  | "--services" : "Start the Brewfile's services"
+  | "--check" : "Check that the Brewfile is satisfied first"
+  | "--no-secrets" : "Remove secrets from the environment"
+  | "--sandbox" : "Run in a sandbox writing only to this path" , @directory
+  | "--sandbox=" : "Run in a sandbox writing only to this path" ~ @directory
+  | "--deny-network" : "Deny network access in the sandbox"
+  | "--all" : "Every supported dependency type"
+  | "--" : "Only this dependency type" ~ bundle_entry_type
+  | "--no-" : "Skip this dependency type" ~ bundle_entry_type
+  | "--no-dump-" : "Do not dump this dependency type" ~ bundle_entry_type
+  | "--no-cleanup-" : "Do not clean up this dependency type" ~ bundle_entry_type
+  | "--no-dump-brew" : "Do not dump formulae"
+  | "--no-cleanup-brew" : "Do not clean up formulae"
+  | "--upgrade" : "Upgrade outdated dependencies"
+  | "--no-upgrade" : "Do not upgrade outdated dependencies"
+  | "--upgrade-formulae" : "Upgrade only these formulae" , @any
+  | "--upgrade-formulae=" : "Upgrade only these formulae" ~ @any
+  | "-f" : "Overwrite or uninstall without asking" | "--force" : "Overwrite or uninstall without asking"
+  | "--force-cleanup" : "Clean up after installing"
+  | "--zap" : "Zap casks when cleaning up"
+  | "--no-describe" : "Do not add descriptions as comments"
+  | "--no-restart" : "Do not restart services after dumping" ;

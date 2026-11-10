@@ -1,0 +1,14 @@
+#pragma once
+
+#include <string_view>
+
+namespace telar::runtime::shell_scripts {
+
+inline constexpr std::string_view zsh_environment = R"TELAR_SHELL(@TELAR_SHELL_ZSHENV@)TELAR_SHELL";
+inline constexpr std::string_view zsh = R"TELAR_SHELL(@TELAR_SHELL_ZSH@)TELAR_SHELL";
+inline constexpr std::string_view bash = R"TELAR_SHELL(@TELAR_SHELL_BASH@)TELAR_SHELL";
+inline constexpr std::string_view fish = R"TELAR_SHELL(@TELAR_SHELL_FISH@)TELAR_SHELL";
+inline constexpr std::string_view ssh = R"TELAR_SHELL(@TELAR_SHELL_SSH@)TELAR_SHELL";
+inline constexpr std::string_view remote = R"TELAR_SHELL(@TELAR_SHELL_REMOTE@)TELAR_SHELL";
+
+}

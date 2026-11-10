@@ -1,0 +1,15 @@
+telar completions: Check a command's completion spec, as the runtime reads it, before using or sharing it
+
+Usage: telar completions check FILE
+
+Commands:
+  check           Compile a spec file and report the first error in it
+
+A completion spec describes a command's subcommands, options and values in EBNF, each
+with a description, for the Tab menu of telar's command editor. The runtime offers the
+specs telar ships, and yours from $XDG_CONFIG_HOME/telar/completions (else
+~/.config/telar/completions), named after their command: nmap.ebnf for nmap. Yours
+replace the shipped one of the same name. A pane gets a spec only for a command its shell
+runs.
+
+`telar completions COMMAND --help` explains a command's arguments, effects and results.

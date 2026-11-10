@@ -1,0 +1,178 @@
+(* wget: the options `wget --help` lists, plus -d from the manual, checked against GNU Wget 1.25.0 on
+   macOS (Homebrew), the version Arch Linux ships. Long options take their value
+   as --name=value or as the next word; short ones also joined (-Ofile). wget
+   also accepts --no- before any boolean option; only the --no- forms the help
+   lists are modelled. Operands are URLs; hosts from the SSH configuration are
+   offered. *)
+
+wget = { option | @ssh_host : "URL to download" } ;
+
+option =
+    "-V" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "-h" : "Print the help and exit" | "--help" : "Print the help and exit"
+  | "-b" : "Go to the background after startup" | "--background" : "Go to the background after startup"
+  | "-e" : "Run a .wgetrc-style command" , @any | "--execute" : "Run a .wgetrc-style command" , @any | "--execute=" : "Run a .wgetrc-style command" ~ @any
+  | "-o" : "Log messages to this file" , @file | "--output-file" : "Log messages to this file" , @file | "--output-file=" : "Log messages to this file" ~ @file
+  | "-a" : "Append log messages to this file" , @file | "--append-output" : "Append log messages to this file" , @file | "--append-output=" : "Append log messages to this file" ~ @file
+  | "-d" : "Print debug output" | "--debug" : "Print debug output"
+  | "-q" : "Quiet: no output" | "--quiet" : "Quiet: no output"
+  | "-v" : "Verbose output (the default)" | "--verbose" : "Verbose output (the default)"
+  | "-nv" : "Less output, without being quiet" | "--no-verbose" : "Less output, without being quiet"
+  | "--report-speed" : "Print bandwidth in this unit" , "bits" | "--report-speed=" : "Print bandwidth in this unit" ~ "bits"
+  | "-i" : "Download the URLs listed in this file, or -" , @file | "--input-file" : "Download the URLs listed in this file, or -" , @file | "--input-file=" : "Download the URLs listed in this file, or -" ~ @file
+  | "-F" : "Treat the input file as HTML" | "--force-html" : "Treat the input file as HTML"
+  | "-B" : "Resolve relative links of the input file against this URL" , @any | "--base" : "Resolve relative links of the input file against this URL" , @any | "--base=" : "Resolve relative links of the input file against this URL" ~ @any
+  | "--config" : "Use this config file" , @file | "--config=" : "Use this config file" ~ @file
+  | "--no-config" : "Do not read any config file"
+  | "--rejected-log" : "Log why URLs were rejected to this file" , @file | "--rejected-log=" : "Log why URLs were rejected to this file" ~ @file
+  | "-t" : "Number of retries; 0 or inf for unlimited" , @any | "--tries" : "Number of retries; 0 or inf for unlimited" , @any | "--tries=" : "Number of retries; 0 or inf for unlimited" ~ @any
+  | "--retry-connrefused" : "Retry even if the connection is refused"
+  | "--retry-on-host-error" : "Treat host errors as transient"
+  | "--retry-on-http-error" : "Retry on these HTTP status codes, comma separated" , @any | "--retry-on-http-error=" : "Retry on these HTTP status codes, comma separated" ~ @any
+  | "-O" : "Write the documents to this file, or -" , @file | "--output-document" : "Write the documents to this file, or -" , @file | "--output-document=" : "Write the documents to this file, or -" ~ @file
+  | "-nc" : "Skip downloads that would overwrite existing files" | "--no-clobber" : "Skip downloads that would overwrite existing files"
+  | "--no-netrc" : "Do not read credentials from .netrc"
+  | "-c" : "Resume a partially downloaded file" | "--continue" : "Resume a partially downloaded file"
+  | "--start-pos" : "Start downloading at this byte offset" , @any | "--start-pos=" : "Start downloading at this byte offset" ~ @any
+  | "--progress" : "Progress indicator type" , progress_type | "--progress=" : "Progress indicator type" ~ progress_type
+  | "--show-progress" : "Show the progress bar in any verbosity mode"
+  | "-N" : "Only download files newer than the local copies" | "--timestamping" : "Only download files newer than the local copies"
+  | "--no-if-modified-since" : "Do not send If-Modified-Since in timestamping mode"
+  | "--no-use-server-timestamps" : "Do not set the local file's time from the server"
+  | "-S" : "Print the server's response headers" | "--server-response" : "Print the server's response headers"
+  | "--spider" : "Check that pages exist without downloading them"
+  | "-T" : "Set every timeout to this many seconds" , @any | "--timeout" : "Set every timeout to this many seconds" , @any | "--timeout=" : "Set every timeout to this many seconds" ~ @any
+  | "--dns-timeout" : "DNS lookup timeout in seconds" , @any | "--dns-timeout=" : "DNS lookup timeout in seconds" ~ @any
+  | "--connect-timeout" : "Connect timeout in seconds" , @any | "--connect-timeout=" : "Connect timeout in seconds" ~ @any
+  | "--read-timeout" : "Read (idle) timeout in seconds" , @any | "--read-timeout=" : "Read (idle) timeout in seconds" ~ @any
+  | "-w" : "Seconds to wait between retrievals" , @any | "--wait" : "Seconds to wait between retrievals" , @any | "--wait=" : "Seconds to wait between retrievals" ~ @any
+  | "--waitretry" : "Wait up to this many seconds between retries" , @any | "--waitretry=" : "Wait up to this many seconds between retries" ~ @any
+  | "--random-wait" : "Wait a random 0.5 to 1.5 times --wait between retrievals"
+  | "--no-proxy" : "Do not use a proxy"
+  | "-Q" : "Download quota, as bytes or with k or m" , @any | "--quota" : "Download quota, as bytes or with k or m" , @any | "--quota=" : "Download quota, as bytes or with k or m" ~ @any
+  | "--bind-address" : "Bind to this local host name or address" , @any | "--bind-address=" : "Bind to this local host name or address" ~ @any
+  | "--limit-rate" : "Limit the download rate, as 20k or 1m" , @any | "--limit-rate=" : "Limit the download rate, as 20k or 1m" ~ @any
+  | "--no-dns-cache" : "Do not cache DNS lookups"
+  | "--restrict-file-names" : "Characters to escape in file names, comma separated" , file_name_mode | "--restrict-file-names=" : "Characters to escape in file names, comma separated" ~ file_name_mode
+  | "--ignore-case" : "Ignore case when matching files and directories"
+  | "-4" : "Connect to IPv4 addresses only" | "--inet4-only" : "Connect to IPv4 addresses only"
+  | "-6" : "Connect to IPv6 addresses only" | "--inet6-only" : "Connect to IPv6 addresses only"
+  | "--prefer-family" : "Connect first to addresses of this family" , ( "IPv6" | "IPv4" | "none" ) | "--prefer-family=" : "Connect first to addresses of this family" ~ ( "IPv6" | "IPv4" | "none" )
+  | "--user" : "User for both FTP and HTTP" , @any | "--user=" : "User for both FTP and HTTP" ~ @any
+  | "--password" : "Password for both FTP and HTTP" , @any | "--password=" : "Password for both FTP and HTTP" ~ @any
+  | "--ask-password" : "Prompt for passwords"
+  | "--use-askpass" : "Ask for user and password with this command" , @command | "--use-askpass=" : "Ask for user and password with this command" ~ @command
+  | "--no-iri" : "Turn off IRI support"
+  | "--local-encoding" : "Local encoding for IRIs" , @any | "--local-encoding=" : "Local encoding for IRIs" ~ @any
+  | "--remote-encoding" : "Default remote encoding" , @any | "--remote-encoding=" : "Default remote encoding" ~ @any
+  | "--unlink" : "Remove a file before overwriting it"
+  | "--xattr" : "Store metadata in extended file attributes"
+  | "-nd" : "Do not create directories" | "--no-directories" : "Do not create directories"
+  | "-x" : "Always create directories" | "--force-directories" : "Always create directories"
+  | "-nH" : "Do not create host directories" | "--no-host-directories" : "Do not create host directories"
+  | "--protocol-directories" : "Use the protocol name as a directory"
+  | "-P" : "Save files under this directory" , @directory | "--directory-prefix" : "Save files under this directory" , @directory | "--directory-prefix=" : "Save files under this directory" ~ @directory
+  | "--cut-dirs" : "Ignore this many remote directory components" , @number | "--cut-dirs=" : "Ignore this many remote directory components" ~ @number
+  | "--http-user" : "HTTP user" , @any | "--http-user=" : "HTTP user" ~ @any
+  | "--http-password" : "HTTP password" , @any | "--http-password=" : "HTTP password" ~ @any
+  | "--no-cache" : "Ask the server not to serve cached data"
+  | "--default-page" : "Default page name instead of index.html" , @any | "--default-page=" : "Default page name instead of index.html" ~ @any
+  | "-E" : "Save HTML and CSS documents with proper extensions" | "--adjust-extension" : "Save HTML and CSS documents with proper extensions"
+  | "--ignore-length" : "Ignore the Content-Length header"
+  | "--header" : "Add this header to the request" , @any | "--header=" : "Add this header to the request" ~ @any
+  | "--compression" : "Compression to request" , ( "auto" | "gzip" | "none" ) | "--compression=" : "Compression to request" ~ ( "auto" | "gzip" | "none" )
+  | "--max-redirect" : "Maximum redirections per page" , @number | "--max-redirect=" : "Maximum redirections per page" ~ @number
+  | "--proxy-user" : "Proxy user" , @any | "--proxy-user=" : "Proxy user" ~ @any
+  | "--proxy-password" : "Proxy password" , @any | "--proxy-password=" : "Proxy password" ~ @any
+  | "--referer" : "Send this Referer URL" , @any | "--referer=" : "Send this Referer URL" ~ @any
+  | "--save-headers" : "Save the HTTP headers in the file"
+  | "-U" : "User-Agent to send" , @any | "--user-agent" : "User-Agent to send" , @any | "--user-agent=" : "User-Agent to send" ~ @any
+  | "--no-http-keep-alive" : "Disable HTTP keep-alive"
+  | "--no-cookies" : "Do not use cookies"
+  | "--load-cookies" : "Load cookies from this file first" , @file | "--load-cookies=" : "Load cookies from this file first" ~ @file
+  | "--save-cookies" : "Save cookies to this file at the end" , @file | "--save-cookies=" : "Save cookies to this file at the end" ~ @file
+  | "--keep-session-cookies" : "Load and save session cookies too"
+  | "--post-data" : "POST this string" , @any | "--post-data=" : "POST this string" ~ @any
+  | "--post-file" : "POST the contents of this file" , @file | "--post-file=" : "POST the contents of this file" ~ @file
+  | "--method" : "HTTP method to use" , http_method | "--method=" : "HTTP method to use" ~ http_method
+  | "--body-data" : "Send this string as the body (needs --method)" , @any | "--body-data=" : "Send this string as the body (needs --method)" ~ @any
+  | "--body-file" : "Send this file as the body (needs --method)" , @file | "--body-file=" : "Send this file as the body (needs --method)" ~ @file
+  | "--content-disposition" : "Name files from Content-Disposition (experimental)"
+  | "--content-on-error" : "Save the content of server error responses"
+  | "--auth-no-challenge" : "Send Basic authentication without waiting for a challenge"
+  | "--secure-protocol" : "TLS protocol to use" , ( "auto" | "SSLv2" | "SSLv3" | "TLSv1" | "TLSv1_1" | "TLSv1_2" | "TLSv1_3" | "PFS" ) | "--secure-protocol=" : "TLS protocol to use" ~ ( "auto" | "SSLv2" | "SSLv3" | "TLSv1" | "TLSv1_1" | "TLSv1_2" | "TLSv1_3" | "PFS" )
+  | "--https-only" : "Only follow HTTPS links when recursing"
+  | "--no-check-certificate" : "Do not verify the server certificate"
+  | "--certificate" : "Client certificate file" , @file | "--certificate=" : "Client certificate file" ~ @file
+  | "--certificate-type" : "Client certificate type" , ( "PEM" | "DER" ) | "--certificate-type=" : "Client certificate type" ~ ( "PEM" | "DER" )
+  | "--private-key" : "Private key file" , @file | "--private-key=" : "Private key file" ~ @file
+  | "--private-key-type" : "Private key type" , ( "PEM" | "DER" ) | "--private-key-type=" : "Private key type" ~ ( "PEM" | "DER" )
+  | "--ca-certificate" : "CA certificate bundle file" , @file | "--ca-certificate=" : "CA certificate bundle file" ~ @file
+  | "--ca-directory" : "Directory of hashed CA certificates" , @directory | "--ca-directory=" : "Directory of hashed CA certificates" ~ @directory
+  | "--crl-file" : "File with a bundle of CRLs" , @file | "--crl-file=" : "File with a bundle of CRLs" ~ @file
+  | "--pinnedpubkey" : "Public key file or sha256// hashes to verify the peer" , @any | "--pinnedpubkey=" : "Public key file or sha256// hashes to verify the peer" ~ @any
+  | "--random-file" : "File of random data to seed the TLS PRNG" , @file | "--random-file=" : "File of random data to seed the TLS PRNG" ~ @file
+  | "--ciphers" : "TLS cipher list or GnuTLS priority string" , @any | "--ciphers=" : "TLS cipher list or GnuTLS priority string" ~ @any
+  | "--no-hsts" : "Disable HSTS"
+  | "--hsts-file" : "HSTS database file" , @file | "--hsts-file=" : "HSTS database file" ~ @file
+  | "--ftp-user" : "FTP user" , @any | "--ftp-user=" : "FTP user" ~ @any
+  | "--ftp-password" : "FTP password" , @any | "--ftp-password=" : "FTP password" ~ @any
+  | "--no-remove-listing" : "Keep the .listing files"
+  | "--no-glob" : "Turn off FTP file name globbing"
+  | "--no-passive-ftp" : "Use active FTP"
+  | "--preserve-permissions" : "Keep the remote file permissions"
+  | "--retr-symlinks" : "When recursing, download the files symlinks point to"
+  | "--ftps-implicit" : "Use implicit FTPS (port 990)"
+  | "--ftps-resume-ssl" : "Reuse the control connection's TLS session for data"
+  | "--ftps-clear-data-connection" : "Encrypt only the control connection"
+  | "--ftps-fallback-to-ftp" : "Fall back to FTP if the server lacks FTPS"
+  | "--warc-file" : "Save requests and responses to this .warc.gz file" , @file | "--warc-file=" : "Save requests and responses to this .warc.gz file" ~ @file
+  | "--warc-header" : "Insert this string into the warcinfo record" , @any | "--warc-header=" : "Insert this string into the warcinfo record" ~ @any
+  | "--warc-max-size" : "Maximum size of the WARC files" , @any | "--warc-max-size=" : "Maximum size of the WARC files" ~ @any
+  | "--warc-cdx" : "Write CDX index files"
+  | "--warc-dedup" : "Do not store records listed in this CDX file" , @file | "--warc-dedup=" : "Do not store records listed in this CDX file" ~ @file
+  | "--no-warc-compression" : "Do not compress WARC files"
+  | "--no-warc-digests" : "Do not compute SHA1 digests"
+  | "--no-warc-keep-log" : "Do not store the log file in a WARC record"
+  | "--warc-tempdir" : "Directory for the WARC writer's temporary files" , @directory | "--warc-tempdir=" : "Directory for the WARC writer's temporary files" ~ @directory
+  | "-r" : "Download recursively" | "--recursive" : "Download recursively"
+  | "-l" : "Maximum recursion depth; inf or 0 for unlimited" , @any | "--level" : "Maximum recursion depth; inf or 0 for unlimited" , @any | "--level=" : "Maximum recursion depth; inf or 0 for unlimited" ~ @any
+  | "--delete-after" : "Delete each file after downloading it"
+  | "-k" : "Point links in downloaded HTML or CSS to local files" | "--convert-links" : "Point links in downloaded HTML or CSS to local files"
+  | "--convert-file-only" : "Convert only the file part of the URLs"
+  | "--backups" : "Rotate up to this many backup files" , @number | "--backups=" : "Rotate up to this many backup files" ~ @number
+  | "-K" : "Back up each converted file as X.orig" | "--backup-converted" : "Back up each converted file as X.orig"
+  | "-m" : "Mirror: -N -r -l inf --no-remove-listing" | "--mirror" : "Mirror: -N -r -l inf --no-remove-listing"
+  | "-p" : "Download everything needed to display each page" | "--page-requisites" : "Download everything needed to display each page"
+  | "--strict-comments" : "Parse HTML comments strictly"
+  | "-A" : "Accepted file suffixes or patterns, comma separated" , @any | "--accept" : "Accepted file suffixes or patterns, comma separated" , @any | "--accept=" : "Accepted file suffixes or patterns, comma separated" ~ @any
+  | "-R" : "Rejected file suffixes or patterns, comma separated" , @any | "--reject" : "Rejected file suffixes or patterns, comma separated" , @any | "--reject=" : "Rejected file suffixes or patterns, comma separated" ~ @any
+  | "--accept-regex" : "Regular expression of accepted URLs" , @any | "--accept-regex=" : "Regular expression of accepted URLs" ~ @any
+  | "--reject-regex" : "Regular expression of rejected URLs" , @any | "--reject-regex=" : "Regular expression of rejected URLs" ~ @any
+  | "--regex-type" : "Regular expression type" , ( "posix" | "pcre" ) | "--regex-type=" : "Regular expression type" ~ ( "posix" | "pcre" )
+  | "-D" : "Domains to follow, comma separated" , @any | "--domains" : "Domains to follow, comma separated" , @any | "--domains=" : "Domains to follow, comma separated" ~ @any
+  | "--exclude-domains" : "Domains not to follow, comma separated" , @any | "--exclude-domains=" : "Domains not to follow, comma separated" ~ @any
+  | "--follow-ftp" : "Follow FTP links from HTML documents"
+  | "--follow-tags" : "HTML tags to follow, comma separated" , @any | "--follow-tags=" : "HTML tags to follow, comma separated" ~ @any
+  | "--ignore-tags" : "HTML tags to ignore, comma separated" , @any | "--ignore-tags=" : "HTML tags to ignore, comma separated" ~ @any
+  | "-H" : "Follow links to other hosts when recursing" | "--span-hosts" : "Follow links to other hosts when recursing"
+  | "-L" : "Follow relative links only" | "--relative" : "Follow relative links only"
+  | "-I" : "Directories to follow, comma separated" , @any | "--include-directories" : "Directories to follow, comma separated" , @any | "--include-directories=" : "Directories to follow, comma separated" ~ @any
+  | "--trust-server-names" : "Name files after the last redirection URL"
+  | "-X" : "Directories to exclude, comma separated" , @any | "--exclude-directories" : "Directories to exclude, comma separated" , @any | "--exclude-directories=" : "Directories to exclude, comma separated" ~ @any
+  | "-np" : "Never ascend to the parent directory" | "--no-parent" : "Never ascend to the parent directory" ;
+
+progress_type =
+    "bar" : "Progress bar (the default on a terminal)" | "bar:force" : "Progress bar even without a terminal"
+  | "bar:noscroll" : "Progress bar without scrolling the file name"
+  | "bar:force:noscroll" : "Forced progress bar without scrolling"
+  | "dot" : "Dots, 1K each" | "dot:default" : "Dots, 1K each" | "dot:binary" : "Dots, 8K each"
+  | "dot:mega" : "Dots, 64K each" | "dot:giga" : "Dots, 1M each" ;
+
+file_name_mode =
+    "unix" : "Escape / and control characters" | "windows" : "Escape the characters Windows forbids"
+  | "nocontrol" : "Do not escape control characters" | "ascii" : "Escape bytes outside ASCII"
+  | "lowercase" : "Convert file names to lowercase" | "uppercase" : "Convert file names to uppercase"
+  | @any : "Several modes, comma separated" ;
+
+http_method = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | @any : "Any HTTP method" ;

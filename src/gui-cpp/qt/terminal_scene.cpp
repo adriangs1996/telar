@@ -5,6 +5,7 @@ static_assert(true);
 
 
 #include "terminal_scene.hpp"
+#include <QMatrix4x4>
 #include "cell_glyphs.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -270,7 +271,10 @@ void TerminalScene::synchronizeGrid(CellRectangle visible) {
   row_nodes_.clear();
   row_nodes_.reserve(visible.height);
   for (std::size_t index = 0; index < visible.height; ++index) {
-    row_nodes_.append({.text = &appendSceneNode<QSGTransformNode>(rows_), .background = &appendSceneNode<QSGTransformNode>(cell_backgrounds_)});
+    // Each row can fade and rise into place on its own, for a command's first output.
+    QSGOpacityNode *text_opacity = &appendSceneNode<QSGOpacityNode>(rows_);
+    QSGOpacityNode *background_opacity = &appendSceneNode<QSGOpacityNode>(cell_backgrounds_);
+    row_nodes_.append({.text = &appendSceneNode<QSGTransformNode>(*text_opacity), .background = &appendSceneNode<QSGTransformNode>(*background_opacity), .text_opacity = text_opacity, .background_opacity = background_opacity});
   }
 
   columns_ = visible.width;
@@ -348,8 +352,33 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
 
   for (qsizetype index = 0; index < row_nodes_.size(); ++index) {
     auto &row = row_nodes_[index];
+    const auto position = static_cast<std::size_t>(index);
+    if (frame.hidden(position)) {
+      if (!row.hidden) {
+        std::unique_ptr<QSGNode> previous{row.text_content};
+        row.text_content = nullptr;
+        if (previous) {
+          row.text->removeChildNode(previous.get());
+        }
+        clearSceneChildren(*row.text);
+        clearSceneChildren(*row.background);
+        row.hidden = true;
+      }
+      continue;
+    }
+    if (const auto revealed = frame.revealed(position); revealed != row.revealed) {
+      row.revealed = revealed;
+      const auto settled = 1.0F - (1.0F - revealed) * (1.0F - revealed) * (1.0F - revealed);
+      QMatrix4x4 lift;
+      lift.translate(0, static_cast<float>(frame.font.cell.height()) * 0.25F * (1.0F - settled));
+      row.text->setMatrix(lift);
+      row.background->setMatrix(lift);
+      row.text_opacity->setOpacity(revealed);
+      row.background_opacity->setOpacity(revealed);
+    }
+    const bool shown = std::exchange(row.hidden, false);
     const auto selection = frame.selection.within(static_cast<std::size_t>(index) * frame.screen.columns(), frame.screen.columns());
-    if (glyphs_changed || bounds_ != frame.bounds || row.revision != frame.screen.rowRevision(static_cast<std::size_t>(index)) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, static_cast<std::size_t>(index), columns_)) {
+    if (shown || glyphs_changed || bounds_ != frame.bounds || row.revision != frame.screen.rowRevision(static_cast<std::size_t>(index)) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, static_cast<std::size_t>(index), columns_)) {
       paintRow(frame, static_cast<std::size_t>(index));
     }
   }
@@ -386,7 +415,7 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
     return;
   }
 
-  if (std::cmp_greater_equal(cursor.y, row_nodes_.size()) || cursor.x >= columns_) {
+  if (std::cmp_greater_equal(cursor.y, row_nodes_.size()) || cursor.x >= columns_ || frame.hidden(cursor.y)) {
     return;
   }
 

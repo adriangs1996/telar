@@ -1,0 +1,76 @@
+(* rspec: options of rspec-core 3.13.5, checked against `rspec --help`.
+   Operands are spec files or directories, optionally with line numbers or
+   example ids (spec/a_spec.rb:37, spec/a_spec.rb[1:5]).
+
+   OptionParser rules: a value is `--name value` or `--name=value`, `-x value`
+   or `-xvalue`; an optional value is taken from the next word when it does not
+   start with a dash. *)
+
+rspec = { option | @file } ;
+
+option =
+    "-I" : "Add this path to $LOAD_PATH" , @directory
+  | "-r" : "Require a file" , @any | "--require" : "Require a file" , @any | "--require=" : "Require a file" ~ @any
+  | "-O" : "Use this options file" , @file | "--options" : "Use this options file" , @file
+  | "--options=" : "Use this options file" ~ @file
+  | "--order" : "Order of examples, TYPE[:SEED]" , ( order | seeded_order ) | "--order=" : "Order of examples, TYPE[:SEED]" ~ order
+  | "--order=rand:" : "Random order with this seed" ~ @number | "--order=random:" : "Random order with this seed" ~ @number
+  | "--seed" : "Run in random order with this seed" , @number | "--seed=" : "Run in random order with this seed" ~ @number
+  | "--bisect" : "Find the minimal set of examples that fails"
+  | "--bisect=" : "Find the minimal set of examples that fails" ~ "verbose"
+  | "--fail-fast" : "Abort after a number of failures, 1 by default" , [ @number ]
+  | "--fail-fast=" : "Abort after this many failures" ~ @number
+  | "--no-fail-fast" : "Do not abort on failures"
+  | "--failure-exit-code" : "Exit code when specs fail" , @number
+  | "--failure-exit-code=" : "Exit code when specs fail" ~ @number
+  | "--error-exit-code" : "Exit code for errors outside examples" , @number
+  | "--error-exit-code=" : "Exit code for errors outside examples" ~ @number
+  | "-X" : "Run examples via DRb" | "--drb" : "Run examples via DRb" | "--no-drb" : "Do not run via DRb"
+  | "--drb-port" : "Port of the DRb server" , @number | "--drb-port=" : "Port of the DRb server" ~ @number
+  | "-f" : "Formatter" , formatter | "--format" : "Formatter" , formatter | "--format=" : "Formatter" ~ formatter
+  | "-o" : "Write output to this file" , @file | "--out" : "Write output to this file" , @file
+  | "--out=" : "Write output to this file" ~ @file
+  | "--deprecation-out" : "Write deprecation warnings to this file" , @file
+  | "--deprecation-out=" : "Write deprecation warnings to this file" ~ @file
+  | "-b" : "Enable full backtraces" | "--backtrace" : "Enable full backtraces"
+  | "--force-color" : "Force colored output" | "--force-colour" : "Force colored output"
+  | "--no-color" : "Disable colored output" | "--no-colour" : "Disable colored output"
+  | "-p" : "Profile the slowest examples, 10 by default" , [ @number ]
+  | "--profile" : "Profile the slowest examples, 10 by default" , [ @number ]
+  | "--profile=" : "Profile this many slowest examples" ~ @number
+  | "--no-profile" : "Do not profile examples"
+  | "--dry-run" : "Print the formatter output without running examples"
+  | "-w" : "Enable Ruby warnings" | "--warnings" : "Enable Ruby warnings"
+  | "--only-failures" : "Only run the examples that failed last time"
+  | "-n" : "Run the next failure and stop" | "--next-failure" : "Run the next failure and stop"
+  | "-P" : "Load files matching this pattern" , @any | "--pattern" : "Load files matching this pattern" , @any
+  | "--pattern=" : "Load files matching this pattern" ~ @any
+  | "--exclude-pattern" : "Skip files matching this pattern" , @any
+  | "--exclude-pattern=" : "Skip files matching this pattern" ~ @any
+  | "-e" : "Run examples whose names include this string" , @any
+  | "--example" : "Run examples whose names include this string" , @any
+  | "--example=" : "Run examples whose names include this string" ~ @any
+  | "-E" : "Run examples whose names match this regex" , @any
+  | "--example-matches" : "Run examples whose names match this regex" , @any
+  | "--example-matches=" : "Run examples whose names match this regex" ~ @any
+  | "-t" : "Run examples with this tag, ~tag excludes" , @any
+  | "--tag" : "Run examples with this tag, ~tag excludes" , @any
+  | "--tag=" : "Run examples with this tag, ~tag excludes" ~ @any
+  | "--default-path" : "Default path of the specs" , @file | "--default-path=" : "Default path of the specs" ~ @file
+  | "--init" : "Initialize the project with RSpec"
+  | "-v" : "Print the version" | "--version" : "Print the version"
+  | "-h" : "Show the help" | "--help" : "Show the help" ;
+
+order =
+    "defined" : "In the order they are defined"
+  | "rand" : "Random order" | "random" : "Random order"
+  | "recently-modified" : "Most recently modified files first" ;
+seeded_order = "rand:" : "Random order with this seed" ~ @number | "random:" : "Random order with this seed" ~ @number ;
+
+formatter =
+    "progress" : "Dots, the default" | "p" : "Dots, the default"
+  | "documentation" : "Group and example names" | "d" : "Group and example names"
+  | "html" : "HTML" | "h" : "HTML"
+  | "json" : "JSON" | "j" : "JSON"
+  | "failures" : "file:line:reason of each failure" | "f" : "file:line:reason of each failure"
+  | @any : "A custom formatter class" ;

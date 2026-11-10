@@ -1,0 +1,92 @@
+(* journalctl: the options of `journalctl --help` and `man journalctl` of
+   systemd 262 (Arch Linux). Long options take their value as --name=value or as
+   the next word; -b and -n also read an optional offset or count as the next
+   word, as journalctl does. Operands are matches (FIELD=VALUE, +, or the path
+   of an executable or device); files are offered. *)
+
+journalctl = { option | "+" : "OR the matches before and after" | @file : "FIELD=VALUE, or an executable or device path" } ;
+
+option =
+    "-b" : "Show the current boot, or this offset or id" , [ "-" ~ @number | "all" : "Undo an earlier -b" ] | "-b" ~ @any
+  | "--boot" : "Show the current boot, or this offset or id" , [ "-" ~ @number | "all" : "Undo an earlier -b" ] | "--boot=" : "Show this boot offset or id" ~ @any
+  | "-n" : "Number of entries to show (default 10)" , [ @number | "all" : "Show every entry" ] | "-n" ~ @any
+  | "--lines" : "Number of entries to show (default 10)" , [ @number | "all" : "Show every entry" ] | "--lines=" : "Number of entries to show, or +N from the start" ~ @any
+  | "--system" : "Show the system journal"
+  | "--user" : "Show the current user's journal"
+  | "-M" : "Operate on this local container" , @any | "--machine" : "Operate on this local container" , @any | "--machine=" : "Operate on this local container" ~ @any
+  | "-m" : "Show entries from all available journals" | "--merge" : "Show entries from all available journals"
+  | "-D" : "Show the journal files in this directory" , @directory | "--directory" : "Show the journal files in this directory" , @directory | "--directory=" : "Show the journal files in this directory" ~ @directory
+  | "-i" : "Show this journal file" , @file | "--file" : "Show this journal file" , @file | "--file=" : "Show this journal file" ~ @file
+  | "--root" : "Operate on this file system root" , @directory | "--root=" : "Operate on this file system root" ~ @directory
+  | "--image" : "Operate on this disk image" , @file | "--image=" : "Operate on this disk image" ~ @file
+  | "--image-policy" : "Disk image dissection policy" , @any | "--image-policy=" : "Disk image dissection policy" ~ @any
+  | "--namespace" : "Show the journal of this namespace" , @any | "--namespace=" : "Show the journal of this namespace" ~ @any
+  | "-S" : "Show entries not older than this date" , @any | "--since" : "Show entries not older than this date" , @any | "--since=" : "Show entries not older than this date" ~ @any
+  | "-U" : "Show entries not newer than this date" , @any | "--until" : "Show entries not newer than this date" , @any | "--until=" : "Show entries not newer than this date" ~ @any
+  | "-c" : "Show entries starting at this cursor" , @any | "--cursor" : "Show entries starting at this cursor" , @any | "--cursor=" : "Show entries starting at this cursor" ~ @any
+  | "--after-cursor" : "Show entries after this cursor" , @any | "--after-cursor=" : "Show entries after this cursor" ~ @any
+  | "--cursor-file" : "Show entries after the cursor in this file, then update it" , @file | "--cursor-file=" : "Show entries after the cursor in this file, then update it" ~ @file
+  | "-u" : "Show logs of this unit or pattern" , @any | "--unit" : "Show logs of this unit or pattern" , @any | "--unit=" : "Show logs of this unit or pattern" ~ @any
+  | "--user-unit" : "Show logs of this user unit" , @any | "--user-unit=" : "Show logs of this user unit" ~ @any
+  | "--invocation" : "Show logs of this invocation id or offset" , @any | "--invocation=" : "Show logs of this invocation id or offset" ~ @any
+  | "-I" : "Show logs of the latest invocation of the unit"
+  | "-t" : "Show entries with this syslog identifier" , @any | "--identifier" : "Show entries with this syslog identifier" , @any | "--identifier=" : "Show entries with this syslog identifier" ~ @any
+  | "-T" : "Hide entries with this syslog identifier" , @any | "--exclude-identifier" : "Hide entries with this syslog identifier" , @any | "--exclude-identifier=" : "Hide entries with this syslog identifier" ~ @any
+  | "-p" : "Show entries in this priority range, as err or 0..3" , priority | "--priority" : "Show entries in this priority range, as err or 0..3" , priority | "--priority=" : "Show entries in this priority range, as err or 0..3" ~ priority
+  | "--facility" : "Show entries of these facilities, comma separated" , @any | "--facility=" : "Show entries of these facilities, comma separated" ~ @any
+  | "-g" : "Show entries whose MESSAGE matches this pattern" , @any | "--grep" : "Show entries whose MESSAGE matches this pattern" , @any | "--grep=" : "Show entries whose MESSAGE matches this pattern" ~ @any
+  | "--case-sensitive" : "Force case sensitive or insensitive matching" | "--case-sensitive=" : "Force case sensitive or insensitive matching" ~ ( "yes" | "no" | "true" | "false" | "1" | "0" | "on" | "off" )
+  | "-k" : "Show the kernel log of the current boot" | "--dmesg" : "Show the kernel log of the current boot"
+  | "-o" : "Output mode" , output_mode | "--output" : "Output mode" , output_mode | "--output=" : "Output mode" ~ output_mode
+  | "--output-fields" : "Fields to print in verbose, export and json modes" , @any | "--output-fields=" : "Fields to print in verbose, export and json modes" ~ @any
+  | "-r" : "Show the newest entries first" | "--reverse" : "Show the newest entries first"
+  | "--show-cursor" : "Print the cursor after the entries"
+  | "--utc" : "Show times in UTC"
+  | "-x" : "Add message explanations where available" | "--catalog" : "Add message explanations where available"
+  | "-W" : "Do not show the host name" | "--no-hostname" : "Do not show the host name"
+  | "--no-full" : "Ellipsize fields"
+  | "-a" : "Show all fields, including long and unprintable ones" | "--all" : "Show all fields, including long and unprintable ones"
+  | "-f" : "Follow the journal" | "--follow" : "Follow the journal"
+  | "--no-tail" : "Show all lines, even when following"
+  | "--truncate-newline" : "Truncate entries at the first newline"
+  | "-q" : "Do not show info messages and privilege warnings" | "--quiet" : "Do not show info messages and privilege warnings"
+  | "--synchronize-on-exit" : "Wait for journal synchronization before exiting" , ( "yes" | "no" | "true" | "false" | "1" | "0" | "on" | "off" ) | "--synchronize-on-exit=" : "Wait for journal synchronization before exiting" ~ ( "yes" | "no" | "true" | "false" | "1" | "0" | "on" | "off" )
+  | "--no-pager" : "Do not start a pager"
+  | "-e" : "Jump to the end in the pager" | "--pager-end" : "Jump to the end in the pager"
+  | "--interval" : "Interval for changing the FSS sealing key" , @any | "--interval=" : "Interval for changing the FSS sealing key" ~ @any
+  | "--verify-key" : "FSS verification key" , @any | "--verify-key=" : "FSS verification key" ~ @any
+  | "--force" : "Override the FSS key pair with --setup-keys"
+  | "-h" : "Print the help and exit" | "--help" : "Print the help and exit"
+  | "--version" : "Print the version and exit"
+  | "-N" : "List the field names in use" | "--fields" : "List the field names in use"
+  | "-F" : "List the values this field takes" , @any | "--field" : "List the values this field takes" , @any | "--field=" : "List the values this field takes" ~ @any
+  | "--list-boots" : "List the recorded boots"
+  | "--list-invocations" : "List the invocation ids of the unit"
+  | "--list-namespaces" : "List the journal namespaces"
+  | "--disk-usage" : "Show the disk usage of all journal files"
+  | "--vacuum-size" : "Remove archived files until under this size" , @any | "--vacuum-size=" : "Remove archived files until under this size" ~ @any
+  | "--vacuum-files" : "Keep at most this many archived files" , @number | "--vacuum-files=" : "Keep at most this many archived files" ~ @number
+  | "--vacuum-time" : "Remove archived files older than this" , @any | "--vacuum-time=" : "Remove archived files older than this" ~ @any
+  | "--verify" : "Verify the consistency of journal files"
+  | "--sync" : "Write unwritten journal messages to disk"
+  | "--relinquish-var" : "Stop logging to /var, log to /run"
+  | "--smart-relinquish-var" : "As --relinquish-var, unless /var is on the root mount"
+  | "--flush" : "Move journal data from /run to /var"
+  | "--rotate" : "Rotate the journal files now"
+  | "--header" : "Show the journal header information"
+  | "--list-catalog" : "List the message ids in the catalog"
+  | "--dump-catalog" : "Show the entries of the message catalog"
+  | "--update-catalog" : "Update the message catalog database"
+  | "--setup-keys" : "Generate a new FSS key pair" ;
+
+priority =
+    "emerg" : "0" | "alert" : "1" | "crit" : "2" | "err" : "3" | "warning" : "4" | "notice" : "5" | "info" : "6" | "debug" : "7"
+  | @any : "A level or range, as 0..4 or err..emerg" ;
+
+output_mode =
+    "short" : "Like classic syslog files (default)" | "short-full" : "Timestamps in the --since format" | "short-iso" : "RFC 3339 timestamps"
+  | "short-iso-precise" : "RFC 3339 timestamps with microseconds" | "short-precise" : "Timestamps with microseconds"
+  | "short-monotonic" : "Monotonic timestamps" | "short-delta" : "Monotonic timestamps and the time since the previous entry"
+  | "short-unix" : "Seconds since the epoch" | "verbose" : "Every field" | "export" : "Export stream for backups and network transfer"
+  | "json" : "One JSON object per line" | "json-pretty" : "Indented JSON" | "json-sse" : "JSON for server-sent events"
+  | "json-seq" : "JSON text sequences (RFC 7464)" | "cat" : "Only the message" | "with-unit" : "Like short-full, with unit names instead of identifiers" ;

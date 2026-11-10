@@ -1,0 +1,2227 @@
+(* az: Azure CLI 2.92.0, checked against `az --help`, `az <group> --help` and the
+   argument definitions azure-cli loads for each command (mcr.microsoft.com/azure-cli).
+   Every top-level group and command is listed. login, logout, account, group, vm, aks,
+   acr, webapp, storage, keyvault, functionapp and network list all their subgroups and
+   commands; the common commands of the main groups (create, list, show, delete, start,
+   stop, update, ...) and of storage account/container/blob, keyvault secret, aks
+   nodepool, acr repository and network vnet/subnet/nsg/rule/public-ip/nic/lb model their
+   arguments: the required ones plus about a dozen of the most used (the spec format caps
+   the source at 10000 tokens). Everything else takes any words. Preview and deprecated
+   arguments are left out.
+
+   Conventions:
+   - Arguments come after the command. az takes `--name value` and `--name=value`;
+     only the global arguments model the joined form.
+   - Arguments with several values (--tags a=1 b=2) take any words that follow. *)
+
+az = { early_global } , command | "--version" : "Show the versions of Azure CLI modules and extensions" | help ;
+
+command =
+    "account" : "Manage Azure subscription information" , [ account_command ]
+  | "acr" : "Manage private registries with Azure Container Registries" , [ acr_command ]
+  | "aks" : "Azure Kubernetes Service" , [ aks_command ]
+  | "functionapp" : "Manage function apps" , [ functionapp_command ]
+  | "group" : "Manage resource groups and template deployments" , [ group_command ]
+  | "keyvault" : "Manage KeyVault keys, secrets, and certificates" , [ keyvault_command ]
+  | "login" : "Log in to Azure" , { login_option }
+  | "logout" : "Log out to remove access to Azure subscriptions" , { logout_option }
+  | "network" : "Manage Azure Network resources" , [ network_command ]
+  | "storage" : "Manage Azure Cloud Storage resources" , [ storage_command ]
+  | "version" : "Show the versions of Azure CLI modules and extensions" , { version_option }
+  | "vm" : "Manage Linux or Windows virtual machines" , [ vm_command ]
+  | "webapp" : "Manage web apps" , [ webapp_command ]
+  | ( "ad" : "Manage Microsoft Entra ID entities for Azure RBAC"
+  | "advisor" : "Manage Azure Advisor"
+  | "ams" : "Manage Azure Media Services resources"
+  | "apim" : "Manage Azure API Management services"
+  | "appconfig" : "Manage App Configurations"
+  | "appservice" : "Manage Appservice"
+  | "aro" : "Manage Azure Red Hat OpenShift clusters"
+  | "backup" : "Manage Azure Backups"
+  | "batch" : "Manage Azure Batch"
+  | "bicep" : "Bicep CLI command group"
+  | "billing" : "Manage Azure Billing"
+  | "bot" : "Manage Microsoft Azure Bot Service"
+  | "cache" : "Commands to manage CLI objects cached using the --defer argument"
+  | "capacity" : "Manage capacity"
+  | "cloud" : "Manage registered Azure clouds"
+  | "cognitiveservices" : "Manage Azure Cognitive Services accounts"
+  | "compute-fleet" : "Manage for Azure Compute Fleet"
+  | "compute-recommender" : "Manage sku/zone/region recommender info for compute resources"
+  | "config" : "Manage Azure CLI configuration"
+  | "configure" : "Manage Azure CLI configuration"
+  | "connection" : "Manage Service Connector local connections"
+  | "consumption" : "Manage consumption of Azure resources"
+  | "container" : "Manage Azure Container Instances"
+  | "containerapp" : "Manage Azure Container Apps"
+  | "cosmosdb" : "Manage Azure Cosmos DB database accounts"
+  | "data-boundary" : "Data boundary operations"
+  | "databoxedge" : "Manage device with databoxedge"
+  | "deployment" : "Manage Azure Resource Manager template deployment at subscription"
+  | "deployment-scripts" : "Manage deployment scripts at subscription or resource group scope"
+  | "disk" : "Manage Azure Managed Disks"
+  | "disk-access" : "Manage disk access resources"
+  | "disk-encryption-set" : "Disk Encryption Set resource"
+  | "dls" : "Manage Data Lake Store accounts and filesystems"
+  | "dms" : "Manage Azure Data Migration Service (classic) instances"
+  | "eventgrid" : "Manage Azure Event Grid topics, domains and event subscriptions"
+  | "eventhubs" : "Manage Event Hub"
+  | "extension" : "Manage and update CLI extensions"
+  | "feature" : "Manage resource provider features"
+  | "feedback" : "Send feedback to the Azure CLI Team"
+  | "find" : "Ask an AI assistant for Azure CLI usage"
+  | "hdinsight" : "Manage HDInsight resources"
+  | "identity" : "Manage Managed Identity"
+  | "image" : "Manage custom virtual machine images"
+  | "interactive" : "Start interactive mode"
+  | "iot" : "Manage Internet of Things (IoT) assets"
+  | "lab" : "Manage azure devtest labs"
+  | "lock" : "Manage Azure locks"
+  | "logicapp" : "Manage logic apps"
+  | "managed-cassandra" : "Azure Managed Cassandra"
+  | "managedapp" : "Manage template solutions provided by ISVs"
+  | "managedservices" : "Manage the registration assignments and definitions in Azure"
+  | "maps" : "Manage Azure Maps"
+  | "mariadb" : "Manage Azure Database for MariaDB servers"
+  | "monitor" : "Manage the Azure Monitor Service"
+  | "mysql" : "Manage Azure Database for MySQL servers"
+  | "netappfiles" : "Manage Azure NetApp Files (ANF) Resources"
+  | "policy" : "Manage resources defined and used by the Azure Policy service"
+  | "postgres" : "Manage Azure Database for PostgreSQL"
+  | "ppg" : "Manage Proximity Placement Groups"
+  | "private-link" : "Private-link association CLI command group"
+  | "provider" : "Manage resource providers"
+  | "redis" : "Manage dedicated Redis caches for your Azure applications"
+  | "relay" : "Manage Azure Relay namespaces, WCF relays and hybrid connections"
+  | "resource" : "Manage Azure resources"
+  | "resourcemanagement" : "Resourcemanagement CLI command group"
+  | "rest" : "Invoke a custom request"
+  | "restore-point" : "Manage restore point with res"
+  | "role" : "Manage Azure role-based access control (Azure RBAC)"
+  | "search" : "Manage Azure AI Search"
+  | "security" : "Manage your security posture with Microsoft Defender for Cloud"
+  | "servicebus" : "Manage Service Bus"
+  | "sf" : "Manage and administer Azure Service Fabric clusters"
+  | "sig" : "Manage shared image gallery"
+  | "signalr" : "Manage Azure SignalR Service"
+  | "snapshot" : "Manage point-in-time copies of managed disks and snapshots"
+  | "sql" : "Manage Azure SQL Databases and Data Warehouses"
+  | "sshkey" : "Manage ssh public key with vm"
+  | "stack" : "Manage deployment stacks"
+  | "stack-whatif" : "Preview operations on deployment stacks"
+  | "staticwebapp" : "Manage static apps"
+  | "survey" : "Take Azure CLI survey"
+  | "synapse" : "Manage and operate Synapse Workspace, Spark Pool, SQL Pool"
+  | "tag" : "Tag Management on a resource"
+  | "term" : "Manage marketplace agreement with marketplaceordering"
+  | "ts" : "Manage template specs at subscription or resource group scope"
+  | "upgrade" : "Upgrade Azure CLI and extensions"
+  | "vmss" : "Manage Virtual Machine Scale Sets" ) , rest ;
+
+(* Global arguments every command accepts. --debug, --verbose and --only-show-errors also
+   work before the command. *)
+early_global =
+    "--debug" : "Increase logging verbosity to show all debug logs"
+  | "--verbose" : "Increase logging verbosity"
+  | "--only-show-errors" : "Only show errors, suppressing warnings" ;
+help = "-h" : "Show the help message" | "--help" : "Show the help message" ;
+global =
+    early_global | help
+  | "--output" : "Output format" , output_format | "--output=" : "Output format" ~ output_format
+  | "-o" : "Output format" , output_format
+  | "--query" : "JMESPath query string" , @any | "--query=" : "JMESPath query string" ~ @any
+  | "--subscription" : "Name or ID of the subscription" , @any
+  | "--subscription=" : "Name or ID of the subscription" ~ @any ;
+output_format = "json" : "JSON (default)" | "jsonc" : "Colored JSON" | "none" : "No output" | "table" : "ASCII table"
+  | "tsv" : "Tab-separated values" | "yaml" : "YAML" | "yamlc" : "Colored YAML" ;
+opt_ids = "--ids" : "One or more resource IDs, space separated" , @any , { @any } ;
+(* Commands this spec does not model take any words. *)
+rest = { @any } ;
+
+account_get_access_token_option =
+    opt_subscription
+  | "--resource" : "Azure resource endpoints in Microsoft Entra v1.0" , @any
+  | "--scope" : "Space-separated scopes in Microsoft Entra v2.0" , { @any }
+  | "--resource-type" : "Type of well-known resource" , values_oss_rdbms_arm_aad_graph
+  | ( "--tenant" : "Tenant ID for which the token is acquired" | "-t" : "Tenant ID for which the token is acquired" ) , @any
+  | global ;
+
+account_list_option =
+    "--all" : "List all subscriptions from all clouds, including subscriptions"
+  | "--refresh" : "Retrieve up-to-date subscriptions from server"
+  | global ;
+
+account_list_locations_option =
+    "--include-extended-locations" : "Whether to include extended locations" , [ values_true_t_yes ]
+  | global ;
+
+account_set_option =
+    opt_subscription
+  | global ;
+
+account_show_option =
+    opt_subscription
+  | global ;
+
+account_command =
+    "get-access-token" : "Get a token for utilities to access Azure" , { account_get_access_token_option }
+  | "list" : "Get a list of subscriptions for the logged in account" , { account_list_option }
+  | "list-locations" : "List supported regions for the current subscription" , { account_list_locations_option }
+  | "set" : "Set a subscription to be the current active subscription" , { account_set_option }
+  | "show" : "Get the details of a subscription" , { account_show_option }
+  | ( "clear" : "Clear all subscriptions from the CLI's local cache"
+  | "lock" : "Manage Azure subscription level locks"
+  | "management-group" : "Manage Azure Management Groups" ) , rest
+  | help ;
+
+acr_build_option =
+    ( "--registry" : "The name of the container registry" | "-r" : "The name of the container registry" ) , @any
+  | ( "--image" : "The name and tag of the image using the format: '-t repo/image:tag'" | "-t" : "The name and tag of the image using the format: '-t repo/image:tag'" ) , @any
+  | opt_resource_group
+  | "--timeout" : "The timeout in seconds" , @any
+  | "--build-arg" : "Build argument in '--build-arg name[=value]' format" , @any
+  | "--secret-build-arg" : "Secret build argument in '--secret-build-arg name[=value]' format" , @any
+  | ( "--file" : "The relative path of the the docker file to the source code root" | "-f" : "The relative path of the the docker file to the source code root" ) , @file
+  | "--no-format" : "Indicates whether the logs should be displayed in raw format"
+  | "--no-push" : "Indicates whether the image built should be pushed to the registry"
+  | "--no-logs" : "Do not show logs after successfully queuing the build"
+  | "--platform" : "The platform where build/task is run, Eg, 'windows' and 'linux'" , @any
+  | "--target" : "The name of the target build stage" , @any
+  | opt_ids
+  | global ;
+
+acr_create_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_resource_group
+  | "--sku" : "The SKU of the container registry" , values_basic_standard_premium
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | "--admin-enabled" : "Indicates whether the admin user is enabled" , [ values_true_false ]
+  | opt_default_action
+  | "--identity" : "Use assigned managed identity resource id or name if in the same" , @any
+  | "--key-encryption-key" : "Azure Key Vault or Managed HSM key URI" , @any
+  | "--public-network-enabled" : "Allow public network access for the container registry" , [ values_true_false ]
+  | "--allow-trusted-services" : "Allow trusted Azure Services to access network restricted registries" , [ values_true_false ]
+  | opt_tags_2
+  | "--role-assignment-mode" : "Role assignment mode of the registry" , values_rbac_abac_rbac
+  | opt_ids
+  | global ;
+
+acr_delete_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_resource_group
+  | opt_yes
+  | opt_ids
+  | global ;
+
+acr_list_option =
+    opt_resource_group
+  | opt_ids
+  | global ;
+
+acr_login_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_resource_group
+  | opt_suffix
+  | ( "--username" : "The username used to log into a container registry" | "-u" : "The username used to log into a container registry" ) , @any
+  | ( "--password" : "The password used to log into a container registry" | "-p" : "The password used to log into a container registry" ) , @any
+  | "--expose-token" : "Expose refresh token instead of automatically logging in through"
+  | "-t" : "Expose refresh token instead of automatically logging in through"
+  | opt_ids
+  | global ;
+
+acr_repository_delete_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_repository
+  | ( "--image" : "The name of the image" | "-t" : "The name of the image" ) , @any
+  | opt_suffix
+  | ( "--username" : "The username used to log into a container registry" | "-u" : "The username used to log into a container registry" ) , @any
+  | ( "--password" : "The password used to log into a container registry" | "-p" : "The password used to log into a container registry" ) , @any
+  | opt_yes
+  | opt_ids
+  | global ;
+
+acr_repository_list_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_top
+  | opt_suffix
+  | ( "--username" : "The username used to log into a container registry" | "-u" : "The username used to log into a container registry" ) , @any
+  | ( "--password" : "The password used to log into a container registry" | "-p" : "The password used to log into a container registry" ) , @any
+  | opt_ids
+  | global ;
+
+acr_repository_show_tags_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_repository
+  | opt_top
+  | "--orderby" : "Order the items in the results" , values_time_asc_time_desc
+  | opt_suffix
+  | ( "--username" : "The username used to log into a container registry" | "-u" : "The username used to log into a container registry" ) , @any
+  | ( "--password" : "The password used to log into a container registry" | "-p" : "The password used to log into a container registry" ) , @any
+  | "--detail" : "Show detailed information"
+  | opt_ids
+  | global ;
+
+acr_repository_command =
+    "delete" : "Delete a repository or image in an Azure Container Registry" , { acr_repository_delete_option }
+  | "list" : "List repositories in an Azure Container Registry" , { acr_repository_list_option }
+  | "show-tags" : "Show tags for a repository in an Azure Container Registry" , { acr_repository_show_tags_option }
+  | ( "list-deleted" : "List soft-deleted repositories in an Azure Container Registry"
+  | "show" : "Get the attributes of a repository or image in an Azure Container"
+  | "show-manifests" : "Show manifests of a repository in an Azure Container Registry"
+  | "untag" : "Untag an image in an Azure Container Registry"
+  | "update" : "Update the attributes of a repository or image in an Azure Container" ) , rest
+  | help ;
+
+acr_show_option =
+    ( "--name" : "The name of the container registry" | "-n" : "The name of the container registry" ) , @any
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+acr_command =
+    "build" : "Queues a quick build, providing streaming logs for an Azure Container" , { acr_build_option }
+  | "create" : "Create an Azure Container Registry" , { acr_create_option }
+  | "delete" : "Deletes an Azure Container Registry" , { acr_delete_option }
+  | "list" : "Lists all the container registries under the current subscription" , { acr_list_option }
+  | "login" : "Log in to an Azure Container Registry through the Docker CLI" , { acr_login_option }
+  | "repository" : "Manage repositories (image names) for Azure Container Registries" , [ acr_repository_command ]
+  | "show" : "Get the details of an Azure Container Registry" , { acr_show_option }
+  | ( "agentpool" : "Manage private Tasks agent pools with Azure Container Registries"
+  | "artifact-streaming" : "Manage artifact streaming for any repositories or supported images"
+  | "cache" : "Manage cache rules in Azure Container Registries"
+  | "check-health" : "Gets health information on the environment and optionally a target"
+  | "check-name" : "Checks if an Azure Container Registry name is valid and available"
+  | "config" : "Configure policies for Azure Container Registries"
+  | "connected-registry" : "Manage connected registry resources with Azure Container Registries"
+  | "credential" : "Manage login credentials for Azure Container Registries"
+  | "credential-set" : "Manage credential sets in Azure Container Registries"
+  | "encryption" : "Manage customer-managed encryption for a container registry"
+  | "helm" : "Manage helm charts for Azure Container Registries"
+  | "identity" : "Manage service (managed) identities for a container registry"
+  | "import" : "Imports an image to an Azure Container Registry from another"
+  | "manifest" : "Manage artifact manifests in Azure Container Registries"
+  | "network-rule" : "Manage network rules for Azure Container Registries"
+  | "pack" : "Manage Azure Container Registry Tasks that use Cloud Native"
+  | "private-endpoint-connection" : "Manage container registry private endpoint connections"
+  | "private-link-resource" : "Manage registry private link resources"
+  | "replication" : "Manage geo-replicated regions of Azure Container Registries"
+  | "run" : "Queues a quick run providing streamed logs for an Azure Container"
+  | "scope-map" : "Manage scope access maps for Azure Container Registries"
+  | "show-endpoints" : "Display registry endpoints including data endpoints and regional"
+  | "show-usage" : "Get the storage usage for an Azure Container Registry"
+  | "task" : "Manage a collection of steps for building, testing and OS & Framework"
+  | "taskrun" : "Manage taskruns using Azure Container Registries"
+  | "token" : "Manage tokens for an Azure Container Registry"
+  | "update" : "Update an Azure Container Registry"
+  | "webhook" : "Manage webhooks for Azure Container Registries" ) , rest
+  | help ;
+
+aks_create_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | "--ssh-key-value" : "Public key path or key contents to install on node VMs for SSH access" , @any
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | ( "--kubernetes-version" : "Version of Kubernetes to use for creating the cluster, such" | "-k" : "Version of Kubernetes to use for creating the cluster, such" ) , @any
+  | opt_tags_2
+  | opt_generate_ssh_keys
+  | opt_network_plugin
+  | "--network-policy" : "Network Policy Engine to use" , @any
+  | opt_tier
+  | "--enable-private-cluster" : "Enable private cluster"
+  | "--enable-managed-identity" : "Using a system assigned managed identity to manage cluster resource"
+  | opt_enable_azure_rbac
+  | opt_enable_oidc_issuer
+  | "--attach-acr" : "Grant the 'acrpull' role assignment to the ACR specified by name" , @any
+  | opt_enable_workload_identity
+  | ( "--enable-addons" : "Enable the Kubernetes addons in a comma-separated list" | "-a" : "Enable the Kubernetes addons in a comma-separated list" ) , @any
+  | opt_node_vm_size
+  | "--os-sku" : "The OS SKU of the agent node pool" , values_azurelinux_azurelinux3_azurecontainerlin
+  | "--vnet-subnet-id" : "The ID of a subnet in an existing VNet into which to deploy" , @any
+  | "--enable-cluster-autoscaler" : "Enable cluster autoscaler, default value is false"
+  | opt_min_count
+  | opt_max_count
+  | ( "--node-count" : "Number of nodes in the Kubernetes node pool" | "-c" : "Number of nodes in the Kubernetes node pool" ) , @any
+  | opt_zones_1
+  | opt_yes
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_delete_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | "--if-match" : "The value provided will be compared to the ETag of the managed" , @any
+  | "--if-none-match" : "Set to '*' to allow deleting a cluster only if it exists" , @any
+  | opt_yes
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_get_credentials_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | "--admin" : "Get cluster administrator credentials"
+  | "-a" : "Get cluster administrator credentials"
+  | ( "--file" : "Kubernetes configuration file to update" | "-f" : "Kubernetes configuration file to update" ) , @file
+  | "--overwrite-existing" : "Overwrite any existing cluster entry with the same name"
+  | "--context" : "If specified, overwrite the default context name" , @any
+  | "--public-fqdn" : "Get private cluster credential with server address to be public fqdn"
+  | "--format" : "Specify the format of the returned credential" , @any
+  | opt_ids
+  | global ;
+
+aks_list_option =
+    opt_resource_group
+  | opt_ids
+  | global ;
+
+aks_nodepool_add_option =
+    opt_resource_group
+  | opt_cluster_name
+  | opt_nodepool_name_1
+  | ( "--kubernetes-version" : "Version of Kubernetes to use for creating the cluster, such" | "-k" : "Version of Kubernetes to use for creating the cluster, such" ) , @any
+  | opt_node_vm_size
+  | "--os-type" : "The OS Type: linux or Windows" , @any
+  | "--os-sku" : "The OS SKU of the agent node pool" , values_azurelinux_azurelinux3_azurecontainerlin_2
+  | opt_enable_cluster_autoscaler
+  | opt_min_count
+  | opt_max_count
+  | ( "--node-count" : "Number of nodes in the Kubernetes agent pool" | "-c" : "Number of nodes in the Kubernetes agent pool" ) , @any
+  | "--priority" : "The priority of the node pool" , values_regular_spot
+  | "--labels" : "The node labels for the node pool" , { @any }
+  | "--node-taints" : "The node taints for the node pool" , @any
+  | "--mode" : "The mode for a node pool which defines a node pool's primary function" , values_system_user_gateway
+  | opt_max_pods
+  | opt_zones_1
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_nodepool_delete_option =
+    opt_resource_group
+  | opt_cluster_name
+  | opt_nodepool_name_1
+  | "--if-match" : "The value provided will be compared to the ETag of the node" , @any
+  | "--ignore-pdb" : "Delete an existing nodepool without considering Pod Disruption Budget"
+  | "-i" : "Delete an existing nodepool without considering Pod Disruption Budget"
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_nodepool_list_option =
+    opt_resource_group
+  | opt_cluster_name
+  | opt_ids
+  | global ;
+
+aks_nodepool_scale_option =
+    opt_resource_group
+  | opt_cluster_name
+  | opt_nodepool_name_1
+  | ( "--node-count" : "Number of nodes in the Kubernetes node pool" | "-c" : "Number of nodes in the Kubernetes node pool" ) , @any
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_nodepool_command =
+    "add" : "Add a node pool to the managed Kubernetes cluster" , { aks_nodepool_add_option }
+  | "delete" : "Delete the agent pool in the managed Kubernetes cluster" , { aks_nodepool_delete_option }
+  | "list" : "List node pools in the managed Kubernetes cluster" , { aks_nodepool_list_option }
+  | "scale" : "Scale the node pool in a managed Kubernetes cluster" , { aks_nodepool_scale_option }
+  | ( "auto-scale" : "Commands to manage nodepool virtualMachinesProfile.scale.autoscale"
+  | "delete-machines" : "Delete specific machines in an agentpool for a managed cluster"
+  | "get-rollback-versions" : "Get the available rollback versions for an agent pool of the managed"
+  | "get-upgrades" : "Get the available upgrade versions for an agent pool of the managed"
+  | "manual-scale" : "Commands to manage nodepool virtualMachinesProfile.scale.manual"
+  | "operation-abort" : "Abort last running operation on nodepool"
+  | "rollback" : "Rollback an agent pool to the most recently used configuration (N-1)"
+  | "show" : "Show the details for a node pool in the managed Kubernetes cluster"
+  | "snapshot" : "Commands to manage nodepool snapshots"
+  | "start" : "Start stopped agent pool in the managed Kubernetes cluster"
+  | "stop" : "Stop running agent pool in the managed Kubernetes cluster"
+  | "update" : "Update a node pool properties"
+  | "upgrade" : "Upgrade the node pool in a managed Kubernetes cluster"
+  | "wait" : "Wait for a node pool to reach a desired state" ) , rest
+  | help ;
+
+aks_scale_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | ( "--node-count" : "Number of nodes in the Kubernetes node pool" | "-c" : "Number of nodes in the Kubernetes node pool" ) , @any
+  | opt_nodepool_name_2
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_show_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | opt_ids
+  | global ;
+
+aks_start_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_stop_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_update_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | opt_tags_2
+  | opt_auto_upgrade_channel
+  | opt_tier
+  | opt_api_server_authorized_ip_ranges
+  | opt_enable_oidc_issuer
+  | "--attach-acr" : "Attach an ACR to the AKS cluster" , @any
+  | "--detach-acr" : "Detach an ACR from the AKS cluster" , @any
+  | opt_enable_workload_identity
+  | opt_enable_cluster_autoscaler
+  | "--disable-cluster-autoscaler" : "Disable cluster autoscaler"
+  | "-d" : "Disable cluster autoscaler"
+  | "--update-cluster-autoscaler" : "Update min-count or max-count for cluster autoscaler"
+  | "-u" : "Update min-count or max-count for cluster autoscaler"
+  | opt_min_count
+  | opt_max_count
+  | opt_yes
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+aks_upgrade_option =
+    opt_resource_group
+  | ( "--name" : "Name of the managed cluster" | "-n" : "Name of the managed cluster" ) , @any
+  | ( "--kubernetes-version" : "Version of Kubernetes to upgrade the cluster to, such as '1.16.9'" | "-k" : "Version of Kubernetes to upgrade the cluster to, such as '1.16.9'" ) , @any
+  | "--control-plane-only" : "Upgrade the cluster control plane only"
+  | "--node-image-only" : "Only upgrade node image for agent pools"
+  | opt_enable_force_upgrade
+  | opt_disable_force_upgrade
+  | opt_upgrade_override_until
+  | opt_tier
+  | opt_k8s_support_plan
+  | opt_yes
+  | "--if-match" : "The value provided will be compared to the ETag of the managed" , @any
+  | opt_ids
+  | global ;
+
+aks_command =
+    "create" : "Create a new managed Kubernetes cluster" , { aks_create_option }
+  | "delete" : "Delete a managed Kubernetes cluster" , { aks_delete_option }
+  | "get-credentials" : "Get access credentials for a managed Kubernetes cluster" , { aks_get_credentials_option }
+  | "list" : "List managed Kubernetes clusters" , { aks_list_option }
+  | "nodepool" : "Commands to manage node pools in Kubernetes kubernetes cluster" , [ aks_nodepool_command ]
+  | "scale" : "Scale the node pool in a managed Kubernetes cluster" , { aks_scale_option }
+  | "show" : "Show the details for a managed Kubernetes cluster" , { aks_show_option }
+  | "start" : "Starts a previously stopped Managed Cluster" , { aks_start_option }
+  | "stop" : "Stop a managed cluster" , { aks_stop_option }
+  | "update" : "Update a managed Kubernetes cluster" , { aks_update_option }
+  | "upgrade" : "Upgrade a managed Kubernetes cluster to a newer version" , { aks_upgrade_option }
+  | ( "approuting" : "Commands to manage App Routing addon"
+  | "browse" : "Show the dashboard for a Kubernetes cluster in a web browser"
+  | "check-acr" : "Validate an ACR is accessible from an AKS cluster"
+  | "command" : "Run shell commands on the cluster through the AKS API"
+  | "connection" : "Commands to manage aks connections"
+  | "disable-addons" : "Disable Kubernetes addons"
+  | "enable-addons" : "Enable Kubernetes addons"
+  | "get-upgrades" : "Get the upgrade versions available for a managed Kubernetes cluster"
+  | "get-versions" : "Get the versions available for creating a managed Kubernetes cluster"
+  | "identity-binding" : "Commands to manage identity bindings in Azure Kubernetes Service"
+  | "install-cli" : "Download and install kubectl, the Kubernetes command-line tool"
+  | "install-desktop" : "Download and install AKS Desktop for the current platform"
+  | "machine" : "Get information about machines in a nodepool of a managed clusters"
+  | "maintenanceconfiguration" : "Commands to manage maintenance configurations in managed Kubernetes"
+  | "mesh" : "Commands to manage Azure Service Mesh"
+  | "namespace" : "Commands to manage namespace in managed Kubernetes cluster"
+  | "oidc-issuer" : "Oidc issuer related commands"
+  | "operation-abort" : "Abort last running operation on managed cluster"
+  | "remove-dev-spaces" : "Remove Azure Dev Spaces from a managed Kubernetes cluster"
+  | "rotate-certs" : "Rotate certificates and keys on a managed Kubernetes cluster"
+  | "safeguards" : "Manage Deployment Safeguards"
+  | "snapshot" : "Commands to manage nodepool snapshots"
+  | "trustedaccess" : "Commands to manage trusted access security features"
+  | "update-credentials" : "Update credentials for a managed Kubernetes cluster, like service"
+  | "use-dev-spaces" : "Use Azure Dev Spaces with a managed Kubernetes cluster"
+  | "wait" : "Wait for a managed Kubernetes cluster to reach a desired state" ) , rest
+  | help ;
+
+functionapp_config_appsettings_list_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app" | "-n" : "Name of the function app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_config_appsettings_set_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app" | "-n" : "Name of the function app" ) , @any
+  | "--settings" : "Space-separated app settings in a format of <name>=<value>" , @any , { @any }
+  | opt_slot
+  | "--slot-settings" : "Space-separated slot app settings in a format of <name>=<value>" , @any , { @any }
+  | opt_ids
+  | global ;
+
+functionapp_config_appsettings_command =
+    "list" : "Show settings for a function app" , { functionapp_config_appsettings_list_option }
+  | "set" : "Update a function app's settings" , { functionapp_config_appsettings_set_option }
+  | ( "delete" : "Delete a function app's settings" ) , rest
+  | help ;
+
+functionapp_config_command =
+    "appsettings" : "Configure function app settings" , [ functionapp_config_appsettings_command ]
+  | ( "access-restriction" : "Methods that show, set, add, and remove access restrictions"
+  | "container" : "Manage an existing function app's container settings"
+  | "hostname" : "Configure hostnames for a function app"
+  | "set" : "Set an existing function app's configuration"
+  | "show" : "Get the details of an existing function app's configuration"
+  | "ssl" : "Configure SSL certificates" ) , rest
+  | help ;
+
+functionapp_create_option =
+    opt_resource_group
+  | ( "--name" : "Name of the new function app" | "-n" : "Name of the new function app" ) , @any
+  | ( "--storage-account" : "Provide a string value of a Storage Account in the provided Resource" | "-s" : "Provide a string value of a Storage Account in the provided Resource" ) , @any
+  | ( "--plan" : "Name or resource id of the functionapp app service plan" | "-p" : "Name or resource id of the functionapp app service plan" ) , @any
+  | opt_os_type
+  | "--functions-version" : "The functions app version" , values_4
+  | "--runtime" : "The functions runtime stack" , @any
+  | "--runtime-version" : "The version of the functions runtime stack" , @any
+  | ( "--consumption-plan-location" : "Geographic location where function app will be hosted" | "-c" : "Geographic location where function app will be hosted" ) , @any
+  | "--app-insights" : "Name of the existing App Insights project to be added to the function" , @any
+  | "--app-insights-key" : "Instrumentation key of App Insights to be added" , @any
+  | "--disable-app-insights" : "Disable creating application insights resource during functionapp" , [ values_true_false ]
+  | opt_ids
+  | global ;
+
+functionapp_delete_option =
+    opt_resource_group
+  | ( "--name" : "The name of the functionapp" | "-n" : "The name of the functionapp" ) , @any
+  | opt_keep_empty_plan
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_deploy_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app to deploy to" | "-n" : "Name of the function app to deploy to" ) , @any
+  | opt_src_path
+  | opt_src_url
+  | opt_target_path
+  | opt_type
+  | "--async" : "Asynchronous deployment" , values_true_false
+  | "--restart" : "If true, the web app will be restarted following the deployment" , values_true_false
+  | "--clean" : "If true, cleans the target directory prior to deploying the file(s)" , values_true_false
+  | "--ignore-stack" : "If true, any stack-specific defaults are ignored" , values_true_false
+  | "--timeout" : "Timeout for the deployment operation in milliseconds" , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_list_option =
+    opt_resource_group
+  | opt_ids
+  | global ;
+
+functionapp_restart_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app" | "-n" : "Name of the function app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_show_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app" | "-n" : "Name of the function app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_start_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app" | "-n" : "Name of the function app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_stop_option =
+    opt_resource_group
+  | ( "--name" : "Name of the function app" | "-n" : "Name of the function app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+functionapp_command =
+    "config" : "Configure a function app" , [ functionapp_config_command ]
+  | "create" : "Create a function app" , { functionapp_create_option }
+  | "delete" : "Delete a function app" , { functionapp_delete_option }
+  | "deploy" : "Deploys a provided artifact to Azure functionapp" , { functionapp_deploy_option }
+  | "list" : "List function apps" , { functionapp_list_option }
+  | "restart" : "Restart a function app" , { functionapp_restart_option }
+  | "show" : "Get the details of a function app" , { functionapp_show_option }
+  | "start" : "Start a function app" , { functionapp_start_option }
+  | "stop" : "Stop a function app" , { functionapp_stop_option }
+  | ( "connection" : "Commands to manage functionapp connections"
+  | "cors" : "Manage Cross-Origin Resource Sharing (CORS)"
+  | "deployment" : "Manage function app deployments"
+  | "flex-migration" : "Manage migration between Linux Consumption and Flex Consumption plans"
+  | "function" : "Manage function app functions"
+  | "hybrid-connection" : "Methods that list, add and remove hybrid-connections from functionapp"
+  | "identity" : "Manage web app's managed identity"
+  | "keys" : "Manage function app keys"
+  | "list-consumption-locations" : "List available locations for running function apps"
+  | "list-flexconsumption-locations" : "List available locations for running function apps on the Flex"
+  | "list-flexconsumption-runtimes" : "List available built-in stacks which can be used for function apps"
+  | "list-runtimes" : "List available built-in stacks which can be used for function apps"
+  | "log" : "Manage function app logs"
+  | "plan" : "Manage App Service Plans for an Azure Function"
+  | "runtime" : "Manage a function app's runtime"
+  | "scale" : "Manage a function app's scale"
+  | "update" : "Update a function app"
+  | "update-strategy" : "Manage a function app's update strategy"
+  | "vnet-integration" : "Methods that list, add, and remove virtual networks integrations" ) , rest
+  | help ;
+
+group_create_option =
+    ( "--name" : "Name of the new resource group" | "--resource-group" : "Name of the new resource group" | "-g" : "Name of the new resource group" | "-n" : "Name of the new resource group" ) , @any
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | opt_tags_2
+  | "--managed-by" : "The ID of the resource that manages this resource group" , @any
+  | global ;
+
+group_delete_option =
+    ( "--name" : "Name of resource group" | "--resource-group" : "Name of resource group" | "-g" : "Name of resource group" | "-n" : "Name of resource group" ) , @any
+  | ( "--force-deletion-types" : "The resource types you want to force delete" | "-f" : "The resource types you want to force delete" ) , values_microsoft_compute_virtualmachines_micros
+  | opt_yes
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+group_exists_option =
+    ( "--name" : "Name of resource group" | "--resource-group" : "Name of resource group" | "-g" : "Name of resource group" | "-n" : "Name of resource group" ) , @any
+  | opt_ids
+  | global ;
+
+group_list_option =
+    "--tag" : "A single tag in 'key[=value]' format" , [ @any ]
+  | global ;
+
+group_show_option =
+    ( "--name" : "Name of resource group" | "--resource-group" : "Name of resource group" | "-g" : "Name of resource group" | "-n" : "Name of resource group" ) , @any
+  | opt_ids
+  | global ;
+
+group_update_option =
+    ( "--name" : "Name of resource group" | "--resource-group" : "Name of resource group" | "-g" : "Name of resource group" | "-n" : "Name of resource group" ) , @any
+  | opt_tags_2
+  | opt_set
+  | opt_force_string
+  | opt_ids
+  | global ;
+
+group_command =
+    "create" : "Create a new resource group" , { group_create_option }
+  | "delete" : "Delete a resource group" , { group_delete_option }
+  | "exists" : "Check if a resource group exists" , { group_exists_option }
+  | "list" : "List resource groups" , { group_list_option }
+  | "show" : "Gets a resource group" , { group_show_option }
+  | "update" : "Update a resource group" , { group_update_option }
+  | ( "deployment" : "Manage Azure Resource Manager deployments"
+  | "export" : "Captures a resource group as a template"
+  | "lock" : "Manage Azure resource group locks"
+  | "wait" : "Place the CLI in a waiting state until a condition of the resource" ) , rest
+  | help ;
+
+keyvault_create_option =
+    opt_resource_group
+  | ( "--name" : "Name of the Vault" | "-n" : "Name of the Vault" ) , @any
+  | opt_hsm_name
+  | "--administrators" : "[HSM Only] Administrator role for data plane operations for Managed" , @any , { @any }
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | "--sku" : "SKU details" , @any
+  | "--enabled-for-deployment" : "[Vault Only] Property to specify whether Azure Virtual Machines" , [ values_true_false ]
+  | "--enabled-for-disk-encryption" : "[Vault Only] Property to specify whether Azure Disk Encryption" , [ values_true_false ]
+  | "--enabled-for-template-deployment" : "[Vault Only] Property to specify whether Azure Resource Manager" , [ values_true_false ]
+  | "--enable-rbac-authorization" : "Property that controls how data actions are authorized" , [ values_true_false ]
+  | "--enable-purge-protection" : "Property specifying whether protection against purge is enabled" , [ values_true_false ]
+  | "--retention-days" : "Soft delete data retention days" , @any
+  | opt_ids
+  | global ;
+
+keyvault_delete_option =
+    opt_resource_group
+  | ( "--name" : "Name of the Vault" | "-n" : "Name of the Vault" ) , @any
+  | opt_hsm_name
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | global ;
+
+keyvault_list_option =
+    opt_resource_group
+  | "--resource-type" : "When --resource-type is not present the command will list all Vaults" , @any
+  | opt_ids
+  | global ;
+
+keyvault_secret_delete_option =
+    ( "--name" : "Name of the secret" | "-n" : "Name of the secret" ) , @any
+  | "--id" : "Id of the secret" , @any
+  | "--vault-name" : "Name of the Key Vault" , @any
+  | global ;
+
+keyvault_secret_list_option =
+    "--id" : "Full URI of the Vault" , @any
+  | "--vault-name" : "Name of the Key Vault" , @any
+  | "--maxresults" : "Maximum number of results to return in a page" , @any
+  | "--include-managed" : "Include managed secrets" , [ values_true_false ]
+  | global ;
+
+keyvault_secret_set_option =
+    ( "--name" : "Name of the secret" | "-n" : "Name of the secret" ) , @any
+  | "--value" : "Plain text secret value" , @any
+  | ( "--content-type" : "Description of the secret contents" | "--description" : "Description of the secret contents" ) , @any
+  | "--expires" : "Expiration UTC datetime (Y-m-d'T'H:M:S'Z')" , @any
+  | "--not-before" : "Secret not usable before the provided UTC datetime (Y-m-d'T'H:M:S'Z')" , @any
+  | opt_tags_2
+  | "--vault-name" : "Name of the Vault" , @any
+  | "--disabled" : "Create secret in disabled state" , [ values_true_false ]
+  | ( "--file" : "Source file for secret" | "-f" : "Source file for secret" ) , @file
+  | ( "--encoding" : "Source file encoding" | "-e" : "Source file encoding" ) , values_utf_8_utf_16le_utf_16be
+  | global ;
+
+keyvault_secret_show_option =
+    ( "--name" : "Name of the secret" | "-n" : "Name of the secret" ) , @any
+  | ( "--version" : "The secret version" | "-v" : "The secret version" ) , @any
+  | "--id" : "Id of the secret" , @any
+  | "--vault-name" : "Name of the Key Vault" , @any
+  | global ;
+
+keyvault_secret_command =
+    "delete" : "Delete all versions of a secret" , { keyvault_secret_delete_option }
+  | "list" : "List secrets in a specified key vault" , { keyvault_secret_list_option }
+  | "set" : "Create a secret (if one doesn't exist) or update a secret" , { keyvault_secret_set_option }
+  | "show" : "Get a specified secret from a given key vault" , { keyvault_secret_show_option }
+  | ( "backup" : "Backs up the specified secret"
+  | "download" : "Download a secret from a KeyVault"
+  | "list-deleted" : "Lists deleted secrets for the specified vault"
+  | "list-versions" : "List all versions of the specified secret"
+  | "purge" : "Permanently deletes the specified secret"
+  | "recover" : "Recovers the deleted secret to the latest version"
+  | "restore" : "Restores a backed up secret to a vault"
+  | "set-attributes" : "Updates the attributes associated with a specified secret in a given"
+  | "show-deleted" : "Gets the specified deleted secret" ) , rest
+  | help ;
+
+keyvault_set_policy_option =
+    opt_resource_group
+  | ( "--name" : "Name of the Vault" | "-n" : "Name of the Vault" ) , @any
+  | "--object-id" : "A GUID that identifies the principal that will receive permissions" , @any
+  | "--application-id" : "Application ID of the client making request on behalf of a principal" , @any
+  | "--spn" : "Name of a service principal that will receive permissions" , @any
+  | "--upn" : "Name of a user principal that will receive permissions" , @any
+  | "--key-permissions" : "Space-separated list of key permissions to assign" , { @any }
+  | "--secret-permissions" : "Space-separated list of secret permissions to assign" , { values_all_get_list }
+  | "--certificate-permissions" : "Space-separated list of certificate permissions to assign" , { @any }
+  | "--storage-permissions" : "Space-separated list of storage permissions to assign" , { @any }
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | global ;
+
+keyvault_show_option =
+    opt_resource_group
+  | ( "--name" : "Name of the Vault" | "-n" : "Name of the Vault" ) , @any
+  | opt_hsm_name
+  | global ;
+
+keyvault_command =
+    "create" : "Create a Vault or HSM" , { keyvault_create_option }
+  | "delete" : "Delete a Vault or HSM" , { keyvault_delete_option }
+  | "list" : "List Vaults and/or HSMs" , { keyvault_list_option }
+  | "secret" : "Manage secrets" , [ keyvault_secret_command ]
+  | "set-policy" : "Update security policy settings for a Key Vault" , { keyvault_set_policy_option }
+  | "show" : "Show details of a Vault or HSM" , { keyvault_show_option }
+  | ( "backup" : "Manage full HSM backup"
+  | "certificate" : "Manage certificates"
+  | "check-name" : "Check that the given name is valid and is not already in use"
+  | "delete-policy" : "Delete security policy settings for a Key Vault"
+  | "ekm-connection" : "Manage External Key Manager (EKM) connection for a Managed HSM"
+  | "key" : "Manage keys"
+  | "list-deleted" : "Get information about the deleted Vaults or HSMs in a subscription"
+  | "network-rule" : "Manage network ACLs for vault or managed hsm"
+  | "private-endpoint-connection" : "Manage vault/HSM private endpoint connections"
+  | "private-link-resource" : "Manage vault/HSM private link resources"
+  | "purge" : "Permanently delete the specified Vault or HSM"
+  | "recover" : "Recover a Vault or HSM"
+  | "region" : "Manage MHSM multi-regions"
+  | "restore" : "Manage full HSM restore"
+  | "role" : "Manage user roles for access control"
+  | "security-domain" : "Manage security domain operations"
+  | "setting" : "Manage MHSM settings"
+  | "show-deleted" : "Show details of a deleted Vault or HSM"
+  | "update" : "Update the properties of a Vault"
+  | "update-hsm" : "Update the properties of a HSM"
+  | "wait" : "Place the CLI in a waiting state until a condition of the Vault"
+  | "wait-hsm" : "Place the CLI in a waiting state until a condition of the HSM is met" ) , rest
+  | help ;
+
+login_option =
+    ( "--username" : "User name or service principal client ID" | "-u" : "User name or service principal client ID" ) , @any
+  | ( "--password" : "User password or service principal secret" | "-p" : "User password or service principal secret" ) , @any
+  | ( "--tenant" : "The Microsoft Entra tenant, must be provided when using a service" | "-t" : "The Microsoft Entra tenant, must be provided when using a service" ) , @any
+  | "--scope" : "Used in the /authorize request" , @any , { @any }
+  | "--allow-no-subscriptions" : "Support accessing tenants without subscriptions"
+  | "--claims-challenge" : "Base64-encoded claims challenge requested by a resource API" , @any
+  | "--use-device-code" : "Use device code flow"
+  | "--service-principal" : "Log in with a service principal"
+  | "--certificate" : "PEM file with key and public certificate" , @file
+  | "--use-cert-sn-issuer" : "Use Subject Name + Issuer (SN+I) authentication in order to support"
+  | "--federated-token" : "Federated token that can be used for OIDC token exchange" , @any
+  | "--identity" : "Log in using managed identity"
+  | "-i" : "Log in using managed identity"
+  | global ;
+
+logout_option =
+    "--username" : "Account user, if missing, logout the current active account" , @any
+  | global ;
+
+network_lb_create_option =
+    ( "--name" : "The load balancer name" | "-n" : "The load balancer name" ) , @any
+  | opt_resource_group
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | opt_tags_2
+  | "--backend-pool-name" : "The name of the backend address pool" , @any
+  | "--frontend-ip-name" : "The name of the frontend IP configuration" , @any
+  | "--private-ip-address" : "Static private IP address to use" , @any
+  | "--public-ip-address" : "Name or ID of the public IP address, or '' for none" , @any
+  | "--public-ip-address-allocation" : "IP allocation method" , values_static_dynamic
+  | "--public-ip-dns-name" : "Globally unique DNS name for a new public IP" , @any
+  | "--subnet" : "Name or ID of a subnet" , @any
+  | "--subnet-address-prefix" : "The CIDR address prefix to use when creating a new subnet" , @any
+  | opt_ids
+  | global ;
+
+network_lb_delete_option =
+    opt_no_wait
+  | ( "--name" : "The load balancer name" | "-n" : "The load balancer name" ) , @any
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_lb_list_option =
+    opt_next_token
+  | opt_max_items
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_lb_show_option =
+    ( "--name" : "The load balancer name" | "-n" : "The load balancer name" ) , @any
+  | opt_resource_group
+  | "--detail-level" : "Controls verbosity of the returned load balancer resource" , values_reduced
+  | opt_expand
+  | opt_ids
+  | global ;
+
+network_lb_command =
+    "create" : "Create a load balancer" , { network_lb_create_option }
+  | "delete" : "Delete the specified load balancer" , { network_lb_delete_option }
+  | "list" : "List load balancers" , { network_lb_list_option }
+  | "show" : "Get the details of a load balancer" , { network_lb_show_option }
+  | ( "address-pool" : "Manage address pools of a load balancer"
+  | "frontend-ip" : "Manage frontend IP addresses of a load balancer"
+  | "inbound-nat-pool" : "Manage inbound NAT address pools of a load balancer"
+  | "inbound-nat-rule" : "Manage inbound NAT rules of a load balancer"
+  | "list-mapping" : "List inbound NAT rule port mappings"
+  | "list-nic" : "List associated load balancer network interfaces"
+  | "outbound-rule" : "Manage outbound rules of a load balancer"
+  | "probe" : "Evaluate probe information and define routing rules"
+  | "rule" : "Manage load balancing rules"
+  | "update" : "Update a load balancer"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_nic_create_option =
+    opt_no_wait
+  | ( "--name" : "Name of the network interface (NIC)" | "-n" : "Name of the network interface (NIC)" ) , @any
+  | opt_resource_group
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | "--accelerated-networking" : "Whether to enable accelerated networking" , [ values_true_t_yes ]
+  | "--ip-forwarding" : "Whether to enable IP forwarding" , [ values_true_t_yes ]
+  | opt_tags_1
+  | opt_dns_servers
+  | "--internal-dns-name" : "Name of internal DNS label" , @any
+  | "--auxiliary-mode" : "Auxiliary mode of Network Interface resource" , values_acceleratedconnections_floating_maxconne
+  | "--auxiliary-sku" : "Auxiliary sku of Network Interface resource" , values_a1_a2_a4
+  | "--subnet" : "Name or ID of an existing subnet" , @any
+  | opt_ids
+  | global ;
+
+network_nic_delete_option =
+    opt_no_wait
+  | ( "--name" : "Name of the network interface (NIC)" | "-n" : "Name of the network interface (NIC)" ) , @any
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_nic_list_option =
+    opt_next_token
+  | opt_max_items
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_nic_show_option =
+    ( "--name" : "Name of the network interface (NIC)" | "-n" : "Name of the network interface (NIC)" ) , @any
+  | opt_resource_group
+  | opt_expand
+  | opt_ids
+  | global ;
+
+network_nic_command =
+    "create" : "Create a network interface" , { network_nic_create_option }
+  | "delete" : "Delete a network interface" , { network_nic_delete_option }
+  | "list" : "List network interfaces" , { network_nic_list_option }
+  | "show" : "Get the details of a network interface" , { network_nic_show_option }
+  | ( "ip-config" : "Manage IP configurations of a network interface"
+  | "list-effective-nsg" : "List all effective network security groups applied to a network"
+  | "show-effective-route-table" : "Show the effective route table applied to a network interface"
+  | "update" : "Update a network interface"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_nsg_create_option =
+    opt_no_wait
+  | ( "--name" : "Name of the network security group" | "-n" : "Name of the network security group" ) , @any
+  | opt_resource_group
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | opt_tags_1
+  | opt_ids
+  | global ;
+
+network_nsg_delete_option =
+    opt_no_wait
+  | ( "--name" : "Name of the network security group" | "-n" : "Name of the network security group" ) , @any
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_nsg_list_option =
+    opt_resource_group
+  | opt_ids
+  | global ;
+
+network_nsg_rule_create_option =
+    opt_no_wait
+  | opt_nsg_name
+  | opt_resource_group
+  | ( "--name" : "Name of the network security group rule" | "-n" : "Name of the network security group rule" ) , @any
+  | "--access" : "Network traffic is allowed or denied" , values_allow_deny
+  | "--description" : "Description for this rule" , @any
+  | "--direction" : "Direction of the rule" , values_inbound_outbound
+  | "--priority" : "Priority of the rule" , @any
+  | "--protocol" : "Network protocol this rule applies to" , values___ah_esp
+  | "--destination-address-prefixes" : "Space-separated list of CIDR prefixes or IP ranges" , @any , { @any }
+  | "--destination-port-ranges" : "Space-separated list of ports or port ranges between 0-65535" , @any , { @any }
+  | "--source-address-prefixes" : "Space-separated list of CIDR prefixes or IP ranges" , @any , { @any }
+  | opt_ids
+  | global ;
+
+network_nsg_rule_delete_option =
+    opt_no_wait
+  | opt_nsg_name
+  | opt_resource_group
+  | ( "--name" : "Name of the network security group rule" | "-n" : "Name of the network security group rule" ) , @any
+  | opt_ids
+  | global ;
+
+network_nsg_rule_list_option =
+    opt_resource_group
+  | opt_nsg_name
+  | "--include-default" : "Include default security rules in the output"
+  | opt_ids
+  | global ;
+
+network_nsg_rule_show_option =
+    opt_nsg_name
+  | opt_resource_group
+  | ( "--name" : "Name of the network security group rule" | "-n" : "Name of the network security group rule" ) , @any
+  | opt_ids
+  | global ;
+
+network_nsg_rule_command =
+    "create" : "Create a network security group rule" , { network_nsg_rule_create_option }
+  | "delete" : "Delete a network security group rule" , { network_nsg_rule_delete_option }
+  | "list" : "List all rules in a network security group" , { network_nsg_rule_list_option }
+  | "show" : "Get the details of a network security group rule" , { network_nsg_rule_show_option }
+  | ( "update" : "Update a network security group rule"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_nsg_show_option =
+    ( "--name" : "Name of the network security group" | "-n" : "Name of the network security group" ) , @any
+  | opt_resource_group
+  | opt_expand
+  | opt_ids
+  | global ;
+
+network_nsg_command =
+    "create" : "Create a network security group" , { network_nsg_create_option }
+  | "delete" : "Delete a network security group" , { network_nsg_delete_option }
+  | "list" : "List network security groups" , { network_nsg_list_option }
+  | "rule" : "Manage network security group rules" , [ network_nsg_rule_command ]
+  | "show" : "Get information about a network security group" , { network_nsg_show_option }
+  | ( "update" : "Update a network security group"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_public_ip_create_option =
+    opt_resource_group
+  | ( "--name" : "The name of the public IP address" | "-n" : "The name of the public IP address" ) , @any
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | opt_tags_2
+  | "--allocation-method" : "IP address allocation method" , values_static_dynamic
+  | "--dns-name" : "Globally unique DNS entry" , @any
+  | "--dns-name-scope" : "The domain name label scope" , values_noreuse_resourcegroupreuse_subscriptionr
+  | "--idle-timeout" : "Idle timeout in minutes" , @any
+  | "--reverse-fqdn" : "Reverse FQDN (fully qualified domain name)" , @any
+  | "--version" : "IP address type" , values_ipv4_ipv6
+  | "--sku" : "Name of a public IP address SKU" , values_basic_standard_standardv2
+  | "--tier" : "Tier of a public IP address SKU and Global tier is only supported" , values_regional_global
+  | opt_ids
+  | global ;
+
+network_public_ip_delete_option =
+    opt_no_wait
+  | ( "--name" : "The name of the public IP address" | "-n" : "The name of the public IP address" ) , @any
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_public_ip_list_option =
+    opt_next_token
+  | opt_max_items
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_public_ip_show_option =
+    ( "--name" : "The name of the public IP address" | "-n" : "The name of the public IP address" ) , @any
+  | opt_resource_group
+  | opt_expand
+  | opt_ids
+  | global ;
+
+network_public_ip_command =
+    "create" : "Create a public IP address" , { network_public_ip_create_option }
+  | "delete" : "Delete a public IP address" , { network_public_ip_delete_option }
+  | "list" : "List public IP addresses" , { network_public_ip_list_option }
+  | "show" : "Get the details of a public IP address" , { network_public_ip_show_option }
+  | ( "ddos-protection" : "Manage public IP DDoS protection"
+  | "prefix" : "Manage public IP prefix resources"
+  | "update" : "Update a public IP address"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_vnet_create_option =
+    opt_no_wait
+  | opt_resource_group
+  | ( "--name" : "The virtual network (VNet) name" | "-n" : "The virtual network (VNet) name" ) , @any
+  | ( "--location" : "Resource location" | "-l" : "Resource location" ) , @any
+  | "--address-prefixes" : "Space-separated list of IP address prefixes for the VNet" , @any , { @any }
+  | opt_bgp_community
+  | "--ddos-protection-plan" : "Name or ID of a DDoS protection plan to associate with the VNet" , @any
+  | opt_dns_servers
+  | opt_ddos_protection
+  | opt_vm_protection
+  | opt_enable_encryption
+  | opt_encryption_enforcement_policy
+  | opt_ids
+  | global ;
+
+network_vnet_delete_option =
+    opt_no_wait
+  | opt_resource_group
+  | ( "--name" : "The virtual network (VNet) name" | "-n" : "The virtual network (VNet) name" ) , @any
+  | opt_ids
+  | global ;
+
+network_vnet_list_option =
+    opt_next_token
+  | opt_max_items
+  | opt_resource_group
+  | opt_ids
+  | global ;
+
+network_vnet_show_option =
+    opt_resource_group
+  | ( "--name" : "The virtual network (VNet) name" | "-n" : "The virtual network (VNet) name" ) , @any
+  | opt_expand
+  | opt_ids
+  | global ;
+
+network_vnet_subnet_create_option =
+    opt_no_wait
+  | opt_resource_group
+  | ( "--name" : "The subnet name" | "-n" : "The subnet name" ) , @any
+  | "--vnet-name" : "The virtual network (VNet) name" , @any
+  | "--address-prefixes" : "Space-separated list of address prefixes in CIDR format" , @any , { @any }
+  | ( "--default-outbound" : "Set this property to false to disable default outbound connectivity" | "--default-outbound-access" : "Set this property to false to disable default outbound connectivity" ) , [ values_true_t_yes ]
+  | ( "--ipam-allocations" : "A list of IPAM Pools for allocating IP address prefixes" | "--ipam-pool-prefix-allocations" : "A list of IPAM Pools for allocating IP address prefixes" ) , @any , { @any }
+  | "--nat-gateway" : "Name or ID of a NAT gateway to attach" , @any
+  | opt_network_security_group
+  | ( "--ple-network-policies" : "Manage network policies for private endpoint" | "--private-endpoint-network-policies" : "Manage network policies for private endpoint" ) , values_disabled_enabled_networksecuritygroupena
+  | ( "--pls-network-policies" : "Manage network policy for private link service" | "--private-link-service-network-policies" : "Manage network policy for private link service" ) , values_disabled_enabled
+  | "--route-table" : "Name or ID of a route table to associate with the subnet" , @any
+  | opt_ids
+  | global ;
+
+network_vnet_subnet_delete_option =
+    opt_no_wait
+  | opt_resource_group
+  | ( "--name" : "The subnet name" | "-n" : "The subnet name" ) , @any
+  | "--vnet-name" : "The virtual network (VNet) name" , @any
+  | opt_ids
+  | global ;
+
+network_vnet_subnet_list_option =
+    opt_next_token
+  | opt_max_items
+  | opt_resource_group
+  | "--vnet-name" : "The virtual network (VNet) name" , @any
+  | opt_ids
+  | global ;
+
+network_vnet_subnet_show_option =
+    opt_resource_group
+  | ( "--name" : "The subnet name" | "-n" : "The subnet name" ) , @any
+  | "--vnet-name" : "The virtual network (VNet) name" , @any
+  | opt_expand
+  | opt_ids
+  | global ;
+
+network_vnet_subnet_command =
+    "create" : "Create a subnet and associate an existing NSG and route table" , { network_vnet_subnet_create_option }
+  | "delete" : "Delete a subnet" , { network_vnet_subnet_delete_option }
+  | "list" : "List the subnets in a virtual network" , { network_vnet_subnet_list_option }
+  | "show" : "Show details of a subnet" , { network_vnet_subnet_show_option }
+  | ( "list-available-delegations" : "List the services available for subnet delegation"
+  | "list-available-ips" : "List some available ips in the subnet"
+  | "update" : "Update a subnet"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_vnet_update_option =
+    opt_no_wait
+  | opt_add
+  | opt_set
+  | opt_remove
+  | "--force-string" : "When using 'set' or 'add', preserve string literals instead" , [ values_true_t_yes ]
+  | opt_resource_group
+  | ( "--name" : "The virtual network (VNet) name" | "-n" : "The virtual network (VNet) name" ) , @any
+  | "--address-prefixes" : "Space-separated list of IP address prefixes for the VNet" , @any , { @any }
+  | opt_bgp_community
+  | "--ddos-protection-plan" : "Name or ID of a DDoS protection plan to associate with the VNet" , @any
+  | opt_dns_servers
+  | opt_ddos_protection
+  | opt_ids
+  | global ;
+
+network_vnet_command =
+    "create" : "Create a virtual network" , { network_vnet_create_option }
+  | "delete" : "Delete a virtual network" , { network_vnet_delete_option }
+  | "list" : "List virtual networks" , { network_vnet_list_option }
+  | "show" : "Get the details of a virtual network" , { network_vnet_show_option }
+  | "subnet" : "Manage subnets in an Azure Virtual Network" , [ network_vnet_subnet_command ]
+  | "update" : "Update a virtual network" , { network_vnet_update_option }
+  | ( "check-ip-address" : "Check if a private IP address is available for use within a virtual"
+  | "list-available-ips" : "List some available ips in the vnet"
+  | "list-endpoint-services" : "List which services support VNet service tunneling in a given region"
+  | "move-ip-configurations" : "Move IP configurations from one virtual network to another"
+  | "peering" : "Manage peering connections between Azure Virtual Networks"
+  | "wait" : "Place the CLI in a waiting state until a condition is met" ) , rest
+  | help ;
+
+network_command =
+    "lb" : "Manage and configure load balancers" , [ network_lb_command ]
+  | "nic" : "Manage network interfaces" , [ network_nic_command ]
+  | "nsg" : "Manage Azure Network Security Groups (NSGs)" , [ network_nsg_command ]
+  | "public-ip" : "Manage public IP addresses" , [ network_public_ip_command ]
+  | "vnet" : "Check if a private IP address is available for use within a virtual" , [ network_vnet_command ]
+  | ( "application-gateway" : "Manage application-level routing and load balancing services"
+  | "asg" : "Manage application security groups (ASGs)"
+  | "cross-region-lb" : "Manage and configure cross-region load balancers"
+  | "custom-ip" : "Manage custom IP"
+  | "ddos-custom-policy" : "Manage Ddos Custom Policy"
+  | "ddos-protection" : "Manage DDoS Protection Plans"
+  | "dns" : "Manage DNS domains in Azure"
+  | "express-route" : "Manage Express Route Circuit"
+  | "first-party-service-tag" : "Manage First Party Service Tag"
+  | "list-service-aliases" : "List available service aliases in the region which can be used"
+  | "list-service-tags" : "List all service tags which are below to different resources"
+  | "list-usages" : "List the number of network resources in a region that are used"
+  | "local-gateway" : "Manage local gateways"
+  | "nat" : "Manage NAT resources"
+  | "network-watcher" : "Manage network watcher and its sub-resources"
+  | "private-dns" : "Manage Private DNS domains in Azure"
+  | "private-endpoint" : "Manage private endpoints"
+  | "private-endpoint-connection" : "Manage private endpoint connections"
+  | "private-link-resource" : "Manage private link resources"
+  | "private-link-service" : "Manage private link services"
+  | "profile" : "Manage network profiles"
+  | "route-filter" : "Manage route filters"
+  | "route-table" : "Manage route tables"
+  | "routeserver" : "Manage the route server"
+  | "security-partner-provider" : "Manage Azure security partner provider"
+  | "service-endpoint" : "Manage policies related to service endpoints"
+  | "traffic-manager" : "Manage the routing of incoming traffic"
+  | "virtual-appliance" : "Manage Azure Network Virtual Appliance"
+  | "virtual-network-appliance" : "Manage Virtual Network Appliance"
+  | "vnet-gateway" : "Use an Azure Virtual Network Gateway to establish secure"
+  | "vpn-connection" : "Manage VPN connections"
+  | "watcher" : "Manage the Azure Network Watcher" ) , rest
+  | help ;
+
+storage_account_create_option =
+    opt_resource_group
+  | ( "--name" : "The storage account name" | "-n" : "The storage account name" ) , @any
+  | "--sku" : "The storage account SKU" , @any
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | "--kind" : "Indicate the type of storage account" , values_storage_storagev2_blobstorage
+  | opt_tags_2
+  | opt_access_tier
+  | "--https-only" : "Allow https traffic only to storage service if set to true" , [ values_true_false ]
+  | opt_default_action
+  | ( "--enable-hierarchical-namespace" : "Allow the blob service to exhibit filesystem semantics" | "--hierarchical-namespace" : "Allow the blob service to exhibit filesystem semantics" | "--hns" : "Allow the blob service to exhibit filesystem semantics" ) , [ values_true_false ]
+  | opt_allow_blob_public_access
+  | opt_min_tls_version
+  | opt_allow_shared_key_access
+  | opt_public_network_access
+  | opt_ids
+  | global ;
+
+storage_account_delete_option =
+    opt_resource_group
+  | ( "--name" : "The storage account name" | "-n" : "The storage account name" ) , @any
+  | opt_yes
+  | opt_ids
+  | global ;
+
+storage_account_keys_list_option =
+    opt_resource_group
+  | ( "--account-name" : "The storage account name" | "-n" : "The storage account name" ) , @any
+  | opt_ids
+  | global ;
+
+storage_account_keys_command =
+    "list" : "List the access keys or Kerberos keys (if active directory enabled)" , { storage_account_keys_list_option }
+  | ( "renew" : "Regenerate one of the access keys or Kerberos keys" ) , rest
+  | help ;
+
+storage_account_list_option =
+    opt_resource_group
+  | opt_ids
+  | global ;
+
+storage_account_show_option =
+    opt_resource_group
+  | ( "--name" : "The storage account name" | "-n" : "The storage account name" ) , @any
+  | "--expand" : "May be used to expand the properties within account's properties" , values_georeplicationstats_blobrestorestatus
+  | opt_ids
+  | global ;
+
+storage_account_show_connection_string_option =
+    opt_resource_group
+  | ( "--name" : "The storage account name" | "-n" : "The storage account name" ) , @any
+  | "--protocol" : "The default endpoint protocol" , values_http_https
+  | "--blob-endpoint" : "Custom endpoint for blobs" , @any
+  | "--file-endpoint" : "Custom endpoint for files" , @file
+  | "--queue-endpoint" : "Custom endpoint for queues" , @any
+  | "--table-endpoint" : "Custom endpoint for tables" , @any
+  | "--sas-token" : "The SAS token to be used in the connection-string" , @any
+  | "--key" : "The key to use" , values_primary_secondary_key1
+  | opt_ids
+  | global ;
+
+storage_account_update_option =
+    opt_resource_group
+  | ( "--name" : "The storage account name" | "-n" : "The storage account name" ) , @any
+  | "--sku" : "Note that the SKU name cannot be updated to Standard_ZRS, Premium_LRS" , @any
+  | opt_tags_2
+  | opt_access_tier
+  | "--https-only" : "Allows https traffic only to storage service" , [ values_true_false ]
+  | opt_default_action
+  | opt_allow_blob_public_access
+  | opt_min_tls_version
+  | opt_allow_shared_key_access
+  | opt_public_network_access
+  | opt_set
+  | opt_add
+  | opt_remove
+  | opt_ids
+  | global ;
+
+storage_account_command =
+    "create" : "Create a storage account" , { storage_account_create_option }
+  | "delete" : "Delete a storage account" , { storage_account_delete_option }
+  | "keys" : "Manage storage account keys" , [ storage_account_keys_command ]
+  | "list" : "List storage accounts" , { storage_account_list_option }
+  | "show" : "Show storage account properties" , { storage_account_show_option }
+  | "show-connection-string" : "Get the connection string for a storage account" , { storage_account_show_connection_string_option }
+  | "update" : "Update the properties of a storage account" , { storage_account_update_option }
+  | ( "blob-inventory-policy" : "Manage storage account Blob Inventory Policy"
+  | "blob-service-properties" : "Manage the properties of a storage account's blob service"
+  | "check-name" : "Check that the storage account name is valid and is not already"
+  | "encryption-scope" : "Manage encryption scope for a storage account"
+  | "failover" : "Failover request can be triggered for a storage account in case"
+  | "file-service-properties" : "Manage the properties of file service in storage account"
+  | "file-service-usage" : "Get the usage of file service in storage account including account"
+  | "generate-sas" : "Generate a shared access signature for the storage account"
+  | "hns-migration" : "Manage storage account migration to enable hierarchical namespace"
+  | "local-user" : "Manage storage account local users"
+  | "management-policy" : "Manage storage account management policies"
+  | "migration" : "Manage Storage Account Migration"
+  | "network-rule" : "Manage network rules"
+  | "network-security-perimeter-configuration" : "Manage Network Security Perimeter Configuration"
+  | "or-policy" : "Manage storage account Object Replication Policy"
+  | "private-endpoint-connection" : "Manage storage account private endpoint connection"
+  | "private-link-resource" : "Manage storage account private link resources"
+  | "revoke-delegation-keys" : "Revoke all user delegation keys for a storage account"
+  | "show-usage" : "Show the current count and limit of the storage accounts under" ) , rest
+  | help ;
+
+storage_blob_delete_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | "--delete-snapshots" : "Required if the blob has associated snapshots" , values_include_only
+  | ( "--name" : "The blob name" | "-n" : "The blob name" ) , @any
+  | opt_container_name
+  | "--timeout" : "Request timeout in seconds" , @any
+  | opt_blob_url
+  | opt_if_modified_since
+  | global ;
+
+storage_blob_download_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | ( "--file" : "Path of file to write out to" | "-f" : "Path of file to write out to" ) , @file
+  | "--open-mode" : "Mode to use when opening the file" , @any
+  | "--start-range" : "Start of byte range to use for downloading a section of the blob" , @any
+  | "--end-range" : "End of byte range to use for downloading a section of the blob" , @any
+  | "--overwrite" : "Overwrite an existing file when specified" , [ values_true_false ]
+  | ( "--name" : "The blob name" | "-n" : "The blob name" ) , @any
+  | global ;
+
+storage_blob_download_batch_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | ( "--source" : "The blob container from where the files will be downloaded" | "-s" : "The blob container from where the files will be downloaded" ) , @any
+  | ( "--destination" : "The existing destination folder for this download operation" | "-d" : "The existing destination folder for this download operation" ) , @any
+  | opt_pattern
+  | "--dryrun" : "Show the summary of the operations to be taken instead of actually"
+  | "--overwrite" : "Overwrite an existing file when specified" , [ values_true_false ]
+  | opt_no_progress
+  | global ;
+
+storage_blob_list_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | "--delimiter" : "When the request includes this parameter, the operation returns" , @any
+  | "--include" : "Specify one or more additional datasets to include in the response" , @any
+  | opt_marker
+  | opt_num_results
+  | opt_prefix
+  | opt_container_name
+  | global ;
+
+storage_blob_upload_option =
+    opt_account_name
+  | opt_connection_string
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | ( "--file" : "Path of the file to upload as the blob content" | "-f" : "Path of the file to upload as the blob content" ) , @file
+  | opt_container_name
+  | ( "--name" : "The blob name" | "-n" : "The blob name" ) , @any
+  | ( "--type" : "Default to 'page' for *.vhd files, or 'block' otherwise" | "-t" : "Default to 'page' for *.vhd files, or 'block' otherwise" ) , values_block_page_append
+  | opt_metadata
+  | "--max-connections" : "Maximum number of parallel connections to use when the blob size" , @any
+  | "--timeout" : "Request timeout in seconds" , @any
+  | "--overwrite" : "Whether the blob to be uploaded should overwrite the current data" , [ values_true_false ]
+  | opt_content_type
+  | opt_no_progress
+  | "--tier" : "The tier value to set the blob to" , @any
+  | opt_tags_2
+  | global ;
+
+storage_blob_upload_batch_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | ( "--source" : "The directory where the files to be uploaded are located" | "-s" : "The directory where the files to be uploaded are located" ) , @any
+  | ( "--destination" : "The blob container where the files will be uploaded" | "-d" : "The blob container where the files will be uploaded" ) , @any
+  | opt_pattern
+  | "--destination-path" : "The destination path that will be prepended to the blob name" , @file
+  | ( "--type" : "Defaults to 'page' for *.vhd files, or 'block' otherwise" | "-t" : "Defaults to 'page' for *.vhd files, or 'block' otherwise" ) , values_block_page_append
+  | opt_metadata
+  | global ;
+
+storage_blob_command =
+    "delete" : "Mark a blob or snapshot for deletion" , { storage_blob_delete_option }
+  | "download" : "Download a blob to a file path" , { storage_blob_download_option }
+  | "download-batch" : "Download blobs from a blob container recursively" , { storage_blob_download_batch_option }
+  | "list" : "List blobs in a given container" , { storage_blob_list_option }
+  | "upload" : "Upload a file to a storage blob" , { storage_blob_upload_option }
+  | "upload-batch" : "Upload files from a local directory to a blob container" , { storage_blob_upload_batch_option }
+  | ( "copy" : "Manage blob copy operations"
+  | "delete-batch" : "Delete blobs from a blob container recursively"
+  | "exists" : "Check for the existence of a blob in a container"
+  | "generate-sas" : "Generate a shared access signature for the blob"
+  | "immutability-policy" : "Manage blob immutability policy"
+  | "incremental-copy" : "Manage blob incremental copy operations"
+  | "lease" : "Manage storage blob leases"
+  | "metadata" : "Manage blob metadata"
+  | "query" : "Enable users to select/project on blob or blob snapshot data"
+  | "restore" : "Restore blobs in the specified blob ranges"
+  | "rewrite" : "Create a new Block Blob where the content of the blob is read"
+  | "service-properties" : "Manage storage blob service properties"
+  | "set-legal-hold" : "Set blob legal hold"
+  | "set-tier" : "Set the block or page tiers on the blob"
+  | "show" : "Get the details of a blob"
+  | "snapshot" : "Creates a snapshot of the blob"
+  | "sync" : "Sync blobs recursively to a storage blob container"
+  | "undelete" : "Restore soft deleted blob or snapshot"
+  | "update" : "Sets system properties on the blob"
+  | "url" : "Create the url to access a blob" ) , rest
+  | help ;
+
+storage_container_create_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | ( "--name" : "The container name" | "-n" : "The container name" ) , @any
+  | opt_metadata
+  | "--public-access" : "Specifies whether data in the container may be accessed publicly" , values_off_blob_container
+  | "--fail-on-exist" : "Throw an exception if the container already exists"
+  | "--timeout" : "Request timeout in seconds" , @any
+  | opt_ids
+  | global ;
+
+storage_container_delete_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | ( "--name" : "The container name" | "-n" : "The container name" ) , @any
+  | "--fail-not-exist" : "Throw an exception if the container does not exist"
+  | "--lease-id" : "If specified, delete_container only succeeds if the container's lease" , @any
+  | opt_if_modified_since
+  | opt_if_unmodified_since
+  | "--timeout" : "Request timeout in seconds" , @any
+  | global ;
+
+storage_container_list_option =
+    opt_account_name
+  | opt_connection_string
+  | "--blob-endpoint" : "Storage data service endpoint" , @any
+  | opt_account_key
+  | "--sas-token" : "A Shared Access Signature (SAS)" , @any
+  | opt_auth_mode
+  | "--include-metadata" : "Specify that container metadata to be returned in the response" , [ values_true_false ]
+  | "--include-deleted" : "Specify that deleted containers to be returned in the response" , [ values_true_false ]
+  | opt_marker
+  | opt_num_results
+  | opt_prefix
+  | "--timeout" : "Request timeout in seconds" , @any
+  | global ;
+
+storage_container_command =
+    "create" : "Create a container in a storage account" , { storage_container_create_option }
+  | "delete" : "Mark the specified container for deletion" , { storage_container_delete_option }
+  | "list" : "List containers in a storage account" , { storage_container_list_option }
+  | ( "exists" : "Check for the existence of a storage container"
+  | "generate-sas" : "Generate a SAS token for a storage container"
+  | "immutability-policy" : "Manage container immutability policies"
+  | "lease" : "Manage blob storage container leases"
+  | "legal-hold" : "Manage container legal holds"
+  | "metadata" : "Manage container metadata"
+  | "policy" : "Manage container stored access policies"
+  | "restore" : "Restore soft-deleted container"
+  | "set-permission" : "Set the permissions for the specified container"
+  | "show" : "Return all user-defined metadata and system properties"
+  | "show-permission" : "Get the permissions for the specified container" ) , rest
+  | help ;
+
+storage_command =
+    "account" : "Manage storage accounts" , [ storage_account_command ]
+  | "blob" : "Manage object storage for unstructured data (blobs)" , [ storage_blob_command ]
+  | "container" : "Manage blob storage containers" , [ storage_container_command ]
+  | ( "advanced-platform-metric" : "Manage Advanced Platform Metric"
+  | "container-rm" : "Manage Azure containers using the Microsoft.Storage resource provider"
+  | "copy" : "Copy files or directories to or from Azure storage"
+  | "cors" : "Manage storage service Cross-Origin Resource Sharing (CORS)"
+  | "directory" : "Manage file storage directories"
+  | "entity" : "Manage table storage entities"
+  | "file" : "Manage file shares"
+  | "fs" : "Manage file systems in Azure Data Lake Storage Gen2 account"
+  | "logging" : "Manage storage service logging information"
+  | "message" : "Manage queue storage messages"
+  | "metrics" : "Manage storage service metrics"
+  | "queue" : "Manage storage queues"
+  | "remove" : "Delete blobs or files from Azure Storage"
+  | "share" : "Manage file shares"
+  | "share-rm" : "Manage Azure file shares using the Microsoft.Storage resource"
+  | "sku" : "Manage Sku"
+  | "table" : "Manage NoSQL key-value storage" ) , rest
+  | help ;
+
+version_option =
+    global ;
+
+vm_create_option =
+    ( "--name" : "Name of the virtual machine" | "-n" : "Name of the virtual machine" ) , @any
+  | opt_resource_group
+  | "--image" : "OS image as a URN alias, URN, custom image name or ID" , @any
+  | "--size" : "The VM size to be created" , @any
+  | ( "--location" : "Location in which to create VM and related resources" | "-l" : "Location in which to create VM and related resources" ) , @any
+  | opt_tags_2
+  | "--authentication-type" : "Type of authentication to use with the VM" , values_ssh_password_all
+  | "--admin-password" : "Password for the VM if authentication type is 'Password'" , @any
+  | "--admin-username" : "Username for the VM" , @any
+  | "--ssh-key-values" : "Space-separated list of SSH public keys or public key file paths" , @any , { @any }
+  | opt_generate_ssh_keys
+  | "--nsg-rule" : "NSG rule to create when creating a new NSG" , values_rdp_ssh_none
+  | "--public-ip-address" : "Name of the public IP address when creating one (default)" , @any
+  | "--public-ip-sku" : "Public IP SKU: the public IP is supported to be created on edge zone" , values_basic_standard_2
+  | "--storage-sku" : "The SKU of the storage account with which to persist VM" , @any , { @any }
+  | "--os-disk-size-gb" : "OS disk size in GB to create" , @any
+  | "--data-disk-sizes-gb" : "Space-separated empty managed data disk sizes in GB to create" , @any , { @any }
+  | "--vnet-name" : "Name of the virtual network when creating a new one or referencing" , @any
+  | "--subnet" : "The name of the subnet when creating a new VNet or referencing" , @any
+  | opt_validate
+  | "--custom-data" : "Custom init script file or text (cloud-init, cloud-config, etc..)" , @any
+  | opt_assign_identity_1
+  | opt_zone
+  | opt_priority
+  | opt_security_type
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+vm_deallocate_option =
+    opt_no_wait
+  | opt_resource_group
+  | opt_vm_name
+  | "--force-deallocate" : "Optional parameter to force deallocate a virtual machine" , [ values_true_t_yes ]
+  | "--hibernate" : "Optional parameter to hibernate a virtual machine" , [ values_true_t_yes ]
+  | opt_ids
+  | global ;
+
+vm_delete_option =
+    opt_no_wait
+  | opt_resource_group
+  | ( "--name" : "The name of the virtual machine" | "-n" : "The name of the virtual machine" ) , @any
+  | "--force-deletion" : "Optional parameter to force delete virtual machines" , [ values_true_t_yes ]
+  | opt_yes
+  | opt_ids
+  | global ;
+
+vm_image_list_option =
+    ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | ( "--publisher" : "Image publisher" | "-p" : "Image publisher" ) , @any
+  | ( "--offer" : "Image offer" | "-f" : "Image offer" ) , @any
+  | ( "--sku" : "Image sku" | "-s" : "Image sku" ) , @any
+  | "--all" : "Retrieve image list from live Azure service rather using an offline"
+  | "--edge-zone" : "The name of edge zone" , @any
+  | "--architecture" : "The name of architecture" , values_x64_arm64
+  | global ;
+
+vm_image_command =
+    "list" : "List the VM/VMSS images available in the Azure Marketplace" , { vm_image_list_option }
+  | ( "accept-terms" : "Accept Azure Marketplace term so that the image can be used to create"
+  | "list-offers" : "List the VM image offers available in the Azure Marketplace"
+  | "list-publishers" : "List the VM image publishers available in the Azure Marketplace"
+  | "list-skus" : "List the VM image SKUs available in the Azure Marketplace"
+  | "show" : "Get the details for a VM image available in the Azure Marketplace"
+  | "terms" : "Manage Azure Marketplace image terms" ) , rest
+  | help ;
+
+vm_list_option =
+    opt_resource_group
+  | opt_show_details
+  | "--vmss" : "List VM instances in a specific VMSS" , @any
+  | opt_ids
+  | global ;
+
+vm_list_sizes_option =
+    ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | global ;
+
+vm_resize_option =
+    opt_resource_group
+  | ( "--name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any
+  | "--size" : "The VM size" , @any
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+vm_restart_option =
+    opt_resource_group
+  | ( "--name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any
+  | "--force" : "Force the VM to restart by redeploying it"
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+vm_run_command_invoke_option =
+    opt_resource_group
+  | ( "--name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any
+  | "--command-id" : "The command id: use 'az vm run-command list' to get the list" , @any
+  | "--scripts" : "Space-separated script lines" , @any , { @any }
+  | "--parameters" : "Space-separated parameters in the format of '[name=]value'" , @any , { @any }
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+vm_run_command_command =
+    "invoke" : "Execute a specific run command on a vm" , { vm_run_command_invoke_option }
+  | ( "create" : "The operation to create the run command"
+  | "delete" : "The operation to delete the run command"
+  | "list" : "List run commands from a VM or a location"
+  | "show" : "Get specific run command"
+  | "update" : "The operation to update the run command"
+  | "wait" : "Place the CLI in a waiting state until a condition of the res" ) , rest
+  | help ;
+
+vm_show_option =
+    opt_resource_group
+  | ( "--name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any
+  | opt_show_details
+  | "--include-user-data" : "Include the user data properties in the query result"
+  | "-u" : "Include the user data properties in the query result"
+  | opt_ids
+  | global ;
+
+vm_start_option =
+    opt_no_wait
+  | opt_resource_group
+  | opt_vm_name
+  | opt_ids
+  | global ;
+
+vm_stop_option =
+    opt_resource_group
+  | ( "--name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any
+  | "--skip-shutdown" : "Skip shutdown and power-off immediately"
+  | "--no-wait" : "Do not wait for the long-running operation to finish"
+  | opt_ids
+  | global ;
+
+vm_update_option =
+    opt_resource_group
+  | ( "--name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any
+  | "--os-disk" : "Managed OS disk ID or name to swap to" , @any
+  | "--disk-caching" : "Use singular value to apply across, or specify individual disks, e.g" , { @any }
+  | "--write-accelerator" : "Enable/disable disk write accelerator" , { @any }
+  | opt_license_type
+  | opt_ultra_ssd_enabled
+  | opt_priority
+  | "--ppg" : "The name or ID of the proximity placement group the VM should" , @any
+  | opt_enable_secure_boot
+  | opt_enable_vtpm
+  | opt_user_data
+  | opt_ids
+  | global ;
+
+vm_command =
+    "create" : "Create an Azure Virtual Machine" , { vm_create_option }
+  | "deallocate" : "Deallocate a VM so that computing resources are no longer allocated" , { vm_deallocate_option }
+  | "delete" : "Delete operation to delete a virtual machine" , { vm_delete_option }
+  | "image" : "Information on available virtual machine images" , [ vm_image_command ]
+  | "list" : "List details of Virtual Machines" , { vm_list_option }
+  | "list-sizes" : "List available sizes for VMs" , { vm_list_sizes_option }
+  | "resize" : "Update a VM's size" , { vm_resize_option }
+  | "restart" : "Restart VMs" , { vm_restart_option }
+  | "run-command" : "Manage run commands on a Virtual Machine" , [ vm_run_command_command ]
+  | "show" : "Get the details of a VM" , { vm_show_option }
+  | "start" : "Start a stopped VM" , { vm_start_option }
+  | "stop" : "Power off (stop) a running VM" , { vm_stop_option }
+  | "update" : "Update the properties of a VM" , { vm_update_option }
+  | ( "application" : "Manage applications for VM"
+  | "assess-patches" : "Assess patches on a VM"
+  | "auto-shutdown" : "Manage auto-shutdown for VM"
+  | "availability-set" : "Group resources into availability sets"
+  | "boot-diagnostics" : "Troubleshoot the startup of an Azure Virtual Machine"
+  | "capture" : "Capture information for a stopped VM"
+  | "convert" : "Convert a VM with unmanaged disks to use managed disks"
+  | "diagnostics" : "Configure the Azure Virtual Machine diagnostics extension"
+  | "disk" : "Manage the managed data disks attached to a VM"
+  | "encryption" : "Manage encryption of VM disks"
+  | "extension" : "Manage extensions on VMs"
+  | "generalize" : "Mark a VM as generalized, allowing it to be imaged for multiple"
+  | "get-instance-view" : "Get instance information about a VM"
+  | "host" : "Manage Dedicated Hosts for Virtual Machines"
+  | "identity" : "Manage service identities of a VM"
+  | "install-patches" : "Install patches on a VM"
+  | "list-ip-addresses" : "List IP addresses associated with a VM"
+  | "list-skus" : "Get details for compute-related resource SKUs"
+  | "list-usage" : "List available usage resources for VMs"
+  | "list-vm-resize-options" : "List available resizing options for VMs"
+  | "migrate-to-vmss" : "Migrate a virtual machine from availability set to Flexible Virtual"
+  | "monitor" : "Manage monitor aspect for a vm"
+  | "nic" : "Manage network interfaces"
+  | "open-port" : "Opens a VM to inbound traffic on specified ports"
+  | "perform-maintenance" : "The operation to perform maintenance on a virtual machine"
+  | "reapply" : "Reapply VMs"
+  | "redeploy" : "Redeploy an existing VM"
+  | "reimage" : "Reimage (upgrade the operating system) a virtual machine"
+  | "secret" : "Manage VM secrets"
+  | "simulate-eviction" : "Simulate the eviction of a Spot VM"
+  | "unmanaged-disk" : "Manage the unmanaged data disks attached to a VM"
+  | "user" : "Manage user accounts for a VM"
+  | "wait" : "Place the CLI in a waiting state until a condition of the VM is met" ) , rest
+  | help ;
+
+webapp_config_appsettings_list_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_config_appsettings_set_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | "--settings" : "Space-separated appsettings in a format of <name>=<value>" , @any , { @any }
+  | opt_slot
+  | "--slot-settings" : "Space-separated slot appsettings in a format of either <name>=<value>" , @any , { @any }
+  | opt_ids
+  | global ;
+
+webapp_config_appsettings_command =
+    "list" : "Get the details of a web app's settings" , { webapp_config_appsettings_list_option }
+  | "set" : "Set a web app's settings" , { webapp_config_appsettings_set_option }
+  | ( "delete" : "Delete web app settings" ) , rest
+  | help ;
+
+webapp_config_command =
+    "appsettings" : "Configure web app settings" , [ webapp_config_appsettings_command ]
+  | ( "access-restriction" : "Methods that show, set, add, and remove access restrictions"
+  | "backup" : "Manage backups for web apps"
+  | "connection-string" : "Manage a web app's connection strings"
+  | "container" : "Manage an existing web app's container settings"
+  | "hostname" : "Configure hostnames for a web app"
+  | "set" : "Set a web app's configuration"
+  | "show" : "Get the details of a web app's configuration"
+  | "snapshot" : "Manage web app snapshots"
+  | "ssl" : "Configure SSL certificates for web apps"
+  | "storage-account" : "Manage a web app's Azure storage account configurations" ) , rest
+  | help ;
+
+webapp_create_option =
+    opt_resource_group
+  | ( "--name" : "Name of the new web app" | "-n" : "Name of the new web app" ) , @any
+  | ( "--plan" : "Name or resource id of the app service plan" | "-p" : "Name or resource id of the app service plan" ) , @any
+  | opt_runtime
+  | "--startup-file" : "Linux only: the web's startup command or script file" , @file
+  | opt_deployment_source_url
+  | opt_deployment_source_branch
+  | opt_deployment_local_git
+  | "--sitecontainers-app" : "If true, a webapp which supports sitecontainers will be created" , [ values_true_false ]
+  | ( "--container-registry-password" : "The container registry server password" | "--docker-registry-server-password" : "The container registry server password" | "-w" : "The container registry server password" ) , @any
+  | ( "--container-registry-user" : "The container registry server username" | "--docker-registry-server-user" : "The container registry server username" | "-s" : "The container registry server username" ) , @any
+  | "--container-registry-url" : "The container registry server url" , @any
+  | opt_ids
+  | global ;
+
+webapp_delete_option =
+    opt_resource_group
+  | ( "--name" : "The name of the webapp" | "-n" : "The name of the webapp" ) , @any
+  | "--keep-metrics" : "Keep app metrics"
+  | opt_keep_empty_plan
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_deploy_option =
+    opt_resource_group
+  | ( "--name" : "Name of the webapp to deploy to" | "-n" : "Name of the webapp to deploy to" ) , @any
+  | opt_src_path
+  | opt_src_url
+  | opt_target_path
+  | opt_type
+  | "--async" : "If true, the artifact is deployed asynchronously" , [ values_true_false ]
+  | "--restart" : "If true, the web app will be restarted following the deployment" , [ values_true_false ]
+  | "--clean" : "If true, cleans the target directory prior to deploying the file(s)" , [ values_true_false ]
+  | "--ignore-stack" : "If true, any stack-specific defaults are ignored" , [ values_true_false ]
+  | "--timeout" : "Timeout for the deployment operation in milliseconds" , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_list_option =
+    opt_resource_group
+  | "--show-details" : "Include detailed site configuration of listed web apps in output"
+  | opt_ids
+  | global ;
+
+webapp_log_tail_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | "--provider" : "By default all live traces configured by az webapp log config" , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_log_command =
+    "tail" : "Start live log tracing for a web app" , { webapp_log_tail_option }
+  | ( "config" : "Configure logging for a web app"
+  | "deployment" : "Manage web app deployment logs"
+  | "download" : "Download a web app's log history as a zip file"
+  | "show" : "Get the details of a web app's logging configuration"
+  | "startup" : "View web app container startup logs" ) , rest
+  | help ;
+
+webapp_restart_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_show_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_start_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_stop_option =
+    opt_resource_group
+  | ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | opt_slot
+  | opt_ids
+  | global ;
+
+webapp_up_option =
+    ( "--name" : "Name of the web app" | "-n" : "Name of the web app" ) , @any
+  | opt_resource_group
+  | ( "--plan" : "Name of the app service plan associated with the webapp" | "-p" : "Name of the app service plan associated with the webapp" ) , @any
+  | ( "--location" : "Location: values from: az account list-locations" | "-l" : "Location: values from: az account list-locations" ) , @any
+  | "--sku" : "The pricing tiers, e.g., F1(Free), D1(Shared), B1(Basic Small)" , @any
+  | opt_os_type
+  | opt_runtime
+  | "--dryrun" : "Show summary of the create and deploy operation instead of executing"
+  | "--logs" : "Configure default logging required to enable viewing log stream"
+  | "--launch-browser" : "Launch the created app using the default browser"
+  | "-b" : "Launch the created app using the default browser"
+  | "--html" : "Ignore app detection and deploy as an html app"
+  | ( "--app-service-environment" : "Name or resource ID of the (pre-existing) App Service Environment" | "-e" : "Name or resource ID of the (pre-existing) App Service Environment" ) , @any
+  | opt_ids
+  | global ;
+
+webapp_command =
+    "config" : "Configure a web app" , [ webapp_config_command ]
+  | "create" : "Create a web app" , { webapp_create_option }
+  | "delete" : "Delete a web app" , { webapp_delete_option }
+  | "deploy" : "Deploys a provided artifact to Azure Web Apps" , { webapp_deploy_option }
+  | "list" : "List web apps" , { webapp_list_option }
+  | "log" : "Manage web app logs" , [ webapp_log_command ]
+  | "restart" : "Restart a web app" , { webapp_restart_option }
+  | "show" : "Get the details of a web app" , { webapp_show_option }
+  | "start" : "Start a web app" , { webapp_start_option }
+  | "stop" : "Stop a web app" , { webapp_stop_option }
+  | "up" : "Create a webapp and deploy code from a local workspace to the app" , { webapp_up_option }
+  | ( "auth" : "Manage webapp authentication and authorization"
+  | "browse" : "Open a web app in a browser"
+  | "connection" : "Commands to manage webapp connections"
+  | "cors" : "Manage Cross-Origin Resource Sharing (CORS)"
+  | "create-remote-connection" : "Creates a remote connection using a tcp tunnel to your web app"
+  | "deleted" : "Manage deleted web apps"
+  | "deployment" : "Manage web app deployments"
+  | "exec" : "Open an interactive shell session or run a command in a Linux web app"
+  | "hybrid-connection" : "Methods that list, add and remove hybrid-connections from webapps"
+  | "identity" : "Manage web app's managed identity"
+  | "list-instances" : "List all scaled out instances of a web app or web app slot"
+  | "list-runtimes" : "List available built-in stacks which can be used for web apps"
+  | "secure-build" : "Review open source vulnerabilities in a web app's packages"
+  | "sitecontainers" : "Manage linux web apps sitecontainers"
+  | "ssh" : "SSH command establishes a ssh session to the web container"
+  | "traffic-routing" : "Manage traffic routing for web apps"
+  | "troubleshoot" : "Diagnose common Linux web app problems"
+  | "update" : "Update an existing web app"
+  | "vnet-integration" : "Methods that list, add, and remove virtual network integrations"
+  | "webjob" : "Allows management operations for webjobs on a web app" ) , rest
+  | help ;
+
+(* Options several commands share. *)
+opt_subscription =
+    ( "--name" : "Name or ID of subscription" | "--subscription" : "Name or ID of subscription" | "-n" : "Name or ID of subscription" | "-s" : "Name or ID of subscription" ) , @any ;
+opt_resource_group =
+    ( "--resource-group" : "Name of resource group" | "-g" : "Name of resource group" ) , @any ;
+opt_default_action =
+    "--default-action" : "Default action to apply when no rule matches" , values_allow_deny ;
+opt_tags_2 =
+    "--tags" : "Space-separated tags: key[=value] [key[=value] ...]" , { @any } ;
+opt_yes =
+    "--yes" : "Do not prompt for confirmation"
+  | "-y" : "Do not prompt for confirmation" ;
+opt_suffix =
+    "--suffix" : "The tenant suffix in registry login server" , @any ;
+opt_repository =
+    "--repository" : "The name of the repository" , @any ;
+opt_top =
+    "--top" : "Limit the number of items in the results" , @any ;
+opt_generate_ssh_keys =
+    "--generate-ssh-keys" : "Generate SSH public and private key files if missing" ;
+opt_network_plugin =
+    "--network-plugin" : "The Kubernetes network plugin to use" , values_kubenet_azure_none ;
+opt_tier =
+    "--tier" : "Specify SKU tier for managed clusters. '--tier standard' enables" , values_free_standard_premium ;
+opt_enable_azure_rbac =
+    "--enable-azure-rbac" : "Enable Azure RBAC to control authorization checks on cluster" ;
+opt_enable_oidc_issuer =
+    "--enable-oidc-issuer" : "Enable OIDC issuer" ;
+opt_enable_workload_identity =
+    "--enable-workload-identity" : "Enable workload identity addon" ;
+opt_node_vm_size =
+    ( "--node-vm-size" : "Size of Virtual Machines to create as Kubernetes nodes" | "-s" : "Size of Virtual Machines to create as Kubernetes nodes" ) , @any ;
+opt_min_count =
+    "--min-count" : "Minimum nodes count used" , @any ;
+opt_max_count =
+    "--max-count" : "Maximum nodes count used" , @any ;
+opt_zones_1 =
+    ( "--zones" : "Space-separated list of availability zones where agent nodes" | "-z" : "Space-separated list of availability zones where agent nodes" ) , @any , { @any } ;
+opt_cluster_name =
+    "--cluster-name" : "The cluster name" , @any ;
+opt_nodepool_name_1 =
+    ( "--name" : "The node pool name" | "--nodepool-name" : "The node pool name" | "-n" : "The node pool name" ) , @any ;
+opt_enable_cluster_autoscaler =
+    "--enable-cluster-autoscaler" : "Enable cluster autoscaler"
+  | "-e" : "Enable cluster autoscaler" ;
+opt_max_pods =
+    ( "--max-pods" : "The maximum number of pods deployable to a node" | "-m" : "The maximum number of pods deployable to a node" ) , @any ;
+opt_nodepool_name_2 =
+    "--nodepool-name" : "Node pool name, alphanumeric characters only" , @any ;
+opt_auto_upgrade_channel =
+    "--auto-upgrade-channel" : "Specify the upgrade channel for autoupgrade" , values_rapid_stable_patch ;
+opt_api_server_authorized_ip_ranges =
+    "--api-server-authorized-ip-ranges" : "Comma-separated list of authorized apiserver IP ranges" , @any ;
+opt_enable_force_upgrade =
+    "--enable-force-upgrade" : "Enable forceUpgrade cluster upgrade settings override" ;
+opt_disable_force_upgrade =
+    "--disable-force-upgrade" : "Disable forceUpgrade cluster upgrade settings override" ;
+opt_upgrade_override_until =
+    "--upgrade-override-until" : "Until when the cluster upgradeSettings overrides are effective" , @any ;
+opt_k8s_support_plan =
+    "--k8s-support-plan" : "Kubernetes support plan" , values_kubernetesofficial_akslongtermsupport ;
+opt_slot =
+    ( "--slot" : "The name of the slot" | "-s" : "The name of the slot" ) , @any ;
+opt_os_type =
+    "--os-type" : "Set the OS type for the app to be created" , values_windows_linux ;
+opt_keep_empty_plan =
+    "--keep-empty-plan" : "Keep empty app service plan" ;
+opt_src_path =
+    "--src-path" : "Path of the artifact to be deployed" , @file ;
+opt_src_url =
+    "--src-url" : "URL of the artifact" , @any ;
+opt_target_path =
+    "--target-path" : "Absolute path that the artifact should be deployed to" , @file ;
+opt_type =
+    "--type" : "Used to override the type of artifact being deployed" , values_war_jar_ear ;
+opt_set =
+    "--set" : "Update an object by specifying a property path and value to set" , @any , { @any } ;
+opt_force_string =
+    "--force-string" : "When using 'set' or 'add', preserve string literals instead" ;
+opt_hsm_name =
+    "--hsm-name" : "Name of the HSM" , @any ;
+opt_no_wait =
+    "--no-wait" : "Do not wait for the long-running operation to finish" , [ values_true_t_yes ] ;
+opt_next_token =
+    "--next-token" : "Token to specify where to start paginating" , @any ;
+opt_max_items =
+    "--max-items" : "Total number of items to return in the command's output" , @any ;
+opt_expand =
+    "--expand" : "Expands referenced resources" , @any ;
+opt_tags_1 =
+    "--tags" : "Space-separated tags: key[=value] [key[=value] ...]" , @any , { @any } ;
+opt_dns_servers =
+    "--dns-servers" : "Space-separated list of DNS server IP addresses" , @any , { @any } ;
+opt_nsg_name =
+    "--nsg-name" : "Name of the network security group" , @any ;
+opt_bgp_community =
+    "--bgp-community" : "The BGP community associated with the virtual network" , @any ;
+opt_ddos_protection =
+    "--ddos-protection" : "Control whether DDoS protection is enabled" , [ values_true_t_yes ] ;
+opt_vm_protection =
+    "--vm-protection" : "Enable VM protection for all subnets in the VNet" , [ values_true_t_yes ] ;
+opt_enable_encryption =
+    "--enable-encryption" : "Enable encryption on the virtual network" , [ values_true_t_yes ] ;
+opt_encryption_enforcement_policy =
+    ( "--encryption-enforcement-policy" : "To control if the Virtual Machine without encryption is allowed" | "--encryption-policy" : "To control if the Virtual Machine without encryption is allowed" ) , values_allowunencrypted_dropunencrypted ;
+opt_network_security_group =
+    ( "--network-security-group" : "Name or ID of a network security group (NSG)" | "--nsg" : "Name or ID of a network security group (NSG)" ) , @any ;
+opt_add =
+    "--add" : "Add an object to a list of objects by specifying a path and key" , @any , { @any } ;
+opt_remove =
+    "--remove" : "Remove a property or an element from a list" , @any , { @any } ;
+opt_access_tier =
+    "--access-tier" : "Required for storage accounts where kind = BlobStorage" , values_hot_cool_premium ;
+opt_allow_blob_public_access =
+    "--allow-blob-public-access" : "Allow or disallow public access to all blobs or containers" , [ values_true_false ] ;
+opt_min_tls_version =
+    "--min-tls-version" : "The minimum TLS version to be permitted on requests to storage" , values_tls1_0_tls1_1_tls1_2 ;
+opt_allow_shared_key_access =
+    ( "--allow-shared-key-access" : "Indicate whether the storage account permits requests" | "-k" : "Indicate whether the storage account permits requests" ) , [ values_true_false ] ;
+opt_public_network_access =
+    "--public-network-access" : "Enable or disable public network access to the storage account" , values_enabled_disabled_securedbyperimeter ;
+opt_account_name =
+    "--account-name" : "Storage account name" , @any ;
+opt_connection_string =
+    "--connection-string" : "Storage account connection string" , @any ;
+opt_account_key =
+    "--account-key" : "Storage account key" , @any ;
+opt_auth_mode =
+    "--auth-mode" : "The mode in which to run the command. 'login' mode will directly" , values_login_key ;
+opt_container_name =
+    ( "--container-name" : "The container name" | "-c" : "The container name" ) , @any ;
+opt_blob_url =
+    "--blob-url" : "The full endpoint URL to the Blob, including SAS token and snapshot" , @any ;
+opt_if_modified_since =
+    "--if-modified-since" : "Commence only if modified since supplied UTC datetime" , @any ;
+opt_pattern =
+    "--pattern" : "The pattern used for globbing files or blobs in the source" , @any ;
+opt_no_progress =
+    "--no-progress" : "Include this flag to disable progress reporting for the command" ;
+opt_marker =
+    "--marker" : "A string value that identifies the portion of the list of containers" , @any ;
+opt_num_results =
+    "--num-results" : "Specify the maximum number to return" , @any ;
+opt_prefix =
+    "--prefix" : "Filter the results to return only blobs whose name begins" , @any ;
+opt_metadata =
+    "--metadata" : "Metadata in space-separated key=value pairs" , @any , { @any } ;
+opt_content_type =
+    "--content-type" : "The content MIME type" , @any ;
+opt_if_unmodified_since =
+    "--if-unmodified-since" : "Commence only if unmodified since supplied UTC datetime" , @any ;
+opt_validate =
+    "--validate" : "Generate and validate the ARM template without creating any resources" ;
+opt_assign_identity_1 =
+    "--assign-identity" : "Accept system or user assigned identities separated by spaces" , { @any } ;
+opt_zone =
+    ( "--zone" : "Availability zone into which to provision the resource" | "-z" : "Availability zone into which to provision the resource" ) , @any ;
+opt_priority =
+    "--priority" : "Priority: use 'Spot' or 'SpotPlus' to run short-lived workloads" , values_regular_low_spot ;
+opt_security_type =
+    "--security-type" : "Specify the security type of the virtual machine" , values_trustedlaunch_standard_confidentialvm ;
+opt_vm_name =
+    ( "--name" : "The name of the Virtual Machine" | "--vm-name" : "The name of the Virtual Machine" | "-n" : "The name of the Virtual Machine" ) , @any ;
+opt_show_details =
+    "--show-details" : "Show public ip address, FQDN, and power states. command will run slow"
+  | "-d" : "Show public ip address, FQDN, and power states. command will run slow" ;
+opt_license_type =
+    "--license-type" : "Specifies that the Windows image or disk was licensed on-premises" , @any ;
+opt_ultra_ssd_enabled =
+    "--ultra-ssd-enabled" : "Enables or disables the capability to have 1 or more managed data" , [ values_true_false ] ;
+opt_enable_secure_boot =
+    "--enable-secure-boot" : "Enable secure boot" , [ values_true_false ] ;
+opt_enable_vtpm =
+    "--enable-vtpm" : "Enable vTPM" , [ values_true_false ] ;
+opt_user_data =
+    "--user-data" : "UserData for the VM" , @any ;
+opt_runtime =
+    ( "--runtime" : "Canonicalized web runtime in the format of Framework:Version, e.g" | "-r" : "Canonicalized web runtime in the format of Framework:Version, e.g" ) , @any ;
+opt_deployment_source_url =
+    ( "--deployment-source-url" : "Git repository URL to link with manual integration" | "-u" : "Git repository URL to link with manual integration" ) , @any ;
+opt_deployment_source_branch =
+    ( "--deployment-source-branch" : "The branch to deploy" | "-b" : "The branch to deploy" ) , @any ;
+opt_deployment_local_git =
+    "--deployment-local-git" : "Enable local git"
+  | "-l" : "Enable local git" ;
+
+(* Values of options. *)
+values_oss_rdbms_arm_aad_graph = "oss-rdbms" | "arm" | "aad-graph" | "ms-graph" | "batch" | "media" | "data-lake" ;
+values_true_t_yes = "true" | "t" | "yes" | "y" | "1" | "false" | "f" | "no" | "n" | "0" ;
+values_basic_standard_premium = "Basic" | "Standard" | "Premium" ;
+values_true_false = "true" | "false" ;
+values_allow_deny = "Allow" | "Deny" ;
+values_rbac_abac_rbac = "rbac-abac" | "rbac" ;
+values_time_asc_time_desc = "time_asc" | "time_desc" ;
+values_kubenet_azure_none = "kubenet" | "azure" | "none" ;
+values_rapid_stable_patch = "rapid" | "stable" | "patch" | "node-image" | "none" ;
+values_free_standard_premium = "free" | "standard" | "premium" ;
+values_kubernetesofficial_akslongtermsupport = "KubernetesOfficial" | "AKSLongTermSupport" ;
+values_azurelinux_azurelinux3_azurecontainerlin = "AzureLinux" | "AzureLinux3" | "AzureContainerLinux" | "Ubuntu" | "CBLMariner" | "Mariner" | "Ubuntu2204" | "Ubuntu2404" ;
+values_azurelinux_azurelinux3_azurecontainerlin_2 = "AzureLinux" | "AzureLinux3" | "AzureContainerLinux" | "Ubuntu" | "CBLMariner" | "Mariner" | "Ubuntu2204" | "Ubuntu2404" | "Windows2019" | "Windows2022" | "Windows2025" ;
+values_regular_spot = "Regular" | "Spot" ;
+values_system_user_gateway = "System" | "User" | "Gateway" ;
+values_windows_linux = "Windows" | "Linux" ;
+values_4 = "4" ;
+values_war_jar_ear = "war" | "jar" | "ear" | "lib" | "startup" | "static" | "zip" ;
+values_microsoft_compute_virtualmachines_micros = "Microsoft.Compute/virtualMachines" | "Microsoft.Compute/virtualMachineScaleSets" | "Microsoft.Databricks/workspaces" ;
+values_utf_8_utf_16le_utf_16be = "utf-8" | "utf-16le" | "utf-16be" | "ascii" | "base64" | "hex" ;
+values_all_get_list = "all" | "get" | "list" | "set" | "delete" | "backup" | "restore" | "recover" | "purge" ;
+values_static_dynamic = "Static" | "Dynamic" ;
+values_ipv4_ipv6 = "IPv4" | "IPv6" ;
+values_reduced = "Reduced" ;
+values_acceleratedconnections_floating_maxconne = "AcceleratedConnections" | "Floating" | "MaxConnections" | "None" ;
+values_a1_a2_a4 = "A1" | "A2" | "A4" | "A8" | "None" ;
+values_inbound_outbound = "Inbound" | "Outbound" ;
+values___ah_esp = "*" | "Ah" | "Esp" | "Icmp" | "Tcp" | "Udp" ;
+values_noreuse_resourcegroupreuse_subscriptionr = "NoReuse" | "ResourceGroupReuse" | "SubscriptionReuse" | "TenantReuse" ;
+values_basic_standard_standardv2 = "Basic" | "Standard" | "StandardV2" ;
+values_regional_global = "Regional" | "Global" ;
+values_allowunencrypted_dropunencrypted = "AllowUnencrypted" | "DropUnencrypted" ;
+values_disabled_enabled_networksecuritygroupena = "Disabled" | "Enabled" | "NetworkSecurityGroupEnabled" | "RouteTableEnabled" ;
+values_disabled_enabled = "Disabled" | "Enabled" ;
+values_storage_storagev2_blobstorage = "Storage" | "StorageV2" | "BlobStorage" | "FileStorage" | "BlockBlobStorage" ;
+values_hot_cool_premium = "Hot" | "Cool" | "Premium" | "Cold" | "Smart" ;
+values_tls1_0_tls1_1_tls1_2 = "TLS1_0" | "TLS1_1" | "TLS1_2" | "TLS1_3" ;
+values_enabled_disabled_securedbyperimeter = "Enabled" | "Disabled" | "SecuredByPerimeter" ;
+values_georeplicationstats_blobrestorestatus = "geoReplicationStats" | "blobRestoreStatus" ;
+values_http_https = "http" | "https" ;
+values_primary_secondary_key1 = "primary" | "secondary" | "key1" | "key2" ;
+values_login_key = "login" | "key" ;
+values_include_only = "include" | "only" ;
+values_block_page_append = "block" | "page" | "append" ;
+values_off_blob_container = "off" | "blob" | "container" ;
+values_ssh_password_all = "ssh" | "password" | "all" ;
+values_rdp_ssh_none = "RDP" | "SSH" | "NONE" ;
+values_basic_standard_2 = "Basic" | "Standard" ;
+values_regular_low_spot = "Regular" | "Low" | "Spot" | "SpotPlus" ;
+values_trustedlaunch_standard_confidentialvm = "TrustedLaunch" | "Standard" | "ConfidentialVM" ;
+values_x64_arm64 = "x64" | "Arm64" ;

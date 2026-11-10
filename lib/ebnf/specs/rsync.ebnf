@@ -1,0 +1,209 @@
+(* rsync: the options of `rsync --help` and `rsync --daemon --help` from rsync
+   3.5.1 (Arch Linux), plus the options only openrsync (macOS, protocol 29) has.
+   -E means --executability in rsync and --extended-attributes in openrsync.
+   Long options take their value as --name=value or as the next word; short ones
+   also joined (-essh). Sources and the destination are local paths,
+   [user@]host:path or rsync://host/path; local files and SSH hosts are offered. *)
+
+rsync = { option | @file | @ssh_host } , [ "--" , { @file | @ssh_host } ] ;
+
+option =
+    "-v" : "Increase verbosity" | "--verbose" : "Increase verbosity"
+  | "--info" : "Fine-grained informational verbosity, as FLAG[N],..." , @any | "--info=" : "Fine-grained informational verbosity, as FLAG[N],..." ~ @any
+  | "--debug" : "Fine-grained debug verbosity, as FLAG[N],..." , @any | "--debug=" : "Fine-grained debug verbosity, as FLAG[N],..." ~ @any
+  | "--stderr" : "Which processes write to stderr" , stderr_mode | "--stderr=" : "Which processes write to stderr" ~ stderr_mode
+  | "-q" : "Suppress non-error messages" | "--quiet" : "Suppress non-error messages"
+  | "--no-motd" : "Suppress the daemon's message of the day"
+  | "-c" : "Skip files by checksum, not by time and size" | "--checksum" : "Skip files by checksum, not by time and size"
+  | "-a" : "Archive mode, same as -rlptgoD" | "--archive" : "Archive mode, same as -rlptgoD"
+  | "-r" : "Recurse into directories" | "--recursive" : "Recurse into directories"
+  | "--inc-recursive" : "Scan directories incrementally" | "--i-r" : "Scan directories incrementally"
+  | "--no-i-r" : "Scan all directories before transferring"
+  | "-R" : "Use relative path names" | "--relative" : "Use relative path names"
+  | "--no-implied-dirs" : "Do not send implied directories with --relative"
+  | "-b" : "Make backups of replaced files" | "--backup" : "Make backups of replaced files"
+  | "--backup-dir" : "Make backups into this directory" , @directory | "--backup-dir=" : "Make backups into this directory" ~ @directory
+  | "--suffix" : "Backup suffix (default ~ without --backup-dir)" , @any | "--suffix=" : "Backup suffix (default ~ without --backup-dir)" ~ @any
+  | "-u" : "Skip files that are newer on the receiver" | "--update" : "Skip files that are newer on the receiver"
+  | "--inplace" : "Update destination files in place"
+  | "--append" : "Append data onto shorter files"
+  | "--append-verify" : "Like --append, checksumming the old data too"
+  | "-d" : "Transfer directories without recursing" | "--dirs" : "Transfer directories without recursing"
+  | "--old-dirs" : "Like --dirs, for old rsync versions" | "--old-d" : "Like --dirs, for old rsync versions"
+  | "--mkpath" : "Create the destination's missing path components"
+  | "-l" : "Copy symlinks as symlinks" | "--links" : "Copy symlinks as symlinks"
+  | "-L" : "Copy the files and directories symlinks point to" | "--copy-links" : "Copy the files and directories symlinks point to"
+  | "--copy-unsafe-links" : "Copy the referents of symlinks outside the tree"
+  | "--safe-links" : "Ignore symlinks that point outside the tree"
+  | "--insecure-links" : "Follow attacker-owned symlinks in operator paths"
+  | "--confine-root" : "Refuse operator paths that resolve outside this directory" , @directory | "--confine-root=" : "Refuse operator paths that resolve outside this directory" ~ @directory
+  | "--munge-links" : "Munge symlinks to make them safe and unusable"
+  | "-k" : "Copy the directories symlinks point to" | "--copy-dirlinks" : "Copy the directories symlinks point to"
+  | "-K" : "Treat symlinked directories on the receiver as directories" | "--keep-dirlinks" : "Treat symlinked directories on the receiver as directories"
+  | "-H" : "Preserve hard links" | "--hard-links" : "Preserve hard links"
+  | "-p" : "Preserve permissions" | "--perms" : "Preserve permissions"
+  | "--executability" : "Preserve executability"
+  | "-E" : "Preserve executability; extended attributes in openrsync"
+  | "--extended-attributes" : "Copy extended attributes and ACLs (openrsync)"
+  | "--chmod" : "Change file or directory permissions, as D755,F644" , @any | "--chmod=" : "Change file or directory permissions, as D755,F644" ~ @any
+  | "-A" : "Preserve ACLs (implies --perms)" | "--acls" : "Preserve ACLs (implies --perms)"
+  | "-X" : "Preserve extended attributes" | "--xattrs" : "Preserve extended attributes"
+  | "-o" : "Preserve the owner (super-user only)" | "--owner" : "Preserve the owner (super-user only)"
+  | "-g" : "Preserve the group" | "--group" : "Preserve the group"
+  | "--devices" : "Preserve device files (super-user only)"
+  | "--copy-devices" : "Copy device contents as regular files"
+  | "--write-devices" : "Write to devices as files (implies --inplace)"
+  | "--specials" : "Preserve special files"
+  | "--drop-D" : "Receiver refuses to create devices and special files"
+  | "-D" : "Same as --devices --specials"
+  | "-t" : "Preserve modification times" | "--times" : "Preserve modification times"
+  | "-U" : "Preserve access times" | "--atimes" : "Preserve access times"
+  | "--open-noatime" : "Do not change the access time of opened files"
+  | "-N" : "Preserve creation times" | "--crtimes" : "Preserve creation times"
+  | "-O" : "Do not preserve directory times" | "--omit-dir-times" : "Do not preserve directory times"
+  | "-J" : "Do not preserve symlink times" | "--omit-link-times" : "Do not preserve symlink times"
+  | "--super" : "Receiver attempts super-user activities"
+  | "--fake-super" : "Store privileged attributes in extended attributes"
+  | "-S" : "Turn sequences of nulls into sparse blocks" | "--sparse" : "Turn sequences of nulls into sparse blocks"
+  | "--preallocate" : "Allocate destination files before writing them"
+  | "-n" : "Trial run without making changes" | "--dry-run" : "Trial run without making changes"
+  | "-W" : "Copy whole files, without the delta algorithm" | "--whole-file" : "Copy whole files, without the delta algorithm"
+  | "--no-whole-file" : "Use the delta-transfer algorithm" | "--no-W" : "Use the delta-transfer algorithm"
+  | "--checksum-choice" : "Checksum algorithm" , checksum_name | "--checksum-choice=" : "Checksum algorithm" ~ checksum_name | "--cc" : "Checksum algorithm" , checksum_name | "--cc=" : "Checksum algorithm" ~ checksum_name
+  | "-x" : "Do not cross file system boundaries" | "--one-file-system" : "Do not cross file system boundaries"
+  | "-B" : "Force this checksum block size" , @any | "--block-size" : "Force this checksum block size" , @any | "--block-size=" : "Force this checksum block size" ~ @any
+  | "-e" : "Remote shell command to use" , @any | "--rsh" : "Remote shell command to use" , @any | "--rsh=" : "Remote shell command to use" ~ @any
+  | "--rsync-path" : "Program to run as rsync on the remote machine" , @any | "--rsync-path=" : "Program to run as rsync on the remote machine" ~ @any
+  | "--existing" : "Do not create new files on the receiver" | "--ignore-non-existing" : "Do not create new files on the receiver"
+  | "--ignore-existing" : "Do not update files that exist on the receiver"
+  | "--remove-source-files" : "Sender removes the files it synchronized"
+  | "--del" : "Alias for --delete-during"
+  | "--delete" : "Delete extraneous files from the destination"
+  | "--delete-before" : "Delete on the receiver before the transfer"
+  | "--delete-during" : "Delete on the receiver during the transfer"
+  | "--delete-delay" : "Find deletions during the transfer, delete after"
+  | "--delete-after" : "Delete on the receiver after the transfer"
+  | "--delete-excluded" : "Also delete excluded files from the destination"
+  | "--ignore-missing-args" : "Ignore missing source arguments without error"
+  | "--delete-missing-args" : "Delete missing source arguments from the destination"
+  | "--ignore-errors" : "Delete even if there are I/O errors"
+  | "--force" : "Delete directories even if they are not empty"
+  | "--max-delete" : "Delete at most this many files" , @number | "--max-delete=" : "Delete at most this many files" ~ @number
+  | "--max-size" : "Skip files larger than this size" , @any | "--max-size=" : "Skip files larger than this size" ~ @any
+  | "--min-size" : "Skip files smaller than this size" , @any | "--min-size=" : "Skip files smaller than this size" ~ @any
+  | "--max-alloc" : "Limit on memory allocations" , @any | "--max-alloc=" : "Limit on memory allocations" ~ @any
+  | "--partial" : "Keep partially transferred files"
+  | "--partial-dir" : "Put partially transferred files into this directory" , @directory | "--partial-dir=" : "Put partially transferred files into this directory" ~ @directory
+  | "--delay-updates" : "Put all updated files into place at the end"
+  | "-m" : "Prune empty directory chains from the file list" | "--prune-empty-dirs" : "Prune empty directory chains from the file list"
+  | "--numeric-ids" : "Do not map user and group ids by name"
+  | "--usermap" : "Map user names, as FROM:TO,..." , @any | "--usermap=" : "Map user names, as FROM:TO,..." ~ @any
+  | "--groupmap" : "Map group names, as FROM:TO,..." , @any | "--groupmap=" : "Map group names, as FROM:TO,..." ~ @any
+  | "--chown" : "Set the owner and group, as USER:GROUP" , @any | "--chown=" : "Set the owner and group, as USER:GROUP" ~ @any
+  | "--timeout" : "I/O timeout in seconds" , @number | "--timeout=" : "I/O timeout in seconds" ~ @number
+  | "--contimeout" : "Daemon connection timeout in seconds" , @number | "--contimeout=" : "Daemon connection timeout in seconds" ~ @number
+  | "-I" : "Do not skip files that match in size and time" | "--ignore-times" : "Do not skip files that match in size and time"
+  | "--size-only" : "Skip files that match in size"
+  | "-@" : "Accuracy in seconds for modification time comparisons" , @any | "--modify-window" : "Accuracy in seconds for modification time comparisons" , @any | "--modify-window=" : "Accuracy in seconds for modification time comparisons" ~ @any
+  | "-T" : "Create temporary files in this directory" , @directory | "--temp-dir" : "Create temporary files in this directory" , @directory | "--temp-dir=" : "Create temporary files in this directory" ~ @directory
+  | "-y" : "Use a similar file as the basis if there is no destination file" | "--fuzzy" : "Use a similar file as the basis if there is no destination file"
+  | "--compare-dest" : "Also compare destination files relative to this directory" , @directory | "--compare-dest=" : "Also compare destination files relative to this directory" ~ @directory
+  | "--copy-dest" : "Like --compare-dest, copying unchanged files too" , @directory | "--copy-dest=" : "Like --compare-dest, copying unchanged files too" ~ @directory
+  | "--link-dest" : "Hard link unchanged files from this directory" , @directory | "--link-dest=" : "Hard link unchanged files from this directory" ~ @directory
+  | "-z" : "Compress file data during the transfer" | "--compress" : "Compress file data during the transfer"
+  | "--compress-choice" : "Compression algorithm" , compress_name | "--compress-choice=" : "Compression algorithm" ~ compress_name | "--zc" : "Compression algorithm" , compress_name | "--zc=" : "Compression algorithm" ~ compress_name
+  | "--compress-level" : "Compression level" , @number | "--compress-level=" : "Compression level" ~ @number | "--zl" : "Compression level" , @number | "--zl=" : "Compression level" ~ @number
+  | "--compress-threads" : "Compression threads" , @number | "--compress-threads=" : "Compression threads" ~ @number | "--zt" : "Compression threads" , @number | "--zt=" : "Compression threads" ~ @number
+  | "--skip-compress" : "Do not compress files with these suffixes, as gz/jpg" , @any | "--skip-compress=" : "Do not compress files with these suffixes, as gz/jpg" ~ @any
+  | "-C" : "Ignore files the way CVS does" | "--cvs-exclude" : "Ignore files the way CVS does"
+  | "-f" : "Add a file-filtering rule" , @any | "--filter" : "Add a file-filtering rule" , @any | "--filter=" : "Add a file-filtering rule" ~ @any
+  | "-F" : "Use .rsync-filter files; twice also excludes them"
+  | "--exclude" : "Exclude files matching this pattern" , @any | "--exclude=" : "Exclude files matching this pattern" ~ @any
+  | "--exclude-from" : "Read exclude patterns from this file" , @file | "--exclude-from=" : "Read exclude patterns from this file" ~ @file
+  | "--include" : "Do not exclude files matching this pattern" , @any | "--include=" : "Do not exclude files matching this pattern" ~ @any
+  | "--include-from" : "Read include patterns from this file" , @file | "--include-from=" : "Read include patterns from this file" ~ @file
+  | "--files-from" : "Read the list of source files from this file" , @file | "--files-from=" : "Read the list of source files from this file" ~ @file
+  | "-0" : "File lists and filter files are NUL separated" | "--from0" : "File lists and filter files are NUL separated"
+  | "--old-args" : "Disable the modern argument protection"
+  | "-s" : "Send the arguments safely through the protocol" | "--secluded-args" : "Send the arguments safely through the protocol"
+  | "--trust-sender" : "Trust the remote sender's file list"
+  | "--copy-as" : "Copy as this USER[:GROUP]" , @any | "--copy-as=" : "Copy as this USER[:GROUP]" ~ @any
+  | "--address" : "Bind to this address" , @any | "--address=" : "Bind to this address" ~ @any
+  | "--port" : "Alternate port number" , @number | "--port=" : "Alternate port number" ~ @number
+  | "--sockopts" : "Custom TCP options" , @any | "--sockopts=" : "Custom TCP options" ~ @any
+  | "--blocking-io" : "Use blocking I/O for the remote shell"
+  | "--outbuf" : "Output buffering mode" , outbuf_mode | "--outbuf=" : "Output buffering mode" ~ outbuf_mode
+  | "--stats" : "Print file transfer statistics"
+  | "-8" : "Leave high-bit characters unescaped in output" | "--8-bit-output" : "Leave high-bit characters unescaped in output"
+  | "-h" : "Human-readable numbers; help when used alone"
+  | "--human-readable" : "Output numbers in a human-readable format"
+  | "--progress" : "Show progress during the transfer"
+  | "-P" : "Same as --partial --progress"
+  | "-i" : "Print a change summary for every update" | "--itemize-changes" : "Print a change summary for every update"
+  | "-M" : "Send this option to the remote side only" , @any | "--remote-option" : "Send this option to the remote side only" , @any | "--remote-option=" : "Send this option to the remote side only" ~ @any
+  | "--out-format" : "Print updates in this format" , @any | "--out-format=" : "Print updates in this format" ~ @any
+  | "--log-file" : "Log to this file" , @file | "--log-file=" : "Log to this file" ~ @file
+  | "--log-file-format" : "Log updates in this format" , @any | "--log-file-format=" : "Log updates in this format" ~ @any
+  | "--password-file" : "Read the daemon password from this file" , @file | "--password-file=" : "Read the daemon password from this file" ~ @file
+  | "--early-input" : "Send this file to the daemon's early exec input" , @file | "--early-input=" : "Send this file to the daemon's early exec input" ~ @file
+  | "--list-only" : "List the files instead of copying them"
+  | "--bwlimit" : "Limit the socket I/O bandwidth, as 1000 or 1.5m" , @any | "--bwlimit=" : "Limit the socket I/O bandwidth, as 1000 or 1.5m" ~ @any
+  | "--stop-after" : "Stop after this many minutes" , @number | "--stop-after=" : "Stop after this many minutes" ~ @number
+  | "--stop-at" : "Stop at this time, as y-m-dTh:m" , @any | "--stop-at=" : "Stop at this time, as y-m-dTh:m" ~ @any
+  | "--fsync" : "Fsync every written file"
+  | "--write-batch" : "Write a batched update to this file" , @file | "--write-batch=" : "Write a batched update to this file" ~ @file
+  | "--only-write-batch" : "Like --write-batch, without updating the destination" , @file | "--only-write-batch=" : "Like --write-batch, without updating the destination" ~ @file
+  | "--read-batch" : "Read a batched update from this file" , @file | "--read-batch=" : "Read a batched update from this file" ~ @file
+  | "--protocol" : "Force an older protocol version" , @number | "--protocol=" : "Force an older protocol version" ~ @number
+  | "--iconv" : "Convert file name charsets, as LOCAL,REMOTE" , @any | "--iconv=" : "Convert file name charsets, as LOCAL,REMOTE" ~ @any
+  | "--checksum-seed" : "Block and file checksum seed" , @number | "--checksum-seed=" : "Block and file checksum seed" ~ @number
+  | "-4" : "Prefer IPv4" | "--ipv4" : "Prefer IPv4"
+  | "-6" : "Prefer IPv6" | "--ipv6" : "Prefer IPv6"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "--help" : "Print the help and exit"
+  | "--cache" : "Use the buffer cache (openrsync)"
+  | "--no-cache" : "Bypass the buffer cache (openrsync)"
+  | "--daemon" : "Run as an rsync daemon"
+  | "--config" : "Daemon: alternate rsyncd.conf file" , @file | "--config=" : "Daemon: alternate rsyncd.conf file" ~ @file
+  | "--dparam" : "Daemon: override a global config parameter" , @any | "--dparam=" : "Daemon: override a global config parameter" ~ @any
+  | "--no-detach" : "Daemon: do not detach from the parent"
+  | negated ;
+
+(* rsync turns off many options with --no-NAME, by long or short name. *)
+negated =
+    "--no-verbose" : "Turn off --verbose" | "--no-checksum" : "Turn off --checksum" | "--no-recursive" : "Turn off --recursive"
+  | "--no-inc-recursive" : "Turn off --inc-recursive" | "--no-relative" : "Turn off --relative" | "--no-backup" : "Turn off --backup"
+  | "--no-inplace" : "Turn off --inplace" | "--no-append" : "Turn off --append" | "--no-dirs" : "Turn off --dirs"
+  | "--no-mkpath" : "Turn off --mkpath" | "--no-links" : "Turn off --links" | "--no-insecure-links" : "Turn off --insecure-links"
+  | "--no-munge-links" : "Turn off --munge-links" | "--no-hard-links" : "Turn off --hard-links" | "--no-perms" : "Turn off --perms"
+  | "--no-acls" : "Turn off --acls" | "--no-xattrs" : "Turn off --xattrs" | "--no-owner" : "Turn off --owner"
+  | "--no-group" : "Turn off --group" | "--no-devices" : "Turn off --devices" | "--no-write-devices" : "Turn off --write-devices"
+  | "--no-specials" : "Turn off --specials" | "--no-times" : "Turn off --times" | "--no-atimes" : "Turn off --atimes"
+  | "--no-open-noatime" : "Turn off --open-noatime" | "--no-crtimes" : "Turn off --crtimes" | "--no-omit-dir-times" : "Turn off --omit-dir-times"
+  | "--no-omit-link-times" : "Turn off --omit-link-times" | "--no-super" : "Turn off --super" | "--no-sparse" : "Turn off --sparse"
+  | "--no-one-file-system" : "Turn off --one-file-system" | "--no-ignore-errors" : "Turn off --ignore-errors" | "--no-force" : "Turn off --force"
+  | "--no-partial" : "Turn off --partial" | "--no-delay-updates" : "Turn off --delay-updates" | "--no-prune-empty-dirs" : "Turn off --prune-empty-dirs"
+  | "--no-numeric-ids" : "Turn off --numeric-ids" | "--no-timeout" : "Turn off --timeout" | "--no-contimeout" : "Turn off --contimeout"
+  | "--no-fuzzy" : "Turn off --fuzzy" | "--no-compress" : "Turn off --compress" | "--no-from0" : "Turn off --from0"
+  | "--no-old-args" : "Turn off --old-args" | "--no-secluded-args" : "Turn off --secluded-args" | "--no-blocking-io" : "Turn off --blocking-io"
+  | "--no-8-bit-output" : "Turn off --8-bit-output" | "--no-human-readable" : "Turn off --human-readable" | "--no-progress" : "Turn off --progress"
+  | "--no-itemize-changes" : "Turn off --itemize-changes" | "--no-bwlimit" : "Turn off --bwlimit" | "--no-iconv" : "Turn off --iconv"
+  | "--no-8" : "Turn off -8" | "--no-A" : "Turn off -A" | "--no-D" : "Turn off -D"
+  | "--no-H" : "Turn off -H" | "--no-J" : "Turn off -J" | "--no-N" : "Turn off -N"
+  | "--no-O" : "Turn off -O" | "--no-R" : "Turn off -R" | "--no-S" : "Turn off -S"
+  | "--no-U" : "Turn off -U" | "--no-X" : "Turn off -X" | "--no-c" : "Turn off -c"
+  | "--no-d" : "Turn off -d" | "--no-g" : "Turn off -g" | "--no-h" : "Turn off -h"
+  | "--no-i" : "Turn off -i" | "--no-l" : "Turn off -l" | "--no-m" : "Turn off -m"
+  | "--no-o" : "Turn off -o" | "--no-p" : "Turn off -p" | "--no-r" : "Turn off -r"
+  | "--no-s" : "Turn off -s" | "--no-t" : "Turn off -t" | "--no-v" : "Turn off -v"
+  | "--no-x" : "Turn off -x" | "--no-y" : "Turn off -y" | "--no-z" : "Turn off -z" ;
+
+stderr_mode =
+    "errors" : "Errors to stderr from every process (default)" | "all" : "All messages to stderr"
+  | "client" : "Everything through the protocol to the client" | "e" | "a" | "c" ;
+
+outbuf_mode = "None" | "Line" | "Block" | "N" | "L" | "B" ;
+
+checksum_name = "auto" | "xxh128" | "xxh3" | "xxh64" | "md5" | "md4" | "sha1" | "none" | @any : "Two names, comma separated" ;
+
+compress_name = "auto" | "zstd" | "lz4" | "zlibx" | "zlib" | "none" ;

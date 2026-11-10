@@ -110,9 +110,9 @@ struct ScreenObservationResult {
 template <Allocator Memory>
 class PaneObserver {
 public:
-  inline explicit PaneObserver(Memory &memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false)
+  inline explicit PaneObserver(Memory &memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt)
       : terminal_(memory, size, TerminalPurpose::observation),
-        tracker_(memory, terminal_, directory, capture_output),
+        tracker_(memory, terminal_, directory, capture_output, shell_token),
         workspace_path_(AllocatorRef<char, Memory>{memory}),
         shell_(AllocatorRef<char, Memory>{memory}),
         initial_size_(size) {}

@@ -685,6 +685,188 @@ runtime = {
 List of strings. Commands run in a directory whose path contains any of these
 substrings are not recorded. Same limits as `command_filters`.
 
+## Command editor
+
+`client.prompt` chooses who edits commands. In `"classic"` mode the shell's own
+prompt and line editor work as in any terminal. In `"telar"` mode, a pane whose
+shell telar [integrated](#runtimeshell_integration) gets telar's editor while
+the shell waits for a command: an island over the bottom of the pane, drawn in
+the terminal's font, that hides the shell's prompt row and sends the finished
+command to the shell as one paste followed by Enter.
+
+```lua
+client = {
+  prompt = { mode = "telar", keymap = "vim", skin = "halo" },
+}
+```
+
+What the island does:
+
+- **Editing.** The command wraps at the island's width and grows to `max_lines`
+  rows before it scrolls, so nothing is cut. Enter runs a complete command and
+  continues an incomplete one on a new line (an open quote, a trailing `|` or
+  `\`, `do` without `done`, a fish block without `end`), as the shell would.
+  Alt-Enter always inserts a line.
+- **Colours.** Commands, options, strings, variables, operators, keywords and
+  comments, from a lexer of the shell's dialect (bash and zsh, or fish). A
+  command the shell does not run, on its PATH or among its builtins, aliases
+  and functions (bash lists functions defined after startup from 5.3 on; a
+  command that ran counts too), is underlined in red once you type past it; paths get a
+  dotted underline. Typed characters rise into place and a taken completion
+  sweeps in from the accent colour.
+- **Completion.** Tab completes from [completion specs](#completion-specs): a
+  command's subcommands, options and values, each with its description. The
+  runtime holds them and offers a spec only for a command the pane's shell
+  runs. It supplies the rest from where the shell runs: files and directories,
+  commands on the PATH the shell reported, git branches, remotes and stashes,
+  hosts from `~/.ssh/config`, Makefile targets, justfile recipes, package.json
+  scripts, compose services and your processes. More than
+  one choice opens a menu above the command: Tab and the arrows move through it,
+  Enter takes a choice, Escape closes it.
+- **Suggestions.** The rest of a recent command that starts like the line
+  appears dimmed after the caret, from what you typed in any pane and the
+  [history](/docs/history). Right or Ctrl-E takes it, Alt-F its next word.
+- **While a command runs**, the island becomes a pill with the command, the
+  last line it printed, how long it has run, and the program's progress when it
+  reports one (OSC 9;4). When it finishes, the island flashes green after a
+  success and shakes after a failure, and shows the outcome for a moment: the
+  exit status, the command and its duration, with **view error** after a
+  failure. What you type queues the next command; Enter arms it to run when the current one
+  succeeds, and a failure leaves it as a draft. The terminal's signal and
+  end-of-file keys (Ctrl-C, Ctrl-\, Ctrl-Z, Ctrl-D, as `stty` sets them)
+  still reach the program, and so does typing when the program seems to ask a
+  question. Alt-Enter sends the line to the program instead.
+- **Passwords.** When a program reads with echo off, as `sudo` does, the island
+  shows a lock and a dot per key; the keys go to the program and nowhere else.
+- **Commands in the scrollback.** Each command's prompt turns into a separator:
+  how it ended, its first line and how long it ran. On Enter the command flies
+  to its separator. A dot per command at the pane's right edge, in the colour
+  of how it ended, selects the command when clicked, as a click on its
+  separator does.
+- **Selecting a command.** From vim's normal mode, Ctrl-U and Ctrl-D (or `[[`
+  and `]]`) step through the commands, showing each from the top of the pane
+  with its separator and its dot lit; with the emacs keymap, the copy mode
+  binding (prefix `[`) selects the last one. On a selected command, `v` starts
+  copy mode on its output and `V` selects all of it; `Y` copies its output and
+  `yc` its command. Esc, `q`, `i`, `a`, `I`, `A` or any other key go back to
+  the prompt. Copy mode keeps the island in place of the shell's prompt.
+- **Full-screen and raw programs** (vim, fzf, agents' interfaces) get the
+  keyboard exactly as in classic mode, and the island disappears.
+- **Context.** The pane header shows the directory and, in a git repository,
+  the branch, the number of changed files and how far the branch is ahead of
+  or behind its upstream. The runtime reads the repository itself, without
+  running git. A change of directory or branch is announced over the island for
+  a moment.
+- **SSH.** A shell that `ssh` reached with
+  [`runtime.ssh_integration`](#runtimessh_integration) gets the island too, with
+  its history suggestions and the specs' own choices, and a violet edge. The
+  pane header names the host and the link's round trip, timed from what you
+  type reaching the remote line editor to its echo. Files, commands, branches
+  and the pane header's git summary belong to the remote host, so telar offers
+  none of them there.
+
+### Completion specs
+
+A completion spec describes a command in EBNF: its subcommands, options and the
+values they take, each with a description the menu shows. telar ships specs for
+82 commands, `telar` itself among them, whose spec is written from the CLI's
+own help when telar is built: `aider`, `ansible`, `ansible-playbook`, `apt`, `awk`, `aws`, `az`, `brew`, `bun`, `bundle`, `cargo`, `cd`, `chown`, `claude`, `cmake`, `codex`, `composer`, `curl`, `deno`, `dig`, `dnf`, `docker`, `docker-compose`, `eza`, `fd`, `find`, `gcloud`, `gem`, `gemini`, `gh`, `git`, `go`, `gradle`, `grep`, `helm`, `journalctl`, `jq`, `just`, `kill`, `kubectl`, `ls`, `lsof`, `make`, `man`, `mvn`, `nc`, `ninja`, `nmap`, `node`, `npm`, `npx`, `oc`, `opencode`, `openssl`, `pacman`, `ping`, `pip`, `pip3`, `pnpm`, `poetry`, `ps`, `python`, `python3`, `rails`, `rake`, `rbenv`, `rg`, `rspec`, `rsync`, `rustup`, `scp`, `sed`, `ssh`, `systemctl`, `tar`, `telar`, `terraform`, `uv`, `wget`, `xargs`, `yarn`, `zig`.
+
+Add your own, or replace a shipped one, as `NAME.ebnf` in
+`$XDG_CONFIG_HOME/telar/completions` (else `~/.config/telar/completions`), named
+after its command. The runtime reads the directory where the shell runs, so a
+spec there serves every window on that machine, and it offers a spec only for a
+command the pane's shell runs: on its PATH, or a builtin, alias or function. A
+shell that `ssh` reached gets no specs, since its commands are another host's.
+
+```ebnf
+(* mytool: a spec of your own *)
+mytool = { option } , [ command ] ;
+option = "-v" : "Print more" | "--config" : "Read this file" , @file ;
+command = "deploy" : "Deploy the current branch" , @branch
+        | "status" : "Show what is deployed" ;
+```
+
+An alias of plain words completes as what it stands for: with `alias
+gst='git status'`, `gst -` offers `git status`'s options. zsh, bash and fish
+report their aliases, and fish its abbreviations, to the runtime as they change.
+
+`@name` asks the runtime for values: `@file`, `@directory`, `@branch`,
+`@remote`, `@stash`, `@ssh_host`, `@make_target`, `@process`, `@command`,
+`@number` and `@any`; and, read from the nearest file of their kind in the
+shell's directory or its parents, `@just_recipe` (a justfile's recipes),
+`@package_script` (package.json's scripts) and `@compose_service` (a compose
+file's services). Providers only read files: none runs a program. `"--name=" ~ @file` writes the value right after the
+option. Check a spec before you rely on it with `telar completions check
+mytool.ebnf`; one that does not compile is skipped, and the shipped spec of the
+same name, if any, is offered instead. To share one with everybody, add it to
+`lib/ebnf/specs` in the telar repository.
+
+### `client.prompt.mode`
+
+String. `"classic"` (the default) or `"telar"`.
+
+### `client.prompt.keymap`
+
+String. `"emacs"` (the default), readline's bindings, or `"vim"`: normal,
+insert and visual modes with counts, operators (`d`, `c`, `y`, `>`, `<`, `~`),
+motions (`w`, `b`, `e`, `f`, `t`, `%`, `gg`, `G` and the rest), text objects
+(`iw`, `a"`, `i(` and the rest), named registers, the system clipboard in `"+`,
+undo, redo and `.`. The mark turns to `❮` in normal mode, and a label at the end
+of the editor names the mode as Neovim does: `INSERT`, `NORMAL`, `VISUAL` or
+`V-LINE`. Beside it the island shows the keys that act on what is on screen:
+`→` and `⌥→` to take a suggestion or its next word, and `⇥`, `⏎` and `esc` while
+the completion menu is open.
+
+### `client.prompt.skin`
+
+String. `"halo"` (the default), an opaque surface with an accent border;
+`"ink"`, inverted colours; or `"glass"`, which blurs the output behind the
+island and is the only one that costs an extra GPU pass.
+
+### `client.prompt.motion`
+
+String. `"spring"` (the default), `"ease"` or `"none"`: how the island changes
+size. `"none"` also stills its other movement: the light that runs around the
+`"halo"` border while a command runs, the glow under the island, the command
+rising when it runs, and the flash or shake when it ends.
+
+### `client.prompt.ghost`
+
+Boolean. Show suggestions from the history. Default `true`.
+
+### `client.prompt.max_lines`
+
+Integer. Rows the island grows to before it scrolls, from `1` to `64`.
+Default `12`.
+
+### `client.prompt.bindings`
+
+A list of keys for the island's editor, on top of the keymap. Each binding is a
+table with `keys`, one chord in the [key syntax](#key-syntax); `action`; and,
+with the vim keymap, `mode`: `"insert"` (the default) or `"normal"`. A binding
+replaces whatever the keymap does with that chord in that mode.
+
+```lua
+client = {
+  prompt = {
+    mode = "telar",
+    keymap = "vim",
+    bindings = {
+      { keys = "ctrl+j", action = "submit" },
+      { keys = "H", action = "line_start", mode = "normal" },
+    },
+  },
+}
+```
+
+The actions: `submit`, `newline`, `cancel`, `complete`, `accept_suggestion`,
+`history_previous`, `history_next`, `history_search`, `line_start`, `line_end`,
+`char_left`, `char_right`, `word_left`, `word_right`, `delete_char`,
+`backspace`, `kill_line`, `kill_to_start`, `kill_word`, `kill_word_back`,
+`yank`, `undo`, `redo`, `transpose`, `clear_screen`, `normal_mode` and
+`insert_mode`.
+
 ## Agents
 
 ### `runtime.agents`
@@ -853,6 +1035,46 @@ Boolean. Resume agent sessions when a saved session is restored. Default
 String. The session checkpoint file. Default `session.ckpt` next to the
 history database. A relative path is resolved against the config file's
 directory.
+
+### `runtime.shell_integration`
+
+Boolean. Integrate with the zsh, bash and fish shells the runtime starts.
+Default `true`.
+
+The runtime writes its scripts beneath `$XDG_DATA_HOME/telar/shell-integration`,
+or `~/.local/share/telar/shell-integration`, and points each shell at them. The
+scripts load your own startup files as the shell would, then mark each prompt
+and command with OSC 133. Every mark carries a token only that pane's shell
+knows, so the runtime ignores marks a program prints.
+
+Only a shell started with no options, or with `-l`, `-i` and `--login`, is
+integrated; a shell running a command or a script starts as usual. Telar starts bash with `--rcfile`, which a login
+shell ignores, so an integrated login bash reads the login files itself and
+`shopt login_shell` reports off. Bash before 4.4, such as the 3.2 macOS ships,
+has no `PS0`: telar marks its commands with a `DEBUG` trap instead, and leaves
+the integration off if your configuration sets a trap of its own.
+
+### `runtime.ssh_integration`
+
+Boolean. Let an integrated shell's `ssh` start the remote login shell with the
+integration, so the remote prompt gets the [command editor](#command-editor).
+Default `true`. It needs `runtime.shell_integration`.
+
+The shell's `ssh` is a function that runs the real `ssh`. An interactive
+session, with no remote command, gets `-t` and a remote command that writes the
+scripts beneath the remote `$XDG_DATA_HOME/telar/shell-integration` and starts
+your login shell with them; it needs `/bin/sh`, `od` and `base64` there, and
+starts the login shell as usual when anything is missing. Everything else runs
+`ssh` unchanged: a remote command, `-N`, `-W`, `-O`, `-Q`, `-G`, `-V`, or a
+`RemoteCommand`, `RequestTTY no` or `SessionType` other than default in
+`ssh_config`. A function named `ssh` in your configuration replaces telar's,
+and `command ssh` skips it.
+
+The pane's token never leaves the host. Before connecting, the shell signs a
+one-time nonce; the remote shell answers with it and a token of its own, which
+signs its marks until the local shell prompts again. The nonce is on ssh's
+command line, where other users of either host can read it, and is spent by
+the first answer.
 
 ### `runtime.graphics.pane_mib`
 

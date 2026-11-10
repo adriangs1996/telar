@@ -16,6 +16,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(ebnf_tests ${ebnf_test_sources} ${ebnf_sources})
 target_link_libraries(ebnf_tests PRIVATE ebnf_options GTest::gtest_main)
+target_compile_definitions(ebnf_tests PRIVATE "EBNF_SPECS_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/specs\"")
 
 include(GoogleTest)
 gtest_discover_tests(ebnf_tests

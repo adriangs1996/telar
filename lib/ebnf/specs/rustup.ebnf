@@ -1,0 +1,170 @@
+(* rustup: checked against `rustup --help` and `rustup <command> [<subcommand>] --help`
+   of rustup 1.28.2. clap options with a value accept `--name value` and
+   `--name=value`. Toolchains are a channel (stable, beta, nightly), a version
+   such as 1.85.0, a dated channel or a custom name; components and targets list
+   the common ones and accept any other name. `install` and `uninstall` are the
+   hidden aliases of `toolchain install` and `toolchain uninstall`. *)
+
+rustup = { global_option } , [ "+" : "Use this toolchain" ~ toolchain ] , { global_option } , [ command ] ;
+
+global_option =
+    "-v" : "Set the log level to DEBUG" | "--verbose" : "Set the log level to DEBUG"
+  | "-q" : "Disable progress output" | "--quiet" : "Disable progress output"
+  | help
+  | "-V" : "Print the version" | "--version" : "Print the version" ;
+
+help = "-h" : "Print help" | "--help" : "Print help" ;
+
+toolchain =
+    "stable" : "The stable channel" | "beta" : "The beta channel" | "nightly" : "The nightly channel"
+  | @any ;
+
+command =
+    "toolchain" : "Install, uninstall, or list toolchains" , { help } , [ toolchain_command ]
+  | "default" : "Set the default toolchain" , { default_option } , [ toolchain | "none" : "Unset the default toolchain" ] , { default_option }
+  | "show" : "Show the active and installed toolchains" , { show_option } , [ show_command ]
+  | "update" : "Update Rust toolchains and rustup" , { update_option | toolchain }
+  | "check" : "Check for updates to toolchains and rustup" , { help }
+  | "target" : "Modify the targets of a toolchain" , { help } , [ target_command ]
+  | "component" : "Modify the components of a toolchain" , { help } , [ component_command ]
+  | "override" : "Modify the toolchain overrides of directories" , { help } , [ override_command ]
+  | "run" : "Run a command with a toolchain's environment" , { run_option } , toolchain , @command , { @any }
+  | "which" : "Show which binary a command runs" , { toolchain_option | help } , [ @command , { toolchain_option | help } ]
+  | "doc" : "Open the documentation of the current toolchain" , { doc_option } , [ @any , { doc_option } ]
+  | "man" : "Show the man page of a command" , { toolchain_option | help } , [ @command , { toolchain_option | help } ]
+  | "self" : "Modify the rustup installation" , { help } , [ self_command ]
+  | "set" : "Alter rustup settings" , { help } , [ set_command ]
+  | "completions" : "Generate a tab-completion script" , { help } , [ shell , [ "rustup" | "cargo" ] ]
+  | "install" : "Install or update toolchains" , { install_option | toolchain }
+  | "uninstall" : "Uninstall toolchains" , { help | toolchain }
+  | "help" : "Print the help of a command" , [ command_name , { @any } ] ;
+
+command_name =
+    "toolchain" | "default" | "show" | "update" | "check" | "target" | "component" | "override" | "run"
+  | "which" | "doc" | "man" | "self" | "set" | "completions" | "install" | "uninstall" ;
+
+shell = "bash" | "elvish" | "fish" | "powershell" | "zsh" ;
+
+toolchain_option =
+    "--toolchain" : "Toolchain to act on" , toolchain | "--toolchain=" : "Toolchain to act on" ~ toolchain ;
+
+force_non_host = "--force-non-host" : "Install toolchains that require an emulator" ;
+
+default_option = force_non_host | help ;
+
+show_option =
+    "-v" : "Show rustc information for all installed toolchains" | "--verbose" : "Show rustc information for all installed toolchains"
+  | help ;
+
+show_command =
+    "active-toolchain" : "Show the active toolchain" , { show_option }
+  | "home" : "Print the value of RUSTUP_HOME" , { help }
+  | "profile" : "Show the default profile" , { help }
+  | "help" : "Print the help of a subcommand" , [ "active-toolchain" | "home" | "profile" ] ;
+
+update_option =
+    "--no-self-update" : "Do not update rustup itself"
+  | "--force" : "Update even if some components are missing"
+  | force_non_host | help ;
+
+install_option =
+    update_option
+  | "--profile" : "Components to install" , profile | "--profile=" : "Components to install" ~ profile
+  | "-c" : "Comma-separated components to add" , component_name | "--component" : "Comma-separated components to add" , component_name
+  | "--component=" : "Comma-separated components to add" ~ component_name
+  | "-t" : "Comma-separated targets to add" , target_name | "--target" : "Comma-separated targets to add" , target_name
+  | "--target=" : "Comma-separated targets to add" ~ target_name
+  | "--allow-downgrade" : "Downgrade the toolchain to satisfy the components" ;
+
+profile = "minimal" : "The fewest components" | "default" : "The default set of components" | "complete" : "Every available component" ;
+
+toolchain_command =
+    "list" : "List installed toolchains" , { list_option }
+  | "install" : "Install or update toolchains" , { install_option | toolchain }
+  | "uninstall" : "Uninstall toolchains" , { help | toolchain }
+  | "link" : "Create a custom toolchain from a directory" , { help } , [ @any , [ @directory ] ]
+  | "help" : "Print the help of a subcommand" , [ "list" | "install" | "uninstall" | "link" ] ;
+
+list_option =
+    "-v" : "Show toolchain information" | "--verbose" : "Show toolchain information"
+  | "-q" : "Print a single column" | "--quiet" : "Print a single column"
+  | help ;
+
+component_name =
+    "cargo" | "clippy" | "llvm-bitcode-linker" | "llvm-tools" | "miri" | "rust-analysis" | "rust-analyzer"
+  | "rust-docs" | "rust-src" | "rust-std" | "rustc" | "rustc-dev" | "rustfmt" | @any ;
+
+target_name =
+    "all" : "Every available target"
+  | "x86_64-unknown-linux-gnu" | "x86_64-unknown-linux-musl" | "aarch64-unknown-linux-gnu" | "aarch64-unknown-linux-musl"
+  | "x86_64-apple-darwin" | "aarch64-apple-darwin" | "aarch64-apple-ios" | "aarch64-linux-android"
+  | "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" | "aarch64-pc-windows-msvc"
+  | "wasm32-unknown-unknown" | "wasm32-wasip1" | "wasm32-wasip2" | "riscv64gc-unknown-linux-gnu" | "thumbv7em-none-eabihf"
+  | @any ;
+
+installed_list_option =
+    toolchain_option
+  | "--installed" : "List only installed ones"
+  | "-q" : "Print a single column" | "--quiet" : "Print a single column"
+  | help ;
+
+component_command =
+    "list" : "List installed and available components" , { installed_list_option }
+  | "add" : "Add components to a toolchain" , { component_option | component_name }
+  | "remove" : "Remove components from a toolchain" , { component_option | component_name }
+  | "help" : "Print the help of a subcommand" , [ "list" | "add" | "remove" ] ;
+
+component_option =
+    toolchain_option | help
+  | "--target" : "Target of the component" , target_name | "--target=" : "Target of the component" ~ target_name ;
+
+target_command =
+    "list" : "List installed and available targets" , { installed_list_option }
+  | "add" : "Add targets to a toolchain" , { toolchain_option | help | target_name }
+  | "remove" : "Remove targets from a toolchain" , { toolchain_option | help | target_name }
+  | "help" : "Print the help of a subcommand" , [ "list" | "add" | "remove" ] ;
+
+path_option = "--path" : "Directory of the override" , @directory | "--path=" : "Directory of the override" ~ @directory ;
+
+override_command =
+    "list" : "List directory toolchain overrides" , { help }
+  | "set" : "Set the override toolchain of a directory" , { path_option | help } , [ toolchain , { path_option | help } ]
+  | "unset" : "Remove the override toolchain of a directory" , { path_option | help | "--nonexistent" : "Remove overrides of missing directories" }
+  | "help" : "Print the help of a subcommand" , [ "list" | "set" | "unset" ] ;
+
+run_option = "--install" : "Install the toolchain if needed" | help ;
+
+doc_option =
+    toolchain_option | help
+  | "--path" : "Only print the path to the documentation"
+  | "--alloc" : "The core allocation and collections library"
+  | "--book" : "The Rust Programming Language book"
+  | "--cargo" : "The Cargo Book"
+  | "--clippy" : "The Clippy documentation"
+  | "--core" : "The Rust Core Library"
+  | "--edition-guide" : "The Rust Edition Guide"
+  | "--embedded-book" : "The Embedded Rust Book"
+  | "--error-codes" : "The Rust Error Codes Index"
+  | "--nomicon" : "The Rustonomicon"
+  | "--proc_macro" : "The support library for procedural macros"
+  | "--reference" : "The Rust Reference"
+  | "--rust-by-example" : "Rust by Example"
+  | "--rustc" : "The rustc book"
+  | "--rustdoc" : "The rustdoc book"
+  | "--std" : "The standard library API documentation"
+  | "--style-guide" : "The Rust Style Guide"
+  | "--test" : "The test support library"
+  | "--unstable-book" : "The Unstable Book" ;
+
+self_command =
+    "update" : "Download and install rustup updates" , { help }
+  | "uninstall" : "Uninstall rustup" , { help | "-y" : "Do not ask for confirmation" }
+  | "upgrade-data" : "Upgrade the internal data format" , { help }
+  | "help" : "Print the help of a subcommand" , [ "update" | "uninstall" | "upgrade-data" ] ;
+
+set_command =
+    "default-host" : "Triple that identifies toolchains by default" , { help } , [ target_name ]
+  | "profile" : "Components installed with new toolchains" , { help } , [ profile ]
+  | "auto-self-update" : "When rustup updates itself" , { help } , [ "enable" | "disable" | "check-only" ]
+  | "auto-install" : "Whether missing toolchains are installed" , { help } , [ "enable" | "disable" ]
+  | "help" : "Print the help of a subcommand" , [ "default-host" | "profile" | "auto-self-update" | "auto-install" ] ;

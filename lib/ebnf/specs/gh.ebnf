@@ -1,0 +1,1849 @@
+(* gh: every command `gh --help` lists, checked against gh 2.102.0 (macOS) and
+   gh 2.103.3 (Linux; `issue artifact` is new there). Generated from the help of
+   each command, then reviewed.
+
+   Modelled with every flag their `--help` lists: pr, issue, repo, run, workflow,
+   release, auth, api, cache, label, secret, variable, config, alias, browse,
+   ssh-key, gpg-key, completion, status and org. The other
+   commands (codespace, discussion, extension, gist, project, ruleset, search,
+   skill, attestation, agent-task, copilot, preview, licenses, issue artifact)
+   list their subcommands, which take any words.
+
+   Conventions:
+   - Flags with a value accept `--name value` and `--name=value`; short ones
+     accept `-x value` and `-xvalue` (the matcher decomposes short-option
+     clusters itself). `browse --commit` takes its optional value joined only.
+   - Positional arguments (numbers, URLs, names, tags) are @any, so after a
+     command that takes them an unknown flag is not rejected. The number of
+     positional arguments is not checked.
+   - Aliases (`gh alias set`) and installed extensions add top-level commands
+     the spec cannot know, so they are reported as invalid. *)
+
+gh = { "--help" : "Show help for command" | "--version" : "Show gh version" } , [ command ] ;
+
+command =
+    "auth" : "Authenticate gh and git with GitHub" , auth
+  | "browse" : "Open repositories, issues, pull requests, and more in the browser" , browse
+  | "codespace" : "Connect to and manage codespaces" , codespace
+  | "discussion" : "Work with GitHub Discussions (preview)" , discussion
+  | "gist" : "Manage gists" , gist
+  | "issue" : "Manage issues" , issue
+  | "org" : "Manage organizations" , org
+  | "pr" : "Manage pull requests" , pr
+  | "project" : "Work with GitHub Projects" , project
+  | "release" : "Manage releases" , release
+  | "repo" : "Manage repositories" , repo
+  | "skill" : "Install and manage agent skills (preview)" , skill
+  | "cache" : "Manage GitHub Actions caches" , cache
+  | "run" : "View details about workflow runs" , run
+  | "workflow" : "View details about GitHub Actions workflows" , workflow
+  | "agent-task" : "Work with agent tasks (preview)" , agent_task
+  | "alias" : "Create command shortcuts" , alias
+  | "api" : "Make an authenticated GitHub API request" , api
+  | "attestation" : "Work with artifact attestations" , attestation
+  | "completion" : "Generate shell completion scripts" , completion
+  | "config" : "Manage configuration for gh" , config
+  | "copilot" : "Run the GitHub Copilot CLI (preview)" , copilot
+  | "extension" : "Manage gh extensions" , extension
+  | "gpg-key" : "Manage GPG keys" , gpg_key
+  | "label" : "Manage labels" , label
+  | "licenses" : "View third-party license information" , licenses
+  | "preview" : "Execute previews for gh features" , preview
+  | "ruleset" : "View info about repo rulesets" , ruleset
+  | "search" : "Search for repositories, issues, and pull requests" , search
+  | "secret" : "Manage GitHub secrets" , secret
+  | "ssh-key" : "Manage SSH keys" , ssh_key
+  | "status" : "Print relevant issues, pull requests, and notifications" , status
+  | "variable" : "Manage GitHub Actions variables" , variable
+  | "help" : "Help about any command" , { @any }
+  | "version" : "Show gh version" ;
+
+auth = [ auth_command ] ;
+
+auth_command =
+    "login" : "Log in to a GitHub account" , auth_login
+  | "logout" : "Log out of a GitHub account" , auth_logout
+  | "refresh" : "Refresh stored authentication credentials" , auth_refresh
+  | "setup-git" : "Setup git with GitHub CLI" , auth_setup_git
+  | "status" : "Show the active account and auth state on each known host" , auth_status
+  | "switch" : "Switch active GitHub account" , auth_switch
+  | "token" : "Print the authentication token gh uses for a hostname and account" , auth_token ;
+
+auth_login = { auth_login_option } ;
+
+auth_login_option =
+    opt_clipboard
+  | "-p" : "The protocol to use for git operations on this host" , ( "ssh" | "https" ) | "--git-protocol" : "The protocol to use for git operations on this host" , ( "ssh" | "https" ) | "--git-protocol=" : "The protocol to use for git operations on this host" ~ ( "ssh" | "https" )
+  | "-h" : "The hostname of the GitHub instance to authenticate with" , @any | "--hostname" : "The hostname of the GitHub instance to authenticate with" , @any | "--hostname=" : "The hostname of the GitHub instance to authenticate with" ~ @any
+  | opt_insecure_storage
+  | "-s" : "Additional authentication scopes to request" , @any | "--scopes" : "Additional authentication scopes to request" , @any | "--scopes=" : "Additional authentication scopes to request" ~ @any
+  | "--skip-ssh-key" : "Skip generate/upload SSH key prompt"
+  | "-w" : "Open a browser to authenticate" | "--web" : "Open a browser to authenticate"
+  | "--with-token" : "Read token from standard input"
+  | opt_help ;
+
+auth_logout = { auth_logout_option } ;
+
+auth_logout_option =
+    "-h" : "The hostname of the GitHub instance to log out of" , @any | "--hostname" : "The hostname of the GitHub instance to log out of" , @any | "--hostname=" : "The hostname of the GitHub instance to log out of" ~ @any
+  | "-u" : "The account to log out of" , @any | "--user" : "The account to log out of" , @any | "--user=" : "The account to log out of" ~ @any
+  | opt_help ;
+
+auth_refresh = { auth_refresh_option } ;
+
+auth_refresh_option =
+    opt_clipboard
+  | "-h" : "The GitHub host to use for authentication" , @any | "--hostname" : "The GitHub host to use for authentication" , @any | "--hostname=" : "The GitHub host to use for authentication" ~ @any
+  | opt_insecure_storage
+  | "-r" : "Authentication scopes to remove from gh" , @any | "--remove-scopes" : "Authentication scopes to remove from gh" , @any | "--remove-scopes=" : "Authentication scopes to remove from gh" ~ @any
+  | "--reset-scopes" : "Reset authentication scopes to the default minimum set of scopes"
+  | "-s" : "Additional authentication scopes for gh to have" , @any | "--scopes" : "Additional authentication scopes for gh to have" , @any | "--scopes=" : "Additional authentication scopes for gh to have" ~ @any
+  | opt_help ;
+
+auth_setup_git = { auth_setup_git_option } ;
+
+auth_setup_git_option =
+    "-f" : "Force setup even if the host is not known" | "--force" : "Force setup even if the host is not known"
+  | "-h" : "The hostname to configure git for" , @any | "--hostname" : "The hostname to configure git for" , @any | "--hostname=" : "The hostname to configure git for" ~ @any
+  | opt_help ;
+
+auth_status = { auth_status_option } ;
+
+auth_status_option =
+    "-a" : "Display the active account only" | "--active" : "Display the active account only"
+  | "-h" : "Check only a specific hostname's auth status" , @any | "--hostname" : "Check only a specific hostname's auth status" , @any | "--hostname=" : "Check only a specific hostname's auth status" ~ @any
+  | "--jq" : "Filter JSON output using a jq expression" , @any | "--jq=" : "Filter JSON output using a jq expression" ~ @any
+  | opt_json
+  | "-t" : "Display the auth token" | "--show-token" : "Display the auth token"
+  | "--template" : "Format JSON output using a Go template" , @any | "--template=" : "Format JSON output using a Go template" ~ @any
+  | opt_help ;
+
+auth_switch = { auth_switch_option } ;
+
+auth_switch_option =
+    "-h" : "The hostname of the GitHub instance to switch account for" , @any | "--hostname" : "The hostname of the GitHub instance to switch account for" , @any | "--hostname=" : "The hostname of the GitHub instance to switch account for" ~ @any
+  | "-u" : "The account to switch to" , @any | "--user" : "The account to switch to" , @any | "--user=" : "The account to switch to" ~ @any
+  | opt_help ;
+
+auth_token = { auth_token_option } ;
+
+auth_token_option =
+    "-h" : "The hostname of the GitHub instance authenticated with" , @any | "--hostname" : "The hostname of the GitHub instance authenticated with" , @any | "--hostname=" : "The hostname of the GitHub instance authenticated with" ~ @any
+  | "-u" : "The account to output the token for" , @any | "--user" : "The account to output the token for" , @any | "--user=" : "The account to output the token for" ~ @any
+  | opt_help ;
+
+browse = { browse_option | @any } ;
+
+browse_option =
+    "-a" : "Open repository actions" | "--actions" : "Open repository actions"
+  | "--blame" : "Open blame view for a file"
+  | "-b" : "Select another branch by passing in the branch name" , @branch | "--branch" : "Select another branch by passing in the branch name" , @branch | "--branch=" : "Select another branch by passing in the branch name" ~ @branch
+  | "-c" : "Select a commit by SHA, the last commit when no value is given" | "--commit" : "Select a commit by SHA, the last commit when no value is given" | "--commit=" : "Select a commit by SHA, the last commit when no value is given" ~ @any
+  | "-n" : "Print destination URL instead of opening the browser" | "--no-browser" : "Print destination URL instead of opening the browser"
+  | "-p" : "Open repository projects" | "--projects" : "Open repository projects"
+  | "-r" : "Open repository releases" | "--releases" : "Open repository releases"
+  | opt_repo
+  | "-s" : "Open repository settings" | "--settings" : "Open repository settings"
+  | "-w" : "Open repository wiki" | "--wiki" : "Open repository wiki"
+  | opt_help ;
+
+codespace = [ codespace_command ] ;
+
+codespace_command =
+    "code" : "Open a codespace in Visual Studio Code" , codespace_code
+  | "cp" : "Copy files between local and remote file systems" , codespace_cp
+  | "create" : "Create a codespace" , codespace_create
+  | "delete" : "Delete codespaces" , codespace_delete
+  | "edit" : "Edit a codespace" , codespace_edit
+  | "jupyter" : "Open a codespace in JupyterLab" , codespace_jupyter
+  | "list" : "List codespaces" , codespace_list
+  | "logs" : "Access codespace logs" , codespace_logs
+  | "ports" : "List ports in a codespace" , codespace_ports
+  | "rebuild" : "Rebuild a codespace" , codespace_rebuild
+  | "ssh" : "SSH into a codespace" , codespace_ssh
+  | "stop" : "Stop a running codespace" , codespace_stop
+  | "view" : "View details about a codespace" , codespace_view ;
+
+codespace_code = { @any } ;
+
+codespace_cp = { @any } ;
+
+codespace_create = { @any } ;
+
+codespace_delete = { @any } ;
+
+codespace_edit = { @any } ;
+
+codespace_jupyter = { @any } ;
+
+codespace_list = { @any } ;
+
+codespace_logs = { @any } ;
+
+codespace_ports = [ codespace_ports_command ] ;
+
+codespace_ports_command =
+    "forward" : "Forward ports" , codespace_ports_forward
+  | "visibility" : "Change the visibility of the forwarded port" , codespace_ports_visibility ;
+
+codespace_ports_forward = { @any } ;
+
+codespace_ports_visibility = { @any } ;
+
+codespace_rebuild = { @any } ;
+
+codespace_ssh = { @any } ;
+
+codespace_stop = { @any } ;
+
+codespace_view = { @any } ;
+
+discussion = [ discussion_command ] ;
+
+discussion_command =
+    "create" : "Create a new discussion (preview)" , discussion_create
+  | "list" : "List discussions in a repository (preview)" , discussion_list
+  | "comment" : "Add, edit, or delete a comment or a reply on a discussion (preview)" , discussion_comment
+  | "edit" : "Edit a discussion (preview)" , discussion_edit
+  | "view" : "View a discussion (preview)" , discussion_view ;
+
+discussion_create = { @any } ;
+
+discussion_list = { @any } ;
+
+discussion_comment = { @any } ;
+
+discussion_edit = { @any } ;
+
+discussion_view = { @any } ;
+
+gist = [ gist_command ] ;
+
+gist_command =
+    "clone" : "Clone a gist locally" , gist_clone
+  | "create" : "Create a new gist" , gist_create
+  | "delete" : "Delete a gist" , gist_delete
+  | "edit" : "Edit one of your gists" , gist_edit
+  | "list" : "List your gists" , gist_list
+  | "rename" : "Rename a file in a gist" , gist_rename
+  | "view" : "View a gist" , gist_view ;
+
+gist_clone = { @any } ;
+
+gist_create = { @any } ;
+
+gist_delete = { @any } ;
+
+gist_edit = { @any } ;
+
+gist_list = { @any } ;
+
+gist_rename = { @any } ;
+
+gist_view = { @any } ;
+
+issue = { issue_option } , [ issue_command ] ;
+
+issue_option =
+    opt_repo ;
+
+issue_command =
+    "artifact" : "Work with issue artifacts (preview, gh 2.103)" , issue_artifact
+  | "create" : "Create a new issue" , issue_create
+  | "list" : "List issues in a repository" , issue_list
+  | "status" : "Show status of relevant issues" , issue_status
+  | "close" : "Close issue" , issue_close
+  | "comment" : "Add a comment to an issue" , issue_comment
+  | "delete" : "Delete issue" , issue_delete
+  | "develop" : "Manage linked branches for an issue" , issue_develop
+  | "edit" : "Edit issues" , issue_edit
+  | "lock" : "Lock issue conversation" , issue_lock
+  | "pin" : "Pin an issue" , issue_pin
+  | "reopen" : "Reopen issue" , issue_reopen
+  | "transfer" : "Transfer issue to another repository" , issue_transfer
+  | "unlock" : "Unlock issue conversation" , issue_unlock
+  | "unpin" : "Unpin an issue" , issue_unpin
+  | "view" : "View an issue" , issue_view ;
+
+issue_artifact = [ issue_artifact_command ] ;
+
+issue_artifact_command =
+    "create" : "Create issue artifacts (preview)" , issue_artifact_create
+  | "delete" : "Delete issue artifacts (preview)" , issue_artifact_delete
+  | "download" : "Download issue artifacts (preview)" , issue_artifact_download
+  | "edit" : "Edit an issue artifact (preview)" , issue_artifact_edit
+  | "list" : "List artifacts on an issue (preview)" , issue_artifact_list
+  | "view" : "View an issue artifact (preview)" , issue_artifact_view ;
+
+issue_artifact_create = { @any } ;
+
+issue_artifact_delete = { @any } ;
+
+issue_artifact_download = { @any } ;
+
+issue_artifact_edit = { @any } ;
+
+issue_artifact_list = { @any } ;
+
+issue_artifact_view = { @any } ;
+
+issue_create = { issue_create_option } ;
+
+issue_create_option =
+    opt_assignee
+  | opt_attach
+  | "--blocked-by" : "Mark the new issue as blocked by these issue numbers or URLs" , @any | "--blocked-by=" : "Mark the new issue as blocked by these issue numbers or URLs" ~ @any
+  | "--blocking" : "Mark the new issue as blocking these issue numbers or URLs" , @any | "--blocking=" : "Mark the new issue as blocking these issue numbers or URLs" ~ @any
+  | "-b" : "Supply a body" , @any | "--body" : "Supply a body" , @any | "--body=" : "Supply a body" ~ @any
+  | opt_body_file
+  | opt_editor
+  | opt_label
+  | "-m" : "Add the issue to a milestone by name" , @any | "--milestone" : "Add the issue to a milestone by name" , @any | "--milestone=" : "Add the issue to a milestone by name" ~ @any
+  | "--parent" : "Add the issue as a sub-issue of this parent number or URL" , @any | "--parent=" : "Add the issue as a sub-issue of this parent number or URL" ~ @any
+  | "-p" : "Add the issue to projects by title" , @any | "--project" : "Add the issue to projects by title" , @any | "--project=" : "Add the issue to projects by title" ~ @any
+  | opt_recover
+  | "-T" : "Template name to use as starting body text" , @any | "--template" : "Template name to use as starting body text" , @any | "--template=" : "Template name to use as starting body text" ~ @any
+  | "-t" : "Supply a title" , @any | "--title" : "Supply a title" , @any | "--title=" : "Supply a title" ~ @any
+  | opt_type
+  | "-w" : "Open the browser to create an issue" | "--web" : "Open the browser to create an issue"
+  | opt_help
+  | opt_repo ;
+
+issue_list = { issue_list_option } ;
+
+issue_list_option =
+    opt_app
+  | opt_assignee_2
+  | opt_author
+  | opt_jq
+  | opt_json
+  | opt_label_2
+  | "-L" : "Maximum number of issues to fetch" , @number | "--limit" : "Maximum number of issues to fetch" , @number | "--limit=" : "Maximum number of issues to fetch" ~ @number
+  | "--mention" : "Filter by mention" , @any | "--mention=" : "Filter by mention" ~ @any
+  | "-m" : "Filter by milestone number or title" , @any | "--milestone" : "Filter by milestone number or title" , @any | "--milestone=" : "Filter by milestone number or title" ~ @any
+  | "-S" : "Search issues with query" , @any | "--search" : "Search issues with query" , @any | "--search=" : "Search issues with query" ~ @any
+  | "-s" : "Filter by state" , ( "open" | "closed" | "all" ) | "--state" : "Filter by state" , ( "open" | "closed" | "all" ) | "--state=" : "Filter by state" ~ ( "open" | "closed" | "all" )
+  | opt_template
+  | "--type" : "Filter by issue type name" , @any | "--type=" : "Filter by issue type name" ~ @any
+  | "-w" : "List issues in the web browser" | "--web" : "List issues in the web browser"
+  | opt_help
+  | opt_repo ;
+
+issue_status = { issue_status_option } ;
+
+issue_status_option =
+    opt_jq
+  | opt_json
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+issue_close = { issue_close_option | @any } ;
+
+issue_close_option =
+    opt_comment
+  | "--duplicate-of" : "Mark as duplicate of another issue by number or URL" , @any | "--duplicate-of=" : "Mark as duplicate of another issue by number or URL" ~ @any
+  | "-r" : "Reason for closing: {completed|not planned|duplicate}" , @any | "--reason" : "Reason for closing: {completed|not planned|duplicate}" , @any | "--reason=" : "Reason for closing: {completed|not planned|duplicate}" ~ @any
+  | opt_help
+  | opt_repo ;
+
+issue_comment = { issue_comment_option | @any } ;
+
+issue_comment_option =
+    opt_attach
+  | opt_body
+  | opt_body_file
+  | opt_create_if_none
+  | opt_delete_last
+  | opt_edit_last
+  | opt_editor_2
+  | opt_web
+  | opt_yes
+  | opt_help
+  | opt_repo ;
+
+issue_delete = { issue_delete_option | @any } ;
+
+issue_delete_option =
+    opt_yes_2
+  | opt_help
+  | opt_repo ;
+
+issue_develop = { issue_develop_option | @any } ;
+
+issue_develop_option =
+    "-b" : "Name of the remote branch you want to make your new branch from" , @branch | "--base" : "Name of the remote branch you want to make your new branch from" , @branch | "--base=" : "Name of the remote branch you want to make your new branch from" ~ @branch
+  | "--branch-repo" : "Name or URL of the repository for the new branch" , @any | "--branch-repo=" : "Name or URL of the repository for the new branch" ~ @any
+  | "-c" : "Checkout the branch after creating it" | "--checkout" : "Checkout the branch after creating it"
+  | "-l" : "List linked branches for the issue" | "--list" : "List linked branches for the issue"
+  | "-n" : "Name of the branch to create" , @any | "--name" : "Name of the branch to create" , @any | "--name=" : "Name of the branch to create" ~ @any
+  | "--worktree" : "Check out the branch into a worktree at the given path" , @any | "--worktree=" : "Check out the branch into a worktree at the given path" ~ @any
+  | opt_help
+  | opt_repo ;
+
+issue_edit = { issue_edit_option | @any } ;
+
+issue_edit_option =
+    opt_add_assignee
+  | "--add-blocked-by" : "Add 'blocked by' relationships by issue number or URL" , @any | "--add-blocked-by=" : "Add 'blocked by' relationships by issue number or URL" ~ @any
+  | "--add-blocking" : "Add 'blocking' relationships by issue number or URL" , @any | "--add-blocking=" : "Add 'blocking' relationships by issue number or URL" ~ @any
+  | opt_add_label
+  | "--add-project" : "Add the issue to projects by title" , @any | "--add-project=" : "Add the issue to projects by title" ~ @any
+  | "--add-sub-issue" : "Add sub-issues by number or URL" , @any | "--add-sub-issue=" : "Add sub-issues by number or URL" ~ @any
+  | opt_attach
+  | opt_body_2
+  | opt_body_file
+  | "-m" : "Edit the milestone the issue belongs to by name" , @any | "--milestone" : "Edit the milestone the issue belongs to by name" , @any | "--milestone=" : "Edit the milestone the issue belongs to by name" ~ @any
+  | "--parent" : "Set the parent issue by number or URL" , @any | "--parent=" : "Set the parent issue by number or URL" ~ @any
+  | opt_remove_assignee
+  | "--remove-blocked-by" : "Remove 'blocked by' relationships by issue number or URL" , @any | "--remove-blocked-by=" : "Remove 'blocked by' relationships by issue number or URL" ~ @any
+  | "--remove-blocking" : "Remove 'blocking' relationships by issue number or URL" , @any | "--remove-blocking=" : "Remove 'blocking' relationships by issue number or URL" ~ @any
+  | opt_remove_label
+  | "--remove-milestone" : "Remove the milestone association from the issue"
+  | "--remove-parent" : "Remove the parent issue"
+  | "--remove-project" : "Remove the issue from projects by title" , @any | "--remove-project=" : "Remove the issue from projects by title" ~ @any
+  | "--remove-sub-issue" : "Remove sub-issues by number or URL" , @any | "--remove-sub-issue=" : "Remove sub-issues by number or URL" ~ @any
+  | "--remove-type" : "Remove the issue type from the issue"
+  | opt_title
+  | opt_type
+  | opt_help
+  | opt_repo ;
+
+issue_lock = { issue_lock_option | @any } ;
+
+issue_lock_option =
+    opt_reason
+  | opt_help
+  | opt_repo ;
+
+issue_pin = { issue_pin_option | @any } ;
+
+issue_pin_option =
+    opt_help
+  | opt_repo ;
+
+issue_reopen = { issue_reopen_option | @any } ;
+
+issue_reopen_option =
+    opt_comment_2
+  | opt_help
+  | opt_repo ;
+
+issue_transfer = { issue_transfer_option | @any } ;
+
+issue_transfer_option =
+    opt_help
+  | opt_repo ;
+
+issue_unlock = { issue_unlock_option | @any } ;
+
+issue_unlock_option =
+    opt_help
+  | opt_repo ;
+
+issue_unpin = { issue_unpin_option | @any } ;
+
+issue_unpin_option =
+    opt_help
+  | opt_repo ;
+
+issue_view = { issue_view_option | @any } ;
+
+issue_view_option =
+    "-c" : "View issue comments" | "--comments" : "View issue comments"
+  | opt_jq
+  | opt_json
+  | opt_template
+  | "-w" : "Open an issue in the browser" | "--web" : "Open an issue in the browser"
+  | opt_help
+  | opt_repo ;
+
+org = [ org_command ] ;
+
+org_command =
+    "list" : "List organizations for the authenticated user" , org_list ;
+
+org_list = { org_list_option } ;
+
+org_list_option =
+    "-L" : "Maximum number of organizations to list" , @number | "--limit" : "Maximum number of organizations to list" , @number | "--limit=" : "Maximum number of organizations to list" ~ @number
+  | opt_help ;
+
+pr = { pr_option } , [ pr_command ] ;
+
+pr_option =
+    opt_repo ;
+
+pr_command =
+    "create" : "Create a pull request" , pr_create
+  | "list" : "List pull requests in a repository" , pr_list
+  | "status" : "Show status of relevant pull requests" , pr_status
+  | "checkout" : "Check out a pull request in git" , pr_checkout
+  | "checks" : "Show CI status for a single pull request" , pr_checks
+  | "close" : "Close a pull request" , pr_close
+  | "comment" : "Add a comment to a pull request" , pr_comment
+  | "diff" : "View changes in a pull request" , pr_diff
+  | "edit" : "Edit a pull request" , pr_edit
+  | "lock" : "Lock pull request conversation" , pr_lock
+  | "merge" : "Merge a pull request" , pr_merge
+  | "ready" : "Mark a pull request as ready for review" , pr_ready
+  | "reopen" : "Reopen a pull request" , pr_reopen
+  | "revert" : "Revert a pull request" , pr_revert
+  | "review" : "Add a review to a pull request" , pr_review
+  | "unlock" : "Unlock pull request conversation" , pr_unlock
+  | "update-branch" : "Update a pull request branch" , pr_update_branch
+  | "view" : "View a pull request" , pr_view ;
+
+pr_create = { pr_create_option } ;
+
+pr_create_option =
+    opt_assignee
+  | opt_attach
+  | "-B" : "The branch into which you want your code merged" , @branch | "--base" : "The branch into which you want your code merged" , @branch | "--base=" : "The branch into which you want your code merged" ~ @branch
+  | "-b" : "Body for the pull request" , @any | "--body" : "Body for the pull request" , @any | "--body=" : "Body for the pull request" ~ @any
+  | opt_body_file
+  | "-d" : "Mark pull request as a draft" | "--draft" : "Mark pull request as a draft"
+  | "--dry-run" : "Print details instead of creating the PR"
+  | opt_editor
+  | "-f" : "Use commit info for title and body" | "--fill" : "Use commit info for title and body"
+  | "--fill-first" : "Use first commit info for title and body"
+  | "--fill-verbose" : "Use commits msg+body for description"
+  | "-H" : "The branch that contains commits for your pull request" , @branch | "--head" : "The branch that contains commits for your pull request" , @branch | "--head=" : "The branch that contains commits for your pull request" ~ @branch
+  | opt_label
+  | "-m" : "Add the pull request to a milestone by name" , @any | "--milestone" : "Add the pull request to a milestone by name" , @any | "--milestone=" : "Add the pull request to a milestone by name" ~ @any
+  | "--no-maintainer-edit" : "Disable maintainer's ability to modify pull request"
+  | "-p" : "Add the pull request to projects by title" , @any | "--project" : "Add the pull request to projects by title" , @any | "--project=" : "Add the pull request to projects by title" ~ @any
+  | opt_recover
+  | "-r" : "Request reviews from people or teams by their handle" , @any | "--reviewer" : "Request reviews from people or teams by their handle" , @any | "--reviewer=" : "Request reviews from people or teams by their handle" ~ @any
+  | "-T" : "Template file to use as starting body text" , @file | "--template" : "Template file to use as starting body text" , @file | "--template=" : "Template file to use as starting body text" ~ @file
+  | "-t" : "Title for the pull request" , @any | "--title" : "Title for the pull request" , @any | "--title=" : "Title for the pull request" ~ @any
+  | "-w" : "Open the web browser to create a pull request" | "--web" : "Open the web browser to create a pull request"
+  | opt_help
+  | opt_repo ;
+
+pr_list = { pr_list_option } ;
+
+pr_list_option =
+    opt_app
+  | opt_assignee_2
+  | opt_author
+  | "-B" : "Filter by base branch" , @branch | "--base" : "Filter by base branch" , @branch | "--base=" : "Filter by base branch" ~ @branch
+  | "-d" : "Filter by draft state" | "--draft" : "Filter by draft state"
+  | "-H" : "Filter by head branch ('<owner>:<branch>' syntax not supported)" , @branch | "--head" : "Filter by head branch ('<owner>:<branch>' syntax not supported)" , @branch | "--head=" : "Filter by head branch ('<owner>:<branch>' syntax not supported)" ~ @branch
+  | opt_jq
+  | opt_json
+  | opt_label_2
+  | opt_limit
+  | "-S" : "Search pull requests with query" , @any | "--search" : "Search pull requests with query" , @any | "--search=" : "Search pull requests with query" ~ @any
+  | "-s" : "Filter by state" , ( "open" | "closed" | "merged" | "all" ) | "--state" : "Filter by state" , ( "open" | "closed" | "merged" | "all" ) | "--state=" : "Filter by state" ~ ( "open" | "closed" | "merged" | "all" )
+  | opt_template
+  | "-w" : "List pull requests in the web browser" | "--web" : "List pull requests in the web browser"
+  | opt_help
+  | opt_repo ;
+
+pr_status = { pr_status_option } ;
+
+pr_status_option =
+    "-c" : "Display the merge conflict status of each pull request" | "--conflict-status" : "Display the merge conflict status of each pull request"
+  | opt_jq
+  | opt_json
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+pr_checkout = { pr_checkout_option | @any } ;
+
+pr_checkout_option =
+    "-b" : "Local branch name to use" , @branch | "--branch" : "Local branch name to use" , @branch | "--branch=" : "Local branch name to use" ~ @branch
+  | "--detach" : "Checkout PR with a detached HEAD"
+  | "-f" : "Reset the local branch to the latest state of the pull request" | "--force" : "Reset the local branch to the latest state of the pull request"
+  | "--recurse-submodules" : "Update all submodules after checkout"
+  | "--worktree" : "Check out the pull request into a worktree at the given path" , @any | "--worktree=" : "Check out the pull request into a worktree at the given path" ~ @any
+  | opt_help
+  | opt_repo ;
+
+pr_checks = { pr_checks_option | @any } ;
+
+pr_checks_option =
+    "--fail-fast" : "Exit watch mode on first check failure"
+  | "-i" : "Refresh interval in seconds in watch mode" , @number | "--interval" : "Refresh interval in seconds in watch mode" , @number | "--interval=" : "Refresh interval in seconds in watch mode" ~ @number
+  | opt_jq
+  | opt_json
+  | "--required" : "Only show checks that are required"
+  | opt_template
+  | "--watch" : "Watch checks until they finish"
+  | "-w" : "Open the web browser to show details about checks" | "--web" : "Open the web browser to show details about checks"
+  | opt_help
+  | opt_repo ;
+
+pr_close = { pr_close_option | @any } ;
+
+pr_close_option =
+    opt_comment
+  | "-d" : "Delete the local and remote branch after close" | "--delete-branch" : "Delete the local and remote branch after close"
+  | opt_help
+  | opt_repo ;
+
+pr_comment = { pr_comment_option | @any } ;
+
+pr_comment_option =
+    opt_attach
+  | opt_body
+  | opt_body_file
+  | opt_create_if_none
+  | opt_delete_last
+  | opt_edit_last
+  | opt_editor_2
+  | opt_web
+  | opt_yes
+  | opt_help
+  | opt_repo ;
+
+pr_diff = { pr_diff_option | @any } ;
+
+pr_diff_option =
+    opt_allow_escape_sequences
+  | "--color" : "Use color in diff output" , ( "always" | "never" | "auto" ) | "--color=" : "Use color in diff output" ~ ( "always" | "never" | "auto" )
+  | "-e" : "Exclude files matching glob patterns from the diff" , @any | "--exclude" : "Exclude files matching glob patterns from the diff" , @any | "--exclude=" : "Exclude files matching glob patterns from the diff" ~ @any
+  | "--name-only" : "Display only names of changed files"
+  | "--patch" : "Display diff in patch format"
+  | "-w" : "Open the pull request diff in the browser" | "--web" : "Open the pull request diff in the browser"
+  | opt_help
+  | opt_repo ;
+
+pr_edit = { pr_edit_option | @any } ;
+
+pr_edit_option =
+    opt_add_assignee
+  | opt_add_label
+  | "--add-project" : "Add the pull request to projects by title" , @any | "--add-project=" : "Add the pull request to projects by title" ~ @any
+  | "--add-reviewer" : "Add or re-request reviewers by their login" , @any | "--add-reviewer=" : "Add or re-request reviewers by their login" ~ @any
+  | opt_attach
+  | "-B" : "Change the base branch for this pull request" , @branch | "--base" : "Change the base branch for this pull request" , @branch | "--base=" : "Change the base branch for this pull request" ~ @branch
+  | opt_body_2
+  | opt_body_file
+  | "-m" : "Edit the milestone the pull request belongs to by name" , @any | "--milestone" : "Edit the milestone the pull request belongs to by name" , @any | "--milestone=" : "Edit the milestone the pull request belongs to by name" ~ @any
+  | opt_remove_assignee
+  | opt_remove_label
+  | "--remove-milestone" : "Remove the milestone association from the pull request"
+  | "--remove-project" : "Remove the pull request from projects by title" , @any | "--remove-project=" : "Remove the pull request from projects by title" ~ @any
+  | "--remove-reviewer" : "Remove reviewers by their login" , @any | "--remove-reviewer=" : "Remove reviewers by their login" ~ @any
+  | opt_title
+  | opt_help
+  | opt_repo ;
+
+pr_lock = { pr_lock_option | @any } ;
+
+pr_lock_option =
+    opt_reason
+  | opt_help
+  | opt_repo ;
+
+pr_merge = { pr_merge_option | @any } ;
+
+pr_merge_option =
+    "--admin" : "Use administrator privileges to bypass merge requirements"
+  | "-A" : "Email text for merge commit author" , @any | "--author-email" : "Email text for merge commit author" , @any | "--author-email=" : "Email text for merge commit author" ~ @any
+  | "--auto" : "Automatically merge only after necessary requirements are met"
+  | "-b" : "Body text for the merge commit" , @any | "--body" : "Body text for the merge commit" , @any | "--body=" : "Body text for the merge commit" ~ @any
+  | opt_body_file
+  | "-d" : "Delete the local and remote branch after merge" | "--delete-branch" : "Delete the local and remote branch after merge"
+  | "--disable-auto" : "Disable auto-merge for this pull request"
+  | "--match-head-commit" : "Commit SHA that the pull request head must match to allow merge" , @any | "--match-head-commit=" : "Commit SHA that the pull request head must match to allow merge" ~ @any
+  | "-m" : "Merge the commits with the base branch" | "--merge" : "Merge the commits with the base branch"
+  | "-r" : "Rebase the commits onto the base branch" | "--rebase" : "Rebase the commits onto the base branch"
+  | "-s" : "Squash the commits into one commit and merge it into the base branch" | "--squash" : "Squash the commits into one commit and merge it into the base branch"
+  | "-t" : "Subject text for the merge commit" , @any | "--subject" : "Subject text for the merge commit" , @any | "--subject=" : "Subject text for the merge commit" ~ @any
+  | opt_help
+  | opt_repo ;
+
+pr_ready = { pr_ready_option | @any } ;
+
+pr_ready_option =
+    "--undo" : "Convert a pull request to 'draft'"
+  | opt_help
+  | opt_repo ;
+
+pr_reopen = { pr_reopen_option | @any } ;
+
+pr_reopen_option =
+    opt_comment_2
+  | opt_help
+  | opt_repo ;
+
+pr_revert = { pr_revert_option | @any } ;
+
+pr_revert_option =
+    "-b" : "Body for the revert pull request" , @any | "--body" : "Body for the revert pull request" , @any | "--body=" : "Body for the revert pull request" ~ @any
+  | opt_body_file
+  | "-d" : "Mark revert pull request as a draft" | "--draft" : "Mark revert pull request as a draft"
+  | "-t" : "Title for the revert pull request" , @any | "--title" : "Title for the revert pull request" , @any | "--title=" : "Title for the revert pull request" ~ @any
+  | opt_help
+  | opt_repo ;
+
+pr_review = { pr_review_option | @any } ;
+
+pr_review_option =
+    "-a" : "Approve pull request" | "--approve" : "Approve pull request"
+  | "-b" : "Specify the body of a review" , @any | "--body" : "Specify the body of a review" , @any | "--body=" : "Specify the body of a review" ~ @any
+  | opt_body_file
+  | "-c" : "Comment on a pull request" | "--comment" : "Comment on a pull request"
+  | "-r" : "Request changes on a pull request" | "--request-changes" : "Request changes on a pull request"
+  | opt_help
+  | opt_repo ;
+
+pr_unlock = { pr_unlock_option | @any } ;
+
+pr_unlock_option =
+    opt_help
+  | opt_repo ;
+
+pr_update_branch = { pr_update_branch_option | @any } ;
+
+pr_update_branch_option =
+    "--rebase" : "Update PR branch by rebasing on top of latest base branch"
+  | opt_help
+  | opt_repo ;
+
+pr_view = { pr_view_option | @any } ;
+
+pr_view_option =
+    "-c" : "View pull request comments" | "--comments" : "View pull request comments"
+  | opt_jq
+  | opt_json
+  | opt_template
+  | "-w" : "Open a pull request in the browser" | "--web" : "Open a pull request in the browser"
+  | opt_help
+  | opt_repo ;
+
+project = [ project_command ] ;
+
+project_command =
+    "close" : "Close a project" , project_close
+  | "copy" : "Copy a project" , project_copy
+  | "create" : "Create a project" , project_create
+  | "delete" : "Delete a project" , project_delete
+  | "edit" : "Edit a project" , project_edit
+  | "field-create" : "Create a field in a project" , project_field_create
+  | "field-delete" : "Delete a field in a project" , project_field_delete
+  | "field-list" : "List the fields in a project" , project_field_list
+  | "item-add" : "Add a pull request or an issue to a project" , project_item_add
+  | "item-archive" : "Archive an item in a project" , project_item_archive
+  | "item-create" : "Create a draft issue item in a project" , project_item_create
+  | "item-delete" : "Delete an item from a project by ID" , project_item_delete
+  | "item-edit" : "Edit an item in a project" , project_item_edit
+  | "item-list" : "List the items in a project" , project_item_list
+  | "link" : "Link a project to a repository or a team" , project_link
+  | "list" : "List the projects for an owner" , project_list
+  | "mark-template" : "Mark a project as a template" , project_mark_template
+  | "unlink" : "Unlink a project from a repository or a team" , project_unlink
+  | "view" : "View a project" , project_view ;
+
+project_close = { @any } ;
+
+project_copy = { @any } ;
+
+project_create = { @any } ;
+
+project_delete = { @any } ;
+
+project_edit = { @any } ;
+
+project_field_create = { @any } ;
+
+project_field_delete = { @any } ;
+
+project_field_list = { @any } ;
+
+project_item_add = { @any } ;
+
+project_item_archive = { @any } ;
+
+project_item_create = { @any } ;
+
+project_item_delete = { @any } ;
+
+project_item_edit = { @any } ;
+
+project_item_list = { @any } ;
+
+project_link = { @any } ;
+
+project_list = { @any } ;
+
+project_mark_template = { @any } ;
+
+project_unlink = { @any } ;
+
+project_view = { @any } ;
+
+release = { release_option } , [ release_command ] ;
+
+release_option =
+    opt_repo ;
+
+release_command =
+    "create" : "Create a new release" , release_create
+  | "list" : "List releases in a repository" , release_list
+  | "delete" : "Delete a release" , release_delete
+  | "delete-asset" : "Delete an asset from a release" , release_delete_asset
+  | "download" : "Download release assets" , release_download
+  | "edit" : "Edit a release" , release_edit
+  | "upload" : "Upload assets to a release" , release_upload
+  | "verify" : "Verify the attestation for a release" , release_verify
+  | "verify-asset" : "Verify that a given asset originated from a release" , release_verify_asset
+  | "view" : "View information about a release" , release_view ;
+
+release_create = { release_create_option | @any } ;
+
+release_create_option =
+    "--discussion-category" : "Start a discussion in the specified category" , @any | "--discussion-category=" : "Start a discussion in the specified category" ~ @any
+  | "-d" : "Save the release as a draft instead of publishing it" | "--draft" : "Save the release as a draft instead of publishing it"
+  | "--fail-on-no-commits" : "Fail if there are no commits since the last release"
+  | "--generate-notes" : "Generate title and notes with the Release Notes API"
+  | "--latest" : "Mark this release as 'Latest'"
+  | opt_notes
+  | opt_notes_file
+  | "--notes-from-tag" : "Take notes from the tag annotation or its commit message"
+  | "--notes-start-tag" : "Tag to use as the starting point for generating release notes" , @any | "--notes-start-tag=" : "Tag to use as the starting point for generating release notes" ~ @any
+  | "-p" : "Mark the release as a prerelease" | "--prerelease" : "Mark the release as a prerelease"
+  | opt_target
+  | opt_title_2
+  | opt_verify_tag
+  | opt_help
+  | opt_repo ;
+
+release_list = { release_list_option } ;
+
+release_list_option =
+    "--exclude-drafts" : "Exclude draft releases"
+  | "--exclude-pre-releases" : "Exclude pre-releases"
+  | opt_jq
+  | opt_json
+  | opt_limit
+  | "-O" : "Order of releases returned" , ( "asc" | "desc" ) | "--order" : "Order of releases returned" , ( "asc" | "desc" ) | "--order=" : "Order of releases returned" ~ ( "asc" | "desc" )
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+release_delete = { release_delete_option | @any } ;
+
+release_delete_option =
+    "--cleanup-tag" : "Delete the specified tag in addition to its release"
+  | opt_yes_3
+  | opt_help
+  | opt_repo ;
+
+release_delete_asset = { release_delete_asset_option | @any } ;
+
+release_delete_asset_option =
+    opt_yes_3
+  | opt_help
+  | opt_repo ;
+
+release_download = { release_download_option | @any } ;
+
+release_download_option =
+    "--allow-escape-sequences" : "Allow terminal escape sequences when writing to standard output"
+  | "-A" : "Download the source code archive in the specified format" , @any | "--archive" : "Download the source code archive in the specified format" , @any | "--archive=" : "Download the source code archive in the specified format" ~ @any
+  | "--clobber" : "Overwrite existing files of the same name"
+  | "-D" : "The directory to download files into" , @directory | "--dir" : "The directory to download files into" , @directory | "--dir=" : "The directory to download files into" ~ @directory
+  | "-O" : "The file to write a single asset to" , @file | "--output" : "The file to write a single asset to" , @file | "--output=" : "The file to write a single asset to" ~ @file
+  | "-p" : "Download only assets that match a glob pattern" , @any | "--pattern" : "Download only assets that match a glob pattern" , @any | "--pattern=" : "Download only assets that match a glob pattern" ~ @any
+  | "--skip-existing" : "Skip downloading when files of the same name exist"
+  | opt_help
+  | opt_repo ;
+
+release_edit = { release_edit_option | @any } ;
+
+release_edit_option =
+    "--discussion-category" : "Start a discussion in the specified category when publishing a draft" , @any | "--discussion-category=" : "Start a discussion in the specified category when publishing a draft" ~ @any
+  | "--draft" : "Save the release as a draft instead of publishing it"
+  | "--latest" : "Explicitly mark the release as 'Latest'"
+  | opt_notes
+  | opt_notes_file
+  | "--prerelease" : "Mark the release as a prerelease"
+  | "--tag" : "The name of the tag" , @any | "--tag=" : "The name of the tag" ~ @any
+  | opt_target
+  | opt_title_2
+  | opt_verify_tag
+  | opt_help
+  | opt_repo ;
+
+release_upload = { release_upload_option | @any } ;
+
+release_upload_option =
+    "--clobber" : "Delete and re-upload existing assets of the same name"
+  | opt_help
+  | opt_repo ;
+
+release_verify = { release_verify_option | @any } ;
+
+release_verify_option =
+    opt_format
+  | opt_jq
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+release_verify_asset = { release_verify_asset_option | @any } ;
+
+release_verify_asset_option =
+    opt_format
+  | opt_jq
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+release_view = { release_view_option | @any } ;
+
+release_view_option =
+    opt_jq
+  | opt_json
+  | opt_template
+  | "-w" : "Open the release in the browser" | "--web" : "Open the release in the browser"
+  | opt_help
+  | opt_repo ;
+
+repo = [ repo_command ] ;
+
+repo_command =
+    "create" : "Create a new repository" , repo_create
+  | "list" : "List repositories owned by user or organization" , repo_list
+  | "archive" : "Archive a repository" , repo_archive
+  | "autolink" : "Manage autolink references" , repo_autolink
+  | "clone" : "Clone a repository locally" , repo_clone
+  | "delete" : "Delete a repository" , repo_delete
+  | "deploy-key" : "Manage deploy keys in a repository" , repo_deploy_key
+  | "edit" : "Edit repository settings" , repo_edit
+  | "fork" : "Create a fork of a repository" , repo_fork
+  | "gitignore" : "List and view available repository gitignore templates" , repo_gitignore
+  | "license" : "Explore repository licenses" , repo_license
+  | "read-dir" : "List a directory in a repository (preview)" , repo_read_dir
+  | "read-file" : "Read a file from a repository (preview)" , repo_read_file
+  | "rename" : "Rename a repository" , repo_rename
+  | "set-default" : "Configure default repository for this directory" , repo_set_default
+  | "sync" : "Sync a repository" , repo_sync
+  | "unarchive" : "Unarchive a repository" , repo_unarchive
+  | "view" : "View a repository" , repo_view ;
+
+repo_create = { repo_create_option | @any } ;
+
+repo_create_option =
+    "--add-readme" : "Add a README file to the new repository"
+  | "-c" : "Clone the new repository to the current directory" | "--clone" : "Clone the new repository to the current directory"
+  | opt_description
+  | "--disable-issues" : "Disable issues in the new repository"
+  | "--disable-wiki" : "Disable wiki in the new repository"
+  | "-g" : "Specify a gitignore template for the repository" , @any | "--gitignore" : "Specify a gitignore template for the repository" , @any | "--gitignore=" : "Specify a gitignore template for the repository" ~ @any
+  | opt_homepage
+  | "--include-all-branches" : "Include all branches from template repository"
+  | "--internal" : "Make the new repository internal"
+  | "-l" : "Specify an Open Source License for the repository" , @any | "--license" : "Specify an Open Source License for the repository" , @any | "--license=" : "Specify an Open Source License for the repository" ~ @any
+  | "--private" : "Make the new repository private"
+  | "--public" : "Make the new repository public"
+  | "--push" : "Push local commits to the new repository"
+  | "-r" : "Specify remote name for the new repository" , @any | "--remote" : "Specify remote name for the new repository" , @any | "--remote=" : "Specify remote name for the new repository" ~ @any
+  | "-s" : "Specify path to local repository to use as source" , @any | "--source" : "Specify path to local repository to use as source" , @any | "--source=" : "Specify path to local repository to use as source" ~ @any
+  | "-t" : "The name of the organization team to be granted access" , @any | "--team" : "The name of the organization team to be granted access" , @any | "--team=" : "The name of the organization team to be granted access" ~ @any
+  | "-p" : "Make the new repository based on a template repository" , @any | "--template" : "Make the new repository based on a template repository" , @any | "--template=" : "Make the new repository based on a template repository" ~ @any
+  | opt_help ;
+
+repo_list = { repo_list_option | @any } ;
+
+repo_list_option =
+    "--archived" : "Show only archived repositories"
+  | "--fork" : "Show only forks"
+  | opt_jq
+  | opt_json
+  | "-l" : "Filter by primary coding language" , @any | "--language" : "Filter by primary coding language" , @any | "--language=" : "Filter by primary coding language" ~ @any
+  | "-L" : "Maximum number of repositories to list" , @number | "--limit" : "Maximum number of repositories to list" , @number | "--limit=" : "Maximum number of repositories to list" ~ @number
+  | "--no-archived" : "Omit archived repositories"
+  | "--source" : "Show only non-forks"
+  | opt_template
+  | "--topic" : "Filter by topic" , @any | "--topic=" : "Filter by topic" ~ @any
+  | "--visibility" : "Filter by repository visibility" , ( "public" | "private" | "internal" ) | "--visibility=" : "Filter by repository visibility" ~ ( "public" | "private" | "internal" )
+  | opt_help ;
+
+repo_archive = { repo_archive_option | @any } ;
+
+repo_archive_option =
+    opt_yes_3
+  | opt_help ;
+
+repo_autolink = { repo_autolink_option } , [ repo_autolink_command ] ;
+
+repo_autolink_option =
+    opt_repo ;
+
+repo_autolink_command =
+    "create" : "Create a new autolink reference" , repo_autolink_create
+  | "delete" : "Delete an autolink reference" , repo_autolink_delete
+  | "list" : "List autolink references for a GitHub repository" , repo_autolink_list
+  | "view" : "View an autolink reference" , repo_autolink_view ;
+
+repo_autolink_create = { repo_autolink_create_option | @any } ;
+
+repo_autolink_create_option =
+    "-n" : "Mark autolink as numeric" | "--numeric" : "Mark autolink as numeric"
+  | opt_help
+  | opt_repo ;
+
+repo_autolink_delete = { repo_autolink_delete_option | @any } ;
+
+repo_autolink_delete_option =
+    opt_yes_2
+  | opt_help
+  | opt_repo ;
+
+repo_autolink_list = { repo_autolink_list_option } ;
+
+repo_autolink_list_option =
+    opt_jq
+  | opt_json
+  | opt_template
+  | "-w" : "List autolink references in the web browser" | "--web" : "List autolink references in the web browser"
+  | opt_help
+  | opt_repo ;
+
+repo_autolink_view = { repo_autolink_view_option | @any } ;
+
+repo_autolink_view_option =
+    opt_jq
+  | opt_json
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+repo_clone = { repo_clone_option | @any } ;
+
+repo_clone_option =
+    "--no-upstream" : "Do not add an upstream remote when cloning a fork"
+  | "-u" : "Upstream remote name when cloning a fork" , @any | "--upstream-remote-name" : "Upstream remote name when cloning a fork" , @any | "--upstream-remote-name=" : "Upstream remote name when cloning a fork" ~ @any
+  | opt_help ;
+
+repo_delete = { repo_delete_option | @any } ;
+
+repo_delete_option =
+    opt_yes_2
+  | opt_help ;
+
+repo_deploy_key = { repo_deploy_key_option } , [ repo_deploy_key_command ] ;
+
+repo_deploy_key_option =
+    opt_repo ;
+
+repo_deploy_key_command =
+    "add" : "Add a deploy key to a GitHub repository" , repo_deploy_key_add
+  | "delete" : "Delete a deploy key from a GitHub repository" , repo_deploy_key_delete
+  | "list" : "List deploy keys in a GitHub repository" , repo_deploy_key_list ;
+
+repo_deploy_key_add = { repo_deploy_key_add_option | @file } ;
+
+repo_deploy_key_add_option =
+    "-w" : "Allow write access for the key" | "--allow-write" : "Allow write access for the key"
+  | "-t" : "Title of the new key" , @any | "--title" : "Title of the new key" , @any | "--title=" : "Title of the new key" ~ @any
+  | opt_help
+  | opt_repo ;
+
+repo_deploy_key_delete = { repo_deploy_key_delete_option | @any } ;
+
+repo_deploy_key_delete_option =
+    opt_help
+  | opt_repo ;
+
+repo_deploy_key_list = { repo_deploy_key_list_option } ;
+
+repo_deploy_key_list_option =
+    opt_jq
+  | opt_json
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+repo_edit = { repo_edit_option | @any } ;
+
+repo_edit_option =
+    "--accept-visibility-change-consequences" : "Accept the consequences of changing the repository visibility"
+  | "--add-topic" : "Add repository topic" , @any | "--add-topic=" : "Add repository topic" ~ @any
+  | "--allow-forking" : "Allow forking of an organization repository"
+  | "--allow-update-branch" : "Allow updating a head branch that is behind its base"
+  | "--default-branch" : "Set the default branch name for the repository" , @any | "--default-branch=" : "Set the default branch name for the repository" ~ @any
+  | "--delete-branch-on-merge" : "Delete head branch when pull requests are merged"
+  | opt_description
+  | "--enable-advanced-security" : "Enable advanced security in the repository"
+  | "--enable-auto-merge" : "Enable auto-merge functionality"
+  | "--enable-discussions" : "Enable discussions in the repository"
+  | "--enable-issues" : "Enable issues in the repository"
+  | "--enable-merge-commit" : "Enable merging pull requests via merge commit"
+  | "--enable-projects" : "Enable projects in the repository"
+  | "--enable-rebase-merge" : "Enable merging pull requests via rebase"
+  | "--enable-secret-scanning" : "Enable secret scanning in the repository"
+  | "--enable-secret-scanning-push-protection" : "Enable secret scanning push protection in the repository"
+  | "--enable-squash-merge" : "Enable merging pull requests via squashed commit"
+  | "--enable-wiki" : "Enable wiki in the repository"
+  | opt_homepage
+  | "--remove-topic" : "Remove repository topic" , @any | "--remove-topic=" : "Remove repository topic" ~ @any
+  | "--squash-merge-commit-message" : "Default squash merge commit message" , ( "default" | "pr-title" | "pr-title-commits" | "pr-title-description" ) | "--squash-merge-commit-message=" : "Default squash merge commit message" ~ ( "default" | "pr-title" | "pr-title-commits" | "pr-title-description" )
+  | "--template" : "Make the repository available as a template repository"
+  | "--visibility" : "Change the visibility of the repository to {public,private,internal}" , @any | "--visibility=" : "Change the visibility of the repository to {public,private,internal}" ~ @any
+  | opt_help ;
+
+repo_fork = { repo_fork_option | @any } ;
+
+repo_fork_option =
+    "--clone" : "Clone the fork"
+  | "--default-branch-only" : "Only include the default branch in the fork"
+  | "--fork-name" : "Rename the forked repository" , @any | "--fork-name=" : "Rename the forked repository" ~ @any
+  | "--org" : "Create the fork in an organization" , @any | "--org=" : "Create the fork in an organization" ~ @any
+  | "--remote" : "Add a git remote for the fork"
+  | "--remote-name" : "Specify the name for the new remote" , @any | "--remote-name=" : "Specify the name for the new remote" ~ @any
+  | opt_help ;
+
+repo_gitignore = [ repo_gitignore_command ] ;
+
+repo_gitignore_command =
+    "list" : "List available repository gitignore templates" , repo_gitignore_list
+  | "view" : "View an available repository gitignore template" , repo_gitignore_view ;
+
+repo_gitignore_list = { repo_gitignore_list_option } ;
+
+repo_gitignore_list_option =
+    opt_help ;
+
+repo_gitignore_view = { repo_gitignore_view_option | @any } ;
+
+repo_gitignore_view_option =
+    opt_help ;
+
+repo_license = [ repo_license_command ] ;
+
+repo_license_command =
+    "list" : "List common repository licenses" , repo_license_list
+  | "view" : "View a specific repository license" , repo_license_view ;
+
+repo_license_list = { repo_license_list_option } ;
+
+repo_license_list_option =
+    opt_help ;
+
+repo_license_view = { repo_license_view_option | @any } ;
+
+repo_license_view_option =
+    "-w" : "Open https://choosealicense.com/ in the browser" | "--web" : "Open https://choosealicense.com/ in the browser"
+  | opt_help ;
+
+repo_read_dir = { repo_read_dir_option | @file } ;
+
+repo_read_dir_option =
+    opt_jq
+  | opt_json
+  | "--ref" : "The branch, tag, or commit to list from" , @any | "--ref=" : "The branch, tag, or commit to list from" ~ @any
+  | opt_repo
+  | opt_template
+  | opt_help ;
+
+repo_read_file = { repo_read_file_option | @file } ;
+
+repo_read_file_option =
+    opt_allow_escape_sequences
+  | "--clobber" : "Overwrite the output path if it already exists"
+  | opt_jq
+  | opt_json
+  | "-o" : "Write the file to a path instead of stdout" , @any | "--output" : "Write the file to a path instead of stdout" , @any | "--output=" : "Write the file to a path instead of stdout" ~ @any
+  | "--ref" : "The branch, tag, or commit to read from" , @any | "--ref=" : "The branch, tag, or commit to read from" ~ @any
+  | opt_repo
+  | opt_template
+  | opt_help ;
+
+repo_rename = { repo_rename_option | @any } ;
+
+repo_rename_option =
+    opt_repo
+  | opt_yes_3
+  | opt_help ;
+
+repo_set_default = { repo_set_default_option | @any } ;
+
+repo_set_default_option =
+    "-u" : "Unset the current default repository" | "--unset" : "Unset the current default repository"
+  | "-v" : "View the current default repository" | "--view" : "View the current default repository"
+  | opt_help ;
+
+repo_sync = { repo_sync_option | @any } ;
+
+repo_sync_option =
+    "-b" : "Branch to sync" , @branch | "--branch" : "Branch to sync" , @branch | "--branch=" : "Branch to sync" ~ @branch
+  | "--force" : "Hard reset the destination branch to match the source"
+  | "-s" : "Source repository" , @any | "--source" : "Source repository" , @any | "--source=" : "Source repository" ~ @any
+  | opt_help ;
+
+repo_unarchive = { repo_unarchive_option | @any } ;
+
+repo_unarchive_option =
+    opt_yes_3
+  | opt_help ;
+
+repo_view = { repo_view_option | @any } ;
+
+repo_view_option =
+    "-b" : "View a specific branch of the repository" , @branch | "--branch" : "View a specific branch of the repository" , @branch | "--branch=" : "View a specific branch of the repository" ~ @branch
+  | opt_jq
+  | opt_json
+  | opt_template
+  | "-w" : "Open a repository in the browser" | "--web" : "Open a repository in the browser"
+  | opt_help ;
+
+skill = [ skill_command ] ;
+
+skill_command =
+    "install" : "Install agent skills from a GitHub repository (preview)" , skill_install
+  | "list" : "List installed skills (preview)" , skill_list
+  | "preview" : "Preview a skill from a GitHub repository (preview)" , skill_preview
+  | "publish" : "Validate and publish skills to a GitHub repository (preview)" , skill_publish
+  | "search" : "Search for skills across GitHub (preview)" , skill_search
+  | "update" : "Update installed skills to their latest versions (preview)" , skill_update ;
+
+skill_install = { @any } ;
+
+skill_list = { @any } ;
+
+skill_preview = { @any } ;
+
+skill_publish = { @any } ;
+
+skill_search = { @any } ;
+
+skill_update = { @any } ;
+
+cache = { cache_option } , [ cache_command ] ;
+
+cache_option =
+    opt_repo ;
+
+cache_command =
+    "delete" : "Delete GitHub Actions caches" , cache_delete
+  | "list" : "List GitHub Actions caches" , cache_list ;
+
+cache_delete = { cache_delete_option | @any } ;
+
+cache_delete_option =
+    "-a" : "Delete all caches, or all of one ref with --ref" | "--all" : "Delete all caches, or all of one ref with --ref"
+  | "-r" : "Delete by cache key and ref, as refs/heads/<branch>" , @any | "--ref" : "Delete by cache key and ref, as refs/heads/<branch>" , @any | "--ref=" : "Delete by cache key and ref, as refs/heads/<branch>" ~ @any
+  | "--succeed-on-no-caches" : "Return exit code 0 if no caches found"
+  | opt_help
+  | opt_repo ;
+
+cache_list = { cache_list_option } ;
+
+cache_list_option =
+    opt_jq
+  | opt_json
+  | "-k" : "Filter by cache key prefix" , @any | "--key" : "Filter by cache key prefix" , @any | "--key=" : "Filter by cache key prefix" ~ @any
+  | "-L" : "Maximum number of caches to fetch" , @number | "--limit" : "Maximum number of caches to fetch" , @number | "--limit=" : "Maximum number of caches to fetch" ~ @number
+  | "-O" : "Order of caches returned" , ( "asc" | "desc" ) | "--order" : "Order of caches returned" , ( "asc" | "desc" ) | "--order=" : "Order of caches returned" ~ ( "asc" | "desc" )
+  | "-r" : "Filter by ref, as refs/heads/<branch> or refs/pull/<n>/merge" , @any | "--ref" : "Filter by ref, as refs/heads/<branch> or refs/pull/<n>/merge" , @any | "--ref=" : "Filter by ref, as refs/heads/<branch> or refs/pull/<n>/merge" ~ @any
+  | "-S" : "Sort fetched caches" , ( "created_at" | "last_accessed_at" | "size_in_bytes" ) | "--sort" : "Sort fetched caches" , ( "created_at" | "last_accessed_at" | "size_in_bytes" ) | "--sort=" : "Sort fetched caches" ~ ( "created_at" | "last_accessed_at" | "size_in_bytes" )
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+run = { run_option } , [ run_command ] ;
+
+run_option =
+    opt_repo ;
+
+run_command =
+    "cancel" : "Cancel a workflow run" , run_cancel
+  | "delete" : "Delete a workflow run" , run_delete
+  | "download" : "Download artifacts generated by a workflow run" , run_download
+  | "list" : "List recent workflow runs" , run_list
+  | "rerun" : "Rerun a run" , run_rerun
+  | "view" : "View a summary of a workflow run" , run_view
+  | "watch" : "Watch a run until it completes, showing its progress" , run_watch ;
+
+run_cancel = { run_cancel_option | @any } ;
+
+run_cancel_option =
+    "--force" : "Force cancel a workflow run"
+  | opt_help
+  | opt_repo ;
+
+run_delete = { run_delete_option | @any } ;
+
+run_delete_option =
+    opt_help
+  | opt_repo ;
+
+run_download = { run_download_option | @any } ;
+
+run_download_option =
+    "-D" : "The directory to download artifacts into" , @directory | "--dir" : "The directory to download artifacts into" , @directory | "--dir=" : "The directory to download artifacts into" ~ @directory
+  | "-n" : "Download artifacts that match any of the given names" , @any | "--name" : "Download artifacts that match any of the given names" , @any | "--name=" : "Download artifacts that match any of the given names" ~ @any
+  | "-p" : "Download artifacts that match a glob pattern" , @any | "--pattern" : "Download artifacts that match a glob pattern" , @any | "--pattern=" : "Download artifacts that match a glob pattern" ~ @any
+  | opt_help
+  | opt_repo ;
+
+run_list = { run_list_option } ;
+
+run_list_option =
+    opt_all
+  | "-b" : "Filter runs by branch" , @branch | "--branch" : "Filter runs by branch" , @branch | "--branch=" : "Filter runs by branch" ~ @branch
+  | "-c" : "Filter runs by the SHA of the commit" , @any | "--commit" : "Filter runs by the SHA of the commit" , @any | "--commit=" : "Filter runs by the SHA of the commit" ~ @any
+  | "--created" : "Filter runs by the date it was created" , @any | "--created=" : "Filter runs by the date it was created" ~ @any
+  | "-e" : "Filter runs by which event triggered the run" , @any | "--event" : "Filter runs by which event triggered the run" , @any | "--event=" : "Filter runs by which event triggered the run" ~ @any
+  | opt_jq
+  | opt_json
+  | "-L" : "Maximum number of runs to fetch" , @number | "--limit" : "Maximum number of runs to fetch" , @number | "--limit=" : "Maximum number of runs to fetch" ~ @number
+  | "-s" : "Filter runs by status" , ( "queued" | "completed" | "in_progress" | "requested" | "waiting" | "pending" | "action_required" | "cancelled" | "failure" | "neutral" | "skipped" | "stale" | "startup_failure" | "success" | "timed_out" ) | "--status" : "Filter runs by status" , ( "queued" | "completed" | "in_progress" | "requested" | "waiting" | "pending" | "action_required" | "cancelled" | "failure" | "neutral" | "skipped" | "stale" | "startup_failure" | "success" | "timed_out" ) | "--status=" : "Filter runs by status" ~ ( "queued" | "completed" | "in_progress" | "requested" | "waiting" | "pending" | "action_required" | "cancelled" | "failure" | "neutral" | "skipped" | "stale" | "startup_failure" | "success" | "timed_out" )
+  | opt_template
+  | "-u" : "Filter runs by user who triggered the run" , @any | "--user" : "Filter runs by user who triggered the run" , @any | "--user=" : "Filter runs by user who triggered the run" ~ @any
+  | "-w" : "Filter runs by workflow" , @any | "--workflow" : "Filter runs by workflow" , @any | "--workflow=" : "Filter runs by workflow" ~ @any
+  | opt_help
+  | opt_repo ;
+
+run_rerun = { run_rerun_option | @any } ;
+
+run_rerun_option =
+    "-d" : "Rerun with debug logging" | "--debug" : "Rerun with debug logging"
+  | "--failed" : "Rerun only failed jobs, including dependencies"
+  | "-j" : "Rerun a specific job ID from a run, including dependencies" , @any | "--job" : "Rerun a specific job ID from a run, including dependencies" , @any | "--job=" : "Rerun a specific job ID from a run, including dependencies" ~ @any
+  | opt_help
+  | opt_repo ;
+
+run_view = { run_view_option | @any } ;
+
+run_view_option =
+    "-a" : "The attempt number of the workflow run" , @number | "--attempt" : "The attempt number of the workflow run" , @number | "--attempt=" : "The attempt number of the workflow run" ~ @number
+  | "--exit-status" : "Exit with non-zero status if run failed"
+  | "-j" : "View a specific job ID from a run" , @any | "--job" : "View a specific job ID from a run" , @any | "--job=" : "View a specific job ID from a run" ~ @any
+  | opt_jq
+  | opt_json
+  | "--log" : "View full log for either a run or specific job"
+  | "--log-failed" : "View the log for any failed steps in a run or specific job"
+  | opt_template
+  | "-v" : "Show job steps" | "--verbose" : "Show job steps"
+  | "-w" : "Open run in the browser" | "--web" : "Open run in the browser"
+  | opt_help
+  | opt_repo ;
+
+run_watch = { run_watch_option | @any } ;
+
+run_watch_option =
+    "--compact" : "Show only relevant/failed steps"
+  | "--exit-status" : "Exit with non-zero status if run fails"
+  | "-i" : "Refresh interval in seconds" , @number | "--interval" : "Refresh interval in seconds" , @number | "--interval=" : "Refresh interval in seconds" ~ @number
+  | opt_help
+  | opt_repo ;
+
+workflow = { workflow_option } , [ workflow_command ] ;
+
+workflow_option =
+    opt_repo ;
+
+workflow_command =
+    "disable" : "Disable a workflow" , workflow_disable
+  | "enable" : "Enable a workflow" , workflow_enable
+  | "list" : "List workflows" , workflow_list
+  | "run" : "Run a workflow by creating a workflow_dispatch event" , workflow_run
+  | "view" : "View the summary of a workflow" , workflow_view ;
+
+workflow_disable = { workflow_disable_option | @any } ;
+
+workflow_disable_option =
+    opt_help
+  | opt_repo ;
+
+workflow_enable = { workflow_enable_option | @any } ;
+
+workflow_enable_option =
+    opt_help
+  | opt_repo ;
+
+workflow_list = { workflow_list_option } ;
+
+workflow_list_option =
+    opt_all
+  | opt_jq
+  | opt_json
+  | "-L" : "Maximum number of workflows to fetch" , @number | "--limit" : "Maximum number of workflows to fetch" , @number | "--limit=" : "Maximum number of workflows to fetch" ~ @number
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+workflow_run = { workflow_run_option | @any } ;
+
+workflow_run_option =
+    "-F" : "Add a string parameter in key=value format, respecting @ syntax" , @any | "--field" : "Add a string parameter in key=value format, respecting @ syntax" , @any | "--field=" : "Add a string parameter in key=value format, respecting @ syntax" ~ @any
+  | "--json" : "Read workflow inputs as JSON via STDIN"
+  | opt_raw_field
+  | "-r" : "Branch or tag with the version of the workflow file to run" , @any | "--ref" : "Branch or tag with the version of the workflow file to run" , @any | "--ref=" : "Branch or tag with the version of the workflow file to run" ~ @any
+  | opt_help
+  | opt_repo ;
+
+workflow_view = { workflow_view_option | @any } ;
+
+workflow_view_option =
+    "-r" : "Branch or tag with the version of the workflow file to view" , @any | "--ref" : "Branch or tag with the version of the workflow file to view" , @any | "--ref=" : "Branch or tag with the version of the workflow file to view" ~ @any
+  | "-w" : "Open workflow in the browser" | "--web" : "Open workflow in the browser"
+  | "-y" : "View the workflow yaml file" | "--yaml" : "View the workflow yaml file"
+  | opt_help
+  | opt_repo ;
+
+agent_task = [ agent_task_command ] ;
+
+agent_task_command =
+    "create" : "Create an agent task (preview)" , agent_task_create
+  | "list" : "List agent tasks (preview)" , agent_task_list
+  | "view" : "View an agent task session (preview)" , agent_task_view ;
+
+agent_task_create = { @any } ;
+
+agent_task_list = { @any } ;
+
+agent_task_view = { @any } ;
+
+alias = [ alias_command ] ;
+
+alias_command =
+    "delete" : "Delete set aliases" , alias_delete
+  | "import" : "Import aliases from a YAML file" , alias_import
+  | "list" : "List your aliases" , alias_list
+  | "set" : "Create a shortcut for a gh command" , alias_set ;
+
+alias_delete = { alias_delete_option | @any } ;
+
+alias_delete_option =
+    "--all" : "Delete all aliases"
+  | opt_help ;
+
+alias_import = { alias_import_option | @file } ;
+
+alias_import_option =
+    opt_clobber
+  | opt_help ;
+
+alias_list = { alias_list_option } ;
+
+alias_list_option =
+    opt_help ;
+
+alias_set = { alias_set_option | @any } ;
+
+alias_set_option =
+    opt_clobber
+  | "-s" : "Declare an alias to be passed through a shell interpreter" | "--shell" : "Declare an alias to be passed through a shell interpreter"
+  | opt_help ;
+
+api = { api_option | @any } ;
+
+api_option =
+    opt_allow_escape_sequences
+  | "--cache" : "Cache the response" , @any | "--cache=" : "Cache the response" ~ @any
+  | "-F" : "Add a typed parameter in key=value format" , @any | "--field" : "Add a typed parameter in key=value format" , @any | "--field=" : "Add a typed parameter in key=value format" ~ @any
+  | "-H" : "Add a HTTP request header in key:value format" , @any | "--header" : "Add a HTTP request header in key:value format" , @any | "--header=" : "Add a HTTP request header in key:value format" ~ @any
+  | "--hostname" : "The GitHub hostname for the request" , @any | "--hostname=" : "The GitHub hostname for the request" ~ @any
+  | "-i" : "Include HTTP response status line and headers in the output" | "--include" : "Include HTTP response status line and headers in the output"
+  | "--input" : "The file to use as body for the HTTP request" , @file | "--input=" : "The file to use as body for the HTTP request" ~ @file
+  | "-q" : "Query to select values from the response using jq syntax" , @any | "--jq" : "Query to select values from the response using jq syntax" , @any | "--jq=" : "Query to select values from the response using jq syntax" ~ @any
+  | "-X" : "The HTTP method for the request" , @any | "--method" : "The HTTP method for the request" , @any | "--method=" : "The HTTP method for the request" ~ @any
+  | "--paginate" : "Make additional HTTP requests to fetch all pages of results"
+  | "-p" : "Opt into GitHub API previews (names should omit '-preview')" , @any | "--preview" : "Opt into GitHub API previews (names should omit '-preview')" , @any | "--preview=" : "Opt into GitHub API previews (names should omit '-preview')" ~ @any
+  | opt_raw_field
+  | "--silent" : "Do not print the response body"
+  | "--slurp" : "With --paginate, return one array of all pages"
+  | opt_template
+  | "--verbose" : "Include full HTTP request and response in the output"
+  | opt_help ;
+
+attestation = [ attestation_command ] ;
+
+attestation_command =
+    "download" : "Download an artifact's attestations for offline use" , attestation_download
+  | "trusted-root" : "Output trusted_root.jsonl contents, likely for offline verification" , attestation_trusted_root
+  | "verify" : "Verify an artifact's integrity using attestations" , attestation_verify ;
+
+attestation_download = { @any } ;
+
+attestation_trusted_root = { @any } ;
+
+attestation_verify = { @any } ;
+
+completion = { completion_option | @any } ;
+
+completion_option =
+    "-s" : "Shell type" , ( "bash" | "zsh" | "fish" | "powershell" ) | "--shell" : "Shell type" , ( "bash" | "zsh" | "fish" | "powershell" ) | "--shell=" : "Shell type" ~ ( "bash" | "zsh" | "fish" | "powershell" )
+  | opt_help ;
+
+config = [ config_command ] ;
+
+config_command =
+    "clear-cache" : "Clear the cli cache" , config_clear_cache
+  | "get" : "Print the value of a given configuration key" , config_get
+  | "list" : "Print a list of configuration keys and values" , config_list
+  | "set" : "Update configuration with a value for the given key" , config_set ;
+
+config_clear_cache = { config_clear_cache_option } ;
+
+config_clear_cache_option =
+    opt_help ;
+
+config_get = { config_get_option | @any } ;
+
+config_get_option =
+    "-h" : "Get per-host setting" , @any | "--host" : "Get per-host setting" , @any | "--host=" : "Get per-host setting" ~ @any
+  | opt_help ;
+
+config_list = { config_list_option } ;
+
+config_list_option =
+    "-h" : "Get per-host configuration" , @any | "--host" : "Get per-host configuration" , @any | "--host=" : "Get per-host configuration" ~ @any
+  | opt_help ;
+
+config_set = { config_set_option | @any } ;
+
+config_set_option =
+    "-h" : "Set per-host setting" , @any | "--host" : "Set per-host setting" , @any | "--host=" : "Set per-host setting" ~ @any
+  | opt_help ;
+
+copilot = { @any } ;
+
+extension = [ extension_command ] ;
+
+extension_command =
+    "browse" : "Enter a UI for browsing, adding, and removing extensions" , extension_browse
+  | "create" : "Create a new extension" , extension_create
+  | "exec" : "Execute an installed extension" , extension_exec
+  | "install" : "Install a gh extension from a repository" , extension_install
+  | "list" : "List installed extension commands" , extension_list
+  | "remove" : "Remove an installed extension" , extension_remove
+  | "search" : "Search extensions to the GitHub CLI" , extension_search
+  | "upgrade" : "Upgrade installed extensions" , extension_upgrade ;
+
+extension_browse = { @any } ;
+
+extension_create = { @any } ;
+
+extension_exec = { @any } ;
+
+extension_install = { @any } ;
+
+extension_list = { @any } ;
+
+extension_remove = { @any } ;
+
+extension_search = { @any } ;
+
+extension_upgrade = { @any } ;
+
+gpg_key = [ gpg_key_command ] ;
+
+gpg_key_command =
+    "add" : "Add a GPG key to your GitHub account" , gpg_key_add
+  | "delete" : "Delete a GPG key from your GitHub account" , gpg_key_delete
+  | "list" : "Lists GPG keys in your GitHub account" , gpg_key_list ;
+
+gpg_key_add = { gpg_key_add_option | @file } ;
+
+gpg_key_add_option =
+    opt_title_3
+  | opt_help ;
+
+gpg_key_delete = { gpg_key_delete_option | @any } ;
+
+gpg_key_delete_option =
+    opt_yes_3
+  | opt_help ;
+
+gpg_key_list = { gpg_key_list_option } ;
+
+gpg_key_list_option =
+    opt_help ;
+
+label = { label_option } , [ label_command ] ;
+
+label_option =
+    opt_repo ;
+
+label_command =
+    "clone" : "Clones labels from one repository to another" , label_clone
+  | "create" : "Create a new label" , label_create
+  | "delete" : "Delete a label from a repository" , label_delete
+  | "edit" : "Edit a label" , label_edit
+  | "list" : "List labels in a repository" , label_list ;
+
+label_clone = { label_clone_option | @any } ;
+
+label_clone_option =
+    "-f" : "Overwrite labels in the destination repository" | "--force" : "Overwrite labels in the destination repository"
+  | opt_help
+  | opt_repo ;
+
+label_create = { label_create_option | @any } ;
+
+label_create_option =
+    opt_color
+  | opt_description_2
+  | "-f" : "Update the label color and description if label already exists" | "--force" : "Update the label color and description if label already exists"
+  | opt_help
+  | opt_repo ;
+
+label_delete = { label_delete_option | @any } ;
+
+label_delete_option =
+    opt_yes_2
+  | opt_help
+  | opt_repo ;
+
+label_edit = { label_edit_option | @any } ;
+
+label_edit_option =
+    opt_color
+  | opt_description_2
+  | "-n" : "New name of the label" , @any | "--name" : "New name of the label" , @any | "--name=" : "New name of the label" ~ @any
+  | opt_help
+  | opt_repo ;
+
+label_list = { label_list_option } ;
+
+label_list_option =
+    opt_jq
+  | opt_json
+  | "-L" : "Maximum number of labels to fetch" , @number | "--limit" : "Maximum number of labels to fetch" , @number | "--limit=" : "Maximum number of labels to fetch" ~ @number
+  | "--order" : "Order of labels returned" , ( "asc" | "desc" ) | "--order=" : "Order of labels returned" ~ ( "asc" | "desc" )
+  | "-S" : "Search label names and descriptions" , @any | "--search" : "Search label names and descriptions" , @any | "--search=" : "Search label names and descriptions" ~ @any
+  | "--sort" : "Sort fetched labels" , ( "created" | "name" ) | "--sort=" : "Sort fetched labels" ~ ( "created" | "name" )
+  | opt_template
+  | "-w" : "List labels in the web browser" | "--web" : "List labels in the web browser"
+  | opt_help
+  | opt_repo ;
+
+licenses = { @any } ;
+
+preview = [ preview_command ] ;
+
+preview_command =
+    "prompter" : "Execute a test program to preview the prompter" , preview_prompter ;
+
+preview_prompter = { @any } ;
+
+ruleset = [ ruleset_command ] ;
+
+ruleset_command =
+    "check" : "View rules that would apply to a given branch" , ruleset_check
+  | "list" : "List rulesets for a repository or organization" , ruleset_list
+  | "view" : "View information about a ruleset" , ruleset_view ;
+
+ruleset_check = { @any } ;
+
+ruleset_list = { @any } ;
+
+ruleset_view = { @any } ;
+
+search = [ search_command ] ;
+
+search_command =
+    "code" : "Search within code" , search_code
+  | "commits" : "Search for commits" , search_commits
+  | "issues" : "Search for issues" , search_issues
+  | "prs" : "Search for pull requests" , search_prs
+  | "repos" : "Search for repositories" , search_repos ;
+
+search_code = { @any } ;
+
+search_commits = { @any } ;
+
+search_issues = { @any } ;
+
+search_prs = { @any } ;
+
+search_repos = { @any } ;
+
+secret = { secret_option } , [ secret_command ] ;
+
+secret_option =
+    opt_repo ;
+
+secret_command =
+    "delete" : "Delete secrets" , secret_delete
+  | "list" : "List secrets" , secret_list
+  | "set" : "Create or update secrets" , secret_set ;
+
+secret_delete = { secret_delete_option | @any } ;
+
+secret_delete_option =
+    "-a" : "Delete a secret for a specific application" , ( "actions" | "agents" | "codespaces" | "dependabot" ) | "--app" : "Delete a secret for a specific application" , ( "actions" | "agents" | "codespaces" | "dependabot" ) | "--app=" : "Delete a secret for a specific application" ~ ( "actions" | "agents" | "codespaces" | "dependabot" )
+  | "-e" : "Delete a secret for an environment" , @any | "--env" : "Delete a secret for an environment" , @any | "--env=" : "Delete a secret for an environment" ~ @any
+  | "-o" : "Delete a secret for an organization" , @any | "--org" : "Delete a secret for an organization" , @any | "--org=" : "Delete a secret for an organization" ~ @any
+  | "-u" : "Delete a secret for your user" | "--user" : "Delete a secret for your user"
+  | opt_help
+  | opt_repo ;
+
+secret_list = { secret_list_option } ;
+
+secret_list_option =
+    "-a" : "List secrets for a specific application" , ( "actions" | "agents" | "codespaces" | "dependabot" ) | "--app" : "List secrets for a specific application" , ( "actions" | "agents" | "codespaces" | "dependabot" ) | "--app=" : "List secrets for a specific application" ~ ( "actions" | "agents" | "codespaces" | "dependabot" )
+  | "-e" : "List secrets for an environment" , @any | "--env" : "List secrets for an environment" , @any | "--env=" : "List secrets for an environment" ~ @any
+  | opt_jq
+  | opt_json
+  | "-o" : "List secrets for an organization" , @any | "--org" : "List secrets for an organization" , @any | "--org=" : "List secrets for an organization" ~ @any
+  | opt_template
+  | "-u" : "List a secret for your user" | "--user" : "List a secret for your user"
+  | opt_help
+  | opt_repo ;
+
+secret_set = { secret_set_option | @any } ;
+
+secret_set_option =
+    "-a" : "Set the application for a secret" , ( "actions" | "agents" | "codespaces" | "dependabot" ) | "--app" : "Set the application for a secret" , ( "actions" | "agents" | "codespaces" | "dependabot" ) | "--app=" : "Set the application for a secret" ~ ( "actions" | "agents" | "codespaces" | "dependabot" )
+  | "-b" : "The value for the secret (reads from standard input if not specified)" , @any | "--body" : "The value for the secret (reads from standard input if not specified)" , @any | "--body=" : "The value for the secret (reads from standard input if not specified)" ~ @any
+  | "-e" : "Set deployment environment secret" , @any | "--env" : "Set deployment environment secret" , @any | "--env=" : "Set deployment environment secret" ~ @any
+  | "-f" : "Load secret names and values from a dotenv-formatted file" , @file | "--env-file" : "Load secret names and values from a dotenv-formatted file" , @file | "--env-file=" : "Load secret names and values from a dotenv-formatted file" ~ @file
+  | "--no-repos-selected" : "No repositories can access the organization secret"
+  | "--no-store" : "Print the encrypted base64 value instead of storing it"
+  | "-o" : "Set organization secret" , @any | "--org" : "Set organization secret" , @any | "--org=" : "Set organization secret" ~ @any
+  | "-r" : "List of repositories that can access an organization or user secret" , @any | "--repos" : "List of repositories that can access an organization or user secret" , @any | "--repos=" : "List of repositories that can access an organization or user secret" ~ @any
+  | "-u" : "Set a secret for your user" | "--user" : "Set a secret for your user"
+  | "-v" : "Set visibility for an organization secret" , ( "all" | "private" | "selected" ) | "--visibility" : "Set visibility for an organization secret" , ( "all" | "private" | "selected" ) | "--visibility=" : "Set visibility for an organization secret" ~ ( "all" | "private" | "selected" )
+  | opt_help
+  | opt_repo ;
+
+ssh_key = [ ssh_key_command ] ;
+
+ssh_key_command =
+    "add" : "Add an SSH key to your GitHub account" , ssh_key_add
+  | "delete" : "Delete an SSH key from your GitHub account" , ssh_key_delete
+  | "list" : "Lists SSH keys in your GitHub account" , ssh_key_list ;
+
+ssh_key_add = { ssh_key_add_option | @file } ;
+
+ssh_key_add_option =
+    opt_title_3
+  | "--type" : "Type of the ssh key" , ( "authentication" | "signing" ) | "--type=" : "Type of the ssh key" ~ ( "authentication" | "signing" )
+  | opt_help ;
+
+ssh_key_delete = { ssh_key_delete_option | @any } ;
+
+ssh_key_delete_option =
+    opt_yes_3
+  | opt_help ;
+
+ssh_key_list = { ssh_key_list_option } ;
+
+ssh_key_list_option =
+    opt_help ;
+
+status = { status_option } ;
+
+status_option =
+    "-e" : "Comma separated list of repos to exclude in owner/name format" , @any | "--exclude" : "Comma separated list of repos to exclude in owner/name format" , @any | "--exclude=" : "Comma separated list of repos to exclude in owner/name format" ~ @any
+  | "-o" : "Report status within an organization" , @any | "--org" : "Report status within an organization" , @any | "--org=" : "Report status within an organization" ~ @any
+  | opt_help ;
+
+variable = { variable_option } , [ variable_command ] ;
+
+variable_option =
+    opt_repo ;
+
+variable_command =
+    "delete" : "Delete variables" , variable_delete
+  | "get" : "Get variables" , variable_get
+  | "list" : "List variables" , variable_list
+  | "set" : "Create or update variables" , variable_set ;
+
+variable_delete = { variable_delete_option | @any } ;
+
+variable_delete_option =
+    "-e" : "Delete a variable for an environment" , @any | "--env" : "Delete a variable for an environment" , @any | "--env=" : "Delete a variable for an environment" ~ @any
+  | "-o" : "Delete a variable for an organization" , @any | "--org" : "Delete a variable for an organization" , @any | "--org=" : "Delete a variable for an organization" ~ @any
+  | opt_help
+  | opt_repo ;
+
+variable_get = { variable_get_option | @any } ;
+
+variable_get_option =
+    "-e" : "Get a variable for an environment" , @any | "--env" : "Get a variable for an environment" , @any | "--env=" : "Get a variable for an environment" ~ @any
+  | opt_jq
+  | opt_json
+  | "-o" : "Get a variable for an organization" , @any | "--org" : "Get a variable for an organization" , @any | "--org=" : "Get a variable for an organization" ~ @any
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+variable_list = { variable_list_option } ;
+
+variable_list_option =
+    "-e" : "List variables for an environment" , @any | "--env" : "List variables for an environment" , @any | "--env=" : "List variables for an environment" ~ @any
+  | opt_jq
+  | opt_json
+  | "-o" : "List variables for an organization" , @any | "--org" : "List variables for an organization" , @any | "--org=" : "List variables for an organization" ~ @any
+  | opt_template
+  | opt_help
+  | opt_repo ;
+
+variable_set = { variable_set_option | @any } ;
+
+variable_set_option =
+    "-b" : "The value for the variable" , @any | "--body" : "The value for the variable" , @any | "--body=" : "The value for the variable" ~ @any
+  | "-e" : "Set deployment environment variable" , @any | "--env" : "Set deployment environment variable" , @any | "--env=" : "Set deployment environment variable" ~ @any
+  | "-f" : "Load variable names and values from a dotenv-formatted file" , @file | "--env-file" : "Load variable names and values from a dotenv-formatted file" , @file | "--env-file=" : "Load variable names and values from a dotenv-formatted file" ~ @file
+  | "-o" : "Set organization variable" , @any | "--org" : "Set organization variable" , @any | "--org=" : "Set organization variable" ~ @any
+  | "-r" : "List of repositories that can access an organization variable" , @any | "--repos" : "List of repositories that can access an organization variable" , @any | "--repos=" : "List of repositories that can access an organization variable" ~ @any
+  | "-v" : "Set visibility for an organization variable" , ( "all" | "private" | "selected" ) | "--visibility" : "Set visibility for an organization variable" , ( "all" | "private" | "selected" ) | "--visibility=" : "Set visibility for an organization variable" ~ ( "all" | "private" | "selected" )
+  | opt_help
+  | opt_repo ;
+
+(* Flags shared by several commands. *)
+
+opt_add_assignee = "--add-assignee" : "Add assigned users by their login" , @any | "--add-assignee=" : "Add assigned users by their login" ~ @any ;
+opt_add_label = "--add-label" : "Add labels by name" , @any | "--add-label=" : "Add labels by name" ~ @any ;
+opt_all = "-a" : "Include disabled workflows" | "--all" : "Include disabled workflows" ;
+opt_allow_escape_sequences = "--allow-escape-sequences" : "Allow printing terminal escape sequences" ;
+opt_app = "--app" : "Filter by GitHub App author" , @any | "--app=" : "Filter by GitHub App author" ~ @any ;
+opt_assignee = "-a" : "Assign people by their login" , @any | "--assignee" : "Assign people by their login" , @any | "--assignee=" : "Assign people by their login" ~ @any ;
+opt_assignee_2 = "-a" : "Filter by assignee" , @any | "--assignee" : "Filter by assignee" , @any | "--assignee=" : "Filter by assignee" ~ @any ;
+opt_attach = "--attach" : "Attach an image or video file, in '<file>#<image alt text>' format" , @file | "--attach=" : "Attach an image or video file, in '<file>#<image alt text>' format" ~ @file ;
+opt_author = "-A" : "Filter by author (use --app to filter by a GitHub App)" , @any | "--author" : "Filter by author (use --app to filter by a GitHub App)" , @any | "--author=" : "Filter by author (use --app to filter by a GitHub App)" ~ @any ;
+opt_body = "-b" : "The comment body text" , @any | "--body" : "The comment body text" , @any | "--body=" : "The comment body text" ~ @any ;
+opt_body_2 = "-b" : "Set the new body" , @any | "--body" : "Set the new body" , @any | "--body=" : "Set the new body" ~ @any ;
+opt_body_file = "-F" : "Read body text from file (use '-' to read from standard input)" , @file | "--body-file" : "Read body text from file (use '-' to read from standard input)" , @file | "--body-file=" : "Read body text from file (use '-' to read from standard input)" ~ @file ;
+opt_clipboard = "-c" : "Copy one-time OAuth device code to clipboard" | "--clipboard" : "Copy one-time OAuth device code to clipboard" ;
+opt_clobber = "--clobber" : "Overwrite existing aliases of the same name" ;
+opt_color = "-c" : "Color of the label" , @any | "--color" : "Color of the label" , @any | "--color=" : "Color of the label" ~ @any ;
+opt_comment = "-c" : "Leave a closing comment" , @any | "--comment" : "Leave a closing comment" , @any | "--comment=" : "Leave a closing comment" ~ @any ;
+opt_comment_2 = "-c" : "Add a reopening comment" , @any | "--comment" : "Add a reopening comment" , @any | "--comment=" : "Add a reopening comment" ~ @any ;
+opt_create_if_none = "--create-if-none" : "Create a new comment if no comments are found" ;
+opt_delete_last = "--delete-last" : "Delete the last comment of the current user" ;
+opt_description = "-d" : "Description of the repository" , @any | "--description" : "Description of the repository" , @any | "--description=" : "Description of the repository" ~ @any ;
+opt_description_2 = "-d" : "Description of the label" , @any | "--description" : "Description of the label" , @any | "--description=" : "Description of the label" ~ @any ;
+opt_edit_last = "--edit-last" : "Edit the last comment of the current user" ;
+opt_editor = "-e" : "Skip prompts and open the text editor to write the title and body in" | "--editor" : "Skip prompts and open the text editor to write the title and body in" ;
+opt_editor_2 = "-e" : "Skip prompts and open the text editor to write the body in" | "--editor" : "Skip prompts and open the text editor to write the body in" ;
+opt_format = "--format" : "Output format" , @any | "--format=" : "Output format" ~ @any ;
+opt_help = "--help" : "Show help for command" ;
+opt_homepage = "-h" : "Repository home page URL" , @any | "--homepage" : "Repository home page URL" , @any | "--homepage=" : "Repository home page URL" ~ @any ;
+opt_insecure_storage = "--insecure-storage" : "Save credentials in plain text instead of the credential store" ;
+opt_jq = "-q" : "Filter JSON output using a jq expression" , @any | "--jq" : "Filter JSON output using a jq expression" , @any | "--jq=" : "Filter JSON output using a jq expression" ~ @any ;
+opt_json = "--json" : "Output JSON with the specified fields" , @any | "--json=" : "Output JSON with the specified fields" ~ @any ;
+opt_label = "-l" : "Add labels by name" , @any | "--label" : "Add labels by name" , @any | "--label=" : "Add labels by name" ~ @any ;
+opt_label_2 = "-l" : "Filter by label" , @any | "--label" : "Filter by label" , @any | "--label=" : "Filter by label" ~ @any ;
+opt_limit = "-L" : "Maximum number of items to fetch" , @number | "--limit" : "Maximum number of items to fetch" , @number | "--limit=" : "Maximum number of items to fetch" ~ @number ;
+opt_notes = "-n" : "Release notes" , @any | "--notes" : "Release notes" , @any | "--notes=" : "Release notes" ~ @any ;
+opt_notes_file = "-F" : "Read release notes from file (use '-' to read from standard input)" , @file | "--notes-file" : "Read release notes from file (use '-' to read from standard input)" , @file | "--notes-file=" : "Read release notes from file (use '-' to read from standard input)" ~ @file ;
+opt_raw_field = "-f" : "Add a string parameter in key=value format" , @any | "--raw-field" : "Add a string parameter in key=value format" , @any | "--raw-field=" : "Add a string parameter in key=value format" ~ @any ;
+opt_reason = "-r" : "Optional reason for locking conversation" , @any | "--reason" : "Optional reason for locking conversation" , @any | "--reason=" : "Optional reason for locking conversation" ~ @any ;
+opt_recover = "--recover" : "Recover input from a failed run of create" , @any | "--recover=" : "Recover input from a failed run of create" ~ @any ;
+opt_remove_assignee = "--remove-assignee" : "Remove assigned users by their login" , @any | "--remove-assignee=" : "Remove assigned users by their login" ~ @any ;
+opt_remove_label = "--remove-label" : "Remove labels by name" , @any | "--remove-label=" : "Remove labels by name" ~ @any ;
+opt_repo = "-R" : "Select another repository using the [HOST/]OWNER/REPO format" , @any | "--repo" : "Select another repository using the [HOST/]OWNER/REPO format" , @any | "--repo=" : "Select another repository using the [HOST/]OWNER/REPO format" ~ @any ;
+opt_target = "--target" : "Target branch or full commit SHA" , @branch | "--target=" : "Target branch or full commit SHA" ~ @branch ;
+opt_template = "-t" : "Format JSON output using a Go template" , @any | "--template" : "Format JSON output using a Go template" , @any | "--template=" : "Format JSON output using a Go template" ~ @any ;
+opt_title = "-t" : "Set the new title" , @any | "--title" : "Set the new title" , @any | "--title=" : "Set the new title" ~ @any ;
+opt_title_2 = "-t" : "Release title" , @any | "--title" : "Release title" , @any | "--title=" : "Release title" ~ @any ;
+opt_title_3 = "-t" : "Title for the new key" , @any | "--title" : "Title for the new key" , @any | "--title=" : "Title for the new key" ~ @any ;
+opt_type = "--type" : "Set the issue type by name" , @any | "--type=" : "Set the issue type by name" ~ @any ;
+opt_verify_tag = "--verify-tag" : "Abort if the git tag does not exist in the remote repository" ;
+opt_web = "-w" : "Open the web browser to write the comment" | "--web" : "Open the web browser to write the comment" ;
+opt_yes = "--yes" : "Skip the delete confirmation prompt when --delete-last is provided" ;
+opt_yes_2 = "--yes" : "Confirm deletion without prompting" ;
+opt_yes_3 = "-y" : "Skip the confirmation prompt" | "--yes" : "Skip the confirmation prompt" ;

@@ -1,0 +1,211 @@
+(* node: checked against `node --help` of Node.js 24.15.0. Of the V8 options
+   (`node --v8-options`) only --max-old-space-size and --stack-trace-limit are
+   modelled.
+
+   Conventions:
+   - Options with a value accept `--name=value` and `--name value`; short ones
+     accept `-r value` and `-rvalue`.
+   - Options come before the script; every word after the script, `-` or `--`
+     and the script after it belong to the script. `-e` and `-p` take the code
+     to run instead of a script. *)
+
+node = { option } , [ "inspect" : "Run a script under the CLI debugger" , { @any } | script ] ;
+
+script =
+    @file : "Run this script" , { @any }
+  | "-" : "Read the script from stdin" , { @any }
+  | "--" : "End of the node options" , [ @file , { @any } ] ;
+
+option =
+    "-e" : "Evaluate a script" , @any | "--eval" : "Evaluate a script" , @any | "--eval=" : "Evaluate a script" ~ @any
+  | "-p" : "Evaluate a script and print the result" , @any | "--print" : "Evaluate a script and print the result" , @any
+  | "--print=" : "Evaluate a script and print the result" ~ @any
+  | "-c" : "Check the syntax without running" | "--check" : "Check the syntax without running"
+  | "-i" : "Enter the REPL even without a terminal" | "--interactive" : "Enter the REPL even without a terminal"
+  | "-r" : "Preload a CommonJS module" , @file | "--require" : "Preload a CommonJS module" , @file | "--require=" : "Preload a CommonJS module" ~ @file
+  | "--import" : "Preload an ES module" , @file | "--import=" : "Preload an ES module" ~ @file
+  | "--loader" : "Use a custom module loader" , @file | "--loader=" : "Use a custom module loader" ~ @file
+  | "--experimental-loader" : "Use a custom module loader" , @file | "--experimental-loader=" : "Use a custom module loader" ~ @file
+  | "--input-type" : "Module type of string input" , input_type | "--input-type=" : "Module type of string input" ~ input_type
+  | "-C" : "Extra conditions for conditional exports" , @any | "--conditions" : "Extra conditions for conditional exports" , @any
+  | "--conditions=" : "Extra conditions for conditional exports" ~ @any
+  | "--run" : "Run a package.json script" , @package_script | "--run=" : "Run a package.json script" ~ @package_script
+  | "--watch" : "Restart when files change"
+  | "--watch-path" : "Path to watch" , @file | "--watch-path=" : "Path to watch" ~ @file
+  | "--watch-preserve-output" : "Keep the output on watch restarts"
+  | "--watch-kill-signal" : "Signal to send on watch restarts" , @any | "--watch-kill-signal=" : "Signal to send on watch restarts" ~ @any
+  | "--env-file" : "Load environment variables from a file" , @file | "--env-file=" : "Load environment variables from a file" ~ @file
+  | "--env-file-if-exists" : "Load environment variables from a file if it exists" , @file
+  | "--env-file-if-exists=" : "Load environment variables from a file if it exists" ~ @file
+  | "--inspect" : "Activate the inspector on 127.0.0.1:9229" | "--inspect=" : "Activate the inspector on [host:]port" ~ @any
+  | "--inspect-brk" : "Activate the inspector and break at the start" | "--inspect-brk=" : "Activate the inspector on [host:]port and break" ~ @any
+  | "--inspect-wait" : "Activate the inspector and wait for a debugger" | "--inspect-wait=" : "Activate the inspector on [host:]port and wait" ~ @any
+  | "--inspect-port" : "Host and port of the inspector" , @any | "--inspect-port=" : "Host and port of the inspector" ~ @any
+  | "--debug-port" : "Host and port of the inspector" , @any | "--debug-port=" : "Host and port of the inspector" ~ @any
+  | "--inspect-publish-uid" : "Where to publish the inspector uid" , @any | "--inspect-publish-uid=" : "Where to publish the inspector uid" ~ @any
+  | "--enable-source-maps" : "Use source maps in stack traces"
+  | "--experimental-strip-types" : "Strip TypeScript types" | "--no-strip-types" : "Do not strip TypeScript types"
+  | "--experimental-transform-types" : "Transform TypeScript-only syntax"
+  | "--test" : "Run the test runner"
+  | "--test-concurrency" : "Test runner concurrency" , @number | "--test-concurrency=" : "Test runner concurrency" ~ @number
+  | "--test-name-pattern" : "Run tests whose name matches a regex" , @any | "--test-name-pattern=" : "Run tests whose name matches a regex" ~ @any
+  | "--test-skip-pattern" : "Skip tests whose name matches a regex" , @any | "--test-skip-pattern=" : "Skip tests whose name matches a regex" ~ @any
+  | "--test-only" : "Run only tests marked only"
+  | "--test-reporter" : "Reporter of the test output" , test_reporter | "--test-reporter=" : "Reporter of the test output" ~ test_reporter
+  | "--test-reporter-destination" : "Destination of the test reporter" , @file | "--test-reporter-destination=" : "Destination of the test reporter" ~ @file
+  | "--test-shard" : "Run one shard of the tests, like 1/3" , @any | "--test-shard=" : "Run one shard of the tests, like 1/3" ~ @any
+  | "--test-timeout" : "Test timeout in milliseconds" , @number | "--test-timeout=" : "Test timeout in milliseconds" ~ @number
+  | "--test-force-exit" : "Exit when the tests finish"
+  | "--test-update-snapshots" : "Regenerate the test snapshots"
+  | "--test-global-setup" : "Global setup file of the tests" , @file | "--test-global-setup=" : "Global setup file of the tests" ~ @file
+  | "--test-rerun-failures" : "State file to rerun failed tests" , @file | "--test-rerun-failures=" : "State file to rerun failed tests" ~ @file
+  | "--test-isolation" : "Isolation of the test files" , ( "process" | "none" ) | "--test-isolation=" : "Isolation of the test files" ~ ( "process" | "none" )
+  | "--experimental-test-isolation" : "Isolation of the test files" , ( "process" | "none" ) | "--experimental-test-isolation=" : "Isolation of the test files" ~ ( "process" | "none" )
+  | "--experimental-test-coverage" : "Collect code coverage in the test runner"
+  | "--experimental-test-module-mocks" : "Enable module mocking in the test runner"
+  | "--test-coverage-include" : "Include files matching a glob in coverage" , @any | "--test-coverage-include=" : "Include files matching a glob in coverage" ~ @any
+  | "--test-coverage-exclude" : "Exclude files matching a glob from coverage" , @any | "--test-coverage-exclude=" : "Exclude files matching a glob from coverage" ~ @any
+  | "--test-coverage-lines" : "Minimum line coverage" , @number | "--test-coverage-lines=" : "Minimum line coverage" ~ @number
+  | "--test-coverage-branches" : "Minimum branch coverage" , @number | "--test-coverage-branches=" : "Minimum branch coverage" ~ @number
+  | "--test-coverage-functions" : "Minimum function coverage" , @number | "--test-coverage-functions=" : "Minimum function coverage" ~ @number
+  | "--permission" : "Enable the permission model"
+  | "--allow-fs-read" : "Allow reading these paths" , @file | "--allow-fs-read=" : "Allow reading these paths" ~ @file
+  | "--allow-fs-write" : "Allow writing these paths" , @file | "--allow-fs-write=" : "Allow writing these paths" ~ @file
+  | "--allow-addons" : "Allow addons under the permission model"
+  | "--allow-child-process" : "Allow child processes under the permission model"
+  | "--allow-inspector" : "Allow the inspector under the permission model"
+  | "--allow-wasi" : "Allow WASI under the permission model"
+  | "--allow-worker" : "Allow worker threads under the permission model"
+  | "--cpu-prof" : "Write a V8 CPU profile on exit"
+  | "--cpu-prof-dir" : "Directory of the CPU profiles" , @directory | "--cpu-prof-dir=" : "Directory of the CPU profiles" ~ @directory
+  | "--cpu-prof-name" : "File name of the CPU profile" , @any | "--cpu-prof-name=" : "File name of the CPU profile" ~ @any
+  | "--cpu-prof-interval" : "CPU sampling interval in microseconds" , @number | "--cpu-prof-interval=" : "CPU sampling interval in microseconds" ~ @number
+  | "--heap-prof" : "Write a V8 heap profile on exit"
+  | "--heap-prof-dir" : "Directory of the heap profiles" , @directory | "--heap-prof-dir=" : "Directory of the heap profiles" ~ @directory
+  | "--heap-prof-name" : "File name of the heap profile" , @any | "--heap-prof-name=" : "File name of the heap profile" ~ @any
+  | "--heap-prof-interval" : "Heap sampling interval in bytes" , @number | "--heap-prof-interval=" : "Heap sampling interval in bytes" ~ @number
+  | "--heapsnapshot-near-heap-limit" : "Heap snapshots to write near the heap limit" , @number
+  | "--heapsnapshot-near-heap-limit=" : "Heap snapshots to write near the heap limit" ~ @number
+  | "--heapsnapshot-signal" : "Write a heap snapshot on this signal" , @any | "--heapsnapshot-signal=" : "Write a heap snapshot on this signal" ~ @any
+  | "--prof" : "Write V8 profiler output"
+  | "--prof-process" : "Process V8 profiler output"
+  | "--diagnostic-dir" : "Directory for diagnostic output files" , @directory | "--diagnostic-dir=" : "Directory for diagnostic output files" ~ @directory
+  | "--max-old-space-size-percentage" : "Max old space size as a share of memory" , @any
+  | "--max-old-space-size-percentage=" : "Max old space size as a share of memory" ~ @any
+  | "--max-http-header-size" : "Maximum size of HTTP headers" , @number | "--max-http-header-size=" : "Maximum size of HTTP headers" ~ @number
+  | "--stack-trace-limit" : "Frames to keep in stack traces (V8)" , @number | "--stack-trace-limit=" : "Frames to keep in stack traces (V8)" ~ @number
+  | "--max-old-space-size" : "Size of the old heap in MiB (V8)" , @number | "--max-old-space-size=" : "Size of the old heap in MiB (V8)" ~ @number
+  | "--no-warnings" : "Silence all process warnings"
+  | "--disable-warning" : "Silence this process warning" , @any | "--disable-warning=" : "Silence this process warning" ~ @any
+  | "--no-deprecation" : "Silence deprecation warnings"
+  | "--pending-deprecation" : "Emit pending deprecation warnings"
+  | "--throw-deprecation" : "Throw on deprecations"
+  | "--trace-deprecation" : "Show stack traces on deprecations"
+  | "--trace-warnings" : "Show stack traces on process warnings"
+  | "--trace-uncaught" : "Show stack traces of uncaught exceptions"
+  | "--trace-exit" : "Show a stack trace when the environment exits"
+  | "--trace-sigint" : "Print a JavaScript stack trace on SIGINT"
+  | "--trace-sync-io" : "Show stack traces of sync IO after the first tick"
+  | "--trace-promises" : "Show stack traces of promise lifecycle"
+  | "--trace-tls" : "Print TLS packet traces to stderr"
+  | "--trace-env" : "Print accesses to environment variables"
+  | "--trace-env-js-stack" : "Print environment accesses with JavaScript stacks"
+  | "--trace-env-native-stack" : "Print environment accesses with native stacks"
+  | "--trace-require-module" : "Print uses of require(esm)" , ( "all" | "no-node-modules" )
+  | "--trace-require-module=" : "Print uses of require(esm)" ~ ( "all" | "no-node-modules" )
+  | "--trace-event-categories" : "Trace event categories to record" , @any | "--trace-event-categories=" : "Trace event categories to record" ~ @any
+  | "--trace-event-file-pattern" : "File pattern of the trace events" , @any | "--trace-event-file-pattern=" : "File pattern of the trace events" ~ @any
+  | "--unhandled-rejections" : "Behavior on unhandled rejections" , rejections | "--unhandled-rejections=" : "Behavior on unhandled rejections" ~ rejections
+  | "--abort-on-uncaught-exception" : "Abort instead of exiting on uncaught exceptions"
+  | "--title" : "Process title" , @any | "--title=" : "Process title" ~ @any
+  | "--preserve-symlinks" : "Preserve symbolic links when resolving"
+  | "--preserve-symlinks-main" : "Preserve symbolic links of the main module"
+  | "--no-addons" : "Disable native addons"
+  | "--no-global-search-paths" : "Disable the global module search paths"
+  | "--no-experimental-detect-module" : "Do not retry ambiguous modules as ESM"
+  | "--no-experimental-require-module" : "Legacy alias of --no-require-module"
+  | "--no-require-module" : "Do not allow require() of ES modules"
+  | "--no-experimental-global-navigator" : "Do not expose the Navigator API"
+  | "--no-experimental-repl-await" : "Disable await in the REPL"
+  | "--no-experimental-sqlite" : "Disable the node:sqlite module"
+  | "--no-experimental-websocket" : "Disable the WebSocket API"
+  | "--no-async-context-frame" : "Do not use AsyncContextFrame"
+  | "--no-extra-info-on-fatal-exception" : "Hide extra info on fatal exceptions"
+  | "--no-force-async-hooks-checks" : "Disable the async_hooks checks"
+  | "--experimental-vm-modules" : "ES module support in the vm module"
+  | "--experimental-webstorage" : "Enable the Web Storage API"
+  | "--localstorage-file" : "File that persists localStorage" , @file | "--localstorage-file=" : "File that persists localStorage" ~ @file
+  | "--experimental-eventsource" : "Enable the EventSource API"
+  | "--experimental-import-meta-resolve" : "Support the parentURL of import.meta.resolve()"
+  | "--experimental-addon-modules" : "Import support for addons"
+  | "--experimental-network-inspection" : "Network inspection support"
+  | "--experimental-worker-inspection" : "Worker inspection support"
+  | "--experimental-inspector-network-resource" : "Load network resources through the inspector"
+  | "--experimental-print-required-tla" : "Print pending top-level await"
+  | "--experimental-config-file" : "Use this config file" , @file | "--experimental-config-file=" : "Use this config file" ~ @file
+  | "--experimental-default-config-file" : "Use the default config file"
+  | "--experimental-sea-config" : "Build a single executable application blob" , @file
+  | "--experimental-sea-config=" : "Build a single executable application blob" ~ @file
+  | "--build-snapshot" : "Write a snapshot blob on exit"
+  | "--build-snapshot-config" : "JSON configuration of the snapshot" , @file | "--build-snapshot-config=" : "JSON configuration of the snapshot" ~ @file
+  | "--snapshot-blob" : "Snapshot blob to build or start from" , @file | "--snapshot-blob=" : "Snapshot blob to build or start from" ~ @file
+  | "--entry-url" : "Treat the entry point as a URL"
+  | "--expose-gc" : "Expose the gc extension"
+  | "--jitless" : "Disable executable memory allocation"
+  | "--frozen-intrinsics" : "Freeze the intrinsics (experimental)"
+  | "--disable-proto" : "Disable Object.prototype.__proto__" , ( "delete" | "throw" ) | "--disable-proto=" : "Disable Object.prototype.__proto__" ~ ( "delete" | "throw" )
+  | "--disallow-code-generation-from-strings" : "Disallow eval and friends"
+  | "--disable-sigusr1" : "Do not start the inspector on SIGUSR1"
+  | "--disable-wasm-trap-handler" : "Use inline bound checks for WebAssembly"
+  | "--force-context-aware" : "Refuse addons that are not context aware"
+  | "--force-node-api-uncaught-exceptions-policy" : "Emit uncaughtException for Node-API callbacks"
+  | "--interpreted-frames-native-stack" : "Show interpreted frames to native profilers"
+  | "--insecure-http-parser" : "Accept invalid HTTP headers"
+  | "--dns-result-order" : "Default order of dns.lookup results" , dns_order | "--dns-result-order=" : "Default order of dns.lookup results" ~ dns_order
+  | "--enable-network-family-autoselection" : "Enable network family autoselection"
+  | "--no-network-family-autoselection" : "Disable network family autoselection"
+  | "--network-family-autoselection-attempt-timeout" : "Attempt timeout of family autoselection" , @number
+  | "--network-family-autoselection-attempt-timeout=" : "Attempt timeout of family autoselection" ~ @number
+  | "--use-env-proxy" : "Use the HTTP_PROXY and HTTPS_PROXY variables"
+  | "--use-system-ca" : "Use the system CA store"
+  | "--use-openssl-ca" : "Use the OpenSSL CA store"
+  | "--use-bundled-ca" : "Use the bundled CA store"
+  | "--tls-cipher-list" : "Default TLS cipher list" , @any | "--tls-cipher-list=" : "Default TLS cipher list" ~ @any
+  | "--tls-keylog" : "Log TLS keys to this file" , @file | "--tls-keylog=" : "Log TLS keys to this file" ~ @file
+  | "--tls-max-v1.2" : "Default TLS maximum TLSv1.2" | "--tls-max-v1.3" : "Default TLS maximum TLSv1.3"
+  | "--tls-min-v1.0" : "Default TLS minimum TLSv1.0" | "--tls-min-v1.1" : "Default TLS minimum TLSv1.1"
+  | "--tls-min-v1.2" : "Default TLS minimum TLSv1.2" | "--tls-min-v1.3" : "Default TLS minimum TLSv1.3"
+  | "--enable-fips" : "Enable FIPS crypto at startup"
+  | "--force-fips" : "Force FIPS crypto"
+  | "--openssl-config" : "Load this OpenSSL configuration" , @file | "--openssl-config=" : "Load this OpenSSL configuration" ~ @file
+  | "--openssl-legacy-provider" : "Enable the OpenSSL 3 legacy provider"
+  | "--openssl-shared-config" : "Enable the OpenSSL shared configuration"
+  | "--secure-heap" : "Size of the OpenSSL secure heap" , @number | "--secure-heap=" : "Size of the OpenSSL secure heap" ~ @number
+  | "--secure-heap-min" : "Minimum allocation of the OpenSSL secure heap" , @number | "--secure-heap-min=" : "Minimum allocation of the OpenSSL secure heap" ~ @number
+  | "--icu-data-dir" : "ICU data directory" , @directory | "--icu-data-dir=" : "ICU data directory" ~ @directory
+  | "--redirect-warnings" : "Write warnings to this file" , @file | "--redirect-warnings=" : "Write warnings to this file" ~ @file
+  | "--report-on-signal" : "Write a diagnostic report on a signal"
+  | "--report-signal" : "Signal that writes a diagnostic report" , @any | "--report-signal=" : "Signal that writes a diagnostic report" ~ @any
+  | "--report-on-fatalerror" : "Write a diagnostic report on fatal errors"
+  | "--report-uncaught-exception" : "Write a diagnostic report on uncaught exceptions"
+  | "--report-compact" : "Write single-line JSON reports"
+  | "--report-directory" : "Directory of diagnostic reports" , @directory | "--report-directory=" : "Directory of diagnostic reports" ~ @directory
+  | "--report-dir" : "Directory of diagnostic reports" , @directory | "--report-dir=" : "Directory of diagnostic reports" ~ @directory
+  | "--report-filename" : "File name of diagnostic reports" , @any | "--report-filename=" : "File name of diagnostic reports" ~ @any
+  | "--report-exclude-env" : "Leave environment variables out of reports"
+  | "--report-exclude-network" : "Leave network interfaces out of reports"
+  | "--track-heap-objects" : "Track heap allocations for snapshots"
+  | "--zero-fill-buffers" : "Zero-fill new Buffer instances"
+  | "--use-largepages" : "Map the static code to large pages" , largepages | "--use-largepages=" : "Map the static code to large pages" ~ largepages
+  | "--v8-pool-size" : "Size of the V8 thread pool" , @number | "--v8-pool-size=" : "Size of the V8 thread pool" ~ @number
+  | "--node-memory-debug" : "Extra memory leak checks in Node.js itself"
+  | "--completion-bash" : "Print a bash completion script"
+  | "--v8-options" : "Print the V8 options"
+  | "-h" : "Print the node options" | "--help" : "Print the node options"
+  | "-v" : "Print the Node.js version" | "--version" : "Print the Node.js version" ;
+
+input_type = "commonjs" | "module" | "commonjs-typescript" | "module-typescript" ;
+test_reporter = "spec" | "tap" | "dot" | "junit" | "lcov" | @any ;
+rejections = "strict" | "warn" | "throw" | "warn-with-error-code" | "none" ;
+dns_order = "verbatim" | "ipv4first" | "ipv6first" ;
+largepages = "off" | "on" | "silent" ;

@@ -1,0 +1,231 @@
+(* pip: checked against `pip --help` and `pip <command> --help` of pip 26.1.2.
+
+   Conventions:
+   - Options with a value accept `--name value` and `--name=value`; short ones
+     accept `-r file` and `-rfile`.
+   - The general options in `general` are accepted before and after the
+     command. Unique-prefix abbreviations of long options are not modelled. *)
+
+pip = { general } , [ command ] ;
+
+command =
+    "install" : "Install packages" , { install_option | general | @any }
+  | "uninstall" : "Uninstall packages" , { uninstall_option | general | @any }
+  | "download" : "Download packages" , { download_option | general | @any }
+  | "wheel" : "Build wheels from your requirements" , { wheel_option | general | @any }
+  | "lock" : "Generate a lock file" , { lock_option | general | @any }
+  | "freeze" : "Output installed packages in requirements format" , { freeze_option | general }
+  | "list" : "List installed packages" , { list_option | general }
+  | "show" : "Show information about installed packages" , { "-f" : "List the installed files" | "--files" : "List the installed files" | general | @any }
+  | "check" : "Verify installed packages have compatible dependencies" , { general }
+  | "inspect" : "Inspect the Python environment" , { inspect_option | general }
+  | "config" : "Manage the configuration" , { config_option | general } , [ config_command ]
+  | "search" : "Search PyPI for packages" , { "-i" : "Base URL of the package index" , @any | "--index" : "Base URL of the package index" , @any | "--index=" : "Base URL of the package index" ~ @any | general | @any }
+  | "cache" : "Inspect and manage the wheel cache" , { cache_format | general } , [ cache_command ]
+  | "index" : "Inspect the package indexes" , { index_option | general } , [ "versions" : "List the available versions of a package" , { index_option | general | @any } ]
+  | "hash" : "Compute hashes of package archives" , { "-a" : "Hash algorithm" , hash_algorithm | "--algorithm" : "Hash algorithm" , hash_algorithm | "--algorithm=" : "Hash algorithm" ~ hash_algorithm | general | @file }
+  | "completion" : "Print the shell completion script" , { completion_shell | general }
+  | "debug" : "Show information useful for debugging" , { target_platform | general }
+  | "help" : "Show help for a command" , { general } , [ command_name ] ;
+
+command_name =
+    "install" | "uninstall" | "download" | "wheel" | "lock" | "freeze" | "list" | "show" | "check"
+  | "inspect" | "config" | "search" | "cache" | "index" | "hash" | "completion" | "debug" | "help" ;
+
+general =
+    "-h" : "Show help" | "--help" : "Show help"
+  | "--debug" : "Let unhandled exceptions propagate"
+  | "--isolated" : "Ignore environment variables and user configuration"
+  | "--require-virtualenv" : "Only run inside a virtual environment"
+  | "--python" : "Run pip with this Python interpreter" , @file | "--python=" : "Run pip with this Python interpreter" ~ @file
+  | "-v" : "More output, up to 3 times" | "--verbose" : "More output, up to 3 times"
+  | "-V" : "Show the version and exit" | "--version" : "Show the version and exit"
+  | "-q" : "Less output, up to 3 times" | "--quiet" : "Less output, up to 3 times"
+  | "--log" : "Append a verbose log to this file" , @file | "--log=" : "Append a verbose log to this file" ~ @file
+  | "--no-input" : "Disable prompting for input"
+  | "--keyring-provider" : "Keyring mechanism for credentials" , keyring | "--keyring-provider=" : "Keyring mechanism for credentials" ~ keyring
+  | "--proxy" : "Proxy, scheme://[user:passwd@]proxy.server:port" , @any | "--proxy=" : "Proxy, scheme://[user:passwd@]proxy.server:port" ~ @any
+  | "--retries" : "Maximum attempts to open a connection" , @number | "--retries=" : "Maximum attempts to open a connection" ~ @number
+  | "--timeout" : "Socket timeout in seconds" , @number | "--timeout=" : "Socket timeout in seconds" ~ @number
+  | "--exists-action" : "Action when a path exists" , exists_action | "--exists-action=" : "Action when a path exists" ~ exists_action
+  | "--trusted-host" : "Trust this host even without valid HTTPS" , @any | "--trusted-host=" : "Trust this host even without valid HTTPS" ~ @any
+  | "--cert" : "CA certificate bundle" , @file | "--cert=" : "CA certificate bundle" ~ @file
+  | "--client-cert" : "SSL client certificate with its private key" , @file | "--client-cert=" : "SSL client certificate with its private key" ~ @file
+  | "--cache-dir" : "Directory of the cache" , @directory | "--cache-dir=" : "Directory of the cache" ~ @directory
+  | "--no-cache-dir" : "Disable the cache"
+  | "--disable-pip-version-check" : "Do not check PyPI for a newer pip"
+  | "--no-color" : "Suppress colored output"
+  | "--use-feature" : "Enable a new feature" , @any | "--use-feature=" : "Enable a new feature" ~ @any
+  | "--use-deprecated" : "Enable a deprecated feature" , @any | "--use-deprecated=" : "Enable a deprecated feature" ~ @any
+  | "--resume-retries" : "Attempts to resume an incomplete download" , @number | "--resume-retries=" : "Attempts to resume an incomplete download" ~ @number ;
+
+keyring = "auto" | "disabled" | "import" | "subprocess" ;
+exists_action = "s" : "Switch" | "i" : "Ignore" | "w" : "Wipe" | "b" : "Backup" | "a" : "Abort" ;
+
+(* Option groups several commands share. *)
+
+requirement =
+    "-r" : "Install from a requirements file" , @file | "--requirement" : "Install from a requirements file" , @file
+  | "--requirement=" : "Install from a requirements file" ~ @file ;
+
+constraint =
+    "-c" : "Constrain versions with a constraints file" , @file | "--constraint" : "Constrain versions with a constraints file" , @file
+  | "--constraint=" : "Constrain versions with a constraints file" ~ @file
+  | "--build-constraint" : "Constrain build dependencies with a file" , @file
+  | "--build-constraint=" : "Constrain build dependencies with a file" ~ @file ;
+
+from_script = "--requirements-from-script" : "Install the PEP 723 dependencies of a script" , @file | "--requirements-from-script=" : "Install the PEP 723 dependencies of a script" ~ @file ;
+
+editable = "-e" : "Install a project in editable mode" , @any | "--editable" : "Install a project in editable mode" , @any | "--editable=" : "Install a project in editable mode" ~ @any ;
+
+src = "--src" : "Directory to check out editable projects into" , @directory | "--src=" : "Directory to check out editable projects into" ~ @directory ;
+
+build =
+    "--no-build-isolation" : "Disable build isolation"
+  | "--check-build-dependencies" : "Check the build dependencies"
+  | "--ignore-requires-python" : "Ignore the Requires-Python information"
+  | "--no-deps" : "Do not install package dependencies"
+  | "--require-hashes" : "Require a hash for each requirement"
+  | "--progress-bar" : "Show a progress bar" , progress_bar | "--progress-bar=" : "Show a progress bar" ~ progress_bar
+  | "--group" : "Install a dependency group of pyproject.toml" , @any | "--group=" : "Install a dependency group of pyproject.toml" ~ @any
+  | "--no-clean" : "Do not clean up build directories" ;
+
+progress_bar = "auto" | "on" | "off" | "raw" ;
+
+config_settings = "-C" : "Settings for the build backend, KEY=VALUE" , @any | "--config-settings" : "Settings for the build backend, KEY=VALUE" , @any | "--config-settings=" : "Settings for the build backend, KEY=VALUE" ~ @any ;
+
+target_platform =
+    "--platform" : "Only use wheels for this platform" , @any | "--platform=" : "Only use wheels for this platform" ~ @any
+  | "--python-version" : "Python version to check compatibility against" , @any | "--python-version=" : "Python version to check compatibility against" ~ @any
+  | "--implementation" : "Only use wheels for this implementation" , @any | "--implementation=" : "Only use wheels for this implementation" ~ @any
+  | "--abi" : "Only use wheels for this ABI" , @any | "--abi=" : "Only use wheels for this ABI" ~ @any ;
+
+package_index =
+    "--pre" : "Include pre-release and development versions"
+  | "--all-releases" : "Allow all release types for a package" , @any | "--all-releases=" : "Allow all release types for a package" ~ @any
+  | "--only-final" : "Only allow final releases for a package" , @any | "--only-final=" : "Only allow final releases for a package" ~ @any
+  | "--no-binary" : "Do not use binary packages" , @any | "--no-binary=" : "Do not use binary packages" ~ @any
+  | "--only-binary" : "Do not use source packages" , @any | "--only-binary=" : "Do not use source packages" ~ @any
+  | "--prefer-binary" : "Prefer binary packages over newer sources"
+  | "-i" : "Base URL of the package index" , @any | "--index-url" : "Base URL of the package index" , @any
+  | "--index-url=" : "Base URL of the package index" ~ @any
+  | "--extra-index-url" : "Extra package index URL" , @any | "--extra-index-url=" : "Extra package index URL" ~ @any
+  | "--no-index" : "Ignore the package index"
+  | "-f" : "Look for archives at this URL or path" , @any | "--find-links" : "Look for archives at this URL or path" , @any
+  | "--find-links=" : "Look for archives at this URL or path" ~ @any
+  | "--uploaded-prior-to" : "Only packages uploaded before this date or age" , @any
+  | "--uploaded-prior-to=" : "Only packages uploaded before this date or age" ~ @any ;
+
+root_user_action = "--root-user-action" : "Action when run as root" , ( "warn" | "ignore" ) | "--root-user-action=" : "Action when run as root" ~ ( "warn" | "ignore" ) ;
+break_system = "--break-system-packages" : "Allow modifying an externally managed Python" ;
+
+(* Per-command options. *)
+
+install_option =
+    requirement | constraint | from_script | editable | src | build | config_settings | target_platform | package_index
+  | root_user_action | break_system
+  | "--dry-run" : "Only print what would be installed"
+  | "-t" : "Install packages into this directory" , @directory | "--target" : "Install packages into this directory" , @directory
+  | "--target=" : "Install packages into this directory" ~ @directory
+  | "--user" : "Install to the user site directory"
+  | "--root" : "Install relative to this root directory" , @directory | "--root=" : "Install relative to this root directory" ~ @directory
+  | "--prefix" : "Installation prefix" , @directory | "--prefix=" : "Installation prefix" ~ @directory
+  | "-U" : "Upgrade the packages to the newest version" | "--upgrade" : "Upgrade the packages to the newest version"
+  | "--upgrade-strategy" : "How to upgrade dependencies" , upgrade_strategy | "--upgrade-strategy=" : "How to upgrade dependencies" ~ upgrade_strategy
+  | "--force-reinstall" : "Reinstall packages even if up to date"
+  | "-I" : "Ignore and overwrite installed packages" | "--ignore-installed" : "Ignore and overwrite installed packages"
+  | "--compile" : "Compile sources to bytecode" | "--no-compile" : "Do not compile sources to bytecode"
+  | "--no-warn-script-location" : "Do not warn about scripts outside PATH"
+  | "--no-warn-conflicts" : "Do not warn about broken dependencies"
+  | "--report" : "Write a JSON report of the installation" , @file | "--report=" : "Write a JSON report of the installation" ~ @file ;
+
+upgrade_strategy = "only-if-needed" | "eager" ;
+
+uninstall_option =
+    "-r" : "Uninstall the packages of a requirements file" , @file | "--requirement" : "Uninstall the packages of a requirements file" , @file
+  | "--requirement=" : "Uninstall the packages of a requirements file" ~ @file
+  | "-y" : "Do not ask for confirmation" | "--yes" : "Do not ask for confirmation"
+  | root_user_action | break_system ;
+
+download_option =
+    requirement | constraint | from_script | src | build | target_platform | package_index
+  | "-d" : "Download packages into this directory" , @directory | "--dest" : "Download packages into this directory" , @directory
+  | "--dest=" : "Download packages into this directory" ~ @directory ;
+
+wheel_option =
+    requirement | constraint | from_script | editable | src | build | config_settings | package_index
+  | "-w" : "Build wheels into this directory" , @directory | "--wheel-dir" : "Build wheels into this directory" , @directory
+  | "--wheel-dir=" : "Build wheels into this directory" ~ @directory
+  | "--no-verify" : "Do not verify the built wheels" ;
+
+lock_option =
+    requirement | constraint | from_script | editable | src | build | config_settings | package_index
+  | "-o" : "Lock file name, or - for stdout" , @file | "--output" : "Lock file name, or - for stdout" , @file
+  | "--output=" : "Lock file name, or - for stdout" ~ @file ;
+
+env_scope =
+    "-l" : "Leave out globally installed packages" | "--local" : "Leave out globally installed packages"
+  | "--user" : "Only packages in the user site"
+  | "--path" : "Only packages in this path" , @directory | "--path=" : "Only packages in this path" ~ @directory ;
+
+freeze_option =
+    env_scope
+  | "-r" : "Follow the order of a requirements file" , @file | "--requirement" : "Follow the order of a requirements file" , @file
+  | "--requirement=" : "Follow the order of a requirements file" ~ @file
+  | "--all" : "Also list pip, setuptools and wheel"
+  | "--exclude-editable" : "Leave out editable packages"
+  | "--exclude" : "Leave out this package" , @any | "--exclude=" : "Leave out this package" ~ @any ;
+
+list_option =
+    env_scope | package_index
+  | "-o" : "List outdated packages" | "--outdated" : "List outdated packages"
+  | "-u" : "List up-to-date packages" | "--uptodate" : "List up-to-date packages"
+  | "-e" : "List editable projects" | "--editable" : "List editable projects"
+  | "--format" : "Output format" , list_format | "--format=" : "Output format" ~ list_format
+  | "--not-required" : "List packages no other package depends on"
+  | "--exclude-editable" : "Leave out editable packages"
+  | "--include-editable" : "Include editable packages"
+  | "--exclude" : "Leave out this package" , @any | "--exclude=" : "Leave out this package" ~ @any ;
+
+list_format = "columns" | "freeze" | "json" ;
+
+inspect_option =
+    "--local" : "Leave out globally installed packages"
+  | "--user" : "Only packages in the user site"
+  | "--path" : "Only packages in this path" , @directory | "--path=" : "Only packages in this path" ~ @directory ;
+
+config_option =
+    "--editor" : "Editor to edit the file with" , @command | "--editor=" : "Editor to edit the file with" ~ @command
+  | "--global" : "Use the system-wide configuration file"
+  | "--user" : "Use the user configuration file"
+  | "--site" : "Use the environment configuration file" ;
+
+config_command =
+    "list" : "List the active configuration" , { config_option | general }
+  | "edit" : "Edit the configuration file" , { config_option | general }
+  | "get" : "Print a configuration value" , { config_option | general | @any }
+  | "set" : "Set a configuration value" , { config_option | general | @any }
+  | "unset" : "Remove a configuration value" , { config_option | general | @any }
+  | "debug" : "List the configuration files and values" , { config_option | general } ;
+
+cache_format = "--format" : "Output format of cache list" , ( "human" | "abspath" ) | "--format=" : "Output format of cache list" ~ ( "human" | "abspath" ) ;
+
+cache_command =
+    "dir" : "Show the cache directory" , { general }
+  | "info" : "Show information about the cache" , { general }
+  | "list" : "List the cached wheels" , { cache_format | general | @any }
+  | "remove" : "Remove cached wheels matching a pattern" , { general | @any }
+  | "purge" : "Remove all items from the cache" , { general } ;
+
+index_option =
+    target_platform | package_index
+  | "--ignore-requires-python" : "Ignore the Requires-Python information"
+  | "--json" : "Output JSON" ;
+
+hash_algorithm = "sha256" | "sha384" | "sha512" ;
+
+completion_shell =
+    "-b" : "Completion code for bash" | "--bash" : "Completion code for bash"
+  | "-z" : "Completion code for zsh" | "--zsh" : "Completion code for zsh"
+  | "-f" : "Completion code for fish" | "--fish" : "Completion code for fish"
+  | "-p" : "Completion code for PowerShell" | "--powershell" : "Completion code for PowerShell" ;

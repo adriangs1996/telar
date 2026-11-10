@@ -1,0 +1,106 @@
+(* grep: the union of GNU grep 3.12 (`grep --help` on Arch Linux) and BSD grep
+   2.6.0-FreeBSD (`man grep` on macOS 26). Where a short option differs between
+   them, its description names both meanings. The first operand is the pattern
+   unless -e or -f gives one; the rest are files. After `--` the pattern may start
+   with a dash. *)
+
+grep = { option | @file } , [ "--" , { @any } ] ;
+
+option =
+    (* Pattern selection and interpretation *)
+    "-E" : "Patterns are extended regular expressions" | "--extended-regexp" : "Patterns are extended regular expressions"
+  | "-F" : "Patterns are fixed strings" | "--fixed-strings" : "Patterns are fixed strings"
+  | "-G" : "Patterns are basic regular expressions" | "--basic-regexp" : "Patterns are basic regular expressions"
+  | "-P" : "GNU: patterns are Perl regular expressions" | "--perl-regexp" : "Patterns are Perl regular expressions"
+  | "-e" : "Use this pattern for matching" , @any
+  | "--regexp" : "Use this pattern for matching" , @any | "--regexp=" : "Use this pattern for matching" ~ @any
+  | "-f" : "Read patterns from this file" , @file
+  | "--file" : "Read patterns from this file" , @file | "--file=" : "Read patterns from this file" ~ @file
+  | "-i" : "Ignore case distinctions" | "--ignore-case" : "Ignore case distinctions"
+  | "-y" : "Same as -i (obsolete)"
+  | "--no-ignore-case" : "Do not ignore case distinctions"
+  | "-w" : "Match only whole words" | "--word-regexp" : "Match only whole words"
+  | "-x" : "Match only whole lines" | "--line-regexp" : "Match only whole lines"
+  | "-z" : "Input lines end in a NUL byte" | "--null-data" : "Input lines end in a NUL byte"
+    (* Miscellaneous *)
+  | "-s" : "Suppress error messages" | "--no-messages" : "Suppress error messages"
+  | "-v" : "Select non-matching lines" | "--invert-match" : "Select non-matching lines"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "--help" : "Print the help and exit"
+    (* Output control *)
+  | "-m" : "Stop after this many selected lines" , @number
+  | "--max-count" : "Stop after this many selected lines" , @number
+  | "--max-count=" : "Stop after this many selected lines" ~ @number
+  | "-b" : "Print the byte offset of each output line" | "--byte-offset" : "Print the byte offset of each output line"
+  | "-n" : "Print line numbers" | "--line-number" : "Print line numbers"
+  | "--line-buffered" : "Flush the output on every line"
+  | "-H" : "Print the file name of each match" | "--with-filename" : "Print the file name of each match"
+  | "-h" : "Do not print file names" | "--no-filename" : "Do not print file names"
+  | "--label" : "File name to show for standard input" , @any
+  | "--label=" : "File name to show for standard input" ~ @any
+  | "-o" : "Print only the matching parts of lines" | "--only-matching" : "Print only the matching parts of lines"
+  | "-q" : "Suppress all normal output" | "--quiet" : "Suppress all normal output" | "--silent" : "Suppress all normal output"
+  | "--binary-files" : "How to treat binary files" , binary_type
+  | "--binary-files=" : "How to treat binary files" ~ binary_type
+  | "-a" : "Treat binary files as text" | "--text" : "Treat binary files as text"
+  | "-I" : "Skip binary files"
+  | "-d" : "How to handle directories" , directory_action
+  | "--directories" : "How to handle directories" , directory_action
+  | "--directories=" : "How to handle directories" ~ directory_action
+  | "-D" : "How to handle devices, FIFOs and sockets" , device_action
+  | "--devices" : "How to handle devices, FIFOs and sockets" , device_action
+  | "--devices=" : "How to handle devices, FIFOs and sockets" ~ device_action
+  | "-r" : "Search directories recursively" | "--recursive" : "Search directories recursively"
+  | "-R" : "Search recursively; GNU follows all symbolic links"
+  | "--dereference-recursive" : "Search recursively, following all symbolic links"
+  | "--include" : "Search only files matching this glob" , @any
+  | "--include=" : "Search only files matching this glob" ~ @any
+  | "--exclude" : "Skip files matching this glob" , @any
+  | "--exclude=" : "Skip files matching this glob" ~ @any
+  | "--exclude-from" : "Skip files matching any glob in this file" , @file
+  | "--exclude-from=" : "Skip files matching any glob in this file" ~ @file
+  | "--exclude-dir" : "Skip directories matching this glob" , @any
+  | "--exclude-dir=" : "Skip directories matching this glob" ~ @any
+  | "--include-dir" : "BSD: with -R, search only directories matching this glob" , @any
+  | "-L" : "Print only the names of files without matches" | "--files-without-match" : "Print only the names of files without matches"
+  | "-l" : "Print only the names of files with matches" | "--files-with-matches" : "Print only the names of files with matches"
+  | "-c" : "Print only a count of selected lines per file" | "--count" : "Print only a count of selected lines per file"
+  | "-T" : "GNU: make tabs line up" | "--initial-tab" : "Make tabs line up"
+  | "-Z" : "GNU: NUL after each file name; BSD: decompress like zgrep"
+  | "--null" : "Print a NUL byte after each file name"
+    (* Context control *)
+  | "-B" : "Print this many lines of leading context" , @number
+  | "--before-context" : "Print this many lines of leading context" , @number
+  | "--before-context=" : "Print this many lines of leading context" ~ @number
+  | "-A" : "Print this many lines of trailing context" , @number
+  | "--after-context" : "Print this many lines of trailing context" , @number
+  | "--after-context=" : "Print this many lines of trailing context" ~ @number
+  | "-C" : "Print this many lines of context" , @number
+  | "--context" : "Print this many lines of context" , @number
+  | "--context=" : "Print this many lines of context" ~ @number
+  | "-" : "GNU: print this many lines of context" ~ @number
+  | "--group-separator" : "Print this between matches with context" , @any
+  | "--group-separator=" : "Print this between matches with context" ~ @any
+  | "--no-group-separator" : "Print no separator between matches with context"
+  | "--color" : "Highlight the matching strings" | "--color=" : "When to highlight the matching strings" ~ when
+  | "--colour" : "Highlight the matching strings" | "--colour=" : "When to highlight the matching strings" ~ when
+  | "-U" : "Treat files as binary" | "--binary" : "Treat files as binary"
+    (* BSD only *)
+  | "-J" : "BSD: decompress bzip2 input" | "--bz2decompress" : "BSD: decompress bzip2 input"
+  | "-M" : "BSD: decompress LZMA input" | "--lzma" : "BSD: decompress LZMA input"
+  | "-X" : "BSD: decompress xz input" | "--xz" : "BSD: decompress xz input"
+  | "--decompress" : "BSD: behave as zgrep"
+  | "--mmap" : "BSD: read input with mmap(2)"
+  | "-O" : "BSD: with -R, follow only command line symbolic links"
+  | "-p" : "BSD: with -R, follow no symbolic links"
+  | "-S" : "BSD: with -R, follow all symbolic links"
+  | "-u" : "BSD: no effect, for compatibility" ;
+
+when = "always" | "never" | "auto" ;
+binary_type =
+    "binary" : "Report matches in binary files" | "text" : "Treat binary files as text"
+  | "without-match" : "Skip binary files" ;
+directory_action =
+    "read" : "Read directories as files" | "recurse" : "Search directories recursively"
+  | "skip" : "Skip directories" ;
+device_action = "read" : "Read devices as files" | "skip" : "Skip devices" ;

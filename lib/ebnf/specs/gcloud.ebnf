@@ -1,0 +1,1669 @@
+(* gcloud: checked against `gcloud help` and `gcloud <group> <command> --help` of Google
+   Cloud SDK 566.0.0 (core 2026.04.24).
+
+   Every top-level group and command is listed. Fully modelled: auth, config, projects,
+   compute instances (and compute ssh, scp, config-ssh, start-iap-tunnel), container
+   clusters, run, functions, storage, sql, logging, iam and secrets, with the common flags
+   of their main commands. Other groups and commands take any words.
+
+   Conventions:
+   - gcloud-wide flags are accepted before the group and anywhere after it.
+   - Flags with a value accept `--flag value` and `--flag=value`. Only the `--flag=`
+     form, the one gcloud documents, carries the description: the lexer reads at most
+     10000 tokens, and describing both forms would not fit.
+   - Resource names (instances, clusters, services, buckets) have no provider, so they
+     are @any, which also accepts option-like words: an unknown flag is only rejected
+     by commands that take no positional arguments, such as the list commands. *)
+
+gcloud = { g } , [ command ] ;
+
+(* gcloud-wide flags *)
+g =
+    "--account" , @any
+  | "--account=" : "Google Cloud user account to use" ~ @any
+  | "--billing-project" , @any
+  | "--billing-project=" : "Project charged quota for this command" ~ @any
+  | "--configuration" , @any
+  | "--configuration=" : "Named configuration to use" ~ @any
+  | "--flags-file" , @file
+  | "--flags-file=" : "YAML or JSON file of flags" ~ @file
+  | "--flatten" , @any
+  | "--flatten=" : "Flatten these resource slices into separate records" ~ @any
+  | "--format" , format_name
+  | "--format=" : "Output format" ~ format_name
+  | "--help" : "Display detailed help"
+  | "-h" : "Print a summary help"
+  | "--project" , @any
+  | "--project=" : "Google Cloud project to use" ~ @any
+  | "--quiet" : "Disable all interactive prompts" | "-q" : "Disable all interactive prompts"
+  | "--verbosity" , verbosity
+  | "--verbosity=" : "Logging verbosity" ~ verbosity
+  | "--version" : "Print version information" | "-v" : "Print version information"
+  | "--access-token-file" , @file
+  | "--access-token-file=" : "File with an access token to use" ~ @file
+  | "--impersonate-service-account" , @any
+  | "--impersonate-service-account=" : "Impersonate these service accounts" ~ @any
+  | "--log-http" : "Log all HTTP requests and responses" | "--no-log-http" : "Do not log HTTP traffic"
+  | "--trace-token" , @any
+  | "--trace-token=" : "Token for tracing the server requests" ~ @any
+  | "--user-output-enabled" : "Print output and prompts" | "--no-user-output-enabled" : "Suppress output and prompts" ;
+
+verbosity = "debug" | "info" | "warning" | "error" | "critical" | "none" ;
+
+format_name =
+    "json" : "JSON" | "yaml" : "YAML" | "table" : "Table, with table(KEYS) projections"
+  | "value" : "Values only, with value(KEYS) projections" | "csv" : "CSV, with csv(KEYS) projections"
+  | "text" : "Flattened key: value pairs" | "list" : "List of resources" | "flattened" : "Flattened key: value pairs"
+  | "config" : "Properties file format" | "default" : "The command's default format" | "diff" : "Diff of two resources"
+  | "disable" : "Disable output" | "get" : "A single value" | "multi" : "Per-key formats" | "none" : "No output"
+  | "object" : "Python object" | @any ;
+
+(* Words of a command not modelled further. *)
+rest = { @any } ;
+
+(* A gcloud-wide flag or a positional argument, optionally after a location flag. *)
+ga = g | @any ;
+zga = zone | ga ;
+rga = region | ga ;
+lga = location | ga ;
+
+(* Shared flags *)
+filter = "--filter" , @any
+       | "--filter=" : "Filter expression for the listed resources" ~ @any ;
+limit = "--limit" , @number
+      | "--limit=" : "Maximum number of resources to list" ~ @number ;
+page_size = "--page-size" , @number
+          | "--page-size=" : "Resources fetched per page" ~ @number ;
+sort_by = "--sort-by" , @any
+        | "--sort-by=" : "Comma separated fields to sort by" ~ @any ;
+uri = "--uri" : "Print resource URIs instead of the default output" ;
+(* The list flags of a command come in three sets. *)
+list_flag = filter | limit | page_size | sort_by | uri ;
+query_flag = filter | limit | page_size | sort_by ;
+short_query = filter | limit | sort_by ;
+
+async = "--async" : "Return without waiting for the operation" | "--no-async" : "Wait for the operation to finish" ;
+zone = "--zone" , @any | "--zone=" : "Zone of the resource" ~ @any ;
+region = "--region" , @any | "--region=" : "Region of the resource" ~ @any ;
+location = "--location" , @any | "--location=" : "Location of the resource" ~ @any ;
+description = "--description" , @any | "--description=" : "Description of the resource" ~ @any ;
+
+labels =
+    "--labels" , @any | "--labels=" : "KEY=VALUE labels to set" ~ @any ;
+
+update_labels =
+    "--update-labels" , @any
+  | "--update-labels=" : "KEY=VALUE labels to add or update" ~ @any
+  | "--remove-labels" , @any | "--remove-labels=" : "Label keys to remove" ~ @any
+  | "--clear-labels" : "Remove all labels" ;
+member = "--member" , @any
+       | "--member=" : "Principal of the binding, as user:EMAIL" ~ @any ;
+role = "--role" , @any | "--role=" : "Role of the binding" ~ @any ;
+
+binding =
+    member | role
+  | "--condition" , @any
+  | "--condition=" : "Condition of the binding, as KEY=VALUE" ~ @any
+  | "--condition-from-file" , @file
+  | "--condition-from-file=" : "File with the binding condition" ~ @file ;
+
+env_vars =
+    "--set-env-vars" , @any
+  | "--set-env-vars=" : "Replace all environment variables, KEY=VALUE" ~ @any
+  | "--update-env-vars" , @any
+  | "--update-env-vars=" : "Add or update environment variables" ~ @any
+  | "--remove-env-vars" , @any
+  | "--remove-env-vars=" : "Environment variables to remove" ~ @any
+  | "--clear-env-vars" : "Remove all environment variables"
+  | "--env-vars-file" , @file
+  | "--env-vars-file=" : "YAML file of environment variables" ~ @file
+  | "--set-secrets" , @any
+  | "--set-secrets=" : "Replace all secrets, KEY=SECRET:VERSION" ~ @any
+  | "--update-secrets" , @any
+  | "--update-secrets=" : "Add or update secrets" ~ @any
+  | "--remove-secrets" , @any | "--remove-secrets=" : "Secrets to remove" ~ @any
+  | "--clear-secrets" : "Remove all secrets" ;
+
+service_account =
+    "--service-account" , @any
+  | "--service-account=" : "Service account to run as" ~ @any ;
+
+resources =
+    "--memory" , @any | "--memory=" : "Memory limit, such as 512Mi or 2Gi" ~ @any
+  | "--cpu" , @any | "--cpu=" : "CPU limit" ~ @any
+  | "--vpc-connector" , @any
+  | "--vpc-connector=" : "Serverless VPC Access connector" ~ @any ;
+
+scaling =
+    "--timeout" , @any | "--timeout=" : "Request timeout" ~ @any
+  | "--concurrency" , @any
+  | "--concurrency=" : "Maximum concurrent requests per instance" ~ @any
+  | "--min-instances" , @any
+  | "--min-instances=" : "Minimum number of instances" ~ @any
+  | "--max-instances" , @any
+  | "--max-instances=" : "Maximum number of instances" ~ @any ;
+
+unauthenticated =
+    "--allow-unauthenticated" : "Allow unauthenticated invocations"
+  | "--no-allow-unauthenticated" : "Require authenticated invocations" ;
+
+command =
+    "auth" : "Manage oauth2 credentials for the Google Cloud CLI" , { g } , [ auth_command ]
+  | "config" : "View and edit Google Cloud CLI properties" , { g } , [ config_command ]
+  | "projects" : "Create and manage project access policies" , { g } , [ projects_command ]
+  | "compute" : "Create and manipulate Compute Engine resources" , { g } , [ compute_command ]
+  | "container" : "Deploy and manage clusters of machines for containers" , { g } , [ container_command ]
+  | "run" : "Manage your Cloud Run applications" , { g } , [ run_command ]
+  | "functions" : "Manage Google Cloud Functions" , { g } , [ functions_command ]
+  | "storage" : "Create and manage Cloud Storage buckets and objects" , { g } , [ storage_command ]
+  | "sql" : "Create and manage Google Cloud SQL databases" , { g } , [ sql_command ]
+  | "logging" : "Manage Cloud Logging" , { g } , [ logging_command ]
+  | "iam" : "Manage IAM service accounts and keys" , { g } , [ iam_command ]
+  | "secrets" : "Manage secrets on Google Cloud" , { g } , [ secrets_command ]
+  | "components" : "List, install, update, or remove CLI components" , { g } , [ components_command ]
+  | "init" : "Initialize or reinitialize gcloud" , { init_flag | g }
+  | "info" : "Display information about the gcloud environment" , { info_flag | g }
+  | "version" : "Print version information for CLI components" , { g }
+  | "help" : "Search gcloud help text" , { query_flag | ga } , [ "--" , { @any } ]
+  | "cheat-sheet" : "Display gcloud cheat sheet" , { g }
+  | ( "feedback" : "Provide feedback to the Google Cloud CLI team"
+      | "survey" : "Invoke a customer satisfaction survey"
+      | "docker" : "Deprecated: Docker access to Container Registry"
+      | "topic" : "Supplementary help topics"
+      | "access-approval" : "Manage Access Approval requests and settings"
+      | "access-context-manager" : "Manage Access Context Manager resources"
+      | "active-directory" : "Manage Managed Microsoft AD resources"
+      | "ai" : "Manage entities in Vertex AI"
+      | "ai-platform" : "Manage AI Platform jobs and models"
+      | "alloydb" : "Create and manage AlloyDB databases"
+      | "anthos" : "Anthos command group"
+      | "api-gateway" : "Manage Cloud API Gateway resources"
+      | "apigee" : "Manage Apigee resources"
+      | "apihub" : "Manage Apihub resources"
+      | "app" : "Manage your App Engine deployments"
+      | "apphub" : "Manage App Hub resources"
+      | "artifacts" : "Manage Artifact Registry resources"
+      | "asset" : "Manage the Cloud Asset Inventory"
+      | "assured" : "Read and manipulate Assured Workloads data controls"
+      | "audit-manager" : "Enroll resources, audit workloads, generate reports"
+      | "backup-dr" : "Manage Backup and DR resources"
+      | "batch" : "Manage Batch resources"
+      | "beyondcorp" : "Manage Beyondcorp resources"
+      | "biglake" : "Create and manage BigLake resources"
+      | "bigtable" : "Manage your Cloud Bigtable storage"
+      | "billing" : "Manage billing accounts and associate them with projects"
+      | "bms" : "Manage Bare Metal Solution resources"
+      | "bq" : "Manage Bq resources"
+      | "builds" : "Create and manage builds for Google Cloud Build"
+      | "certificate-manager" : "Manage SSL certificates for your projects"
+      | "cloud-shell" : "Manage Google Cloud Shell"
+      | "cloudlocationfinder" : "Manage Cloudlocationfinder resources"
+      | "colab" : "Manage Colab Enterprise resources"
+      | "compliance-manager" : "Manage Compliance Manager resources"
+      | "composer" : "Create and manage Cloud Composer Environments"
+      | "data-catalog" : "Manage Data Catalog resources"
+      | "database-migration" : "Manage Database Migration Service resources"
+      | "dataflow" : "Manage Google Cloud Dataflow resources"
+      | "dataplex" : "Manage Dataplex resources"
+      | "dataproc" : "Create and manage Dataproc clusters and jobs"
+      | "datastore" : "Manage your Cloud Datastore resources"
+      | "datastream" : "Manage Cloud Datastream resources"
+      | "deploy" : "Create and manage Cloud Deploy resources"
+      | "deployment-manager" : "Manage deployments of cloud resources"
+      | "design-center" : "Manage Application Design Center resources"
+      | "developer-connect" : "Manage Developer Connect resources"
+      | "dns" : "Manage your Cloud DNS managed-zones and record-sets"
+      | "domains" : "Manage domains for your Google Cloud projects"
+      | "edge-cache" : "Manage Media CDN resources"
+      | "edge-cloud" : "Manage edge-cloud resources"
+      | "emulators" : "Set up local development emulators"
+      | "endpoints" : "Create, enable and manage API services"
+      | "essential-contacts" : "Manage Essential Contacts"
+      | "eventarc" : "Manage Eventarc resources"
+      | "filestore" : "Create and manipulate Filestore resources"
+      | "firebase" : "Work with Google Firebase"
+      | "firestore" : "Manage your Cloud Firestore resources"
+      | "gemini" : "Manage Gemini Code Assist and Gemini Cloud Assist"
+      | "healthcare" : "Manage Cloud Healthcare resources"
+      | "iap" : "Manage IAP policies"
+      | "identity" : "Manage Cloud Identity Groups and Memberships"
+      | "ids" : "Manage Cloud IDS"
+      | "infra-manager" : "Manage Infra Manager resources"
+      | "kms" : "Manage cryptographic keys in the cloud"
+      | "looker" : "Manage Looker resources"
+      | "lustre" : "Manage Lustre resources"
+      | "managed-kafka" : "Administer Managed Service for Apache Kafka"
+      | "memcache" : "Manage Cloud Memorystore Memcached resources"
+      | "memorystore" : "Manage Memorystore resources"
+      | "metastore" : "Manage Dataproc Metastore resources"
+      | "migration" : "Cloud Migration commands"
+      | "ml" : "Use Google Cloud machine learning capabilities"
+      | "model-armor" : "Manage Model Armor LLM security and safety"
+      | "monitoring" : "Manage Cloud Monitoring dashboards"
+      | "netapp" : "Create and manipulate Cloud NetApp Files resources"
+      | "network-connectivity" : "Manage Network Connectivity resources"
+      | "network-management" : "Manage Network Management resources"
+      | "network-security" : "Manage Network Security resources"
+      | "network-services" : "Manage Network Services resources"
+      | "notebooks" : "Notebooks command group"
+      | "observability" : "Manage Observability resources"
+      | "oracle-database" : "Manage Oracle Database resources"
+      | "org-policies" : "Create and manage Organization Policies"
+      | "organizations" : "Create and manage Organizations"
+      | "pam" : "Manage Privileged Access Manager entitlements"
+      | "parametermanager" : "Store, access and manage parameters"
+      | "policy-intelligence" : "Understand, use, and manage policies"
+      | "policy-troubleshoot" : "Troubleshoot Google Cloud Platform policies"
+      | "privateca" : "Manage private Certificate Authorities"
+      | "publicca" : "Manage Google Trust Services CA accounts"
+      | "pubsub" : "Manage Cloud Pub/Sub topics, subscriptions, and snapshots"
+      | "recaptcha" : "Manage reCAPTCHA Enterprise Keys"
+      | "recommender" : "Manage Cloud recommendations and recommendation rules"
+      | "redis" : "Manage Cloud Memorystore Redis resources"
+      | "resource-manager" : "Manage Cloud Resources"
+      | "scc" : "Manage Cloud SCC resources"
+      | "scheduler" : "Manage Cloud Scheduler jobs and schedules"
+      | "service-directory" : "Command groups for Service Directory"
+      | "service-extensions" : "Manage Service Extensions resources"
+      | "services" : "List, enable and disable APIs and services"
+      | "source" : "Cloud git repository commands"
+      | "source-manager" : "Manage Secure Source Manager resources"
+      | "spanner" : "Command groups for Cloud Spanner"
+      | "tasks" : "Manage Cloud Tasks queues and tasks"
+      | "telco-automation" : "Manage Telco Automation resources"
+      | "transcoder" : "Manage Transcoder jobs and job templates"
+      | "transfer" : "Manage Transfer Service jobs, operations, and agents"
+      | "vector-search" : "Manage Vector Search data objects"
+      | "vmware" : "Manage Google Cloud VMware Engine resources"
+      | "workbench" : "Workbench command group"
+      | "workflows" : "Manage your Cloud Workflows resources"
+      | "workload-identity" : "Manage Workload Identity"
+      | "workspace-add-ons" : "Manage Google Workspace Add-ons resources"
+      | "workstations" : "Manage Cloud Workstations resources" ) , rest ;
+
+init_flag =
+    "--no-browser" : "Authorize without a browser on this machine"
+  | "--console-only" : "Print the authorization URL instead of a browser"
+  | "--no-launch-browser" : "Print the authorization URL instead of a browser"
+  | "--skip-diagnostics" : "Do not run diagnostics" ;
+
+info_flag =
+    "--anonymize" : "Minimize personal information in the output"
+  | "--show-log" : "Print the contents of the last log file"
+  | "--run-diagnostics" : "Run diagnostics on the installation"
+  | "--check-certs" , @any
+  | "--check-certs=" : "Check certificates for this host" ~ @any ;
+
+components_command =
+    "install" : "Install one or more components" , { ga }
+  | "list" : "List the status of all components" , { components_list_flag | short_query | g }
+  | "update" : "Update all installed components" , { components_update_flag | g }
+  | "remove" : "Remove one or more installed components" , { ga }
+  | "reinstall" : "Reinstall the Google Cloud CLI" , { g }
+  | "repositories" : "Manage additional component repositories" , rest ;
+
+components_list_flag =
+    "--only-local-state" : "Only show locally installed components"
+  | "--show-platform" : "Show the platform of this machine"
+  | "--show-versions" : "Show installed and available versions" ;
+
+components_update_flag =
+    "--version" , @any | "--version=" : "Update to this version" ~ @any ;
+
+(* auth *)
+
+auth_command =
+    "login" : "Authorize gcloud with Google user credentials" , { auth_login_flag | ga }
+  | "activate-service-account" : "Authorize with a service account" , { auth_sa_flag | ga }
+  | "list" : "List credentialed accounts" , { auth_list_flag | query_flag | g }
+  | "revoke" : "Revoke access credentials for an account" , { "--all" : "Revoke all credentialed accounts" | ga }
+  | "print-access-token" : "Print an access token for the account" , { lifetime | ga }
+  | "print-identity-token" : "Print an identity token for the account" , { identity_token_flag | ga }
+  | "configure-docker" : "Register gcloud as a Docker credential helper" , { ga }
+  | "application-default" : "Manage your Application Default Credentials" , { g } , [ adc_command ]
+  | "enterprise-certificate-config" : "Manage enterprise certificate configurations" , rest ;
+
+auth_login_flag =
+    "--activate" : "Make the account active" | "--no-activate" : "Do not make the account active"
+  | "--brief" : "Minimal user output"
+  | "--no-browser" : "Authorize without a browser on this machine"
+  | "--no-launch-browser" : "Print the authorization URL instead of a browser"
+  | "--cred-file" , @file
+  | "--cred-file=" : "Credential configuration file" ~ @file
+  | "--enable-gdrive-access" : "Also request Google Drive access"
+  | "--force" : "Re-run the web flow even if credentials exist"
+  | "--login-config" , @file
+  | "--login-config=" : "Workforce identity login configuration file" ~ @file
+  | "--update-adc" : "Also write Application Default Credentials" ;
+
+auth_sa_flag =
+    "--key-file" , @file
+  | "--key-file=" : "Path to the private key file" ~ @file
+  | "--password-file" , @file
+  | "--password-file=" : "File with the password of a .p12 key" ~ @file
+  | "--prompt-for-password" : "Prompt for the password of a .p12 key" ;
+
+auth_list_flag =
+    "--filter-account" , @any
+  | "--filter-account=" : "List only this account" ~ @any ;
+
+lifetime = "--lifetime" , @any | "--lifetime=" : "Lifetime of the token" ~ @any ;
+
+identity_token_flag =
+    "--audiences" , @any
+  | "--audiences=" : "Intended recipient of the token" ~ @any
+  | "--include-email" : "Include the account email in the token"
+  | "--include-license" : "Include license codes in the token"
+  | "--token-format" , ( "standard" | "full" )
+  | "--token-format=" : "Token format" ~ ( "standard" | "full" ) ;
+
+adc_command =
+    "login" : "Acquire new user credentials for ADC" , { adc_login_flag | ga }
+  | "print-access-token" : "Print an access token for your current ADC" , { lifetime | scopes | g }
+  | "revoke" : "Revoke previously generated ADC" , { g }
+  | "set-quota-project" : "Update the quota project in ADC" , { ga } ;
+
+adc_login_flag =
+    "--no-browser" : "Authorize without a browser on this machine"
+  | "--no-launch-browser" : "Print the authorization URL instead of a browser"
+  | "--client-id-file" , @file
+  | "--client-id-file=" : "OAuth client id file" ~ @file
+  | "--disable-quota-project" : "Do not write a quota project"
+  | "--login-config" , @file
+  | "--login-config=" : "Workforce identity login configuration file" ~ @file
+  | scopes ;
+
+scopes = "--scopes" , @any | "--scopes=" : "OAuth scopes, comma separated" ~ @any ;
+
+(* config *)
+
+config_command =
+    "get" : "Print the value of a property" , { g } , [ property ] , { g }
+  | "set" : "Set a property" , { installation | g } , [ property , { installation | g } , [ @any ] ] , { installation | g }
+  | "unset" : "Unset a property" , { installation | g } , [ property ] , { installation | g }
+  | "list" : "List the properties of the active configuration" , { config_list_flag | short_query | g | property }
+  | "configurations" : "Manage the set of named configurations" , { g } , [ configurations_command ] ;
+
+installation = "--installation" : "Set the property for the whole installation" ;
+config_list_flag = "--all" : "List all set and unset properties" ;
+
+property =
+    "project" : "Project ID to operate on" | "account" : "Account gcloud uses"
+  | "core/project" : "Project ID to operate on" | "core/account" : "Account gcloud uses"
+  | "core/disable_prompts" : "Disable interactive prompts" | "core/verbosity" : "Default logging verbosity"
+  | "core/log_http" : "Log HTTP requests and responses" | "core/format" : "Default output format"
+  | "core/disable_usage_reporting" : "Do not send usage statistics" | "core/custom_ca_certs_file" : "CA bundle for TLS"
+  | "core/universe_domain" : "Universe domain of the API endpoints"
+  | "compute/zone" : "Default Compute Engine zone" | "compute/region" : "Default Compute Engine region"
+  | "run/region" : "Default Cloud Run region" | "run/platform" : "Default Cloud Run platform"
+  | "functions/region" : "Default Cloud Functions region" | "container/cluster" : "Default GKE cluster"
+  | "artifacts/location" : "Default Artifact Registry location" | "artifacts/repository" : "Default Artifact Registry repository"
+  | "ai/region" : "Default Vertex AI region" | "billing/quota_project" : "Project charged for quota"
+  | "auth/impersonate_service_account" : "Service account to impersonate"
+  | "auth/access_token_file" : "File with an access token"
+  | "component_manager/disable_update_check" : "Do not check for updates"
+  | "survey/disable_prompts" : "Disable survey prompts"
+  | "accessibility/screen_reader" : "Screen reader friendly output"
+  | @any ;
+
+configurations_command =
+    "create" : "Create a new named configuration" , { "--activate" : "Activate the new configuration" | "--no-activate" : "Do not activate the new configuration" | ga }
+  | "activate" : "Activate an existing named configuration" , { ga }
+  | "list" : "List existing named configurations" , { short_query | g }
+  | "delete" : "Delete named configurations" , { ga }
+  | "describe" : "Describe a named configuration" , { "--all" : "Include unset properties" | ga }
+  | "rename" : "Rename a named configuration" , { "--new-name" , @any | "--new-name=" : "New name of the configuration" ~ @any | ga } ;
+
+(* projects *)
+
+projects_command =
+    "add-iam-policy-binding" : "Add an IAM policy binding for a project" , { binding | ga }
+  | "create" : "Create a new project" , { project_create_flag | labels | ga }
+  | "delete" : "Delete a project" , { ga }
+  | "describe" : "Show metadata for a project" , { ga }
+  | "get-ancestors" : "Get the ancestors for a project" , { ga }
+  | "get-ancestors-iam-policy" : "Get IAM policies for a project and its ancestors" , { "--include-deny" : "Include deny policies" | query_flag | ga }
+  | "get-iam-policy" : "Get the IAM policy for a project" , { query_flag | ga }
+  | "list" : "List projects accessible by the active account" , { list_flag | g }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding for a project" , { binding | "--all" : "Remove the binding for all conditions" | ga }
+  | "set-iam-policy" : "Set the IAM policy for a project" , { g | @file | @any }
+  | "undelete" : "Undelete a project" , { ga }
+  | "update" : "Update the name of a project" , { name | ga } ;
+
+name = "--name" , @any | "--name=" : "Display name" ~ @any ;
+
+project_create_flag =
+    "--enable-cloud-apis" : "Enable cloudapis.googleapis.com" | "--no-enable-cloud-apis" : "Do not enable cloudapis.googleapis.com"
+  | "--folder" , @any | "--folder=" : "Folder to create the project in" ~ @any
+  | "--organization" , @any
+  | "--organization=" : "Organization to create the project in" ~ @any
+  | "--set-as-default" : "Set the new project as the default"
+  | "--tags" , @any | "--tags=" : "KEY=VALUE tags to bind" ~ @any
+  | name ;
+
+(* compute *)
+
+compute_command =
+    "instances" : "Read and manipulate virtual machine instances" , { g } , [ instances_command ]
+  | "ssh" : "SSH into a virtual machine instance" , { ssh_flag | ssh_common | ga } , [ "--" , { @any } ]
+  | "scp" : "Copy files to and from instances via scp" , { scp_flag | ssh_common | g | @file | @any }
+  | "config-ssh" : "Write SSH config Host entries for each instance" , { config_ssh_flag | g }
+  | "start-iap-tunnel" : "Start an IAP TCP forwarding tunnel" , { iap_tunnel_flag | iap_network | zga }
+  | ( "connect-to-serial-port" : "Connect to the serial port of an instance"
+      | "copy-files" : "Copy files to and from instances via scp"
+      | "reset-windows-password" : "Reset the password of a Windows instance"
+      | "sign-url" : "Sign a URL for Cloud CDN Signed URLs"
+      | "accelerator-types" : "Read accelerator types"
+      | "addresses" : "Read and manipulate addresses"
+      | "advice" : "Recommend optimal allocation of resources"
+      | "backend-buckets" : "Read and manipulate backend buckets"
+      | "backend-services" : "List, create, and delete backend services"
+      | "commitments" : "Manage commitments"
+      | "composite-health-checks" : "Manage composite health checks"
+      | "diagnose" : "Debugging tools for virtual machine instances"
+      | "disk-types" : "Read virtual disk types"
+      | "disks" : "Read and manipulate disks"
+      | "external-vpn-gateways" : "Manage External VPN Gateways"
+      | "firewall-policies" : "Manage organization firewall policies"
+      | "firewall-rules" : "List, create, update, and delete firewall rules"
+      | "forwarding-rules" : "Read and manipulate traffic forwarding rules"
+      | "future-reservations" : "Manage future reservations"
+      | "health-aggregation-policies" : "Manage health aggregation policies"
+      | "health-checks" : "Read and manipulate health checks"
+      | "health-sources" : "Manage health sources"
+      | "http-health-checks" : "Read and manipulate HTTP health checks"
+      | "https-health-checks" : "Read and manipulate HTTPS health checks"
+      | "images" : "List, create, and delete images"
+      | "instance-groups" : "Read and manipulate instance groups"
+      | "instance-templates" : "Read and manipulate instance templates"
+      | "instant-snapshot-groups" : "Create, list and delete instant snapshot groups"
+      | "instant-snapshots" : "Create, list and delete instant snapshots"
+      | "interconnects" : "Read and manipulate interconnects"
+      | "machine-images" : "Read and manage machine images"
+      | "machine-types" : "Read virtual machine types"
+      | "migration" : "Migrate to Virtual Machines"
+      | "network-attachments" : "Manage network attachments"
+      | "network-edge-security-services" : "Read and manipulate network edge security services"
+      | "network-endpoint-groups" : "Read and manipulate network endpoint groups"
+      | "network-firewall-policies" : "Manage network firewall policies"
+      | "network-profiles" : "Read network profiles"
+      | "networks" : "List, create, and delete networks"
+      | "operations" : "Read and manipulate operations"
+      | "org-security-policies" : "Manage organization security policies"
+      | "os-config" : "Manage OS Config tasks for VM instances"
+      | "os-login" : "Manage OS Login resources"
+      | "packet-mirrorings" : "Manage packet mirroring resources"
+      | "preview-features" : "Read and manipulate Preview Features"
+      | "project-info" : "Read and manipulate project-level data"
+      | "project-zonal-metadata" : "Describe and update project zonal metadata"
+      | "public-advertised-prefixes" : "Manage public advertised prefixes"
+      | "public-delegated-prefixes" : "Manage public delegated prefixes"
+      | "regions" : "List Compute Engine regions"
+      | "reservations" : "Manage reservations"
+      | "resource-policies" : "Manage resource policies"
+      | "rollout-plans" : "Read and manipulate rollout plans"
+      | "rollouts" : "Read and manipulate rollouts"
+      | "routers" : "List, create, and delete routers"
+      | "routes" : "Read and manipulate routes"
+      | "security-policies" : "Read and manipulate Cloud Armor security policies"
+      | "service-attachments" : "Manage service attachments"
+      | "shared-vpc" : "Configure shared VPC"
+      | "snapshot-settings" : "Describe and update snapshot settings"
+      | "snapshots" : "List, describe, and delete snapshots"
+      | "sole-tenancy" : "Read and manage sole-tenancy resources"
+      | "ssl-certificates" : "List, create, and delete SSL certificates"
+      | "ssl-policies" : "List, create, delete and update SSL policies"
+      | "storage-pool-types" : "Read storage pool types"
+      | "storage-pools" : "Read and manipulate storage pools"
+      | "target-grpc-proxies" : "Manage target gRPC proxies"
+      | "target-http-proxies" : "List, create, and delete target HTTP proxies"
+      | "target-https-proxies" : "List, create, and delete target HTTPS proxies"
+      | "target-instances" : "Read and manipulate target instances"
+      | "target-pools" : "Control target pools for network load balancing"
+      | "target-ssl-proxies" : "List, create, and delete target SSL proxies"
+      | "target-tcp-proxies" : "List, create, and delete target TCP proxies"
+      | "target-vpn-gateways" : "Read and manipulate classic VPN gateways"
+      | "tpus" : "List, create, and delete Cloud TPUs"
+      | "url-maps" : "List, create, and delete URL maps"
+      | "vpn-gateways" : "Read and manipulate HA VPN gateways"
+      | "vpn-tunnels" : "Read and manipulate VPN tunnels"
+      | "zone-vm-extension-policies" : "Zone VM extension policies"
+      | "zones" : "List Compute Engine zones" ) , rest ;
+
+(* Flags shared by ssh and scp. *)
+ssh_common =
+    "--dry-run" : "Print the equivalent command without running it"
+  | "--force-key-file-overwrite" : "Overwrite a broken SSH key file without asking"
+  | "--plain" : "Do not add flags to the ssh or scp command"
+  | "--ssh-key-file" , @file
+  | "--ssh-key-file=" : "Path to the SSH key file" ~ @file
+  | "--strict-host-key-checking" , strict_host
+  | "--strict-host-key-checking=" : "Override StrictHostKeyChecking" ~ strict_host
+  | "--internal-ip" : "Connect to the internal IP address"
+  | "--tunnel-through-iap" : "Tunnel the connection through Identity-Aware Proxy"
+  | iap_network | zone ;
+strict_host = "yes" | "no" | "ask" ;
+
+iap_network =
+    "--network" , @any
+  | "--network=" : "Network of the IAP tunnel destination" ~ @any
+  | region
+  | "--dest-group" , @any
+  | "--dest-group=" : "Tunnel destination group" ~ @any ;
+
+ssh_flag =
+    "--command" , @any
+  | "--command=" : "Run this command on the instance" ~ @any
+  | "--container" , @any
+  | "--container=" : "Run in this container on a COS instance" ~ @any
+  | "--ssh-flag" , @any | "--ssh-flag=" : "Extra flag for ssh" ~ @any
+  | "--troubleshoot" : "Check for common connectivity problems" ;
+
+scp_flag =
+    "--compress" : "Enable compression"
+  | "--port" , @number | "--port=" : "Port to connect to" ~ @number
+  | "--recurse" : "Copy directories recursively"
+  | "--scp-flag" , @any | "--scp-flag=" : "Extra flag for scp" ~ @any ;
+
+config_ssh_flag =
+    "--dry-run" : "Print the changes without writing them"
+  | "--force-key-file-overwrite" : "Overwrite a broken SSH key file without asking"
+  | "--remove" : "Remove the gcloud entries from the SSH config"
+  | "--ssh-config-file" , @file
+  | "--ssh-config-file=" : "SSH config file to write" ~ @file
+  | "--ssh-key-file" , @file
+  | "--ssh-key-file=" : "Path to the SSH key file" ~ @file ;
+
+iap_tunnel_flag =
+    "--iap-tunnel-disable-connection-check" : "Skip the connection check"
+  | "--local-host-port" , @any
+  | "--local-host-port=" : "Local host and port to listen on" ~ @any ;
+
+instances_command =
+    "create" : "Create virtual machine instances" , { instance_create_flag | instance_shared_flag | labels | description | async | zga }
+  | "list" : "List Compute Engine instances" , { instance_list_flag | list_flag | ga }
+  | "describe" : "Describe a virtual machine instance" , { zone | ga }
+  | "delete" : "Delete virtual machine instances" , { instance_delete_flag | zga }
+  | "start" : "Start a stopped instance" , { async | csek | zga }
+  | "stop" : "Stop a virtual machine instance" , { async | discard_ssd | zga }
+  | "suspend" : "Suspend a virtual machine instance" , { async | discard_ssd | zga }
+  | "resume" : "Resume a virtual machine instance" , { async | zga }
+  | "reset" : "Reset a virtual machine instance" , { zone | ga }
+  | "update" : "Update a virtual machine instance" , { instance_update_flag | update_labels | zga }
+  | "add-labels" : "Add labels to instances" , { labels | zga }
+  | "remove-labels" : "Remove labels from instances" , { "--all" : "Remove all labels" | labels | zga }
+  | "add-metadata" : "Add or update instance metadata" , { metadata | zga }
+  | "remove-metadata" : "Remove instance metadata" , { remove_metadata_flag | zga }
+  | "add-tags" : "Add network tags to instances" , { tags | zga }
+  | "remove-tags" : "Remove network tags from instances" , { "--all" : "Remove all tags" | tags | zga }
+  | "set-machine-type" : "Set the machine type of an instance" , { machine_type | custom_machine | zga }
+  | "set-service-account" : "Set the service account and scopes of an instance" , { instance_account | zga }
+  | "set-scheduling" : "Set scheduling options of an instance" , { scheduling | zga }
+  | "attach-disk" : "Attach a disk to an instance" , { attach_disk_flag | csek | zga }
+  | "detach-disk" : "Detach disks from an instance" , { detach_disk_flag | zga }
+  | "get-serial-port-output" : "Read output from the serial port of an instance" , { serial_port | serial_start | zga }
+  | "tail-serial-port-output" : "Fetch new serial port output periodically" , { serial_port | zga }
+  | "add-iam-policy-binding" : "Add an IAM policy binding to an instance" , { binding | zga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from an instance" , { binding | zga }
+  | "get-iam-policy" : "Get the IAM policy of an instance" , { query_flag | zga }
+  | "set-iam-policy" : "Set the IAM policy of an instance" , { zone | g | @file | @any }
+  | ( "bulk" : "Manipulate multiple virtual machines at once"
+      | "network-interfaces" : "Read and manipulate instance network interfaces"
+      | "ops-agents" : "Manage Observability agents on instances"
+      | "os-inventory" : "Read OS Inventory data"
+      | "add-access-config" : "Create an access configuration"
+      | "add-resource-policies" : "Add resource policies to instances"
+      | "create-with-container" : "Deprecated: create instances running containers"
+      | "delete-access-config" : "Delete an access configuration"
+      | "export" : "Export the configuration of an instance"
+      | "get-guest-attributes" : "Get the guest attributes of an instance"
+      | "get-screenshot" : "Capture a screenshot of an instance"
+      | "get-shielded-identity" : "Get the Shielded identity of an instance"
+      | "import" : "Create instances from virtual appliances"
+      | "perform-maintenance" : "Perform maintenance of an instance"
+      | "remove-resource-policies" : "Remove resource policies from instances"
+      | "report-host-as-faulty" : "Report a host as faulty"
+      | "send-diagnostic-interrupt" : "Send a diagnostic interrupt to an instance"
+      | "set-disk-auto-delete" : "Set auto-delete behavior for disks"
+      | "set-name" : "Set the name of an instance"
+      | "simulate-maintenance-event" : "Simulate host maintenance of instances"
+      | "update-access-config" : "Update an access configuration"
+      | "update-container" : "Deprecated: update instances running containers"
+      | "update-from-file" : "Update an instance from a configuration file" ) , rest ;
+
+csek = "--csek-key-file" , @file
+     | "--csek-key-file=" : "File of customer-supplied encryption keys" ~ @file ;
+discard_ssd = "--discard-local-ssd" : "Discard local SSD data" | "--discard-local-ssd=" : "Discard local SSD data, true or false" ~ ( "true" | "false" ) ;
+machine_type = "--machine-type" , @any | "--machine-type=" : "Machine type, such as e2-medium" ~ @any ;
+tags = "--tags" , @any | "--tags=" : "Network tags, comma separated" ~ @any ;
+
+metadata =
+    "--metadata" , @any | "--metadata=" : "KEY=VALUE metadata entries" ~ @any
+  | "--metadata-from-file" , @any
+  | "--metadata-from-file=" : "KEY=FILE metadata entries read from files" ~ @any ;
+
+custom_machine =
+    "--custom-cpu" , @any
+  | "--custom-cpu=" : "Number of CPUs of a custom machine type" ~ @any
+  | "--custom-memory" , @any
+  | "--custom-memory=" : "Memory of a custom machine type" ~ @any
+  | "--custom-extensions" : "Use extended custom machine types"
+  | "--custom-vm-type" , @any
+  | "--custom-vm-type=" : "Machine series of a custom machine type" ~ @any ;
+
+instance_account =
+    service_account | "--no-service-account" : "Run without a service account"
+  | scopes | "--no-scopes" : "Grant no access scopes" ;
+serial_port = "--port" , @number | "--port=" : "Serial port number, 1 to 4" ~ @number ;
+serial_start = "--start" , @number | "--start=" : "Byte offset to start reading from" ~ @number ;
+
+scheduling =
+    "--maintenance-policy" , maintenance_policy
+  | "--maintenance-policy=" : "Behavior on host maintenance" ~ maintenance_policy
+  | "--preemptible" : "Create a preemptible instance" | "--no-preemptible" : "Not preemptible"
+  | "--provisioning-model" , provisioning_model
+  | "--provisioning-model=" : "Provisioning model" ~ provisioning_model
+  | "--instance-termination-action" , termination_action
+  | "--instance-termination-action=" : "Action when Compute Engine preempts the VM" ~ termination_action
+  | "--max-run-duration" , @any
+  | "--max-run-duration=" : "Run duration before the VM is terminated" ~ @any
+  | "--termination-time" , @any
+  | "--termination-time=" : "Time at which the VM is terminated" ~ @any
+  | "--restart-on-failure" : "Restart the VM if it crashes" | "--no-restart-on-failure" : "Do not restart the VM if it crashes" ;
+
+maintenance_policy = "MIGRATE" | "TERMINATE" ;
+provisioning_model = "STANDARD" | "SPOT" | "FLEX_START" | "RESERVATION_BOUND" ;
+termination_action = "STOP" | "DELETE" ;
+
+instance_shared_flag = machine_type | metadata | tags | scheduling | instance_account | csek ;
+
+instance_create_flag =
+    "--accelerator" , @any
+  | "--accelerator=" : "Accelerator to attach, as type=TYPE,count=N" ~ @any
+  | "--boot-disk-auto-delete" : "Delete the boot disk with the instance"
+  | "--no-boot-disk-auto-delete" : "Keep the boot disk when deleting the instance"
+  | "--boot-disk-size" , @any
+  | "--boot-disk-size=" : "Size of the boot disk, such as 10GB" ~ @any
+  | "--boot-disk-type" , @any
+  | "--boot-disk-type=" : "Type of the boot disk, such as pd-ssd" ~ @any
+  | "--deletion-protection" : "Protect the instance from deletion"
+  | "--disk" , @any
+  | "--disk=" : "Attach an existing disk, as name=NAME,mode=MODE" ~ @any
+  | "--enable-nested-virtualization" : "Enable nested virtualization"
+  | "--no-enable-nested-virtualization" : "Disable nested virtualization"
+  | "--hostname" , @any
+  | "--hostname=" : "Custom hostname of the instance" ~ @any
+  | "--min-cpu-platform" , @any
+  | "--min-cpu-platform=" : "Minimum CPU platform" ~ @any
+  | "--network" , @any | "--network=" : "Network of the instance" ~ @any
+  | "--subnet" , @any | "--subnet=" : "Subnet of the instance" ~ @any
+  | "--network-interface" , @any
+  | "--network-interface=" : "Network interface, as PROPERTY=VALUE" ~ @any
+  | "--network-tier" , network_tier | "--network-tier=" : "Network tier" ~ network_tier
+  | "--private-network-ip" , @any
+  | "--private-network-ip=" : "Internal IP address" ~ @any
+  | "--address" , @any | "--address=" : "External IP address" ~ @any
+  | "--no-address" : "Do not assign an external IP address"
+  | "--stack-type" , stack_type | "--stack-type=" : "IP stack type" ~ stack_type
+  | "--image" , @any | "--image=" : "Boot disk image" ~ @any
+  | "--image-family" , @any
+  | "--image-family=" : "Image family of the boot disk" ~ @any
+  | "--image-project" , @any
+  | "--image-project=" : "Project of the boot disk image" ~ @any
+  | "--source-snapshot" , @any
+  | "--source-snapshot=" : "Snapshot to restore the boot disk from" ~ @any
+  | "--source-instance-template" , @any
+  | "--source-instance-template=" : "Instance template to create from" ~ @any
+  | "--shielded-secure-boot" : "Enable Shielded VM Secure Boot"
+  | "--shielded-vtpm" : "Enable the Shielded VM vTPM"
+  | "--shielded-integrity-monitoring" : "Enable Shielded VM integrity monitoring"
+  | custom_machine ;
+network_tier = "PREMIUM" | "STANDARD" ;
+stack_type = "IPV4_ONLY" | "IPV4_IPV6" | "IPV6_ONLY" ;
+
+instance_list_flag =
+    "--zones" , @any | "--zones=" : "Only instances in these zones" ~ @any ;
+
+instance_delete_flag =
+    "--delete-disks" , disk_kind
+  | "--delete-disks=" : "Disks to delete with the instance" ~ disk_kind
+  | "--keep-disks" , disk_kind
+  | "--keep-disks=" : "Disks to keep after deleting the instance" ~ disk_kind ;
+
+disk_kind = "boot" | "data" | "all" ;
+
+instance_update_flag =
+    "--deletion-protection" : "Protect the instance from deletion"
+  | "--no-deletion-protection" : "Allow deleting the instance"
+  | "--min-cpu-platform" , @any
+  | "--min-cpu-platform=" : "Minimum CPU platform" ~ @any
+  | "--shielded-secure-boot" : "Enable Shielded VM Secure Boot"
+  | "--no-shielded-secure-boot" : "Disable Shielded VM Secure Boot"
+  | "--shielded-vtpm" : "Enable the Shielded VM vTPM" | "--no-shielded-vtpm" : "Disable the Shielded VM vTPM"
+  | "--shielded-integrity-monitoring" : "Enable Shielded VM integrity monitoring"
+  | "--no-shielded-integrity-monitoring" : "Disable Shielded VM integrity monitoring" ;
+
+remove_metadata_flag =
+    "--all" : "Remove all metadata"
+  | "--keys" , @any | "--keys=" : "Metadata keys to remove" ~ @any ;
+
+attach_disk_flag =
+    "--disk" , @any | "--disk=" : "Name of the disk to attach" ~ @any
+  | "--boot" : "Attach as a boot disk"
+  | "--device-name" , @any
+  | "--device-name=" : "Device name inside the guest" ~ @any
+  | "--disk-scope" , ( "zonal" | "regional" )
+  | "--disk-scope=" : "Scope of the disk" ~ ( "zonal" | "regional" )
+  | "--force-attach" : "Attach even if attached to another instance"
+  | "--interface" , ( "SCSI" | "NVME" )
+  | "--interface=" : "Disk interface" ~ ( "SCSI" | "NVME" )
+  | "--mode" , ( "rw" | "ro" ) | "--mode=" : "Access mode" ~ ( "rw" | "ro" ) ;
+
+detach_disk_flag =
+    "--device-name" , @any
+  | "--device-name=" : "Device name of the disk to detach" ~ @any
+  | "--disk" , @any | "--disk=" : "Name of the disk to detach" ~ @any
+  | "--disk-scope" , ( "zonal" | "regional" )
+  | "--disk-scope=" : "Scope of the disk" ~ ( "zonal" | "regional" ) ;
+
+(* container *)
+
+container_command =
+    "clusters" : "Deploy and tear down GKE clusters" , { g } , [ clusters_command ]
+  | "get-server-config" : "Get Kubernetes Engine server config" , { cluster_location | g }
+  | ( "ai" : "Manage AI related workloads for GKE"
+      | "attached" : "Manage Attached clusters"
+      | "aws" : "Deprecated: clusters on AWS"
+      | "azure" : "Deprecated: clusters on Azure"
+      | "bare-metal" : "Manage Anthos clusters on bare metal"
+      | "binauthz" : "Manage Binary Authorization attestations"
+      | "fleet" : "Manage features and services on all your clusters"
+      | "hub" : "Manage features and services on all your clusters"
+      | "images" : "List and manipulate Container Registry images"
+      | "node-pools" : "Create and delete GKE node pools"
+      | "operations" : "Get and list operations for GKE clusters"
+      | "subnets" : "Manage subnets for GKE clusters"
+      | "vmware" : "Manage Anthos clusters on VMware" ) , rest ;
+
+cluster_location =
+    location | region | zone | "-z" : "Zone of the cluster" , @any ;
+
+clusters_command =
+    "create" : "Create a cluster" , { cluster_create_flag | cluster_common_flag | cluster_location | async | ga }
+  | "create-auto" : "Create an Autopilot cluster" , { cluster_common_flag | cluster_location | async | ga }
+  | "get-credentials" : "Fetch kubeconfig credentials for a running cluster" , { get_credentials_flag | cluster_location | ga }
+  | "list" : "List existing clusters" , { cluster_location | list_flag | g }
+  | "describe" : "Describe an existing cluster" , { cluster_location | ga }
+  | "delete" : "Delete an existing cluster" , { async | cluster_location | ga }
+  | "resize" : "Resize an existing cluster" , { resize_flag | node_pool | async | cluster_location | ga }
+  | "upgrade" : "Upgrade the Kubernetes version of a cluster" , { upgrade_flag | node_pool | async | cluster_location | ga }
+  | "update" : "Update the settings of a cluster" , { cluster_update_flag | node_pool | update_labels | async | cluster_location | ga }
+  | ( "check-autopilot-compatibility" : "Check Autopilot compatibility of a cluster"
+      | "get-upgrade-info" : "Get upgrade information for a cluster" ) , rest ;
+
+node_pool = "--node-pool" , @any | "--node-pool=" : "Node pool to act on" ~ @any ;
+
+get_credentials_flag =
+    "--dns-endpoint" : "Use the DNS based endpoint"
+  | "--internal-ip" : "Use the internal IP of the control plane" ;
+
+resize_flag =
+    "--num-nodes" , @number | "--num-nodes=" : "Target number of nodes" ~ @number
+  | "--size" , @number | "--size=" : "Target number of nodes" ~ @number ;
+
+upgrade_flag =
+    "--cluster-version" , @any
+  | "--cluster-version=" : "Kubernetes version to upgrade to" ~ @any
+  | "--image-type" , @any | "--image-type=" : "Node image type" ~ @any
+  | "--master" : "Upgrade the control plane" ;
+
+(* Flags of both create and create-auto. *)
+cluster_common_flag =
+    "--cluster-version" , @any
+  | "--cluster-version=" : "Kubernetes version of the cluster" ~ @any
+  | "--release-channel" , release_channel
+  | "--release-channel=" : "Release channel" ~ release_channel
+  | "--network" , @any | "--network=" : "VPC network of the cluster" ~ @any
+  | "--subnetwork" , @any | "--subnetwork=" : "Subnetwork of the cluster" ~ @any
+  | "--cluster-ipv4-cidr" , @any | "--cluster-ipv4-cidr=" : "IP range of the pods" ~ @any
+  | "--services-ipv4-cidr" , @any
+  | "--services-ipv4-cidr=" : "IP range of the services" ~ @any
+  | "--enable-private-nodes" : "Nodes get internal IP addresses only"
+  | "--enable-private-endpoint" : "Use the internal control plane endpoint"
+  | "--master-ipv4-cidr" , @any
+  | "--master-ipv4-cidr=" : "IP range of the control plane" ~ @any
+  | "--enable-master-authorized-networks" : "Restrict control plane access to CIDRs"
+  | "--master-authorized-networks" , @any
+  | "--master-authorized-networks=" : "CIDRs allowed to reach the control plane" ~ @any
+  | "--labels" , @any
+  | "--labels=" : "KEY=VALUE labels of the cluster" ~ @any
+  | "--logging" , @any | "--logging=" : "Components that write logs" ~ @any
+  | "--monitoring" , @any
+  | "--monitoring=" : "Components that write metrics" ~ @any
+  | scopes | service_account ;
+
+release_channel = "rapid" | "regular" | "stable" | "extended" | "None" ;
+
+cluster_create_flag =
+    "--num-nodes" , @number
+  | "--num-nodes=" : "Nodes per zone of the default pool" ~ @number
+  | machine_type
+  | "--disk-size" , @any | "--disk-size=" : "Boot disk size of each node" ~ @any
+  | "--image-type" , @any | "--image-type=" : "Node image type" ~ @any
+  | "--node-locations" , @any | "--node-locations=" : "Zones for the nodes" ~ @any
+  | "--enable-autoscaling" : "Enable cluster autoscaling"
+  | "--min-nodes" , @number
+  | "--min-nodes=" : "Minimum nodes per zone when autoscaling" ~ @number
+  | "--max-nodes" , @number
+  | "--max-nodes=" : "Maximum nodes per zone when autoscaling" ~ @number
+  | "--enable-ip-alias" : "Create a VPC-native cluster"
+  | "--enable-autorepair" : "Repair unhealthy nodes automatically"
+  | "--no-enable-autoupgrade" : "Do not upgrade nodes automatically"
+  | "--workload-pool" , @any | "--workload-pool=" : "Workload Identity pool" ~ @any
+  | "--addons" , @any | "--addons=" : "Addons to enable" ~ @any
+  | "--preemptible" : "Use preemptible nodes" | "--spot" : "Use Spot VM nodes"
+  | tags ;
+
+cluster_update_flag =
+    "--enable-autoscaling" : "Enable autoscaling of a node pool"
+  | "--min-nodes" , @number
+  | "--min-nodes=" : "Minimum nodes per zone when autoscaling" ~ @number
+  | "--max-nodes" , @number
+  | "--max-nodes=" : "Maximum nodes per zone when autoscaling" ~ @number
+  | "--node-locations" , @any | "--node-locations=" : "Zones for the nodes" ~ @any
+  | "--release-channel" , release_channel
+  | "--release-channel=" : "Release channel" ~ release_channel
+  | "--enable-master-authorized-networks" : "Restrict control plane access to CIDRs"
+  | "--no-enable-master-authorized-networks" : "Allow control plane access from anywhere"
+  | "--master-authorized-networks" , @any
+  | "--master-authorized-networks=" : "CIDRs allowed to reach the control plane" ~ @any
+  | "--workload-pool" , @any | "--workload-pool=" : "Workload Identity pool" ~ @any
+  | "--logging" , @any | "--logging=" : "Components that write logs" ~ @any
+  | "--monitoring" , @any
+  | "--monitoring=" : "Components that write metrics" ~ @any ;
+
+(* run *)
+
+run_command =
+    "deploy" : "Create or update a Cloud Run service" , { run_deploy_flag | run_service_flag | run_container_flag | async | rga }
+  | "services" : "View and manage your Cloud Run services" , { g } , [ run_services_command ]
+  | "jobs" : "View and manage your Cloud Run jobs" , { g } , [ run_jobs_command ]
+  | "revisions" : "View and manage your Cloud Run revisions" , { g } , [ run_revisions_command ]
+  | "regions" : "View available Cloud Run regions" , { g } , [ "list" : "List available regions" , { list_flag | g } ]
+  | ( "compose" : "Support Docker Compose workflows on Cloud Run"
+      | "domain-mappings" : "View and manage domain mappings"
+      | "multi-region-services" : "Manage multi-region services"
+      | "worker-pools" : "View and manage your Cloud Run worker pools" ) , rest ;
+
+run_deploy_flag =
+    "--source" , @directory
+  | "--source=" : "Build the container from this source directory" ~ @directory
+  | unauthenticated
+  | "--function" , @any
+  | "--function=" : "Function to run, built from --source" ~ @any
+  | "--base-image" , @any
+  | "--base-image=" : "Base image for automatic updates" ~ @any
+  | description ;
+
+(* Flags of both run deploy and run services update. *)
+run_service_flag =
+    "--port" , @number | "--port=" : "Port the container listens on" ~ @number
+  | "--ingress" , run_ingress | "--ingress=" : "Allowed ingress traffic" ~ run_ingress
+  | "--execution-environment" , ( "gen1" | "gen2" )
+  | "--execution-environment=" : "Execution environment" ~ ( "gen1" | "gen2" )
+  | "--no-traffic" : "Do not send traffic to the new revision"
+  | "--tag" , @any | "--tag=" : "Traffic tag of the new revision" ~ @any
+  | "--revision-suffix" , @any
+  | "--revision-suffix=" : "Suffix of the revision name" ~ @any
+  | "--cpu-boost" : "Boost CPU at startup" | "--no-cpu-boost" : "Do not boost CPU at startup"
+  | "--cpu-throttling" : "Allocate CPU only during requests" | "--no-cpu-throttling" : "Always allocate CPU"
+  | "--use-http2" : "Use HTTP/2 end to end" | "--no-use-http2" : "Do not use HTTP/2 end to end"
+  | "--add-cloudsql-instances" , @any
+  | "--add-cloudsql-instances=" : "Cloud SQL instances to connect to" ~ @any
+  | "--set-cloudsql-instances" , @any
+  | "--set-cloudsql-instances=" : "Replace the Cloud SQL connections" ~ @any
+  | "--invoker-iam-check" : "Check IAM for invokers" | "--no-invoker-iam-check" : "Skip the invoker IAM check"
+  | "--default-url" : "Serve the run.app URL" | "--no-default-url" : "Disable the run.app URL"
+  | scaling | labels | update_labels ;
+run_ingress = "all" | "internal" | "internal-and-cloud-load-balancing" ;
+
+(* Flags of services and jobs. *)
+run_container_flag =
+    "--image" , @any | "--image=" : "Container image to deploy" ~ @any
+  | "--command" , @any | "--command=" : "Entrypoint of the container" ~ @any
+  | "--args" , @any | "--args=" : "Arguments of the container" ~ @any
+  | "--container" , @any | "--container=" : "Container to configure" ~ @any
+  | resources
+  | "--network" , @any
+  | "--network=" : "VPC network for Direct VPC egress" ~ @any
+  | "--subnet" , @any
+  | "--subnet=" : "VPC subnet for Direct VPC egress" ~ @any
+  | "--vpc-egress" , vpc_egress
+  | "--vpc-egress=" : "Traffic sent through the VPC" ~ vpc_egress
+  | env_vars | service_account ;
+vpc_egress = "all-traffic" | "private-ranges-only" | "all" ;
+
+run_services_command =
+    "list" : "List available services" , { region | list_flag | g }
+  | "describe" : "Show details of a service" , { region | namespace | ga }
+  | "delete" : "Delete a service" , { async | region | namespace | ga }
+  | "update" : "Update the configuration of a service" , { run_service_flag | run_container_flag | async | rga }
+  | "update-traffic" : "Adjust the traffic assignments of a service" , { traffic_flag | async | region | namespace | ga }
+  | "logs" : "Read logs for Cloud Run services" , { g } , [ "read" : "Read logs for a service" , { run_logs_flag | rga } ]
+  | "proxy" : "Proxy a service to localhost" , { proxy_flag | rga }
+  | "replace" : "Create or replace a service from YAML" , { async | "--dry-run" : "Validate without applying" | region | g | @file | @any }
+  | "add-iam-policy-binding" : "Add an IAM policy binding to a service" , { binding | rga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from a service" , { binding | rga }
+  | "get-iam-policy" : "Get the IAM policy of a service" , { region | query_flag | ga }
+  | "set-iam-policy" : "Set the IAM policy of a service" , { region | g | @file | @any } ;
+
+namespace = "--namespace" , @any | "--namespace=" : "Namespace of the resource" ~ @any ;
+
+traffic_flag =
+    "--to-latest" : "Send all traffic to the latest revision"
+  | "--to-revisions" , @any
+  | "--to-revisions=" : "REVISION=PERCENT traffic assignments" ~ @any
+  | "--to-tags" , @any
+  | "--to-tags=" : "TAG=PERCENT traffic assignments" ~ @any
+  | "--set-tags" , @any
+  | "--set-tags=" : "Replace all tags, TAG=REVISION" ~ @any
+  | "--update-tags" , @any
+  | "--update-tags=" : "Add or update tags, TAG=REVISION" ~ @any
+  | "--remove-tags" , @any | "--remove-tags=" : "Tags to remove" ~ @any
+  | "--clear-tags" : "Remove all tags" ;
+
+run_logs_flag =
+    "--freshness" , @any
+  | "--freshness=" : "Return entries newer than this, such as 1d" ~ @any
+  | "--log-filter" , @any | "--log-filter=" : "Logging filter expression" ~ @any
+  | "--order" , log_order | "--order=" : "Order of the entries" ~ log_order
+  | "--limit" , @number | "--limit=" : "Maximum number of entries" ~ @number ;
+
+log_order = "desc" | "asc" ;
+
+proxy_flag =
+    "--port" , @number | "--port=" : "Local port to listen on" ~ @number
+  | "--tag" , @any | "--tag=" : "Traffic tag to proxy" ~ @any
+  | "--token" , @any | "--token=" : "Identity token to use" ~ @any ;
+
+run_jobs_command =
+    "create" : "Create a job" , { job_flag | run_container_flag | labels | async | rga }
+  | "deploy" : "Create or update a job" , { job_flag | run_container_flag | labels | async | rga }
+  | "update" : "Update a job" , { job_flag | run_container_flag | labels | update_labels | async | rga }
+  | "execute" : "Execute a job" , { execute_flag | rga }
+  | "list" : "List jobs" , { region | list_flag | g }
+  | "describe" : "Show details of a job" , { region | ga }
+  | "delete" : "Delete a job" , { async | rga }
+  | "logs" : "Read logs for Cloud Run jobs" , { g } , [ "read" : "Read logs for a job" , { run_logs_flag | rga } ]
+  | "executions" : "View and manage job executions" , { g } , [ executions_command ]
+  | "replace" : "Create or replace a job from YAML" , rest
+  | "add-iam-policy-binding" : "Add an IAM policy binding to a job" , { binding | rga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from a job" , { binding | rga }
+  | ( "get-iam-policy" : "Get the IAM policy of a job"
+      | "set-iam-policy" : "Set the IAM policy of a job" ) , rest ;
+
+job_flag =
+    "--tasks" , @number | "--tasks=" : "Number of tasks" ~ @number
+  | "--parallelism" , @number
+  | "--parallelism=" : "Tasks that may run in parallel" ~ @number
+  | "--task-timeout" , @any | "--task-timeout=" : "Timeout of each task" ~ @any
+  | "--max-retries" , @number | "--max-retries=" : "Retries of a failed task" ~ @number
+  | "--execute-now" : "Execute the job right after creating it"
+  | "--wait" : "Wait for the execution to complete" ;
+
+execute_flag =
+    "--container" , @any | "--container=" : "Container to override" ~ @any
+  | "--task-timeout" , @any | "--task-timeout=" : "Timeout of each task" ~ @any
+  | "--tasks" , @number | "--tasks=" : "Number of tasks" ~ @number
+  | "--args" , @any | "--args=" : "Arguments of the container" ~ @any
+  | "--update-env-vars" , @any
+  | "--update-env-vars=" : "Add or update environment variables" ~ @any
+  | "--async" : "Return without waiting for the execution"
+  | "--wait" : "Wait for the execution to complete" ;
+
+executions_command =
+    "list" : "List executions" , { "--job" , @any | "--job=" : "Only executions of this job" ~ @any | region | list_flag | g }
+  | "describe" : "Show details of an execution" , { region | ga }
+  | "delete" : "Delete an execution" , { async | rga }
+  | "cancel" : "Cancel an execution" , { async | rga }
+  | "tasks" : "View and manage execution tasks" , rest ;
+
+run_revisions_command =
+    "list" : "List available revisions" , { region | "--service" , @any | "--service=" : "Only revisions of this service" ~ @any | list_flag | g }
+  | "describe" : "Show details of a revision" , { region | ga }
+  | "delete" : "Delete a revision" , { async | rga } ;
+
+(* functions *)
+
+functions_command =
+    "deploy" : "Create or update a function" , { function_deploy_flag | resources | scaling | env_vars | update_labels | service_account | rga }
+  | "list" : "List functions" , { "--regions" , @any | "--regions=" : "Only functions in these regions" ~ @any | v2 | query_flag | g }
+  | "describe" : "Show details of a function" , { region | v2 | ga }
+  | "delete" : "Delete a function" , { region | ga }
+  | "call" : "Trigger execution of a function" , { call_flag | rga }
+  | "logs" : "Display log entries of functions" , { g } , [ "read" : "Read log entries of functions" , { function_logs_flag | region | list_flag | ga } ]
+  | "add-iam-policy-binding" : "Add an IAM policy binding to a function" , { member | role | rga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from a function" , { member | role | rga }
+  | "add-invoker-policy-binding" : "Add an invoker binding to a function" , { member | rga }
+  | "remove-invoker-policy-binding" : "Remove an invoker binding from a function" , { member | rga }
+  | "get-iam-policy" : "Get the IAM policy of a function" , { region | list_flag | ga }
+  | "set-iam-policy" : "Set the IAM policy of a function" , { region | g | @file | @any }
+  | "detach" : "Detach a v2 function from its environment" , rest
+  | "regions" : "List regions available to Cloud Functions" , { g } , [ "list" : "List regions" , { gen2 | list_flag | g } ]
+  | "runtimes" : "List runtimes available to Cloud Functions" , { g } , [ "list" : "List runtimes" , { region | list_flag | g } ]
+  | "event-types" : "List event types that can trigger a function" , { g } , [ "list" : "List event types" , { gen2 | g } ] ;
+
+v2 = "--v2" : "Only Cloud Functions v2" ;
+gen2 = "--gen2" : "Use Cloud Functions (2nd gen)" | "--no-gen2" : "Use Cloud Functions (1st gen)" ;
+
+function_deploy_flag =
+    "--runtime" , @any
+  | "--runtime=" : "Runtime, such as python312 or nodejs20" ~ @any
+  | "--source" , @directory | "--source=" : "Source code location" ~ @directory
+  | "--entry-point" , @any
+  | "--entry-point=" : "Function to execute in the source code" ~ @any
+  | "--trigger-http" : "Trigger the function with HTTP requests"
+  | "--trigger-topic" , @any
+  | "--trigger-topic=" : "Trigger on messages of this Pub/Sub topic" ~ @any
+  | "--trigger-bucket" , @any
+  | "--trigger-bucket=" : "Trigger on changes to this bucket" ~ @any
+  | "--trigger-event" , @any
+  | "--trigger-event=" : "Event type that triggers the function" ~ @any
+  | "--trigger-resource" , @any
+  | "--trigger-resource=" : "Resource the event comes from" ~ @any
+  | "--trigger-event-filters" , @any
+  | "--trigger-event-filters=" : "Eventarc filters, ATTRIBUTE=VALUE" ~ @any
+  | "--trigger-location" , @any
+  | "--trigger-location=" : "Location of the trigger" ~ @any
+  | "--trigger-service-account" , @any
+  | "--trigger-service-account=" : "Service account of the trigger" ~ @any
+  | gen2 | unauthenticated
+  | "--retry" : "Retry failed event-driven executions"
+  | "--ingress-settings" , function_ingress
+  | "--ingress-settings=" : "Allowed ingress traffic" ~ function_ingress
+  | "--egress-settings" , function_egress
+  | "--egress-settings=" : "Egress traffic through the VPC connector" ~ function_egress
+  | "--stage-bucket" , @any
+  | "--stage-bucket=" : "Bucket to stage the source in" ~ @any ;
+function_ingress = "all" | "internal-only" | "internal-and-gclb" ;
+function_egress = "private-ranges-only" | "all" ;
+
+call_flag =
+    "--data" , @any | "--data=" : "JSON data to send to the function" ~ @any
+  | "--cloud-event" , @any
+  | "--cloud-event=" : "CloudEvent JSON to send to the function" ~ @any ;
+
+function_logs_flag =
+    "--start-time" , @any
+  | "--start-time=" : "Return entries at or after this time" ~ @any
+  | "--min-log-level" , @any
+  | "--min-log-level=" : "Minimum level of the entries" ~ @any
+  | "--gen2" : "Only Cloud Functions (2nd gen)" ;
+(* storage *)
+
+storage_command =
+    "cp" : "Upload, download, and copy objects" , { cp_flag | copy_flag | g | @file | @any }
+  | "mv" : "Move or rename objects" , { copy_flag | g | @file | @any }
+  | "rm" : "Delete objects and buckets" , { rm_flag | ga }
+  | "ls" : "List buckets and objects" , { ls_flag | ga }
+  | "cat" : "Print the contents of objects" , { cat_flag | ga }
+  | "du" : "Display the space used by buckets and objects" , { du_flag | ga }
+  | "rsync" : "Synchronize buckets and directories" , { rsync_flag | g | @directory | @any }
+  | "sign-url" : "Generate a signed URL" , { sign_url_flag | rga }
+  | "buckets" : "Manage Cloud Storage buckets" , { g } , [ buckets_command ]
+  | "objects" : "Manage Cloud Storage objects" , { g } , [ objects_command ]
+  | ( "hash" : "Calculate hashes of local or cloud files"
+      | "restore" : "Restore soft-deleted objects"
+      | "diagnose" : "Diagnose Google Cloud Storage"
+      | "service-agent" : "Manage the Cloud Storage service agent"
+      | "batch-operations" : "Manage batch operations"
+      | "folders" : "Manage folders"
+      | "hmac" : "Manage service account HMAC keys"
+      | "insights" : "Manage inventory reports"
+      | "intelligence-configs" : "Manage Storage Intelligence configurations"
+      | "managed-folders" : "Manage managed folders"
+      | "operations" : "Manage storage operations" ) , rest ;
+
+recursive = "--recursive" : "Recurse into directories and prefixes" | "-R" : "Recurse into directories and prefixes" | "-r" : "Recurse into directories and prefixes" ;
+continue_on_error = "--continue-on-error" : "Keep going after an error" | "-c" : "Keep going after an error" ;
+stdin_paths = "--read-paths-from-stdin" : "Read the paths from stdin" | "-I" : "Read the paths from stdin" ;
+no_clobber = "--no-clobber" : "Do not overwrite existing objects" | "-n" : "Do not overwrite existing objects" ;
+storage_class_name = "STANDARD" | "NEARLINE" | "COLDLINE" | "ARCHIVE" | @any ;
+
+copy_flag =
+    "--all-versions" : "Copy all object versions" | "-A" : "Copy all object versions"
+  | no_clobber | continue_on_error | stdin_paths
+  | "--cache-control" , @any
+  | "--cache-control=" : "Cache-Control header of the objects" ~ @any
+  | "--content-type" , @any
+  | "--content-type=" : "Content-Type of the objects" ~ @any
+  | "--preserve-posix" : "Preserve POSIX attributes" | "-P" : "Preserve POSIX attributes"
+  | "--print-created-message" : "Print the version of each created object" | "-v" : "Print the version of each created object"
+  | "--skip-unsupported" : "Skip unsupported objects" | "-U" : "Skip unsupported objects"
+  | "--storage-class" , storage_class_name
+  | "--storage-class=" : "Storage class of the destination" ~ storage_class_name
+  | "-s" : "Storage class of the destination" , storage_class_name
+  | "--predefined-acl" , @any
+  | "--predefined-acl=" : "Predefined ACL of the objects" ~ @any
+  | "-a" : "Predefined ACL of the objects" , @any
+  | "--gzip-in-flight-all" : "Compress all uploads in flight" | "-J" : "Compress all uploads in flight" ;
+
+cp_flag = recursive ;
+
+rm_flag =
+    "--all-versions" : "Delete all object versions" | "-a" : "Delete all object versions"
+  | continue_on_error | stdin_paths | recursive
+  | "--exclude-managed-folders" : "Do not delete managed folders" ;
+
+ls_flag =
+    "--all-versions" : "List all object versions" | "-a" : "List all object versions"
+  | "--buckets" : "List buckets, not their contents" | "-b" : "List buckets, not their contents"
+  | "--etag" : "Show ETag" | "-e" : "Show ETag"
+  | "--full" : "Show all metadata" | "-L" : "Show all metadata"
+  | "--json" : "Show all metadata as JSON" | "-j" : "Show all metadata as JSON"
+  | "--long" : "Show size, creation time and URL" | "-l" : "Show size, creation time and URL"
+  | "--readable-sizes" : "Show human readable sizes"
+  | "--soft-deleted" : "List soft-deleted objects"
+  | stdin_paths | recursive ;
+
+cat_flag =
+    "--display-url" : "Print the URL of each object" | "-d" : "Print the URL of each object"
+  | "--range" , @any | "--range=" : "Byte range to print" ~ @any
+  | "-r" : "Byte range to print" , @any ;
+
+du_flag =
+    "--all-versions" : "Include all object versions" | "-a" : "Include all object versions"
+  | "--readable-sizes" : "Show human readable sizes" | "-r" : "Show human readable sizes"
+  | "--summarize" : "Show only a total per argument" | "-s" : "Show only a total per argument"
+  | "--total" : "Show a grand total" | "-c" : "Show a grand total"
+  | "--exclude-name-pattern" , @any
+  | "--exclude-name-pattern=" : "Exclude objects matching this pattern" ~ @any
+  | "-e" : "Exclude objects matching this pattern" , @any ;
+
+rsync_flag =
+    "--delete-unmatched-destination-objects" : "Delete destination objects not in the source"
+  | "--dry-run" : "Print what would be copied or deleted"
+  | "--exclude" , @any
+  | "--exclude=" : "Exclude paths matching these regexes" ~ @any
+  | "-x" : "Exclude paths matching these regexes" , @any
+  | "--checksums-only" : "Compare checksums, not modification times"
+  | "--skip-if-dest-has-newer-mtime" : "Skip files newer at the destination" | "-u" : "Skip files newer at the destination"
+  | "--predefined-acl" , @any
+  | "--predefined-acl=" : "Predefined ACL of the objects" ~ @any
+  | "-a" : "Predefined ACL of the objects" , @any
+  | "--preserve-posix" : "Preserve POSIX attributes" | "-P" : "Preserve POSIX attributes"
+  | "--skip-unsupported" : "Skip unsupported objects" | "-U" : "Skip unsupported objects"
+  | "--gzip-in-flight-all" : "Compress all uploads in flight" | "-J" : "Compress all uploads in flight"
+  | no_clobber | continue_on_error | recursive ;
+
+sign_url_flag =
+    "--duration" , @any | "--duration=" : "How long the URL is valid" ~ @any
+  | "-d" : "How long the URL is valid" , @any
+  | "--private-key-file" , @file
+  | "--private-key-file=" : "Service account private key file" ~ @file ;
+
+buckets_command =
+    "create" : "Create buckets" , { bucket_create_flag | ga }
+  | "list" : "List buckets" , { raw | list_flag | ga }
+  | "describe" : "Describe a bucket" , { raw | ga }
+  | "delete" : "Delete buckets" , { continue_on_error | ga }
+  | "update" : "Update bucket settings" , { bucket_update_flag | update_labels | continue_on_error | ga }
+  | "add-iam-policy-binding" : "Add an IAM policy binding to a bucket" , { binding | ga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from a bucket" , { binding | ga }
+  | "get-iam-policy" : "Get the IAM policy of a bucket" , { ga }
+  | "set-iam-policy" : "Set the IAM policy of a bucket" , { g | @file | @any }
+  | ( "relocate" : "Relocate a bucket to another location"
+      | "anywhere-caches" : "Manage Anywhere Caches"
+      | "notifications" : "Manage bucket notifications" ) , rest ;
+
+raw = "--raw" : "Show the raw API response" ;
+
+bucket_location =
+    "--location" , @any | "--location=" : "Location of the bucket" ~ @any
+  | "-l" : "Location of the bucket" , @any ;
+
+bucket_create_flag =
+    bucket_location
+  | "--default-storage-class" , storage_class_name
+  | "--default-storage-class=" : "Default storage class" ~ storage_class_name
+  | "-c" : "Default storage class" , storage_class_name
+  | "--uniform-bucket-level-access" : "Use uniform bucket-level access" | "-b" : "Use uniform bucket-level access"
+  | "--public-access-prevention" : "Prevent public access"
+  | "--retention-period" , @any
+  | "--retention-period=" : "Retention period of the objects" ~ @any
+  | "--soft-delete-duration" , @any
+  | "--soft-delete-duration=" : "How long to keep soft-deleted objects" ~ @any
+  | "--lifecycle-file" , @file
+  | "--lifecycle-file=" : "Lifecycle configuration file" ~ @file ;
+
+bucket_update_flag =
+    "--default-storage-class" , storage_class_name
+  | "--default-storage-class=" : "Default storage class" ~ storage_class_name
+  | "--uniform-bucket-level-access" : "Use uniform bucket-level access"
+  | "--no-uniform-bucket-level-access" : "Use fine-grained ACLs"
+  | "--public-access-prevention" : "Prevent public access"
+  | "--no-public-access-prevention" : "Allow public access"
+  | "--versioning" : "Enable object versioning" | "--no-versioning" : "Disable object versioning"
+  | "--requester-pays" : "Bill requesters for access" | "--no-requester-pays" : "Do not bill requesters"
+  | "--no-enable-autoclass" : "Do not manage storage classes automatically"
+  | "--lifecycle-file" , @file
+  | "--lifecycle-file=" : "Lifecycle configuration file" ~ @file
+  | "--clear-lifecycle" : "Remove the lifecycle configuration"
+  | "--retention-period" , @any
+  | "--retention-period=" : "Retention period of the objects" ~ @any
+  | "--soft-delete-duration" , @any
+  | "--soft-delete-duration=" : "How long to keep soft-deleted objects" ~ @any ;
+
+objects_command =
+    "list" : "List objects" , { "--exhaustive" : "List all objects, not only the first pages" | "--soft-deleted" : "List soft-deleted objects" | "--stat" : "Show the metadata of each object" | raw | list_flag | ga }
+  | "describe" : "Describe an object" , { raw | "--soft-deleted" : "Describe a soft-deleted object" | ga }
+  | ( "update" : "Update objects"
+      | "compose" : "Concatenate objects into a composite object" ) , rest ;
+
+(* sql *)
+
+sql_command =
+    "instances" : "Manage Cloud SQL instances" , { g } , [ sql_instances_command ]
+  | "databases" : "Manage databases of Cloud SQL instances" , { g } , [ sql_databases_command ]
+  | "users" : "Manage Cloud SQL users" , { g } , [ sql_users_command ]
+  | "backups" : "Work with backups of Cloud SQL instances" , { g } , [ sql_backups_command ]
+  | "export" : "Export data from Cloud SQL instances" , { g } , [ sql_export_command ]
+  | "import" : "Import data into Cloud SQL instances" , { g } , [ sql_import_command ]
+  | "connect" : "Connect to a Cloud SQL instance" , { sql_connect_flag | ga }
+  | "flags" : "List database flags" , { g } , [ "list" : "List database flags" , { database_version | list_flag | g } ]
+  | "tiers" : "List machine tiers" , { g } , [ "list" : "List machine tiers" , { "--show-edition" : "Show the edition of each tier" | list_flag | g } ]
+  | "operations" : "Work with Cloud SQL instance operations" , { g } , [ sql_operations_command ]
+  | "generate-login-token" : "Generate an IAM login token" , { "--application-default-credential" : "Use Application Default Credentials" | sql_instance | g }
+  | ( "reschedule-maintenance" : "Reschedule maintenance of an instance"
+      | "ssl" : "Manage SSL certificates of Cloud SQL instances"
+      | "ssl-certs" : "Deprecated: manage SSL certificates" ) , rest ;
+
+sql_instance = "--instance" , @any | "--instance=" : "Cloud SQL instance" ~ @any | "-i" : "Cloud SQL instance" , @any ;
+
+database_version =
+    "--database-version" , db_version
+  | "--database-version=" : "Database engine and version" ~ db_version ;
+
+db_version =
+    "MYSQL_5_6" | "MYSQL_5_7" | "MYSQL_8_0" | "MYSQL_8_4"
+  | "POSTGRES_9_6" | "POSTGRES_10" | "POSTGRES_11" | "POSTGRES_12" | "POSTGRES_13" | "POSTGRES_14"
+  | "POSTGRES_15" | "POSTGRES_16" | "POSTGRES_17" | "POSTGRES_18"
+  | "SQLSERVER_2017_EXPRESS" | "SQLSERVER_2017_WEB" | "SQLSERVER_2017_STANDARD" | "SQLSERVER_2017_ENTERPRISE"
+  | "SQLSERVER_2019_EXPRESS" | "SQLSERVER_2019_WEB" | "SQLSERVER_2019_STANDARD" | "SQLSERVER_2019_ENTERPRISE"
+  | "SQLSERVER_2022_EXPRESS" | "SQLSERVER_2022_WEB" | "SQLSERVER_2022_STANDARD" | "SQLSERVER_2022_ENTERPRISE"
+  | "SQLSERVER_2025_EXPRESS" | "SQLSERVER_2025_STANDARD" | "SQLSERVER_2025_ENTERPRISE"
+  | @any ;
+
+sql_instances_command =
+    "create" : "Create a Cloud SQL instance" , { database_version | sql_settings_flag | sql_create_flag | async | ga }
+  | "list" : "List Cloud SQL instances" , { "--show-edition" : "Show the edition of each instance" | list_flag | g }
+  | "describe" : "Show configuration and metadata of an instance" , { ga }
+  | "delete" : "Delete a Cloud SQL instance" , { async | ga }
+  | "patch" : "Update the settings of an instance" , { sql_settings_flag | sql_patch_flag | async | ga }
+  | "restart" : "Restart a Cloud SQL instance" , { async | ga }
+  | "clone" : "Clone a Cloud SQL instance" , { "--point-in-time" , @any | "--point-in-time=" : "Clone the state at this time" ~ @any | async | ga }
+  | "failover" : "Fail over a high-availability instance" , { async | ga }
+  | "promote-replica" : "Promote a read replica to a standalone instance" , { async | ga }
+  | ( "switchover" : "Switch over to a replica"
+      | "acquire-ssrs-lease" : "Acquire a SQL Server Reporting Services lease"
+      | "release-ssrs-lease" : "Release a SQL Server Reporting Services lease"
+      | "execute-sql" : "Execute a statement on an instance"
+      | "export" : "Deprecated: export data from an instance"
+      | "import" : "Deprecated: import data into an instance"
+      | "get-latest-recovery-time" : "Display the latest recovery time"
+      | "get-storage-shrink-config" : "Display the minimum storage size"
+      | "perform-storage-shrink" : "Decrease the storage size"
+      | "point-in-time-restore" : "Perform a point in time restore"
+      | "pre-check-major-version-upgrade" : "Pre-check a major version upgrade"
+      | "reencrypt" : "Reencrypt a CMEK instance"
+      | "reset-ssl-config" : "Reset SSL materials"
+      | "restore-backup" : "Restore a backup of an instance" ) , rest ;
+
+(* Flags of both create and patch. *)
+sql_settings_flag =
+    "--tier" , @any
+  | "--tier=" : "Machine tier, such as db-custom-2-7680" ~ @any
+  | "--cpu" , @number | "--cpu=" : "Number of CPU cores" ~ @number
+  | "--memory" , @any | "--memory=" : "Amount of memory, such as 4GB" ~ @any
+  | "--edition" , sql_edition
+  | "--edition=" : "Edition of the instance" ~ sql_edition
+  | "--availability-type" , ( "regional" | "zonal" )
+  | "--availability-type=" : "Availability of the instance" ~ ( "regional" | "zonal" )
+  | "--storage-size" , @any
+  | "--storage-size=" : "Storage capacity, such as 10GB" ~ @any
+  | "--storage-auto-increase" : "Increase storage automatically"
+  | "--no-storage-auto-increase" : "Do not increase storage automatically"
+  | "--backup-start-time" , @any
+  | "--backup-start-time=" : "Start time of daily backups, HH:MM in UTC" ~ @any
+  | "--enable-bin-log" : "Enable binary logging" | "--no-enable-bin-log" : "Disable binary logging"
+  | "--network" , @any | "--network=" : "VPC network for private IP" ~ @any
+  | "--assign-ip" : "Assign a public IP address" | "--no-assign-ip" : "Do not assign a public IP address"
+  | "--authorized-networks" , @any
+  | "--authorized-networks=" : "Networks allowed to connect, as CIDRs" ~ @any
+  | "--database-flags" , @any
+  | "--database-flags=" : "FLAG=VALUE database flags" ~ @any
+  | "--deletion-protection" : "Protect the instance from deletion"
+  | "--no-deletion-protection" : "Allow deleting the instance"
+  | "--maintenance-window-day" , weekday
+  | "--maintenance-window-day=" : "Day of the maintenance window" ~ weekday
+  | "--maintenance-window-hour" , @number
+  | "--maintenance-window-hour=" : "Hour of the maintenance window, in UTC" ~ @number ;
+
+sql_edition = "enterprise" | "enterprise-plus" ;
+weekday = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" ;
+
+sql_create_flag =
+    region | zone
+  | "--root-password" , @any
+  | "--root-password=" : "Password of the root user" ~ @any
+  | "--storage-type" , sql_storage_type
+  | "--storage-type=" : "Storage type" ~ sql_storage_type ;
+
+sql_storage_type = "SSD" | "HDD" | "HYPERDISK_BALANCED" ;
+
+sql_patch_flag =
+    "--activation-policy" , ( "always" | "never" )
+  | "--activation-policy=" : "When the instance is activated" ~ ( "always" | "never" )
+  | "--clear-authorized-networks" : "Remove all authorized networks"
+  | "--clear-database-flags" : "Remove all database flags"
+  | "--no-backup" : "Disable automated backups" ;
+
+sql_databases_command =
+    "create" : "Create a database" , { sql_instance | charset | async | ga }
+  | "list" : "List the databases of an instance" , { sql_instance | list_flag | g }
+  | "describe" : "Describe a database" , { sql_instance | ga }
+  | "delete" : "Delete a database" , { sql_instance | ga }
+  | "patch" : "Update the settings of a database" , { sql_instance | charset | "--diff" : "Show what changed" | ga } ;
+
+charset =
+    "--charset" , @any | "--charset=" : "Character set of the database" ~ @any
+  | "--collation" , @any | "--collation=" : "Collation of the database" ~ @any ;
+
+sql_users_command =
+    "create" : "Create a user" , { sql_instance | sql_user_flag | sql_password | "--type" , @any | "--type=" : "Type of the user" ~ @any | async | ga }
+  | "list" : "List the users of an instance" , { sql_instance | list_flag | g }
+  | "describe" : "Describe a user" , { sql_instance | sql_user_flag | ga }
+  | "delete" : "Delete a user" , { sql_instance | sql_user_flag | async | ga }
+  | "set-password" : "Change the password of a user" , { sql_instance | sql_user_flag | sql_password | "--prompt-for-password" : "Prompt for the password" | async | ga }
+  | ( "assign-roles" : "Update the database roles of a user"
+      | "set-password-policy" : "Replace the password policy of a user" ) , rest ;
+
+sql_user_flag = "--host" , @any | "--host=" : "Host of a MySQL user" ~ @any ;
+sql_password = "--password" , @any | "--password=" : "Password of the user" ~ @any ;
+
+sql_backups_command =
+    "create" : "Create a backup of an instance" , { sql_instance | description | location | async | g }
+  | "list" : "List backups" , { sql_instance | list_flag | g }
+  | "describe" : "Describe a backup" , { sql_instance | ga }
+  | "delete" : "Delete a backup" , { sql_instance | async | ga }
+  | "restore" : "Restore a backup" , { "--restore-instance" , @any | "--restore-instance=" : "Instance to restore into" ~ @any | async | ga }
+  | "patch" : "Update the final backup of an instance" , rest ;
+
+sql_export_command =
+    "sql" : "Export to a SQL dump file" , { sql_dump_flag | sql_export_flag | ga }
+  | "csv" : "Export to a CSV file" , { sql_export_flag | csv_flag | "--query" , @any | "--query=" : "SELECT query of the data to export" ~ @any | ga }
+  | ( "bak" : "Export to a BAK file"
+      | "tde" : "Export a TDE certificate" ) , rest ;
+
+sql_import_command =
+    "sql" : "Import from a SQL dump file" , { sql_dump_flag | sql_import_flag | ga }
+  | "csv" : "Import from a CSV file" , { sql_import_flag | csv_flag | "--table" , @any | "--table=" : "Table to import into" ~ @any | ga }
+  | ( "bak" : "Import from a BAK file"
+      | "tde" : "Import a TDE certificate" ) , rest ;
+
+sql_database = "--database" , @any | "--database=" : "Database to use" ~ @any | "-d" : "Database to use" , @any ;
+
+sql_dump_flag =
+    "--clean" : "Drop objects before recreating them"
+  | "--if-exists" : "Use IF EXISTS when dropping objects"
+  | "--parallel" : "Run in parallel"
+  | "--threads" , @number | "--threads=" : "Number of threads" ~ @number
+  | async | sql_database ;
+
+sql_export_flag =
+    "--offload" : "Use a serverless export"
+  | "--table" , @any | "--table=" : "Tables to export" ~ @any
+  | "-t" : "Tables to export" , @any
+  | async | sql_database ;
+
+sql_import_flag =
+    "--user" , @any | "--user=" : "Database user for the import" ~ @any
+  | async | sql_database ;
+
+csv_flag =
+    "--escape" , @any | "--escape=" : "Escape character, as a hex code" ~ @any
+  | "--quote" , @any | "--quote=" : "Quote character, as a hex code" ~ @any
+  | "--fields-terminated-by" , @any
+  | "--fields-terminated-by=" : "Field separator, as a hex code" ~ @any
+  | "--lines-terminated-by" , @any
+  | "--lines-terminated-by=" : "Line separator, as a hex code" ~ @any ;
+
+sql_connect_flag =
+    sql_database
+  | "--user" , @any | "--user=" : "Database user to connect as" ~ @any
+  | "-u" : "Database user to connect as" , @any
+  | "--port" , @number | "--port=" : "Local port of the Cloud SQL Proxy" ~ @number
+  | "--auto-iam-authn" : "Use IAM database authentication"
+  | "--private-ip" : "Connect over the private IP"
+  | "--psc" : "Connect over Private Service Connect"
+  | "--auto-ip" : "Connect over the private or public IP"
+  | "--skip-ssl" : "Do not use SSL" ;
+
+sql_operations_command =
+    "list" : "List operations of an instance" , { sql_instance | list_flag | g }
+  | ( "describe" : "Describe an operation"
+      | "wait" : "Wait for operations to complete"
+      | "cancel" : "Cancel an operation" ) , rest ;
+
+(* logging *)
+
+logging_command =
+    "read" : "Read log entries" , { logging_read_flag | logging_parent | ga }
+  | "write" : "Write a log entry" , { logging_write_flag | logging_parent | ga }
+  | "logs" : "Manage your project's logs" , { g } , [ logging_logs_command ]
+  | "sinks" : "Manage sinks that route logs" , { g } , [ logging_sinks_command ]
+  | "metrics" : "Manage logs-based metrics" , { g } , [ logging_metrics_command ]
+  | ( "copy" : "Copy log entries"
+      | "buckets" : "Manage Cloud Logging buckets"
+      | "links" : "Manage linked datasets"
+      | "locations" : "Query Cloud Logging locations"
+      | "operations" : "Manage long running operations"
+      | "recent-queries" : "Manage recent queries"
+      | "resource-descriptors" : "Get information about resource descriptors"
+      | "saved-queries" : "Manage saved queries"
+      | "scopes" : "Manage log scopes"
+      | "settings" : "Manage the org settings of the Logs Router"
+      | "views" : "Manage log views" ) , rest ;
+
+logging_parent =
+    "--billing-account" , @any
+  | "--billing-account=" : "Billing account of the logs" ~ @any
+  | "--folder" , @any | "--folder=" : "Folder of the logs" ~ @any
+  | "--organization" , @any
+  | "--organization=" : "Organization of the logs" ~ @any ;
+
+log_view =
+    "--bucket" , @any | "--bucket=" : "Log bucket" ~ @any
+  | location
+  | "--view" , @any | "--view=" : "Log view" ~ @any ;
+
+logging_read_flag =
+    "--freshness" , @any
+  | "--freshness=" : "Return entries newer than this, such as 1d" ~ @any
+  | "--order" , log_order | "--order=" : "Order of the entries" ~ log_order
+  | "--limit" , @number | "--limit=" : "Maximum number of entries" ~ @number
+  | "--resource-names" , @any
+  | "--resource-names=" : "Resource names to read from" ~ @any
+  | log_view ;
+
+logging_write_flag =
+    "--severity" , severity | "--severity=" : "Severity of the entry" ~ severity
+  | "--payload-type" , ( "text" | "json" )
+  | "--payload-type=" : "Type of the payload" ~ ( "text" | "json" )
+  | "--monitored-resource-type" , @any
+  | "--monitored-resource-type=" : "Monitored resource type" ~ @any ;
+severity = "DEFAULT" | "DEBUG" | "INFO" | "NOTICE" | "WARNING" | "ERROR" | "CRITICAL" | "ALERT" | "EMERGENCY" ;
+
+logging_logs_command =
+    "list" : "List your project's logs" , { log_view | short_query | g }
+  | "delete" : "Delete all entries from a log" , { ga } ;
+
+logging_sinks_command =
+    "create" : "Create a log sink" , { sink_flag | logging_parent | ga }
+  | "list" : "List the defined sinks" , { "--sink-filter" , @any | "--sink-filter=" : "Filter of the sinks" ~ @any | logging_parent | short_query | g }
+  | "describe" : "Show a sink" , { logging_parent | ga }
+  | "delete" : "Delete a sink" , { logging_parent | ga }
+  | "update" : "Update a sink" , { sink_flag | "--clear-exclusions" : "Remove all exclusions" | logging_parent | ga } ;
+
+sink_flag =
+    "--log-filter" , @any
+  | "--log-filter=" : "Filter of the routed entries" ~ @any
+  | "--description" , @any | "--description=" : "Description of the sink" ~ @any
+  | "--disabled" : "Create the sink disabled"
+  | "--include-children" : "Include logs of child resources"
+  | "--custom-writer-identity" , @any
+  | "--custom-writer-identity=" : "Service account that writes to the destination" ~ @any
+  | "--use-partitioned-tables" : "Use BigQuery partitioned tables" ;
+
+logging_metrics_command =
+    "create" : "Create a logs-based metric" , { metric_flag | ga }
+  | "list" : "List logs-based metrics" , { short_query | g }
+  | "describe" : "Show a logs-based metric" , { ga }
+  | "delete" : "Delete a logs-based metric" , { ga }
+  | "update" : "Update a logs-based metric" , { metric_flag | ga } ;
+
+metric_flag =
+    "--description" , @any | "--description=" : "Description of the metric" ~ @any
+  | "--log-filter" , @any
+  | "--log-filter=" : "Filter of the counted entries" ~ @any
+  | "--config-from-file" , @file
+  | "--config-from-file=" : "Metric configuration file" ~ @file ;
+
+(* iam *)
+
+iam_command =
+    "service-accounts" : "Create and manipulate service accounts" , { g } , [ service_accounts_command ]
+  | "roles" : "Create and manipulate roles" , { g } , [ roles_command ]
+  | "list-grantable-roles" : "List IAM grantable roles for a resource" , { filter | page_size | ga }
+  | "list-testable-permissions" : "List IAM testable permissions for a resource" , { filter | ga }
+  | ( "oauth-clients" : "Create and manage OAuth clients"
+      | "policies" : "Manage IAM deny policies"
+      | "policy-bindings" : "Manage policy bindings"
+      | "principal-access-boundary-policies" : "Manage principal access boundary policies"
+      | "simulator" : "Simulate the impact of IAM policy changes"
+      | "workforce-pools" : "Create and manage workforce pools"
+      | "workload-identity-pools" : "Manage workload identity pools" ) , rest ;
+
+display_name =
+    "--display-name" , @any | "--display-name=" : "Display name" ~ @any ;
+
+service_accounts_command =
+    "create" : "Create a service account" , { display_name | description | ga }
+  | "list" : "List the service accounts of a project" , { short_query | uri | g }
+  | "describe" : "Show a service account" , { ga }
+  | "delete" : "Delete a service account" , { ga }
+  | "update" : "Update a service account" , { display_name | description | ga }
+  | "enable" : "Enable a service account" , { ga }
+  | "disable" : "Disable a service account" , { ga }
+  | "undelete" : "Undelete a service account" , { ga }
+  | "keys" : "Manage service account keys" , { g } , [ keys_command ]
+  | "add-iam-policy-binding" : "Add an IAM policy binding to a service account" , { binding | ga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from a service account" , { binding | ga }
+  | "get-iam-policy" : "Get the IAM policy of a service account" , { query_flag | ga }
+  | "set-iam-policy" : "Set the IAM policy of a service account" , { g | @file | @any }
+  | ( "sign-blob" : "Sign a blob with a service account"
+      | "sign-jwt" : "Sign a JWT with a service account" ) , rest ;
+
+iam_account =
+    "--iam-account" , @any | "--iam-account=" : "Service account of the keys" ~ @any ;
+
+keys_command =
+    "create" : "Create a service account key" , { iam_account | "--key-file-type" , ( "json" | "p12" ) | "--key-file-type=" : "Format of the key file" ~ ( "json" | "p12" ) | g | @file }
+  | "list" : "List the keys of a service account" , { iam_account | keys_list_flag | query_flag | g }
+  | "delete" : "Delete a service account key" , { iam_account | ga }
+  | "disable" : "Disable a service account key" , { iam_account | ga }
+  | "enable" : "Enable a service account key" , { iam_account | ga }
+  | "upload" : "Upload a public key for a service account" , { iam_account | g | @file } ;
+
+keys_list_flag =
+    "--managed-by" , ( "user" | "system" | "any" )
+  | "--managed-by=" : "Who manages the keys" ~ ( "user" | "system" | "any" )
+  | "--created-before" , @any
+  | "--created-before=" : "Only keys created before this time" ~ @any ;
+
+role_parent =
+    "--organization" , @any
+  | "--organization=" : "Organization of the custom role" ~ @any ;
+
+role_flag =
+    "--file" , @file | "--file=" : "YAML or JSON file of the role" ~ @file
+  | "--title" , @any | "--title=" : "Title of the role" ~ @any
+  | description
+  | "--permissions" , @any | "--permissions=" : "Permissions of the role" ~ @any
+  | "--stage" , role_stage | "--stage=" : "Launch stage of the role" ~ role_stage ;
+
+role_stage = "ALPHA" | "BETA" | "GA" | "DEPRECATED" | "DISABLED" | "EAP" ;
+
+roles_command =
+    "list" : "List predefined or custom roles" , { "--show-deleted" : "Include deleted roles" | role_parent | short_query | g }
+  | "describe" : "Show a role" , { role_parent | ga }
+  | "create" : "Create a custom role" , { role_flag | role_parent | ga }
+  | "update" : "Update a custom role" , { role_flag | role_update_flag | role_parent | ga }
+  | "delete" : "Delete a custom role" , { role_parent | ga }
+  | "undelete" : "Undelete a custom role" , { role_parent | ga }
+  | "copy" : "Create a role from an existing role" , rest ;
+
+role_update_flag =
+    "--add-permissions" , @any | "--add-permissions=" : "Permissions to add" ~ @any
+  | "--remove-permissions" , @any
+  | "--remove-permissions=" : "Permissions to remove" ~ @any ;
+
+(* secrets *)
+
+secrets_command =
+    "create" : "Create a secret" , { secret_create_flag | labels | lga }
+  | "list" : "List secret names" , { location | list_flag | g }
+  | "describe" : "Show the metadata of a secret" , { location | ga }
+  | "delete" : "Delete a secret" , { etag | lga }
+  | "update" : "Update the metadata of a secret" , { secret_update_flag | update_labels | etag | lga }
+  | "versions" : "Manage secret versions" , { g } , [ secret_versions_command ]
+  | "add-iam-policy-binding" : "Add an IAM policy binding to a secret" , { binding | lga }
+  | "remove-iam-policy-binding" : "Remove an IAM policy binding from a secret" , { binding | lga }
+  | "get-iam-policy" : "Get the IAM policy of a secret" , { location | query_flag | ga }
+  | "set-iam-policy" : "Set the IAM policy of a secret" , { location | g | @file | @any }
+  | ( "locations" : "Manage locations of secrets"
+      | "replication" : "Manage secret replication" ) , rest ;
+
+etag = "--etag" , @any | "--etag=" : "Act only if the etag matches" ~ @any ;
+data_file = "--data-file" , @file | "--data-file=" : "File with the secret data, or - for stdin" ~ @file ;
+secret_name = "--secret" , @any | "--secret=" : "Secret of the version" ~ @any ;
+
+secret_create_flag =
+    data_file
+  | "--replication-policy" , ( "automatic" | "user-managed" )
+  | "--replication-policy=" : "Replication policy" ~ ( "automatic" | "user-managed" )
+  | "--locations" , @any | "--locations=" : "Replica locations" ~ @any ;
+
+secret_update_flag =
+    "--expire-time" , @any | "--expire-time=" : "Time the secret expires" ~ @any
+  | "--ttl" , @any | "--ttl=" : "Time to live of the secret" ~ @any
+  | "--remove-expiration" : "Remove the expiration"
+  | "--rotation-period" , @any | "--rotation-period=" : "Rotation period" ~ @any
+  | "--next-rotation-time" , @any
+  | "--next-rotation-time=" : "Time of the next rotation" ~ @any
+  | "--remove-rotation-schedule" : "Remove the rotation schedule"
+  | "--add-topics" , @any | "--add-topics=" : "Pub/Sub topics to add" ~ @any
+  | "--remove-topics" , @any
+  | "--remove-topics=" : "Pub/Sub topics to remove" ~ @any
+  | "--clear-topics" : "Remove all Pub/Sub topics" ;
+
+secret_versions_command =
+    "access" : "Print the data of a secret version" , { secret_name | "--out-file" , @file | "--out-file=" : "Write the data to this file" ~ @file | location | g | version }
+  | "add" : "Create a new version of a secret" , { data_file | lga }
+  | "list" : "List the versions of a secret" , { location | list_flag | ga }
+  | "describe" : "Show the metadata of a secret version" , { secret_name | location | g | version }
+  | "destroy" : "Destroy the data of a secret version" , { secret_name | etag | location | g | version }
+  | "disable" : "Disable a secret version" , { secret_name | etag | location | g | version }
+  | "enable" : "Enable a secret version" , { secret_name | etag | location | g | version } ;
+
+version = "latest" : "The latest version" | @any ;

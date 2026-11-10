@@ -3,10 +3,8 @@
 static_assert(true);
 #endif
 
-
-#if (defined(__APPLE__))
 #include <cerrno>
-#endif
+
 #if (defined(__APPLE__))
 #include <cstdint>
 #endif

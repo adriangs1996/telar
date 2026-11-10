@@ -60,6 +60,37 @@ namespace telar::gui::qt {
     bool focused = false;
   };
 
+  // The repository beside the directory: ⎇ branch, then changes and divergence when known.
+  inline QString gitSummary(const PaneGit &git) {
+    if (!git.repository || git.branch.empty()) {
+      return {};
+    }
+    auto text = QStringLiteral("\u2387 ") + toQString(git.branch);
+    if (git.changes_known && git.staged + git.unstaged + git.conflicted != 0) {
+      text += QStringLiteral(" \u25CF") + QString::number(git.staged + git.unstaged + git.conflicted);
+    }
+    if (git.divergence_known && git.ahead != 0) {
+      text += QStringLiteral(" \u2191") + QString::number(git.ahead);
+    }
+    if (git.divergence_known && git.behind != 0) {
+      text += QStringLiteral(" \u2193") + QString::number(git.behind);
+    }
+    return text;
+  }
+
+  // A shell `ssh` reached: its host, and the link the last command took to reach it.
+  template <Allocator Memory>
+  QString remoteSummary(const Pane<Memory> &pane) {
+    if (!pane.shell.remote) {
+      return {};
+    }
+    auto text = pane.shell.host.empty() ? QStringLiteral("remote") : toQString(pane.shell.host);
+    if (pane.shell.link_ms != 0) {
+      text += QStringLiteral(" \u00B7 link ") + QString::number(pane.shell.link_ms) + QStringLiteral(" ms");
+    }
+    return text;
+  }
+
   template <Allocator Memory>
   QVariantMap paneChromeRecord(const Pane<Memory> &pane, std::span<const Agent<Memory>> agents, std::uint16_t index, bool images_paused = false) {
     QVariantMap agent_record;
@@ -90,6 +121,8 @@ namespace telar::gui::qt {
         {QStringLiteral("index"), QString::number(index)},
         {QStringLiteral("program"), pane.foreground.empty() ? QStringLiteral("shell") : toQString(pane.foreground)},
         {QStringLiteral("context"), context.empty() ? displayPath(pane.cwd) : toQString(safe_context.view())},
+        {QStringLiteral("git"), gitSummary(pane.git)},
+        {QStringLiteral("remote"), remoteSummary(pane)},
         {QStringLiteral("glyph"), toQString(mark.glyph)},
         {QStringLiteral("providerMark"), static_cast<int>(mark.provider)},
         {QStringLiteral("tile"), toQString(mark.tile)},

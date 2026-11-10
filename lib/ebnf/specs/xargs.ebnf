@@ -1,0 +1,47 @@
+(* xargs: the union of GNU xargs (findutils 4.11.0, `xargs --help` on Arch Linux)
+   and BSD xargs (`man xargs` on macOS 26). Options come first; the first operand
+   is the command, and everything after it belongs to the command. *)
+
+xargs = { option } , [ @command , { @any } ] ;
+
+option =
+    "-0" : "Input items are separated by NUL" | "--null" : "Input items are separated by NUL"
+  | "-a" : "GNU: read arguments from this file, not stdin" , @file
+  | "--arg-file" : "Read arguments from this file, not stdin" , @file
+  | "--arg-file=" : "Read arguments from this file, not stdin" ~ @file
+  | "-d" : "GNU: input items are separated by this character" , @any
+  | "--delimiter" : "Input items are separated by this character" , @any
+  | "--delimiter=" : "Input items are separated by this character" ~ @any
+  | "-E" : "Logical end-of-file string" , @any
+  | "-e" : "GNU: logical end-of-file string if joined, else none" | "-e" ~ @any
+  | "--eof" : "No logical end-of-file string" | "--eof=" : "Logical end-of-file string" ~ @any
+  | "-I" : "Run once per line, replacing this string in the arguments" , @any
+  | "-i" : "GNU: run once per line, replacing {} or the joined string" | "-i" ~ @any
+  | "--replace" : "Run once per line, replacing {} in the arguments"
+  | "--replace=" : "Run once per line, replacing this string" ~ @any
+  | "-J" : "BSD: replace this string with all the arguments" , @any
+  | "-R" : "BSD: replace in at most this many arguments with -I" , @any
+  | "-S" : "BSD: bytes -I may use for replacements" , @number
+  | "-L" : "Use at most this many input lines per command" , @number
+  | "--max-lines" : "Use at most this many input lines per command" , @number
+  | "--max-lines=" : "Use at most this many input lines per command" ~ @number
+  | "-l" : "GNU: use at most one input line, or the joined number" | "-l" ~ @number
+  | "-n" : "Use at most this many arguments per command" , @number
+  | "--max-args" : "Use at most this many arguments per command" , @number
+  | "--max-args=" : "Use at most this many arguments per command" ~ @number
+  | "-o" : "Reopen stdin as /dev/tty in the command" | "--open-tty" : "Reopen stdin as /dev/tty in the command"
+  | "-P" : "Run at most this many processes at a time" , @number
+  | "--max-procs" : "Run at most this many processes at a time" , @number
+  | "--max-procs=" : "Run at most this many processes at a time" ~ @number
+  | "-p" : "Ask before running each command" | "--interactive" : "Ask before running each command"
+  | "--process-slot-var" : "GNU: set this variable in each child to its slot" , @any
+  | "--process-slot-var=" : "GNU: set this variable in each child to its slot" ~ @any
+  | "-r" : "Do not run the command without arguments" | "--no-run-if-empty" : "Do not run the command without arguments"
+  | "-s" : "Limit command lines to this many bytes" , @number
+  | "--max-chars" : "Limit command lines to this many bytes" , @number
+  | "--max-chars=" : "Limit command lines to this many bytes" ~ @number
+  | "--show-limits" : "GNU: show the limits on command line length"
+  | "-t" : "Print each command before running it" | "--verbose" : "Print each command before running it"
+  | "-x" : "Exit if a command line exceeds the size limit" | "--exit" : "Exit if a command line exceeds the size limit"
+  | "--help" : "GNU: print the help and exit"
+  | "--version" : "GNU: print the version and exit" ;

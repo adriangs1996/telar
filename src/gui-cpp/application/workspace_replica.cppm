@@ -576,6 +576,16 @@ struct Pane {
   std::uint64_t acknowledged_frame = 0;
   PaneProgressState progress_state = PaneProgressState::remove;
   std::optional<Byte> progress_percent;
+  // The integrated shell's phase and the terminal's line discipline, for the command editor.
+  PaneShell shell{};
+  // The repository the integrated shell works in; `branch` owns the text the message viewed.
+  PaneGit git{};
+  std::string git_branch;
+  // The host a remote shell runs on, which `shell.host` views.
+  std::string shell_host;
+  // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines.
+  std::vector<CommandBlock> blocks;
+  std::string blocks_text;
 };
 
 // A pane the runtime listed for a tab. It stands in for the pane while the tab is not loaded.

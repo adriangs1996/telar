@@ -1,0 +1,230 @@
+(* bundle: commands and options of Bundler 4.0.15, checked against `bundle help`
+   and the Thor definitions in its lib/bundler/cli.rb, cli/config.rb,
+   cli/doctor.rb and cli/plugin.rb. Options Bundler 4 marks as removed
+   (install --path, --deployment, --without and friends) are left out.
+
+   Thor rules: a value is `--name value` or `--name=value`; short ones also take
+   it joined (`-j4`). Gem names and groups are free text, so commands that take
+   them accept any word. bundle exec runs the command that follows with its
+   own arguments. Executables named bundler-<command> also run as commands;
+   they are not modelled. *)
+
+bundle = { global_option } , [ command ] ;
+
+global_option =
+    "--no-color" : "Disable colorization in output"
+  | "-r" : "Times to attempt network commands" , @number
+  | "--retry" : "Times to attempt network commands" , @number | "--retry=" : "Times to attempt network commands" ~ @number
+  | "-V" : "Enable verbose output" | "--verbose" : "Enable verbose output"
+  | "-h" : "Show the help" | "--help" : "Show the help" ;
+
+command =
+    ( "install" : "Install the gems in the Gemfile" | "i" : "Install the gems in the Gemfile" ) , { install_option | global_option }
+  | "update" : "Update gems to their latest allowed versions" , { update_option | global_option | @any }
+  | ( "exec" : "Run a command in the context of the bundle" | "e" : "Run a command in the context of the bundle"
+    | "ex" : "Run a command in the context of the bundle" | "exe" : "Run a command in the context of the bundle" ) ,
+    { gemfile | global_option } , [ @command , { @any } ]
+  | ( "cache" : "Lock and cache the gems into vendor/cache" | "package" : "Lock and cache the gems into vendor/cache"
+    | "pack" : "Lock and cache the gems into vendor/cache" ) , { cache_option | global_option }
+  | "config" : "Read or set a configuration value" , { config_option | global_option } , [ config_command ]
+  | "add" : "Add a gem to the Gemfile and install it" , { add_option | global_option | @any }
+  | "remove" : "Remove gems from the Gemfile" , { global_option | @any }
+  | ( "check" : "Check that the Gemfile dependencies are installed" | "c" : "Check that the Gemfile dependencies are installed" ) ,
+    { check_option | global_option }
+  | "show" : "Show the path of a gem in the bundle" , { "--paths" : "List the paths of all gems in the Gemfile" | global_option | @any }
+  | "info" : "Show information about a gem" , { info_option | global_option | @any }
+  | ( "list" : "List the gems in the bundle" | "ls" : "List the gems in the bundle" ) , { list_option | global_option }
+  | "outdated" : "List gems with newer versions available" , { outdated_option | global_option | @any }
+  | "binstubs" : "Install the binstubs of gems" , { binstubs_option | global_option | @any }
+  | "lock" : "Create a lockfile without installing" , { lock_option | global_option }
+  | "init" : "Create a Gemfile in the current directory" , { init_option | global_option }
+  | "gem" : "Create the skeleton of a new gem" , { gem_option | global_option | @any }
+  | "open" : "Open the source of a gem in the editor" , { open_option | global_option | @any }
+  | "console" : "Start IRB with the bundle loaded" , { global_option | @any }
+  | "clean" : "Remove unused gems from the bundle directory" , { clean_option | global_option }
+  | "platform" : "Show platform compatibility information" , { "--ruby" : "Only show Ruby information" | global_option }
+  | "doctor" : "Check the bundle for common problems" , { doctor_option | global_option } , [ doctor_command ]
+  | "pristine" : "Restore installed gems to a pristine state" , { global_option | @any }
+  | "fund" : "List gems that ask for funding" , { group | global_option }
+  | "licenses" : "Print the license of every gem" , { global_option }
+  | "env" : "Print the environment Bundler runs under" , { global_option }
+  | "issue" : "Learn how to report a Bundler issue" , { global_option }
+  | ( "version" : "Print the Bundler version" | "-v" : "Print the Bundler version" | "--version" : "Print the Bundler version" ) , { global_option }
+  | "plugin" : "Manage Bundler plugins" , { global_option } , [ plugin_command ]
+  | "help" : "Show help for a command" , { global_option } , [ help_topic ] ;
+
+gemfile =
+    "--gemfile" : "Use this Gemfile" , @file | "--gemfile=" : "Use this Gemfile" ~ @file ;
+quiet = "--quiet" : "Only print warnings and errors" ;
+full_index = "--full-index" : "Use the single-file index of all gems" ;
+local = "--local" : "Use the gem cache instead of fetching gems" ;
+jobs = "-j" : "Jobs to run in parallel" , @number | "--jobs" : "Jobs to run in parallel" , @number | "--jobs=" : "Jobs to run in parallel" ~ @number ;
+force = "--force" : "Reinstall every gem" | "--redownload" : "Reinstall every gem" ;
+cooldown =
+    "--cooldown" : "Only use versions published at least N days ago" , @number
+  | "--cooldown=" : "Only use versions published at least N days ago" ~ @number ;
+lockfile = "--lockfile" : "Use this lockfile" , @file | "--lockfile=" : "Use this lockfile" ~ @file ;
+level =
+    "--patch" : "Prefer patch updates" | "--minor" : "Prefer minor updates" | "--major" : "Prefer major updates"
+  | "--pre" : "Always choose the highest version, even prereleases"
+  | "--strict" : "Do not update past the chosen level"
+  | "--conservative" : "Do not update shared dependencies" ;
+bundler_version =
+    "--bundler" : "Update the locked Bundler version" | "--bundler=" : "Update the locked Bundler version to this" ~ @any ;
+group = "-g" : "Only this group" , @any | "--group" : "Only this group" , @any | "--group=" : "Only this group" ~ @any ;
+
+install_option =
+    gemfile | quiet | full_index | local | jobs | force | cooldown | lockfile
+  | "--prefer-local" : "Only fetch gems that are not available locally"
+  | "--no-cache" : "Do not update the gem cache"
+  | "--no-lock" : "Do not create a lockfile"
+  | "--standalone" : "Make a bundle that works without Bundler" | "--standalone=" : "Standalone bundle for these groups" ~ @any
+  | "--trust-policy" : "Gem trust policy" , trust_policy | "--trust-policy=" : "Gem trust policy" ~ trust_policy
+  | "--target-rbconfig" : "rbconfig.rb of the target platform" , @file
+  | "--target-rbconfig=" : "rbconfig.rb of the target platform" ~ @file ;
+trust_policy = "HighSecurity" | "MediumSecurity" | "LowSecurity" | "AlmostNoSecurity" | "NoSecurity" ;
+
+update_option =
+    gemfile | quiet | full_index | local | jobs | force | cooldown | level | bundler_version | group
+  | "--source" : "Update the gems of this source" , @any | "--source=" : "Update the gems of this source" ~ @any
+  | "--ruby" : "Update the Ruby in Gemfile.lock"
+  | "--all" : "Update every gem" ;
+
+cache_option =
+    gemfile | quiet
+  | "--all-platforms" : "Cache gems for every platform in the lockfile"
+  | "--cache-path" : "Cache path instead of vendor/cache" , @directory
+  | "--cache-path=" : "Cache path instead of vendor/cache" ~ @directory
+  | "--no-install" : "Only update the cache, do not install" ;
+
+config_option =
+    "--global" : "Only change the global config" | "--local" : "Only change the local config"
+  | "--delete" : "Delete the setting" | "--parseable" : "Use parseable output" ;
+config_command =
+    "list" : "List all settings" , { config_option }
+  | "get" : "Print the value of a setting" , { config_option } , @any
+  | "set" : "Set a setting" , { config_option | @any }
+  | "unset" : "Remove a setting" , { config_option } , @any
+  | @any : "A setting name" , { config_option | @any } ;
+
+add_option =
+    quiet | cooldown
+  | "-v" : "Version requirement" , @any | "--version" : "Version requirement" , @any | "--version=" : "Version requirement" ~ @any
+  | "-g" : "Gemfile group" , @any | "--group" : "Gemfile group" , @any | "--group=" : "Gemfile group" ~ @any
+  | "-s" : "Gem source" , @any | "--source" : "Gem source" , @any | "--source=" : "Gem source" ~ @any
+  | "-r" : "Require path, or false" , @any | "--require" : "Require path, or false" , @any | "--require=" : "Require path, or false" ~ @any
+  | "--path" : "Path of a local gem" , @directory | "--path=" : "Path of a local gem" ~ @directory
+  | "--git" : "Git repository of the gem" , @any | "--git=" : "Git repository of the gem" ~ @any
+  | "--github" : "GitHub repository of the gem" , @any | "--github=" : "GitHub repository of the gem" ~ @any
+  | "--branch" : "Git branch" , @any | "--branch=" : "Git branch" ~ @any
+  | "--ref" : "Git revision" , @any | "--ref=" : "Git revision" ~ @any
+  | "--glob" : "Location of the gemspec in the repository" , @any | "--glob=" : "Location of the gemspec in the repository" ~ @any
+  | "--skip-install" : "Add the gem without installing it"
+  | "--optimistic" : "Use an optimistic version requirement, >="
+  | "--strict" : "Use a strict version requirement, =" ;
+
+check_option = gemfile | "--dry-run" : "Do not write a lockfile" ;
+
+info_option = "--path" : "Print the full path of the gem" | "--version" : "Print the gem version" ;
+
+list_option =
+    "--name-only" : "Print only gem names"
+  | "--only-group" : "Only gems of these groups" , @any | "--only-group=" : "Only gems of these groups" ~ @any
+  | "--without-group" : "Gems outside these groups" , @any | "--without-group=" : "Gems outside these groups" ~ @any
+  | "--format" : "Output format" , "json" | "--format=" : "Output format" ~ "json"
+  | "--paths" : "Print the path of each gem" ;
+
+outdated_option =
+    local | cooldown
+  | "--group" : "Only gems of this group" , @any | "--group=" : "Only gems of this group" ~ @any
+  | "--groups" : "Group the output by Gemfile group"
+  | "--pre" : "Check for newer prereleases"
+  | "--source" : "Check against this source" , @any | "--source=" : "Check against this source" ~ @any
+  | "--filter-strict" : "Only versions the Gemfile allows" | "--strict" : "Only versions the Gemfile allows"
+  | "--update-strict" : "Do not update past the chosen level"
+  | "--patch" : "Prefer patch updates" | "--minor" : "Prefer minor updates" | "--major" : "Prefer major updates"
+  | "--filter-major" : "Only list major updates" | "--filter-minor" : "Only list minor updates"
+  | "--filter-patch" : "Only list patch updates"
+  | "--parseable" : "Use parseable output" | "--porcelain" : "Use parseable output"
+  | "--only-explicit" : "Only gems in the Gemfile" ;
+
+binstubs_option =
+    "--force" : "Overwrite existing binstubs"
+  | "--shebang" : "Executable for the shebang" , @any | "--shebang=" : "Executable for the shebang" ~ @any
+  | "--standalone" : "Binstubs that work without Bundler"
+  | "--all" : "Binstubs for every gem"
+  | "--all-platforms" : "Binstubs for every platform" ;
+
+lock_option =
+    gemfile | full_index | level | bundler_version
+  | "--update" : "Update gems, all when none are named"
+  | "--local" : "Use the local gem cache only"
+  | "--print" : "Print the lockfile instead of writing it"
+  | "--lockfile" : "Write the lockfile to this path" , @file | "--lockfile=" : "Write the lockfile to this path" ~ @file
+  | "--add-checksums" : "Add checksums to the lockfile"
+  | "--add-platform" : "Add a platform to the lockfile" , @any | "--add-platform=" : "Add a platform to the lockfile" ~ @any
+  | "--remove-platform" : "Remove a platform from the lockfile" , @any
+  | "--remove-platform=" : "Remove a platform from the lockfile" ~ @any
+  | "--normalize-platforms" : "Normalize the lockfile platforms" ;
+
+init_option =
+    "--gemspec" : "Create the Gemfile from this gemspec" , @file | "--gemspec=" : "Create the Gemfile from this gemspec" ~ @file
+  | "--gemfile" : "Name of the Gemfile to create" , @any | "--gemfile=" : "Name of the Gemfile to create" ~ @any ;
+
+gem_option =
+    "--exe" : "Generate an executable" | "--bin" : "Generate an executable" | "-b" : "Generate an executable"
+  | "--no-exe" : "Do not generate an executable"
+  | "--coc" : "Generate a code of conduct" | "--no-coc" : "Do not generate a code of conduct"
+  | "-e" : "Open the gemspec in the editor" , [ @any ] | "--edit" : "Open the gemspec in the editor" , [ @any ]
+  | "--edit=" : "Open the gemspec in this editor" ~ @any
+  | "--ext" : "Generate extension boilerplate" , extension | "--ext=" : "Generate extension boilerplate" ~ extension
+  | "--git" : "Initialize a git repository" | "--no-git" : "Do not initialize a git repository"
+  | "--mit" : "Generate an MIT license" | "--no-mit" : "Do not generate an MIT license"
+  | "--changelog" : "Generate a changelog" | "--no-changelog" : "Do not generate a changelog"
+  | "-t" : "Generate tests" , [ test_framework ] | "--test" : "Generate tests" , [ test_framework ]
+  | "--test=" : "Test framework" ~ test_framework | "--no-test" : "Do not generate tests"
+  | "--ci" : "Generate CI configuration" , [ ci ] | "--ci=" : "CI service" ~ ci
+  | "--no-ci" : "Do not generate CI configuration"
+  | "--linter" : "Add a linter" , [ linter ] | "--linter=" : "Linter to add" ~ linter
+  | "--no-linter" : "Do not add a linter"
+  | "--github-username" : "GitHub username for the README" , @any
+  | "--github-username=" : "GitHub username for the README" ~ @any
+  | "--bundle" : "Run bundle install after creating the gem" | "--no-bundle" : "Do not run bundle install" ;
+extension = "c" | "rust" | "go" ;
+test_framework = "rspec" | "minitest" | "test-unit" ;
+ci = "github" | "gitlab" | "circle" ;
+linter = "rubocop" | "standard" ;
+
+open_option = "--path" : "Open this path inside the gem" | "--path=" : "Open this path inside the gem" ~ @any ;
+
+clean_option =
+    "--dry-run" : "Only print what would be removed"
+  | "--force" : "Clean even when gems are installed system-wide" ;
+
+doctor_option = gemfile | quiet | "--ssl" : "Diagnose SSL problems" ;
+doctor_command =
+    "diagnose" : "Check the bundle for common problems" , { doctor_option }
+  | "ssl" : "Diagnose SSL problems" , { ssl_option } ;
+ssl_option =
+    "--host" : "Host to diagnose" , @any | "--host=" : "Host to diagnose" ~ @any
+  | "--tls-version" : "TLS version to use" , ( "1.1" | "1.2" ) | "--tls-version=" : "TLS version to use" ~ ( "1.1" | "1.2" )
+  | "--verify-mode" : "Certificate verification mode" , ( "peer" | "none" )
+  | "--verify-mode=" : "Certificate verification mode" ~ ( "peer" | "none" ) ;
+
+plugin_command =
+    "install" : "Install plugins" , { plugin_install_option | @any }
+  | "uninstall" : "Uninstall plugins" , { "--all" : "Uninstall every plugin" | @any }
+  | "list" : "List the installed plugins"
+  | "help" : "Show help for a plugin command" , [ @any ] ;
+plugin_install_option =
+    "--source" : "RubyGems source of the plugin" , @any | "--source=" : "RubyGems source of the plugin" ~ @any
+  | "--version" : "Plugin version" , @any | "--version=" : "Plugin version" ~ @any
+  | "--git" : "Git repository of the plugin" , @any | "--git=" : "Git repository of the plugin" ~ @any
+  | "--branch" : "Git branch" , @any | "--branch=" : "Git branch" ~ @any
+  | "--ref" : "Git revision" , @any | "--ref=" : "Git revision" ~ @any
+  | "--path" : "Path of a local plugin" , @directory | "--path=" : "Path of a local plugin" ~ @directory ;
+
+help_topic =
+    "install" | "update" | "exec" | "cache" | "config" | "add" | "remove" | "check" | "show" | "info" | "list"
+  | "outdated" | "binstubs" | "lock" | "init" | "gem" | "open" | "console" | "clean" | "platform" | "doctor"
+  | "pristine" | "fund" | "licenses" | "env" | "issue" | "version" | "plugin" | "help" | "gemfile" ;

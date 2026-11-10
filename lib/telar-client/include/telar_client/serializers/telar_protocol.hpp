@@ -142,6 +142,21 @@ namespace telar {
     pause = 4,
   };
 
+  // The shell telar integrated with in a pane; none for any other program.
+  enum class IntegratedShell : Byte {
+    none = 0,
+    zsh = 1,
+    bash = 2,
+    fish = 3,
+  };
+
+  // Where the integrated shell is, from the marks it signed.
+  enum class ShellPhase : Byte {
+    unknown = 0,
+    prompt = 1,
+    running = 2,
+  };
+
   enum class SnapshotPhase : Byte {
     begin = 0,
     end = 1,
@@ -2152,6 +2167,221 @@ namespace telar {
                Field<&PaneProgress::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneProgress::state, EnumByte<PaneProgressState, 4>, "state">,
                Field<&PaneProgress::percent, PercentSentinel, "percent">> {};
+
+  // What a native command editor needs to decide who gets the keyboard: whether the pane's
+  // integrated shell is reading a command, and how the terminal's line discipline is set
+  // for the program that is not. The control characters are 0 when disabled.
+  struct PaneShell {
+    std::uint64_t pane_id{};
+    IntegratedShell shell{};
+    ShellPhase phase{};
+    bool shell_foreground = false;
+    bool canonical = false;
+    bool echo = false;
+    bool signal_keys = false;
+    Byte interrupt{};
+    Byte quit{};
+    Byte suspend{};
+    Byte end_of_file{};
+    // Counts the commands the shell reported finished, and the last one's exit status.
+    std::uint32_t commands = 0;
+    std::int32_t status = 0;
+    // The shell runs on another host, which `ssh` reached: the line discipline above is the
+    // local one ssh set raw, and the files, repositories and PATH are not this host's.
+    bool remote = false;
+    // The host the shell runs on, as its working directory report names it; empty when
+    // the shell runs on this one.
+    std::string_view host{};
+    // The round trip to that host, from input reaching its line editor to the echo, in
+    // milliseconds; 0 until timed.
+    std::uint32_t link_ms = 0;
+
+    bool operator==(const PaneShell &) const = default;
+
+    void validate() const {
+      if (shell == IntegratedShell::none && phase != ShellPhase::unknown) {
+        throw EncodingError{"Shell phase without an integrated shell"};
+      }
+    }
+  };
+
+  template <>
+  struct MessageSchema<PaneShell>
+      : Schema<Direction::server,
+               ServerTag::pane_shell,
+               Field<&PaneShell::pane_id, NonzeroU64, "pane_id">,
+               Field<&PaneShell::shell, EnumByte<IntegratedShell, 3>, "shell">,
+               Field<&PaneShell::phase, EnumByte<ShellPhase, 2>, "phase">,
+               Field<&PaneShell::shell_foreground, BoolByte, "shell_foreground">,
+               Field<&PaneShell::canonical, BoolByte, "canonical">,
+               Field<&PaneShell::echo, BoolByte, "echo">,
+               Field<&PaneShell::signal_keys, BoolByte, "signal_keys">,
+               Field<&PaneShell::interrupt, u8, "interrupt">,
+               Field<&PaneShell::quit, u8, "quit">,
+               Field<&PaneShell::suspend, u8, "suspend">,
+               Field<&PaneShell::end_of_file, u8, "end_of_file">,
+               Field<&PaneShell::commands, u32, "commands">,
+               Field<&PaneShell::status, i32, "status">,
+               Field<&PaneShell::remote, BoolByte, "remote">,
+               Field<&PaneShell::host, DisplayText16<255>, "host">,
+               Field<&PaneShell::link_ms, u32, "link_ms">> {};
+
+  // What a command spec leaves to the runtime: values that live where the shell runs.
+  enum class CompletionProvider : Byte {
+    command = 0,
+    branch = 1,
+    ssh_host = 2,
+    make_target = 3,
+    remote = 4,
+    stash = 5,
+    process = 6,
+    // Read from files in the shell's directory or its parents: a justfile's recipes, the
+    // nearest package.json's scripts and a compose file's services.
+    just_recipe = 7,
+    package_script = 8,
+    compose_service = 9,
+  };
+
+  // Asks for the values of `provider` that start with `prefix`, for the pane's integrated shell.
+  struct CompleteWords {
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    CompletionProvider provider{};
+    std::string_view prefix{};
+  };
+
+  template <>
+  struct MessageSchema<CompleteWords>
+      : Schema<Direction::client,
+               ClientTag::complete_words,
+               Field<&CompleteWords::request_id, NonzeroU64, "request_id">,
+               Field<&CompleteWords::pane_id, NonzeroU64, "pane_id">,
+               Field<&CompleteWords::provider, EnumByte<CompletionProvider, 9>, "provider">,
+               Field<&CompleteWords::prefix, DisplayText16<256>, "prefix">> {};
+
+  struct CompletionWords {
+    std::uint64_t request_id{};
+    bool truncated{};
+    std::span<const CompletionWord> words{};
+  };
+
+  template <>
+  struct MessageSchema<CompletionWords>
+      : Schema<Direction::server,
+               ServerTag::completion_words,
+               Field<&CompletionWords::request_id, NonzeroU64, "request_id">,
+               Field<&CompletionWords::truncated, BoolByte, "truncated">,
+               SpanCountField<&CompletionWords::words, u16, ValueCodec<CompletionWord>, 256, "word_count", 0>,
+               SpanItemsField<&CompletionWords::words, ValueCodec<CompletionWord>, "words">> {};
+
+  // The completion spec of a command, which the runtime holds: the specs telar ships and the
+  // ones in the user's completions directory. It answers only for a command the pane's
+  // shell runs; with the digest of the spec the client holds, an unchanged one is not sent.
+  struct RequestCommandSpec {
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    std::string_view command{};
+    std::uint64_t known_digest = 0;
+  };
+
+  template <>
+  struct MessageSchema<RequestCommandSpec>
+      : Schema<Direction::client,
+               ClientTag::request_command_spec,
+               Field<&RequestCommandSpec::request_id, NonzeroU64, "request_id">,
+               Field<&RequestCommandSpec::pane_id, NonzeroU64, "pane_id">,
+               Field<&RequestCommandSpec::command, DisplayText16<64, false>, "command">,
+               Field<&RequestCommandSpec::known_digest, u64, "known_digest">> {};
+
+  enum class CommandSpecState : Byte {
+    // `source` is the spec, and `digest` names it.
+    available = 0,
+    // The spec the client holds, with the digest it sent, still stands.
+    unchanged = 1,
+    // The shell does not run the command, or no spec describes it.
+    unavailable = 2,
+  };
+
+  struct CommandSpec {
+    static constexpr std::size_t maximum_source = 256 * 1024;
+
+    std::uint64_t request_id{};
+    std::string_view command{};
+    CommandSpecState state{};
+    std::uint64_t digest = 0;
+    std::string_view source{};
+    // When the command is an alias, the words it stands for: the spec is the first word's,
+    // and completion follows the words.
+    std::string_view expansion{};
+
+    void validate() const {
+      if ((state == CommandSpecState::available) == source.empty()) {
+        throw EncodingError{"Command spec source does not match its state"};
+      }
+    }
+  };
+
+  template <>
+  struct MessageSchema<CommandSpec>
+      : Schema<Direction::server,
+               ServerTag::command_spec,
+               Field<&CommandSpec::request_id, NonzeroU64, "request_id">,
+               Field<&CommandSpec::command, DisplayText16<64, false>, "command">,
+               Field<&CommandSpec::state, EnumByte<CommandSpecState, 2>, "state">,
+               Field<&CommandSpec::digest, u64, "digest">,
+               Field<&CommandSpec::source, SizedText<u32, CommandSpec::maximum_source, true, TextRule::utf8>, "source">,
+               Field<&CommandSpec::expansion, DisplayText16<256>, "expansion">> {};
+
+  // The commands a pane's integrated shell ran, oldest first, at most `capacity`. Sent again
+  // whenever one starts or ends, or the rows they take move.
+  struct PaneBlocks {
+    static constexpr std::size_t capacity = 64;
+
+    std::uint64_t pane_id{};
+    std::span<const CommandBlock> blocks{};
+  };
+
+  template <>
+  struct MessageSchema<PaneBlocks>
+      : Schema<Direction::server,
+               ServerTag::pane_blocks,
+               Field<&PaneBlocks::pane_id, NonzeroU64, "pane_id">,
+               SpanCountField<&PaneBlocks::blocks, u16, ValueCodec<CommandBlock>, PaneBlocks::capacity, "block_count", 0>,
+               SpanItemsField<&PaneBlocks::blocks, ValueCodec<CommandBlock>, "blocks">> {};
+
+  // The git repository an integrated shell's working directory is in, read by the runtime after
+  // each command. Counts the native reader could not establish are flagged unknown.
+  struct PaneGit {
+    std::uint64_t pane_id{};
+    bool repository = false;
+    bool detached = false;
+    std::string_view branch{};
+    bool divergence_known = false;
+    std::uint32_t ahead = 0;
+    std::uint32_t behind = 0;
+    bool changes_known = false;
+    std::uint32_t staged = 0;
+    std::uint32_t unstaged = 0;
+    std::uint32_t conflicted = 0;
+
+    bool operator==(const PaneGit &) const = default;
+  };
+
+  template <>
+  struct MessageSchema<PaneGit>
+      : Schema<Direction::server,
+               ServerTag::pane_git,
+               Field<&PaneGit::pane_id, NonzeroU64, "pane_id">,
+               Field<&PaneGit::repository, BoolByte, "repository">,
+               Field<&PaneGit::detached, BoolByte, "detached">,
+               Field<&PaneGit::branch, DisplayText16<256>, "branch">,
+               Field<&PaneGit::divergence_known, BoolByte, "divergence_known">,
+               Field<&PaneGit::ahead, u32, "ahead">,
+               Field<&PaneGit::behind, u32, "behind">,
+               Field<&PaneGit::changes_known, BoolByte, "changes_known">,
+               Field<&PaneGit::staged, u32, "staged">,
+               Field<&PaneGit::unstaged, u32, "unstaged">,
+               Field<&PaneGit::conflicted, u32, "conflicted">> {};
 
   struct ClientList {
     std::uint64_t request_id{};

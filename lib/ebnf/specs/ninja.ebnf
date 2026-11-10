@@ -1,0 +1,54 @@
+(* ninja: checked against `ninja --help`, `ninja -t list`, `ninja -d list` and
+   `ninja -w list` of ninja 1.13.2. Short options take their value joined or
+   separate (`-j8`, `-j 8`). Targets are the outputs and phony names of
+   build.ninja; they complete as files, and any word that is not an option is
+   accepted. `-t` ends ninja's own options: the rest belongs to the tool. *)
+
+ninja = { option | target } , [ "-t" : "Run a subtool" , subtool , { @any } ] ;
+
+target = @file ;
+
+option =
+    "--version" : "Print the ninja version"
+  | "-v" : "Show all command lines while building" | "--verbose" : "Show all command lines while building"
+  | "--quiet" : "Show only command output, no progress"
+  | "-C" : "Change to this directory first" , @directory
+  | "-f" : "Input build file (default: build.ninja)" , @file
+  | "-j" : "Run this many jobs in parallel; 0 means infinity" , @number
+  | "-k" : "Keep going until this many jobs fail; 0 means infinity" , @number
+  | "-l" : "Start no new jobs above this load average" , @any
+  | "-n" : "Dry run: act as if commands succeeded"
+  | "-d" : "Enable a debugging mode" , debug_mode
+  | "-w" : "Adjust warnings" , warning
+  | "-h" : "Print the usage" | "--help" : "Print the usage" ;
+
+debug_mode =
+    "list" : "List the debugging modes"
+  | "stats" : "Print operation counts and timing"
+  | "explain" : "Explain what caused a command to run"
+  | "keepdepfile" : "Keep depfiles after reading them"
+  | "keeprsp" : "Keep @response files on success" ;
+
+warning =
+    "list" : "List the warning flags"
+  | "phonycycle=err" : "Error when a phony statement references itself"
+  | "phonycycle=warn" : "Warn when a phony statement references itself" ;
+
+subtool =
+    "list" : "List the subtools"
+  | "browse" : "Browse the dependency graph in a web browser"
+  | "clean" : "Clean built files"
+  | "commands" : "List the commands needed to rebuild targets"
+  | "inputs" : "List the inputs needed to rebuild targets"
+  | "multi-inputs" : "Print sets of inputs needed to build targets"
+  | "deps" : "Show dependencies stored in the deps log"
+  | "missingdeps" : "Check deps log dependencies on generated files"
+  | "graph" : "Output a graphviz dot file for targets"
+  | "query" : "Show the inputs and outputs of a path"
+  | "targets" : "List targets by rule or depth in the DAG"
+  | "compdb" : "Dump a JSON compilation database"
+  | "compdb-targets" : "Dump a JSON compilation database of targets"
+  | "recompact" : "Recompact ninja-internal data structures"
+  | "restat" : "Restat all outputs in the build log"
+  | "rules" : "List all rules"
+  | "cleandead" : "Clean files the manifest no longer produces" ;

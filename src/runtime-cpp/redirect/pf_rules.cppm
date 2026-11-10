@@ -17,9 +17,11 @@ module;
 #include <sys/ioctl.h>
 
 #include <net/if.h>
+#include <poll.h>
+#if defined(__APPLE__)
 #include <net/if_dl.h>
 #include <net/route.h>
-#include <poll.h>
+#endif
 
 export module telar.runtime.redirect.pf_rules;
 
@@ -123,6 +125,10 @@ private:
 
 }
 }
+
+// pf's NAT lookup, the routing socket and pf's rules exist on macOS only; a flow's key is
+// shared with the Linux socket table.
+#if defined(__APPLE__)
 
 // Interface: redirect/nat_lookup.cppm
 export {
@@ -466,3 +472,5 @@ String<Memory> pfRules(Memory &memory, std::span<const Mapping> mappings, const 
 
 }
 }
+
+#endif

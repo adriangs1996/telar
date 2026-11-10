@@ -1,0 +1,26 @@
+(* kill: the POSIX forms, which /bin/kill and the bash and zsh builtins share.
+   Signal names are the ones Linux and macOS both define; numbers are the ones
+   POSIX fixes. Operands are process ids or shell job specs such as %1. *)
+
+kill = [ signal ] , { @process } , [ "--" , { @any } ]
+     | "-l" : "List signal names, or name the signal of an exit status" , [ @number ] ;
+
+signal =
+    "-s" : "Send this signal" , signal_name
+  | "-" : "Send this signal" ~ signal_name
+  | "-" : "Send the signal with this number" ~ signal_number ;
+
+signal_name =
+    "HUP" : "Hangup" | "INT" : "Interrupt" | "QUIT" : "Quit" | "ILL" : "Illegal instruction"
+  | "TRAP" : "Trace trap" | "ABRT" : "Abort" | "FPE" : "Floating point exception" | "KILL" : "Kill, cannot be caught"
+  | "BUS" : "Bus error" | "SEGV" : "Segmentation fault" | "SYS" : "Bad system call" | "PIPE" : "Broken pipe"
+  | "ALRM" : "Alarm clock" | "TERM" : "Terminate (default)" | "URG" : "Urgent socket condition"
+  | "STOP" : "Stop, cannot be caught" | "TSTP" : "Stop from the terminal" | "CONT" : "Continue if stopped"
+  | "CHLD" : "Child status changed" | "TTIN" : "Background read from the terminal" | "TTOU" : "Background write to the terminal"
+  | "IO" : "I/O possible" | "XCPU" : "CPU time limit exceeded" | "XFSZ" : "File size limit exceeded"
+  | "VTALRM" : "Virtual timer expired" | "PROF" : "Profiling timer expired" | "WINCH" : "Window size changed"
+  | "USR1" : "User defined signal 1" | "USR2" : "User defined signal 2" ;
+
+signal_number =
+    "0" : "Check that the process exists" | "1" : "HUP" | "2" : "INT" | "3" : "QUIT" | "6" : "ABRT"
+  | "9" : "KILL" | "14" : "ALRM" | "15" : "TERM" ;

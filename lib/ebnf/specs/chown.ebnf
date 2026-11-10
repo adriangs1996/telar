@@ -1,0 +1,29 @@
+(* chown: the union of GNU coreutils 9.12 (Arch Linux, `chown --help`) and the
+   BSD chown of macOS 26 (`man chown`). GNU long options take their value as
+   --name=value or as the next word. Operands are OWNER[:GROUP] (or :GROUP),
+   unless --reference is given, then the files; files are offered. *)
+
+chown = { option | @file } , [ "--" , { @file } ] ;
+
+option =
+    "-c" : "Linux: report only the files that change" | "--changes" : "Linux: report only the files that change"
+  | "-f" : "Suppress most error messages" | "--silent" : "Linux: suppress most error messages"
+  | "--quiet" : "Linux: suppress most error messages"
+  | "-v" : "Report every file processed" | "--verbose" : "Linux: report every file processed"
+  | "--dereference" : "Linux: change the targets of symlinks (default)"
+  | "-h" : "Change symlinks themselves, not their targets"
+  | "--no-dereference" : "Linux: change symlinks themselves, not their targets"
+  | "--from" : "Linux: only change files owned by CURRENT_OWNER:CURRENT_GROUP" , @any
+  | "--from=" : "Linux: only change files owned by CURRENT_OWNER:CURRENT_GROUP" ~ @any
+  | "--no-preserve-root" : "Linux: do not treat / specially (default)"
+  | "--preserve-root" : "Linux: refuse to operate recursively on /"
+  | "--reference" : "Linux: copy the owner and group of this file" , @file
+  | "--reference=" : "Linux: copy the owner and group of this file" ~ @file
+  | "-R" : "Operate on directories recursively" | "--recursive" : "Linux: operate on directories recursively"
+  | "-H" : "With -R, follow symlinks on the command line"
+  | "-L" : "With -R, follow every symlink to a directory"
+  | "-P" : "With -R, follow no symlinks (default)"
+  | "-n" : "macOS: numeric user and group ids, without name lookups"
+  | "-x" : "macOS: do not cross mount points"
+  | "--help" : "Linux: print the help and exit"
+  | "--version" : "Linux: print the version and exit" ;

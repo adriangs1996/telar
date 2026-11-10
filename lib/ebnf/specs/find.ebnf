@@ -1,0 +1,144 @@
+(* find: the union of GNU find (findutils 4.11.0, `find --help` and `man find` on
+   Arch Linux) and BSD find (`man find` on macOS 26). Options come first, then the
+   starting points, then the expression. Primaries only one of them knows say so.
+   Numeric test arguments take N, +N (more than N) or -N (less than N); BSD time
+   tests also take a unit, as -mtime -2h. *)
+
+find = { leading_option } , { @file } , { expression } ;
+
+leading_option =
+    "-H" : "Follow symbolic links on the command line only"
+  | "-L" : "Follow all symbolic links"
+  | "-P" : "Never follow symbolic links (default)"
+  | "-D" : "GNU: print diagnostics of these kinds, comma separated" , debug_options
+  | "-O" : "GNU: query optimisation level" ~ ( "0" | "1" | "2" | "3" )
+  | "-E" : "BSD: -regex and -iregex use extended regexes"
+  | "-X" : "BSD: skip file names unsafe for xargs"
+  | "-d" : "BSD: depth-first traversal"
+  | "-s" : "BSD: traverse in lexicographical order"
+  | "-x" : "BSD: do not cross file systems"
+  | "-f" : "BSD: add this starting point" , @any
+  | "--help" : "Print the help and exit"
+  | "--version" : "Print the version and exit" ;
+
+expression = operator | option | test | action ;
+
+operator =
+    "(" : "Group expressions" | ")" : "End a group"
+  | "!" : "Negate the next expression" | "-not" : "Negate the next expression"
+  | "-a" : "And (implicit between expressions)" | "-and" : "And (implicit between expressions)"
+  | "-o" : "Or" | "-or" : "Or"
+  | "," : "GNU: evaluate both, keep the second result" ;
+
+option =
+    "-daystart" : "GNU: measure times from the start of today"
+  | "-follow" : "Follow symbolic links (deprecated, use -L)"
+  | "-regextype" : "GNU: regex syntax of later -regex and -iregex" , regex_type
+  | "-warn" : "GNU: print warnings" | "-nowarn" : "GNU: do not print warnings"
+  | "-depth" : "Process a directory's contents before it; BSD: or depth is N"
+  | "-depth" , number
+  | "-d" : "BSD: same as -depth"
+  | "-files0-from" : "GNU: read starting points from this NUL separated file" , @file
+  | "-maxdepth" : "Descend at most this many levels" , @number
+  | "-mindepth" : "Skip tests and actions above this level" , @number
+  | "-mount" : "Do not descend into other file systems"
+  | "-xdev" : "Do not descend into other file systems"
+  | "-noleaf" : "Do not assume directories have 2 fewer subdirectories than links"
+  | "-ignore_readdir_race" : "Ignore files that vanish during the search"
+  | "-noignore_readdir_race" : "Report files that vanish during the search"
+  | "-help" : "GNU: print the help and exit"
+  | "-version" : "GNU: print the version and exit" ;
+
+test =
+    "-amin" : "Accessed N minutes ago" , number
+  | "-anewer" : "Accessed more recently than this file was modified" , @file
+  | "-atime" : "Accessed N days ago" , number
+  | "-cmin" : "Status changed N minutes ago" , number
+  | "-cnewer" : "Status changed more recently than this file was modified" , @file
+  | "-ctime" : "Status changed N days ago" , number
+  | "-mmin" : "Modified N minutes ago" , number
+  | "-mnewer" : "BSD: modified more recently than this file" , @file
+  | "-mtime" : "Modified N days ago" , number
+  | "-newer" : "Modified more recently than this file" , @file
+  | "-newer" : "Compare time X of the file to time Y of a reference" ~ newer_xy , @any
+  | "-Bmin" : "BSD: created N minutes ago" , number
+  | "-Bnewer" : "BSD: created more recently than this file was modified" , @file
+  | "-Btime" : "BSD: created N days ago" , number
+  | "-used" : "GNU: accessed N days after its status last changed" , number
+  | "-empty" : "Empty file or directory"
+  | "-executable" : "GNU: executable or searchable by the current user"
+  | "-readable" : "GNU: readable by the current user"
+  | "-writable" : "GNU: writable by the current user"
+  | "-false" : "Always false" | "-true" : "Always true"
+  | "-fstype" : "On a file system of this type" , @any
+  | "-gid" : "Numeric group ID is N" , @any
+  | "-uid" : "Numeric user ID is N" , @any
+  | "-group" : "Belongs to this group" , @any
+  | "-user" : "Owned by this user" , @any
+  | "-nogroup" : "No group corresponds to its group ID"
+  | "-nouser" : "No user corresponds to its user ID"
+  | "-name" : "Base name matches this shell pattern" , @any
+  | "-iname" : "Base name matches this shell pattern, ignoring case" , @any
+  | "-path" : "Path matches this shell pattern" , @any
+  | "-ipath" : "Path matches this shell pattern, ignoring case" , @any
+  | "-wholename" : "Path matches this shell pattern" , @any
+  | "-iwholename" : "Path matches this shell pattern, ignoring case" , @any
+  | "-lname" : "Symbolic link whose target matches this pattern" , @any
+  | "-ilname" : "Symbolic link whose target matches this pattern, ignoring case" , @any
+  | "-regex" : "Path matches this regular expression" , @any
+  | "-iregex" : "Path matches this regular expression, ignoring case" , @any
+  | "-inum" : "Inode number is N" , number
+  | "-links" : "Has N hard links" , number
+  | "-samefile" : "Refers to the same inode as this file" , @file
+  | "-perm" : "Permission bits are MODE, -MODE (all) or /MODE (any)" , @any
+  | "-size" : "Size is N units, as 10k, +1M or -100c" , @any
+  | "-type" : "File is of this type" , file_type
+  | "-xtype" : "GNU: like -type, but checks the target of symbolic links" , file_type
+  | "-context" : "GNU: SELinux context matches this pattern" , @any
+  | "-acl" : "BSD: has an extended ACL"
+  | "-flags" : "BSD: has these file flags, as [-|+]flags,notflags" , @any
+  | "-sparse" : "BSD: is a sparse file"
+  | "-xattr" : "BSD: has extended attributes"
+  | "-xattrname" : "BSD: has the extended attribute of this name" , @any ;
+
+action =
+    "-delete" : "Delete the file"
+  | "-print" : "Print the path followed by a newline"
+  | "-print0" : "Print the path followed by a NUL"
+  | "-printf" : "GNU: print the file in this format, as %p" , @any
+  | "-fprint" : "GNU: write the path to this file" , @file
+  | "-fprint0" : "GNU: write the path and a NUL to this file" , @file
+  | "-fprintf" : "GNU: write in a format to this file" , @file , @any
+  | "-ls" : "List the file in ls -dils format"
+  | "-fls" : "GNU: list the file in ls -dils format into this file" , @file
+  | "-prune" : "Do not descend into this directory"
+  | "-quit" : "Exit immediately"
+  | "-exec" : "Run a command; {} is the path; end with ; or +" , @command , { command_argument } , ( ";" : "Run once per file" | "+" : "Run with as many files as fit" )
+  | "-execdir" : "Run a command from the file's directory; end with ; or +" , @command , { command_argument } , ( ";" : "Run once per file" | "+" : "Run with as many files as fit" )
+  | "-ok" : "Ask, then run a command; end with ;" , @command , { command_argument } , ";" : "End of the command"
+  | "-okdir" : "Ask, then run a command from the file's directory" , @command , { command_argument } , ";" : "End of the command" ;
+
+command_argument = "{}" : "The current path" | @any ;
+
+number = @any : "N, +N for more than N, -N for less than N" ;
+
+file_type =
+    "f" : "Regular file" | "d" : "Directory" | "l" : "Symbolic link" | "p" : "Named pipe (FIFO)"
+  | "s" : "Socket" | "b" : "Block special" | "c" : "Character special" | "D" : "Door (Solaris)"
+  | @any : "GNU: several types, comma separated" ;
+
+(* X is the time of the file, Y the time of the reference: a(ccess), B(irth),
+   c(hange), m(odification), or t, a date string instead of a file. *)
+newer_xy =
+    "aa" | "aB" | "ac" | "am" | "at" | "Ba" | "BB" | "Bc" | "Bm" | "Bt"
+  | "ca" | "cB" | "cc" | "cm" | "ct" | "ma" | "mB" | "mc" | "mm" | "mt" ;
+
+regex_type =
+    "findutils-default" | "awk" | "ed" | "egrep" | "emacs" | "gnu-awk" | "grep" | "posix-awk"
+  | "posix-basic" | "posix-egrep" | "posix-extended" | "posix-minimal-basic" | "sed" ;
+
+debug_options =
+    "exec" : "Diagnostics of -exec, -execdir, -ok and -okdir" | "opt" : "Expression optimisation"
+  | "rates" : "How often each predicate succeeded" | "search" : "Navigate the tree verbosely"
+  | "stat" : "Each stat and lstat call" | "tree" : "The expression tree" | "all" : "All of them"
+  | "help" : "Explain the debug options" | @any : "Several kinds, comma separated" ;

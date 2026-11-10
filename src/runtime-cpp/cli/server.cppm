@@ -531,6 +531,15 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
   const ExecutablePath cli{"telar"};
   plugins::TapConfiguration tap_configuration{memory, configuration.configuration_directory.view(), configuration.plugins.configured(), process_environment};
   installPngDecoder();
+  // Shells keep starting without the integration when its scripts cannot be written.
+  String<Memory> shell_integration{AllocatorRef<char, Memory>{memory}};
+  if (configuration.shell_integration && !paths.data_home.empty()) {
+    try {
+      shell_integration = ShellIntegration<Memory>::install(memory, paths.data_home);
+    } catch (const SystemError &error) {
+      std::fprintf(stderr, "telar runtime: shell integration disabled: %s\n", error.what());
+    }
+  }
   SqliteAllocator sqlite_memory{memory};
   std::optional<traffic::Service<Memory>> traffic_service;
   if (configuration.proxy.network_capture) {
@@ -586,6 +595,8 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
       .descriptions = {.arguments = std::span{description_arguments}.first(configuration.descriptions.arguments.size()), .timeout = configuration.descriptions.timeout},
       .graphics = configuration.graphics,
       .control_policy = configuration.control_policy,
+      .shell_integration = shell_integration,
+      .ssh_integration = configuration.ssh_integration,
   };
   Runtime runtime{memory, poller, background, runtime_options, proxy.clientConfiguration()};
   runtime.run(proxy, plugin_service);

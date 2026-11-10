@@ -418,6 +418,56 @@ struct HistoryConfiguration {
   bool match_fts = false;
 };
 
+enum class PromptMode : std::uint8_t {
+  classic,
+  telar,
+};
+
+enum class PromptSkin : std::uint8_t {
+  halo,
+  glass,
+  ink,
+};
+
+enum class PromptMotion : std::uint8_t {
+  spring,
+  ease,
+  none,
+};
+
+enum class PromptKeymap : std::uint8_t {
+  emacs,
+  vim,
+};
+
+// A key `client.prompt.bindings` binds: a KeyChord's key, character and modifiers, and the
+// index of its action; `normal` binds it in vim's normal mode instead of typing.
+struct PromptBinding {
+  std::uint8_t key = 0;
+  std::uint32_t character = 0;
+  unsigned modifiers = 0;
+  std::uint8_t action = 0;
+  bool normal = false;
+
+  bool operator==(const PromptBinding &) const = default;
+};
+
+// `client.prompt`: the shell prompt as the shell draws it, or telar's own command editor.
+struct PromptConfiguration {
+  static constexpr std::uint8_t default_max_lines = 12;
+  static constexpr std::uint8_t maximum_max_lines = 64;
+
+  PromptMode mode = PromptMode::classic;
+  PromptSkin skin = PromptSkin::halo;
+  PromptMotion motion = PromptMotion::spring;
+  PromptKeymap keymap = PromptKeymap::emacs;
+  bool ghost = true;
+  std::uint8_t max_lines = default_max_lines;
+  std::vector<PromptBinding> bindings;
+
+  bool operator==(const PromptConfiguration &) const = default;
+};
+
 struct SoundPolicy {
   bool enabled = true;
   bool ready = true;
@@ -451,6 +501,7 @@ struct Configuration {
   runtime::FixedText<maximum_editor_bytes> editor;
   runtime::FixedText<maximum_window_title_bytes> window_title;
   HistoryConfiguration history;
+  PromptConfiguration prompt;
   SoundPolicy sound;
   NotificationDelivery notification_delivery = NotificationDelivery::telar;
   Theme theme;

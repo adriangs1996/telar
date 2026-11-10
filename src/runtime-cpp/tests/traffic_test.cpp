@@ -8,6 +8,7 @@ static_assert(true);
 #include <sys/types.h>
 #include <unistd.h>
 #include <cerrno>
+#include <cstdlib>
 #include <csignal>
 #include <cstddef>
 #include <cstring>

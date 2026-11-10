@@ -227,6 +227,11 @@ return telar.config({
 		prefix = "ctrl+s",
 		pane_gaps = true,
 
+		prompt = {
+			mode = "telar",
+			keymap = "vim",
+		},
+
 		sidebar = {
 			visible = true,
 		},

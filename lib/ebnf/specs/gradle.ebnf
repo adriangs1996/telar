@@ -1,0 +1,209 @@
+(* gradle: options checked against `gradle --help` of Gradle 9.8.2, task options
+   against `gradle help --task <task>` in a project with the application plugin.
+   bootRun comes from the Spring Boot plugin and was not run; it takes the
+   JavaExec options of run.
+
+   Options with a value accept `--name value` and `--name=value`; short ones
+   accept `-x value` and `-xvalue` (`-Pkey=value`). Any other word is a task, a
+   task path such as :app:build, a camel-case abbreviation or a task option, so
+   the grammar accepts every word and only offers the common ones. *)
+
+gradle = { option | task } , [ "--" : "End of the built-in options" , { @any } ] ;
+
+option =
+    "-?" : "Show the help" | "-h" : "Show the help" | "--help" : "Show the help"
+  | "-V" : "Print the version and continue" | "--show-version" : "Print the version and continue"
+  | "-v" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "-d" : "Log at debug level" | "--debug" : "Log at debug level"
+  | "-S" : "Print the full stacktrace of exceptions" | "--full-stacktrace" : "Print the full stacktrace of exceptions"
+  | "-i" : "Log at info level" | "--info" : "Log at info level"
+  | "-q" : "Log errors only" | "--quiet" : "Log errors only"
+  | "-s" : "Print the stacktrace of exceptions" | "--stacktrace" : "Print the stacktrace of exceptions"
+  | "-w" : "Log at warn level" | "--warn" : "Log at warn level"
+  | "--console" : "Type of console output" , console | "--console=" : "Type of console output" ~ console
+  | "--console-unicode" : "Characters allowed in console output" , auto_switch
+  | "--console-unicode=" : "Characters allowed in console output" ~ auto_switch
+  | "--non-interactive" : "Do not prompt"
+  | "-g" : "Gradle user home directory" , @directory
+  | "--gradle-user-home" : "Gradle user home directory" , @directory | "--gradle-user-home=" : "Gradle user home directory" ~ @directory
+  | "--include-build" : "Include this build in the composite" , @directory
+  | "--include-build=" : "Include this build in the composite" ~ @directory
+  | "-I" : "Initialization script" , @file
+  | "--init-script" : "Initialization script" , @file | "--init-script=" : "Initialization script" ~ @file
+  | "--offline" : "Build without network access"
+  | "--project-cache-dir" : "Project cache directory" , @directory
+  | "--project-cache-dir=" : "Project cache directory" ~ @directory
+  | "-p" : "Start directory" , @directory
+  | "--project-dir" : "Start directory" , @directory | "--project-dir=" : "Start directory" ~ @directory
+  | "-P" : "Set a project property, name=value" , @any
+  | "--project-prop" : "Set a project property, name=value" , @any | "--project-prop=" : "Set a project property, name=value" ~ @any
+  | "-U" : "Refresh the state of dependencies" | "--refresh-dependencies" : "Refresh the state of dependencies"
+  | "-D" : "Set a JVM system property, name=value" , @any
+  | "--system-prop" : "Set a JVM system property, name=value" , @any | "--system-prop=" : "Set a JVM system property, name=value" ~ @any
+  | "--continue" : "Continue after a task failure" | "--no-continue" : "Stop after a task failure"
+  | "-t" : "Rerun tasks when their inputs change" | "--continuous" : "Rerun tasks when their inputs change"
+  | "-m" : "Run with all task actions disabled" | "--dry-run" : "Run with all task actions disabled"
+  | "-x" : "Exclude this task" , @any
+  | "--exclude-task" : "Exclude this task" , @any | "--exclude-task=" : "Exclude this task" ~ @any
+  | "-a" : "Do not rebuild project dependencies" | "--no-rebuild" : "Do not rebuild project dependencies"
+  | "--rerun-tasks" : "Ignore previously cached task results"
+  | "--build-cache" : "Enable the build cache" | "--no-build-cache" : "Disable the build cache"
+  | "--configuration-cache" : "Enable the configuration cache" | "--no-configuration-cache" : "Disable the configuration cache"
+  | "--configure-on-demand" : "Configure necessary projects only" | "--no-configure-on-demand" : "Disable configuration on demand"
+  | "--isolated-projects" : "Enable Isolated Projects" | "--no-isolated-projects" : "Disable Isolated Projects"
+  | "--max-workers" : "Maximum number of concurrent workers" , @number
+  | "--max-workers=" : "Maximum number of concurrent workers" ~ @number
+  | "--parallel" : "Build projects in parallel" | "--no-parallel" : "Disable parallel project execution"
+  | "--priority" : "Scheduling priority of the daemon" , priority | "--priority=" : "Scheduling priority of the daemon" ~ priority
+  | "--watch-fs" : "Enable file system watching" | "--no-watch-fs" : "Disable file system watching"
+  | "-F" : "Dependency verification mode" , verification
+  | "--dependency-verification" : "Dependency verification mode" , verification
+  | "--dependency-verification=" : "Dependency verification mode" ~ verification
+  | "--export-keys" : "Export the public keys used for verification"
+  | "--refresh-keys" : "Refresh the public keys used for verification"
+  | "--update-locks" : "Update the dependency lock for these modules" , @any
+  | "--update-locks=" : "Update the dependency lock for these modules" ~ @any
+  | "--write-locks" : "Persist dependency resolution for locked configurations"
+  | "-M" : "Write verification metadata, comma separated" , @any
+  | "--write-verification-metadata" : "Write verification metadata, comma separated" , @any
+  | "--write-verification-metadata=" : "Write verification metadata, comma separated" ~ @any
+  | "--configuration-cache-problems" : "How the configuration cache handles problems" , problems
+  | "--configuration-cache-problems=" : "How the configuration cache handles problems" ~ problems
+  | "--problems-report" : "Enable the HTML problems report" | "--no-problems-report" : "Disable the HTML problems report"
+  | "--profile" : "Profile build execution time"
+  | "--property-upgrade-report" : "Run with the property upgrade report"
+  | "--task-graph" : "Print the task graph instead of running tasks"
+  | "--warning-mode" : "Which warnings to generate" , warning_mode | "--warning-mode=" : "Which warnings to generate" ~ warning_mode
+  | "--daemon" : "Use the Gradle daemon" | "--no-daemon" : "Run without the Gradle daemon"
+  | "--foreground" : "Start the daemon in the foreground"
+  | "--status" : "Show the status of Gradle daemons"
+  | "--stop" : "Stop the Gradle daemon"
+  | "--develocity-plugin-version" : "Develocity plugin version to apply" , @any
+  | "--develocity-plugin-version=" : "Develocity plugin version to apply" ~ @any
+  | "--develocity-url" : "Develocity server for Build Scans" , @any
+  | "--develocity-url=" : "Develocity server for Build Scans" ~ @any
+  | "--scan" : "Generate a Build Scan" | "--no-scan" : "Do not generate a Build Scan" ;
+
+console = "plain" | "colored" | "auto" | "rich" | "verbose" ;
+auto_switch = "auto" | "disable" | "enable" ;
+priority = "normal" | "low" ;
+verification = "strict" | "lenient" | "off" ;
+problems = "warn" | "fail" ;
+warning_mode = "all" | "fail" | "summary" | "none" ;
+
+(* Tasks the base, java and application plugins define, with their options. *)
+task =
+    "build" : "Assemble and test this project" , { rerun }
+  | "assemble" : "Assemble the outputs of this project" , { rerun }
+  | "check" : "Run all checks" , { rerun }
+  | "test" : "Run the test suite" , { test_option }
+  | "clean" : "Delete the build directory" , { rerun }
+  | "run" : "Run this project as a JVM application" , { exec_option }
+  | "bootRun" : "Run this project as a Spring Boot application" , { exec_option }
+  | "jar" : "Assemble a jar archive" , { rerun }
+  | "classes" : "Assemble main classes" , { rerun }
+  | "testClasses" : "Assemble test classes" , { rerun }
+  | "compileJava" : "Compile main Java source" , { rerun }
+  | "compileTestJava" : "Compile test Java source" , { rerun }
+  | "javadoc" : "Generate Javadoc API documentation" , { rerun }
+  | "buildNeeded" : "Assemble and test this project and its dependencies" , { rerun }
+  | "buildDependents" : "Assemble and test this project and its dependents" , { rerun }
+  | "installDist" : "Install the project as a distribution" , { rerun }
+  | "distZip" : "Bundle the project as a zip distribution" , { rerun }
+  | "distTar" : "Bundle the project as a tar distribution" , { rerun }
+  | "tasks" : "Display the runnable tasks" , { tasks_option }
+  | "dependencies" : "Display the declared dependencies" , { dependencies_option }
+  | "dependencyInsight" : "Explain why a dependency is selected" , { insight_option }
+  | "buildEnvironment" : "Display the buildscript dependencies" , { rerun }
+  | "projects" : "Display the sub-projects" , { rerun }
+  | "properties" : "Display the project properties" , { properties_option }
+  | "javaToolchains" : "Display the detected Java toolchains" , { rerun }
+  | "outgoingVariants" : "Display the outgoing variants" , { rerun }
+  | "resolvableConfigurations" : "Display the resolvable configurations" , { rerun }
+  | "help" : "Display a help message" , { help_option }
+  | "init" : "Initialize a new Gradle build" , { init_option }
+  | "wrapper" : "Generate Gradle wrapper files" , { wrapper_option }
+  | "updateDaemonJvm" : "Generate or update the daemon JVM criteria" , { rerun }
+  | @any : "Another task, a task path, or a task option" ;
+
+rerun = "--rerun" : "Rerun the task even if up to date" ;
+
+test_option =
+    rerun
+  | "--tests" : "Include this test class or method, * allowed" , @any
+  | "--tests=" : "Include this test class or method, * allowed" ~ @any
+  | "--fail-fast" : "Stop after the first failed test" | "--no-fail-fast" : "Do not stop after a failed test"
+  | "--debug-jvm" : "Suspend the test JVM for a debugger on port 5005" | "--no-debug-jvm" : "Do not debug the test JVM"
+  | "--test-dry-run" : "Simulate test execution" | "--no-test-dry-run" : "Run the tests" ;
+
+exec_option =
+    rerun
+  | "--args" : "Arguments for the main class" , @any | "--args=" : "Arguments for the main class" ~ @any
+  | "--debug-jvm" : "Suspend the JVM for a debugger on port 5005" | "--no-debug-jvm" : "Do not debug the JVM" ;
+
+tasks_option =
+    rerun
+  | "--all" : "Show additional tasks and detail" | "--no-all" : "Hide additional tasks"
+  | "--group" : "Show tasks for this group" , @any | "--group=" : "Show tasks for this group" ~ @any
+  | "--groups" : "Show tasks for these groups" , @any | "--groups=" : "Show tasks for these groups" ~ @any
+  | "--provenance" : "Show task provenance" | "--no-provenance" : "Hide task provenance"
+  | "--types" : "Show task class types" | "--no-types" : "Hide task class types" ;
+
+dependencies_option =
+    rerun
+  | "--configuration" : "Configuration to report" , @any | "--configuration=" : "Configuration to report" ~ @any ;
+
+insight_option =
+    rerun
+  | "--dependency" : "Dependency to explain" , @any | "--dependency=" : "Dependency to explain" ~ @any
+  | "--configuration" : "Configuration to search" , @any | "--configuration=" : "Configuration to search" ~ @any
+  | "--all-variants" : "Show all variants of each dependency" | "--no-all-variants" : "Show the selected variant only"
+  | "--single-path" : "Show at most one path to each dependency" | "--no-single-path" : "Show every path" ;
+
+properties_option =
+    rerun
+  | "--property" : "Property to print" , @any | "--property=" : "Property to print" ~ @any ;
+
+help_option =
+    rerun
+  | "--task" : "Task to show help for" , @any | "--task=" : "Task to show help for" ~ @any ;
+
+init_option =
+    rerun
+  | "--type" : "Type of project to generate" , init_type | "--type=" : "Type of project to generate" ~ init_type
+  | "--dsl" : "Build script DSL" , dsl | "--dsl=" : "Build script DSL" ~ dsl
+  | "--project-name" : "Project name" , @any | "--project-name=" : "Project name" ~ @any
+  | "--package" : "Package for source files" , @any | "--package=" : "Package for source files" ~ @any
+  | "--test-framework" : "Test framework" , test_framework | "--test-framework=" : "Test framework" ~ test_framework
+  | "--java-version" : "Java version of the project" , @number | "--java-version=" : "Java version of the project" ~ @number
+  | "--into" : "Directory to generate the project in" , @directory | "--into=" : "Directory to generate the project in" ~ @directory
+  | "--insecure-protocol" : "How to handle insecure repository URLs" , insecure_protocol
+  | "--insecure-protocol=" : "How to handle insecure repository URLs" ~ insecure_protocol
+  | "--comments" : "Include clarifying comments" | "--no-comments" : "Leave out clarifying comments"
+  | "--incubating" : "Allow incubating features" | "--no-incubating" : "Do not use incubating features"
+  | "--overwrite" : "Overwrite existing files" | "--no-overwrite" : "Do not overwrite existing files"
+  | "--split-project" : "Split functionality across subprojects" | "--no-split-project" : "Generate a single project"
+  | "--use-defaults" : "Use defaults for unset options" | "--no-use-defaults" : "Ask for unset options" ;
+
+init_type =
+    "basic" | "java-application" | "java-library" | "java-gradle-plugin" | "kotlin-application" | "kotlin-library"
+  | "kotlin-gradle-plugin" | "groovy-application" | "groovy-library" | "groovy-gradle-plugin" | "scala-application"
+  | "scala-library" | "cpp-application" | "cpp-library" | "swift-application" | "swift-library" | "pom" ;
+dsl = "kotlin" | "groovy" ;
+test_framework = "junit" | "junit-jupiter" | "testng" | "spock" | "kotlintest" | "scalatest" | "cpptest" | "xctest" ;
+insecure_protocol = "ALLOW" | "FAIL" | "UPGRADE" | "WARN" ;
+
+wrapper_option =
+    rerun
+  | "--gradle-version" : "Gradle version for the wrapper" , @any | "--gradle-version=" : "Gradle version for the wrapper" ~ @any
+  | "--distribution-type" : "Distribution type" , distribution | "--distribution-type=" : "Distribution type" ~ distribution
+  | "--gradle-distribution-url" : "URL of the Gradle distribution" , @any
+  | "--gradle-distribution-url=" : "URL of the Gradle distribution" ~ @any
+  | "--gradle-distribution-sha256-sum" : "SHA-256 sum of the distribution" , @any
+  | "--gradle-distribution-sha256-sum=" : "SHA-256 sum of the distribution" ~ @any
+  | "--network-timeout" : "Network timeout in ms" , @number | "--network-timeout=" : "Network timeout in ms" ~ @number
+  | "--retries" : "Number of download retries" , @number | "--retries=" : "Number of download retries" ~ @number
+  | "--retry-back-off-ms" : "Initial back off between retries in ms" , @number
+  | "--retry-back-off-ms=" : "Initial back off between retries in ms" ~ @number
+  | "--validate-url" : "Validate the distribution URL" | "--no-validate-url" : "Do not validate the distribution URL" ;
+distribution = "bin" | "all" | "BIN" | "ALL" ;

@@ -54,6 +54,9 @@ list(FILTER ebnf_test_sources INCLUDE REGEX "^tests/")
 list(FILTER ebnf_sources EXCLUDE REGEX "^tests/")
 list(REMOVE_ITEM ebnf_sources main.cpp)
 
+# A consumer such as the GUI only needs the library: the executable, the tests and their
+# downloaded GoogleTest, and the lifetime checks belong to the standalone project.
+if(PROJECT_IS_TOP_LEVEL)
 add_executable(ebnf main.cpp ${ebnf_sources})
 target_link_libraries(ebnf PRIVATE ebnf_options)
 
@@ -112,3 +115,4 @@ foreach(mode IN ITEMS format format-check lint)
     USES_TERMINAL
     VERBATIM)
 endforeach()
+endif()

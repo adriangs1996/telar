@@ -1,0 +1,39 @@
+(* jq: jq 1.8.2, checked against `jq --help` and `man jq` on macOS 26 and
+   `jq --help` on Arch Linux (identical). The first operand is the filter (a file
+   name with -f); the rest are input files, or values with --args and --jsonargs.
+   Options may come before or after the filter. *)
+
+jq = { option } , [ @any : "The jq filter, as . or .items[]" , { option | @file } ] , [ "--" , { @any } ] ;
+
+option =
+    "-n" : "Use null as the single input value" | "--null-input" : "Use null as the single input value"
+  | "-R" : "Read each line as a string, not JSON" | "--raw-input" : "Read each line as a string, not JSON"
+  | "-s" : "Read all inputs into one array" | "--slurp" : "Read all inputs into one array"
+  | "-c" : "Compact instead of pretty-printed output" | "--compact-output" : "Compact instead of pretty-printed output"
+  | "-r" : "Print strings without quotes" | "--raw-output" : "Print strings without quotes"
+  | "--raw-output0" : "Like -r, with a NUL after each output"
+  | "-j" : "Like -r, without a newline after each output" | "--join-output" : "Like -r, without a newline after each output"
+  | "-a" : "Escape non-ASCII characters" | "--ascii-output" : "Escape non-ASCII characters"
+  | "-S" : "Sort the keys of objects" | "--sort-keys" : "Sort the keys of objects"
+  | "-C" : "Colorize the output" | "--color-output" : "Colorize the output"
+  | "-M" : "Disable colored output" | "--monochrome-output" : "Disable colored output"
+  | "--tab" : "Indent with tabs"
+  | "--indent" : "Indent with this many spaces, at most 7" , @number
+  | "--unbuffered" : "Flush the output after each value"
+  | "--stream" : "Parse the input in streaming fashion"
+  | "--stream-errors" : "Like --stream, reporting parse errors as arrays"
+  | "--seq" : "Use application/json-seq for input and output"
+  | "-f" : "Read the filter from a file" | "--from-file" : "Read the filter from a file"
+  | "-L" : "Search this directory for modules" , @directory
+  | "--library-path" : "Search this directory for modules" , @directory
+  | "--arg" : "Set $name to a string, as --arg name value" , @any , @any
+  | "--argjson" : "Set $name to a JSON value, as --argjson name json" , @any , @any
+  | "--slurpfile" : "Set $name to the JSON values in a file" , @any , @file
+  | "--rawfile" : "Set $name to the contents of a file" , @any , @file
+  | "--args" : "Remaining operands are string values"
+  | "--jsonargs" : "Remaining operands are JSON values"
+  | "-e" : "Set the exit status from the last output" | "--exit-status" : "Set the exit status from the last output"
+  | "-b" : "Windows: do not convert newlines to CRLF" | "--binary" : "Windows: do not convert newlines to CRLF"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "--build-configuration" : "Print the build configuration and exit"
+  | "-h" : "Print the help and exit" | "--help" : "Print the help and exit" ;

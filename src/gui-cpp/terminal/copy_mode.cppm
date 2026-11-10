@@ -736,6 +736,20 @@ public:
     return true;
   }
 
+  // Enters at `cursor`, from the top of the scrollback, already selecting from `anchor` when
+  // one is given: a command block's text, picked from telar's editor.
+  inline bool enterAt(std::uint64_t pane_id, const CopyGrid &grid, CopyPoint cursor, std::optional<CopyPoint> anchor, bool linewise) noexcept {
+    if (active() || grid.columns == 0 || grid.rows == 0) {
+      return false;
+    }
+
+    state_ = CopyState{.pane_id = pane_id, .cursor = cursor, .anchor = anchor, .linewise = linewise, .entry_offset = grid.scroll.offset, .viewport_offset = grid.scroll.offset};
+    match_count_ = 0;
+    ++revision_;
+
+    return true;
+  }
+
   [[nodiscard]] inline std::optional<CopyPlan> key(const TerminalKey &key, const CopyGrid &grid) const noexcept {
     if (!state_ || state_->pointer) {
       return {};

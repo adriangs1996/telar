@@ -1,0 +1,331 @@
+(* codex: Codex CLI 0.166.0 (codex-cli), checked against `codex --help` and the -h/--help
+   of each subcommand of that version. The CLI changes fast: this spec follows 0.166.0 and
+   options added later stay invalid until it is updated.
+
+   Conventions (the CLI uses clap):
+   - Options with a value accept `--name value` and `--name=value`; short ones `-x value`
+     and `-xvalue`. Options may follow positional arguments.
+   - -c, --enable and --disable are global: every subcommand takes them.
+   - The prompt is one free-text word (quote it).
+   - The experimental tooling commands (app-server, exec-server, remote-control, debug)
+     only model their own options; their nested subcommands take any words. *)
+
+codex = { root_option } , [ command | @any , { root_option } ] ;
+
+(* Values. *)
+
+sandbox_mode =
+    "read-only" : "Read files, no writes or network"
+  | "workspace-write" : "Write inside the workspace"
+  | "danger-full-access" : "No sandbox at all" ;
+approval_policy =
+    "on-request" : "The model decides when to ask"
+  | "never" : "Never ask; failures go back to the model" ;
+local_provider = "lmstudio" : "LM Studio" | "ollama" : "Ollama" ;
+color_when = "always" | "never" | "auto" ;
+cyber_program = "standard" | "daybreak_blue" | "daybreak_red" ;
+oauth_registration = "auto" | "cimd" | "dcr" ;
+ws_auth = "capability-token" | "signed-bearer-token" ;
+shell = "bash" | "elvish" | "fish" | "powershell" | "zsh" ;
+
+(* Option groups. *)
+
+global =
+    "-c" : "Override a config value, key=value" , @any | "--config" : "Override a config value, key=value" , @any
+  | "--config=" : "Override a config value, key=value" ~ @any
+  | "--enable" : "Enable a feature" , @any | "--enable=" : "Enable a feature" ~ @any
+  | "--disable" : "Disable a feature" , @any | "--disable=" : "Disable a feature" ~ @any
+  | "-h" : "Print help" | "--help" : "Print help" ;
+
+strict = "--strict-config" : "Fail on unknown config.toml fields" ;
+json = "--json" : "Output as JSON" ;
+
+model =
+    "-m" : "Model the agent should use" , @any | "--model" : "Model the agent should use" , @any
+  | "--model=" : "Model the agent should use" ~ @any ;
+image =
+    "-i" : "Images to attach to the prompt" , @file , { @file } | "--image" : "Images to attach to the prompt" , @file , { @file }
+  | "--image=" : "Images to attach to the prompt" ~ @file ;
+profile =
+    "-p" : "Layer $CODEX_HOME/<name>.config.toml on the config" , @any | "--profile" : "Layer $CODEX_HOME/<name>.config.toml on the config" , @any
+  | "--profile=" : "Layer $CODEX_HOME/<name>.config.toml on the config" ~ @any ;
+cd =
+    "-C" : "Use this directory as the working root" , @directory | "--cd" : "Use this directory as the working root" , @directory
+  | "--cd=" : "Use this directory as the working root" ~ @directory ;
+bypass =
+    "--dangerously-bypass-approvals-and-sandbox" : "Skip every prompt and the sandbox"
+  | "--dangerously-bypass-hook-trust" : "Run enabled hooks without persisted trust" ;
+worktree = "--worktree" : "Run the session in a new managed Git worktree" ;
+remote =
+    "--remote" : "Remote app server: ws://, wss:// or unix://" , @any | "--remote=" : "Remote app server: ws://, wss:// or unix://" ~ @any
+  | "--remote-auth-token-env" : "Environment variable with the bearer token" , @any
+  | "--remote-auth-token-env=" : "Environment variable with the bearer token" ~ @any ;
+
+(* The options of an agent session, shared by the TUI, exec and the session commands. *)
+session_option =
+    global | strict | model | image | profile | cd | bypass | worktree
+  | "--oss" : "Use the open-source provider"
+  | "--local-provider" : "Local provider for --oss" , local_provider | "--local-provider=" : "Local provider for --oss" ~ local_provider
+  | "-s" : "Sandbox policy for model commands" , sandbox_mode | "--sandbox" : "Sandbox policy for model commands" , sandbox_mode
+  | "--sandbox=" : "Sandbox policy for model commands" ~ sandbox_mode
+  | "--approve-for-me" : "Route approvals through automatic review"
+  | "--add-dir" : "Additional writable directory" , @directory | "--add-dir=" : "Additional writable directory" ~ @directory ;
+
+tui_option =
+    session_option | remote
+  | "-a" : "When the model asks for approval" , approval_policy | "--ask-for-approval" : "When the model asks for approval" , approval_policy
+  | "--ask-for-approval=" : "When the model asks for approval" ~ approval_policy
+  | "--search" : "Enable live web search"
+  | "--no-alt-screen" : "Run inline, keeping the scrollback"
+  | "--no-daemon" : "Run without the shared background server" ;
+
+root_option = tui_option | "-V" : "Print version" | "--version" : "Print version" ;
+
+command =
+    "agents" : "Browse agent sessions on the local daemon" , { global | remote | cd | "--no-alt-screen" : "Run inline, keeping the scrollback" }
+  | ( "exec" : "Run Codex non-interactively" | "e" : "Run Codex non-interactively" ) , { exec_option } , [ exec_command | @any , { exec_option } ]
+  | "review" : "Run a code review non-interactively" , { global | strict | review_option } , [ @any , { global | strict | review_option } ]
+  | "login" : "Manage login" , { login_option } , [ "status" : "Show login status" , { global } | "help" : "Print help" , [ "status" ] ]
+  | "logout" : "Remove stored authentication credentials" , { global }
+  | "mcp" : "Manage external MCP servers" , { global } , mcp_command
+  | "plugin" : "Manage Codex plugins" , { global } , plugin_command
+  | "app-server" : "Run the app server or related tooling (experimental)" , { app_server_option } , [ app_server_command , { @any } ]
+  | "remote-control" : "Manage the daemon with remote control (experimental)" , { remote_control_option } , [ remote_control_command , { @any } ]
+  | "app" : "Launch the Desktop app" , { global | "--download-url" : "Override the app installer URL" , @any } , [ @directory , { global } ]
+  | "completion" : "Generate shell completion scripts" , { global } , [ shell , { global } ]
+  | "update" : "Update Codex to the latest version" , { global }
+  | "doctor" : "Diagnose the installation, config, auth and runtime" , { doctor_option }
+  | "sandbox" : "Run commands within a Codex-provided sandbox" , { sandbox_option } , [ "uninstall" : "Remove the legacy Windows sandbox" , { global } | [ "--" ] , @command , { @any } ]
+  | "debug" : "Debugging tools" , { global } , debug_command , { @any }
+  | ( "apply" : "Apply the latest Codex diff with git apply" | "a" : "Apply the latest Codex diff with git apply" ) , { global } , @any , { global }
+  | "resume" : "Resume a previous interactive session" , { resume_option } , [ @any , { resume_option } , [ @any , { resume_option } ] ]
+  | "queue" : "Queue a message for an existing session" , { queue_option }
+  | "archive" : "Archive a saved session" , { session_option | remote } , @any , { session_option | remote }
+  | "delete" : "Permanently delete a saved session" , { delete_option } , @any , { delete_option }
+  | "migrate-rollouts" : "Inspect or migrate legacy local sessions" , { migrate_rollouts_option }
+  | "migrate-nfs-db" : "Migrate SQLite databases to DELETE mode (experimental)" , { global | "--staging-dir" : "Local directory for the database and WAL files" , @directory }
+  | "unarchive" : "Unarchive a saved session" , { session_option | remote } , @any , { session_option | remote }
+  | "fork" : "Fork a previous interactive session" , { fork_option } , [ @any , { fork_option } , [ @any , { fork_option } ] ]
+  | "cloud" : "Browse Codex Cloud tasks (experimental)" , { global | "-V" : "Print version" | "--version" : "Print version" } , [ cloud_command ]
+  | "exec-server" : "Run the standalone exec-server (experimental)" , { exec_server_option } , [ ( "forward" : "Register a remote exec-server" | "help" : "Print help" ) , { @any } ]
+  | "features" : "Inspect feature flags" , { global } , features_command
+  | "help" : "Print help for a subcommand" , { @any } ;
+
+(* exec *)
+
+exec_only =
+    "--thread-source" : "Source classification for new threads" , @any | "--thread-source=" : "Source classification for new threads" ~ @any
+  | "--cyber-access-program" : "Experimental Cyber access program" , cyber_program | "--cyber-access-program=" : "Experimental Cyber access program" ~ cyber_program
+  | "--skip-git-repo-check" : "Allow running outside a Git repository"
+  | "--ephemeral" : "Do not persist session files"
+  | "--ignore-user-config" : "Do not load $CODEX_HOME/config.toml"
+  | "--ignore-rules" : "Do not load execpolicy .rules files"
+  | "--output-schema" : "JSON Schema for the final response" , @file | "--output-schema=" : "JSON Schema for the final response" ~ @file
+  | "--json" : "Print events to stdout as JSONL"
+  | "-o" : "Write the last agent message to this file" , @file | "--output-last-message" : "Write the last agent message to this file" , @file
+  | "--output-last-message=" : "Write the last agent message to this file" ~ @file ;
+
+exec_option =
+    session_option | exec_only
+  | "--color" : "Color settings for the output" , color_when | "--color=" : "Color settings for the output" ~ color_when ;
+
+(* resume, fork and review under exec take a narrower set. *)
+exec_sub_option = global | strict | model | bypass | worktree | exec_only ;
+last_all =
+    "--last" : "Pick the most recent session"
+  | "--all" : "Show all sessions, not only this directory's" ;
+
+exec_command =
+    "resume" : "Resume a previous session by id, or --last" , { exec_sub_option | image | last_all } , [ @any , { exec_sub_option | image | last_all } , [ @any , { exec_sub_option | image | last_all } ] ]
+  | "fork" : "Fork a previous session into a new one" , { exec_sub_option | image } , @any , { exec_sub_option | image } , [ @any , { exec_sub_option | image } ]
+  | "review" : "Run a code review against the repository" , { exec_sub_option | review_option } , [ @any , { exec_sub_option | review_option } ]
+  | "help" : "Print help" , [ "resume" | "fork" | "review" ] ;
+
+review_option =
+    "--uncommitted" : "Review staged, unstaged and untracked changes"
+  | "--base" : "Review changes against this base branch" , @branch | "--base=" : "Review changes against this base branch" ~ @branch
+  | "--commit" : "Review the changes of this commit" , @any | "--commit=" : "Review the changes of this commit" ~ @any
+  | "--title" : "Commit title for the review summary" , @any | "--title=" : "Commit title for the review summary" ~ @any ;
+
+(* Session commands. *)
+
+resume_option = tui_option | last_all | "--include-non-interactive" : "Include non-interactive sessions" ;
+fork_option = tui_option | last_all ;
+delete_option = session_option | remote | "--force" : "Delete without prompting; needs a UUID" ;
+queue_option =
+    global | strict | remote | profile | cd
+  | "--thread" : "Session UUID or exact session name" , @any | "--thread=" : "Session UUID or exact session name" ~ @any
+  | "--message" : "Message text to queue" , @any | "--message=" : "Message text to queue" ~ @any
+  | "--resume" : "Resume the thread after queueing" ;
+
+login_option =
+    global
+  | "--with-api-key" : "Read the API key from stdin"
+  | "--with-access-token" : "Read the access token from stdin"
+  | "--device-auth" : "Use device authentication" ;
+
+doctor_option =
+    global
+  | "--json" : "Emit a redacted machine-readable report"
+  | "--network-only" : "Run only the config and network checks"
+  | "--summary" : "Only show grouped rows and the summary"
+  | "--all" : "Expand long lists"
+  | "--no-color" : "Disable ANSI color"
+  | "--ascii" : "Use ASCII status labels" ;
+
+sandbox_option =
+    global | cd
+  | "--sandbox-state-json" : "Opaque JSON from codex/sandbox-state" , @any
+  | "--sandbox-state-readable-root" : "Add a readable root to the sandbox state" , @directory
+  | "--sandbox-state-disable-network" : "Disable network in the sandbox state"
+  | "-P" : "Named permissions profile" , @any | "--permission-profile" : "Named permissions profile" , @any
+  | "-p" : "Config profile" , @any | "--profile" : "Config profile" , @any
+  | "--include-managed-config" : "Include managed requirements"
+  | "--allow-unix-socket" : "Allow AF_UNIX sockets under this path" , @file
+  | "--log-denials" : "Print macOS sandbox denials after exit" ;
+
+migrate_rollouts_option =
+    global
+  | "--apply" : "Publish the migration instead of only reporting"
+  | "--thread" : "Restrict to this thread id" , @any
+  | "--max-mib-per-second" : "Limit read and write throughput" , @number
+  | "--json" : "Emit the per-thread report as JSON"
+  | "--verbose" : "Print one line per inspected rollout" ;
+
+(* mcp *)
+
+mcp_command =
+    "list" : "List configured MCP servers" , { global | json }
+  | "get" : "Show an MCP server's configuration" , { global | json } , @any , { global | json }
+  | "add" : "Add an MCP server" , { mcp_add_option } , @any , { mcp_add_option } , [ "--" , @command , { @any } ]
+  | "remove" : "Remove an MCP server" , { global } , @any , { global }
+  | "login" : "Authenticate with an MCP server over OAuth" , { mcp_login_option } , @any , { mcp_login_option }
+  | "logout" : "Remove an MCP server's OAuth credentials" , { global } , @any , { global }
+  | "help" : "Print help" , [ @any ] ;
+
+mcp_add_option =
+    global
+  | "--env" : "Environment variable for stdio servers, KEY=VALUE" , @any | "--env=" : "Environment variable for stdio servers, KEY=VALUE" ~ @any
+  | "--url" : "URL of a streamable HTTP server" , @any | "--url=" : "URL of a streamable HTTP server" ~ @any
+  | "--bearer-token-env-var" : "Environment variable with a bearer token" , @any
+  | "--oauth-client-id" : "OAuth client id" , @any
+  | "--oauth-client-secret" : "OAuth client secret" , @any
+  | "--oauth-client-registration" : "OAuth client registration strategy" , oauth_registration
+  | "--oauth-resource" : "OAuth resource parameter" , @any ;
+
+mcp_login_option =
+    global
+  | "--no-browser" : "Print the authorization URL instead"
+  | "--scopes" : "OAuth scopes to request, comma separated" , @any
+  | "--oauth-client-registration" : "OAuth client registration strategy" , oauth_registration ;
+
+(* plugin *)
+
+marketplace_option = "-m" : "Marketplace name" , @any | "--marketplace" : "Marketplace name" , @any | "--marketplace=" : "Marketplace name" ~ @any ;
+
+plugin_command =
+    "add" : "Install a plugin from a marketplace" , { global | json | marketplace_option } , @any , { global | json | marketplace_option }
+  | "list" : "List plugins from the marketplaces" , { global | json | marketplace_option | "--available" : "Include uninstalled plugins in the JSON" }
+  | "marketplace" : "Add, list, upgrade or remove marketplaces" , { global } , plugin_marketplace_command
+  | "remove" : "Uninstall a plugin and remove its cache" , { global | json | marketplace_option } , @any , { global | json | marketplace_option }
+  | "help" : "Print help" , [ @any ] ;
+
+plugin_marketplace_command =
+    "add" : "Add a local or Git marketplace" , { global | json
+      | "--ref" : "Git ref to fetch" , @any | "--sparse" : "Sparse checkout path" , @any } , ( @directory | @any ) , { global | json
+      | "--ref" : "Git ref to fetch" , @any | "--sparse" : "Sparse checkout path" , @any }
+  | "list" : "List marketplaces and their roots" , { global | json }
+  | "upgrade" : "Refresh Git marketplace snapshots" , { global | json } , [ @any , { global | json } ]
+  | "remove" : "Remove a marketplace by name" , { global | json } , @any , { global | json }
+  | "help" : "Print help" , [ @any ] ;
+
+(* features *)
+
+features_command =
+    "list" : "List features with their stage and state" , { global }
+  | "enable" : "Enable a feature in config.toml" , { global } , @any , { global }
+  | "disable" : "Disable a feature in config.toml" , { global } , @any , { global }
+  | "help" : "Print help" , [ "list" | "enable" | "disable" ] ;
+
+(* cloud *)
+
+cloud_command =
+    "exec" : "Submit a new Codex Cloud task" , { cloud_exec_option } , [ @any , { cloud_exec_option } ]
+  | "status" : "Show the status of a task" , { global } , @any , { global }
+  | "list" : "List Codex Cloud tasks" , { global | json
+      | "--env" : "Filter by environment id" , @any
+      | "--limit" : "Maximum tasks to return, 1-20" , @number
+      | "--cursor" : "Pagination cursor" , @any }
+  | "apply" : "Apply a task's diff locally" , { global | attempt } , @any , { global | attempt }
+  | "diff" : "Show a task's unified diff" , { global | attempt } , @any , { global | attempt }
+  | "help" : "Print help" , [ @any ] ;
+
+attempt = "--attempt" : "Attempt number, 1-based" , @number | "--attempt=" : "Attempt number, 1-based" ~ @number ;
+cloud_exec_option =
+    global
+  | "--env" : "Target environment id" , @any | "--env=" : "Target environment id" ~ @any
+  | "--attempts" : "Assistant attempts (best-of-N)" , @number
+  | "--branch" : "Git branch to run in" , @branch | "--branch=" : "Git branch to run in" ~ @branch ;
+
+(* Experimental tooling. *)
+
+ws_option =
+    "--listen" : "Transport endpoint URL" , @any
+  | "--ws-auth" : "WebSocket authentication mode" , ws_auth
+  | "--ws-token-file" : "Capability-token file" , @file
+  | "--ws-token-sha256" : "SHA-256 of the WebSocket token" , @any
+  | "--ws-shared-secret-file" : "Shared secret file for signed JWTs" , @file
+  | "--ws-issuer" : "Expected issuer of signed JWTs" , @any
+  | "--ws-audience" : "Expected audience of signed JWTs" , @any
+  | "--ws-max-clock-skew-seconds" : "Maximum clock skew for signed JWTs" , @number ;
+
+app_server_option =
+    global | strict | ws_option
+  | "--startup-sign-out" : "Sign out before loading startup requirements"
+  | "--print-startup-config" : "Print requirements as JSON and exit"
+  | "--startup-client-info" : "ClientInfo JSON for request identity" , @any
+  | "--cloud-skills-snapshot" : "Load cloud skills from a JSON snapshot" , @file
+  | "--code-mode-host" : "Connect to a remote code-mode host" , @any
+  | "--stdio" : "Use stdio as the transport"
+  | "--analytics-default-enabled" : "Enable analytics by default" ;
+
+app_server_command =
+    "daemon" : "Manage the local app-server daemon"
+  | "proxy" : "Proxy stdio to the app-server control socket"
+  | "generate-ts" : "Generate TypeScript bindings (experimental)"
+  | "generate-json-schema" : "Generate the protocol JSON Schema (experimental)"
+  | "help" : "Print help" ;
+
+remote_control_option =
+    global
+  | "--json" : "Emit machine-readable JSON"
+  | "--no-daemon" : "Run an embedded app-server in the foreground" ;
+
+remote_control_command =
+    "start" : "Start the daemon with remote control enabled"
+  | "stop" : "Stop the app-server daemon"
+  | "pair" : "Print a short-lived pairing code"
+  | "help" : "Print help" ;
+
+debug_command =
+    "models" : "Render the raw model catalog as JSON"
+  | "app-server" : "Debug the app server"
+  | "prompt-input" : "Render the model-visible prompt input as JSON"
+  | "help" : "Print help" ;
+
+exec_server_option =
+    global | strict | ws_option
+  | "--linux-sandbox-pid-namespace" : "Linux PID namespace mode" , ( "isolate" | "inherit" )
+  | "--proxy-private-ips-via-upstream" : "Let private IPs use the upstream proxy"
+  | "--concurrent-requests" : "Maximum concurrent requests per connection" , @number
+  | "--remote" : "Register as a remote environment at this URL" , @any
+  | "--remote-transport" : "Transport to the remote executor" , ( "noise" | "direct" )
+  | "--environment-id" : "Environment id to attach to" , @any
+  | "--name" : "Human-readable environment name" , @any
+  | "--use-agent-identity-auth" : "Use Agent Identity auth for registration"
+  | "--executor-credential-stdin" : "Read executor credentials from stdin"
+  | "--aws-sigv4" : "Sign requests with AWS SigV4"
+  | "--aws-profile" : "AWS profile for SigV4" , @any
+  | "--aws-region" : "AWS signing region" , @any
+  | "--aws-service" : "AWS signing service" , @any
+  | "--exit-on-stdin-close" : "Exit when stdin closes" ;

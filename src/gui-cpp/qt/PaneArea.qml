@@ -305,6 +305,42 @@ Item {
                         }
                     }
                 }
+
+                // The commands the shell ran: a separator over each one's prompt, and a dot per
+                // command beside the pane to reach it.
+                CommandSeparators {
+                    view: terminal
+                    colors: root.application.colors
+                    grid: root.application.windowGeometry.typography.grid
+                    ratio: root.ratio
+                    moving: island.moving
+                    landing: island.landing
+                    holding: island.flying
+                }
+
+                CommandRail {
+                    view: terminal
+                    colors: root.application.colors
+                    ratio: root.ratio
+                    moving: island.moving
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4 * root.ratio
+                    anchors.top: parent.top
+                    anchors.topMargin: 12 * root.ratio
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: (island.visible ? island.height : 0) + 28 * root.ratio
+                }
+
+                PromptIsland {
+                    id: island
+                    application: root.application
+                    paneId: pane.record.key
+                    colors: root.application.colors
+                    grid: root.application.windowGeometry.typography.grid
+                    terminal: terminal
+                    ratio: root.ratio
+                    focused: pane.record.focused
+                }
             }
 
             Loader {

@@ -1,0 +1,136 @@
+(* nmap: the options `nmap --help` lists, checked against Nmap 7.991. Values may follow
+   an option as the next word or, where nmap reads them joined (-p22, -T4, -PS80), right
+   after it. Operands are targets: host names, addresses and networks, offered from the
+   SSH configuration's hosts. *)
+
+nmap = { option | @ssh_host } ;
+
+option =
+    (* Target specification *)
+    "-iL" : "Read targets from a file of hosts and networks" , @file
+  | "-iR" : "Choose this many random targets" , @number
+  | "--exclude" : "Exclude these hosts and networks, comma separated" , @any
+  | "--excludefile" : "Exclude the hosts and networks listed in a file" , @file
+    (* Host discovery *)
+  | "-sL" : "List scan: list the targets without scanning them"
+  | "-sn" : "Ping scan: discover hosts without scanning ports"
+  | "-Pn" : "Treat every host as online and skip discovery"
+  | "-PS" : "TCP SYN discovery, on these ports when joined" | "-PS" ~ @any
+  | "-PA" : "TCP ACK discovery, on these ports when joined" | "-PA" ~ @any
+  | "-PU" : "UDP discovery, on these ports when joined" | "-PU" ~ @any
+  | "-PY" : "SCTP discovery, on these ports when joined" | "-PY" ~ @any
+  | "-PE" : "ICMP echo request discovery"
+  | "-PP" : "ICMP timestamp request discovery"
+  | "-PM" : "ICMP netmask request discovery"
+  | "-PO" : "IP protocol ping, with these protocols when joined" | "-PO" ~ @any
+  | "-n" : "Never resolve DNS names"
+  | "-R" : "Always resolve DNS names"
+  | "--dns-servers" : "Use these DNS servers, comma separated" , @any
+  | "--system-dns" : "Use the operating system's DNS resolver"
+  | "--traceroute" : "Trace the hop path to each host"
+    (* Scan techniques *)
+  | "-sS" : "TCP SYN scan"
+  | "-sT" : "TCP connect scan"
+  | "-sA" : "TCP ACK scan"
+  | "-sW" : "TCP window scan"
+  | "-sM" : "TCP Maimon scan"
+  | "-sU" : "UDP scan"
+  | "-sN" : "TCP null scan"
+  | "-sF" : "TCP FIN scan"
+  | "-sX" : "TCP Xmas scan"
+  | "--scanflags" : "Customize the TCP scan flags" , @any
+  | "-sI" : "Idle scan through this zombie host[:probeport]" , @any
+  | "-sY" : "SCTP INIT scan"
+  | "-sZ" : "SCTP COOKIE-ECHO scan"
+  | "-sO" : "IP protocol scan"
+  | "-b" : "FTP bounce scan through this relay host" , @any
+    (* Port specification and scan order *)
+  | "-p" : "Scan only these ports, as 22, 1-1024 or U:53,T:80" , @any | "-p" ~ @any
+  | "--exclude-ports" : "Do not scan these ports" , @any
+  | "-F" : "Fast mode: scan fewer ports than the default"
+  | "-r" : "Scan ports in order instead of at random"
+  | "--top-ports" : "Scan this many of the most common ports" , @number
+  | "--port-ratio" : "Scan ports more common than this ratio" , @any
+    (* Service and version detection *)
+  | "-sV" : "Probe open ports for their service and version"
+  | "--version-intensity" : "Probe intensity, from 0 (light) to 9 (all probes)" , ( "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" )
+  | "--version-light" : "Only the most likely probes (intensity 2)"
+  | "--version-all" : "Every probe (intensity 9)"
+  | "--version-trace" : "Show the version scan's activity in detail"
+    (* Script scan *)
+  | "-sC" : "Run the default scripts, as --script=default"
+  | "--script" : "Run these scripts, categories or directories, comma separated" , @any
+  | "--script=" : "Run these scripts, categories or directories, comma separated" ~ @any
+  | "--script-args" : "Arguments for the scripts, as n1=v1,n2=v2" , @any
+  | "--script-args=" : "Arguments for the scripts, as n1=v1,n2=v2" ~ @any
+  | "--script-args-file" : "Read the scripts' arguments from a file" , @file
+  | "--script-args-file=" : "Read the scripts' arguments from a file" ~ @file
+  | "--script-trace" : "Show all data the scripts send and receive"
+  | "--script-updatedb" : "Update the script database"
+  | "--script-help" : "Show help about these scripts" , @any
+  | "--script-help=" : "Show help about these scripts" ~ @any
+    (* OS detection *)
+  | "-O" : "Enable OS detection"
+  | "--osscan-limit" : "Limit OS detection to promising targets"
+  | "--osscan-guess" : "Guess the OS more aggressively"
+    (* Timing and performance; times are seconds, or end in ms, s, m or h *)
+  | "-T" : "Timing template, 0 (paranoid) to 5 (insane); higher is faster" ~ ( "0" | "1" | "2" | "3" | "4" | "5" )
+  | "--min-hostgroup" : "Smallest group of hosts scanned in parallel" , @number
+  | "--max-hostgroup" : "Largest group of hosts scanned in parallel" , @number
+  | "--min-parallelism" : "Fewest probes in flight at once" , @number
+  | "--max-parallelism" : "Most probes in flight at once" , @number
+  | "--min-rtt-timeout" : "Shortest probe round trip timeout" , @any
+  | "--max-rtt-timeout" : "Longest probe round trip timeout" , @any
+  | "--initial-rtt-timeout" : "Initial probe round trip timeout" , @any
+  | "--max-retries" : "Most retransmissions of a port scan probe" , @number
+  | "--host-timeout" : "Give up on a target after this long" , @any
+  | "--scan-delay" : "Wait at least this long between probes" , @any
+  | "--max-scan-delay" : "Wait at most this long between probes" , @any
+  | "--min-rate" : "Send at least this many packets per second" , @number
+  | "--max-rate" : "Send at most this many packets per second" , @number
+    (* Firewall and IDS evasion and spoofing *)
+  | "-f" : "Fragment packets"
+  | "--mtu" : "Fragment packets with this MTU" , @number
+  | "-D" : "Cloak the scan with these decoys, as decoy1,decoy2,ME" , @any
+  | "-S" : "Spoof this source address" , @any
+  | "-e" : "Use this network interface" , @any
+  | "-g" : "Send from this source port" , @number
+  | "--source-port" : "Send from this source port" , @number
+  | "--proxies" : "Relay connections through these HTTP or SOCKS4 proxies" , @any
+  | "--data" : "Append this hex payload to sent packets" , @any
+  | "--data-string" : "Append this ASCII string to sent packets" , @any
+  | "--data-length" : "Append this many random bytes to sent packets" , @number
+  | "--ip-options" : "Send packets with these IP options" , @any
+  | "--ttl" : "Set the IP time-to-live field" , @number
+  | "--spoof-mac" : "Spoof the MAC address: an address, a prefix or a vendor name" , @any
+  | "--badsum" : "Send packets with a bogus TCP, UDP or SCTP checksum"
+    (* Output *)
+  | "-oN" : "Write normal output to this file" , @file
+  | "-oX" : "Write XML output to this file" , @file
+  | "-oS" : "Write script kiddie output to this file" , @file
+  | "-oG" : "Write grepable output to this file" , @file
+  | "-oA" : "Write the three major formats to files with this base name" , @file
+  | "-v" : "Increase verbosity; -vv or more for greater effect"
+  | "-vv" : "Increase verbosity twice"
+  | "-d" : "Increase debugging; -dd or more for greater effect"
+  | "-dd" : "Increase debugging twice"
+  | "--reason" : "Show why a port is in its state"
+  | "--open" : "Only show open (or possibly open) ports"
+  | "--packet-trace" : "Show all packets sent and received"
+  | "--iflist" : "Print the host's interfaces and routes"
+  | "--append-output" : "Append to the output files instead of overwriting them"
+  | "--resume" : "Resume the aborted scan this output file records" , @file
+  | "--noninteractive" : "Disable runtime interaction through the keyboard"
+  | "--stylesheet" : "XSL stylesheet to turn XML output into HTML" , @any
+  | "--webxml" : "Reference the stylesheet from nmap.org"
+  | "--no-stylesheet" : "Do not associate an XSL stylesheet with XML output"
+    (* Miscellaneous *)
+  | "-6" : "Enable IPv6 scanning"
+  | "-A" : "Enable OS and version detection, script scanning and traceroute"
+  | "--datadir" : "Read nmap's data files from this directory" , @directory
+  | "--send-eth" : "Send raw ethernet frames"
+  | "--send-ip" : "Send raw IP packets"
+  | "--privileged" : "Assume the user is fully privileged"
+  | "--unprivileged" : "Assume the user lacks raw socket privileges"
+  | "-V" : "Print the version"
+  | "-h" : "Print the help summary" ;

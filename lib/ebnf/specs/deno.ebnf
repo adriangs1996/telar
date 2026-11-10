@@ -1,0 +1,360 @@
+(* deno: deno is installed neither here nor on the Linux VM; the commands and
+   options come from the CLI reference of the Deno documentation
+   (https://docs.deno.com/runtime/reference/cli/), whose latest release is
+   Deno 2.9.8. The global -q/--quiet comes from Deno's own flag definitions
+   (cli/flags.rs), where it is global; those reviewed are of the 1.x series.
+
+   Conventions:
+   - Options with a required value accept `--name value` and `--name=value`.
+     Options with an optional value (`--allow-read[=<PATH>...]`,
+     `--reload[=<LIST>]`) only take it joined with `=`.
+   - `deno <file>` runs a file like `deno run`. Words after the script belong
+     to it.
+   - run, serve, task, test, fmt, lint, check, compile, install, add, remove,
+     outdated, init, eval and publish are modelled in full; the other commands
+     accept any arguments. *)
+
+deno = { common | "-V" : "Print the version" | "--version" : "Print the version" } , [ command | { run_option } , @file , { @any } ] ;
+
+command =
+    "run" : "Run a script or a task" , { run_option } , [ @file , { @any } ]
+  | "serve" : "Run a server from a file that exports a fetch handler" , { serve_option } , [ @file , { @any } ]
+  | "task" : "Run a task from the config file" , { task_option } , [ @package_script , { @any } ]
+  | "repl" : "Start an interactive REPL" , { @any }
+  | "eval" : "Evaluate a script string" , { eval_option } , [ @any , { @any } ]
+  | "test" : "Run the tests" , { test_option | @file } , [ "--" : "Pass the rest to the tests" , { @any } ]
+  | "bench" : "Run the benchmarks" , { @any }
+  | "fmt" : "Format the source files" , { fmt_option | @file }
+  | "lint" : "Lint the source files" , { lint_option | @file }
+  | "check" : "Type-check without running" , { check_option | @file }
+  | "compile" : "Compile a script into a standalone executable" , { compile_option } , [ @file , { @any } ]
+  | "install" : "Install dependencies or a script" , { install_option | @any } , [ "--" : "Arguments for the installed script" , { @any } ]
+  | "add" : "Add dependencies" , { add_option | @any }
+  | "remove" : "Remove dependencies" , { remove_option | @any }
+  | "uninstall" : "Uninstall a dependency or a global script" , { remove_option | @any }
+  | "outdated" : "Show or update outdated dependencies" , { outdated_option | @any }
+  | "update" : "Update dependencies" , { outdated_option | @any }
+  | "init" : "Create a new project" , { init_option } , [ @directory ]
+  | "publish" : "Publish the package to JSR" , { publish_option }
+  | "x" : "Run a package from npm or JSR" , { @any }
+  | "approve-scripts" : "Review and approve npm lifecycle scripts" , { @any }
+  | "audit" : "Audit the dependencies" , { @any }
+  | "why" : "Explain why a package is in the dependency tree" , { @any }
+  | "bump-version" : "Bump the project version" , { @any }
+  | "cache" : "Cache the dependencies (deprecated, use install)" , { @any }
+  | "clean" : "Remove the module cache" , { @any }
+  | "coverage" : "Print the coverage reports" , { @any }
+  | "create" : "Scaffold a project from a template" , { @any }
+  | "deploy" : "Manage and publish Deno Deploy projects" , { @any }
+  | "desktop" : "Build a desktop application" , { @any }
+  | "doc" : "Show or generate documentation" , { @any }
+  | "info" : "Show a module and its dependency tree" , { @any }
+  | "jupyter" : "Deno kernel for Jupyter notebooks" , { @any }
+  | "lsp" : "Start the language server" , { @any }
+  | "pack" : "Create an npm tarball" , { @any }
+  | "transpile" : "Transpile TypeScript, JSX and TSX to JavaScript" , { @any }
+  | "types" : "Print the runtime type declarations" , { @any }
+  | "upgrade" : "Upgrade Deno" , { @any }
+  | "completions" : "Generate shell completions" , { @any }
+  | "help" : "Print help" , { @any } ;
+
+common = "-h" : "Print help" | "--help" : "Print help" | "-q" : "Suppress diagnostic output" | "--quiet" : "Suppress diagnostic output" ;
+
+(* Permissions. *)
+
+permission =
+    "-A" : "Allow all permissions" | "--allow-all" : "Allow all permissions"
+  | "-R" : "Allow file system reads" | "--allow-read" : "Allow file system reads" | "--allow-read=" : "Allow reading these paths" ~ @file
+  | "--deny-read" : "Deny file system reads" | "--deny-read=" : "Deny reading these paths" ~ @file
+  | "-W" : "Allow file system writes" | "--allow-write" : "Allow file system writes" | "--allow-write=" : "Allow writing these paths" ~ @file
+  | "--deny-write" : "Deny file system writes" | "--deny-write=" : "Deny writing these paths" ~ @file
+  | "-N" : "Allow network access" | "--allow-net" : "Allow network access" | "--allow-net=" : "Allow access to these hosts" ~ @any
+  | "--deny-net" : "Deny network access" | "--deny-net=" : "Deny access to these hosts" ~ @any
+  | "-E" : "Allow environment access" | "--allow-env" : "Allow environment access" | "--allow-env=" : "Allow access to these variables" ~ @any
+  | "--deny-env" : "Deny environment access" | "--deny-env=" : "Deny access to these variables" ~ @any
+  | "--ignore-env" : "Return undefined for environment variables" | "--ignore-env=" : "Return undefined for these variables" ~ @any
+  | "-S" : "Allow system information APIs" | "--allow-sys" : "Allow system information APIs" | "--allow-sys=" : "Allow these system APIs" ~ @any
+  | "--deny-sys" : "Deny system information APIs" | "--deny-sys=" : "Deny these system APIs" ~ @any
+  | "--allow-run" : "Allow running subprocesses" | "--allow-run=" : "Allow running these programs" ~ @any
+  | "--deny-run" : "Deny running subprocesses" | "--deny-run=" : "Deny running these programs" ~ @any
+  | "--allow-ffi" : "Allow loading dynamic libraries" | "--allow-ffi=" : "Allow loading these libraries" ~ @file
+  | "--deny-ffi" : "Deny loading dynamic libraries" | "--deny-ffi=" : "Deny loading these libraries" ~ @file
+  | import_permission
+  | "--no-prompt" : "Do not prompt for permissions" ;
+
+import_permission =
+    "-I" : "Allow importing from remote hosts" | "--allow-import" : "Allow importing from remote hosts"
+  | "--allow-import=" : "Allow importing from these hosts" ~ @any
+  | "--deny-import" : "Deny importing from remote hosts" | "--deny-import=" : "Deny importing from these hosts" ~ @any ;
+
+(* Configuration and dependencies. *)
+
+config =
+    "-c" : "Configuration file" , @file | "--config" : "Configuration file" , @file | "--config=" : "Configuration file" ~ @file
+  | "--no-config" : "Do not discover a configuration file" ;
+
+dependency =
+    config
+  | "--import-map" : "Load an import map file" , @file | "--import-map=" : "Load an import map file" ~ @file
+  | "--lock" : "Check or write the lockfile" | "--lock=" : "Check or write this lockfile" ~ @file
+  | "--no-lock" : "Do not use a lockfile"
+  | "--frozen-lockfile" : "Fail if the lockfile is out of date"
+  | "--node-modules-dir" : "Use a local node_modules directory" | "--node-modules-dir=" : "Mode of the node_modules directory" ~ node_modules_mode
+  | "--node-modules-linker" : "Layout of node_modules" , linker | "--node-modules-linker=" : "Layout of node_modules" ~ linker
+  | "--no-npm" : "Do not resolve npm modules"
+  | "--no-remote" : "Do not resolve remote modules"
+  | "--cert" : "Load a certificate authority from a PEM file" , @file | "--cert=" : "Load a certificate authority from a PEM file" ~ @file
+  | "-r" : "Reload the source code cache" | "--reload" : "Reload the source code cache" | "--reload=" : "Reload these modules" ~ @any
+  | "--unsafely-ignore-certificate-errors" : "Disable TLS certificate verification"
+  | "--vendor" : "Vendor remote modules into a vendor folder"
+  | "--min-dep-age" : "Minimum age of dependencies (unstable)" , @any | "--min-dep-age=" : "Minimum age of dependencies (unstable)" ~ @any ;
+
+node_modules_mode = "auto" | "manual" | "none" ;
+linker = "isolated" | "hoisted" ;
+
+typecheck =
+    "--check" : "Type-check local modules" | "--check=all" : "Type-check local and remote modules"
+  | "--no-check" : "Skip type-checking" | "--no-check=remote" : "Skip type-checking remote modules" ;
+
+inspect =
+    "--inspect" : "Activate the inspector on 127.0.0.1:9229" | "--inspect=" : "Activate the inspector on host:port" ~ @any
+  | "--inspect-brk" : "Activate the inspector and break at the start" | "--inspect-brk=" : "Activate the inspector on host:port and break" ~ @any
+  | "--inspect-wait" : "Activate the inspector and wait for a debugger" | "--inspect-wait=" : "Activate the inspector on host:port and wait" ~ @any
+  | "--inspect-publish-uid" : "Where to publish the inspector uid" , @any | "--inspect-publish-uid=" : "Where to publish the inspector uid" ~ @any ;
+
+env_file = "--env-file" : "Load environment variables from .env" | "--env-file=" : "Load environment variables from this file" ~ @file ;
+
+runtime =
+    dependency | typecheck | inspect | env_file | unstable
+  | "--cached-only" : "Require remote dependencies to be cached"
+  | "--allow-scripts" : "Allow npm lifecycle scripts of these packages" , @any | "--allow-scripts=" : "Allow npm lifecycle scripts of these packages" ~ @any
+  | "--conditions" : "Custom conditions for exports" , @any | "--conditions=" : "Custom conditions for exports" ~ @any
+  | "--location" : "Value of globalThis.location" , @any | "--location=" : "Value of globalThis.location" ~ @any
+  | "--seed" : "Seed for Math.random()" , @number | "--seed=" : "Seed for Math.random()" ~ @number
+  | "--v8-flags" : "Flags passed to V8" , @any | "--v8-flags=" : "Flags passed to V8" ~ @any
+  | "--preload" : "Modules to run before the main module" , @file | "--preload=" : "Modules to run before the main module" ~ @file
+  | "--require" : "CommonJS modules to run before the main module" , @file | "--require=" : "CommonJS modules to run before the main module" ~ @file
+  | "--ext" : "Content type of the input, like ts or js" , @any | "--ext=" : "Content type of the input, like ts or js" ~ @any
+  | "--no-code-cache" : "Disable the V8 code cache" ;
+
+watch =
+    "--watch" : "Restart when files change" | "--watch=" : "Restart when these paths change" ~ @file
+  | "--watch-exclude" : "Paths to exclude from watching" , @file | "--watch-exclude=" : "Paths to exclude from watching" ~ @file
+  | "--no-clear-screen" : "Do not clear the screen on restart" ;
+
+unstable =
+    "--unstable-detect-cjs" : "Treat ambiguous files as CommonJS"
+  | "--unstable-node-globals" : "Expose Node.js globals"
+  | "--unstable-sloppy-imports" : "Allow imports without extensions"
+  | "--unstable-unsafe-proto" : "Enable Object.prototype.__proto__"
+  | "--unstable-webgpu" : "Enable the WebGPU API"
+  | "--unstable-broadcast-channel" : "Enable the BroadcastChannel API"
+  | "--unstable-worker-options" : "Enable unstable Worker options"
+  | "--unstable-cron" : "Enable the Deno.cron API"
+  | "--unstable-kv" : "Enable the Deno KV API"
+  | "--unstable-net" : "Enable unstable networking APIs"
+  | "--unstable-otel" : "Enable OpenTelemetry"
+  | "--unstable-bundle" : "Enable the bundler"
+  | "--unstable-lazy-dynamic-imports" : "Lazily load dynamic imports"
+  | "--unstable-npm-lazy-caching" : "Lazily cache npm packages"
+  | "--unstable-no-legacy-abort" : "Disable the legacy abort behavior"
+  | "--unstable-temporal" : "Enable the Temporal API"
+  | "--unstable-tsgo" : "Type-check with tsgo"
+  | "--unstable" : "Enable all unstable features (deprecated)" ;
+
+(* Per-command options. *)
+
+run_option =
+    common | permission | runtime | watch
+  | "--coverage" : "Collect coverage into coverage/" | "--coverage=" : "Collect coverage into this directory" ~ @directory
+  | "--hmr" : "Watch and replace modules in place" | "--hmr=" : "Watch these paths and replace modules in place" ~ @file
+  | "--use-env-proxy" : "Use the proxy environment variables" ;
+
+serve_option =
+    common | permission | runtime | watch
+  | "--host" : "Host to listen on" , @any | "--host=" : "Host to listen on" ~ @any
+  | "--port" : "Port to listen on" , @number | "--port=" : "Port to listen on" ~ @number
+  | "--open" : "Open the server in the browser"
+  | "--parallel" : "Run the server on several cores"
+  | "--watch-hmr" : "Watch and replace modules in place" | "--watch-hmr=" : "Watch these paths and replace modules in place" ~ @file ;
+
+task_option =
+    common | config | env_file
+  | "--cwd" : "Directory to run the task in" , @directory | "--cwd=" : "Directory to run the task in" ~ @directory
+  | "--eval" : "Evaluate the argument as a task" , @any | "--eval=" : "Evaluate the argument as a task" ~ @any
+  | "-f" : "Run the task in matching workspace members" , @any | "--filter" : "Run the task in matching workspace members" , @any
+  | "--filter=" : "Run the task in matching workspace members" ~ @any
+  | "--frozen-lockfile" : "Fail if the lockfile is out of date"
+  | "--if-present" : "Do not fail when the task is missing"
+  | "-j" : "Number of parallel jobs" , @number | "--jobs" : "Number of parallel jobs" , @number | "--jobs=" : "Number of parallel jobs" ~ @number
+  | "--lock" : "Check or write the lockfile" | "--lock=" : "Check or write this lockfile" ~ @file
+  | "--no-lock" : "Do not use a lockfile"
+  | "--members" : "Run the task in all workspace members"
+  | "--no-prefix" : "Do not prefix the output with the task name"
+  | "--node-modules-dir" : "Use a local node_modules directory" | "--node-modules-dir=" : "Mode of the node_modules directory" ~ node_modules_mode
+  | "-r" : "Run the task in all workspace members" | "--recursive" : "Run the task in all workspace members" ;
+
+eval_option =
+    common | runtime
+  | "-p" : "Print the result" | "--print" : "Print the result" ;
+
+test_option =
+    common | permission | runtime | watch
+  | "--changed" : "Only run tests affected by uncommitted changes" | "--changed=" : "Only run tests affected by changes since a ref" ~ @branch
+  | "--clean" : "Empty the coverage directory first"
+  | "--coverage" : "Collect coverage into coverage/" | "--coverage=" : "Collect coverage into this directory" ~ @directory
+  | "--coverage-raw-data-only" : "Only collect raw coverage data"
+  | "--coverage-threshold" : "Minimum coverage percentage" , @number | "--coverage-threshold=" : "Minimum coverage percentage" ~ @number
+  | "--doc" : "Type-check code blocks in documentation"
+  | "--fail-fast" : "Stop after the first failure" | "--fail-fast=" : "Stop after this many failures" ~ @number
+  | "--filter" : "Run tests matching a string or /regex/" , @any | "--filter=" : "Run tests matching a string or /regex/" ~ @any
+  | "--hide-stacktraces" : "Hide stack traces of errors"
+  | "--ignore" : "Ignore these files" , @file | "--ignore=" : "Ignore these files" ~ @file
+  | "--junit-path" : "Write a JUnit report to stdout" | "--junit-path=" : "Write a JUnit report to this file" ~ @file
+  | "--no-run" : "Cache and type-check without running"
+  | "--parallel" : "Run test files in parallel"
+  | "--permit-no-files" : "Do not fail when no files are found"
+  | "--related" : "Only run tests related to this file" , @file | "--related=" : "Only run tests related to this file" ~ @file
+  | "--repeats" : "Run each test this many times" , @number | "--repeats=" : "Run each test this many times" ~ @number
+  | "--retry" : "Retry failed tests this many times" , @number | "--retry=" : "Retry failed tests this many times" ~ @number
+  | "--reporter" : "Test reporter" , reporter | "--reporter=" : "Test reporter" ~ reporter
+  | "--sanitize-ops" : "Check that async ops finish"
+  | "--sanitize-resources" : "Check that resources are closed"
+  | "--shard" : "Run one shard, INDEX/COUNT" , @any | "--shard=" : "Run one shard, INDEX/COUNT" ~ @any
+  | "--shuffle" : "Run the tests in random order"
+  | "-u" : "Update the snapshots" | "--update-snapshots" : "Update the snapshots" ;
+
+reporter = "pretty" | "dot" | "junit" | "tap" ;
+
+fmt_option =
+    common | config | watch
+  | "--check" : "Check the formatting without changing files"
+  | "--fail-fast" : "Stop at the first unformatted file"
+  | "--no-editorconfig" : "Ignore .editorconfig"
+  | "--ext" : "Language of stdin input" , @any | "--ext=" : "Language of stdin input" ~ @any
+  | "--ignore" : "Ignore these files" , @file | "--ignore=" : "Ignore these files" ~ @file
+  | "--indent-width" : "Spaces per indentation level" , @number | "--indent-width=" : "Spaces per indentation level" ~ @number
+  | "--line-width" : "Maximum line width" , @number | "--line-width=" : "Maximum line width" ~ @number
+  | "--no-semicolons" : "Avoid semicolons where possible"
+  | "--single-quote" : "Use single quotes"
+  | "--use-tabs" : "Indent with tabs"
+  | "--prose-wrap" : "How to wrap markdown prose" , @any | "--prose-wrap=" : "How to wrap markdown prose" ~ @any
+  | "--permit-no-files" : "Do not fail when no files are found"
+  | "--unstable-component" : "Format HTML, Svelte, Vue and Astro components"
+  | "--unstable-sql" : "Format SQL files" ;
+
+lint_option =
+    common | config | watch | import_permission
+  | "--compact" : "Compact output"
+  | "--json" : "Output JSON"
+  | "--ext" : "Language of stdin input" , @any | "--ext=" : "Language of stdin input" ~ @any
+  | "--fix" : "Fix the problems that can be fixed"
+  | "--ignore" : "Ignore these files" , @file | "--ignore=" : "Ignore these files" ~ @file
+  | "--permit-no-files" : "Do not fail when no files are found"
+  | "--rules" : "List the available rules"
+  | "--rules-include" : "Rules to include" , @any | "--rules-include=" : "Rules to include" ~ @any
+  | "--rules-exclude" : "Rules to exclude" , @any | "--rules-exclude=" : "Rules to exclude" ~ @any
+  | "--rules-tags" : "Rule tags to use" , @any | "--rules-tags=" : "Rule tags to use" ~ @any ;
+
+check_option =
+    common | dependency | import_permission
+  | "--all" : "Type-check local and remote modules"
+  | "--cached-only" : "Require remote dependencies to be cached"
+  | "--conditions" : "Custom conditions for exports" , @any | "--conditions=" : "Custom conditions for exports" ~ @any
+  | "--desktop" : "Type-check for a desktop application"
+  | "--doc" : "Also type-check code blocks in documentation"
+  | "--doc-only" : "Only type-check code blocks in documentation"
+  | "--location" : "Value of globalThis.location" , @any | "--location=" : "Value of globalThis.location" ~ @any
+  | "--no-check" : "Skip type-checking"
+  | "--no-code-cache" : "Disable the V8 code cache"
+  | "--preload" : "Modules to run before the main module" , @file | "--preload=" : "Modules to run before the main module" ~ @file
+  | "--require" : "CommonJS modules to run before the main module" , @file | "--require=" : "CommonJS modules to run before the main module" ~ @file
+  | "--seed" : "Seed for Math.random()" , @number | "--seed=" : "Seed for Math.random()" ~ @number
+  | "--v8-flags" : "Flags passed to V8" , @any | "--v8-flags=" : "Flags passed to V8" ~ @any
+  | "--watch" : "Type-check again when files change"
+  | "--watch-exclude" : "Paths to exclude from watching" , @file | "--watch-exclude=" : "Paths to exclude from watching" ~ @file
+  | "--no-clear-screen" : "Do not clear the screen on restart" ;
+
+compile_option =
+    common | permission | runtime
+  | "-o" : "Output file" , @file | "--output" : "Output file" , @file | "--output=" : "Output file" ~ @file
+  | "--app-name" : "Name of the application" , @any | "--app-name=" : "Name of the application" ~ @any
+  | "--bundle" : "Bundle the code (experimental)"
+  | "--minify" : "Minify the bundle"
+  | "--engine" : "JavaScript engine (experimental)" , ( "v8" | "quickjs" ) | "--engine=" : "JavaScript engine (experimental)" ~ ( "v8" | "quickjs" )
+  | "--exclude" : "Exclude this file from the executable" , @file | "--exclude=" : "Exclude this file from the executable" ~ @file
+  | "--exclude-unused-npm" : "Leave out unused npm packages"
+  | "--icon" : "Icon of the executable (.ico)" , @file | "--icon=" : "Icon of the executable (.ico)" ~ @file
+  | "--include" : "Embed this file or module" , @file | "--include=" : "Embed this file or module" ~ @file
+  | "--no-terminal" : "Hide the terminal window on Windows"
+  | "--self-extracting" : "Extract embedded files at startup"
+  | "--target" : "Target triple, like aarch64-apple-darwin" , @any | "--target=" : "Target triple, like aarch64-apple-darwin" ~ @any
+  | "--watch" : "Compile again when files change"
+  | "--watch-exclude" : "Paths to exclude from watching" , @file | "--watch-exclude=" : "Paths to exclude from watching" ~ @file
+  | "--no-clear-screen" : "Do not clear the screen on restart" ;
+
+package_manager =
+    common | dependency
+  | "--package-json" : "Use package.json"
+  | "--jsr" : "Default to JSR packages"
+  | "--npm" : "Default to npm packages"
+  | "--lockfile-only" : "Only update the lockfile"
+  | "--no-save" : "Do not save to the config file"
+  | "--save-exact" : "Save the exact version"
+  | "-D" : "Add as a development dependency" | "--dev" : "Add as a development dependency"
+  | "-O" : "Add as an optional dependency" | "--save-optional" : "Add as an optional dependency"
+  | "--unscoped" : "Allow unscoped package names"
+  | "--allow-scripts" : "Allow npm lifecycle scripts of these packages" , @any | "--allow-scripts=" : "Allow npm lifecycle scripts of these packages" ~ @any
+  | env_file | import_permission | typecheck ;
+
+install_option =
+    package_manager | permission | runtime
+  | "--arch" : "Install for this architecture" , @any | "--arch=" : "Install for this architecture" ~ @any
+  | "--os" : "Install for this operating system" , @any | "--os=" : "Install for this operating system" ~ @any
+  | "--compile" : "Compile the global script to an executable"
+  | "-e" : "Install the dependencies of these files" , @file | "--entrypoint" : "Install the dependencies of these files" , @file
+  | "--entrypoint=" : "Install the dependencies of these files" ~ @file
+  | "-f" : "Overwrite an existing installation" | "--force" : "Overwrite an existing installation"
+  | "-g" : "Install a script globally" | "--global" : "Install a script globally"
+  | "-n" : "Name of the global executable" , @any | "--name" : "Name of the global executable" , @any | "--name=" : "Name of the global executable" ~ @any
+  | "--prod" : "Only install production dependencies"
+  | "--root" : "Root of the global installation" , @directory | "--root=" : "Root of the global installation" ~ @directory
+  | "--skip-types" : "Skip type-only packages with --prod" ;
+
+add_option = package_manager ;
+
+remove_option =
+    common | dependency
+  | "-g" : "Remove a global script" | "--global" : "Remove a global script"
+  | "--root" : "Root of the global installation" , @directory | "--root=" : "Root of the global installation" ~ @directory
+  | "--lockfile-only" : "Only update the lockfile"
+  | "--package-json" : "Use package.json"
+  | "--no-check" : "Skip type-checking" ;
+
+outdated_option =
+    common | dependency | env_file
+  | "--compatible" : "Only versions compatible with the ranges"
+  | "-i" : "Pick the updates interactively" | "--interactive" : "Pick the updates interactively"
+  | "--latest" : "Update to the latest versions"
+  | "--lockfile-only" : "Only update the lockfile"
+  | "--recursive" : "Include all workspace members"
+  | "-u" : "Update the dependencies" | "--update" : "Update the dependencies"
+  | "--no-check" : "Skip type-checking" ;
+
+init_option =
+    common
+  | "--empty" : "Create a minimal project"
+  | "--jsr" : "Create from a JSR package"
+  | "--lib" : "Create a library project"
+  | "--npm" : "Create from an npm package"
+  | "--serve" : "Create a server project for deno serve"
+  | "-y" : "Grant all permissions without prompting" | "--yes" : "Grant all permissions without prompting" ;
+
+publish_option =
+    common | dependency | typecheck | env_file
+  | "--allow-dirty" : "Allow uncommitted changes"
+  | "--allow-slow-types" : "Allow slow types"
+  | "--dry-run" : "Check everything without publishing"
+  | "--no-provenance" : "Do not publish a provenance statement"
+  | "--set-version" : "Version to publish" , @any | "--set-version=" : "Version to publish" ~ @any
+  | "--token" : "Token for the upload" , @any | "--token=" : "Token for the upload" ~ @any ;

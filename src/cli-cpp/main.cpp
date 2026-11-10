@@ -159,6 +159,8 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     return runMachineCommand(memory, options);
   case Family::cli:
     return runCliCommand(options);
+  case Family::completions:
+    return runCompletionsCommand(options);
   case Family::gui:
     return runWindowCommand(memory, options, true);
   case Family::hook:

@@ -1,0 +1,427 @@
+(* npm: checked against `npm -l`, `npm <command> --help` and `npm help 7 config`
+   of npm 12.1.0.
+
+   Conventions:
+   - Options with a value accept `--name value` and `--name=value`.
+   - npm rejects unknown flags but accepts any of its config keys on any
+     command. Each command lists the options its usage shows, plus the
+     common configs in `common`; other config keys are not modelled.
+   - Only the documented aliases people type are listed (no typo aliases
+     such as `isntall`). *)
+
+npm = { common } , [ command ] ;
+
+command =
+    install_word , { install_option | common | @any }
+  | ( "ci" : "Clean install from the lockfile" | "clean-install" : "Clean install from the lockfile" ) , { ci_option | common }
+  | ( "install-test" : "Install packages and run the tests" | "it" : "Install packages and run the tests" ) , { install_option | common | @any }
+  | ( "install-ci-test" : "Clean install and run the tests" | "cit" : "Clean install and run the tests" ) , { ci_option | common }
+  | uninstall_word , { uninstall_option | common | @any }
+  | update_word , { update_option | common | @any }
+  | "outdated" : "Check for outdated packages" , { outdated_option | common | @any }
+  | ( "ls" : "List installed packages" | "list" : "List installed packages" ) , { ls_option | common | @any }
+  | ( "ll" : "List installed packages with details" | "la" : "List installed packages with details" ) , { ls_option | common | @any }
+  | run_word , { run_option | common } , [ @package_script , { run_option | common | @any } ]
+  | ( "exec" : "Run a command from a local or remote package" | "x" : "Run a command from a local or remote package" ) , { exec_option | common } , [ "--" : "End of npm options" ] , [ @any , { @any } ]
+  | ( "test" : "Run the test script" | "t" : "Run the test script" | "tst" : "Run the test script" ) , { script_option | common } , [ "--" : "Pass the rest to the script" , { @any } ]
+  | "start" : "Run the start script" , { script_option | common } , [ "--" : "Pass the rest to the script" , { @any } ]
+  | "stop" : "Run the stop script" , { script_option | common } , [ "--" : "Pass the rest to the script" , { @any } ]
+  | "restart" : "Run the restart script" , { script_option | common } , [ "--" : "Pass the rest to the script" , { @any } ]
+  | ( "init" : "Create a package.json file" | "create" : "Create a package.json file" ) , { init_option | common } , [ @any , { @any } ]
+  | "publish" : "Publish a package" , { publish_option | common | @file }
+  | "unpublish" : "Remove a package from the registry" , { unpublish_option | common | @any }
+  | "pack" : "Create a tarball from a package" , { pack_option | common | @any }
+  | "version" : "Bump the package version" , { version_option | common } , [ version_bump , { version_option | common } ]
+  | ( "view" : "View registry info about a package" | "info" : "View registry info about a package" | "show" : "View registry info about a package" | "v" : "View registry info about a package" ) , { view_option | common | @any }
+  | "audit" : "Run a security audit" , { audit_option | common } , [ ( "fix" : "Install compatible updates for vulnerable dependencies" | "signatures" : "Verify the signatures of installed packages" ) , { audit_option | common } ]
+  | ( "link" : "Symlink a package folder" | "ln" : "Symlink a package folder" ) , { link_option | common | @any }
+  | ( "dedupe" : "Reduce duplication in the package tree" | "ddp" : "Reduce duplication in the package tree" ) , { dedupe_option | common }
+  | "find-dupes" : "Find duplication in the package tree" , { dedupe_option | common }
+  | "prune" : "Remove extraneous packages" , { prune_option | common | @any }
+  | ( "rebuild" : "Rebuild a package" | "rb" : "Rebuild a package" ) , { rebuild_option | common | @any }
+  | ( "explain" : "Explain why a package is installed" | "why" : "Explain why a package is installed" ) , { json | workspace | common | @any }
+  | ( "search" : "Search for packages" | "find" : "Search for packages" | "s" : "Search for packages" | "se" : "Search for packages" ) , { search_option | common | @any }
+  | ( "config" : "Manage the npm configuration files" | "c" : "Manage the npm configuration files" ) , { config_option | common } , [ config_command ]
+  | "get" : "Get a value from the npm configuration" , { config_option | common | @any }
+  | "set" : "Set a value in the npm configuration" , { config_option | common | @any }
+  | "pkg" : "Manage the package.json" , { pkg_option | common } , [ pkg_command ]
+  | "cache" : "Manage the package and npx cache" , { cache_option | common } , [ cache_command ]
+  | "fund" : "Retrieve funding information" , { fund_option | common | @any }
+  | ( "docs" : "Open the documentation of a package" | "home" : "Open the documentation of a package" ) , { browser_option | common | @any }
+  | ( "bugs" : "Open the bug tracker of a package" | "issues" : "Open the bug tracker of a package" ) , { browser_option | common | @any }
+  | "repo" : "Open the repository page of a package" , { browser_option | common | @any }
+  | "diff" : "Show changes between package versions" , { diff_option | common | @file }
+  | "dist-tag" : "Modify package distribution tags" , { workspace | common } , [ ( "add" : "Tag a version" | "rm" : "Remove a tag" | "ls" : "List the tags" ) , { workspace | common | @any } ]
+  | "deprecate" : "Deprecate a version of a package" , { registry | otp | dry_run | common | @any }
+  | "undeprecate" : "Undeprecate a version of a package" , { registry | otp | dry_run | common | @any }
+  | "doctor" : "Check the health of the npm environment" , { registry | common | doctor_check }
+  | "edit" : "Edit an installed package" , { editor | common | @any }
+  | "explore" : "Browse an installed package" , { shell | common } , [ @any , { shell | common } ] , [ "--" : "Run the rest in the package folder" , { @any } ]
+  | ( "help" : "Get help on npm" | "hlep" : "Get help on npm" ) , { "--viewer" : "Program to show the help with" , @any | "--viewer=" : "Program to show the help with" ~ @any | common } , [ help_topic , { @any } ]
+  | "help-search" : "Search the npm help documentation" , { long | common | @any }
+  | "login" : "Log in to a registry" , { login_option | common }
+  | "logout" : "Log out of a registry" , { registry | scope | common }
+  | "whoami" : "Display the npm username" , { registry | common }
+  | "ping" : "Ping the npm registry" , { registry | common }
+  | "prefix" : "Display the prefix" , { global | common }
+  | "root" : "Display the node_modules root" , { global | common }
+  | "query" : "Retrieve a filtered list of packages" , { query_option | common | @any }
+  | "sbom" : "Generate a Software Bill of Materials" , { sbom_option | common }
+  | ( "owner" : "Manage package owners" | "author" : "Manage package owners" ) , { registry | otp | workspace | common } , [ ( "add" : "Add an owner" | "rm" : "Remove an owner" | "ls" : "List the owners" ) , { registry | otp | workspace | common | @any } ]
+  | "access" : "Set access level on published packages" , { json | otp | registry | common | @any }
+  | ( "org" : "Manage orgs" | "ogr" : "Manage orgs" ) , { registry | otp | json | parseable | common } , [ ( "set" : "Add a user or change a role" | "rm" : "Remove a user" | "ls" : "List the members" ) , { registry | otp | json | parseable | common | @any } ]
+  | "team" : "Manage organization teams" , { registry | otp | json | parseable | common } , [ ( "create" : "Create a team" | "destroy" : "Destroy a team" | "add" : "Add a user to a team" | "rm" : "Remove a user from a team" | "ls" : "List teams or members" ) , { registry | otp | json | parseable | common | @any } ]
+  | "token" : "Manage authentication tokens" , { common } , [ ( "list" : "List the tokens" | "revoke" : "Revoke a token" | "create" : "Create a token" ) , { registry | otp | common | @any } ]
+  | "profile" : "Change the registry profile settings" , { registry | json | parseable | otp | common } , [ profile_command , { registry | json | parseable | otp | common | @any } ]
+  | "patch" : "Apply local patches to dependencies" , { patch_option | common } , [ patch_command ]
+  | "stage" : "Stage packages for publishing" , { common } , [ stage_command , { common | @any } ]
+  | "trust" : "Trust an OIDC provider to publish a package" , { common } , [ trust_command , { common | @any } ]
+  | ( "approve-scripts" : "Approve install scripts of dependencies" | "deny-scripts" : "Deny install scripts of dependencies" ) , { scripts_policy_option | common | @any }
+  | "install-scripts" : "Manage install-script approvals" , { scripts_policy_option | dry_run | common } , [ ( "approve" : "Approve install scripts" | "deny" : "Deny install scripts" | "ls" : "List install-script approvals" | "prune" : "Remove stale approvals" ) , { scripts_policy_option | dry_run | common | @any } ]
+  | "completion" : "Print the tab completion script" , { common } ;
+
+install_word =
+    "install" : "Install a package" | "i" : "Install a package" | "add" : "Install a package"
+  | "in" : "Install a package" | "ins" : "Install a package" ;
+
+uninstall_word =
+    "uninstall" : "Remove a package" | "remove" : "Remove a package" | "rm" : "Remove a package"
+  | "r" : "Remove a package" | "un" : "Remove a package" | "unlink" : "Remove a package" ;
+
+update_word =
+    "update" : "Update packages" | "up" : "Update packages" | "upgrade" : "Update packages" | "u" : "Update packages" ;
+
+run_word =
+    "run" : "Run a package script" | "run-script" : "Run a package script"
+  | "rum" : "Run a package script" | "urn" : "Run a package script" ;
+
+(* Configs npm accepts on every command. *)
+
+common =
+    "-d" : "Log at the info level" | "--dd" : "Log at the verbose level" | "--ddd" : "Log at the silly level"
+  | "-s" : "Log nothing" | "--silent" : "Log nothing"
+  | "-q" : "Log only warnings and errors" | "--quiet" : "Log only warnings and errors"
+  | "--verbose" : "Log at the verbose level"
+  | "--loglevel" : "What level of logs to report" , loglevel | "--loglevel=" : "What level of logs to report" ~ loglevel
+  | "-C" : "Run as if npm started in this folder" , @directory
+  | "--prefix" : "Run as if npm started in this folder" , @directory | "--prefix=" : "Run as if npm started in this folder" ~ @directory
+  | "--userconfig" : "Use this user config file" , @file | "--userconfig=" : "Use this user config file" ~ @file
+  | "--cache" : "Location of the npm cache" , @directory | "--cache=" : "Location of the npm cache" ~ @directory
+  | "--offline" : "Never hit the network"
+  | "--prefer-offline" : "Use cached data, fetch only what is missing"
+  | "--prefer-online" : "Revalidate cached data with the registry"
+  | "--color" : "Use colored output" | "--color=" : "When to use colored output" ~ ( "always" | "true" | "false" ) | "--no-color" : "Turn off colored output"
+  | "--no-progress" : "Hide the progress bar"
+  | "-y" : "Answer yes to prompts" | "--yes" : "Answer yes to prompts"
+  | "-n" : "Answer no to prompts" | "--no" : "Answer no to prompts"
+  | "-h" : "Show quick help" | "--help" : "Show quick help" | "-H" : "Show quick help" | "--usage" : "Show quick help"
+  | "-v" : "Print the npm version" | "--version" : "Print the npm version"
+  | "-l" : "Show extended information" | "--long" : "Show extended information"
+  | "-f" : "Remove safety checks" | "--force" : "Remove safety checks"
+  | registry ;
+
+loglevel = "silent" | "error" | "warn" | "notice" | "http" | "info" | "verbose" | "silly" ;
+
+(* Options several commands share. *)
+
+registry = "--registry" : "Base URL of the npm registry" , @any | "--registry=" : "Base URL of the npm registry" ~ @any ;
+otp = "--otp" : "One-time password from a two-factor authenticator" , @any | "--otp=" : "One-time password from a two-factor authenticator" ~ @any ;
+json = "--json" : "Output JSON data" ;
+parseable = "-p" : "Output parseable results" | "--parseable" : "Output parseable results" ;
+long = "-l" : "Show extended information" | "--long" : "Show extended information" ;
+global = "-g" : "Operate in global mode" | "--global" : "Operate in global mode" ;
+dry_run = "--dry-run" : "Report what would happen without doing it" ;
+scope = "--scope" : "Associate with this scope" , @any | "--scope=" : "Associate with this scope" ~ @any ;
+editor = "--editor" : "Editor to use" , @command | "--editor=" : "Editor to use" ~ @command ;
+shell = "--shell" : "Shell to run the command in" , @command | "--shell=" : "Shell to run the command in" ~ @command ;
+script_shell = "--script-shell" : "Shell to run scripts in" , @command | "--script-shell=" : "Shell to run scripts in" ~ @command ;
+ignore_scripts = "--ignore-scripts" : "Do not run scripts from package.json" ;
+foreground_scripts = "--foreground-scripts" : "Run install scripts in the foreground" ;
+browser = "--browser" : "Browser to open URLs with" , @command | "--browser=" : "Browser to open URLs with" ~ @command | "--no-browser" : "Print URLs instead of opening them" ;
+unicode = "--no-unicode" : "Use ASCII characters only" ;
+
+workspace =
+    "-w" : "Run in this workspace" , @any | "--workspace" : "Run in this workspace" , @any
+  | "--workspace=" : "Run in this workspace" ~ @any
+  | "--workspaces" : "Run in all configured workspaces" | "--ws" : "Run in all configured workspaces"
+  | "--include-workspace-root" : "Include the workspace root" | "--iwr" : "Include the workspace root"
+  | "--install-links" : "Install file: dependencies as packages" ;
+
+save =
+    "-S" : "Save to dependencies" | "--save" : "Save to dependencies" | "--no-save" : "Do not save to package.json"
+  | "-P" : "Save to dependencies" | "--save-prod" : "Save to dependencies"
+  | "-D" : "Save to devDependencies" | "--save-dev" : "Save to devDependencies"
+  | "-O" : "Save to optionalDependencies" | "--save-optional" : "Save to optionalDependencies"
+  | "--save-peer" : "Save to peerDependencies"
+  | "-B" : "Save to bundleDependencies" | "--save-bundle" : "Save to bundleDependencies" ;
+
+save_exact = "-E" : "Save an exact version instead of a range" | "--save-exact" : "Save an exact version instead of a range" ;
+
+omit_include =
+    "--omit" : "Leave this dependency type out" , dep_type | "--omit=" : "Leave this dependency type out" ~ dep_type
+  | "--include" : "Include this dependency type" , dep_type_all | "--include=" : "Include this dependency type" ~ dep_type_all ;
+
+dep_type = "dev" | "optional" | "peer" ;
+dep_type_all = "prod" | "dev" | "optional" | "peer" ;
+
+strategy =
+    "--install-strategy" : "How to lay out node_modules" , install_strategy
+  | "--install-strategy=" : "How to lay out node_modules" ~ install_strategy
+  | "--legacy-bundling" : "Do not hoist dependencies (deprecated)"
+  | "--global-style" : "Install only direct dependencies at top level (deprecated)"
+  | "--strict-peer-deps" : "Fail on conflicting peer dependencies"
+  | "--legacy-peer-deps" : "Ignore peer dependencies when installing" ;
+
+install_strategy = "hoisted" | "nested" | "shallow" | "linked" ;
+
+allow_source =
+    "--allow-directory" : "Allow directory dependencies" , allow_scope | "--allow-directory=" : "Allow directory dependencies" ~ allow_scope
+  | "--allow-file" : "Allow tarball file dependencies" , allow_scope | "--allow-file=" : "Allow tarball file dependencies" ~ allow_scope
+  | "--allow-git" : "Allow git dependencies" , allow_scope | "--allow-git=" : "Allow git dependencies" ~ allow_scope
+  | "--allow-remote" : "Allow remote tarball dependencies" , allow_scope | "--allow-remote=" : "Allow remote tarball dependencies" ~ allow_scope ;
+
+allow_scope = "all" | "none" | "root" ;
+
+allow_scripts =
+    "--allow-scripts" : "Packages whose install scripts may run" , @any | "--allow-scripts=" : "Packages whose install scripts may run" ~ @any
+  | "--strict-allow-scripts" : "Fail when an unapproved install script would run"
+  | "--dangerously-allow-all-scripts" : "Run every install script" ;
+
+release_age =
+    "--before" : "Only use versions published before this date" , @any | "--before=" : "Only use versions published before this date" ~ @any
+  | "--min-release-age" : "Only use versions at least this many days old" , @number
+  | "--min-release-age=" : "Only use versions at least this many days old" ~ @number
+  | "--min-release-age-exclude" : "Packages exempt from --min-release-age" , @any
+  | "--min-release-age-exclude=" : "Packages exempt from --min-release-age" ~ @any ;
+
+install_common =
+    "--no-audit" : "Do not submit audit reports"
+  | "--no-bin-links" : "Do not link package executables"
+  | "--no-fund" : "Hide the funding message"
+  | "--no-package-lock" : "Ignore package-lock.json"
+  | dry_run | ignore_scripts | foreground_scripts | omit_include | strategy | allow_source | workspace ;
+
+(* Per-command options. *)
+
+install_option =
+    save | save_exact | global | install_common | allow_scripts | release_age
+  | "--prefer-dedupe" : "Prefer deduplicating over newer versions"
+  | "--package-lock-only" : "Only update package-lock.json"
+  | "--cpu" : "Install for this CPU architecture" , @any | "--cpu=" : "Install for this CPU architecture" ~ @any
+  | "--os" : "Install for this operating system" , @any | "--os=" : "Install for this operating system" ~ @any
+  | "--libc" : "Install for this libc" , @any | "--libc=" : "Install for this libc" ~ @any ;
+
+ci_option = install_common | allow_scripts ;
+
+uninstall_option = save | global | workspace ;
+
+update_option = save | global | install_common | allow_scripts | release_age ;
+
+outdated_option =
+    "-a" : "Show all outdated packages, not just direct ones" | "--all" : "Show all outdated packages, not just direct ones"
+  | json | long | parseable | global | workspace | release_age ;
+
+ls_option =
+    "-a" : "Show all packages, not just direct ones" | "--all" : "Show all packages, not just direct ones"
+  | json | long | parseable | global | omit_include | workspace | unicode
+  | "--depth" : "How deep to recurse" , @number | "--depth=" : "How deep to recurse" ~ @number
+  | "--link" : "Only show linked packages"
+  | "--package-lock-only" : "Read only package-lock.json" ;
+
+run_option =
+    workspace | ignore_scripts | foreground_scripts | script_shell
+  | "--if-present" : "Do not fail when the script is missing" ;
+
+script_option = ignore_scripts | script_shell ;
+
+exec_option =
+    "--package" : "Package to install before running" , @any | "--package=" : "Package to install before running" ~ @any
+  | "-c" : "Run this shell command" , @any | "--call" : "Run this shell command" , @any | "--call=" : "Run this shell command" ~ @any
+  | workspace | allow_scripts ;
+
+init_option =
+    "--init-author-name" : "Default author name" , @any | "--init-author-name=" : "Default author name" ~ @any
+  | "--init-author-url" : "Default author URL" , @any | "--init-author-url=" : "Default author URL" ~ @any
+  | "--init-license" : "Default license" , @any | "--init-license=" : "Default license" ~ @any
+  | "--init-module" : "Module that runs the init" , @file | "--init-module=" : "Module that runs the init" ~ @file
+  | "--init-type" : "Default package type" , init_type | "--init-type=" : "Default package type" ~ init_type
+  | "--init-version" : "Default package version" , @any | "--init-version=" : "Default package version" ~ @any
+  | "--init-private" : "Mark the package private"
+  | "--no-workspaces-update" : "Do not update the workspace links"
+  | scope | workspace ;
+
+init_type = "commonjs" | "module" ;
+
+publish_option =
+    "--tag" : "Publish under this dist-tag" , @any | "--tag=" : "Publish under this dist-tag" ~ @any
+  | "--access" : "Access level of the package" , access | "--access=" : "Access level of the package" ~ access
+  | "--provenance" : "Link the package to its build with a provenance statement"
+  | "--provenance-file" : "Use this provenance bundle" , @file | "--provenance-file=" : "Use this provenance bundle" ~ @file
+  | dry_run | otp | workspace ;
+
+access = "public" | "restricted" | "private" ;
+
+unpublish_option = dry_run | workspace ;
+
+pack_option =
+    "--pack-destination" : "Directory to save the tarball in" , @directory
+  | "--pack-destination=" : "Directory to save the tarball in" ~ @directory
+  | dry_run | json | workspace | ignore_scripts ;
+
+version_bump =
+    "major" : "Bump the major version" | "minor" : "Bump the minor version" | "patch" : "Bump the patch version"
+  | "premajor" : "Bump to a major prerelease" | "preminor" : "Bump to a minor prerelease"
+  | "prepatch" : "Bump to a patch prerelease" | "prerelease" : "Bump the prerelease number"
+  | "from-git" : "Use the latest git tag" | @any ;
+
+version_option =
+    "--allow-same-version" : "Allow setting the current version"
+  | "--no-commit-hooks" : "Do not run git commit hooks"
+  | "--no-git-tag-version" : "Do not commit and tag in git"
+  | "--preid" : "Prerelease identifier" , @any | "--preid=" : "Prerelease identifier" ~ @any
+  | "--sign-git-tag" : "Sign the git tag"
+  | "--no-workspaces-update" : "Do not update the workspace links"
+  | json | save | workspace | ignore_scripts ;
+
+view_option = json | workspace ;
+
+audit_option =
+    "--audit-level" : "Minimum severity that fails the audit" , audit_level
+  | "--audit-level=" : "Minimum severity that fails the audit" ~ audit_level
+  | "--package-lock-only" : "Audit only package-lock.json"
+  | "--no-package-lock" : "Ignore package-lock.json"
+  | "--include-attestations" : "Include attestations in the signatures output"
+  | dry_run | json | omit_include | foreground_scripts | ignore_scripts | workspace ;
+
+audit_level = "info" | "low" | "moderate" | "high" | "critical" | "none" ;
+
+link_option = save | save_exact | global | install_common ;
+
+dedupe_option = install_common ;
+
+prune_option = omit_include | dry_run | json | foreground_scripts | ignore_scripts | workspace ;
+
+rebuild_option = global | workspace | foreground_scripts | ignore_scripts | allow_scripts | "--no-bin-links" : "Do not link package executables" ;
+
+search_option =
+    json | parseable
+  | "--no-description" : "Hide the package descriptions"
+  | "--searchlimit" : "Number of results to show" , @number | "--searchlimit=" : "Number of results to show" ~ @number
+  | "--searchopts" : "Search options passed to the registry" , @any | "--searchopts=" : "Search options passed to the registry" ~ @any
+  | "--searchexclude" : "Exclude results matching this" , @any | "--searchexclude=" : "Exclude results matching this" ~ @any ;
+
+config_option =
+    json | global | editor | long
+  | "-L" : "Which config file to use" , config_location | "--location" : "Which config file to use" , config_location
+  | "--location=" : "Which config file to use" ~ config_location ;
+
+config_location = "global" | "user" | "project" ;
+
+config_command =
+    "set" : "Set config keys" , { config_option | common | @any }
+  | "get" : "Print config values" , { config_option | common | @any }
+  | "delete" : "Delete config keys" , { config_option | common | @any }
+  | "list" : "Show all config settings" , { config_option | common }
+  | "ls" : "Show all config settings" , { config_option | common }
+  | "edit" : "Open the config file in an editor" , { config_option | common }
+  | "fix" : "Repair invalid config" , { config_option | common } ;
+
+pkg_option = json | workspace ;
+
+pkg_command =
+    "set" : "Set package.json fields" , { pkg_option | common | @any }
+  | "get" : "Print package.json fields" , { pkg_option | common | @any }
+  | "delete" : "Delete package.json fields" , { pkg_option | common | @any }
+  | "fix" : "Repair package.json" , { pkg_option | common } ;
+
+cache_option = "--cache" : "Location of the npm cache" , @directory | "--cache=" : "Location of the npm cache" ~ @directory ;
+
+cache_command =
+    "add" : "Add a package to the cache" , { cache_option | common | @any }
+  | "clean" : "Delete cache entries" , { cache_option | common | @any }
+  | "ls" : "List cache entries" , { cache_option | common | @any }
+  | "verify" : "Verify the cache contents" , { cache_option | common }
+  | "npx" : "Manage the npx cache" , { cache_option | common } , [ ( "ls" : "List npx cache entries" | "rm" : "Remove npx cache entries" | "info" : "Show npx cache entries" ) , { cache_option | common | @any } ] ;
+
+fund_option =
+    json | browser | unicode | workspace
+  | "--which" : "Which funding source to open" , @number | "--which=" : "Which funding source to open" ~ @number ;
+
+browser_option = browser | registry | workspace ;
+
+diff_option =
+    "--diff" : "Package spec to compare" , @any | "--diff=" : "Package spec to compare" ~ @any
+  | "--diff-name-only" : "Only print file names"
+  | "--diff-unified" : "Lines of context" , @number | "--diff-unified=" : "Lines of context" ~ @number
+  | "--diff-ignore-all-space" : "Ignore whitespace"
+  | "--diff-no-prefix" : "Do not show source and destination prefixes"
+  | "--diff-src-prefix" : "Source prefix" , @any | "--diff-src-prefix=" : "Source prefix" ~ @any
+  | "--diff-dst-prefix" : "Destination prefix" , @any | "--diff-dst-prefix=" : "Destination prefix" ~ @any
+  | "--diff-text" : "Treat all files as text"
+  | "--tag" : "Tag to compare against" , @any | "--tag=" : "Tag to compare against" ~ @any
+  | global | workspace ;
+
+doctor_check =
+    "connection" : "Check the registry connection" | "registry" : "Check the configured registry"
+  | "versions" : "Check the node and npm versions" | "environment" : "Check PATH and git"
+  | "permissions" : "Check folder permissions" | "cache" : "Verify the cache" ;
+
+help_topic =
+    "npm" : "Overview of npm" | "config" : "All npm configs" | "scripts" : "How npm runs scripts"
+  | "package-json" : "The package.json fields" | "workspaces" : "Working with workspaces" | @any ;
+
+login_option =
+    registry | scope
+  | "--auth-type" : "Authentication strategy" , ( "legacy" | "web" ) | "--auth-type=" : "Authentication strategy" ~ ( "legacy" | "web" ) ;
+
+query_option =
+    global | workspace | release_age
+  | "--package-lock-only" : "Query only package-lock.json"
+  | "--expect-results" : "Fail when nothing matches"
+  | "--expect-result-count" : "Fail unless this many packages match" , @number
+  | "--expect-result-count=" : "Fail unless this many packages match" ~ @number ;
+
+sbom_option =
+    omit_include | workspace
+  | "--package-lock-only" : "Read only package-lock.json"
+  | "--sbom-format" : "SBOM format" , ( "cyclonedx" | "spdx" ) | "--sbom-format=" : "SBOM format" ~ ( "cyclonedx" | "spdx" )
+  | "--sbom-type" : "Type of the described package" , sbom_type | "--sbom-type=" : "Type of the described package" ~ sbom_type ;
+
+sbom_type = "library" | "application" | "framework" ;
+
+profile_command =
+    "enable-2fa" : "Enable two-factor authentication" | "disable-2fa" : "Disable two-factor authentication"
+  | "get" : "Show profile settings" | "set" : "Change a profile setting" ;
+
+patch_option =
+    "--patches-dir" : "Directory with the patch files" , @directory | "--patches-dir=" : "Directory with the patch files" ~ @directory
+  | "--edit-dir" : "Directory to extract the package into" , @directory | "--edit-dir=" : "Directory to extract the package into" ~ @directory
+  | "--allow-unused-patches" : "Do not fail on patches that match nothing"
+  | "--ignore-patch-failures" : "Keep installing when a patch fails"
+  | "--ignore-existing" : "Ignore existing patches"
+  | "--keep-edit-dir" : "Keep the edit directory after committing"
+  | "--to" : "Version to move the patch to" , @any | "--to=" : "Version to move the patch to" ~ @any
+  | registry ;
+
+patch_command =
+    "add" : "Extract a package for patching" , { patch_option | common | @any }
+  | "commit" : "Create a patch from an edit directory" , { patch_option | common | @directory }
+  | "update" : "Move a patch to another version" , { patch_option | common | @any }
+  | "ls" : "List the patches" , { patch_option | common }
+  | "rm" : "Remove a patch" , { patch_option | common | @any }
+  | @any , { patch_option | common } ;
+
+stage_command =
+    "publish" : "Stage a package for publishing" | "list" : "List the staged versions"
+  | "view" : "View a staged package" | "approve" : "Publish a staged package"
+  | "reject" : "Reject a staged package" | "download" : "Download a staged tarball" ;
+
+trust_command =
+    "github" : "Trust GitHub Actions" | "gitlab" : "Trust GitLab CI/CD" | "circleci" : "Trust CircleCI"
+  | "list" : "List trusted relationships" | "revoke" : "Revoke a trusted relationship" ;
+
+scripts_policy_option =
+    "-a" : "Apply to all dependencies" | "--all" : "Apply to all dependencies"
+  | "--allow-scripts-pending" : "Apply to dependencies awaiting a decision"
+  | "--no-allow-scripts-pin" : "Do not pin approvals to versions"
+  | json ;

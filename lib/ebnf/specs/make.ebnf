@@ -1,0 +1,47 @@
+(* make: GNU make options checked against `make --help` of GNU Make 3.81, all of
+   which later releases keep. Operands are targets or VAR=value assignments. *)
+
+make = { option | @make_target } ;
+
+option =
+    "-B" : "Unconditionally make all targets" | "--always-make" : "Unconditionally make all targets"
+  | "-C" : "Change to this directory first" , @directory
+  | "--directory" : "Change to this directory first" , @directory | "--directory=" : "Change to this directory first" ~ @directory
+  | "-d" : "Print lots of debugging information"
+  | "--debug" : "Print debugging information" | "--debug=" : "Print debugging information of these kinds" ~ @any
+  | "-e" : "Environment variables override makefiles" | "--environment-overrides" : "Environment variables override makefiles"
+  | "-f" : "Read this file as a makefile" , @file
+  | "--file" : "Read this file as a makefile" , @file | "--file=" : "Read this file as a makefile" ~ @file
+  | "--makefile" : "Read this file as a makefile" , @file | "--makefile=" : "Read this file as a makefile" ~ @file
+  | "-h" : "Print the help and exit" | "--help" : "Print the help and exit"
+  | "-i" : "Ignore errors from recipes" | "--ignore-errors" : "Ignore errors from recipes"
+  | "-I" : "Search this directory for included makefiles" , @directory
+  | "--include-dir" : "Search this directory for included makefiles" , @directory
+  | "--include-dir=" : "Search this directory for included makefiles" ~ @directory
+  | "-j" : "Run this many jobs at once; no limit without a number"
+  | "--jobs" : "Run jobs in parallel without a limit" | "--jobs=" : "Run this many jobs at once" ~ @number
+  | "-k" : "Keep going when some targets fail" | "--keep-going" : "Keep going when some targets fail"
+  | "-l" : "Start new jobs only below this load average"
+  | "--load-average" : "Start new jobs only below a load average" | "--load-average=" : "Start new jobs only below this load average" ~ @any
+  | "--max-load" : "Start new jobs only below a load average" | "--max-load=" : "Start new jobs only below this load average" ~ @any
+  | "-L" : "Use the latest mtime of symlinks and targets" | "--check-symlink-times" : "Use the latest mtime of symlinks and targets"
+  | "-n" : "Print the recipes without running them" | "--just-print" : "Print the recipes without running them"
+  | "--dry-run" : "Print the recipes without running them" | "--recon" : "Print the recipes without running them"
+  | "-o" : "Consider this file very old" , @file
+  | "--old-file" : "Consider this file very old" , @file | "--old-file=" : "Consider this file very old" ~ @file
+  | "--assume-old" : "Consider this file very old" , @file | "--assume-old=" : "Consider this file very old" ~ @file
+  | "-p" : "Print the internal database" | "--print-data-base" : "Print the internal database"
+  | "-q" : "Run nothing; the exit status says whether targets are up to date" | "--question" : "Run nothing; the exit status says whether targets are up to date"
+  | "-r" : "Disable the built-in implicit rules" | "--no-builtin-rules" : "Disable the built-in implicit rules"
+  | "-R" : "Disable the built-in variables" | "--no-builtin-variables" : "Disable the built-in variables"
+  | "-s" : "Do not echo recipes" | "--silent" : "Do not echo recipes" | "--quiet" : "Do not echo recipes"
+  | "-S" : "Turn off -k" | "--no-keep-going" : "Turn off -k" | "--stop" : "Turn off -k"
+  | "-t" : "Touch targets instead of remaking them" | "--touch" : "Touch targets instead of remaking them"
+  | "-v" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "-w" : "Print the current directory" | "--print-directory" : "Print the current directory"
+  | "--no-print-directory" : "Turn off -w"
+  | "-W" : "Consider this file infinitely new" , @file
+  | "--what-if" : "Consider this file infinitely new" , @file | "--what-if=" : "Consider this file infinitely new" ~ @file
+  | "--new-file" : "Consider this file infinitely new" , @file | "--new-file=" : "Consider this file infinitely new" ~ @file
+  | "--assume-new" : "Consider this file infinitely new" , @file | "--assume-new=" : "Consider this file infinitely new" ~ @file
+  | "--warn-undefined-variables" : "Warn when an undefined variable is referenced" ;

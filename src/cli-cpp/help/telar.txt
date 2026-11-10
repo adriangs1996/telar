@@ -40,6 +40,7 @@ Window (one attached client)
 
 Configuration and agent integration
   config          Validate the Lua configuration, and reload or read the one a window adopted
+  completions     Check a command's completion spec, as the runtime reads it, before using or sharing it
   plugin          Inspect, install and trust plugin packages; list, enable, disable and run them in a window
   integration     Register telar's lifecycle hooks and skills with an agent CLI, or remove and inspect them
   hook            The entry point an agent's installed hook runs: reads the event on stdin and reports it

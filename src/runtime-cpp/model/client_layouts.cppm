@@ -24,6 +24,7 @@ module;
 #include <csignal>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <termios.h>
 
 export module telar.runtime.model.client_layouts;
 
@@ -42,6 +43,7 @@ export import telar.runtime.agents.screen_inference;
 export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.graphics.pane_media;
 export import telar.runtime.observation.processor;
+export import telar.runtime.shell_integration.git_context;
 export import telar.runtime.persistence.launch_record;
 export import telar.base.memory;
 export import telar.platform;
@@ -118,6 +120,9 @@ struct Attachment {
   std::uint64_t clipboard_revision = 0;
   std::uint64_t foreground_revision = 0;
   std::uint64_t progress_revision = 1;
+  std::uint64_t shell_revision = 0;
+  std::uint64_t git_revision = 0;
+  std::uint64_t blocks_revision = 0;
   FramePacer pacer;
 };
 
@@ -244,7 +249,7 @@ public:
         location(location),
         launch(memory),
         pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
-        observer(std::allocate_shared<PaneObserver<Memory>>(AllocatorRef<PaneObserver<Memory>, Memory>{memory}, memory, settings.size, command.cwd())),
+        observer(std::allocate_shared<PaneObserver<Memory>>(AllocatorRef<PaneObserver<Memory>, Memory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? std::optional{settings.shell->token} : std::nullopt)),
         media(std::allocate_shared<PaneMedia<Memory>>(AllocatorRef<PaneMedia<Memory>, Memory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
@@ -256,6 +261,15 @@ public:
     foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), 48));
     process.emplace(command.specification(settings.size));
     terminal.attachMedia(media);
+    shell_state.pane_id = identity;
+    if (settings.shell) {
+      shell_zones.emplace(command.cwd(), settings.shell->token);
+      blocks.emplace(memory, terminal);
+      shell_state.shell = settings.shell->shell;
+      local_shell = settings.shell->shell;
+      shell_revision = 1;
+      observeShell();
+    }
   }
 
   inline bool read(ReadMode mode = ReadMode::once) {
@@ -264,38 +278,110 @@ public:
     std::array<Byte, read_buffer_size> buffer;
     std::size_t batch_bytes = 0;
     const unsigned read_limit = mode == ReadMode::burst ? batch_read_limit : 1;
+    // Read the shell's state once per call, after the output that may have changed it.
+    const auto observed = [&](bool result) {
+      if (batch_bytes != 0) {
+        observeShell();
+        if (blocks) {
+          blocks->follow();
+        }
+      }
+      return result;
+    };
     for (unsigned attempt = 0; attempt < read_limit && batch_bytes < batch_byte_limit; ++attempt) {
       const auto capacity = std::min(buffer.size(), batch_byte_limit - batch_bytes);
       if (terminal.hasPendingControl() || media->holdsRead(capacity)) {
         TELAR_DIAGNOSTIC(media->noteHeldRead());
-        return true;
+        return observed(true);
       }
 
       const auto count = ::read(process->descriptor(), buffer.data(), capacity);
+      if (count > 0 && echo_sent) {
+        timeLink(std::chrono::steady_clock::now() - *std::exchange(echo_sent, std::nullopt));
+      }
       if (count > 0) {
         const auto bytes = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
         TELAR_DIAGNOSTIC(recordRead(bytes.size(), batch_bytes != 0));
         const auto foreground = needs_foreground_observation ? shellForeground() : std::nullopt;
         expireProgress(foreground);
         observer->bytes(ObservationKind::output, bytes, foreground);
+        ShellCompletions completions{shell_state};
+        if (shell_zones) {
+          const auto before = shell_state.commands;
+          shell_zones->feed(bytes, ObservationTime{}, completions);
+          shell_revision += shell_state.commands != before;
+        }
         {
           TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->ingest});
-          terminal.feed(bytes);
+          // Up to each signed mark, so a command's block anchors where its mark was printed.
+          std::size_t fed = 0;
+          const auto now = std::chrono::steady_clock::now();
+          for (const auto &mark : completions.marks()) {
+            if (mark.end > fed) {
+              terminal.feed(bytes.subspan(fed, mark.end - fed));
+              fed = mark.end;
+            }
+            if (mark.action == 'D') {
+              blocks->finished(mark.status, now);
+            } else {
+              blocks->mark(mark.action, now);
+            }
+          }
+          if (fed < bytes.size()) {
+            terminal.feed(bytes.subspan(fed));
+          }
         }
         batch_bytes += bytes.size();
         continue;
       }
 
       if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
-        return true;
+        return observed(true);
       }
 
       output_closed = true;
       terminal.abortControl();
-      return false;
+      return observed(false);
     }
 
-    return true;
+    return observed(true);
+  }
+
+  // Reads where the integrated shell is and how the line discipline is set, and counts a
+  // change. Two ioctls; the runtime calls it after output and, while a program runs, on its
+  // tick, since a program can change the terminal without printing.
+  inline void observeShell() noexcept {
+    if (!shell_zones) {
+      return;
+    }
+
+    auto next = shell_state;
+    next.phase = shell_zones->editing() ? ShellPhase::prompt : shell_zones->running() ? ShellPhase::running : ShellPhase::unknown;
+    next.remote = shell_zones->remote();
+    next.host = shell_zones->remoteHost();
+    if (!next.remote) {
+      next.link_ms = 0;
+      link_average_ms = 0;
+      echo_sent.reset();
+    }
+    next.shell = next.remote && shell_zones->remoteShell() != IntegratedShell::none ? shell_zones->remoteShell() : local_shell;
+    const auto group = process->foregroundProcessGroup();
+    next.shell_foreground = group && *group == process->processId();
+    termios settings{};
+    if (::tcgetattr(process->descriptor(), &settings) == 0) {
+      const auto character = [&](int index) { return settings.c_cc[index] == _POSIX_VDISABLE ? Byte{0} : static_cast<Byte>(settings.c_cc[index]); };
+      next.canonical = (settings.c_lflag & ICANON) != 0;
+      next.echo = (settings.c_lflag & ECHO) != 0;
+      next.signal_keys = (settings.c_lflag & ISIG) != 0;
+      next.interrupt = character(VINTR);
+      next.quit = character(VQUIT);
+      next.suspend = character(VSUSP);
+      next.end_of_file = character(VEOF);
+    }
+    if (next != shell_state) {
+      shell_state = next;
+      ++shell_revision;
+    }
   }
 
   // The response writer borrows vectors only for this call. Only a positive
@@ -332,6 +418,10 @@ public:
         terminal.resumeControl();
       } else {
         input.consume(static_cast<std::size_t>(count));
+        // A remote line editor echoes what it reads: the next output times the link.
+        if (shell_state.remote && shell_zones && shell_zones->editing() && !echo_sent) {
+          echo_sent = std::chrono::steady_clock::now();
+        }
       }
 
       return;
@@ -366,6 +456,9 @@ public:
       diagnostics::accumulate(counters->input_bytes, bytes.size());
     });
     observer->bytes(ObservationKind::input, bytes, shellForeground());
+    if (shell_zones) {
+      shell_zones->input(bytes);
+    }
     ++input_revision;
     needs_foreground_observation = true;
   }
@@ -376,6 +469,9 @@ public:
     }
 
     terminal.resize(size);
+    if (blocks) {
+      blocks->follow(true);
+    }
     process->resize(size);
     observer->resize(size);
     media->resize(size);
@@ -443,6 +539,25 @@ public:
   bool exit_observed = false;
   bool shell_markers = false;
   bool needs_foreground_observation = false;
+  // The integrated shell's own reading of its signed marks, on the runtime's thread so its
+  // state reaches clients with the output that changed it.
+  std::optional<CommandZones> shell_zones;
+  // The commands it ran, anchored in `terminal`, which outlives them.
+  std::optional<CommandBlocks<Memory>> blocks;
+  // When input last reached a remote shell's line editor, until its echo arrives, and the
+  // link's round trip so far, smoothed.
+  std::optional<std::chrono::steady_clock::time_point> echo_sent;
+  double link_average_ms = 0;
+  PaneShell shell_state{};
+  // The shell the pane started, which an `ssh` session it nests stands in for.
+  IntegratedShell local_shell = IntegratedShell::none;
+  // Zero until the pane has an integrated shell: other panes never send their state.
+  std::uint64_t shell_revision = 0;
+  // The repository the integrated shell works in, read after each command; zero until read.
+  ShellGitSummary git{};
+  std::uint64_t git_revision = 0;
+  std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
+  FixedText<PATH_MAX> git_directory;
   bool write_interest = false;
   bool read_paused = false;
   std::optional<int> exit_status;
@@ -456,6 +571,54 @@ public:
   std::optional<RejectedReporter> rejected_reporter;
 
 private:
+  // Counts the commands the integrated shell finished, for its clients, and keeps the marks
+  // the bytes held, for the command blocks. A mark past the last kept one is not placed.
+  struct ShellCompletions {
+    struct Mark {
+      char action = 0;
+      std::size_t end = 0;
+      std::optional<int> status;
+    };
+
+    PaneShell &state;
+    std::array<Mark, 16> kept{};
+    std::size_t count = 0;
+
+    inline void complete(CommandCompletion completion) noexcept {
+      ++state.commands;
+      state.status = completion.exit_code.value_or(0);
+      if (count != 0 && kept[count - 1].action == 'D') {
+        kept[count - 1].status = completion.exit_code;
+      }
+    }
+
+    inline void mark(CommandMark mark) noexcept {
+      if (count < kept.size()) {
+        kept[count++] = Mark{.action = mark.action, .end = mark.end, .status = std::nullopt};
+      }
+    }
+
+    inline std::span<const Mark> marks() const noexcept {
+      return std::span<const Mark>{kept}.first(count);
+    }
+  };
+
+  // Folds one round trip into the link's; clients hear of it when it moves by a tenth.
+  inline void timeLink(std::chrono::steady_clock::duration elapsed) noexcept {
+    constexpr double longest_ms = 5000;
+    const auto sample = std::chrono::duration<double, std::milli>(elapsed).count();
+    if (!shell_state.remote || sample > longest_ms) {
+      return;
+    }
+    link_average_ms = link_average_ms == 0 ? sample : link_average_ms * 0.7 + sample * 0.3;
+    const auto shown = static_cast<std::uint32_t>(std::max(1.0, std::round(link_average_ms)));
+    const auto published = shell_state.link_ms;
+    if (published == 0 || std::max(shown, published) - std::min(shown, published) >= std::max<std::uint32_t>(2, published / 10)) {
+      shell_state.link_ms = shown;
+      ++shell_revision;
+    }
+  }
+
   inline void expireProgress(std::optional<bool> shell_foreground) noexcept {
     if (terminal.effects.progress_state == PaneProgressState::remove) {
       return;

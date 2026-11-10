@@ -1,0 +1,58 @@
+(* rbenv: commands of rbenv 1.3.2 and the install and uninstall commands of
+   ruby-build 20260924, checked against `rbenv commands`, `rbenv help
+   <command>` and the libexec scripts. Ruby versions are free text, so version
+   arguments accept any word. Commands that other plugins add as rbenv-<name>
+   executables are not modelled. *)
+
+rbenv = [ "--debug" : "Trace rbenv with set -x" ] , [ command ] ;
+
+command =
+    "versions" : "List the installed Ruby versions" , { "--bare" : "Only print the version names" | "--skip-aliases" : "Leave out symlinked versions" }
+  | "version" : "Show the current Ruby version and its origin" , [ help ]
+  | "install" : "Install a Ruby version with ruby-build" , { install_option | @any } , [ "--" : "Pass the rest to configure" , { @any } ]
+  | "uninstall" : "Uninstall a Ruby version" , { "-f" : "Remove without asking" | "--force" : "Remove without asking" | help } , [ @any : "A Ruby version" ]
+  | "rehash" : "Regenerate the rbenv shims" , [ help ]
+  | "global" : "Set or show the global Ruby version" , [ help | version_name ]
+  | "local" : "Set or show the local Ruby version" , [ help | version_name | "--unset" : "Remove the .ruby-version file" ]
+  | "shell" : "Set or show the shell Ruby version" ,
+    [ help | version_name | "--unset" : "Unset RBENV_VERSION" | "-" : "Restore the previous version" ]
+  | "exec" : "Run a command with the selected Ruby" , [ help | @command , { @any } ]
+  | "which" : "Show the full path of an executable" , [ help | @command ]
+  | "whence" : "List the Ruby versions that contain an executable" , [ help | [ "--path" : "Print the full paths" ] , @command ]
+  | "prefix" : "Show where a Ruby version is installed" , [ help | version_name ]
+  | "root" : "Show the rbenv root directory" , [ help ]
+  | "shims" : "List the rbenv shims" , [ help | "--short" : "Only print the shim names" ]
+  | "init" : "Set up rbenv in the shell" , [ help | "-" : "Print the script to eval" , [ "--no-rehash" : "Do not rehash" ] , [ shell ] | { shell } ]
+  | "commands" : "List the rbenv commands" , [ help | "--sh" : "Only shell commands" | "--no-sh" : "Leave out shell commands" ]
+  | "completions" : "List the completions of a command" , [ help | @any , { @any } ]
+  | "hooks" : "List the hook scripts of a command" , [ help | @any ]
+  | "version-name" : "Show the current Ruby version" , [ help ]
+  | "version-origin" : "Explain how the current Ruby version is set" , [ help ]
+  | "version-file" : "Show the .ruby-version file in effect" , [ help | @directory ]
+  | "version-file-read" : "Print the version in a version file" , [ help | @file ]
+  | "version-file-write" : "Write a version to a version file" , [ help | @file , version_name ]
+  | "help" : "Show help on a command" , [ "--usage" : "Only print the usage" ] , [ topic ]
+  | "-v" : "Print the rbenv version" | "--version" : "Print the rbenv version"
+  | "-h" : "Show the help" | "--help" : "Show the help" ;
+
+help = "--help" : "Show help on this command" ;
+
+version_name = "system" : "The system Ruby" | @any : "A Ruby version" ;
+
+install_option =
+    "-l" : "List the latest stable versions" | "--list" : "List the latest stable versions"
+  | "-L" : "List all local definitions" | "--list-all" : "List all local definitions"
+  | "-f" : "Overwrite an installed version" | "--force" : "Overwrite an installed version"
+  | "-s" : "Skip an installed version" | "--skip-existing" : "Skip an installed version"
+  | "-k" : "Keep the source tree" | "--keep" : "Keep the source tree"
+  | "-v" : "Forward all build output" | "--verbose" : "Forward all build output"
+  | "-p" : "Apply a patch from stdin" | "--patch" : "Apply a patch from stdin"
+  | "--version" : "Print the ruby-build version"
+  | "-h" : "Show the help" | "--help" : "Show the help" ;
+
+shell = "bash" | "fish" | "ksh" | "zsh" ;
+
+topic =
+    "versions" | "version" | "install" | "uninstall" | "rehash" | "global" | "local" | "shell" | "exec" | "which"
+  | "whence" | "prefix" | "root" | "shims" | "init" | "commands" | "completions" | "hooks" | "version-name"
+  | "version-origin" | "version-file" | "version-file-read" | "version-file-write" | "help" ;

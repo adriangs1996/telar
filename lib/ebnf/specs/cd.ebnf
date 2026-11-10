@@ -1,0 +1,5 @@
+(* cd: the POSIX options every shell's builtin accepts. Shell-specific flags
+   (bash -e and -@, zsh -q and -s) are left out. *)
+
+cd = [ "-L" : "Keep symbolic links in the new path" | "-P" : "Resolve symbolic links in the new path" ] ,
+     [ "-" : "The previous directory" | @directory ] ;

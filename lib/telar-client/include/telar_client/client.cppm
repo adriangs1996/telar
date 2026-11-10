@@ -56,9 +56,9 @@ namespace telar {
         'C',
     };
 
-    // Native control-query schema. Reject clients with the earlier frame
-    // layout instead of interpreting their input-mode bytes at new offsets.
-    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '1'};
+    // Adds PaneShell, PaneGit, PaneBlocks, word completion and command specs. Peers without
+    // them reject the messages.
+    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '2'};
 
   } // namespace handshake
 

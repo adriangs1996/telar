@@ -1,0 +1,203 @@
+(* poetry: poetry is installed neither here nor on the Linux VM; the commands
+   and options come from the documentation of Poetry 2.5.1
+   (https://python-poetry.org/docs/cli/).
+
+   Conventions:
+   - Options with a value accept `--name value` and `--name=value`; short ones
+     accept `-G value` and `-Gvalue`.
+   - The options in `global` are accepted before and after any command.
+   - `export` and `shell` are plugins since Poetry 2.0 and are not described;
+     `poetry run` passes every word after the command to it. *)
+
+poetry = { global } , [ command ] ;
+
+command =
+    "about" : "Show the versions of Poetry and poetry-core" , { global }
+  | "add" : "Add dependencies to pyproject.toml and install them" , { add_option | global | @any }
+  | "build" : "Build the source and wheel archives" , { build_option | global }
+  | "cache" : "Manage the Poetry caches" , { global } , [ cache_command ]
+  | "check" : "Validate pyproject.toml and poetry.lock" , { check_option | global }
+  | "config" : "View or edit the configuration" , { config_option | global } , [ @any , { config_option | global | @any } ]
+  | "debug" : "Debug Poetry" , { global } , [ debug_command ]
+  | "env" : "Manage the virtual environments of the project" , { global } , [ env_command ]
+  | "help" : "Show the help of a command" , { global } , [ @any ]
+  | "init" : "Create a pyproject.toml interactively" , { init_option | global }
+  | "install" : "Install the dependencies of the project" , { install_option | global }
+  | "list" : "List the Poetry commands" , { global }
+  | "lock" : "Lock the dependencies without installing them" , { "--regenerate" : "Rebuild the lock file from scratch" | global }
+  | "new" : "Create a new project" , { new_option | global | @directory }
+  | "publish" : "Publish the package to a repository" , { publish_option | global }
+  | "python" : "Manage Python installations (experimental)" , { global } , [ python_command ]
+  | "remove" : "Remove dependencies" , { remove_option | global | @any }
+  | "run" : "Run a command in the virtual environment" , { global } , [ @command , { @any } ]
+  | "search" : "Search a remote index for packages" , { global | @any }
+  | "self" : "Manage the Poetry installation" , { global } , [ self_command ]
+  | "show" : "Show the installed packages" , { show_option | global | @any }
+  | "source" : "Manage the package sources of the project" , { global } , [ source_command ]
+  | "sync" : "Sync the environment with poetry.lock" , { install_option | global }
+  | "update" : "Update the dependencies and poetry.lock" , { update_option | global | @any }
+  | "version" : "Show or bump the version of the project" , { version_option | global } , [ version_rule , { version_option | global } ] ;
+
+global =
+    "-h" : "Show the help" | "--help" : "Show the help"
+  | "-q" : "Do not output any message" | "--quiet" : "Do not output any message"
+  | "-V" : "Show the Poetry version" | "--version" : "Show the Poetry version"
+  | "--ansi" : "Force ANSI output" | "--no-ansi" : "Disable ANSI output"
+  | "-n" : "Do not ask any question" | "--no-interaction" : "Do not ask any question"
+  | "--no-plugins" : "Disable plugins"
+  | "--no-cache" : "Do not use the Poetry caches"
+  | "-C" : "Working directory" , @directory | "--directory" : "Working directory" , @directory | "--directory=" : "Working directory" ~ @directory
+  | "-P" : "Root of the project" , @directory | "--project" : "Root of the project" , @directory | "--project=" : "Root of the project" ~ @directory
+  | "-v" : "Increase verbosity" | "-vv" : "More verbose output" | "-vvv" : "Debug output" | "--verbose" : "Increase verbosity" ;
+
+dry_run = "--dry-run" : "Report what would happen without doing it" ;
+lock_only = "--lock" : "Only update the lock file, do not install" ;
+
+group_option =
+    "-G" : "Dependency group" , @any | "--group" : "Dependency group" , @any | "--group=" : "Dependency group" ~ @any
+  | "-D" : "The dev group, like -G dev" | "--dev" : "The dev group, like -G dev" ;
+
+extras =
+    "-E" : "Extras to activate" , @any | "--extras" : "Extras to activate" , @any | "--extras=" : "Extras to activate" ~ @any ;
+
+groups =
+    "--with" : "Optional groups to include" , @any | "--with=" : "Optional groups to include" ~ @any
+  | "--without" : "Groups to ignore" , @any | "--without=" : "Groups to ignore" ~ @any
+  | "--only" : "Only these groups" , @any | "--only=" : "Only these groups" ~ @any ;
+
+add_option =
+    group_option | extras | dry_run | lock_only
+  | "-e" : "Install a path or VCS dependency as editable" | "--editable" : "Install a path or VCS dependency as editable"
+  | "--optional" : "Add as an optional dependency of an extra"
+  | "--python" : "Python versions the dependency is for" , @any | "--python=" : "Python versions the dependency is for" ~ @any
+  | "--platform" : "Platforms the dependency is for" , @any | "--platform=" : "Platforms the dependency is for" ~ @any
+  | "--markers" : "Environment markers of the dependency" , @any | "--markers=" : "Environment markers of the dependency" ~ @any
+  | "--source" : "Source to install the dependency from" , @any | "--source=" : "Source to install the dependency from" ~ @any
+  | "--allow-prereleases" : "Accept pre-release versions" ;
+
+remove_option = group_option | dry_run | lock_only ;
+
+build_option =
+    "-f" : "Format to build" , build_format | "--format" : "Format to build" , build_format | "--format=" : "Format to build" ~ build_format
+  | "--clean" : "Clean the output directory first"
+  | "-l" : "Local version label (deprecated)" , @any | "--local-version" : "Local version label (deprecated)" , @any
+  | "--local-version=" : "Local version label (deprecated)" ~ @any
+  | "-o" : "Output directory" , @directory | "--output" : "Output directory" , @directory | "--output=" : "Output directory" ~ @directory
+  | "-c" : "Setting for the build backend, key=value" , @any | "--config-settings" : "Setting for the build backend, key=value" , @any
+  | "--config-settings=" : "Setting for the build backend, key=value" ~ @any ;
+
+build_format = "wheel" | "sdist" ;
+
+cache_command =
+    "clear" : "Remove packages from the cached repositories" , { "--all" : "Clear the whole repository cache" | global } , [ @any ]
+  | "list" : "List the Poetry caches" , { global } ;
+
+check_option = "--lock" : "Check that poetry.lock exists" | "--strict" : "Fail on warnings" ;
+
+config_option =
+    "--unset" : "Remove the setting"
+  | "--list" : "Show the current configuration"
+  | "--local" : "Use the project-local poetry.toml"
+  | "--migrate" : "Migrate outdated settings" ;
+
+debug_command =
+    "info" : "Show debug information" , { global }
+  | "resolve" : "Resolve the dependencies and list the result" , { global | @any }
+  | "tags" : "Show the supported packaging tags" , { global } ;
+
+env_command =
+    "activate" : "Print the command that activates the environment" , { global }
+  | "info" : "Show information about the environment" , { "-p" : "Only print the environment path" | "--path" : "Only print the environment path" | "-e" : "Only print the Python executable" | "--executable" : "Only print the Python executable" | global }
+  | "list" : "List the environments of the project" , { "--full-path" : "Print the full paths" | global }
+  | "remove" : "Remove environments of the project" , { "--all" : "Remove all the environments of the project" | global | @any }
+  | "use" : "Use or create an environment for a Python version" , { global } , [ @any ] ;
+
+init_option =
+    "--name" : "Name of the package" , @any | "--name=" : "Name of the package" ~ @any
+  | "--description" : "Description of the package" , @any | "--description=" : "Description of the package" ~ @any
+  | "--author" : "Author of the package" , @any | "--author=" : "Author of the package" ~ @any
+  | "--python" : "Compatible Python versions" , @any | "--python=" : "Compatible Python versions" ~ @any
+  | "--dependency" : "Package to require, like foo:1.0.0" , @any | "--dependency=" : "Package to require, like foo:1.0.0" ~ @any
+  | "--dev-dependency" : "Development requirement, like foo:1.0.0" , @any | "--dev-dependency=" : "Development requirement, like foo:1.0.0" ~ @any
+  | "-l" : "License of the package" , @any | "--license" : "License of the package" , @any | "--license=" : "License of the package" ~ @any ;
+
+new_option =
+    init_option
+  | "-i" : "Ask for the project details" | "--interactive" : "Ask for the project details"
+  | "--flat" : "Use a flat layout instead of src"
+  | "--readme" : "Extension of the README file" , ( "md" | @any ) | "--readme=" : "Extension of the README file" ~ ( "md" | @any ) ;
+
+install_option =
+    groups | extras | dry_run
+  | "--only-root" : "Only install the project itself"
+  | "--sync" : "Sync the environment (deprecated, use poetry sync)"
+  | "--no-root" : "Do not install the project itself"
+  | "--no-directory" : "Do not install directory path dependencies"
+  | "--all-extras" : "Install all extras"
+  | "--all-groups" : "Install all dependency groups"
+  | "--compile" : "Compile Python sources to bytecode" ;
+
+publish_option =
+    dry_run
+  | "-r" : "Repository to publish to" , @any | "--repository" : "Repository to publish to" , @any | "--repository=" : "Repository to publish to" ~ @any
+  | "-u" : "Username of the repository" , @any | "--username" : "Username of the repository" , @any | "--username=" : "Username of the repository" ~ @any
+  | "-p" : "Password of the repository" , @any | "--password" : "Password of the repository" , @any | "--password=" : "Password of the repository" ~ @any
+  | "--cert" : "Certificate authority to verify the repository" , @file | "--cert=" : "Certificate authority to verify the repository" ~ @file
+  | "--client-cert" : "Client certificate" , @file | "--client-cert=" : "Client certificate" ~ @file
+  | "--dist-dir" : "Directory of the built archives" , @directory | "--dist-dir=" : "Directory of the built archives" ~ @directory
+  | "--build" : "Build the package before publishing"
+  | "--skip-existing" : "Ignore files that already exist" ;
+
+python_filter =
+    "-t" : "Free-threaded build" | "--free-threaded" : "Free-threaded build"
+  | "-i" : "Python implementation" , implementation | "--implementation" : "Python implementation" , implementation
+  | "--implementation=" : "Python implementation" ~ implementation ;
+
+implementation = "cpython" | "pypy" ;
+
+python_command =
+    "install" : "Install a Python version" , { python_filter | "-c" : "Clean up if the check fails" | "--clean" : "Clean up if the check fails" | "-r" : "Reinstall the version" | "--reinstall" : "Reinstall the version" | global | @any }
+  | "list" : "List the Python versions" , { python_filter | "-a" : "Include downloadable versions" | "--all" : "Include downloadable versions" | "-m" : "Only versions managed by Poetry" | "--managed" : "Only versions managed by Poetry" | global }
+  | "remove" : "Remove a Python version managed by Poetry" , { python_filter | global | @any } ;
+
+show_format = "-f" : "Output format" , ( "text" | "json" ) | "--format" : "Output format" , ( "text" | "json" ) | "--format=" : "Output format" ~ ( "text" | "json" ) ;
+
+show_option =
+    groups | show_format
+  | "--why" : "Show why packages are installed"
+  | "--tree" : "Show the dependency tree"
+  | "-l" : "Show the latest versions" | "--latest" : "Show the latest versions"
+  | "-o" : "Only show outdated packages" | "--outdated" : "Only show outdated packages"
+  | "-a" : "Include packages for other systems" | "--all" : "Include packages for other systems"
+  | "-T" : "Only show top-level dependencies" | "--top-level" : "Only show top-level dependencies"
+  | "--no-truncate" : "Do not truncate the output" ;
+
+self_command =
+    "add" : "Add packages to the Poetry environment" , { extras | dry_run | "-e" : "Install as editable" | "--editable" : "Install as editable" | "--allow-prereleases" : "Accept pre-release versions" | "--source" : "Source to install from" , @any | "--source=" : "Source to install from" ~ @any | global | @any }
+  | "install" : "Install the add-on packages of Poetry" , { dry_run | "--sync" : "Sync the environment (deprecated)" | global }
+  | "lock" : "Lock the dependencies of Poetry" , { "--regenerate" : "Rebuild the lock file from scratch" | global }
+  | "remove" : "Remove add-on packages from Poetry" , { dry_run | global | @any }
+  | "show" : "Show the packages of the Poetry environment" , { show_format | "--addons" : "Only add-on packages" | "--tree" : "Show the dependency tree" | "-l" : "Show the latest versions" | "--latest" : "Show the latest versions" | "-o" : "Only show outdated packages" | "--outdated" : "Only show outdated packages" | global } , [ "plugins" : "List the installed plugins" , { global } ]
+  | "sync" : "Sync the Poetry environment with its lock file" , { dry_run | global }
+  | "update" : "Update Poetry and its dependencies" , { dry_run | "--preview" : "Allow pre-release versions" | global } ;
+
+source_command =
+    "add" : "Add a package source" , { "--priority" : "Priority of the source" , priority | "--priority=" : "Priority of the source" ~ priority | global | @any }
+  | "show" : "Show the configured sources" , { global | @any }
+  | "remove" : "Remove a package source" , { global | @any } ;
+
+priority = "primary" | "supplemental" | "explicit" ;
+
+update_option =
+    groups | dry_run | lock_only
+  | "--sync" : "Sync the environment with the lock file" ;
+
+version_rule =
+    "patch" : "Bump the patch version" | "minor" : "Bump the minor version" | "major" : "Bump the major version"
+  | "prepatch" : "Bump to a patch prerelease" | "preminor" : "Bump to a minor prerelease"
+  | "premajor" : "Bump to a major prerelease" | "prerelease" : "Bump the prerelease" | @any ;
+
+version_option =
+    dry_run
+  | "--next-phase" : "Move to the next prerelease phase"
+  | "-s" : "Only print the version" | "--short" : "Only print the version" ;

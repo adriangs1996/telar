@@ -1,0 +1,64 @@
+(* awk: the union of GNU awk 5.4.1 (`awk --help` on Arch Linux) and the BSD
+   one-true-awk 20200816 (`man awk` on macOS 26), which documents only -F, -v and
+   -f. The other options are gawk's. The first operand is the program unless -f
+   or -e gives one; the rest are input files or var=value assignments. *)
+
+awk = { option | @file } , [ "--" , { @file } ] ;
+
+option =
+    (* POSIX *)
+    "-f" : "Read the program from this file" , @file
+  | "--file" : "Read the program from this file" , @file
+  | "--file=" : "Read the program from this file" ~ @file
+  | "-F" : "Input field separator" , @any
+  | "--field-separator" : "Input field separator" , @any
+  | "--field-separator=" : "Input field separator" ~ @any
+  | "-v" : "Assign a variable before the program runs, as var=value" , @any
+  | "--assign" : "Assign a variable before the program runs, as var=value" , @any
+  | "--assign=" : "Assign a variable before the program runs, as var=value" ~ @any
+    (* GNU extensions *)
+  | "-b" : "GNU: treat all input as single-byte characters"
+  | "--characters-as-bytes" : "Treat all input as single-byte characters"
+  | "-c" : "GNU: compatibility mode, no GNU extensions" | "--traditional" : "Compatibility mode, no GNU extensions"
+  | "-C" : "GNU: print the copyright and exit" | "--copyright" : "Print the copyright and exit"
+  | "-d" : "GNU: dump global variables to awkvars.out or this file" | "-d" ~ @file
+  | "--dump-variables" : "Dump global variables to awkvars.out"
+  | "--dump-variables=" : "Dump global variables to this file" ~ @file
+  | "-D" : "GNU: debug the program, with commands from this file" | "-D" ~ @file
+  | "--debug" : "Debug the program" | "--debug=" : "Debug the program with commands from this file" ~ @file
+  | "-e" : "GNU: program text to run" , @any
+  | "--source" : "Program text to run" , @any | "--source=" : "Program text to run" ~ @any
+  | "-E" : "GNU: run this program file, then stop reading options" , @file
+  | "--exec" : "Run this program file, then stop reading options" , @file
+  | "--exec=" : "Run this program file, then stop reading options" ~ @file
+  | "-g" : "GNU: extract translatable strings as a .pot file" | "--gen-pot" : "Extract translatable strings as a .pot file"
+  | "-h" : "GNU: print the help and exit" | "--help" : "Print the help and exit"
+  | "-i" : "GNU: include this source library" , @file
+  | "--include" : "Include this source library" , @file | "--include=" : "Include this source library" ~ @file
+  | "-I" : "GNU: trace the program's byte code" | "--trace" : "Trace the program's byte code"
+  | "-k" : "GNU: parse input as CSV" | "--csv" : "Parse input as CSV"
+  | "-l" : "GNU: load this shared library extension" , @any
+  | "--load" : "Load this shared library extension" , @any | "--load=" : "Load this shared library extension" ~ @any
+  | "-L" : "GNU: warn about dubious or non-portable constructs" | "-L" ~ lint_kind
+  | "--lint" : "Warn about dubious or non-portable constructs"
+  | "--lint=" : "Warn about dubious constructs, in this way" ~ lint_kind
+  | "-M" : "GNU: arbitrary precision arithmetic" | "--bignum" : "Arbitrary precision arithmetic"
+  | "-N" : "GNU: use the locale's decimal point" | "--use-lc-numeric" : "Use the locale's decimal point"
+  | "-n" : "GNU: recognize octal and hex values in input" | "--non-decimal-data" : "Recognize octal and hex values in input"
+  | "-o" : "GNU: pretty-print the program to awkprof.out or this file" | "-o" ~ @file
+  | "--pretty-print" : "Pretty-print the program to awkprof.out"
+  | "--pretty-print=" : "Pretty-print the program to this file" ~ @file
+  | "-O" : "GNU: enable optimizations" | "--optimize" : "Enable optimizations"
+  | "-p" : "GNU: write a profile to awkprof.out or this file" | "-p" ~ @file
+  | "--profile" : "Write a profile to awkprof.out" | "--profile=" : "Write a profile to this file" ~ @file
+  | "-P" : "GNU: strict POSIX mode" | "--posix" : "Strict POSIX mode"
+  | "-r" : "GNU: allow interval expressions in regexes" | "--re-interval" : "Allow interval expressions in regexes"
+  | "-s" : "GNU: disable optimizations" | "--no-optimize" : "Disable optimizations"
+  | "-S" : "GNU: sandbox mode, no system() or redirections" | "--sandbox" : "Sandbox mode, no system() or redirections"
+  | "-t" : "GNU: warn about constructs the original awk lacks" | "--lint-old" : "Warn about constructs the original awk lacks"
+  | "-V" : "GNU: print the version and exit" | "--version" : "Print the version and exit"
+  | "-version" : "BSD: print the version and exit" ;
+
+lint_kind =
+    "fatal" : "Lint warnings are fatal" | "invalid" : "Only warn about invalid constructs"
+  | "no-ext" : "Do not warn about gawk extensions" ;

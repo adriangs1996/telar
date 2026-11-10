@@ -230,6 +230,7 @@ public:
       : executable_(AllocatorRef<char, Memory>{memory}),
         cwd_(launch.cwd, AllocatorRef<char, Memory>{memory}),
         arguments_(AllocatorRef<String<Memory>, Memory>{memory}),
+        spawn_arguments_(AllocatorRef<String<Memory>, Memory>{memory}),
         environment_memory_(memory),
         environment_(AllocatorRef<String<SensitiveMemory>, SensitiveMemory>{environment_memory_}),
         argument_pointers_(AllocatorRef<char *, Memory>{memory}),
@@ -294,6 +295,35 @@ public:
     std::erase_if(environment_, [prefix](const auto &entry) { return entry.starts_with(prefix); });
   }
 
+  inline std::optional<std::string_view> environment(std::string_view name) const noexcept {
+    for (const auto &entry : environment_) {
+      if (definesVariable(entry, name)) {
+        return std::string_view{entry}.substr(name.size() + 1);
+      }
+    }
+    return std::nullopt;
+  }
+
+  inline void removeEnvironment(std::string_view name) {
+    std::erase_if(environment_, [name](auto &entry) {
+      if (!definesVariable(entry, name)) {
+        return false;
+      }
+
+      eraseSensitive(entry.data(), entry.size());
+      return true;
+    });
+  }
+
+  // The process starts with these after the program instead of the launch's own arguments,
+  // which stay what the pane records and restores.
+  inline void replaceSpawnArguments(std::span<const std::string_view> arguments) {
+    spawn_arguments_.clear();
+    for (const auto argument : arguments) {
+      spawn_arguments_.emplace_back(argument, AllocatorRef<char, Memory>{memory_});
+    }
+  }
+
   inline void setEnvironment(std::string_view name, std::string_view value) {
     String<SensitiveMemory> entry{name, AllocatorRef<char, SensitiveMemory>{environment_memory_}};
     entry.push_back('=');
@@ -315,7 +345,9 @@ public:
     argument_pointers_.clear();
     environment_pointers_.clear();
 
-    for (auto &argument : arguments_) {
+    argument_pointers_.push_back(arguments_.front().data());
+    const auto rest = spawn_arguments_.empty() ? std::span<String<Memory>>{arguments_}.subspan(1) : std::span<String<Memory>>{spawn_arguments_};
+    for (auto &argument : rest) {
       argument_pointers_.push_back(argument.data());
     }
 
@@ -347,6 +379,10 @@ public:
   }
 
 private:
+  inline static bool definesVariable(std::string_view entry, std::string_view name) noexcept {
+    return entry.size() > name.size() && entry[name.size()] == '=' && entry.starts_with(name);
+  }
+
   inline void resolveExecutable() {
     const auto &program = arguments_.front();
     if (program.find('/') != String<Memory>::npos) {
@@ -390,6 +426,7 @@ private:
   tbc::view<String<Memory>, tbc::lt::a> executable_;
   tbc::view<String<Memory>, tbc::lt::a> cwd_;
   tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> arguments_;
+  tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> spawn_arguments_;
   tbc::view<SensitiveMemory, tbc::lt::a> environment_memory_;
   // The environment allocates from the sibling allocator, and the spawn arrays point into the
   // command's own strings, so a command keeps its address.
@@ -929,27 +966,26 @@ public:
   inline explicit RuntimePaths(Memory &memory, const ServerOptions &options, const Environment &environment)
       : socket(AllocatorRef<char, Memory>{memory}),
         history(AllocatorRef<char, Memory>{memory}),
-        session(AllocatorRef<char, Memory>{memory}) {
+        session(AllocatorRef<char, Memory>{memory}),
+        data_home(AllocatorRef<char, Memory>{memory}) {
     resolveSocket(options.socket, environment);
   }
 
   template <EnvironmentLookup Environment>
   inline void resolveStorage(const ServerOptions &options, const Environment &environment) {
+    data_home = environment.lookup("XDG_DATA_HOME");
+    if (const auto home = environment.lookup("HOME"); data_home.empty() && !home.empty()) {
+      data_home = home;
+      data_home += "/.local/share";
+    }
+
     history = options.history.empty() ? environment.lookup("TELAR_HISTORY") : options.history;
     if (history.empty()) {
-      const auto data_home = environment.lookup("XDG_DATA_HOME");
-      if (!data_home.empty()) {
-        history = data_home;
-      } else {
-        const auto home = environment.lookup("HOME");
-        if (home.empty()) {
-          throw std::invalid_argument{"Home directory unavailable"};
-        }
-
-        history = home;
-        history += "/.local/share";
+      if (data_home.empty()) {
+        throw std::invalid_argument{"Home directory unavailable"};
       }
 
+      history = data_home;
       history += "/telar/history.db";
       history_managed = true;
     }
@@ -985,6 +1021,8 @@ public:
   String<Memory> socket;
   String<Memory> history;
   String<Memory> session;
+  // XDG_DATA_HOME, or ~/.local/share; empty without either.
+  String<Memory> data_home;
   bool socket_managed = false;
   bool history_managed = false;
 

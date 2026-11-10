@@ -1,0 +1,95 @@
+(* just: checked against `just --help` of just 1.58.0. Options with a value accept
+   `--name value` and `--name=value`. The first word that is not an option is a
+   recipe (or a VAR=value override before it); every word after it is passed on,
+   options included, as `just recipe --flag` does. *)
+
+just = { option } , [ @just_recipe , { @any } ] ;
+
+option =
+    "--alias-style" : "How --list shows aliases" , alias_style | "--alias-style=" : "How --list shows aliases" ~ alias_style
+  | "--allow-missing" : "Ignore missing recipe and module errors"
+  | "--ceiling" : "Do not search for a justfile above this directory" , @directory
+  | "--ceiling=" : "Do not search for a justfile above this directory" ~ @directory
+  | "--check" : "Run --fmt in check mode"
+  | "--chooser" : "Binary that --choose invokes" , @command | "--chooser=" : "Binary that --choose invokes" ~ @command
+  | "--clear-shell-args" : "Clear the shell arguments"
+  | "--color" : "When to print colorful output" , color_when | "--color=" : "When to print colorful output" ~ color_when
+  | "--command-color" : "Color of echoed recipe lines" , command_color | "--command-color=" : "Color of echoed recipe lines" ~ command_color
+  | "--complete-aliases" : "Complete recipe aliases"
+  | "--cygpath" : "Binary that converts Unix and Windows paths" , @file | "--cygpath=" : "Binary that converts Unix and Windows paths" ~ @file
+  | "--default-list" : "List recipes when no arguments are given"
+  | "--dotenv-command" : "Load the output of this command as an environment file" , @command
+  | "--dotenv-command=" : "Load the output of this command as an environment file" ~ @command
+  | "-F" : "Name of the environment file to search for" , @any | "--dotenv-filename" : "Name of the environment file to search for" , @any
+  | "--dotenv-filename=" : "Name of the environment file to search for" ~ @any
+  | "-E" : "Load this environment file" , @file | "--dotenv-path" : "Load this environment file" , @file
+  | "--dotenv-path=" : "Load this environment file" ~ @file
+  | "-n" : "Print what just would do without doing it" | "--dry-run" : "Print what just would do without doing it"
+  | "--dump-format" : "Format of --dump" , ( "json" | "just" ) | "--dump-format=" : "Format of --dump" ~ ( "json" | "just" )
+  | "--evaluate-format" : "Format of --evaluate" , ( "just" | "shell" ) | "--evaluate-format=" : "Format of --evaluate" ~ ( "just" | "shell" )
+  | "--explain" : "Print the doc comment of a recipe before running it"
+  | "-g" : "Use the global justfile" | "--global-justfile" : "Use the global justfile"
+  | "--group" : "Only list recipes in this group" , @any | "--group=" : "Only list recipes in this group" ~ @any
+  | "--highlight" : "Highlight echoed recipe lines in bold"
+  | "--indentation" : "Indent recipe bodies with this text" , @any | "--indentation=" : "Indent recipe bodies with this text" ~ @any
+  | "--jobs" : "Run at most this many parallel recipes" , @number | "--jobs=" : "Run at most this many parallel recipes" ~ @number
+  | "-f" : "Use this justfile, or - for stdin" , justfile | "--justfile" : "Use this justfile, or - for stdin" , justfile
+  | "--justfile=" : "Use this justfile, or - for stdin" ~ justfile
+  | "--justfile-name" : "Names to search for as the justfile" , @any | "--justfile-name=" : "Names to search for as the justfile" ~ @any
+  | "--list-heading" : "Text to print before the list" , @any | "--list-heading=" : "Text to print before the list" ~ @any
+  | "--list-prefix" : "Text to print before each list item" , @any | "--list-prefix=" : "Text to print before each list item" ~ @any
+  | "--list-submodules" : "List the recipes of submodules"
+  | "--no-aliases" : "Do not show aliases in the list"
+  | "--no-cache" : "Bypass the recipe cache"
+  | "--no-deps" : "Do not run recipe dependencies"
+  | "--no-dotenv" : "Do not load the .env file"
+  | "--no-highlight" : "Do not highlight echoed recipe lines"
+  | "--one" : "Forbid invoking several recipes"
+  | "-q" : "Suppress all output" | "--quiet" : "Suppress all output"
+  | "--set" : "Override a variable with a value" , @any , @any
+  | "--shell" : "Shell that runs the recipes" , @command | "--shell=" : "Shell that runs the recipes" ~ @command
+  | "--shell-arg" : "Argument for the shell" , @any | "--shell-arg=" : "Argument for the shell" ~ @any
+  | "--shell-command" : "Run --command with the recipe shell"
+  | "--tempdir" : "Directory for temporary files" , @directory | "--tempdir=" : "Directory for temporary files" ~ @directory
+  | "--time" : "Print the execution time of recipes"
+  | "--timestamp" : "Print timestamps of recipe commands"
+  | "--timestamp-format" : "Format of the timestamps" , @any | "--timestamp-format=" : "Format of the timestamps" ~ @any
+  | "-u" : "List entries in source order" | "--unsorted" : "List entries in source order"
+  | "--unstable" : "Enable unstable features"
+  | "-v" : "Use verbose output" | "--verbose" : "Use verbose output"
+  | "-d" : "Working directory; needs --justfile" , @directory | "--working-directory" : "Working directory; needs --justfile" , @directory
+  | "--working-directory=" : "Working directory; needs --justfile" ~ @directory
+  | "--yes" : "Confirm all recipes automatically"
+  | "-h" : "Print help" | "--help" : "Print help"
+  | "-V" : "Print the version" | "--version" : "Print the version"
+  | subcommand ;
+
+(* The commands, which just spells as options. *)
+subcommand =
+    "--changelog" : "Print the changelog"
+  | "--choose" : "Pick recipes to run with a chooser such as fzf"
+  | "--clean" : "Clear the recipe cache" , { @just_recipe }
+  | "-c" : "Run a command with the justfile environment" , @command , { @any }
+  | "--command" : "Run a command with the justfile environment" , @command , { @any }
+  | "--completions" : "Print the completion script of a shell" , shell | "--completions=" : "Print the completion script of a shell" ~ shell
+  | "--dump" : "Print the justfile"
+  | "-e" : "Edit the justfile with $VISUAL or $EDITOR" | "--edit" : "Edit the justfile with $VISUAL or $EDITOR"
+  | "--evaluate" : "Print the variables, or the named one"
+  | "--fmt" : "Format and overwrite the justfile"
+  | "--groups" : "List the recipe groups"
+  | "--init" : "Create a justfile in the project root"
+  | "--json" : "Print the justfile as JSON"
+  | "-l" : "List the recipes, or those of a module" | "--list" : "List the recipes, or those of a module"
+  | "--man" : "Print the man page"
+  | "-s" : "Show a recipe" , @just_recipe , { @just_recipe } | "--show" : "Show a recipe" , @just_recipe , { @just_recipe }
+  | "--show=" : "Show a recipe" ~ @just_recipe
+  | "--summary" : "List the names of the recipes"
+  | "--usage" : "Print the usage of a recipe" , @just_recipe , { @just_recipe }
+  | "--usage=" : "Print the usage of a recipe" ~ @just_recipe
+  | "--variables" : "List the names of the variables" ;
+
+alias_style = "left" | "right" | "separate" ;
+color_when = "always" | "auto" | "never" ;
+command_color = "black" | "blue" | "cyan" | "green" | "purple" | "red" | "yellow" ;
+shell = "bash" | "elvish" | "fish" | "nushell" | "powershell" | "zsh" ;
+justfile = "-" : "Read the justfile from stdin" | @file ;

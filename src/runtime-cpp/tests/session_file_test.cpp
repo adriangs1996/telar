@@ -11,6 +11,7 @@ static_assert(true);
 #include <cstddef>
 #include <sqlite3.h>
 #include <cerrno>
+#include <cstdlib>
 #include <fcntl.h>
 #include <sys/stat.h>
 

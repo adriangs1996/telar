@@ -1,0 +1,152 @@
+(* pacman: every operation and its options, checked against `pacman -<op> --help` of
+   Pacman 7.1.0 on Arch Linux. The operation comes first, as usual (`pacman -Syu`,
+   `pacman -S --needed git`); short options cluster and the matcher splits them.
+   Long options with a value accept `--opt value` and `--opt=value`. Package names
+   have no provider, so they are free words. *)
+
+pacman =
+    "-S" : "Sync: install and search repository packages" , sync_rest
+  | "--sync" : "Sync: install and search repository packages" , sync_rest
+  | "-Q" : "Query the local package database" , query_rest
+  | "--query" : "Query the local package database" , query_rest
+  | "-R" : "Remove packages" , remove_rest
+  | "--remove" : "Remove packages" , remove_rest
+  | "-U" : "Install or upgrade packages from files or URLs" , upgrade_rest
+  | "--upgrade" : "Install or upgrade packages from files or URLs" , upgrade_rest
+  | "-F" : "Query the files database" , files_rest
+  | "--files" : "Query the files database" , files_rest
+  | "-D" : "Operate on the package database" , database_rest
+  | "--database" : "Operate on the package database" , database_rest
+  | "-T" : "Check dependencies, print the unsatisfied ones" , deptest_rest
+  | "--deptest" : "Check dependencies, print the unsatisfied ones" , deptest_rest
+  | "-V" : "Print the version" | "--version" : "Print the version"
+  | "-h" : "Print the operations" | "--help" : "Print the operations" ;
+
+sync_rest = { sync_option | transaction_option | upgrade_option | common_option | @any } ;
+query_rest = { query_option | common_option | @any } ;
+remove_rest = { remove_option | transaction_option | common_option | @any } ;
+upgrade_rest = { transaction_option | upgrade_option | common_option | @file } ;
+files_rest = { files_option | common_option | @any } ;
+database_rest = { database_option | common_option | @any } ;
+deptest_rest = { common_option | @any } ;
+
+common_option =
+    "-b" : "Use an alternate database location" , @directory
+  | "--dbpath" : "Use an alternate database location" , @directory
+  | "--dbpath=" : "Use an alternate database location" ~ @directory
+  | "-r" : "Use an alternate installation root" , @directory
+  | "--root" : "Use an alternate installation root" , @directory
+  | "--root=" : "Use an alternate installation root" ~ @directory
+  | "-v" : "Be verbose" | "--verbose" : "Be verbose"
+  | "-h" : "Print the options of the operation" | "--help" : "Print the options of the operation"
+  | "--arch" : "Use an alternate architecture" , @any | "--arch=" : "Use an alternate architecture" ~ @any
+  | "--cachedir" : "Use an alternate package cache location" , @directory
+  | "--cachedir=" : "Use an alternate package cache location" ~ @directory
+  | "--color" : "Colorize the output" , color_when | "--color=" : "Colorize the output" ~ color_when
+  | "--config" : "Use an alternate configuration file" , @file
+  | "--config=" : "Use an alternate configuration file" ~ @file
+  | "--confirm" : "Always ask for confirmation"
+  | "--noconfirm" : "Do not ask for any confirmation"
+  | "--debug" : "Display debug messages"
+  | "--disable-download-timeout" : "Use relaxed timeouts for download"
+  | "--disable-sandbox" : "Disable the downloader sandbox"
+  | "--disable-sandbox-filesystem" : "Disable the filesystem part of the downloader sandbox"
+  | "--disable-sandbox-syscalls" : "Disable the syscalls part of the downloader sandbox"
+  | "--gpgdir" : "Use an alternate home directory for GnuPG" , @directory
+  | "--gpgdir=" : "Use an alternate home directory for GnuPG" ~ @directory
+  | "--hookdir" : "Use an alternate hook location" , @directory
+  | "--hookdir=" : "Use an alternate hook location" ~ @directory
+  | "--logfile" : "Use an alternate log file" , @file
+  | "--logfile=" : "Use an alternate log file" ~ @file
+  | "--sysroot" : "Operate on a mounted guest system (root only)" ;
+
+color_when = "always" | "never" | "auto" ;
+
+(* Options of the operations that change packages: -S, -R and -U. *)
+transaction_option =
+    "-d" : "Skip dependency version checks (-dd skips all checks)"
+  | "--nodeps" : "Skip dependency version checks (-dd skips all checks)"
+  | "-p" : "Print the targets instead of performing the operation"
+  | "--print" : "Print the targets instead of performing the operation"
+  | "--assume-installed" : "Add a virtual package=version to satisfy dependencies" , @any
+  | "--assume-installed=" : "Add a virtual package=version to satisfy dependencies" ~ @any
+  | "--dbonly" : "Only modify database entries, not package files"
+  | "--noprogressbar" : "Do not show a progress bar when downloading"
+  | "--noscriptlet" : "Do not execute the install scriptlet"
+  | "--print-format" : "How to print the targets" , @any
+  | "--print-format=" : "How to print the targets" ~ @any ;
+
+(* Options of the operations that install packages: -S and -U. *)
+upgrade_option =
+    "-w" : "Download packages but do not install them"
+  | "--downloadonly" : "Download packages but do not install them"
+  | "--asdeps" : "Install packages as dependencies"
+  | "--asexplicit" : "Install packages as explicitly installed"
+  | "--ignore" : "Ignore an upgrade of this package" , @any
+  | "--ignore=" : "Ignore an upgrade of this package" ~ @any
+  | "--ignoregroup" : "Ignore an upgrade of this group" , @any
+  | "--ignoregroup=" : "Ignore an upgrade of this group" ~ @any
+  | "--needed" : "Do not reinstall up to date packages"
+  | "--overwrite" : "Overwrite conflicting files matching this glob" , @any
+  | "--overwrite=" : "Overwrite conflicting files matching this glob" ~ @any ;
+
+sync_option =
+    "-c" : "Remove old packages from the cache (-cc for all)"
+  | "--clean" : "Remove old packages from the cache (-cc for all)"
+  | "-g" : "List the members of a group (-gg for all groups)"
+  | "--groups" : "List the members of a group (-gg for all groups)"
+  | "-i" : "Show package information (-ii for more)"
+  | "--info" : "Show package information (-ii for more)"
+  | "-l" : "List the packages in a repository" | "--list" : "List the packages in a repository"
+  | "-q" : "Show less information" | "--quiet" : "Show less information"
+  | "-s" : "Search the repositories for a regex" | "--search" : "Search the repositories for a regex"
+  | "-u" : "Upgrade installed packages (-uu enables downgrades)"
+  | "--sysupgrade" : "Upgrade installed packages (-uu enables downgrades)"
+  | "-y" : "Refresh the package databases (-yy forces it)"
+  | "--refresh" : "Refresh the package databases (-yy forces it)" ;
+
+query_option =
+    "-c" : "Show the changelog of a package" | "--changelog" : "Show the changelog of a package"
+  | "-d" : "List packages installed as dependencies" | "--deps" : "List packages installed as dependencies"
+  | "-e" : "List explicitly installed packages" | "--explicit" : "List explicitly installed packages"
+  | "-g" : "List the members of a group" | "--groups" : "List the members of a group"
+  | "-i" : "Show package information (-ii for backup files)"
+  | "--info" : "Show package information (-ii for backup files)"
+  | "-k" : "Check that package files exist (-kk for properties)"
+  | "--check" : "Check that package files exist (-kk for properties)"
+  | "-l" : "List the files owned by the package" | "--list" : "List the files owned by the package"
+  | "-m" : "List packages not found in the sync databases" | "--foreign" : "List packages not found in the sync databases"
+  | "-n" : "List packages found in the sync databases" | "--native" : "List packages found in the sync databases"
+  | "-o" : "Find the package that owns this file" , @file
+  | "--owns" : "Find the package that owns this file" , @file
+  | "--owns=" : "Find the package that owns this file" ~ @file
+  | "-p" : "Query a package file instead of the database" , @file
+  | "--file" : "Query a package file instead of the database" , @file
+  | "--file=" : "Query a package file instead of the database" ~ @file
+  | "-q" : "Show less information" | "--quiet" : "Show less information"
+  | "-s" : "Search installed packages for a regex" | "--search" : "Search installed packages for a regex"
+  | "-t" : "List packages no package requires (-tt ignores optdepends)"
+  | "--unrequired" : "List packages no package requires (-tt ignores optdepends)"
+  | "-u" : "List outdated packages" | "--upgrades" : "List outdated packages" ;
+
+remove_option =
+    "-c" : "Also remove the packages that depend on them" | "--cascade" : "Also remove the packages that depend on them"
+  | "-n" : "Also remove configuration files" | "--nosave" : "Also remove configuration files"
+  | "-s" : "Also remove unneeded dependencies (-ss includes explicit ones)"
+  | "--recursive" : "Also remove unneeded dependencies (-ss includes explicit ones)"
+  | "-u" : "Remove unneeded packages" | "--unneeded" : "Remove unneeded packages" ;
+
+files_option =
+    "-l" : "List the files owned by the package" | "--list" : "List the files owned by the package"
+  | "-q" : "Show less information" | "--quiet" : "Show less information"
+  | "-x" : "Search with regular expressions" | "--regex" : "Search with regular expressions"
+  | "-y" : "Refresh the files databases (-yy forces it)"
+  | "--refresh" : "Refresh the files databases (-yy forces it)"
+  | "--machinereadable" : "Produce machine-readable output" ;
+
+database_option =
+    "--asdeps" : "Mark packages as dependencies"
+  | "--asexplicit" : "Mark packages as explicitly installed"
+  | "-k" : "Check the local database (-kk for the sync databases)"
+  | "--check" : "Check the local database (-kk for the sync databases)"
+  | "-q" : "Suppress success messages" | "--quiet" : "Suppress success messages" ;

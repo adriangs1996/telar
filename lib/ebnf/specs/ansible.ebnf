@@ -1,0 +1,103 @@
+(* ansible: the ad-hoc runner, checked against `ansible --help` of ansible-core 2.22.0
+   (installed with pip, as on no machine here it was). Options go anywhere; long ones
+   take their value as the next word or after `=`. The operand is a host pattern,
+   offered from the SSH configuration's hosts. Unique-prefix abbreviations of long
+   options, which argparse accepts, are not modelled. *)
+
+ansible = { option | shared_option | "all" : "Every host in the inventory" | @ssh_host } ;
+
+option =
+    "-m" : "Module to run (default command)" , @any
+  | "--module-name" : "Module to run (default command)" , @any
+  | "--module-name=" : "Module to run (default command)" ~ @any
+  | "-a" : "Module arguments as k=v pairs or JSON" , @any
+  | "--args" : "Module arguments as k=v pairs or JSON" , @any
+  | "--args=" : "Module arguments as k=v pairs or JSON" ~ @any
+  | "-B" : "Run asynchronously, failing after this many seconds" , @number
+  | "--background" : "Run asynchronously, failing after this many seconds" , @number
+  | "--background=" : "Run asynchronously, failing after this many seconds" ~ @number
+  | "-P" : "Poll interval with -B (default 15)" , @number
+  | "--poll" : "Poll interval with -B (default 15)" , @number
+  | "--poll=" : "Poll interval with -B (default 15)" ~ @number
+  | "-o" : "Condense the output" | "--one-line" : "Condense the output"
+  | "-t" : "Log the output to this directory" , @directory
+  | "--tree" : "Log the output to this directory" , @directory
+  | "--tree=" : "Log the output to this directory" ~ @directory
+  | "--playbook-dir" : "Directory to use as the playbook directory" , @directory
+  | "--playbook-dir=" : "Directory to use as the playbook directory" ~ @directory
+  | "--task-timeout" : "Task timeout in seconds" , @number
+  | "--task-timeout=" : "Task timeout in seconds" ~ @number ;
+
+(* Options ansible and ansible-playbook share. *)
+shared_option =
+    "-h" : "Show the help and exit" | "--help" : "Show the help and exit"
+  | "--version" : "Show the version and configuration and exit"
+  | "-v" : "More debug messages (-vvv, -vvvv for more)" | "--verbose" : "More debug messages (-vvv, -vvvv for more)"
+  | "-i" : "Inventory path or comma separated host list" , ( @file | @any )
+  | "--inventory" : "Inventory path or comma separated host list" , ( @file | @any )
+  | "--inventory=" : "Inventory path or comma separated host list" ~ @file
+  | "--inventory-file" : "Inventory path or comma separated host list" , ( @file | @any )
+  | "--inventory-file=" : "Inventory path or comma separated host list" ~ @file
+  | "-l" : "Limit the hosts to this pattern" , @any
+  | "--limit" : "Limit the hosts to this pattern" , @any | "--limit=" : "Limit the hosts to this pattern" ~ @any
+  | "--list-hosts" : "List the matching hosts without running anything"
+  | "--flush-cache" : "Clear the fact cache of every host"
+  | "-e" : "Extra variables as key=value, YAML/JSON or @file" , @any
+  | "--extra-vars" : "Extra variables as key=value, YAML/JSON or @file" , @any
+  | "--extra-vars=" : "Extra variables as key=value, YAML/JSON or @file" ~ @any
+  | "-C" : "Do not make changes, predict them" | "--check" : "Do not make changes, predict them"
+  | "-D" : "Show the differences in changed files" | "--diff" : "Show the differences in changed files"
+  | "-f" : "Number of parallel processes (default 5)" , @number
+  | "--forks" : "Number of parallel processes (default 5)" , @number
+  | "--forks=" : "Number of parallel processes (default 5)" ~ @number
+  | "-M" : "Prepend paths to the module library" , @directory
+  | "--module-path" : "Prepend paths to the module library" , @directory
+  | "--module-path=" : "Prepend paths to the module library" ~ @directory
+    (* Vault *)
+  | "--vault-id" : "Vault identity to use" , @any | "--vault-id=" : "Vault identity to use" ~ @any
+  | "-J" : "Ask for the vault password"
+  | "--ask-vault-password" : "Ask for the vault password" | "--ask-vault-pass" : "Ask for the vault password"
+  | "--vault-password-file" : "Vault password file" , @file
+  | "--vault-password-file=" : "Vault password file" ~ @file
+  | "--vault-pass-file" : "Vault password file" , @file
+  | "--vault-pass-file=" : "Vault password file" ~ @file
+    (* Privilege escalation *)
+  | "-b" : "Run operations with become" | "--become" : "Run operations with become"
+  | "--become-method" : "Privilege escalation method (default sudo)" , become_method
+  | "--become-method=" : "Privilege escalation method (default sudo)" ~ become_method
+  | "--become-user" : "Run operations as this user (default root)" , @any
+  | "--become-user=" : "Run operations as this user (default root)" ~ @any
+  | "-K" : "Ask for the privilege escalation password" | "--ask-become-pass" : "Ask for the privilege escalation password"
+  | "--become-password-file" : "Become password file" , @file
+  | "--become-password-file=" : "Become password file" ~ @file
+  | "--become-pass-file" : "Become password file" , @file
+  | "--become-pass-file=" : "Become password file" ~ @file
+    (* Connection *)
+  | "--private-key" : "Authenticate the connection with this key" , @file
+  | "--private-key=" : "Authenticate the connection with this key" ~ @file
+  | "--key-file" : "Authenticate the connection with this key" , @file
+  | "--key-file=" : "Authenticate the connection with this key" ~ @file
+  | "-u" : "Connect as this user" , @any
+  | "--user" : "Connect as this user" , @any | "--user=" : "Connect as this user" ~ @any
+  | "-c" : "Connection type (default ssh)" , connection
+  | "--connection" : "Connection type (default ssh)" , connection
+  | "--connection=" : "Connection type (default ssh)" ~ connection
+  | "-T" : "Connection timeout in seconds" , @number
+  | "--timeout" : "Connection timeout in seconds" , @number | "--timeout=" : "Connection timeout in seconds" ~ @number
+  | "--ssh-common-args" : "Arguments for sftp, scp and ssh" , @any
+  | "--ssh-common-args=" : "Arguments for sftp, scp and ssh" ~ @any
+  | "--sftp-extra-args" : "Extra arguments for sftp only" , @any
+  | "--sftp-extra-args=" : "Extra arguments for sftp only" ~ @any
+  | "--scp-extra-args" : "Extra arguments for scp only" , @any
+  | "--scp-extra-args=" : "Extra arguments for scp only" ~ @any
+  | "--ssh-extra-args" : "Extra arguments for ssh only" , @any
+  | "--ssh-extra-args=" : "Extra arguments for ssh only" ~ @any
+  | "-k" : "Ask for the connection password" | "--ask-pass" : "Ask for the connection password"
+  | "--connection-password-file" : "Connection password file" , @file
+  | "--connection-password-file=" : "Connection password file" ~ @file
+  | "--conn-pass-file" : "Connection password file" , @file
+  | "--conn-pass-file=" : "Connection password file" ~ @file ;
+
+(* The become and connection plugins ansible-core ships; collections add more. *)
+become_method = "sudo" | "su" | "runas" | @any ;
+connection = "ssh" | "local" | "winrm" | "psrp" | @any ;

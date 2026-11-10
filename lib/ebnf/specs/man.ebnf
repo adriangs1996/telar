@@ -1,0 +1,60 @@
+(* man: the union of man-db 2.13.1 (Arch Linux, `man --help` and `man man`) and
+   the man of macOS 26 (`man man`). Where a flag means different things, the
+   description names both. man-db long options take their value as
+   --name=value or as the next word; optional values only as --name=value or
+   joined to the short flag. Operands are an optional section and page names;
+   commands on the PATH are offered as page names. *)
+
+man = { option | section | @command : "Manual page" } ;
+
+option =
+    "-h" : "macOS: print the help"
+  | "-H" : "Linux: show HTML output, in the browser joined to it" | "-H" ~ @any
+  | "-T" : "Linux: use groff, with the device joined to it" | "-T" ~ @any
+  | "-X" : "Linux: show through gxditview, at the resolution joined" | "-X" ~ @any
+  | "-p" : "Preprocessors to run, from e, p, t, g, r and v" , @any | "-p" ~ @any
+  | "-C" : "Linux: use this user configuration file" , @file | "--config-file" : "Linux: use this user configuration file" , @file | "--config-file=" : "Linux: use this user configuration file" ~ @file
+  | "-d" : "Print debugging information" | "--debug" : "Print debugging information"
+  | "-D" : "Linux: reset all options to their defaults" | "--default" : "Linux: reset all options to their defaults"
+  | "--warnings" : "Linux: enable groff warnings" | "--warnings=" : "Linux: enable groff warnings" ~ @any
+  | "-f" : "Emulate whatis" | "--whatis" : "Emulate whatis"
+  | "-k" : "Emulate apropos" | "--apropos" : "Emulate apropos"
+  | "-K" : "Linux: search for text in all pages" | "--global-apropos" : "Linux: search for text in all pages"
+  | "-l" : "Linux: the pages are local files" | "--local-file" : "Linux: the pages are local files"
+  | "-w" : "Print the location of the pages" | "--where" : "Print the location of the pages" | "--path" : "Print the location of the pages" | "--location" : "Print the location of the pages"
+  | "-W" : "Linux: print the location of the cat files" | "--where-cat" : "Linux: print the location of the cat files" | "--location-cat" : "Linux: print the location of the cat files"
+  | "-c" : "Linux: reformat out of date cat pages (for catman)" | "--catman" : "Linux: reformat out of date cat pages (for catman)"
+  | "-R" : "Linux: print the page source in this encoding" , @any | "--recode" : "Linux: print the page source in this encoding" , @any | "--recode=" : "Linux: print the page source in this encoding" ~ @any
+  | "-L" : "Linux: locale for this search" , @any | "--locale" : "Linux: locale for this search" , @any | "--locale=" : "Linux: locale for this search" ~ @any
+  | "-m" : "Linux: pages of other systems; macOS: arch[:machine]" , @any | "--systems" : "Linux: pages of other systems; macOS: arch[:machine]" , @any | "--systems=" : "Linux: pages of other systems; macOS: arch[:machine]" ~ @any
+  | "-M" : "Search for pages in this colon separated path" , @any | "--manpath" : "Search for pages in this colon separated path" , @any | "--manpath=" : "Search for pages in this colon separated path" ~ @any
+  | "-S" : "Search these sections, colon separated" , @any | "-s" : "Search these sections, colon separated" , @any | "--sections" : "Search these sections, colon separated" , @any | "--sections=" : "Search these sections, colon separated" ~ @any
+  | "-e" : "Linux: limit the search to this extension" , @any | "--extension" : "Linux: limit the search to this extension" , @any | "--extension=" : "Linux: limit the search to this extension" ~ @any
+  | "-i" : "Linux: case-insensitive search (default)" | "--ignore-case" : "Linux: case-insensitive search (default)"
+  | "-I" : "Linux: case-sensitive search" | "--match-case" : "Linux: case-sensitive search"
+  | "--regex" : "Linux: show every page matching a regex"
+  | "--wildcard" : "Linux: show every page matching a wildcard"
+  | "--names-only" : "Linux: match --regex and --wildcard on names only"
+  | "-a" : "Show every matching page, not just the first" | "--all" : "Show every matching page, not just the first"
+  | "-u" : "Linux: force a cache consistency check" | "--update" : "Linux: force a cache consistency check"
+  | "--no-subpages" : "Linux: do not try subpages, as foo-bar for foo bar"
+  | "-P" : "Use this pager" , @any | "--pager" : "Use this pager" , @any | "--pager=" : "Use this pager" ~ @any
+  | "-r" : "Linux: prompt for the less pager" , @any | "--prompt" : "Linux: prompt for the less pager" , @any | "--prompt=" : "Linux: prompt for the less pager" ~ @any
+  | "-7" : "Linux: ASCII translation of some latin1 characters" | "--ascii" : "Linux: ASCII translation of some latin1 characters"
+  | "-E" : "Linux: output encoding" , @any | "--encoding" : "Linux: output encoding" , @any | "--encoding=" : "Linux: output encoding" ~ @any
+  | "--no-hyphenation" : "Linux: turn off hyphenation" | "--nh" : "Linux: turn off hyphenation"
+  | "--no-justification" : "Linux: turn off justification" | "--nj" : "Linux: turn off justification"
+  | "--preprocessor" : "Linux: preprocessors to run, from e, p, t, g, r and v" , @any | "--preprocessor=" : "Linux: preprocessors to run, from e, p, t, g, r and v" ~ @any
+  | "-t" : "Format the page with troff" | "--troff" : "Format the page with troff"
+  | "--troff-device" : "Linux: use groff with this device" | "--troff-device=" : "Linux: use groff with this device" ~ @any
+  | "--html" : "Linux: show HTML output in this browser" | "--html=" : "Linux: show HTML output in this browser" ~ @any
+  | "--gxditview" : "Linux: show through gxditview at this resolution" | "--gxditview=" : "Linux: show through gxditview at this resolution" ~ @any
+  | "-Z" : "Linux: force groff to produce ditroff" | "--ditroff" : "Linux: force groff to produce ditroff"
+  | "-" : "Linux: print the help" | "--help" : "Linux: print the help"
+  | "--usage" : "Linux: print a short usage message"
+  | "-V" : "Linux: print the version" | "--version" : "Linux: print the version"
+  | "-o" : "macOS: use non-localized pages" ;
+
+section =
+    "1" : "Executable programs and shell commands" | "2" : "System calls" | "3" : "Library calls" | "4" : "Special files"
+  | "5" : "File formats" | "6" : "Games" | "7" : "Miscellanea" | "8" : "System administration" | "9" : "Kernel routines" ;

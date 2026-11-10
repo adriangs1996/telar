@@ -84,6 +84,18 @@ public:
     return Codec::decode<Message>(*found, storage);
   }
 
+  // Every byte the client sent its panes, in order.
+  [[nodiscard]] std::string inputText() const {
+    std::string result;
+    for (const auto &bytes : received_) {
+      if (bytes.front() == static_cast<Byte>(ClientTag::pane_input)) {
+        DecodeStorage storage{decode_};
+        result.append(textView(Codec::decode<PaneInput>(bytes, storage).bytes));
+      }
+    }
+    return result;
+  }
+
 private:
   void write(std::span<const Byte> payload) {
     std::array<Byte, frame_prefix_size> prefix{};

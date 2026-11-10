@@ -1,0 +1,219 @@
+(* yarn: Yarn classic, checked against `yarn --help`, `yarn <command> --help` and
+   the command flags in the CLI sources of yarn 1.22.22. Yarn 2+ (berry) has a
+   different command set and is not described here.
+
+   Conventions:
+   - The options in `global` are accepted by every command.
+   - Options with a value accept `--name value` and `--name=value`.
+   - A word that is not a command runs the package script or binary of that
+     name, like `yarn build`; plain `yarn` installs. *)
+
+yarn = { global } , [ command ] ;
+
+command =
+    "add" : "Install a package and save it to package.json" , { add_option | global | @any }
+  | "install" : "Install all the dependencies" , { install_option | global }
+  | "remove" : "Remove a package from the dependencies" , { workspace_root_check | global | @any }
+  | "upgrade" : "Upgrade packages within their version ranges" , { upgrade_option | global | @any }
+  | ( "upgrade-interactive" : "Pick outdated packages to upgrade" | "upgradeInteractive" : "Pick outdated packages to upgrade" ) , { upgrade_interactive_option | global }
+  | "outdated" : "Check for outdated dependencies" , { global | @any }
+  | "run" : "Run a package script" , { global } , [ @package_script , { @any } ]
+  | "test" : "Run the test script" , { global } , { @any }
+  | "exec" : "Run a shell command in the package context" , { global } , [ @command , { @any } ]
+  | "node" : "Run Node.js with the version Yarn uses" , { "--into" : "Run in this directory" , @directory | global } , { @any }
+  | "init" : "Create or update a package.json" , { init_option | global }
+  | "create" : "Create a project from a create-* starter kit" , { global } , [ @any , { @any } ]
+  | "list" : "List installed packages" , { list_option | global }
+  | "info" : "Show information about a package" , { global | @any }
+  | "why" : "Explain why a package is installed" , { global | @any }
+  | "publish" : "Publish a package to the npm registry" , { publish_option | version_option | global | @file }
+  | "version" : "Update the package version" , { version_option | global }
+  | "versions" : "Show the versions of Yarn, Node.js and dependencies" , { global }
+  | "pack" : "Create a gzip archive of the package" , { "-f" : "Name of the archive" , @file | "--filename" : "Name of the archive" , @file | "--filename=" : "Name of the archive" ~ @file | global }
+  | "link" : "Symlink a package folder for development" , { global | @any }
+  | "unlink" : "Remove a symlinked package" , { global | @any }
+  | "global" : "Manage globally installed packages" , { global_option | global } , [ global_command ]
+  | "cache" : "Manage the yarn cache" , { global } , [ cache_command ]
+  | "config" : "Manage the yarn configuration" , { global } , [ config_command ]
+  | "workspace" : "Run a command in a workspace" , { global } , [ @any , { @any } ]
+  | "workspaces" : "Show workspace info or run a command in all of them" , { global } , [ ( "info" : "Show the workspace dependency tree" , { global } | "run" : "Run a command in every workspace" , { @any } ) ]
+  | "audit" : "Check installed packages for known vulnerabilities" , { audit_option | global }
+  | "licenses" : "List the licenses of installed packages" , { global } , [ ( "list" : "List the licenses" | "ls" : "List the licenses" | "generate-disclaimer" : "Print a disclaimer with all the licenses" ) , { global } ]
+  | "check" : "Check package.json against yarn.lock" , { check_option | global }
+  | "autoclean" : "Remove unneeded files from dependencies" , { autoclean_option | global }
+  | "import" : "Generate yarn.lock from an npm installation" , { global }
+  | "bin" : "Print the folder of package executables" , { global } , [ @any ]
+  | "tag" : "Add, remove or list the tags of a package" , { global } , [ ( "add" : "Add a tag" | "remove" : "Remove a tag" | "rm" : "Remove a tag" | "list" : "List the tags" | "ls" : "List the tags" ) , { global | @any } ]
+  | "team" : "Maintain team memberships" , { global } , [ ( "create" : "Create a team" | "destroy" : "Destroy a team" | "add" : "Add a user to a team" | "remove" : "Remove a user from a team" | "rm" : "Remove a user from a team" | "list" : "List teams or members" | "ls" : "List teams or members" ) , { global | @any } ]
+  | "owner" : "Manage package owners" , { global } , [ ( "list" : "List the owners" | "ls" : "List the owners" | "add" : "Add an owner" | "remove" : "Remove an owner" | "rm" : "Remove an owner" ) , { global | @any } ]
+  | "access" : "Manage package access" , { global | @any }
+  | "login" : "Store the registry username and email" , { global }
+  | "logout" : "Clear the registry username and email" , { global }
+  | "policies" : "Set the Yarn version for the project" , { global } , [ "set-version" : "Download a Yarn release and use it" , { global | @any } ]
+  | "unplug" : "Copy a package out of the cache for debugging" , { unplug_option | global | @any }
+  | ( "generate-lock-entry" : "Generate a lock file entry" | "generateLockEntry" : "Generate a lock file entry" ) , { lock_entry_option | global }
+  | "help" : "Show help for a command" , { global } , [ @any ]
+  | @package_script : "Run this package script" , { @any } ;
+
+global =
+    "--cache-folder" : "Folder of the yarn cache" , @directory | "--cache-folder=" : "Folder of the yarn cache" ~ @directory
+  | "--check-files" : "Verify the file tree of installed packages"
+  | "--cwd" : "Working directory to use" , @directory | "--cwd=" : "Working directory to use" ~ @directory
+  | "--disable-pnp" : "Disable the Plug'n'Play installation"
+  | "--enable-pnp" : "Enable the Plug'n'Play installation" | "--pnp" : "Enable the Plug'n'Play installation"
+  | "--emoji" : "Enable emoji in the output" , [ boolean ]
+  | "--flat" : "Only allow one version of a package"
+  | "--focus" : "Install remote copies of sibling workspaces"
+  | "--force" : "Rebuild packages and overwrite the lockfile"
+  | "--frozen-lockfile" : "Fail if the lockfile needs an update"
+  | "--global-folder" : "Folder for global packages" , @directory | "--global-folder=" : "Folder for global packages" ~ @directory
+  | "--har" : "Save a HAR file of the network traffic"
+  | "--https-proxy" : "Proxy for HTTPS requests" , @any | "--https-proxy=" : "Proxy for HTTPS requests" ~ @any
+  | "--ignore-engines" : "Ignore the engines check"
+  | "--ignore-optional" : "Do not install optional dependencies"
+  | "--ignore-platform" : "Ignore the platform checks"
+  | "--ignore-scripts" : "Do not run lifecycle scripts"
+  | "--json" : "Print log messages as JSON lines"
+  | "--link-duplicates" : "Hardlink repeated modules in node_modules"
+  | "--link-folder" : "Folder for global links" , @directory | "--link-folder=" : "Folder for global links" ~ @directory
+  | "--modules-folder" : "Install modules here instead of node_modules" , @directory
+  | "--modules-folder=" : "Install modules here instead of node_modules" ~ @directory
+  | "--mutex" : "Ensure only one yarn instance runs" , @any | "--mutex=" : "Ensure only one yarn instance runs" ~ @any
+  | "--network-concurrency" : "Maximum concurrent network requests" , @number | "--network-concurrency=" : "Maximum concurrent network requests" ~ @number
+  | "--network-timeout" : "TCP timeout in milliseconds" , @number | "--network-timeout=" : "TCP timeout in milliseconds" ~ @number
+  | "--no-bin-links" : "Do not link package executables"
+  | "--no-default-rc" : "Do not read .yarnrc and .npmrc files"
+  | "--no-lockfile" : "Do not read or write a lockfile"
+  | "--non-interactive" : "Do not show interactive prompts"
+  | "--no-node-version-check" : "Do not warn about unsupported Node versions"
+  | "--no-progress" : "Hide the progress bar"
+  | "--offline" : "Fail when a dependency is not in the cache"
+  | "--otp" : "One-time password for two-factor authentication" , @any | "--otp=" : "One-time password for two-factor authentication" ~ @any
+  | "--prefer-offline" : "Use the network only for packages not cached"
+  | "--preferred-cache-folder" : "Preferred folder of the yarn cache" , @directory
+  | "--preferred-cache-folder=" : "Preferred folder of the yarn cache" ~ @directory
+  | "--prod" : "Do not install devDependencies" , [ boolean ] | "--production" : "Do not install devDependencies" , [ boolean ]
+  | "--proxy" : "Proxy for HTTP requests" , @any | "--proxy=" : "Proxy for HTTP requests" ~ @any
+  | "--pure-lockfile" : "Do not generate a lockfile"
+  | "--registry" : "Registry URL to use" , @any | "--registry=" : "Registry URL to use" ~ @any
+  | "-s" : "Skip Yarn console logs" | "--silent" : "Skip Yarn console logs"
+  | "--scripts-prepend-node-path" : "Prepend the node directory to PATH in scripts" , [ boolean ]
+  | "--skip-integrity-check" : "Install without the integrity check"
+  | "--strict-semver" : "Use strict semver ranges"
+  | "--update-checksums" : "Update the package checksums"
+  | "--use-yarnrc" : "Use this .yarnrc file" , @file | "--use-yarnrc=" : "Use this .yarnrc file" ~ @file
+  | "-v" : "Print the version" | "--version" : "Print the version"
+  | "--verbose" : "Show verbose messages"
+  | "-h" : "Show usage information" | "--help" : "Show usage information" ;
+
+boolean = "true" | "false" ;
+
+workspace_root_check = "-W" : "Allow running in a workspace root" | "--ignore-workspace-root-check" : "Allow running in a workspace root" ;
+audit = "-A" : "Run a vulnerability audit afterwards" | "--audit" : "Run a vulnerability audit afterwards" ;
+
+add_option =
+    workspace_root_check | audit
+  | "-D" : "Save to devDependencies" | "--dev" : "Save to devDependencies"
+  | "-P" : "Save to peerDependencies" | "--peer" : "Save to peerDependencies"
+  | "-O" : "Save to optionalDependencies" | "--optional" : "Save to optionalDependencies"
+  | "-E" : "Save the exact version" | "--exact" : "Save the exact version"
+  | "-T" : "Save a range within the same minor version" | "--tilde" : "Save a range within the same minor version" ;
+
+install_option =
+    audit
+  | "-g" : "Deprecated, use yarn global" | "--global" : "Deprecated, use yarn global"
+  | "-S" : "Deprecated, use yarn add" | "--save" : "Deprecated, use yarn add"
+  | "-D" : "Deprecated, use yarn add --dev" | "--save-dev" : "Deprecated, use yarn add --dev"
+  | "-P" : "Deprecated, use yarn add --peer" | "--save-peer" : "Deprecated, use yarn add --peer"
+  | "-O" : "Deprecated, use yarn add --optional" | "--save-optional" : "Deprecated, use yarn add --optional"
+  | "-E" : "Deprecated, use yarn add --exact" | "--save-exact" : "Deprecated, use yarn add --exact"
+  | "-T" : "Deprecated, use yarn add --tilde" | "--save-tilde" : "Deprecated, use yarn add --tilde" ;
+
+upgrade_common =
+    "-S" : "Upgrade the packages of this scope" , @any | "--scope" : "Upgrade the packages of this scope" , @any
+  | "--scope=" : "Upgrade the packages of this scope" ~ @any
+  | "-E" : "With --latest, save the exact version" | "--exact" : "With --latest, save the exact version"
+  | "-T" : "With --latest, save a tilde range" | "--tilde" : "With --latest, save a tilde range"
+  | "-C" : "With --latest, save a caret range" | "--caret" : "With --latest, save a caret range" ;
+
+upgrade_option =
+    upgrade_common | audit
+  | "-L" : "Upgrade to the latest version, ignoring ranges" | "--latest" : "Upgrade to the latest version, ignoring ranges"
+  | "-P" : "Upgrade the packages matching a pattern" , @any | "--pattern" : "Upgrade the packages matching a pattern" , @any
+  | "--pattern=" : "Upgrade the packages matching a pattern" ~ @any ;
+
+upgrade_interactive_option =
+    upgrade_common
+  | "--latest" : "Offer the latest versions, ignoring ranges" ;
+
+init_option =
+    "-y" : "Use the default answers" | "--yes" : "Use the default answers"
+  | "-p" : "Use the defaults and mark the package private" | "--private" : "Use the defaults and mark the package private"
+  | "-i" : "Install this Yarn release" , @any | "--install" : "Install this Yarn release" , @any
+  | "--install=" : "Install this Yarn release" ~ @any
+  | "-2" : "Generate the project with Yarn 2" ;
+
+list_option =
+    "--depth" : "Limit the depth of the tree" , @number | "--depth=" : "Limit the depth of the tree" ~ @number
+  | "--pattern" : "Filter the packages by a pattern" , @any | "--pattern=" : "Filter the packages by a pattern" ~ @any ;
+
+version_option =
+    "--new-version" : "Set this version" , @any | "--new-version=" : "Set this version" ~ @any
+  | "--major" : "Increment the major version" | "--minor" : "Increment the minor version" | "--patch" : "Increment the patch version"
+  | "--premajor" : "Increment to a major prerelease" | "--preminor" : "Increment to a minor prerelease"
+  | "--prepatch" : "Increment to a patch prerelease" | "--prerelease" : "Increment the prerelease"
+  | "--preid" : "Prerelease identifier" , @any | "--preid=" : "Prerelease identifier" ~ @any
+  | "--message" : "Commit message of the version" , @any | "--message=" : "Commit message of the version" ~ @any
+  | "--no-git-tag-version" : "Do not commit and tag in git"
+  | "--no-commit-hooks" : "Bypass the git commit hooks" ;
+
+publish_option =
+    "--access" : "Access level of the package" , access | "--access=" : "Access level of the package" ~ access
+  | "--tag" : "Publish under this tag" , @any | "--tag=" : "Publish under this tag" ~ @any ;
+
+access = "public" | "restricted" ;
+
+global_option =
+    "--prefix" : "Prefix for installed binaries" , @directory | "--prefix=" : "Prefix for installed binaries" ~ @directory
+  | "--latest" : "Upgrade to the latest versions" ;
+
+global_command =
+    "add" : "Install packages globally" , { global_option | add_option | global | @any }
+  | "remove" : "Remove global packages" , { global_option | global | @any }
+  | ( "list" : "List global packages" | "ls" : "List global packages" ) , { global_option | global }
+  | "upgrade" : "Upgrade global packages" , { global_option | upgrade_option | global | @any }
+  | "upgrade-interactive" : "Pick global packages to upgrade" , { global_option | upgrade_interactive_option | global }
+  | "bin" : "Print the global bin folder" , { global_option | global }
+  | "dir" : "Print the global installation folder" , { global_option | global } ;
+
+cache_command =
+    ( "list" : "List the cached packages" | "ls" : "List the cached packages" ) , { "--pattern" : "Filter the packages by a pattern" , @any | "--pattern=" : "Filter the packages by a pattern" ~ @any | global }
+  | "clean" : "Remove cached packages" , { global | @any }
+  | "dir" : "Print the cache folder" , { global } ;
+
+config_command =
+    "set" : "Set a config key" , { global | @any }
+  | "get" : "Print a config value" , { global | @any }
+  | "delete" : "Delete a config key" , { global | @any }
+  | "list" : "Show the config" , { global }
+  | "current" : "Show the effective config" , { global } ;
+
+audit_option =
+    "--summary" : "Only print the summary"
+  | "--groups" : "Only audit these dependency groups" , dep_group , { dep_group }
+  | "--level" : "Minimum severity to print" , audit_level | "--level=" : "Minimum severity to print" ~ audit_level ;
+
+dep_group = "dependencies" | "devDependencies" | "optionalDependencies" ;
+audit_level = "info" | "low" | "moderate" | "high" | "critical" ;
+
+check_option = "--integrity" : "Verify the integrity of installed packages" | "--verify-tree" : "Verify node_modules against package.json" ;
+
+autoclean_option =
+    "-I" : "Create a .yarnclean with the defaults" | "--init" : "Create a .yarnclean with the defaults"
+  | "-F" : "Clean with the existing .yarnclean" | "--force" : "Clean with the existing .yarnclean" ;
+
+unplug_option = "--clear" : "Delete the selected unplugged packages" | "--clear-all" : "Delete all unplugged packages" ;
+
+lock_entry_option =
+    "--use-manifest" : "Use this package.json" , @file | "--use-manifest=" : "Use this package.json" ~ @file
+  | "--resolved" : "Resolved URL of the entry" , @any | "--resolved=" : "Resolved URL of the entry" ~ @any ;

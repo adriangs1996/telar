@@ -1,0 +1,270 @@
+(* rails: commands of Rails 8.0.3. `rails new --help` and `rails plugin new
+   --help` were run; there was no application at hand, so the commands, their
+   Thor options, the generators and the tasks were read from the 8.0.3 sources:
+   railties lib/rails/commands, lib/rails/generators and lib/rails/tasks, the
+   databases.rake of activerecord, the generators and tasks of actioncable,
+   actionmailbox, actionmailer, actiontext, activejob and activestorage, the
+   assets tasks of propshaft 1.3.1, and the test options of minitest 5.26 and
+   6.0 plus the Rails minitest plugin.
+
+   Thor rules: a value is `--name value`, `--name=value`, `-x value` or
+   `-xvalue`. Inside an application any rake task runs as a command, so an
+   unknown command is accepted with any arguments. Generator arguments and
+   options depend on the generator, so they accept any word. *)
+
+rails =
+    [ command ]
+  | "-v" : "Print the Rails version" | "--version" : "Print the Rails version"
+  | "-h" : "Show the help" | "--help" : "Show the help" ;
+
+command =
+    "new" : "Create a new Rails application" , { app_option | new_option | @any }
+  | "plugin" : "Create a new Rails railtie or engine" , [ "new" : "Create a new Rails railtie or engine" , { app_option | plugin_option | @any } ]
+  | ( "server" : "Start the Rails server" | "s" : "Start the Rails server" ) , { server_option }
+  | ( "console" : "Start the Rails console" | "c" : "Start the Rails console" ) , { console_option } , [ "--" : "Pass the rest to IRB" , { @any } ]
+  | ( "generate" : "Generate new code" | "g" : "Generate new code" ) , { help } , [ generator , { generator_option | @any } ]
+  | ( "destroy" : "Remove code created by generate" | "d" : "Remove code created by generate" ) , { help } , [ generator , { generator_option | @any } ]
+  | ( "dbconsole" : "Start a console for the database" | "db" : "Start a console for the database" ) , { dbconsole_option }
+  | ( "runner" : "Run Ruby code in the application context" | "r" : "Run Ruby code in the application context" ) ,
+    { runner_option } , [ @any : "Ruby code, a Ruby file, or - for stdin" , { @any } ]
+  | ( "test" : "Run tests except system tests" | "t" : "Run tests except system tests" ) , { test_option | @file }
+  | test_command , { test_option | @file }
+  | "routes" : "List the routes" , { routes_option }
+  | "credentials:edit" : "Edit the encrypted credentials" , { credentials_option }
+  | "credentials:show" : "Show the decrypted credentials" , { credentials_option }
+  | "credentials:diff" : "Enroll in decrypted diffs of credentials" , { credentials_option | diff_option | @file }
+  | "encrypted:edit" : "Edit an encrypted file" , { encrypted_option | @file }
+  | "encrypted:show" : "Show an encrypted file" , { encrypted_option | @file }
+  | "db:system:change" : "Switch config/database.yml to another database" , { "--to" : "The database to switch to" , database | "--to=" : "The database to switch to" ~ database | help }
+  | "notes" : "Show FIXME, OPTIMIZE and TODO comments" , { "-a" : "Only these annotations" , @any | "--annotations" : "Only these annotations" , @any | help | @any }
+  | "dev:cache" : "Toggle caching in development" , { help }
+  | ( "boot" : "Boot the application and exit" | "initializers" : "Print the initializers in order" ) , { environment | help }
+  | "about" : "List the versions of the frameworks and the environment" , { help }
+  | "middleware" : "Print the Rack middleware stack" , { help }
+  | "restart" : "Restart the app by touching tmp/restart.txt" , { help }
+  | "secret" : "Generate a secret key" , { help }
+  | "stats" : "Report code statistics" , { help }
+  | "version" : "Show the Rails version" , { help }
+  | "devcontainer" : "Generate a Dev Container setup" , { help }
+  | "app:update" : "Update configs and other generated files" , { help }
+  | task , { @any }
+  | @any : "A rake task of the application" , { @any } ;
+
+help = "-h" : "Show the help" | "--help" : "Show the help" ;
+
+environment =
+    "-e" : "Environment to run in" , env_name | "--environment" : "Environment to run in" , env_name
+  | "--environment=" : "Environment to run in" ~ env_name ;
+env_name = "development" | "test" | "production" | @any : "An environment in config/environments" ;
+
+database = "mysql" | "trilogy" | "postgresql" | "sqlite3" | "mariadb-mysql" | "mariadb-trilogy" ;
+
+(* Options rails new and rails plugin new share. *)
+app_option =
+    help
+  | "--skip-namespace" : "Skip namespace, isolated engines only"
+  | "--skip-collision-check" : "Skip the collision check"
+  | "-r" : "Path to the Ruby binary" , @file | "--ruby" : "Path to the Ruby binary" , @file | "--ruby=" : "Path to the Ruby binary" ~ @file
+  | "-n" : "Name of the app" , @any | "--name" : "Name of the app" , @any | "--name=" : "Name of the app" ~ @any
+  | "-m" : "Application template, path or URL" , @any | "--template" : "Application template, path or URL" , @any
+  | "--template=" : "Application template, path or URL" ~ @any
+  | "-d" : "Preconfigure this database" , database | "--database" : "Preconfigure this database" , database
+  | "--database=" : "Preconfigure this database" ~ database
+  | "-G" : "Skip git init, .gitignore and .gitattributes" | "--skip-git" : "Skip git init, .gitignore and .gitattributes"
+  | "--skip-docker" : "Skip the Dockerfile and its files"
+  | "--skip-keeps" : "Skip .keep files"
+  | "-M" : "Skip Action Mailer" | "--skip-action-mailer" : "Skip Action Mailer"
+  | "--skip-action-mailbox" : "Skip Action Mailbox"
+  | "--skip-action-text" : "Skip Action Text"
+  | "-O" : "Skip Active Record" | "--skip-active-record" : "Skip Active Record"
+  | "--skip-active-job" : "Skip Active Job"
+  | "--skip-active-storage" : "Skip Active Storage"
+  | "-C" : "Skip Action Cable" | "--skip-action-cable" : "Skip Action Cable"
+  | "-A" : "Skip the asset pipeline" | "--skip-asset-pipeline" : "Skip the asset pipeline"
+  | "-J" : "Skip JavaScript" | "--skip-js" : "Skip JavaScript" | "--skip-javascript" : "Skip JavaScript"
+  | "--skip-hotwire" : "Skip Hotwire"
+  | "--skip-jbuilder" : "Skip jbuilder"
+  | "-T" : "Skip test files" | "--skip-test" : "Skip test files"
+  | "--skip-system-test" : "Skip system test files"
+  | "--skip-bootsnap" : "Skip bootsnap"
+  | "--skip-dev-gems" : "Skip development gems"
+  | "--skip-thruster" : "Skip Thruster"
+  | "--skip-rubocop" : "Skip RuboCop"
+  | "--skip-brakeman" : "Skip Brakeman"
+  | "--skip-ci" : "Skip GitHub CI files"
+  | "--skip-kamal" : "Skip Kamal"
+  | "--skip-solid" : "Skip Solid Cache, Queue and Cable"
+  | "--dev" : "Point the Gemfile to your Rails checkout"
+  | "--devcontainer" : "Generate devcontainer files" | "--no-devcontainer" : "Do not generate devcontainer files"
+  | "--edge" : "Point the Gemfile to the 8-0-stable branch"
+  | "--main" : "Point the Gemfile to the Rails main branch" | "--master" : "Point the Gemfile to the Rails main branch"
+  | "--rc" : "File with extra options for the rails command" , @file | "--rc=" : "File with extra options for the rails command" ~ @file
+  | "--no-rc" : "Do not load .railsrc"
+  | "--api" : "Smaller stack for API only apps"
+  | "-f" : "Overwrite existing files" | "--force" : "Overwrite existing files"
+  | "-p" : "Run without making changes" | "--pretend" : "Run without making changes"
+  | "-q" : "Suppress status output" | "--quiet" : "Suppress status output"
+  | "-s" : "Skip existing files" | "--skip" : "Skip existing files" ;
+
+new_option =
+    "--minimal" : "Preconfigure a minimal app"
+  | "-j" : "JavaScript approach" , javascript | "--js" : "JavaScript approach" , javascript
+  | "--javascript" : "JavaScript approach" , javascript | "--javascript=" : "JavaScript approach" ~ javascript
+  | "-c" : "CSS processor" , css | "--css" : "CSS processor" , css | "--css=" : "CSS processor" ~ css
+  | "-B" : "Do not run bundle install" | "--skip-bundle" : "Do not run bundle install"
+  | "--skip-decrypted-diffs" : "Do not set up decrypted diffs of credentials"
+  | "-v" : "Print the Rails version" | "--version" : "Print the Rails version" ;
+javascript = "importmap" | "bun" | "webpack" | "esbuild" | "rollup" ;
+css = "tailwind" | "bootstrap" | "bulma" | "postcss" | "sass" ;
+
+plugin_option =
+    "--full" : "Generate a Rails engine with its own app"
+  | "--mountable" : "Generate a mountable isolated engine"
+  | "--dummy-path" : "Path of the dummy test app" , @any | "--dummy-path=" : "Path of the dummy test app" ~ @any
+  | "--skip-gemspec" : "Skip the gemspec"
+  | "--skip-gemfile-entry" : "Do not add the plugin to the parent Gemfile" ;
+
+server_option =
+    help | environment
+  | "-p" : "Port, 3000 by default" , @number | "--port" : "Port, 3000 by default" , @number | "--port=" : "Port, 3000 by default" ~ @number
+  | "-b" : "Bind to this address" , @any | "--binding" : "Bind to this address" , @any | "--binding=" : "Bind to this address" ~ @any
+  | "-c" : "Rackup configuration" , @file | "--config" : "Rackup configuration" , @file | "--config=" : "Rackup configuration" ~ @file
+  | "-d" : "Run as a daemon" | "--daemon" : "Run as a daemon"
+  | "-u" : "Rack server to use" , @any | "--using" : "Rack server to use" , @any | "--using=" : "Rack server to use" ~ @any
+  | "-P" : "PID file" , @file | "--pid" : "PID file" , @file | "--pid=" : "PID file" ~ @file
+  | "-C" : "Enable caching in development" | "--dev-caching" : "Enable caching in development"
+  | "--no-dev-caching" : "Disable caching in development"
+  | "--early-hints" : "Enable HTTP/2 early hints"
+  | "--log-to-stdout" : "Log to stdout" | "--no-log-to-stdout" : "Do not log to stdout" ;
+
+console_option =
+    help | environment
+  | "-s" : "Roll back database changes on exit" | "--sandbox" : "Roll back database changes on exit"
+  | "--no-sandbox" : "Keep database changes" ;
+
+dbconsole_option =
+    help | environment
+  | "-p" : "Pass the password from database.yml" | "--include-password" : "Pass the password from database.yml"
+  | "--mode" : "sqlite3 output mode" , sqlite_mode | "--mode=" : "sqlite3 output mode" ~ sqlite_mode
+  | "--header" : "Show sqlite3 headers"
+  | "--db" : "Database to use" , @any | "--database" : "Database to use" , @any | "--database=" : "Database to use" ~ @any ;
+sqlite_mode = "html" | "list" | "line" | "column" ;
+
+runner_option =
+    help | environment
+  | "-w" : "Do not wrap with the Rails executor" | "--skip-executor" : "Do not wrap with the Rails executor" ;
+
+routes_option =
+    help
+  | "-c" : "Only this controller" , @any | "--controller" : "Only this controller" , @any | "--controller=" : "Only this controller" ~ @any
+  | "-g" : "Only routes matching this pattern" , @any | "--grep" : "Only routes matching this pattern" , @any
+  | "--grep=" : "Only routes matching this pattern" ~ @any
+  | "-E" : "Print routes expanded vertically" | "--expanded" : "Print routes expanded vertically"
+  | "-u" : "Print unused routes" | "--unused" : "Print unused routes" ;
+
+credentials_option = help | environment ;
+diff_option =
+    "--enroll" : "Enroll in diffing credentials with git diff"
+  | "--disenroll" : "Disenroll from diffing credentials" ;
+
+encrypted_option =
+    help
+  | "-k" : "Key file of the encrypted file" , @file | "--key" : "Key file of the encrypted file" , @file
+  | "--key=" : "Key file of the encrypted file" ~ @file ;
+
+test_command =
+    "test:all" : "Run all tests, including system tests"
+  | "test:system" : "Run system tests only"
+  | "test:units" : "Run tests in test/models, test/helpers and test/unit"
+  | "test:functionals" : "Run tests in test/controllers, test/mailers and test/functional"
+  | "test:generators" : "Run tests in test/lib/generators"
+  | "test:models" : "Run tests in test/models" | "test:helpers" : "Run tests in test/helpers"
+  | "test:channels" : "Run tests in test/channels" | "test:controllers" : "Run tests in test/controllers"
+  | "test:mailers" : "Run tests in test/mailers" | "test:integration" : "Run tests in test/integration"
+  | "test:jobs" : "Run tests in test/jobs" | "test:mailboxes" : "Run tests in test/mailboxes" ;
+
+test_option =
+    environment
+  | "-w" : "Enable Ruby warnings" | "--warnings" : "Enable Ruby warnings"
+  | "-b" : "Show the complete backtrace" | "--backtrace" : "Show the complete backtrace"
+  | "-d" : "Report failures after the run" | "--defer-output" : "Report failures after the run"
+  | "-f" : "Stop at the first failure or error" | "--fail-fast" : "Stop at the first failure or error"
+  | "-c" : "Enable color" | "--color" : "Enable color" | "--no-color" : "Disable color"
+  | "--profile" : "List the slowest tests, 10 by default" , [ @number ]
+  | "--profile=" : "List this many slowest tests" ~ @number
+  | "-h" : "Show the help" | "--help" : "Show the help"
+  | "--no-plugins" : "Do not load minitest plugins"
+  | "-s" : "Random seed" , @number | "--seed" : "Random seed" , @number | "--seed=" : "Random seed" ~ @number
+  | "-v" : "Print each test as it runs" | "--verbose" : "Print each test as it runs"
+  | "-q" : "Do not show progress" | "--quiet" : "Do not show progress"
+  | "--show-skips" : "Show skipped tests at the end"
+  | "-n" : "Only tests matching a /regexp/ or string" , @any | "--name" : "Only tests matching a /regexp/ or string" , @any
+  | "--name=" : "Only tests matching a /regexp/ or string" ~ @any
+  | "-i" : "Only tests matching a pattern, minitest 6" , @any | "--include" : "Only tests matching a pattern, minitest 6" , @any
+  | "--include=" : "Only tests matching a pattern, minitest 6" ~ @any
+  | "--exclude" : "Skip tests matching a /regexp/ or string" , @any
+  | "--exclude=" : "Skip tests matching a /regexp/ or string" ~ @any
+  | "-S" : "Do not report these result codes, such as E" , @any | "--skip" : "Do not report these result codes, such as E" , @any
+  | "--skip=" : "Do not report these result codes, such as E" ~ @any
+  | "-W" : "Turn Ruby warnings into errors" ;
+
+generator =
+    "application_record" : "Generate ApplicationRecord"
+  | "authentication" : "Generate a basic authentication system"
+  | "benchmark" : "Generate a benchmark file"
+  | "channel" : "Generate an Action Cable channel"
+  | "controller" : "Generate a controller and its views"
+  | "generator" : "Generate a generator"
+  | "helper" : "Generate a helper"
+  | "integration_test" : "Generate an integration test"
+  | "job" : "Generate an Active Job"
+  | "mailbox" : "Generate an Action Mailbox mailbox"
+  | "mailer" : "Generate a mailer and its views"
+  | "migration" : "Generate a migration"
+  | "model" : "Generate a model and its migration"
+  | "resource" : "Generate a model, controller and route"
+  | "scaffold" : "Generate a full CRUD resource"
+  | "scaffold_controller" : "Generate a CRUD controller and views"
+  | "script" : "Generate a script in script/"
+  | "system_test" : "Generate a system test"
+  | "task" : "Generate a rake task"
+  | "action_text:install" : "Install Action Text"
+  | "action_mailbox:install" : "Install Action Mailbox"
+  | "active_record:multi_db" : "Configure multiple databases"
+  | @any : "A generator from another gem" ;
+
+generator_option =
+    help
+  | "--skip-namespace" : "Skip the namespace"
+  | "--skip-collision-check" : "Skip the collision check"
+  | "-f" : "Overwrite existing files" | "--force" : "Overwrite existing files"
+  | "-p" : "Run without making changes" | "--pretend" : "Run without making changes"
+  | "-q" : "Suppress status output" | "--quiet" : "Suppress status output"
+  | "-s" : "Skip existing files" | "--skip" : "Skip existing files" ;
+
+(* Rake tasks Rails and its default gems define. *)
+task =
+    "db:create" : "Create the databases" | "db:drop" : "Drop the databases"
+  | "db:migrate" : "Migrate the database" | "db:migrate:status" : "Show the status of migrations"
+  | "db:migrate:up" : "Run the up of the migration VERSION" | "db:migrate:down" : "Run the down of the migration VERSION"
+  | "db:migrate:redo" : "Roll back one migration and migrate up again"
+  | "db:migrate:reset" : "Reset the database using the migrations"
+  | "db:rollback" : "Roll back the schema, STEP=n" | "db:prepare" : "Set up or migrate the databases"
+  | "db:setup" : "Create the databases, load the schemas and seed"
+  | "db:reset" : "Drop and recreate the databases from the schemas"
+  | "db:seed" : "Load the seed data from db/seeds.rb" | "db:seed:replant" : "Truncate the tables and load the seeds"
+  | "db:version" : "Print the schema version"
+  | "db:schema:dump" : "Write the schema file" | "db:schema:load" : "Load the schema file"
+  | "db:schema:cache:dump" : "Write db/schema_cache.yml" | "db:schema:cache:clear" : "Remove db/schema_cache.yml"
+  | "db:fixtures:load" : "Load fixtures into the database"
+  | "db:environment:set" : "Set the environment value of the database"
+  | "db:encryption:init" : "Generate Active Record encryption keys"
+  | "app:template" : "Apply the template in LOCATION"
+  | "log:clear" : "Truncate the log files" | "tmp:clear" : "Clear cache, socket and screenshot files"
+  | "tmp:create" : "Create the tmp directories" | "time:zones" : "List the time zones"
+  | "zeitwerk:check" : "Check the project for Zeitwerk compatibility"
+  | "assets:precompile" : "Compile the assets" | "assets:clobber" : "Remove the compiled assets"
+  | "assets:clean" : "Remove old compiled assets" | "assets:reveal" : "Print the available assets"
+  | "active_storage:install" : "Copy the Active Storage migration"
+  | "action_text:install" : "Install Action Text" | "action_mailbox:install" : "Install Action Mailbox"
+  | "yarn:install" : "Install the JavaScript dependencies with Yarn" ;

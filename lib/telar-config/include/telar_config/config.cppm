@@ -2729,6 +2729,11 @@ export {
 namespace telar::runtime::config {
 
 // Interface pieces a configuration may draw with Lua, under `client.components`.
+// The actions `client.prompt.bindings` may name, in the order of the GUI editor's Action.
+inline constexpr std::array<std::string_view, 27> prompt_action_names{
+    "submit", "newline", "cancel", "complete", "accept_suggestion", "history_previous", "history_next", "history_search", "line_start", "line_end", "char_left", "char_right", "word_left", "word_right",
+    "delete_char", "backspace", "kill_line", "kill_to_start", "kill_word", "kill_word_back", "yank", "undo", "redo", "transpose", "clear_screen", "normal_mode", "insert_mode"};
+
 inline constexpr std::array<std::string_view, 19> component_slots{
     "top_bar", "bottom_bar", "tab", "pane_header", "agent_card",
     "tab_cards", "tab_title", "tab_path", "tab_activity",
@@ -2744,7 +2749,7 @@ public:
       return;
     }
 
-    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components"});
+    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components", "prompt"});
     const auto prefix = client.field("prefix");
     if (prefix.present()) {
       state.keymap.setPrefix(KeyChordValidator::parse(prefix));
@@ -2758,6 +2763,7 @@ public:
     notifications(client.field("notifications"));
     input(client.field("input"));
     history(client.field("history"));
+    prompt(client.field("prompt"));
     ClientDefinitionsValidator::validate(client, limits);
     const ClientDefinitions definitions{client, inherited};
     const BasicActionValidator actions{definitions, limits, state.commands};
@@ -2824,6 +2830,37 @@ private:
       table.onlyFields({"escape_timeout_ms", "sequence_timeout_ms"});
       table.field("sequence_timeout_ms").boundedInteger(1000, 10, 10000);
     }
+  }
+
+  inline static void prompt(const lua::Value &table) {
+    if (!table.present()) {
+      return;
+    }
+
+    table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
+    optionalChoice(table.field("mode"), {"classic", "telar"});
+    const auto bindings = table.field("bindings");
+    if (bindings.present()) {
+      const auto count = bindings.listLength();
+      if (count > 256) {
+        bindings.fail("has more than 256 bindings");
+      }
+      for (std::size_t index = 0; index < count; ++index) {
+        const auto binding = bindings.element(static_cast<lua_Integer>(index) + 1);
+        binding.onlyFields({"keys", "action", "mode"});
+        KeyChordValidator::parse(binding.field("keys"));
+        const auto action = binding.field("action");
+        if (std::ranges::find(prompt_action_names, action.string()) == prompt_action_names.end()) {
+          action.fail("names an unknown prompt action");
+        }
+        optionalChoice(binding.field("mode"), {"insert", "normal"});
+      }
+    }
+    optionalChoice(table.field("skin"), {"halo", "glass", "ink"});
+    optionalChoice(table.field("motion"), {"spring", "ease", "none"});
+    optionalChoice(table.field("keymap"), {"emacs", "vim"});
+    table.field("ghost").boolean(true);
+    table.field("max_lines").boundedInteger(12, 1, 64);
   }
 
   inline static void history(const lua::Value &table) {
@@ -3534,6 +3571,8 @@ struct RuntimeValues {
   bool capture_output = false;
   bool persist_session = true;
   bool resume_agents = true;
+  bool shell_integration = true;
+  bool ssh_integration = true;
 };
 
 template <Allocator Memory>
@@ -3557,7 +3596,9 @@ public:
       return;
     }
 
-    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries"});
+    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries", "shell_integration", "ssh_integration"});
+    values_.shell_integration = runtime.field("shell_integration").boolean(values_.shell_integration);
+    values_.ssh_integration = runtime.field("ssh_integration").boolean(values_.ssh_integration);
     history(runtime.field("history"));
     session(runtime.field("session"));
     helper(runtime.field("engine"), values_.engine, true);

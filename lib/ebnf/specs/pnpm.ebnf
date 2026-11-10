@@ -1,0 +1,380 @@
+(* pnpm: checked against `pnpm --help` and `pnpm <command> --help` of pnpm 12.5.1.
+
+   Conventions:
+   - clap options with a value accept `--name value` and `--name=value`; short
+     ones accept `-F value` and `-Fvalue`.
+   - The options in `global` are accepted before or after any command.
+   - A word that is not a command runs the package script of that name, like
+     `pnpm build`; pnpm falls back to running a binary, so any word is accepted.
+   - Daily commands are modelled in full; the rest accept any arguments. *)
+
+pnpm = { global } , [ command ] ;
+
+command =
+    "add" : "Add a package" , { add_option | global | @any }
+  | ( "install" : "Install the dependencies" | "i" : "Install the dependencies" ) , { install_option | global }
+  | ( "install-test" : "Install, then run the tests" | "it" : "Install, then run the tests" ) , { install_option | global }
+  | ( "ci" : "Clean, then install with a frozen lockfile" | "clean-install" : "Clean, then install with a frozen lockfile" ) , { install_option | global | "-l" : "Also remove pnpm-lock.yaml files" | "--lockfile" : "Also remove pnpm-lock.yaml files" }
+  | ( "update" : "Update packages to newer versions" | "up" : "Update packages to newer versions" | "upgrade" : "Update packages to newer versions" ) , { update_option | global | @any }
+  | ( "remove" : "Remove packages" | "rm" : "Remove packages" | "uninstall" : "Remove packages" | "un" : "Remove packages" | "uni" : "Remove packages" ) , { remove_option | global | @any }
+  | "run" : "Run a package script" , { run_option | global } , [ @package_script , { @any } ]
+  | ( "test" : "Run the test script" | "t" : "Run the test script" | "tst" : "Run the test script" ) , { global } , { @any }
+  | "start" : "Run the start script" , { global } , { @any }
+  | "stop" : "Run the stop script" , { global } , { @any }
+  | "restart" : "Run the stop, restart and start scripts" , { global } , { @any }
+  | "exec" : "Run a command in the context of a project" , { shell_mode | global } , [ @command , { @any } ]
+  | "dlx" : "Run a package in a temporary environment" , { dlx_option | global } , [ @any , { @any } ]
+  | "create" : "Create a project from a create-* starter kit" , { create_option | global } , [ @any , { @any } ]
+  | ( "list" : "List installed packages" | "ls" : "List installed packages" ) , { list_option | global | @any }
+  | ( "ll" : "List installed packages in long format" | "la" : "List installed packages in long format" ) , { list_option | global | @any }
+  | "why" : "Show the packages that depend on a package" , { why_option | global | @any }
+  | "outdated" : "Check for outdated packages" , { outdated_option | global | @any }
+  | "audit" : "Check installed packages for known vulnerabilities" , { audit_option | global }
+  | ( "licenses" : "Check the licenses of installed packages" | "licences" : "Check the licenses of installed packages" ) , { licenses_option | global } , [ ( "list" : "List the licenses" | "ls" : "List the licenses" ) , { licenses_option | global | @any } ]
+  | ( "view" : "View registry information about a package" | "info" : "View registry information about a package" | "show" : "View registry information about a package" | "v" : "View registry information about a package" ) , { json | global | @any }
+  | "publish" : "Publish a package to the registry" , { publish_option | global | @file }
+  | "pack" : "Create a tarball from a package" , { pack_option | global }
+  | "init" : "Create a package.json" , { init_option | global }
+  | "dedupe" : "Deduplicate packages in the lockfile" , { dedupe_option | global }
+  | "prune" : "Remove extraneous packages" , { prune_option | global }
+  | ( "link" : "Link a local package as a dependency" | "ln" : "Link a local package as a dependency" ) , { global | @directory }
+  | ( "unlink" : "Remove links to a local package" | "dislink" : "Remove links to a local package" ) , { pnpmfile | global | @any }
+  | ( "rebuild" : "Rebuild a package" | "rb" : "Rebuild a package" ) , { global | @any }
+  | "fetch" : "Fetch packages from the lockfile into the store" , { prod_dev | pnpmfile | global }
+  | "deploy" : "Deploy a package from a workspace" , { install_option | "--legacy" : "Use the legacy deploy implementation" | global | @directory }
+  | "patch" : "Prepare a package for patching" , { patch_option | global | @any }
+  | "patch-commit" : "Generate a patch out of a directory" , { patches_dir | global | @directory }
+  | "patch-remove" : "Remove existing patch files" , { global | @any }
+  | "approve-builds" : "Approve dependencies to run install scripts" , { approve_option | global | @any }
+  | "ignored-builds" : "List packages with blocked build scripts" , { global }
+  | "store" : "Manage the package store" , { global } , [ store_command ]
+  | "cache" : "Inspect and manage the metadata cache" , { global } , [ cache_command ]
+  | ( "config" : "Manage the configuration files" | "c" : "Manage the configuration files" ) , { config_option | global } , [ config_command ]
+  | "get" : "Print a config value" , { config_option | global | @any }
+  | "set" : "Set a config value" , { config_option | global | @any }
+  | ( "runtime" : "Manage runtimes" | "rt" : "Manage runtimes" ) , { runtime_option | global | @any }
+  | "env" : "Manage Node.js versions (deprecated)" , { runtime_option | global | @any }
+  | "self-update" : "Update pnpm" , { global } , [ @any ]
+  | ( "recursive" : "Run a command in every workspace project" | "m" : "Run a command in every workspace project" | "multi" : "Run a command in every workspace project" ) , { global } , [ command ]
+  | "with" : "Run a specific pnpm version for one command" , { global } , [ @any , { @any } ]
+  | "pipeline" : "Run a named pipeline of workspace tasks" , { global | @any }
+  | ( "set-script" : "Set a script in package.json" | "ss" : "Set a script in package.json" ) , { global | @any }
+  | "peers" : "Check for unmet peer dependencies" , { global | @any }
+  | "sbom" : "Generate a Software Bill of Materials" , { global | @any }
+  | ( "docs" : "Open the documentation of a package" | "home" : "Open the documentation of a package" ) , { global | @any }
+  | ( "bugs" : "Open the bug tracker of a package" | "issues" : "Open the bug tracker of a package" ) , { global | @any }
+  | "repo" : "Open the repository of a package" , { global | @any }
+  | "dist-tag" : "Manage the distribution tags of a package" , { global | @any }
+  | "deprecate" : "Deprecate a version of a package" , { global | @any }
+  | "undeprecate" : "Remove the deprecation of a version" , { global | @any }
+  | "unpublish" : "Remove a package from the registry" , { global | @any }
+  | "access" : "Manage package access on the registry" , { global | @any }
+  | ( "owner" : "Manage package owners" | "owners" : "Manage package owners" ) , { global | @any }
+  | "team" : "Manage organization teams" , { global | @any }
+  | "star" : "Mark a package as a favorite" , { global | @any }
+  | "unstar" : "Unmark a package as a favorite" , { global | @any }
+  | "stars" : "List the packages a user starred" , { global | @any }
+  | ( "search" : "Search for packages" | "s" : "Search for packages" | "se" : "Search for packages" | "find" : "Search for packages" ) , { global | @any }
+  | ( "login" : "Log in to a registry" | "adduser" : "Log in to a registry" ) , { global | @any }
+  | "logout" : "Log out of a registry" , { global | @any }
+  | "whoami" : "Display the pnpm username" , { global }
+  | "ping" : "Test the connection to the registry" , { global }
+  | "doctor" : "Diagnose the pnpm installation" , { global }
+  | "change" : "Record a change intent for a release" , { global | @any }
+  | "version" : "Apply the pending change intents" , { global | @any }
+  | "lane" : "Manage per-package release lanes" , { global | @any }
+  | "import" : "Generate pnpm-lock.yaml from another lockfile" , { global }
+  | ( "clean" : "Remove node_modules directories" | "purge" : "Remove node_modules directories" ) , { global | @any }
+  | "root" : "Print the node_modules directory" , { global | "-g" : "Print the global node_modules directory" | "--global" : "Print the global node_modules directory" }
+  | "bin" : "Print the directory of installed executables" , { global | "-g" : "Print the global bin directory" | "--global" : "Print the global bin directory" }
+  | "prefix" : "Print the package prefix" , { global }
+  | "pkg" : "Manage the package.json" , { global | @any }
+  | "pack-app" : "Pack an entry file into a standalone executable" , { global | @any }
+  | "shim" : "Manage shims for packages not installed globally" , { global | @any }
+  | "setup" : "Set up pnpm" , { global | @any }
+  | "find-hash" : "List the packages that include a file hash" , { global | @any }
+  | "cat-file" : "Print a file of the store by its hash" , { global | @any }
+  | "cat-index" : "Print the store index of a package" , { global | @any }
+  | "completion" : "Print the shell completion code" , { global } , [ @any ]
+  | "help" : "Print help for a command" , { global } , [ @any ]
+  | @package_script : "Run this package script" , { @any } ;
+
+(* Options accepted by every command. *)
+
+global =
+    "-v" : "Print the pnpm version" | "--version" : "Print the pnpm version"
+  | "-y" : "Answer yes to prompts" | "--yes" : "Answer yes to prompts"
+  | "-C" : "Run in this directory" , @directory | "--dir" : "Run in this directory" , @directory
+  | "--dir=" : "Run in this directory" ~ @directory
+  | "--store-dir" : "Directory of the package store" , @directory | "--store-dir=" : "Directory of the package store" ~ @directory
+  | "--state-dir" : "Directory of the machine-local state" , @directory | "--state-dir=" : "Directory of the machine-local state" ~ @directory
+  | "--npmrc-auth-file" : "Read auth settings from this .npmrc" , @file | "--npmrc-auth-file=" : "Read auth settings from this .npmrc" ~ @file
+  | "--userconfig" : "Read auth settings from this .npmrc" , @file | "--userconfig=" : "Read auth settings from this .npmrc" ~ @file
+  | "--ignore-workspace" : "Ignore the workspace above the project"
+  | "--workspace-packages" : "Globs selecting the workspace projects" , @any | "--workspace-packages=" : "Globs selecting the workspace projects" ~ @any
+  | "--registry" : "Base URL of the npm registry" , @any | "--registry=" : "Base URL of the npm registry" ~ @any
+  | "--https-proxy" : "Proxy for HTTPS requests" , @any | "--https-proxy=" : "Proxy for HTTPS requests" ~ @any
+  | "--http-proxy" : "Proxy for HTTP requests" , @any | "--http-proxy=" : "Proxy for HTTP requests" ~ @any
+  | "--no-proxy" : "Hosts that bypass the proxies" , @any | "--no-proxy=" : "Hosts that bypass the proxies" ~ @any
+  | "--color" : "Force colored output" | "--color=" : "Force colored output" ~ @any
+  | "--reporter" : "Reporter output format" , reporter | "--reporter=" : "Reporter output format" ~ reporter
+  | "--loglevel" : "What level of logs to print" , loglevel | "--loglevel=" : "What level of logs to print" ~ loglevel
+  | "--stream" : "Stream the output of recursive scripts as it arrives"
+  | "--aggregate-output" : "Print the output of each script when it exits"
+  | "--use-stderr" : "Send the reporter output to stderr"
+  | "-r" : "Run for every project in the workspace" | "--recursive" : "Run for every project in the workspace"
+  | "-F" : "Select workspace projects" , @any | "--filter" : "Select workspace projects" , @any
+  | "--filter=" : "Select workspace projects" ~ @any
+  | "--filter-prod" : "Select projects following production deps only" , @any
+  | "--filter-prod=" : "Select projects following production deps only" ~ @any
+  | "-w" : "Run on the root workspace project" | "--workspace-root" : "Run on the root workspace project"
+  | "--fail-if-no-match" : "Fail when the filters match no project"
+  | "--include-workspace-root" : "Include the root project in recursive commands"
+  | "--no-include-workspace-root" : "Leave the root project out of recursive commands"
+  | "--test-pattern" : "Globs naming test files for [since] filters" , @any
+  | "--test-pattern=" : "Globs naming test files for [since] filters" ~ @any
+  | "--changed-files-ignore-pattern" : "Changed files that [since] filters ignore" , @any
+  | "--changed-files-ignore-pattern=" : "Changed files that [since] filters ignore" ~ @any
+  | "--sort" : "Sort recursive projects topologically" | "--no-sort" : "Run recursive projects in workspace order"
+  | "--reverse" : "Process recursive projects in reverse order"
+  | "--workspace-concurrency" : "Projects to process in parallel" , @number
+  | "--workspace-concurrency=" : "Projects to process in parallel" ~ @number
+  | "--parallel" : "Run scripts in all selected projects at once"
+  | "-h" : "Print help" | "--help" : "Print help" ;
+
+reporter = "default" | "append-only" | "ndjson" | "silent" ;
+loglevel = "silent" | "error" | "warn" | "info" | "debug" ;
+
+(* Options several commands share. *)
+
+json = "--json" : "Output JSON" ;
+long = "--long" : "Show extended information" ;
+parseable = "--parseable" : "Show parseable output" ;
+global_flag = "-g" : "Act on global packages" | "--global" : "Act on global packages" ;
+dry_run = "--dry-run" : "Report what would happen without doing it" ;
+force = "--force" : "Reinstall every package the lockfile names" ;
+shell_mode = "-c" : "Run the command in a shell" | "--shell-mode" : "Run the command in a shell" ;
+pnpmfile = "--ignore-pnpmfile" : "Disable the hooks of .pnpmfile.cjs" ;
+patches_dir = "--patches-dir" : "Directory to save the patch in" , @directory | "--patches-dir=" : "Directory to save the patch in" ~ @directory ;
+
+prod_dev =
+    "-P" : "Only production dependencies" | "--prod" : "Only production dependencies" | "--production" : "Only production dependencies"
+  | "-D" : "Only devDependencies" | "--dev" : "Only devDependencies" ;
+
+optional =
+    "--optional" : "Include optionalDependencies"
+  | "--no-optional" : "Leave out optionalDependencies" ;
+
+platform =
+    "--cpu" : "CPU architectures to install optional deps for" , @any | "--cpu=" : "CPU architectures to install optional deps for" ~ @any
+  | "--os" : "Operating systems to install optional deps for" , @any | "--os=" : "Operating systems to install optional deps for" ~ @any
+  | "--libc" : "The libc families to install optional deps for" , ( "glibc" | "musl" | @any )
+  | "--libc=" : "The libc families to install optional deps for" ~ ( "glibc" | "musl" | @any ) ;
+
+scripts =
+    "--ignore-scripts" : "Do not run lifecycle scripts"
+  | "--no-ignore-scripts" : "Run lifecycle scripts even if disabled in the config"
+  | pnpmfile ;
+
+lockfile =
+    "--lockfile-only" : "Only update pnpm-lock.yaml"
+  | "--lockfile-dir" : "Directory of pnpm-lock.yaml" , @directory | "--lockfile-dir=" : "Directory of pnpm-lock.yaml" ~ @directory ;
+
+offline =
+    "--offline" : "Use only packages in the cache" | "--no-offline" : "Allow network fetches"
+  | "--prefer-offline" : "Prefer packages in the cache" | "--no-prefer-offline" : "Do not prefer cached packages" ;
+
+allow_build = "--allow-build" : "Packages allowed to run build scripts" , @any | "--allow-build=" : "Packages allowed to run build scripts" ~ @any ;
+
+pnpr = "--pnpr-server" : "Offload resolution to this pnpr server" , @any | "--pnpr-server=" : "Offload resolution to this pnpr server" ~ @any ;
+
+(* Per-command options. *)
+
+add_option =
+    "-P" : "Save to dependencies" | "--save-prod" : "Save to dependencies"
+  | "-D" : "Save to devDependencies" | "--save-dev" : "Save to devDependencies"
+  | "-O" : "Save to optionalDependencies" | "--save-optional" : "Save to optionalDependencies"
+  | "--save-build" : "Save crate: packages as Cargo build dependencies"
+  | "--save-peer" : "Save to peerDependencies and devDependencies" | "--no-save-peer" : "Do not save to peerDependencies"
+  | "--prod" : "Leave devDependencies out of node_modules" | "--production" : "Leave devDependencies out of node_modules"
+  | "--dev" : "Leave dependencies out of node_modules"
+  | "-E" : "Save an exact version instead of a range" | "--save-exact" : "Save an exact version instead of a range"
+  | "--save-prefix" : "Prefix of the saved version range" , @any | "--save-prefix=" : "Prefix of the saved version range" ~ @any
+  | "--save-catalog" : "Save the dependency to the default catalog"
+  | "--save-catalog-name" : "Save the dependency to this catalog" , @any | "--save-catalog-name=" : "Save the dependency to this catalog" ~ @any
+  | "--config" : "Add a configuration dependency"
+  | "--workspace" : "Only add a package that the workspace provides"
+  | "--ignore-workspace-root-check" : "Allow adding to the workspace root without -w"
+  | global_flag | platform | scripts | lockfile | optional | allow_build | force ;
+
+install_option =
+    prod_dev | optional | platform | scripts | lockfile | offline | pnpr | dry_run | force
+  | "--frozen-lockfile" : "Fail if the lockfile needs an update" | "--no-frozen-lockfile" : "Allow updating the lockfile"
+  | "--fix-lockfile" : "Repair broken lockfile entries"
+  | "--prefer-frozen-lockfile" : "Prefer the lockfile over re-resolving" | "--no-prefer-frozen-lockfile" : "Always re-resolve dependencies"
+  | "--ignore-manifest-check" : "Skip checking the lockfile against package.json"
+  | "--merge-git-branch-lockfiles" : "Merge the per-branch lockfiles"
+  | "--merge-git-branch-lockfiles-branch-pattern" : "Branches that merge per-branch lockfiles" , @any
+  | "--merge-git-branch-lockfiles-branch-pattern=" : "Branches that merge per-branch lockfiles" ~ @any
+  | "--trust-lockfile" : "Skip the supply-chain checks of the lockfile" | "--no-trust-lockfile" : "Check the lockfile against supply-chain policies"
+  | "--update-checksums" : "Refresh the integrity checksums from the registry"
+  | "--network-concurrency" : "Maximum concurrent network requests" , @number | "--network-concurrency=" : "Maximum concurrent network requests" ~ @number
+  | "--fetch-timeout" : "Network timeout in milliseconds" , @number | "--fetch-timeout=" : "Network timeout in milliseconds" ~ @number
+  | "--fetch-warn-timeout-ms" : "Warn about metadata requests slower than this" , @number
+  | "--fetch-warn-timeout-ms=" : "Warn about metadata requests slower than this" ~ @number
+  | "--fetch-min-speed-ki-bps" : "Warn about downloads slower than this KiB/s" , @number
+  | "--fetch-min-speed-ki-bps=" : "Warn about downloads slower than this KiB/s" ~ @number
+  | "--user-agent" : "User-Agent header for registry requests" , @any | "--user-agent=" : "User-Agent header for registry requests" ~ @any
+  | "--no-runtime" : "Do not install runtime dependencies"
+  | "--node-linker" : "Node linker to use" , node_linker | "--node-linker=" : "Node linker to use" ~ node_linker
+  | "--frozen-store" : "Open the store read-only" | "--no-frozen-store" : "Allow store writes" ;
+
+node_linker = "isolated" | "hoisted" | "pnp" ;
+
+update_option =
+    prod_dev | optional | platform | scripts | lockfile | pnpr | global_flag
+  | "-L" : "Update to the latest version, ignoring ranges" | "--latest" : "Update to the latest version, ignoring ranges"
+  | "--patches" : "Refresh registry revisions without changing versions"
+  | "--depth" : "How deep to update dependencies" , @number | "--depth=" : "How deep to update dependencies" ~ @number
+  | "-i" : "Select the updates interactively" | "--interactive" : "Select the updates interactively"
+  | "--include-github-actions" : "Also update GitHub Actions dependencies"
+  | "--workspace" : "Link workspace packages, matching their versions"
+  | "-E" : "Save an exact version instead of a range" | "--save-exact" : "Save an exact version instead of a range"
+  | "--no-save" : "Do not write the new ranges to package.json"
+  | "--changeset" : "Generate a changeset file" | "--no-changeset" : "Do not generate a changeset" ;
+
+remove_option =
+    "-P" : "Remove only from dependencies" | "--save-prod" : "Remove only from dependencies"
+  | "-D" : "Remove only from devDependencies" | "--save-dev" : "Remove only from devDependencies"
+  | "-O" : "Remove only from optionalDependencies" | "--save-optional" : "Remove only from optionalDependencies"
+  | lockfile | global_flag ;
+
+run_option =
+    "--if-present" : "Do not fail when the script is missing"
+  | "-s" : "Run the scripts one by one" | "--sequential" : "Run the scripts one by one"
+  | dry_run | json ;
+
+dlx_option =
+    "--package" : "Package to install before running" , @any | "--package=" : "Package to install before running" ~ @any
+  | create_option ;
+
+create_option = allow_build | shell_mode | platform ;
+
+list_option =
+    global_flag | prod_dev | optional | json | long | parseable
+  | "--exclude-peers" : "Leave out peer dependencies"
+  | "--find-by" : "Search with a finder from .pnpmfile.cjs" , @any | "--find-by=" : "Search with a finder from .pnpmfile.cjs" ~ @any
+  | "--depth" : "Maximum depth of the tree" , @any | "--depth=" : "Maximum depth of the tree" ~ @any
+  | "--only-projects" : "Only show workspace projects"
+  | "--lockfile-only" : "Read only the lockfile" ;
+
+why_option =
+    prod_dev | optional | json | long | parseable
+  | "--depth" : "Maximum depth of the reverse tree" , @number | "--depth=" : "Maximum depth of the reverse tree" ~ @number
+  | "--exclude-peers" : "Leave out peer dependencies"
+  | "--find-by" : "Search with a finder from .pnpmfile.cjs" , @any | "--find-by=" : "Search with a finder from .pnpmfile.cjs" ~ @any ;
+
+outdated_option =
+    prod_dev | optional | global_flag | long | json
+  | "--compatible" : "Only versions that satisfy package.json"
+  | "--include-github-actions" : "Also check GitHub Actions dependencies"
+  | "--format" : "Output format" , outdated_format | "--format=" : "Output format" ~ outdated_format
+  | "--no-table" : "Print a list instead of a table"
+  | "--sort-by" : "Sort method" , "name" | "--sort-by=" : "Sort method" ~ "name" ;
+
+outdated_format = "table" | "list" | "json" ;
+
+audit_option =
+    json | prod_dev | optional
+  | "--ignore-registry-errors" : "Exit with 0 when the registry fails"
+  | "--fix" : "Fix the vulnerabilities" | "--fix=" : "Fix the vulnerabilities with this method" ~ ( "override" | "update" )
+  | "-i" : "Select the fixes interactively" | "--interactive" : "Select the fixes interactively"
+  | "--audit-level" : "Minimum severity to print" , audit_level | "--audit-level=" : "Minimum severity to print" ~ audit_level
+  | "--ignore" : "Ignore this GitHub advisory ID" , @any | "--ignore=" : "Ignore this GitHub advisory ID" ~ @any
+  | "--ignore-unfixable" : "Ignore vulnerabilities without a fix" ;
+
+audit_level = "info" | "low" | "moderate" | "high" | "critical" ;
+
+licenses_option =
+    json | long
+  | "-P" : "Only dependencies" | "--prod" : "Only dependencies"
+  | "-D" : "Only devDependencies" | "--dev" : "Only devDependencies"
+  | "-O" : "Only optionalDependencies" | "--optional" : "Only optionalDependencies"
+  | "--no-optional" : "Leave out optionalDependencies" ;
+
+publish_option =
+    dry_run | json
+  | "--ignore-scripts" : "Do not run publish lifecycle scripts"
+  | "--force" : "Publish even if the version exists"
+  | "--batch" : "Send all workspace packages in one request"
+  | "--tag" : "Publish under this tag" , @any | "--tag=" : "Publish under this tag" ~ @any
+  | "--access" : "Access level of the package" , access | "--access=" : "Access level of the package" ~ access
+  | "--provenance" : "Generate a provenance attestation"
+  | "--otp" : "One-time password" , @any | "--otp=" : "One-time password" ~ @any
+  | "--embed-readme" : "Embed the README in the published manifest"
+  | "--skip-manifest-obfuscation" : "Keep packageManager and publish scripts"
+  | "--publish-branch" : "Branch publishing is allowed from" , @branch | "--publish-branch=" : "Branch publishing is allowed from" ~ @branch
+  | "--no-git-checks" : "Skip the git checks"
+  | "--report-summary" : "Write pnpm-publish-summary.json" ;
+
+access = "public" | "restricted" ;
+
+pack_option =
+    dry_run | json
+  | "--pack-destination" : "Directory to save the tarball in" , @directory
+  | "--pack-destination=" : "Directory to save the tarball in" ~ @directory
+  | "--out" : "Output path of the tarball" , @file | "--out=" : "Output path of the tarball" ~ @file
+  | "--pack-gzip-level" : "The gzip compression level, 0 to 9" , @number | "--pack-gzip-level=" : "The gzip compression level, 0 to 9" ~ @number
+  | "--skip-manifest-obfuscation" : "Keep packageManager and publish scripts" ;
+
+init_option =
+    "--init-type" : "Module system of the package" , init_type | "--init-type=" : "Module system of the package" ~ init_type
+  | "--init-package-manager" : "Pin the latest pnpm in package.json"
+  | "--no-init-package-manager" : "Do not pin a pnpm version" ;
+
+init_type = "commonjs" | "module" ;
+
+dedupe_option =
+    "--check" : "Check whether dedupe would change anything"
+  | "--lockfile-only" : "Only update pnpm-lock.yaml"
+  | scripts | offline ;
+
+prune_option = prod_dev | optional | "--ignore-scripts" : "Do not run lifecycle scripts" | "--no-ignore-scripts" : "Run lifecycle scripts even if disabled in the config" ;
+
+patch_option =
+    "-d" : "Directory to extract the package into" , @directory
+  | "--edit-dir" : "Directory to extract the package into" , @directory
+  | "--edit-dir=" : "Directory to extract the package into" ~ @directory
+  | "--ignore-existing" : "Ignore existing patch files" ;
+
+approve_option =
+    "--all" : "Approve all pending dependencies"
+  | global_flag ;
+
+store_command =
+    "status" : "Check for modified packages in the store" , { global }
+  | "add" : "Add packages to the store" , { global | @any }
+  | "prune" : "Remove unreferenced packages from the store" , { global }
+  | "path" : "Print the path of the store" , { global } ;
+
+cache_command =
+    "list" : "List the metadata cache" , { global | @any }
+  | "list-registries" : "List the registries in the cache" , { global }
+  | "path" : "Print the path of the cache" , { global }
+  | "view" : "View the cache of a package" , { global | @any }
+  | "delete" : "Delete the cache of packages" , { global | @any } ;
+
+config_option =
+    global_flag | json
+  | "--location" : "Which config to use" , ( "project" | "global" ) | "--location=" : "Which config to use" ~ ( "project" | "global" ) ;
+
+config_command =
+    "set" : "Set a config key" , { config_option | global | @any }
+  | "get" : "Print a config value" , { config_option | global | @any }
+  | "delete" : "Remove a config key" , { config_option | global | @any }
+  | "list" : "Show all the config settings" , { config_option | global } ;
+
+runtime_option =
+    "-g" : "Install the runtime globally" | "--global" : "Install the runtime globally"
+  | "-D" : "Save the runtime to devEngines.runtime" | "--save-dev" : "Save the runtime to devEngines.runtime"
+  | "-P" : "Save the runtime to engines.runtime" | "--save-prod" : "Save the runtime to engines.runtime" ;

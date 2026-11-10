@@ -1,0 +1,82 @@
+(* ps: the union of procps-ng 4.0.7 (Arch Linux, `ps --help all` and `man ps`)
+   and the BSD ps of macOS 26 (`man ps`). Where a flag means different things,
+   the description names both. -C reads a command list on Linux and is a flag on
+   macOS, so both readings are allowed. procps long options take their value as
+   --name=value or as the next word. BSD-style options without a dash (aux,
+   axjf, o pid,comm) and bare process ids are words like process ids; the
+   single BSD letters are offered with their meaning. *)
+
+ps = { option | bsd_option | @process } ;
+
+option =
+    "-C" : "Linux: processes with these command names; macOS: raw CPU" , [ @any ]
+  | "--help" : "Linux: print help, on this section" , [ help_section ]
+  | "-A" : "Select all processes"
+  | "-e" : "Linux: all processes; macOS: show the environment too"
+  | "-a" : "Processes with a terminal (Linux: not session leaders)"
+  | "-d" : "All processes except session leaders"
+  | "-N" : "Linux: negate the selection" | "--deselect" : "Linux: negate the selection"
+  | "--Group" : "Linux: processes of these real group ids or names" , @any | "--Group=" : "Linux: processes of these real group ids or names" ~ @any
+  | "-G" : "Processes of these real group ids" , @any
+  | "-g" : "Linux: session or group names; macOS: process group leaders" , @any
+  | "--group" : "Linux: processes of these effective group names" , @any | "--group=" : "Linux: processes of these effective group names" ~ @any
+  | "-p" : "Processes with these ids" , @process | "--pid" : "Processes with these ids" , @process | "--pid=" : "Processes with these ids" ~ @process
+  | "--ppid" : "Linux: processes with these parent ids" , @process | "--ppid=" : "Linux: processes with these parent ids" ~ @process
+  | "-q" : "Linux: processes with these ids, quick mode" , @process | "--quick-pid" : "Linux: processes with these ids, quick mode" , @process | "--quick-pid=" : "Linux: processes with these ids, quick mode" ~ @process
+  | "-s" : "Linux: processes in these sessions" , @any | "--sid" : "Linux: processes in these sessions" , @any | "--sid=" : "Linux: processes in these sessions" ~ @any
+  | "-t" : "Processes on these terminals" , @any | "--tty" : "Processes on these terminals" , @any | "--tty=" : "Processes on these terminals" ~ @any
+  | "-u" : "Processes of these effective users (macOS: user names)" , @any | "--user" : "Processes of these effective users (macOS: user names)" , @any | "--user=" : "Processes of these effective users (macOS: user names)" ~ @any
+  | "-U" : "Processes of these real users" , @any | "--User" : "Processes of these real users" , @any | "--User=" : "Processes of these real users" ~ @any
+  | "-c" : "Linux: scheduler class with -l; macOS: executable name only"
+  | "--context" : "Linux: show the SELinux security context"
+  | "-f" : "Full format listing"
+  | "-F" : "Linux: extra full format"
+  | "-o" : "Show these output fields, comma separated" , @any | "--format" : "Show these output fields, comma separated" , @any | "--format=" : "Show these output fields, comma separated" ~ @any
+  | "-O" : "Default fields plus these, after the process id" , @any
+  | "-j" : "Jobs format"
+  | "-l" : "Long format"
+  | "-M" : "Linux: add security data; macOS: show threads"
+  | "-P" : "Linux: add the processor column"
+  | "-y" : "Linux: show rss instead of flags and addr (with -l)"
+  | "--cols" : "Linux: screen width" , @number | "--cols=" : "Linux: screen width" ~ @number | "--columns" : "Linux: screen width" , @number | "--columns=" : "Linux: screen width" ~ @number | "--width" : "Linux: screen width" , @number | "--width=" : "Linux: screen width" ~ @number
+  | "--rows" : "Linux: screen height" , @number | "--rows=" : "Linux: screen height" ~ @number | "--lines" : "Linux: screen height" , @number | "--lines=" : "Linux: screen height" ~ @number
+  | "--cumulative" : "Linux: include data of dead children"
+  | "-D" : "Linux: date format for lstart" , @any | "--date-format" : "Linux: date format for lstart" , @any | "--date-format=" : "Linux: date format for lstart" ~ @any
+  | "--delimiter" : "Linux: column delimiter instead of spaces" , @any | "--delimiter=" : "Linux: column delimiter instead of spaces" ~ @any
+  | "--forest" : "Linux: ASCII art process tree"
+  | "-H" : "Linux: show the process hierarchy"
+  | "--headers" : "Linux: repeat the header on every page"
+  | "--no-headers" : "Linux: print no header"
+  | "--sort" : "Linux: sort by these keys, as -pcpu,+pid" , @any | "--sort=" : "Linux: sort by these keys, as -pcpu,+pid" ~ @any
+  | "--signames" : "Linux: show signal masks by name"
+  | "-w" : "Wide output; twice for unlimited width"
+  | "-L" : "Linux: show threads; macOS: list the format keywords"
+  | "-m" : "Linux: threads after processes; macOS: sort by memory"
+  | "-T" : "Linux: show threads; macOS: processes on this terminal"
+  | "-V" : "Linux: print the version" | "--version" : "Linux: print the version"
+  | "--info" : "Linux: print debugging information"
+  | "-h" : "macOS: repeat the header on every page"
+  | "-E" : "macOS: show the environment too"
+  | "-r" : "macOS: sort by CPU usage"
+  | "-S" : "macOS: sum the time of exited children into the parent"
+  | "-v" : "macOS: virtual memory format"
+  | "-X" : "macOS: skip processes without a terminal"
+  | "-x" : "macOS: include processes without a terminal" ;
+
+(* procps BSD-style options; macOS still accepts ps aux. *)
+bsd_option =
+    "aux" : "Every process, user-oriented format"
+  | "a" : "Processes of all users with a terminal" | "x" : "Also processes without a terminal"
+  | "r" : "Only running processes" | "T" : "Processes on this terminal" | "g" : "Really all, even session leaders"
+  | "u" : "User-oriented format" | "j" : "BSD job control format" | "l" : "BSD long format" | "s" : "Signal format"
+  | "v" : "Virtual memory format" | "X" : "Register format" | "Z" : "Add a security data column"
+  | "c" : "Show the true command name" | "e" : "Show the environment after the command" | "f" : "ASCII art process tree"
+  | "h" : "No header" | "n" : "Numeric WCHAN and USER" | "S" : "Include data of dead children"
+  | "w" : "Wide output; twice for unlimited" | "H" : "Show threads as processes" | "m" : "Show threads after processes"
+  | "L" : "List the format specifiers" | "V" : "Print the version"
+  | "o" : "Show these output fields" , @any | "O" : "Default fields plus these, or sort order" , @any
+  | "k" : "Sort by these keys" , @any | "p" : "Processes with these ids" , @process
+  | "q" : "Processes with these ids, quick mode" , @process | "t" : "Processes on these terminals" , @any
+  | "U" : "Processes of these users" , @any ;
+
+help_section = "simple" | "list" | "output" | "threads" | "misc" | "all" ;

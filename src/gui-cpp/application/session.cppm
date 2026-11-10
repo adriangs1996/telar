@@ -40,6 +40,8 @@ export import telar.config;
 export import telar.platform;
 export import telar.gui.terminal.font_grid;
 export import telar.gui.terminal.copy_mode;
+export import telar.gui.prompt.island;
+export import telar.gui.prompt.layout;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.gui.core.primitives;
@@ -72,6 +74,15 @@ enum class Change : std::uint8_t {
   peek,
 };
 
+// Whether the shell runs a command word: asked of the runtime, pending until it answers,
+// unknown where it cannot tell (a remote shell, names it never reported).
+enum class CommandPresence : std::uint8_t {
+  unknown,
+  pending,
+  found,
+  missing,
+};
+
 template <Allocator Memory, RuntimeTransport Transport, MonotonicClock Clock = platform::AwakeClock, HostEffects Effects = DiscardHostEffects>
 class Session {
 public:
@@ -83,6 +94,8 @@ public:
   static constexpr std::size_t maximum_pending = 256;
   static constexpr std::size_t maximum_retained_layout_nodes = 511;
   static constexpr std::size_t input_chunk_size = 65536;
+  // A viewport past any bottom: the runtime follows the output.
+  static constexpr std::uint32_t follow_output = std::numeric_limits<std::uint32_t>::max();
   static constexpr std::uint16_t history_page_size = HistoryBrowser<Memory>::page_entries;
   static constexpr std::size_t maximum_history_query_bytes = HistoryBrowser<Memory>::maximum_query_bytes;
   static constexpr std::uint16_t default_sidebar_columns = SidebarColumns::minimum_width;
@@ -326,6 +339,16 @@ public:
       return dispatch.template operator()<PaneForeground>();
     case ServerTag::pane_progress:
       return dispatch.template operator()<PaneProgress>();
+    case ServerTag::pane_shell:
+      return dispatch.template operator()<PaneShell>();
+    case ServerTag::pane_git:
+      return dispatch.template operator()<PaneGit>();
+    case ServerTag::pane_blocks:
+      return dispatch.template operator()<PaneBlocks>();
+    case ServerTag::command_spec:
+      return dispatch.template operator()<CommandSpec>();
+    case ServerTag::completion_words:
+      return dispatch.template operator()<CompletionWords>();
     case ServerTag::pane_clipboard:
       return dispatch.template operator()<PaneClipboard>();
     case ServerTag::pane_matches:
@@ -724,6 +747,16 @@ public:
       return;
     }
 
+    if (source == PaneInputSource::keyboard && promptSurface(pane_id) == prompt::Surface::secret) {
+      const auto byte = static_cast<unsigned char>(bytes.front());
+      auto &island = islandEntry(pane_id).island;
+      if (byte == 0x7f || byte == 0x08 || byte == 0x15) {
+        island.clearSecret();
+      } else if (byte >= 0x20) {
+        island.countSecretKey();
+      }
+    }
+
     if (source == PaneInputSource::keyboard || source == PaneInputSource::key_release) {
       static_cast<void>(copy_mode_.clearPointer());
       if (source != PaneInputSource::key_release) {
@@ -731,7 +764,7 @@ public:
         if (pane->screen.scroll().offset != bottom) {
           ++view_version_.viewport;
           pane->screen.setViewport(bottom);
-          transport_.send(SetPaneViewport{.pane_id = pane_id, .offset = bottom});
+          transport_.send(SetPaneViewport{.pane_id = pane_id, .offset = follow_output});
         }
       }
     }
@@ -750,10 +783,223 @@ public:
     }
   }
 
+  // ---- telar's command editor -----------------------------------------------------------
+
+  [[nodiscard]] inline prompt::Surface promptSurface(std::uint64_t pane_id) const noexcept {
+    const auto *pane = findPane(pane_id);
+    // telar's editor stays while copy mode, which owns the keys, reads the scrollback.
+    if (pane == nullptr || !pane->attached || pane->exited || (copy_mode_.active() && configuration_.prompt.mode != PromptMode::telar)) {
+      return prompt::Surface::none;
+    }
+    return prompt::surface(pane->shell, pane->screen.modes().alternate_screen, configuration_.prompt.mode == PromptMode::telar);
+  }
+
+  // ---- command blocks, selected from the editor -------------------------------------------
+
+  [[nodiscard]] inline std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept {
+    const auto found = islands_.find(pane_id);
+    const auto *pane = findPane(pane_id);
+    if (found == islands_.end() || pane == nullptr || !found->second.block || *found->second.block >= pane->blocks.size()) {
+      return std::nullopt;
+    }
+    return found->second.block;
+  }
+
+  // Selects the block at `index`, shown from the top of the pane, or none: the pane's live end.
+  inline void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
+    const auto *pane = findPane(pane_id);
+    if (pane == nullptr) {
+      return;
+    }
+    auto &entry = islandEntry(pane_id);
+    entry.pending = 0;
+    if (index && *index < pane->blocks.size()) {
+      if (!entry.block) {
+        entry.live_prompt = livePromptRow(*pane);
+      }
+      entry.block = index;
+      const auto row = pane->blocks[*index].row;
+      scrollToRow(pane_id, row == 0 ? 0 : row - 1);
+    } else {
+      entry.block.reset();
+      scrollToRow(pane_id, std::numeric_limits<std::uint32_t>::max());
+    }
+    changed_pane_ = pane_id;
+    block_changed_ = true;
+  }
+
+  // prefix+[ where telar's editor stands in for the prompt: the last command block, selected,
+  // instead of copy mode from the live end.
+  inline bool enterBlocks() {
+    const auto *pane = focusedPane();
+    if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar || pane->blocks.empty() || promptSurface(pane->id) != prompt::Surface::editor || selectedBlock(pane->id)) {
+      return false;
+    }
+    selectBlock(pane->id, pane->blocks.size() - 1);
+    return true;
+  }
+
+  // The pane whose editor took text from outside the keyboard (a paste, a history entry, a
+  // suggestion, a path) since the last call, for its view to show it.
+  [[nodiscard]] inline std::optional<std::uint64_t> takePromptWrite() noexcept {
+    const auto written = std::exchange(prompt_written_, 0);
+    return written == 0 ? std::nullopt : std::optional{written};
+  }
+
+  // Whether a block was selected or left, or copy mode began on one, since the last call.
+  [[nodiscard]] inline bool takeBlockChange() noexcept {
+    return std::exchange(block_changed_, false);
+  }
+
+  // Whether text was written to the clipboard since the last call, as copying a command does.
+  [[nodiscard]] inline bool takeClipboardWrite() noexcept {
+    return std::exchange(clipboard_written_, false);
+  }
+
+  // Whether text meant for the pane belongs in telar's editor instead.
+  [[nodiscard]] inline bool editsPrompt(std::uint64_t pane_id) const noexcept {
+    const auto surface = promptSurface(pane_id);
+    return surface == prompt::Surface::editor || surface == prompt::Surface::running;
+  }
+
+  [[nodiscard]] inline std::span<const std::string> promptHistory() const noexcept {
+    return prompt_history_;
+  }
+
+  [[nodiscard]] inline const prompt::Island *island(std::uint64_t pane_id) const noexcept {
+    const auto found = islands_.find(pane_id);
+    return found == islands_.end() ? nullptr : &found->second.island;
+  }
+
+  // A key for the pane's editor or queue. `terminal` hands it back to the terminal.
+  inline prompt::Outcome promptKey(std::uint64_t pane_id, const prompt::KeyPress &key) {
+    const auto surface = promptSurface(pane_id);
+    if (surface != prompt::Surface::editor && surface != prompt::Surface::running) {
+      return prompt::Outcome::terminal;
+    }
+
+    auto &entry = islandEntry(pane_id);
+    if (surface == prompt::Surface::editor) {
+      if (const auto outcome = blockKey(pane_id, entry, key)) {
+        return *outcome;
+      }
+    }
+    if (surface == prompt::Surface::running && !entry.island.answering()) {
+      const auto *pane = findPane(pane_id);
+      // Signal and end-of-file keys always reach the program, as does typing while it seems
+      // to ask a question.
+      if (key.key == prompt::Key::character && key.modifiers.control && !key.modifiers.alt && key.character < 0x80) {
+        const char control = static_cast<char>(key.character & 0x1f);
+        if (prompt::controlKey(pane->shell, {&control, 1})) {
+          return prompt::Outcome::terminal;
+        }
+      }
+      if (entry.island.editor().text().empty() && prompt::PendingPrompt::likely(pane->screen.cursor().x, std::chrono::nanoseconds{Clock::nowNanoseconds() - entry.output})) {
+        return prompt::Outcome::terminal;
+      }
+    }
+
+    const auto syntax = shell::Syntax{.dialect = findPane(pane_id)->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix};
+    const auto incomplete = [syntax](std::string_view text) { return prompt::incomplete(text, syntax); };
+    const auto bound = boundAction(key, entry.island.editor());
+    const auto outcome = bound ? entry.island.perform(surface, *bound, incomplete, prompt_history_) : entry.island.press(surface, key, incomplete, prompt_history_);
+    if (outcome == prompt::Outcome::complete) {
+      beginCompletion(pane_id, entry.island, syntax);
+      return prompt::Outcome::edited;
+    }
+    deliverPrompt(pane_id, outcome, entry.island);
+    return outcome;
+  }
+
+  // Whether the pane's shell runs `word`, for the editor to mark a command that does not
+  // exist. Asks the runtime the first time and answers pending until it replies; a remote
+  // shell's commands are unknown. Forgotten after each command and change of directory.
+  inline CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word) {
+    const auto *pane = findPane(pane_id);
+    if (pane == nullptr || pane->shell.remote || !ready_ || word.empty() || word.size() > 256) {
+      return CommandPresence::unknown;
+    }
+    auto &checks = commandChecks(*pane);
+    if (checks.learned.contains(word)) {
+      return CommandPresence::found;
+    }
+    if (const auto known = checks.words.find(word); known != checks.words.end()) {
+      return known->second;
+    }
+
+    const auto request_id = nextRequest();
+    try {
+      const auto slash = word.rfind('/');
+      if (slash == std::string_view::npos) {
+        transport_.send(CompleteWords{.request_id = request_id, .pane_id = pane_id, .provider = CompletionProvider::command, .prefix = word});
+      } else {
+        // A command named by its path: a file there, from the directory the shell is in.
+        std::string root{word.starts_with('/') ? std::string_view{} : std::string_view{pane->cwd}};
+        if (!word.starts_with('/')) {
+          root.push_back('/');
+        }
+        root.append(word.substr(0, slash));
+        while (root.size() > 1 && root.ends_with('/')) {
+          root.pop_back();
+        }
+        const auto name = word.substr(slash + 1);
+        if (name.empty() || name.size() > 64 || !root.starts_with('/')) {
+          return CommandPresence::unknown;
+        }
+        transport_.send(FindPaths{.request_id = request_id, .root = root, .query = name, .kind = PathKindFilter::any, .limit = 50});
+      }
+    } catch (const std::exception &) {
+      checks.words.emplace(std::string{word}, CommandPresence::unknown);
+      return CommandPresence::unknown;
+    }
+    checks.words.emplace(std::string{word}, CommandPresence::pending);
+    command_requests_.emplace(request_id, CommandRequest{pane_id, std::string{word}});
+    return CommandPresence::pending;
+  }
+
+  // Whether a pane's header changed with its shell's state since the last call.
+  [[nodiscard]] inline bool takeChromeChange() noexcept {
+    return std::exchange(chrome_changed_, false);
+  }
+
+  // Scrolls the pane so `row`, counted from the top of its scrollback, is the first shown.
+  inline void scrollToRow(std::uint64_t pane_id, std::uint32_t row) {
+    const auto *pane = findPane(pane_id);
+    if (pane != nullptr) {
+      scroll(PaneScrollDelta{.pane_id = pane_id, .rows = static_cast<std::int64_t>(pane->screen.scroll().offset) - static_cast<std::int64_t>(row)});
+    }
+  }
+
+  // Text an input method committed or a paste, into the editor. Controls other than newline
+  // and tab are dropped: they would act on the shell instead of being written.
+  inline void promptText(std::uint64_t pane_id, std::string_view text) {
+    std::string clean;
+    clean.reserve(text.size());
+    for (const auto byte : text) {
+      const auto value = static_cast<unsigned char>(byte);
+      if (value >= 0x20 || byte == '\n' || byte == '\t') {
+        clean.push_back(value == 0x7f ? ' ' : byte);
+      }
+    }
+    islandEntry(pane_id).island.insertText(clean);
+    prompt_written_ = pane_id;
+  }
+
   inline void paste(std::uint64_t pane_id, std::string_view bytes) {
     if (copy_mode_.active()) {
       return;
     }
+
+    if (editsPrompt(pane_id)) {
+      promptText(pane_id, bytes);
+      return;
+    }
+
+    pasteBytes(pane_id, bytes);
+  }
+
+  // A paste straight to the terminal, framed when the program asked for bracketed paste.
+  inline void pasteBytes(std::uint64_t pane_id, std::string_view bytes) {
 
     const auto *pane = findPane(pane_id);
     if (pane == nullptr) {
@@ -778,6 +1024,17 @@ public:
     const auto *pane = focusedPane();
     if (pane == nullptr || !pane->attached || pane->exited) {
       throw EncodingError{"No terminal is ready for input"};
+    }
+
+    if (editsPrompt(pane->id)) {
+      auto &text = islandEntry(pane->id).island.editor().text();
+      text.assign(command);
+      text.moveTo(text.size());
+      prompt_written_ = pane->id;
+      if (configuration_.history.enter_runs != alternate) {
+        promptKey(pane->id, prompt::KeyPress{prompt::Key::enter});
+      }
+      return;
     }
 
     HistoryText::validate(command, pane->screen.modes().bracketed_paste);
@@ -808,6 +1065,11 @@ public:
     if (suggestion_.phase() == SuggestionPhase::ready) {
       if (!ready_ || pane == nullptr || !pane->attached || pane->exited || copy_mode_.active()) {
         return false;
+      }
+
+      if (editsPrompt(pane->id)) {
+        promptText(pane->id, suggestion_.text());
+        return true;
       }
 
       const auto bracketed = pane->screen.modes().bracketed_paste;
@@ -935,13 +1197,18 @@ public:
       return false;
     }
 
-    const auto paste = PathInsertion::prepare(path_picker_, {.selection = selection, .absolute = absolute, .bracketed = pane->screen.modes().bracketed_paste});
+    const bool editor = editsPrompt(pane->id);
+    const auto paste = PathInsertion::prepare(path_picker_, {.selection = selection, .absolute = absolute, .bracketed = !editor && pane->screen.modes().bracketed_paste});
     if (!paste) {
       return false;
     }
 
     try {
-      input(pane->id, paste->view());
+      if (editor) {
+        promptText(pane->id, paste->view());
+      } else {
+        input(pane->id, paste->view());
+      }
     } catch (const std::length_error &) {
       path_picker_.setError("Input is busy; retry");
 
@@ -1127,7 +1394,8 @@ public:
       return;
     }
 
-    transport_.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested});
+    // The bottom as this replica knows it may be behind the runtime's: ask to follow instead.
+    transport_.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
     pane->screen.setViewport(requested);
     ++view_version_.viewport;
   }
@@ -2519,6 +2787,9 @@ private:
       if (copy_mode_.state() && copy_mode_.state()->pane_id == pane->id) {
         copy_mode_.onFrame(previous_offset, copyGrid(pane->screen));
       }
+      if (const auto island = islands_.find(pane->id); island != islands_.end()) {
+        island->second.output = Clock::nowNanoseconds();
+      }
 
       pane->snapshot_requested = false;
       changed_pane_ = pane->id;
@@ -3228,6 +3499,118 @@ private:
     return Change::model;
   }
 
+  Change apply(const PaneGit &message) {
+    auto *pane = findPane(message.pane_id);
+    if (pane == nullptr || pane->git == message) {
+      return Change::none;
+    }
+
+    pane->git_branch.assign(message.branch);
+    pane->git = message;
+    pane->git.branch = pane->git_branch;
+    changed_pane_ = pane->id;
+    return Change::model;
+  }
+
+  Change apply(const PaneShell &message) {
+    auto *pane = findPane(message.pane_id);
+    if (pane == nullptr || pane->shell == message) {
+      return Change::none;
+    }
+
+    const auto previous_host = pane->shell_host;
+    const auto previous = std::exchange(pane->shell, message);
+    pane->shell_host.assign(message.host);
+    pane->shell.host = pane->shell_host;
+    // The pane's header names the host and the link.
+    chrome_changed_ |= previous.remote != message.remote || previous_host != pane->shell_host || previous.link_ms != message.link_ms;
+    if (const auto found = islands_.find(pane->id); found != islands_.end()) {
+      auto &island = found->second.island;
+      if (message.phase != ShellPhase::running || message.echo) {
+        island.clearSecret();
+      }
+      if (previous.phase == ShellPhase::running && message.phase == ShellPhase::prompt) {
+        deliverPrompt(pane->id, island.promptReturned(message.commands != previous.commands && message.status == 0), island);
+      }
+    }
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
+  Change apply(const CommandSpec &message) {
+    const auto request = spec_requests_.find(message.request_id);
+    if (request == spec_requests_.end()) {
+      return Change::none;
+    }
+    const auto [pane_id, command] = std::move(request->second);
+    spec_requests_.erase(request);
+    // An alias's spec is the one of the command it stands for, kept under that command's name.
+    const auto expansion = message.command == command ? message.expansion : std::string_view{};
+    const auto target = expansion.empty() ? std::string_view{command} : expansion.substr(0, expansion.find(' '));
+    auto state = SpecState::unavailable;
+    if (message.state == CommandSpecState::available && message.command == command) {
+      state = prompt_specs_.install(target, message.digest, message.source) ? SpecState::available : SpecState::unavailable;
+    } else if (message.state == CommandSpecState::unchanged && prompt_specs_.find(target) != nullptr && prompt_specs_.digest(target) == message.digest) {
+      state = SpecState::available;
+    }
+    auto &checks = command_checks_[pane_id];
+    if (const auto known = checks.specs.find(command); known != checks.specs.end()) {
+      known->second = state;
+    }
+    if (state == SpecState::available && !expansion.empty()) {
+      checks.aliases.insert_or_assign(command, std::string{expansion});
+      if (checks.alias_targets.size() >= 256) {
+        checks.alias_targets.clear();
+      }
+      checks.alias_targets.insert_or_assign(command, std::string{target});
+    }
+    // A Tab that waited for it completes now, if the line is still the one it was for.
+    const auto waiting = spec_completions_.find(pane_id);
+    const auto island = islands_.find(pane_id);
+    const auto *pane = findPane(pane_id);
+    if (waiting == spec_completions_.end() || island == islands_.end() || pane == nullptr) {
+      return Change::none;
+    }
+    const bool same = waiting->second == island->second.island.editor().text().view();
+    spec_completions_.erase(waiting);
+    if (!same) {
+      return Change::none;
+    }
+    beginCompletion(pane_id, island->second.island, shell::Syntax{.dialect = pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
+    changed_pane_ = pane_id;
+    return Change::terminal;
+  }
+
+  Change apply(const PaneBlocks &message) {
+    auto *pane = findPane(message.pane_id);
+    if (pane == nullptr) {
+      return Change::none;
+    }
+
+    std::size_t bytes = 0;
+    for (const auto &block : message.blocks) {
+      bytes += block.command.size();
+    }
+    pane->blocks_text.clear();
+    pane->blocks_text.reserve(bytes);
+    pane->blocks.assign(message.blocks.begin(), message.blocks.end());
+    for (auto &block : pane->blocks) {
+      const auto start = pane->blocks_text.size();
+      pane->blocks_text.append(block.command);
+      block.command = std::string_view{pane->blocks_text}.substr(start, block.command.size());
+    }
+    // A command that ran without the shell finding it missing (status 127) exists, though the
+    // shell never reported it: a function defined since its last report, say.
+    if (!pane->blocks.empty() && !pane->shell.remote) {
+      const auto &last = pane->blocks.back();
+      if ((last.state == CommandBlockState::succeeded || last.state == CommandBlockState::failed) && last.status != 127) {
+        learnCommand(pane->id, last.command, pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix);
+      }
+    }
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
   Change apply(const AgentSnapshot &message) {
     const auto now_ns = Clock::nowNanoseconds();
     if (!agents_.apply(message, now_ns)) {
@@ -3262,6 +3645,16 @@ private:
   }
 
   Change apply(const HistoryResults &message) {
+    if (message.request_id == prompt_history_request_ && prompt_history_request_ != 0) {
+      prompt_history_request_ = 0;
+      prompt_history_.clear();
+      for (const auto &entry : message.entries) {
+        if (!entry.command_truncated && !entry.command.empty()) {
+          prompt_history_.emplace_back(entry.command);
+        }
+      }
+      return Change::none;
+    }
     if (!history_.apply(message)) {
       return Change::none;
     }
@@ -3285,7 +3678,57 @@ private:
     return Change::history;
   }
 
+  Change apply(const CompletionWords &message) {
+    if (const auto checked = command_requests_.find(message.request_id); checked != command_requests_.end()) {
+      const auto found = std::ranges::any_of(message.words, [&](const CompletionWord &word) { return word.text == checked->second.word; });
+      return settleCommand(checked, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown : CommandPresence::missing);
+    }
+    const auto pending = path_completions_.find(message.request_id);
+    if (pending == path_completions_.end()) {
+      return Change::none;
+    }
+    const auto [pane_id, base, query] = std::move(pending->second);
+    path_completions_.erase(pending);
+    const auto island = islands_.find(pane_id);
+    if (island == islands_.end()) {
+      return Change::none;
+    }
+    std::vector<prompt::Choice> words;
+    for (const auto &word : message.words) {
+      words.push_back({.text = base + std::string{word.text}, .description = std::string{word.description}});
+    }
+    island->second.island.receive(message.request_id, words, message.truncated);
+    changed_pane_ = pane_id;
+    return Change::terminal;
+  }
+
   Change apply(const PathResults &message) {
+    if (const auto checked = command_requests_.find(message.request_id); checked != command_requests_.end()) {
+      const auto name = std::string_view{checked->second.word}.substr(checked->second.word.rfind('/') + 1);
+      const auto found = std::ranges::any_of(message.matches, [&](const PathMatch &match) { return match.kind != PathKind::directory && match.path == name; });
+      return settleCommand(checked, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown : CommandPresence::missing);
+    }
+    if (const auto pending = path_completions_.find(message.request_id); pending != path_completions_.end()) {
+      const auto [pane_id, base, query] = std::move(pending->second);
+      path_completions_.erase(pending);
+      if (const auto island = islands_.find(pane_id); island != islands_.end()) {
+        // The shell completes one directory at a time: children of the root that start with
+        // what was typed, not the deeper matches the search also finds.
+        std::vector<prompt::Choice> paths;
+        for (const auto &match : message.matches) {
+          // Directories arrive with their trailing slash.
+          const bool directory = match.kind == PathKind::directory;
+          const auto name = directory ? match.path.substr(0, match.path.size() - 1) : match.path;
+          if (name.find('/') == std::string_view::npos && name.starts_with(query)) {
+            paths.push_back({.text = base + std::string{match.path}, .directory = directory});
+          }
+        }
+        island->second.island.receive(message.request_id, paths, message.truncated);
+        changed_pane_ = pane_id;
+        return Change::terminal;
+      }
+      return Change::none;
+    }
     return path_picker_.receive(message) ? Change::paths : Change::none;
   }
 
@@ -3937,6 +4380,515 @@ private:
 
   Configuration configuration_;
   ViewVersion view_version_;
+  struct IslandEntry {
+    prompt::Island island;
+    std::int64_t output = 0;
+    // The command block selected from the editor's normal mode, by its index among the pane's
+    // blocks, and the row the live prompt started on when the selection began.
+    std::optional<std::size_t> block;
+    std::optional<std::uint32_t> live_prompt;
+    // The first half of `[[`, `]]` or `yc`.
+    char pending = 0;
+  };
+
+  // The keys of the command blocks, ahead of the editor: Ctrl-U and Ctrl-D, or [[ and ]], step
+  // through the blocks from the normal mode; on a selected block, v and V select its output,
+  // Y copies it and yc its command; Esc, q, i, a, I, A and any other key go back to the prompt.
+  inline std::optional<prompt::Outcome> blockKey(std::uint64_t pane_id, IslandEntry &entry, const prompt::KeyPress &key) {
+    const auto *pane = findPane(pane_id);
+    if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar) {
+      return std::nullopt;
+    }
+    const auto &editor = entry.island.editor();
+    const bool normal = editor.keymap() == prompt::Keymap::vim && editor.mode() == prompt::Mode::normal && !editor.pending();
+    const auto count = pane->blocks.size();
+    const bool selected = entry.block && *entry.block < count;
+    if (!selected && !normal) {
+      entry.pending = 0;
+      return std::nullopt;
+    }
+    const bool plain = key.key == prompt::Key::character && !key.modifiers.control && !key.modifiers.alt;
+    const auto character = plain ? key.character : 0U;
+    const auto step = [&](int direction) {
+      if (count == 0) {
+        return;
+      }
+      if (!selected) {
+        if (direction < 0) {
+          selectBlock(pane_id, count - 1);
+        }
+        return;
+      }
+      if (direction < 0) {
+        selectBlock(pane_id, *entry.block == 0 ? 0 : *entry.block - 1);
+      } else {
+        selectBlock(pane_id, *entry.block + 1 < count ? std::optional<std::size_t>{*entry.block + 1} : std::nullopt);
+      }
+    };
+
+    if (key.key == prompt::Key::character && key.modifiers.control && !key.modifiers.alt && (key.character == 'u' || key.character == 'd')) {
+      entry.pending = 0;
+      step(key.character == 'u' ? -1 : 1);
+      return prompt::Outcome::edited;
+    }
+    if (character == '[' || character == ']') {
+      if (entry.pending == static_cast<char>(character)) {
+        entry.pending = 0;
+        step(character == '[' ? -1 : 1);
+      } else {
+        entry.pending = static_cast<char>(character);
+      }
+      return prompt::Outcome::edited;
+    }
+    const auto pending = std::exchange(entry.pending, 0);
+    if (!selected) {
+      return std::nullopt;
+    }
+
+    const auto &block = pane->blocks[*entry.block];
+    if (pending == 'y') {
+      if (character == 'c') {
+        clipboard_.assign(block.command);
+        clipboard_written_ = true;
+      }
+      return prompt::Outcome::edited;
+    }
+    switch (character) {
+    case 'v':
+    case 'V':
+      selectBlockOutput(*pane, *entry.block, character == 'V');
+      return prompt::Outcome::edited;
+    case 'Y':
+      copyBlockOutput(*pane, *entry.block);
+      return prompt::Outcome::edited;
+    case 'y':
+      entry.pending = 'y';
+      return prompt::Outcome::edited;
+    case 'q':
+      selectBlock(pane_id, std::nullopt);
+      return prompt::Outcome::edited;
+    default:
+      break;
+    }
+    // Back to the prompt: Esc and q stay in normal mode; i, a, I, A and any other key go on
+    // to the editor, which enters insert mode or edits.
+    selectBlock(pane_id, std::nullopt);
+    if (key.key == prompt::Key::escape) {
+      return prompt::Outcome::edited;
+    }
+    return std::nullopt;
+  }
+
+  // The rows of a block's output: from under its command to above the next block's prompt, or
+  // the live prompt's for the last one.
+  [[nodiscard]] inline std::pair<std::uint32_t, std::uint32_t> blockOutput(const Pane<Memory> &pane, std::size_t index) const {
+    const auto &block = pane.blocks[index];
+    const auto first = block.row + block.rows;
+    std::uint32_t end = pane.screen.scroll().total_rows;
+    if (index + 1 < pane.blocks.size()) {
+      end = pane.blocks[index + 1].row;
+    } else if (const auto found = islands_.find(pane.id); found != islands_.end() && found->second.live_prompt) {
+      end = *found->second.live_prompt;
+    }
+    return {first, std::max(first, end == 0 ? 0 : end - 1)};
+  }
+
+  // Copy mode on a block's output: from its first character, or every line of it selected.
+  inline void selectBlockOutput(const Pane<Memory> &pane, std::size_t index, bool lines) {
+    const auto [first, last] = blockOutput(pane, index);
+    const auto grid = copyGrid(pane.screen);
+    const auto columns = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
+    const CopyPoint start{.x = 0, .y = first};
+    if (copy_mode_.enterAt(pane.id, grid, lines ? CopyPoint{.x = columns, .y = last} : start, start, lines)) {
+      copy_search_request_ = 0;
+      changed_pane_ = pane.id;
+      block_changed_ = true;
+    }
+  }
+
+  // A block's whole output to the clipboard, as the runtime reads it.
+  inline void copyBlockOutput(const Pane<Memory> &pane, std::size_t index) {
+    const auto [first, last] = blockOutput(pane, index);
+    const auto columns = pane.screen.columns();
+    transport_.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = first, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = last, .linewise = true});
+  }
+
+  // The row the shell's live prompt starts on, from the top of the scrollback, while the pane
+  // shows its live end.
+  [[nodiscard]] inline static std::optional<std::uint32_t> livePromptRow(const Pane<Memory> &pane) {
+    const auto &screen = pane.screen;
+    const auto &scroll = screen.scroll();
+    if (static_cast<std::uint64_t>(scroll.offset) + screen.rows() < scroll.total_rows) {
+      return std::nullopt;
+    }
+    const auto cursor = static_cast<std::size_t>(screen.cursor().y);
+    for (auto row = cursor + 1; row-- > 0 && cursor - row < 8;) {
+      if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
+        return scroll.offset + static_cast<std::uint32_t>(row);
+      }
+    }
+    return std::nullopt;
+  }
+
+  inline IslandEntry &islandEntry(std::uint64_t pane_id) {
+    const auto keymap = configuration_.prompt.keymap == PromptKeymap::vim ? prompt::Keymap::vim : prompt::Keymap::emacs;
+    auto [found, inserted] = islands_.try_emplace(pane_id, IslandEntry{prompt::Island{keymap}});
+    found->second.island.setKeymap(keymap);
+    if (inserted && prompt_history_.empty()) {
+      requestPromptHistory();
+    }
+    return found->second;
+  }
+
+  // The commands people typed, most recent first and each once, for the editor's suggestions.
+  inline void requestPromptHistory() {
+    if (!ready_ || !configuration_.prompt.ghost || prompt_history_request_ != 0) {
+      return;
+    }
+    const QueryHistory query{.request_id = nextRequest(), .author = HistoryAuthorFilter::human, .distinct = true, .limit = 1000};
+    try {
+      transport_.send(query);
+      prompt_history_request_ = query.request_id;
+    } catch (const std::length_error &) {
+    }
+  }
+
+  static_assert(runtime::config::prompt_action_names.size() == static_cast<std::size_t>(prompt::Action::insert_mode) + 1);
+
+  // The action the user bound to this key in the editor's current mode, if any.
+  inline std::optional<prompt::Action> boundAction(const prompt::KeyPress &key, const prompt::Editor &editor) const {
+    using Chord = runtime::config::KeyChord;
+    const bool normal = editor.keymap() == prompt::Keymap::vim && editor.mode() != prompt::Mode::insert;
+    const auto named = [&]() -> std::optional<Chord::Key> {
+      switch (key.key) {
+      case prompt::Key::character:
+        return Chord::Key::character;
+      case prompt::Key::enter:
+        return Chord::Key::enter;
+      case prompt::Key::backspace:
+        return Chord::Key::backspace;
+      case prompt::Key::delete_forward:
+        return Chord::Key::erase;
+      case prompt::Key::left:
+        return Chord::Key::left;
+      case prompt::Key::right:
+        return Chord::Key::right;
+      case prompt::Key::up:
+        return Chord::Key::up;
+      case prompt::Key::down:
+        return Chord::Key::down;
+      case prompt::Key::home:
+        return Chord::Key::home;
+      case prompt::Key::end:
+        return Chord::Key::end;
+      case prompt::Key::tab:
+        return Chord::Key::tab;
+      case prompt::Key::backtab:
+        return Chord::Key::back_tab;
+      case prompt::Key::escape:
+        return Chord::Key::escape;
+      }
+      return std::nullopt;
+    }();
+    if (!named) {
+      return std::nullopt;
+    }
+    unsigned modifiers = (key.modifiers.control ? static_cast<unsigned>(Chord::Modifier::control) : 0U) | (key.modifiers.alt ? static_cast<unsigned>(Chord::Modifier::alt) : 0U);
+    // A shifted character is its own character; Shift counts only with named keys.
+    if (*named != Chord::Key::character && key.modifiers.shift) {
+      modifiers |= static_cast<unsigned>(Chord::Modifier::shift);
+    }
+    const auto character = *named == Chord::Key::character ? KeyCharacter::pack(key.character) : 0U;
+    for (const auto &binding : configuration_.prompt.bindings) {
+      if (binding.normal == normal && binding.key == static_cast<std::uint8_t>(*named) && binding.modifiers == modifiers && binding.character == character) {
+        return static_cast<prompt::Action>(binding.action);
+      }
+    }
+    return std::nullopt;
+  }
+
+  // Sends what the editor decided: a command to run, a line for the running program, or raw
+  // bytes the shell reads as keys. Commands are validated like a pasted history entry.
+  inline void deliverPrompt(std::uint64_t pane_id, prompt::Outcome outcome, const prompt::Island &island) {
+    const auto *pane = findPane(pane_id);
+    if (pane == nullptr || !pane->attached || pane->exited) {
+      return;
+    }
+    const auto text = island.delivery();
+    switch (outcome) {
+    case prompt::Outcome::run:
+      if (!text.empty()) {
+        HistoryText::validate(text, pane->screen.modes().bracketed_paste);
+        pasteBytes(pane_id, text);
+        // Every pane's suggestions know the command at once, without asking the history again.
+        std::erase(prompt_history_, text);
+        prompt_history_.insert(prompt_history_.begin(), std::string{text});
+      }
+      input(pane_id, "\r");
+      break;
+    case prompt::Outcome::answer: {
+      HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
+      std::string line{text};
+      line.push_back('\r');
+      input(pane_id, line);
+      break;
+    }
+    case prompt::Outcome::bytes:
+      input(pane_id, text);
+      break;
+    default:
+      break;
+    }
+  }
+
+  // Tab: the spec's literal choices at once, and the runtime's files when the spec, or a
+  // command without one, expects a path there.
+  inline void beginCompletion(std::uint64_t pane_id, prompt::Island &island, shell::Syntax syntax) {
+    const auto *pane = findPane(pane_id);
+    const auto &text = island.editor().text();
+    auto context = prompt::completionContext(text.view(), text.cursor(), syntax);
+    if (pane == nullptr || !context) {
+      return;
+    }
+
+    // A command's spec comes from the runtime, for the commands this pane's shell runs; while
+    // it is on its way, Tab waits for it and completes once it arrives.
+    const ebnf::command_spec *spec = nullptr;
+    if (!context->command_position && !pane->shell.remote && ready_) {
+      switch (specState(pane_id, context->command)) {
+      case SpecState::available: {
+        // An alias completes as the words it stands for: `gst -` as `git status -`.
+        const auto &aliases = command_checks_[pane_id].aliases;
+        if (const auto alias = aliases.find(context->command); alias != aliases.end()) {
+          std::vector<std::string> words;
+          for (auto rest = std::string_view{alias->second}; !rest.empty();) {
+            const auto end = rest.find(' ');
+            if (end != 0) {
+              words.emplace_back(rest.substr(0, end));
+            }
+            rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
+          }
+          if (!words.empty()) {
+            context->command = words.front().substr(words.front().rfind('/') + 1);
+            context->words.insert(context->words.begin(), words.begin() + 1, words.end());
+            spec = prompt_specs_.find(words.front());
+          }
+        } else {
+          spec = prompt_specs_.find(context->command);
+        }
+        break;
+      }
+      case SpecState::pending:
+        spec_completions_.insert_or_assign(pane_id, std::string{text.view()});
+        return;
+      case SpecState::unavailable:
+        break;
+      }
+    }
+    auto completion = prompt::complete(*context, spec, prompt_specs_.scratch(), island.recent());
+    const auto wants = [&](std::string_view provider) { return std::ranges::find(completion.providers, provider) != completion.providers.end(); };
+    auto partial = std::string_view{context->partial};
+    if (partial.starts_with(completion.provider_prefix)) {
+      partial.remove_prefix(completion.provider_prefix.size());
+    }
+    std::vector<std::uint64_t> requests;
+    // A remote shell's files, branches and commands are on its host: only the spec's own
+    // choices apply there.
+    const bool local = !pane->shell.remote;
+    if (ready_ && local && (wants("file") || wants("directory"))) {
+      const auto slash = partial.rfind('/');
+      const auto directory = slash == std::string_view::npos ? std::string_view{} : partial.substr(0, slash + 1);
+      std::string root{directory.starts_with('/') ? std::string_view{} : std::string_view{pane->cwd}};
+      if (!directory.starts_with('/') && !root.ends_with('/')) {
+        root.push_back('/');
+      }
+      root.append(directory);
+      while (root.size() > 1 && root.ends_with('/')) {
+        root.pop_back();
+      }
+      const auto query = slash == std::string_view::npos ? partial : partial.substr(slash + 1);
+      if (root.starts_with('/') && query.size() <= 64) {
+        const FindPaths find{.request_id = nextRequest(), .root = root, .query = query, .kind = wants("file") ? PathKindFilter::any : PathKindFilter::directories, .limit = 50};
+        try {
+          transport_.send(find);
+          requests.push_back(find.request_id);
+          path_completions_.emplace(find.request_id, PathCompletion{pane_id, completion.provider_prefix + std::string{directory}, std::string{query}});
+        } catch (const std::length_error &) {
+        }
+      }
+    }
+
+    // Commands on the shell's PATH, branches, SSH hosts and make targets come from the runtime.
+    // A spec's @ref is a branch name as far as the editor completes it.
+    static constexpr std::array<std::pair<std::string_view, CompletionProvider>, 10> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
+    for (const auto &[name, provider] : providers) {
+      const bool asked = context->command_position ? provider == CompletionProvider::command : wants(name) || (provider == CompletionProvider::branch && wants("ref"));
+      if (!ready_ || !local || !asked || partial.size() > 256) {
+        continue;
+      }
+      const CompleteWords request{.request_id = nextRequest(), .pane_id = pane_id, .provider = provider, .prefix = partial};
+      try {
+        transport_.send(request);
+        requests.push_back(request.request_id);
+        path_completions_.emplace(request.request_id, PathCompletion{pane_id, completion.provider_prefix, std::string{partial}});
+      } catch (const std::length_error &) {
+      }
+    }
+    // The heading names where the choices come from.
+    const auto label = [&]() -> std::string {
+      if (context->command_position) {
+        return "commands";
+      }
+      static constexpr std::array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "branches · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
+      for (const auto &[provider, name] : sources) {
+        if (wants(provider)) {
+          return std::string{name};
+        }
+      }
+      return context->command;
+    };
+    island.offer(std::move(completion.choices), context->replace_begin, context->replace_end, std::move(requests), syntax.dialect, label());
+  }
+
+  struct PathCompletion {
+    std::uint64_t pane_id;
+    std::string base;
+    std::string query;
+  };
+
+  enum class SpecState : std::uint8_t {
+    pending,
+    available,
+    unavailable,
+  };
+
+  struct CommandRequest {
+    std::uint64_t pane_id;
+    std::string word;
+  };
+
+  struct StringHash {
+    using is_transparent = void;
+
+    inline std::size_t operator()(std::string_view text) const noexcept {
+      return std::hash<std::string_view>{}(text);
+    }
+  };
+
+  struct CommandChecks {
+    std::uint32_t commands = 0;
+    std::string directory;
+    std::unordered_map<std::string, CommandPresence, StringHash, std::equal_to<>> words;
+    // Commands seen running, kept across commands.
+    std::unordered_set<std::string, StringHash, std::equal_to<>> learned;
+    // Whether the runtime has a spec for each command asked about, and what each alias
+    // among them stands for.
+    std::unordered_map<std::string, SpecState, StringHash, std::equal_to<>> specs;
+    std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> aliases;
+    // The command each alias last stood for, kept across commands for the digest it asks with.
+    std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> alias_targets;
+  };
+
+  // What the pane learned of its shell's commands, forgotten after each command and change of
+  // directory: either may change which commands run.
+  inline CommandChecks &commandChecks(const Pane<Memory> &pane) {
+    auto &checks = command_checks_[pane.id];
+    if (checks.commands != pane.shell.commands || checks.directory != std::string_view{pane.cwd} || checks.words.size() > 512) {
+      checks.commands = pane.shell.commands;
+      checks.directory.assign(pane.cwd);
+      checks.words.clear();
+      checks.specs.clear();
+      checks.aliases.clear();
+    }
+    return checks;
+  }
+
+  // The first command `line` runs, as the editor colours it.
+  inline void learnCommand(std::uint64_t pane_id, std::string_view line, shell::Dialect dialect) {
+    std::vector<prompt::Style> styles(line.size());
+    prompt::classify(line, styles, shell::Syntax{.dialect = dialect});
+    const auto start = std::ranges::find_if(styles, [](prompt::Style style) { return style == prompt::Style::command || style == prompt::Style::pending; });
+    if (start == styles.end()) {
+      return;
+    }
+    const auto first = static_cast<std::size_t>(start - styles.begin());
+    auto end = first;
+    while (end < styles.size() && styles[end] == styles[first]) {
+      ++end;
+    }
+    auto &checks = command_checks_[pane_id];
+    if (checks.learned.size() >= 256) {
+      checks.learned.clear();
+    }
+    const auto word = line.substr(first, end - first);
+    checks.learned.emplace(word);
+    if (const auto known = checks.words.find(word); known != checks.words.end()) {
+      known->second = CommandPresence::found;
+    }
+  }
+
+  // Whether the runtime has a spec for `command` in this pane, asking it the first time: once
+  // per command until the shell's next command, with the digest of the spec already held.
+  inline SpecState specState(std::uint64_t pane_id, std::string_view command) {
+    if (command.empty() || command.size() > 64) {
+      return SpecState::unavailable;
+    }
+    const auto *pane = findPane(pane_id);
+    if (pane == nullptr) {
+      return SpecState::unavailable;
+    }
+    auto &checks = commandChecks(*pane);
+    if (const auto known = checks.specs.find(command); known != checks.specs.end()) {
+      return known->second;
+    }
+    // An alias's spec is its command's: the digest of the one held for what it last stood for.
+    const auto target = checks.alias_targets.find(command);
+    const RequestCommandSpec request{.request_id = nextRequest(), .pane_id = pane_id, .command = command, .known_digest = prompt_specs_.digest(target == checks.alias_targets.end() ? command : std::string_view{target->second})};
+    try {
+      transport_.send(request);
+    } catch (const std::exception &) {
+      checks.specs.emplace(std::string{command}, SpecState::unavailable);
+      return SpecState::unavailable;
+    }
+    checks.specs.emplace(std::string{command}, SpecState::pending);
+    spec_requests_.emplace(request.request_id, CommandRequest{pane_id, std::string{command}});
+    return SpecState::pending;
+  }
+
+  inline Change settleCommand(typename std::unordered_map<std::uint64_t, CommandRequest>::iterator request, CommandPresence presence) {
+    const auto [pane_id, word] = std::move(request->second);
+    command_requests_.erase(request);
+    // A command the shell runs may have a spec: asked now, it is there by the first Tab.
+    if (presence == CommandPresence::found && word.find('/') == std::string::npos) {
+      static_cast<void>(specState(pane_id, word));
+    }
+    const auto checks = command_checks_.find(pane_id);
+    if (checks == command_checks_.end()) {
+      return Change::none;
+    }
+    const auto known = checks->second.words.find(word);
+    if (known == checks->second.words.end() || known->second != CommandPresence::pending) {
+      return Change::none;
+    }
+    known->second = presence;
+    changed_pane_ = pane_id;
+    return Change::terminal;
+  }
+
+  prompt::Specs prompt_specs_;
+  std::vector<std::string> prompt_history_;
+  std::uint64_t prompt_history_request_ = 0;
+  std::unordered_map<std::uint64_t, PathCompletion> path_completions_;
+  std::unordered_map<std::uint64_t, CommandRequest> command_requests_;
+  std::unordered_map<std::uint64_t, CommandChecks> command_checks_;
+  std::unordered_map<std::uint64_t, CommandRequest> spec_requests_;
+  // Tab pressed while a pane waited for a spec: the line it completes, by pane.
+  std::unordered_map<std::uint64_t, std::string> spec_completions_;
+  bool chrome_changed_ = false;
+  bool clipboard_written_ = false;
+  bool block_changed_ = false;
+  std::uint64_t prompt_written_ = 0;
+  std::unordered_map<std::uint64_t, IslandEntry> islands_;
   CopyMode copy_mode_;
   EditorOpening editor_opening_;
   std::uint64_t copy_search_request_ = 0;

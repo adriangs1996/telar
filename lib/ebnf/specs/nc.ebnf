@@ -1,0 +1,64 @@
+(* nc: the union of the macOS 26 nc (`man nc`) and OpenBSD netcat 1.239 as Arch
+   Linux packages it (openbsd-netcat; not installed on the Linux machine checked,
+   so taken from its manual at man.archlinux.org). Where a flag means different
+   things, the description names both; where only one of them reads a value,
+   both readings are allowed. Operands are a host and ports (or ranges nn-mm),
+   or a socket path with -U; SSH hosts and files are offered. *)
+
+nc = { option | @ssh_host | @file } ;
+
+option =
+    "-4" : "Use IPv4 addresses only"
+  | "-6" : "Use IPv6 addresses only"
+  | "-A" : "macOS: set SO_RECV_ANYIF on the socket"
+  | "-b" : "Linux: allow broadcast; macOS: bind to this interface" | "-b" : "Linux: allow broadcast; macOS: bind to this interface" , @any
+  | "-C" : "Linux: send CRLF as line ending; macOS: avoid cellular data"
+  | "-c" : "macOS: send CRLF as line ending"
+  | "-D" : "Enable debugging on the socket"
+  | "-d" : "Do not read from stdin"
+  | "-F" : "Linux: pass the connected socket to stdout and exit"
+  | "-G" : "macOS: TCP connection timeout in seconds" , @number
+  | "-H" : "macOS: initial TCP keepalive timeout in seconds" , @number
+  | "-h" : "Print the help and exit"
+  | "-I" : "Linux: TCP receive buffer size; macOS: keepalive interval" , @number
+  | "-i" : "Seconds to wait between lines and between ports" , @number
+  | "-J" : "macOS: number of TCP keepalive probes" , @number
+  | "-k" : "Keep listening after a connection ends (with -l)"
+  | "-L" : "macOS: probes before declaring the peer unreachable" , @number
+  | "-l" : "Listen for an incoming connection"
+  | "-M" : "Linux: TTL or hop limit of outgoing packets" , @number
+  | "-m" : "Linux: drop incoming packets below this TTL" , @number
+  | "-N" : "Linux: shut down the socket after EOF on input"
+  | "-n" : "Do not resolve names or services"
+  | "-O" : "Linux: TCP send buffer size" , @number
+  | "-P" : "Linux: user name for proxy authentication" , @any
+  | "-p" : "Source port to use" , @number
+  | "-q" : "Linux: quit this many seconds after EOF on stdin" , @any
+  | "-r" : "Choose ports randomly"
+  | "-S" : "Linux: enable the TCP MD5 signature option"
+  | "-s" : "Source address to send from" , @any
+  | "-T" : "Linux: IP type of service or traffic class" , tos
+  | "-t" : "Answer telnet DO and WILL requests with DON'T and WON'T"
+  | "-U" : "Use Unix domain sockets"
+  | "-u" : "Use UDP instead of TCP"
+  | "-V" : "Linux: routing table to use" , @number
+  | "-v" : "Verbose output"
+  | "-W" : "Linux: exit after receiving this many packets" , @number
+  | "-w" : "Close idle connections after this many seconds" , @number
+  | "-X" : "Proxy protocol" , proxy_protocol
+  | "-x" : "Connect through this proxy, as address[:port]" , @any
+  | "-Z" : "Linux: DCCP mode"
+  | "-z" : "Scan for listening daemons without sending data"
+  | "--apple-delegate-pid" : "macOS: delegate the socket for this process" , @process
+  | "--apple-delegate-uuid" : "macOS: delegate the socket for this UUID" , @any
+  | "--apple-ext-bk-idle" : "macOS: extended background idle time when suspended"
+  | "--apple-nowakefromsleep" : "macOS: exclude the port from sleep wake checks" , @number
+  | "--apple-ecn" : "macOS: ECN mode" , ( "default" | "enable" | "disable" ) ;
+
+proxy_protocol =
+    "4" : "SOCKS v4" | "4A" : "SOCKS v4A (Linux)" | "5" : "SOCKS v5 (default)" | "connect" : "HTTPS proxy (CONNECT)" ;
+
+tos =
+    "critical" | "inetcontrol" | "lowcost" | "lowdelay" | "netcontrol" | "throughput" | "reliability" | "ef"
+  | "af11" | "af12" | "af13" | "af21" | "af22" | "af23" | "af31" | "af32" | "af33" | "af41" | "af42" | "af43"
+  | "cs0" | "cs1" | "cs2" | "cs3" | "cs4" | "cs5" | "cs6" | "cs7" | @any : "A number, in hex or decimal" ;

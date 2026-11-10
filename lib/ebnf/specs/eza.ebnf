@@ -1,0 +1,115 @@
+(* eza: eza 0.23.5, checked against `eza --help` and `man eza` on macOS 26 and
+   `eza --help` on Arch Linux (identical), and the accepted values by running it.
+   Options whose value is optional take it as the next word or after `=`. *)
+
+eza = { option | @file } , [ "--" , { @file } ] ;
+
+option =
+    (* Meta *)
+    "--stdin" : "Read file names from stdin"
+  | "-?" : "Print the help and exit" | "--help" : "Print the help and exit"
+  | "-v" : "Print the version and exit" | "--version" : "Print the version and exit"
+    (* Layout *)
+  | "-1" : "Display one entry per line" | "--oneline" : "Display one entry per line"
+  | "-l" : "Display extended metadata as a table" | "--long" : "Display extended metadata as a table"
+  | "-G" : "Display entries as a grid (default)" | "--grid" : "Display entries as a grid (default)"
+  | "-x" : "Sort the grid across, rather than downwards" | "--across" : "Sort the grid across, rather than downwards"
+  | "-R" : "Recurse into directories" | "--recurse" : "Recurse into directories"
+  | "-T" : "Recurse into directories as a tree" | "--tree" : "Recurse into directories as a tree"
+  | "-L" : "Limit the depth of recursion" , @number
+  | "--level" : "Limit the depth of recursion" , @number | "--level=" : "Limit the depth of recursion" ~ @number
+  | "--code" : "Summarise lines of code by language"
+  | "--code=" : "Summarise lines of code by language, shown this way" ~ loc_mode
+  | "--follow-symlinks" : "Drill down into symbolic links to directories"
+  | "-w" : "Screen width in columns" , @number
+  | "--width" : "Screen width in columns" , @number | "--width=" : "Screen width in columns" ~ @number
+    (* Display *)
+  | "-F" : "Display a type indicator by file names" , [ when ]
+  | "--classify" : "Display a type indicator by file names" , [ when ]
+  | "--classify=" : "When to display a type indicator by file names" ~ when
+  | "-X" : "Dereference symbolic links for file information" | "--dereference" : "Dereference symbolic links for file information"
+  | "--absolute" : "Display entries with their absolute path" , [ absolute ]
+  | "--absolute=" : "Display entries with their absolute path" ~ absolute
+  | "--color" : "When to use colours" , [ when ] | "--color=" : "When to use colours" ~ when
+  | "--colour" : "When to use colours" , [ when ] | "--colour=" : "When to use colours" ~ when
+  | "--color-scale" : "Highlight levels of these fields distinctly" , [ scale_fields ]
+  | "--color-scale=" : "Highlight levels of these fields distinctly" ~ scale_fields
+  | "--color-scale-mode" : "Mode for --color-scale" , scale_mode
+  | "--color-scale-mode=" : "Mode for --color-scale" ~ scale_mode
+  | "--icons" : "When to display icons" , [ when ] | "--icons=" : "When to display icons" ~ when
+  | "--hyperlink" : "When to display entries as hyperlinks" , [ when ]
+  | "--hyperlink=" : "When to display entries as hyperlinks" ~ when
+  | "--no-quotes" : "Do not quote file names with spaces"
+  | "--short-nix" : "Abbreviate Nix store hashes in names and paths"
+    (* Filtering *)
+  | "-a" : "Show hidden files; twice to show . and .." | "--all" : "Show hidden files; twice to show . and .."
+  | "-A" : "Same as --all, for compatibility with ls -A" | "--almost-all" : "Same as --all, for compatibility with ls -A"
+  | "-d" : "List directories as files, not their contents" | "--treat-dirs-as-files" : "List directories as files, not their contents"
+  | "-D" : "List only directories" | "--only-dirs" : "List only directories"
+  | "-f" : "List only files" | "--only-files" : "List only files"
+  | "--show-symlinks" : "Show symbolic links with --only-dirs and --only-files"
+  | "--no-symlinks" : "Do not show symbolic links"
+  | "-I" : "Ignore files matching these globs, separated by |" , @any
+  | "--ignore-glob" : "Ignore files matching these globs, separated by |" , @any
+  | "--ignore-glob=" : "Ignore files matching these globs, separated by |" ~ @any
+  | "--git-ignore" : "Ignore files listed in .gitignore"
+    (* Sorting *)
+  | "--group-directories-first" : "List directories before other files"
+  | "--group-directories-last" : "List directories after other files"
+  | "-s" : "Field to sort by" , sort_field
+  | "--sort" : "Field to sort by" , sort_field | "--sort=" : "Field to sort by" ~ sort_field
+  | "-r" : "Reverse the sort order" | "--reverse" : "Reverse the sort order"
+    (* Long view *)
+  | "-h" : "Add a header row to each column" | "--header" : "Add a header row to each column"
+  | "-i" : "List each file's inode number" | "--inode" : "List each file's inode number"
+  | "--loc" : "Add language and lines-of-code columns"
+  | "--loc=" : "Add language and lines-of-code columns, shown this way" ~ loc_mode
+  | "-o" : "List permissions in octal" | "--octal-permissions" : "List permissions in octal"
+  | "-H" : "List each file's number of hard links" | "--links" : "List each file's number of hard links"
+  | "-b" : "Show sizes with binary prefixes" | "--binary" : "Show sizes with binary prefixes"
+  | "-B" : "Show sizes in bytes, without prefixes" | "--bytes" : "Show sizes in bytes, without prefixes"
+  | "--total-size" : "Show a directory's size as that of its content"
+  | "-S" : "List allocated file system blocks" | "--blocksize" : "List allocated file system blocks"
+  | "-g" : "List each file's group" | "--group" : "List each file's group"
+  | "--smart-group" : "Show the group only if it differs from the owner"
+  | "-n" : "Show user and group as numeric IDs" | "--numeric" : "Show user and group as numeric IDs"
+  | "-t" : "Timestamp field to show" , time_field
+  | "--time" : "Timestamp field to show" , time_field | "--time=" : "Timestamp field to show" ~ time_field
+  | "-m" : "Show the modified timestamp" | "--modified" : "Show the modified timestamp"
+  | "-u" : "Show the accessed timestamp" | "--accessed" : "Show the accessed timestamp"
+  | "--changed" : "Show the changed timestamp"
+  | "-U" : "Show the created timestamp" | "--created" : "Show the created timestamp"
+  | "--time-style" : "How to format timestamps" , time_style
+  | "--time-style=" : "How to format timestamps" ~ time_style
+  | "-O" : "List file flags (macOS, BSD and Windows)" | "--flags" : "List file flags (macOS, BSD and Windows)"
+  | "-Z" : "List each file's security context" | "--context" : "List each file's security context"
+  | "--git" : "List each file's Git status"
+  | "--git-repos" : "List the Git status of repository roots"
+  | "--git-repos-no-status" : "List the branch of each Git repository (faster)"
+  | "-M" : "Show mount details (Linux and macOS)" | "--mounts" : "Show mount details (Linux and macOS)"
+  | "-@" : "List extended attributes and their sizes" | "--extended" : "List extended attributes and their sizes"
+  | "--no-permissions" : "Hide the permissions field"
+  | "--no-filesize" : "Hide the file size field"
+  | "--no-user" : "Hide the user field"
+  | "--no-time" : "Hide the time field"
+  | "--no-git" : "Hide the Git fields" ;
+
+when = "always" | "auto" | "never" ;
+absolute = "on" : "Absolute paths for all entries" | "follow" : "Absolute paths, following symbolic links" | "off" : "Relative paths" ;
+scale_fields = "all" | "age" | "size" | @any : "Fields separated by commas, as age,size" ;
+scale_mode = "gradient" | "fixed" ;
+loc_mode = "lines" : "Lines of code" | "percent" : "Share of the code" | "both" : "Lines and share" ;
+sort_field =
+    "name" : "By name" | "Name" : "By name, uppercase first" | ".name" : "By name, ignoring leading dots"
+  | ".Name" : "By name, uppercase first, ignoring leading dots"
+  | "ext" : "By extension" | "Ext" : "By extension, uppercase first" | "extension" : "By extension"
+  | "Extension" : "By extension, uppercase first"
+  | "modified" : "By modified time" | "date" : "By modified time" | "time" : "By modified time"
+  | "newest" : "By modified time" | "age" : "By modified time, reversed" | "oldest" : "By modified time, reversed"
+  | "created" : "By creation time" | "accessed" : "By access time" | "changed" : "By status change time"
+  | "size" : "By size" | "inode" : "By inode number" | "type" : "By file type" | "none" : "Do not sort" ;
+time_field =
+    "modified" | "mod" | "accessed" | "acc" | "changed" | "ch" | "created" | "cr" ;
+time_style =
+    "default" | "iso" | "long-iso" | "full-iso" | "relative"
+  | @any : "A custom format, as +%Y-%m-%d" ;

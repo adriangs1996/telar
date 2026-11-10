@@ -1,0 +1,13 @@
+telar completions check: Compile a spec file and report the first error in it
+
+Usage: telar completions check FILE
+
+Arguments:
+  FILE             The spec, named after its command: nmap.ebnf for nmap.
+
+Effects: reads and compiles the file in this process with the runtime's matcher. Starts
+nothing, writes nothing, contacts no runtime.
+
+Results: `telar completions: OK` on stdout, exit 0. The error on stderr and exit 1 when
+the file cannot be read, is larger than 256 KiB, is not named after a command, or does
+not compile; the runtime skips such a spec and offers the shipped one instead.

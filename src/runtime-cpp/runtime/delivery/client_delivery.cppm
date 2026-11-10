@@ -221,6 +221,12 @@ private:
       return metadata(output.connection, attachment.title_revision, effects.title_revision, PaneTitle{pane.id, effects.title()});
     case DeliveryLane::progress:
       return metadata(output.connection, attachment.progress_revision, effects.progress_revision, PaneProgress{pane.id, effects.progress_state, effects.progress_percent});
+    case DeliveryLane::shell:
+      return metadata(output.connection, attachment.shell_revision, pane.shell_revision, pane.shell_state);
+    case DeliveryLane::git:
+      return metadata(output.connection, attachment.git_revision, pane.git_revision, pane.git.message(pane.id));
+    case DeliveryLane::blocks:
+      return blocks(output.connection, attachment, pane);
     case DeliveryLane::exit:
       return exit(output, attachment, pane);
     case DeliveryLane::graphics:
@@ -238,6 +244,17 @@ private:
 
     connection.send(message);
     observed = revision;
+    return true;
+  }
+
+  inline static bool blocks(Connection<Memory> &connection, Attachment<Memory> &attachment, const Pane<Memory> &pane) {
+    if (!pane.blocks || attachment.blocks_revision == pane.blocks->revision()) {
+      return false;
+    }
+
+    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    connection.send(pane.blocks->message(pane.id, storage));
+    attachment.blocks_revision = pane.blocks->revision();
     return true;
   }
 
@@ -520,8 +537,10 @@ private:
     }
 
     AttachmentDelivery<Memory> attachments{model_, client};
-    if (queued_lane <= DeliveryLane::cells || attachments.prepare(model_, client, DeliveryLane::cells, now, timeout)) {
-      return;
+    for (const auto lane : {DeliveryLane::shell, DeliveryLane::cells}) {
+      if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
+        return;
+      }
     }
 
     for (const auto lane : {DeliveryLane::agents, DeliveryLane::metrics, DeliveryLane::workspaces}) {
@@ -534,7 +553,7 @@ private:
       return;
     }
 
-    for (const auto lane : {DeliveryLane::cwd, DeliveryLane::foreground, DeliveryLane::title, DeliveryLane::progress, DeliveryLane::exit, DeliveryLane::graphics}) {
+    for (const auto lane : {DeliveryLane::cwd, DeliveryLane::foreground, DeliveryLane::title, DeliveryLane::progress, DeliveryLane::git, DeliveryLane::blocks, DeliveryLane::exit, DeliveryLane::graphics}) {
       if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
         return;
       }
@@ -941,6 +960,12 @@ bool dispatchRequest(ClientTag tag, Consumer &&consume) {
     return true;
   case ClientTag::find_paths:
     consume.template operator()<FindPaths>();
+    return true;
+  case ClientTag::complete_words:
+    consume.template operator()<CompleteWords>();
+    return true;
+  case ClientTag::request_command_spec:
+    consume.template operator()<RequestCommandSpec>();
     return true;
   case ClientTag::open_editor:
     consume.template operator()<OpenEditor>();

@@ -1,0 +1,278 @@
+(* go: the go command, checked against `go help <command>` and `go help testflag`
+   of go 1.27.1.
+
+   Conventions:
+   - Go's flag package takes one dash; a flag with a value accepts `-flag value`
+     and `-flag=value`. Short flags never cluster.
+   - Flags come before the packages: `go build . -v` reads -v as a package. Only
+     `go test` takes its flags after the packages too.
+   - Packages complete as directories (`./cmd/x`, `./...`); import paths such as
+     `example.com/m/v2` are accepted as well. Module queries (`go get`,
+     `go install`, `go mod download`) take any word. *)
+
+go = [ command ] ;
+
+command =
+    "build" : "Compile packages and dependencies" , { build_flag | output } , { package }
+  | "run" : "Compile and run a Go program" , { build_flag | exec } , [ ( @file | @directory ) , { @any } ]
+  | "test" : "Test packages" , { test_option | package } , [ "-args" : "Pass the rest of the line to the test binary" , { @any } ]
+  | "get" : "Add dependencies to the current module and install them" , { get_option } , { @any }
+  | "install" : "Compile and install packages and dependencies" , { build_flag } , { @any }
+  | "mod" : "Module maintenance" , [ mod_command ]
+  | "work" : "Workspace maintenance" , [ work_command ]
+  | "fmt" : "Run gofmt on package sources" , { fmt_option } , { package }
+  | "vet" : "Report likely mistakes in packages" , { vet_option } , { package }
+  | "env" : "Print Go environment information" , { env_option } , { env_var }
+  | "list" : "List packages or modules" , { list_option } , { @any }
+  | "clean" : "Remove object files and cached files" , { clean_option } , { package }
+  | "generate" : "Generate Go files by processing source" , { generate_option } , { package | @file }
+  | "doc" : "Show documentation for a package or symbol" , { doc_option } , [ @any , [ @any ] ]
+  | "fix" : "Apply fixes suggested by static checkers" , { fix_option } , { package }
+  | "tool" : "Run a specified go tool" , { tool_option } , [ @any , { @any } ]
+  | "version" : "Print the Go version" , { version_option } , { @file }
+  | "telemetry" : "Manage telemetry data and settings" , [ "off" : "Disable telemetry" | "local" : "Collect telemetry locally only" | "on" : "Collect and upload telemetry" ]
+  | "bug" : "Start a bug report"
+  | "help" : "Show help for a command or topic" , [ help_topic , [ @any ] ] ;
+
+package = @directory ;
+
+help_topic =
+    "build" | "run" | "test" | "get" | "install" | "mod" | "work" | "fmt" | "vet" | "env" | "list" | "clean"
+  | "generate" | "doc" | "fix" | "tool" | "version" | "telemetry" | "bug"
+  | "buildconstraint" : "Build constraints" | "buildjson" : "The build -json encoding"
+  | "buildmode" : "Build modes" | "c" : "Calling between Go and C" | "cache" : "Build and test caching"
+  | "environment" : "Environment variables" | "filetype" : "File types" | "goauth" : "The GOAUTH variable"
+  | "go.mod" : "The go.mod file" | "gopath" : "The GOPATH variable" | "goproxy" : "The module proxy protocol"
+  | "importpath" : "Import path syntax" | "modules" : "Modules and module versions"
+  | "module-auth" : "Module authentication using go.sum" | "packages" : "Package lists and patterns"
+  | "private" : "Configuration for non-public code" | "testflag" : "Testing flags"
+  | "testfunc" : "Testing functions" | "vcs" : "Controlling version control with GOVCS" ;
+
+(* The build flags shared by build, clean, get, install, list, run and test. *)
+build_flag =
+    "-C" : "Change to this directory first" , @directory | "-C=" : "Change to this directory first" ~ @directory
+  | "-a" : "Force rebuilding of up-to-date packages"
+  | "-n" : "Print the commands but do not run them"
+  | "-p" : "Number of programs to run in parallel" , @number | "-p=" : "Number of programs to run in parallel" ~ @number
+  | "-race" : "Enable data race detection"
+  | "-msan" : "Enable the memory sanitizer"
+  | "-asan" : "Enable the address sanitizer"
+  | "-cover" : "Enable code coverage instrumentation"
+  | "-covermode" : "Coverage mode" , cover_mode | "-covermode=" : "Coverage mode" ~ cover_mode
+  | "-coverpkg" : "Packages to apply coverage analysis to" , @any | "-coverpkg=" : "Packages to apply coverage analysis to" ~ @any
+  | "-v" : "Print the names of packages as they are compiled"
+  | "-work" : "Print and keep the temporary work directory"
+  | "-x" : "Print the commands"
+  | "-asmflags" : "Arguments for each go tool asm invocation" , @any | "-asmflags=" : "Arguments for each go tool asm invocation" ~ @any
+  | "-buildmode" : "Build mode to use" , build_mode | "-buildmode=" : "Build mode to use" ~ build_mode
+  | "-buildvcs" : "Stamp binaries with version control information"
+  | "-buildvcs=" : "Stamp binaries with version control information" ~ ( "true" | "false" | "auto" )
+  | "-compiler" : "Compiler to use" , ( "gc" | "gccgo" ) | "-compiler=" : "Compiler to use" ~ ( "gc" | "gccgo" )
+  | "-gccgoflags" : "Arguments for each gccgo invocation" , @any | "-gccgoflags=" : "Arguments for each gccgo invocation" ~ @any
+  | "-gcflags" : "Arguments for each go tool compile invocation" , @any | "-gcflags=" : "Arguments for each go tool compile invocation" ~ @any
+  | "-installsuffix" : "Suffix for the package installation directory" , @any
+  | "-installsuffix=" : "Suffix for the package installation directory" ~ @any
+  | "-json" : "Emit build output in JSON"
+  | "-ldflags" : "Arguments for each go tool link invocation" , @any | "-ldflags=" : "Arguments for each go tool link invocation" ~ @any
+  | "-linkshared" : "Link against shared libraries built with -buildmode=shared"
+  | "-mod" : "Module download mode" , mod_mode | "-mod=" : "Module download mode" ~ mod_mode
+  | "-modcacherw" : "Leave new module cache directories writable"
+  | "-modfile" : "Read an alternate go.mod file" , @file | "-modfile=" : "Read an alternate go.mod file" ~ @file
+  | "-overlay" : "JSON file that overlays build files" , @file | "-overlay=" : "JSON file that overlays build files" ~ @file
+  | "-pgo" : "Profile for profile-guided optimization" , pgo_file | "-pgo=" : "Profile for profile-guided optimization" ~ pgo_file
+  | "-pkgdir" : "Install and load all packages from this directory" , @directory
+  | "-pkgdir=" : "Install and load all packages from this directory" ~ @directory
+  | "-tags" : "Comma-separated build tags" , @any | "-tags=" : "Comma-separated build tags" ~ @any
+  | "-trimpath" : "Remove file system paths from the executable"
+  | "-toolexec" : "Program that runs the toolchain programs" , @any | "-toolexec=" : "Program that runs the toolchain programs" ~ @any ;
+
+cover_mode = "set" : "Whether each statement runs" | "count" : "How many times each statement runs" | "atomic" : "Count, safe in multithreaded tests" ;
+build_mode =
+    "default" | "archive" : "Non-main packages into .a files" | "c-archive" : "C archive file"
+  | "c-shared" : "C shared library" | "shared" : "Shared library for -linkshared" | "exe" : "Executables"
+  | "pie" : "Position independent executables" | "plugin" : "Go plugin" ;
+mod_mode = "readonly" | "vendor" | "mod" ;
+pgo_file = "auto" : "Use default.pgo of the main package" | "off" : "Turn PGO off" | @file ;
+output = "-o" : "Write the result to this file or directory" , @file | "-o=" : "Write the result to this file or directory" ~ @file ;
+exec = "-exec" : "Run the binary through this program" , @any | "-exec=" : "Run the binary through this program" ~ @any ;
+
+test_option =
+    build_flag | output | exec
+  | "-c" : "Compile the test binary but do not run it"
+  | "-artifacts" : "Save test artifacts in the -outputdir directory"
+  | "-bench" : "Run benchmarks matching the regexp" , @any | "-bench=" : "Run benchmarks matching the regexp" ~ @any
+  | "-benchtime" : "Time or iterations per benchmark" , @any | "-benchtime=" : "Time or iterations per benchmark" ~ @any
+  | "-benchmem" : "Print memory allocation statistics for benchmarks"
+  | "-count" : "Run each test and benchmark n times" , @number | "-count=" : "Run each test and benchmark n times" ~ @number
+  | "-cpu" : "GOMAXPROCS values to run with" , @any | "-cpu=" : "GOMAXPROCS values to run with" ~ @any
+  | "-failfast" : "Stop after the first test failure"
+  | "-fullpath" : "Show full file names in error messages"
+  | "-fuzz" : "Fuzz the fuzz test matching the regexp" , @any | "-fuzz=" : "Fuzz the fuzz test matching the regexp" ~ @any
+  | "-fuzztime" : "Time or iterations to fuzz for" , @any | "-fuzztime=" : "Time or iterations to fuzz for" ~ @any
+  | "-fuzzminimizetime" : "Time or iterations per minimization" , @any
+  | "-fuzzminimizetime=" : "Time or iterations per minimization" ~ @any
+  | "-list" : "List tests matching the regexp without running them" , @any | "-list=" : "List tests matching the regexp without running them" ~ @any
+  | "-outputdir" : "Directory for profiles and artifacts" , @directory | "-outputdir=" : "Directory for profiles and artifacts" ~ @directory
+  | "-parallel" : "Maximum number of parallel tests" , @number | "-parallel=" : "Maximum number of parallel tests" ~ @number
+  | "-run" : "Run only tests matching the regexp" , @any | "-run=" : "Run only tests matching the regexp" ~ @any
+  | "-short" : "Tell long-running tests to shorten their run time"
+  | "-shuffle" : "Randomize the test order: off, on or a seed" , @any | "-shuffle=" : "Randomize the test order: off, on or a seed" ~ @any
+  | "-skip" : "Skip tests matching the regexp" , @any | "-skip=" : "Skip tests matching the regexp" ~ @any
+  | "-timeout" : "Panic if the test binary runs longer than this" , @any | "-timeout=" : "Panic if the test binary runs longer than this" ~ @any
+  | "-vet" : "Checks for the go vet run, or off" , @any | "-vet=" : "Checks for the go vet run, or off" ~ @any
+  | "-blockprofile" : "Write a goroutine blocking profile" , @file | "-blockprofile=" : "Write a goroutine blocking profile" ~ @file
+  | "-blockprofilerate" : "Goroutine blocking profile rate" , @number | "-blockprofilerate=" : "Goroutine blocking profile rate" ~ @number
+  | "-coverprofile" : "Write a coverage profile" , @file | "-coverprofile=" : "Write a coverage profile" ~ @file
+  | "-cpuprofile" : "Write a CPU profile" , @file | "-cpuprofile=" : "Write a CPU profile" ~ @file
+  | "-memprofile" : "Write an allocation profile" , @file | "-memprofile=" : "Write an allocation profile" ~ @file
+  | "-memprofilerate" : "Memory allocation profile rate" , @number | "-memprofilerate=" : "Memory allocation profile rate" ~ @number
+  | "-mutexprofile" : "Write a mutex contention profile" , @file | "-mutexprofile=" : "Write a mutex contention profile" ~ @file
+  | "-mutexprofilefraction" : "Sample 1 in n mutex contentions" , @number
+  | "-mutexprofilefraction=" : "Sample 1 in n mutex contentions" ~ @number
+  | "-trace" : "Write an execution trace" , @file | "-trace=" : "Write an execution trace" ~ @file ;
+
+get_option =
+    build_flag
+  | "-t" : "Also add modules needed by tests"
+  | "-u" : "Update dependencies to newer minor or patch releases"
+  | "-u=" : "Update dependencies to newer patch releases" ~ "patch"
+  | "-tool" : "Add a tool line to go.mod for each package" ;
+
+fmt_option =
+    "-n" : "Print the commands that would be executed"
+  | "-x" : "Print the commands as they are executed"
+  | "-mod" : "Module download mode" , mod_mode | "-mod=" : "Module download mode" ~ mod_mode ;
+
+vet_option =
+    build_flag
+  | "-vettool" : "Analysis tool to run instead of vet" , @file | "-vettool=" : "Analysis tool to run instead of vet" ~ @file
+  | "-c" : "Lines of context to show around each problem" , @number | "-c=" : "Lines of context to show around each problem" ~ @number
+  | "-fix" : "Apply the first fix of each diagnostic"
+  | "-diff" : "Print fixes as a unified diff" ;
+
+fix_option =
+    build_flag
+  | "-fixtool" : "Analysis tool to run instead of fix" , @file | "-fixtool=" : "Analysis tool to run instead of fix" ~ @file
+  | "-diff" : "Print fixes as a unified diff" ;
+
+env_option =
+    "-json" : "Print the environment in JSON"
+  | "-changed" : "Print only settings that differ from the defaults"
+  | "-u" : "Unset the named variables in the go env file"
+  | "-w" : "Write NAME=VALUE pairs to the go env file" ;
+
+env_var =
+    "GOPATH" | "GOROOT" | "GOBIN" | "GOOS" | "GOARCH" | "GOCACHE" | "GOMODCACHE" | "GOENV" | "GOFLAGS"
+  | "GOPROXY" | "GOPRIVATE" | "GONOPROXY" | "GONOSUMDB" | "GOSUMDB" | "GOTOOLCHAIN" | "GOWORK" | "GOMOD"
+  | "GOVERSION" | "CGO_ENABLED" | @any ;
+
+list_option =
+    build_flag
+  | "-f" : "Template for each listed package" , @any | "-f=" : "Template for each listed package" ~ @any
+  | "-json=" : "Print only these JSON fields" ~ @any
+  | "-compiled" : "Set CompiledGoFiles to the compiled sources"
+  | "-deps" : "Also list the dependencies"
+  | "-e" : "Report erroneous packages instead of failing"
+  | "-export" : "Set Export to the file with export data"
+  | "-find" : "Find the packages without resolving dependencies"
+  | "-test" : "Also list the test binaries"
+  | "-m" : "List modules instead of packages"
+  | "-u" : "Add information about available upgrades"
+  | "-versions" : "Set the available versions of each module"
+  | "-retracted" : "Report retracted module versions"
+  | "-reuse=" : "Reuse the -m -json output of a previous run" ~ @file ;
+
+clean_option =
+    build_flag
+  | "-i" : "Remove the installed archive or binary"
+  | "-r" : "Clean all dependencies too"
+  | "-cache" : "Remove the entire build cache"
+  | "-testcache" : "Expire all cached test results"
+  | "-modcache" : "Remove the entire module download cache"
+  | "-fuzzcache" : "Remove the fuzz testing cache" ;
+
+generate_option =
+    build_flag
+  | "-run" : "Run only directives matching the regexp" , @any | "-run=" : "Run only directives matching the regexp" ~ @any
+  | "-skip" : "Skip directives matching the regexp" , @any | "-skip=" : "Skip directives matching the regexp" ~ @any ;
+
+doc_option =
+    "-all" : "Show all the documentation for the package"
+  | "-c" : "Respect case when matching symbols"
+  | "-cmd" : "Treat package main like a regular package"
+  | "-ex" : "Include executable examples"
+  | "-http" : "Serve HTML docs over HTTP"
+  | "-short" : "One-line representation for each symbol"
+  | "-src" : "Show the full source code for the symbol"
+  | "-u" : "Show unexported symbols as well" ;
+
+tool_option =
+    "-n" : "Print the command that would be executed"
+  | "-C" : "Change to this directory first" , @directory | "-C=" : "Change to this directory first" ~ @directory
+  | "-modfile=" : "Use an alternate go.mod file" ~ @file
+  | "-overlay=" : "JSON file that overlays build files" ~ @file
+  | "-modcacherw" : "Leave new module cache directories writable" ;
+
+version_option =
+    "-m" : "Print the embedded module version information"
+  | "-v" : "Report unrecognized files"
+  | "-json" : "Print the build information as JSON" ;
+
+mod_command =
+    "download" : "Download modules to the local cache" , { mod_download_option } , { @any }
+  | "edit" : "Edit go.mod from tools or scripts" , { mod_edit_option } , [ @file ]
+  | "graph" : "Print the module requirement graph" , { mod_graph_option }
+  | "init" : "Initialize a new module in the current directory" , [ @any ]
+  | "tidy" : "Add missing and remove unused modules" , { mod_tidy_option }
+  | "vendor" : "Make a vendored copy of dependencies" , { vendor_option }
+  | "verify" : "Verify dependencies have the expected content"
+  | "why" : "Explain why packages or modules are needed" , { "-m" : "Treat the arguments as modules" | "-vendor" : "Exclude tests of dependencies" } , { @any } ;
+
+mod_download_option =
+    "-x" : "Print the commands download executes"
+  | "-json" : "Print a JSON object for each module"
+  | "-reuse=" : "Reuse the -json output of a previous run" ~ @file ;
+
+go_version = "-go=" : "Go language version" ~ @any ;
+toolchain = "-toolchain=" : "Go toolchain to use" ~ @any ;
+godebug = "-godebug=" : "Add a godebug key=value line" ~ @any | "-dropgodebug=" : "Drop godebug lines with this key" ~ @any ;
+edit_output =
+    "-fmt" : "Reformat the file without other changes"
+  | "-print" : "Print the result instead of writing it"
+  | "-json" : "Print the result as JSON instead of writing it" ;
+replace = "-replace=" : "Replace old[@v] with new[@v]" ~ @any | "-dropreplace=" : "Drop a replacement of old[@v]" ~ @any ;
+
+mod_edit_option =
+    edit_output | go_version | toolchain | godebug | replace
+  | "-module=" : "Change the module path" ~ @any
+  | "-require=" : "Add a requirement on path@version" ~ @any | "-droprequire=" : "Drop a requirement on path" ~ @any
+  | "-exclude=" : "Add an exclusion for path@version" ~ @any | "-dropexclude=" : "Drop an exclusion for path@version" ~ @any
+  | "-retract=" : "Add a retraction" ~ @any | "-dropretract=" : "Drop a retraction" ~ @any
+  | "-tool=" : "Add a tool declaration" ~ @any | "-droptool=" : "Drop a tool declaration" ~ @any
+  | "-ignore=" : "Add an ignore declaration" ~ @any | "-dropignore=" : "Drop an ignore declaration" ~ @any ;
+
+mod_graph_option = go_version | "-x" : "Print the commands graph executes" ;
+
+mod_tidy_option =
+    "-e" : "Proceed despite errors"
+  | "-v" : "Print information about removed modules"
+  | "-x" : "Print the commands tidy executes"
+  | "-diff" : "Print the changes as a diff instead of writing them"
+  | go_version
+  | "-compat=" : "Keep checksums needed by this Go version" ~ @any ;
+
+vendor_option =
+    "-e" : "Proceed despite errors"
+  | "-v" : "Print the names of vendored modules and packages"
+  | "-o" : "Create the vendor directory at this path" , @directory | "-o=" : "Create the vendor directory at this path" ~ @directory ;
+
+work_command =
+    "edit" : "Edit go.work from tools or scripts" , { work_edit_option } , [ @file ]
+  | "init" : "Initialize a workspace file" , { @directory }
+  | "sync" : "Sync the workspace build list to its modules"
+  | "use" : "Add modules to the workspace file" , [ "-r" : "Search the directories recursively for modules" ] , { @directory }
+  | "vendor" : "Make a vendored copy of dependencies" , { vendor_option } ;
+
+work_edit_option =
+    edit_output | go_version | toolchain | godebug | replace
+  | "-use=" : "Add a use directive" ~ @directory | "-dropuse=" : "Drop a use directive" ~ @directory ;

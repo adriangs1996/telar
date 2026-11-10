@@ -223,6 +223,9 @@ enum class DeliveryLane : std::uint8_t {
   clipboard,
   layout,
   proxy,
+  // Ahead of cells: a client deciding who gets a key must not see a frame before the state
+  // of the shell that printed it.
+  shell,
   cells,
   agents,
   metrics,
@@ -232,6 +235,8 @@ enum class DeliveryLane : std::uint8_t {
   foreground,
   title,
   progress,
+  git,
+  blocks,
   exit,
   graphics,
   observation,
@@ -268,6 +273,12 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
     return DeliveryLane::title;
   case ServerTag::pane_progress:
     return DeliveryLane::progress;
+  case ServerTag::pane_shell:
+    return DeliveryLane::shell;
+  case ServerTag::pane_git:
+    return DeliveryLane::git;
+  case ServerTag::pane_blocks:
+    return DeliveryLane::blocks;
   case ServerTag::pane_exited:
     return DeliveryLane::exit;
   case ServerTag::history_results:
@@ -305,6 +316,8 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
   case ServerTag::client_command_result:
   case ServerTag::editor_opened:
   case ServerTag::path_results:
+  case ServerTag::completion_words:
+  case ServerTag::command_spec:
   case ServerTag::worktree_registered:
   case ServerTag::limit_list:
   case ServerTag::execution_reply:

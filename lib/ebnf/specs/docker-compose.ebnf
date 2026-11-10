@@ -1,0 +1,416 @@
+(* docker-compose: the standalone Compose binary, checked against `docker-compose --help`
+   and `docker-compose <command> --help` of Compose v5.5, whose commands and options are
+   the ones of `docker compose` (docker.ebnf models the plugin form). The start rule is
+   docker_compose because rule names cannot hold a hyphen; the first rule is the start
+   rule whatever its name.
+
+   Conventions:
+   - Project options (-f, -p, --profile, ...) go before the command.
+   - Options with a value accept `--name value` and `--name=value`.
+   - Service operands come from the compose file in the shell's directory.
+   - exec and run stop reading options at the service; the words after it belong to
+     the command run inside the container.
+   - The commands used less often list their options and accept any word after them.
+   - `opt_*` rules are options several commands share. *)
+
+docker_compose = { compose_global_option } , [ compose_command ] ;
+
+compose_global_option =
+    "--all-resources" : "Include all resources, even those not used by services"
+  | "--ansi" : "Control when to print ANSI control characters ('never'|'always'|'auto')" , ansi_value | "--ansi=" : "Control when to print ANSI control characters ('never'|'always'|'auto')" ~ ansi_value
+  | "--compatibility" : "Run compose in backward compatibility mode"
+  | opt_dry_run
+  | "--env-file" : "Specify an alternate environment file" , @file | "--env-file=" : "Specify an alternate environment file" ~ @file
+  | "-f" : "Compose configuration files" , @file | "--file" : "Compose configuration files" , @file | "--file=" : "Compose configuration files" ~ @file
+  | "--parallel" : "Control max parallelism, -1 for unlimited" , @any | "--parallel=" : "Control max parallelism, -1 for unlimited" ~ @any
+  | "--profile" : "Specify a profile to enable" , @any | "--profile=" : "Specify a profile to enable" ~ @any
+  | "--progress" : "Set type of progress output (auto, tty, plain, json, quiet)" , progress_value | "--progress=" : "Set type of progress output (auto, tty, plain, json, quiet)" ~ progress_value
+  | "--project-directory" : "Specify an alternate working directory" , @directory | "--project-directory=" : "Specify an alternate working directory" ~ @directory
+  | "-p" : "Project name" , @any | "--project-name" : "Project name" , @any | "--project-name=" : "Project name" ~ @any ;
+
+compose_bridge_command =
+    "convert" : "Convert compose files to Kubernetes manifests, Helm charts or others" , { @any } ;
+
+compose_attach_option =
+    "--detach-keys" : "Override the key sequence for detaching from a container"
+  | opt_dry_run
+  | opt_index
+  | "--no-stdin" : "Do not attach STDIN"
+  | "--sig-proxy" : "Proxy all received signals to the process" ;
+
+compose_build_option =
+    "--build-arg" : "Set build-time variables for services" , @any | "--build-arg=" : "Set build-time variables for services" ~ @any
+  | "--builder" : "Set builder to use" , @any | "--builder=" : "Set builder to use" ~ @any
+  | "--check" : "Check build configuration"
+  | opt_dry_run
+  | "-m" : "Set memory limit for the build container" , @any | "--memory" : "Set memory limit for the build container" , @any | "--memory=" : "Set memory limit for the build container" ~ @any
+  | "--no-cache" : "Do not use cache when building the image"
+  | "--print" : "Print equivalent bake file"
+  | "--provenance" : "Add a provenance attestation" , @any | "--provenance=" : "Add a provenance attestation" ~ @any
+  | "--pull" : "Always attempt to pull a newer version of the image"
+  | "--push" : "Push service images"
+  | "-q" : "Suppress the build output" | "--quiet" : "Suppress the build output"
+  | "--sbom" : "Add a SBOM attestation" , @any | "--sbom=" : "Add a SBOM attestation" ~ @any
+  | "--ssh" : "Set SSH authentications used when building service images" , @any | "--ssh=" : "Set SSH authentications used when building service images" ~ @any
+  | "--with-dependencies" : "Also build dependencies (transitively)" ;
+
+compose_commit_option =
+    "-a" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')" | "--author" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')"
+  | "-c" : "Apply Dockerfile instruction to the created image" | "--change" : "Apply Dockerfile instruction to the created image"
+  | opt_dry_run
+  | opt_index
+  | "-m" : "Commit message" | "--message" : "Commit message"
+  | "-p" : "Pause container during commit" | "--pause" : "Pause container during commit" ;
+
+compose_config_option =
+    opt_dry_run
+  | "--environment" : "Print environment used for interpolation"
+  | opt_format
+  | "--hash" : "Print the service config hash, one per line" , @any | "--hash=" : "Print the service config hash, one per line" ~ @any
+  | "--images" : "Print the image names, one per line"
+  | "--lock-image-digests" : "Produces an override file with image digests"
+  | "--models" : "Print the model names, one per line"
+  | "--networks" : "Print the network names, one per line"
+  | "--no-consistency" : "Don't check model consistency, which may produce invalid output"
+  | "--no-env-resolution" : "Don't resolve service env files"
+  | "--no-interpolate" : "Don't interpolate environment variables"
+  | "--no-normalize" : "Don't normalize compose model"
+  | "--no-path-resolution" : "Don't resolve file paths"
+  | "-o" : "Save to file" , @file | "--output" : "Save to file" , @file | "--output=" : "Save to file" ~ @file
+  | "--profiles" : "Print the profile names, one per line"
+  | "-q" : "Only validate the configuration, don't print anything" | "--quiet" : "Only validate the configuration, don't print anything"
+  | opt_resolve_image_digests
+  | "--services" : "Print the service names, one per line"
+  | "--variables" : "Print model variables and default values"
+  | "--volumes" : "Print the volume names, one per line" ;
+
+compose_cp_option =
+    "--all" : "Include containers created by the run command"
+  | "-a" : "Archive mode (copy all uid/gid information)" | "--archive" : "Archive mode (copy all uid/gid information)"
+  | opt_dry_run
+  | "-L" : "Always follow symbol link in SRC_PATH" | "--follow-link" : "Always follow symbol link in SRC_PATH"
+  | opt_index2 ;
+
+compose_create_option =
+    opt_build
+  | opt_dry_run
+  | opt_force_recreate
+  | opt_no_build
+  | opt_no_recreate
+  | "--pull" : "Pull image before running ('always'|'missing'|'never'|'build')" , pull_value | "--pull=" : "Pull image before running ('always'|'missing'|'never'|'build')" ~ pull_value
+  | opt_quiet_pull
+  | opt_remove_orphans
+  | opt_scale
+  | opt_yes ;
+
+compose_down_option =
+    opt_dry_run
+  | opt_remove_orphans
+  | "--rmi" : "Remove images used by services" , rmi_value | "--rmi=" : "Remove images used by services" ~ rmi_value
+  | opt_timeout
+  | "-v" : "Remove the Compose file's named volumes and anonymous volumes" | "--volumes" : "Remove the Compose file's named volumes and anonymous volumes" ;
+
+compose_events_option =
+    opt_dry_run
+  | "--json" : "Output events as a stream of json objects"
+  | "--since" : "Show all events created since timestamp"
+  | "--until" : "Stream events until this timestamp" ;
+
+compose_exec_option =
+    "-d" : "Detached mode: Run command in the background" | "--detach" : "Detached mode: Run command in the background"
+  | opt_dry_run
+  | opt_env
+  | opt_index2
+  | opt_no_tty
+  | "--privileged" : "Give extended privileges to the process"
+  | "-u" : "Run the command as this user" , @any | "--user" : "Run the command as this user" , @any | "--user=" : "Run the command as this user" ~ @any
+  | "-w" : "Path to workdir directory for this command" , @any | "--workdir" : "Path to workdir directory for this command" , @any | "--workdir=" : "Path to workdir directory for this command" ~ @any ;
+
+compose_export_option =
+    opt_dry_run
+  | opt_index
+  | "-o" : "Write to a file, instead of STDOUT" | "--output" : "Write to a file, instead of STDOUT" ;
+
+compose_images_option =
+    opt_dry_run
+  | opt_format
+  | opt_quiet ;
+
+compose_kill_option =
+    opt_dry_run
+  | opt_remove_orphans
+  | "-s" : "SIGNAL to send to the container" , @any | "--signal" : "SIGNAL to send to the container" , @any | "--signal=" : "SIGNAL to send to the container" ~ @any ;
+
+compose_logs_option =
+    opt_dry_run
+  | "-f" : "Follow log output" | "--follow" : "Follow log output"
+  | opt_index2
+  | opt_no_color
+  | opt_no_log_prefix
+  | "--since" : "Show logs since a timestamp or a relative time such as 42m" , @any | "--since=" : "Show logs since a timestamp or a relative time such as 42m" ~ @any
+  | "-n" : "Number of lines to show from the end of the logs for each container" , @any | "--tail" : "Number of lines to show from the end of the logs for each container" , @any | "--tail=" : "Number of lines to show from the end of the logs for each container" ~ @any
+  | "-t" : "Show timestamps" | "--timestamps" : "Show timestamps"
+  | "--until" : "Show logs before a timestamp or a relative time such as 42m" , @any | "--until=" : "Show logs before a timestamp or a relative time such as 42m" ~ @any ;
+
+compose_ls_option =
+    "-a" : "Show all stopped Compose projects" | "--all" : "Show all stopped Compose projects"
+  | opt_dry_run
+  | "--filter" : "Filter output based on conditions provided" , @any | "--filter=" : "Filter output based on conditions provided" ~ @any
+  | opt_format
+  | "-q" : "Only display project names" | "--quiet" : "Only display project names" ;
+
+compose_pause_option = opt_dry_run ;
+
+compose_port_option =
+    opt_dry_run
+  | opt_index
+  | "--protocol" : "Tcp or udp" ;
+
+compose_ps_option =
+    "-a" : "Show all stopped containers (including those created by the run command)" | "--all" : "Show all stopped containers (including those created by the run command)"
+  | opt_dry_run
+  | "--filter" : "Filter services by a property (supported filters: status)" , @any | "--filter=" : "Filter services by a property (supported filters: status)" ~ @any
+  | "--format" : "Format output: 'table', 'table TEMPLATE', 'json' or a Go template" , format | "--format=" : "Format output: 'table', 'table TEMPLATE', 'json' or a Go template" ~ format
+  | "--no-trunc" : "Don't truncate output"
+  | "--orphans" : "Include orphaned services (not declared by project)"
+  | opt_quiet
+  | "--services" : "Display services"
+  | "--status" : "Filter services by status" , @any | "--status=" : "Filter services by status" ~ @any ;
+
+compose_publish_option =
+    "--app" : "Published compose application (includes referenced images)"
+  | opt_dry_run
+  | "--oci-version" : "OCI image/artifact specification version"
+  | opt_resolve_image_digests
+  | "--with-env" : "Include environment variables in the published OCI artifact"
+  | "-y" : "Assume 'yes' as answer to all prompts" | "--yes" : "Assume 'yes' as answer to all prompts" ;
+
+compose_pull_option =
+    opt_dry_run
+  | "--ignore-buildable" : "Ignore images that can be built"
+  | "--ignore-pull-failures" : "Pull what it can and ignores images with pull failures"
+  | "--include-deps" : "Also pull services declared as dependencies"
+  | "--policy" : "Apply pull policy ('missing'|'always')" , policy_value | "--policy=" : "Apply pull policy ('missing'|'always')" ~ policy_value
+  | "-q" : "Pull without printing progress information" | "--quiet" : "Pull without printing progress information" ;
+
+compose_push_option =
+    opt_dry_run
+  | "--ignore-push-failures" : "Push what it can and ignores images with push failures"
+  | "--include-deps" : "Also push images of services declared as dependencies"
+  | "-q" : "Push without printing progress information" | "--quiet" : "Push without printing progress information" ;
+
+compose_restart_option =
+    opt_dry_run
+  | "--no-deps" : "Don't restart dependent services"
+  | opt_timeout ;
+
+compose_rm_option =
+    opt_dry_run
+  | "-f" : "Don't ask to confirm removal" | "--force" : "Don't ask to confirm removal"
+  | "-s" : "Stop the containers, if required, before removing" | "--stop" : "Stop the containers, if required, before removing"
+  | "-v" : "Remove any anonymous volumes attached to containers" | "--volumes" : "Remove any anonymous volumes attached to containers" ;
+
+compose_run_option =
+    "--build" : "Build image before starting container"
+  | "--cap-add" : "Add Linux capabilities" , @any | "--cap-add=" : "Add Linux capabilities" ~ @any
+  | "--cap-drop" : "Drop Linux capabilities" , @any | "--cap-drop=" : "Drop Linux capabilities" ~ @any
+  | "-d" : "Run container in background and print container ID" | "--detach" : "Run container in background and print container ID"
+  | opt_dry_run
+  | "--entrypoint" : "Override the entrypoint of the image" , @any | "--entrypoint=" : "Override the entrypoint of the image" ~ @any
+  | opt_env
+  | "--env-from-file" : "Set environment variables from file" , @file | "--env-from-file=" : "Set environment variables from file" ~ @file
+  | "-i" : "Keep STDIN open even if not attached" | "--interactive" : "Keep STDIN open even if not attached"
+  | "-l" : "Add or override a label" , @any | "--label" : "Add or override a label" , @any | "--label=" : "Add or override a label" ~ @any
+  | "--name" : "Assign a name to the container" , @any | "--name=" : "Assign a name to the container" ~ @any
+  | opt_no_deps
+  | opt_no_tty
+  | "-p" : "Publish a container's port(s) to the host" , @any | "--publish" : "Publish a container's port(s) to the host" , @any | "--publish=" : "Publish a container's port(s) to the host" ~ @any
+  | opt_pull
+  | "-q" : "Don't print anything to STDOUT" | "--quiet" : "Don't print anything to STDOUT"
+  | "--quiet-build" : "Suppress progress output from the build process"
+  | opt_quiet_pull
+  | opt_remove_orphans
+  | "--rm" : "Automatically remove the container when it exits"
+  | "-P" : "Run command with all service's ports enabled and mapped to the host" | "--service-ports" : "Run command with all service's ports enabled and mapped to the host"
+  | "--use-aliases" : "Use the service's network aliases in the networks it joins"
+  | "-u" : "Run as specified username or uid" , @any | "--user" : "Run as specified username or uid" , @any | "--user=" : "Run as specified username or uid" ~ @any
+  | "-v" : "Bind mount a volume" , @any | "--volume" : "Bind mount a volume" , @any | "--volume=" : "Bind mount a volume" ~ @any
+  | "-w" : "Working directory inside the container" , @any | "--workdir" : "Working directory inside the container" , @any | "--workdir=" : "Working directory inside the container" ~ @any ;
+
+compose_scale_option =
+    opt_dry_run
+  | opt_no_deps ;
+
+compose_start_option =
+    opt_dry_run
+  | opt_wait
+  | opt_wait_timeout ;
+
+compose_stats_option =
+    "-a" : "Show all containers" | "--all" : "Show all containers"
+  | opt_dry_run
+  | opt_format2
+  | "--no-stream" : "Disable streaming stats and only pull the first result"
+  | "--no-trunc" : "Do not truncate output" ;
+
+compose_stop_option =
+    opt_dry_run
+  | opt_timeout ;
+
+compose_up_option =
+    "--abort-on-container-exit" : "Stops all containers if any container was stopped"
+  | "--abort-on-container-failure" : "Stops all containers if any container exited with failure"
+  | "--always-recreate-deps" : "Recreate dependent containers"
+  | "--attach" : "Restrict attaching to the specified services" , @any | "--attach=" : "Restrict attaching to the specified services" ~ @any
+  | "--attach-dependencies" : "Automatically attach to log output of dependent services"
+  | opt_build
+  | "-d" : "Detached mode: Run containers in the background" | "--detach" : "Detached mode: Run containers in the background"
+  | opt_dry_run
+  | "--exit-code-from" : "Return the exit code of the selected service container" , @any | "--exit-code-from=" : "Return the exit code of the selected service container" ~ @any
+  | opt_force_recreate
+  | "--menu" : "Enable interactive shortcuts when running attached"
+  | "--no-attach" : "Do not attach (stream logs) to the specified services" , @any | "--no-attach=" : "Do not attach (stream logs) to the specified services" ~ @any
+  | opt_no_build
+  | opt_no_color
+  | opt_no_deps
+  | opt_no_log_prefix
+  | opt_no_recreate
+  | "--no-start" : "Don't start the services after creating them"
+  | opt_pull
+  | "--quiet-build" : "Suppress the build output"
+  | opt_quiet_pull
+  | opt_remove_orphans
+  | "-V" : "Recreate anonymous volumes instead of reusing the previous ones" | "--renew-anon-volumes" : "Recreate anonymous volumes instead of reusing the previous ones"
+  | opt_scale
+  | "-t" : "Timeout in seconds for container shutdown" , @any | "--timeout" : "Timeout in seconds for container shutdown" , @any | "--timeout=" : "Timeout in seconds for container shutdown" ~ @any
+  | "--timestamps" : "Show timestamps"
+  | opt_wait
+  | opt_wait_timeout
+  | "-w" : "Watch source code and rebuild/refresh containers when files are updated" | "--watch" : "Watch source code and rebuild/refresh containers when files are updated"
+  | opt_yes ;
+
+compose_version_option =
+    opt_dry_run
+  | "-f" : "Format the output" , format | "--format" : "Format the output" , format | "--format=" : "Format the output" ~ format
+  | "--short" : "Shows only Compose's version number" ;
+
+compose_volumes_option =
+    opt_dry_run
+  | opt_format2
+  | "-q" : "Only display volume names" | "--quiet" : "Only display volume names" ;
+
+compose_wait_option =
+    "--down-project" : "Drops project when the first container stops"
+  | opt_dry_run ;
+
+compose_watch_option =
+    opt_dry_run
+  | "--no-up" : "Do not build & start services before watching"
+  | "--prune" : "Prune dangling images on rebuild"
+  | "--quiet" : "Hide build output" ;
+
+compose_command =
+    "bridge" : "Convert compose files into another model" , [ compose_bridge_command ]
+  | "attach" : "Attach local stdin, stdout and stderr to a service's container" , { compose_attach_option | @compose_service | @any }
+  | "build" : "Build or rebuild services" , { compose_build_option | @compose_service }
+  | "commit" : "Create a new image from a service container's changes" , { compose_commit_option | @compose_service | @any }
+  | "config" : "Parse, resolve and render compose file in canonical format" , { compose_config_option | @compose_service }
+  | "cp" : "Copy files between a service container and the local filesystem" , { compose_cp_option | @file | "-" : "Stream a tar archive through stdin or stdout" }
+  | "create" : "Creates containers for a service" , { compose_create_option | @compose_service }
+  | "down" : "Stop and remove containers, networks" , { compose_down_option | @compose_service }
+  | "events" : "Receive real time events from containers" , { compose_events_option | @compose_service | @any }
+  | "exec" : "Execute a command in a running container" , { compose_exec_option } , [ @compose_service , { @any } ]
+  | "export" : "Export a service container's filesystem as a tar archive" , { compose_export_option | @compose_service | @any }
+  | "images" : "List images used by the created containers" , { compose_images_option | @compose_service }
+  | "kill" : "Force stop service containers" , { compose_kill_option | @compose_service }
+  | "logs" : "View output from containers" , { compose_logs_option | @compose_service }
+  | "ls" : "List running compose projects" , { compose_ls_option }
+  | "pause" : "Pause services" , { compose_pause_option | @compose_service | @any }
+  | "port" : "Print the public port for a port binding" , { compose_port_option | @compose_service | @any }
+  | "ps" : "List containers" , { compose_ps_option | @compose_service }
+  | "publish" : "Publish compose application" , { compose_publish_option | @compose_service | @any }
+  | "pull" : "Pull service images" , { compose_pull_option | @compose_service }
+  | "push" : "Push service images" , { compose_push_option | @compose_service }
+  | "restart" : "Restart service containers" , { compose_restart_option | @compose_service }
+  | "rm" : "Removes stopped service containers" , { compose_rm_option | @compose_service }
+  | "run" : "Run a one-off command on a service" , { compose_run_option } , [ @compose_service , { @any } ]
+  | "scale" : "Scale services" , { compose_scale_option | @compose_service | @any }
+  | "start" : "Start services" , { compose_start_option | @compose_service }
+  | "stats" : "Display a live stream of container(s) resource usage statistics" , { compose_stats_option | @compose_service | @any }
+  | "stop" : "Stop services" , { compose_stop_option | @compose_service }
+  | "top" : "Display the running processes" , { compose_pause_option | @compose_service }
+  | "unpause" : "Unpause services" , { compose_pause_option | @compose_service | @any }
+  | "up" : "Create and start containers" , { compose_up_option | @compose_service }
+  | "version" : "Show the Docker Compose version information" , { compose_version_option }
+  | "volumes" : "List volumes" , { compose_volumes_option | @compose_service | @any }
+  | "wait" : "Block until containers of all (or specified) services stop" , { compose_wait_option | @compose_service | @any }
+  | "watch" : "Rebuild or refresh service containers when their files change" , { compose_watch_option | @compose_service } ;
+
+opt_dry_run = "--dry-run" : "Execute command in dry run mode" ;
+
+opt_index = "--index" : "Index of the container if service has multiple replicas" ;
+
+opt_format = "--format" : "Format the output" , format | "--format=" : "Format the output" ~ format ;
+
+opt_resolve_image_digests = "--resolve-image-digests" : "Pin image tags to digests" ;
+
+opt_index2 =
+    "--index" : "Index of the container if service has multiple replicas" , @any | "--index=" : "Index of the container if service has multiple replicas" ~ @any ;
+
+opt_build = "--build" : "Build images before starting containers" ;
+
+opt_force_recreate = "--force-recreate" : "Recreate containers even if their configuration did not change" ;
+
+opt_no_build = "--no-build" : "Don't build an image, even if it's policy" ;
+
+opt_no_recreate = "--no-recreate" : "If containers already exist, don't recreate them" ;
+
+opt_quiet_pull = "--quiet-pull" : "Pull without printing progress information" ;
+
+opt_remove_orphans = "--remove-orphans" : "Remove containers for services not defined in the Compose file" ;
+
+opt_scale =
+    "--scale" : "Scale SERVICE to NUM instances" , @any | "--scale=" : "Scale SERVICE to NUM instances" ~ @any ;
+
+opt_yes =
+    "-y" : "Assume 'yes' as answer to all prompts and run non-interactively" | "--yes" : "Assume 'yes' as answer to all prompts and run non-interactively" ;
+
+opt_timeout =
+    "-t" : "Specify a shutdown timeout in seconds" , @any | "--timeout" : "Specify a shutdown timeout in seconds" , @any | "--timeout=" : "Specify a shutdown timeout in seconds" ~ @any ;
+
+opt_env =
+    "-e" : "Set environment variables" , @any | "--env" : "Set environment variables" , @any | "--env=" : "Set environment variables" ~ @any ;
+
+opt_no_tty = "-T" : "Disable pseudo-TTY allocation" | "--no-tty" : "Disable pseudo-TTY allocation" ;
+
+opt_quiet = "-q" : "Only display IDs" | "--quiet" : "Only display IDs" ;
+
+opt_no_color = "--no-color" : "Produce monochrome output" ;
+
+opt_no_log_prefix = "--no-log-prefix" : "Don't print prefix in logs" ;
+
+opt_no_deps = "--no-deps" : "Don't start linked services" ;
+
+opt_pull =
+    "--pull" : "Pull image before running ('always'|'missing'|'never')" , pull_value2 | "--pull=" : "Pull image before running ('always'|'missing'|'never')" ~ pull_value2 ;
+
+opt_wait = "--wait" : "Wait for services to be running|healthy" ;
+
+opt_wait_timeout =
+    "--wait-timeout" : "Maximum seconds to wait for the project to be running or healthy" , @any | "--wait-timeout=" : "Maximum seconds to wait for the project to be running or healthy" ~ @any ;
+
+opt_format2 = "--format" : "Format output: 'table', 'table TEMPLATE', 'json' or a Go template" ;
+
+format = "table" : "Table with column headers" | "json" : "One JSON object per line" | @any ;
+
+ansi_value = "never" | "always" | "auto" ;
+
+progress_value = "auto" | "tty" | "plain" | "json" | "quiet" ;
+
+pull_value = "always" | "missing" | "never" | "build" ;
+
+rmi_value = "local" | "all" ;
+
+policy_value = "missing" | "always" ;
+
+pull_value2 = "always" | "missing" | "never" ;

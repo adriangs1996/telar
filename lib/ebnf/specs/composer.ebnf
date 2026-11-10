@@ -1,0 +1,322 @@
+(* composer: commands and options checked against `composer list` and
+   `composer help <command>` of Composer 2.11.1 (PHP 8.5, official composer:2
+   Docker image; composer is not installed on the development machines).
+
+   Symfony Console rules: options may appear anywhere after the command; a
+   required value is `--name value` or `--name=value`, `-x value` or `-xvalue`;
+   an optional value only exists as `--name=value`. Package names, constraints
+   and script arguments are free text, so commands that take them accept any
+   word. Scripts defined in composer.json also run as commands, so an unknown
+   command is accepted too. *)
+
+composer = { global_option } , [ command ] ;
+
+global_option =
+    "-h" : "Show help for the command" | "--help" : "Show help for the command"
+  | "-q" : "Do not output any message" | "--quiet" : "Do not output any message"
+  | "-V" : "Print the Composer version" | "--version" : "Print the Composer version"
+  | "--ansi" : "Force ANSI output" | "--no-ansi" : "Disable ANSI output"
+  | "-n" : "Do not ask any interactive question" | "--no-interaction" : "Do not ask any interactive question"
+  | "--profile" : "Show timing and memory usage"
+  | "--no-plugins" : "Disable plugins"
+  | "--no-scripts" : "Skip the scripts defined in composer.json"
+  | "-d" : "Use this working directory" , @directory
+  | "--working-dir" : "Use this working directory" , @directory | "--working-dir=" : "Use this working directory" ~ @directory
+  | "--no-cache" : "Do not use the cache"
+  | "-v" : "Increase verbosity" | "-vv" : "More verbose output" | "-vvv" : "Debug output" | "--verbose" : "Increase verbosity" ;
+
+command =
+    ( "install" : "Install the dependencies from composer.lock" | "i" : "Install the dependencies from composer.lock" ) , { install_option | global_option }
+  | ( "update" : "Update the dependencies and composer.lock" | "u" : "Update the dependencies and composer.lock"
+    | "upgrade" : "Update the dependencies and composer.lock" ) , { update_option | global_option | @any }
+  | ( "require" : "Add packages to composer.json and install them" | "r" : "Add packages to composer.json and install them" ) , { require_option | global_option | @any }
+  | ( "remove" : "Remove packages from composer.json" | "rm" : "Remove packages from composer.json"
+    | "uninstall" : "Remove packages from composer.json" ) , { remove_option | global_option | @any }
+  | ( "dump-autoload" : "Dump the autoloader" | "dumpautoload" : "Dump the autoloader" ) , { dump_option | global_option }
+  | "create-project" : "Create a project from a package" , { create_option | global_option | @any }
+  | ( "show" : "Show information about packages" | "info" : "Show information about packages" ) , { show_option | global_option | @any }
+  | "outdated" : "List installed packages with updates available" , { outdated_option | global_option | @any }
+  | "validate" : "Validate composer.json and composer.lock" , { validate_option | global_option | @file }
+  | ( "run-script" : "Run a script defined in composer.json" | "run" : "Run a script defined in composer.json" ) , { run_option | global_option } , [ @any , { @any } ]
+  | "exec" : "Run a vendored binary" , { exec_option | global_option } , [ @any , { @any } ]
+  | "init" : "Create a basic composer.json" , { init_option | global_option }
+  | "audit" : "Check installed packages for security advisories" , { audit_option | global_option }
+  | ( "depends" : "Show which packages require a package" | "why" : "Show which packages require a package" ) , { why_option | global_option | @any }
+  | ( "prohibits" : "Show which packages prevent installing a package" | "why-not" : "Show which packages prevent installing a package" ) , { why_option | global_option | @any }
+  | "config" : "Read or set configuration" , { config_option | global_option | @any }
+  | "global" : "Run a command in the global Composer directory" , command
+  | "search" : "Search for packages" , { search_option | global_option | @any }
+  | "bump" : "Raise the lower bounds in composer.json to the installed versions" , { bump_option | global_option | @any }
+  | "reinstall" : "Uninstall and reinstall packages" , { reinstall_option | global_option | @any }
+  | "check-platform-reqs" : "Check that platform requirements are met" , { platform_option | global_option }
+  | "licenses" : "Show the licenses of dependencies" , { licenses_option | global_option }
+  | "fund" : "Show how to fund dependencies" , { format | global_option }
+  | "suggests" : "Show package suggestions" , { suggests_option | global_option | @any }
+  | "status" : "List locally modified packages" , { global_option }
+  | "archive" : "Create an archive of this package" , { archive_option | global_option | @any }
+  | ( "browse" : "Open the repository or homepage of a package" | "home" : "Open the repository or homepage of a package" ) , { browse_option | global_option | @any }
+  | ( "self-update" : "Update composer.phar" | "selfupdate" : "Update composer.phar" ) , { self_update_option | global_option | @any }
+  | ( "clear-cache" : "Clear the package cache" | "clearcache" : "Clear the package cache" | "cc" : "Clear the package cache" ) , { "--gc" : "Only run garbage collection" | global_option }
+  | "diagnose" : "Diagnose common problems" , { global_option }
+  | ( "repository" : "Manage repositories" | "repo" : "Manage repositories" ) , { global_option | @any }
+  | "policy" : "Manage dependency policies and their sources" , { global_option | @any }
+  | "about" : "Show information about Composer" , { global_option }
+  | "completion" : "Dump the shell completion script" , { global_option } , [ "bash" : "The shell type" | @any ]
+  | "help" : "Show help for a command" , { global_option | @any }
+  | "list" : "List the commands" , { global_option | @any }
+  | @any : "A script defined in composer.json" , { @any } ;
+
+(* Option groups shared by several commands. *)
+
+dry_run = "--dry-run" : "Show the operations without running them" ;
+dev = "--dev" : "Include require-dev packages" ;
+no_dev = "--no-dev" : "Leave out require-dev packages" ;
+no_progress = "--no-progress" : "Do not show download progress" ;
+no_install = "--no-install" : "Skip the install step" ;
+no_audit = "--no-audit" : "Skip the audit step" ;
+prefer =
+    "--prefer-source" : "Install from package sources" | "--prefer-dist" : "Install from package dists"
+  | "--prefer-install" : "Install from dist, source or auto" , prefer_kind
+  | "--prefer-install=" : "Install from dist, source or auto" ~ prefer_kind ;
+prefer_kind = "dist" | "source" | "auto" ;
+audit_format =
+    "--audit-format" : "Audit output format" , audit_kind
+  | "--audit-format=" : "Audit output format" ~ audit_kind ;
+audit_kind = "table" | "plain" | "json" | "summary" ;
+blocking =
+    "--no-blocking" : "Disable all policy blocking"
+  | "--no-security-blocking" : "Deprecated, use --no-blocking"
+  | "--no-cooldown" : "Disable the cooldown policy" ;
+platform_reqs =
+    "--ignore-platform-req" : "Ignore this platform requirement" , @any
+  | "--ignore-platform-req=" : "Ignore this platform requirement" ~ @any
+  | "--ignore-platform-reqs" : "Ignore all platform requirements" ;
+autoloader =
+    "-o" : "Optimize the autoloader" | "--optimize-autoloader" : "Optimize the autoloader"
+  | "-a" : "Autoload from the classmap only" | "--classmap-authoritative" : "Autoload from the classmap only"
+  | "--apcu-autoloader" : "Cache classes in APCu"
+  | "--apcu-autoloader-prefix" : "Prefix for the APCu autoloader cache" , @any
+  | "--apcu-autoloader-prefix=" : "Prefix for the APCu autoloader cache" ~ @any ;
+with_deps =
+    "-w" : "Also update dependencies, except root requirements"
+  | "--update-with-dependencies" : "Also update dependencies, except root requirements"
+  | "-W" : "Also update all dependencies" | "--update-with-all-dependencies" : "Also update all dependencies"
+  | "--update-no-dev" : "Update with --no-dev"
+  | "-m" : "Only make necessary changes to dependencies" | "--minimal-changes" : "Only make necessary changes to dependencies" ;
+stability = "--prefer-stable" : "Prefer stable versions" | "--prefer-lowest" : "Prefer the lowest versions" ;
+format =
+    "-f" : "Output format" , @any | "--format" : "Output format" , @any | "--format=" : "Output format" ~ @any ;
+locked = "--locked" : "Use the lock file" ;
+
+install_option =
+    prefer | dry_run | dev | no_dev | no_progress | no_install | audit_format | blocking | platform_reqs | autoloader
+  | "--download-only" : "Download the packages without installing them"
+  | "--no-suggest" : "Deprecated, has no effect"
+  | "--no-autoloader" : "Skip autoloader generation"
+  | "--audit" : "Run an audit after installing"
+  | "--strict-psr-autoloader" : "Fail on PSR mapping errors" ;
+
+update_option =
+    prefer | dry_run | dev | no_dev | no_progress | no_install | no_audit | audit_format | blocking | platform_reqs
+  | autoloader | stability
+  | "--with" : "Temporary version constraint, foo/bar:1.0" , @any | "--with=" : "Temporary version constraint, foo/bar:1.0" ~ @any
+  | "--lock" : "Only update the lock file hash"
+  | "--no-autoloader" : "Skip autoloader generation"
+  | "--no-suggest" : "Deprecated, has no effect"
+  | "-w" : "Also update dependencies, except root requirements"
+  | "--with-dependencies" : "Also update dependencies, except root requirements"
+  | "-W" : "Also update all dependencies" | "--with-all-dependencies" : "Also update all dependencies"
+  | "--strict-psr-autoloader" : "Fail on PSR mapping errors"
+  | "-m" : "Only make necessary changes" | "--minimal-changes" : "Only make necessary changes"
+  | "--patch-only" : "Only allow patch updates"
+  | "-i" : "Choose the packages interactively" | "--interactive" : "Choose the packages interactively"
+  | "--root-reqs" : "Only update first degree dependencies"
+  | "--bump-after-update" : "Run bump after updating"
+  | "--bump-after-update=" : "Run bump after updating" ~ @any ;
+
+require_option =
+    prefer | dry_run | no_progress | no_install | no_audit | audit_format | blocking | platform_reqs | autoloader
+  | with_deps | stability
+  | "--dev" : "Add the packages to require-dev"
+  | "--fixed" : "Write the exact resolved version"
+  | "--no-suggest" : "Deprecated, has no effect"
+  | "--no-update" : "Do not update the dependencies"
+  | "--with-dependencies" : "Alias of --update-with-dependencies"
+  | "--with-all-dependencies" : "Alias of --update-with-all-dependencies"
+  | "--sort-packages" : "Sort the packages in composer.json" ;
+
+remove_option =
+    dry_run | no_progress | no_install | no_audit | audit_format | blocking | platform_reqs | autoloader | with_deps
+  | "--dev" : "Remove the packages from require-dev"
+  | "--no-update" : "Do not update the dependencies"
+  | "--with-all-dependencies" : "Alias of --update-with-all-dependencies"
+  | "--no-update-with-dependencies" : "Do not update inherited dependencies"
+  | "--unused" : "Remove locked packages nothing requires" ;
+
+dump_option =
+    dry_run | dev | no_dev | platform_reqs
+  | "-o" : "Generate a classmap for PSR-0 and PSR-4" | "--optimize" : "Generate a classmap for PSR-0 and PSR-4"
+  | "-a" : "Autoload from the classmap only" | "--classmap-authoritative" : "Autoload from the classmap only"
+  | "--apcu" : "Cache classes in APCu"
+  | "--apcu-prefix" : "Prefix for the APCu cache" , @any | "--apcu-prefix=" : "Prefix for the APCu cache" ~ @any
+  | "--strict-psr" : "Fail on PSR mapping errors"
+  | "--strict-ambiguous" : "Fail when a class is found in several files" ;
+
+create_option =
+    prefer | dev | no_dev | no_progress | no_install | no_audit | audit_format | blocking | platform_reqs
+  | "-s" : "Minimum stability" , stability_kind | "--stability" : "Minimum stability" , stability_kind
+  | "--stability=" : "Minimum stability" ~ stability_kind
+  | "--repository" : "Look the package up in this repository" , @any
+  | "--repository=" : "Look the package up in this repository" ~ @any
+  | "--repository-url" : "Deprecated, use --repository" , @any | "--repository-url=" : "Deprecated, use --repository" ~ @any
+  | "--add-repository" : "Add the repository to composer.json"
+  | "--require" : "Require another package after installing" , @any
+  | "--require=" : "Require another package after installing" ~ @any
+  | "--no-custom-installers" : "Deprecated, use --no-plugins"
+  | "--no-secure-http" : "Disable secure-http for the root package"
+  | "--keep-vcs" : "Keep the VCS metadata" | "--remove-vcs" : "Delete the VCS metadata without asking"
+  | "--ask" : "Ask for the project directory" ;
+stability_kind = "stable" | "RC" | "beta" | "alpha" | "dev" ;
+
+show_option =
+    no_dev | platform_reqs | locked | format
+  | "--all" : "List all packages"
+  | "-i" : "List installed packages only" | "--installed" : "List installed packages only"
+  | "-p" : "List platform packages only" | "--platform" : "List platform packages only"
+  | "-a" : "List available packages only" | "--available" : "List available packages only"
+  | "-s" : "Show the root package" | "--self" : "Show the root package"
+  | "-N" : "List package names only" | "--name-only" : "List package names only"
+  | "-P" : "Show package paths" | "--path" : "Show package paths"
+  | "-t" : "List dependencies as a tree" | "--tree" : "List dependencies as a tree"
+  | "-l" : "Show the latest version" | "--latest" : "Show the latest version"
+  | "-o" : "Show outdated packages only" | "--outdated" : "Show outdated packages only"
+  | "--ignore" : "Ignore these packages" , @any | "--ignore=" : "Ignore these packages" ~ @any
+  | "-M" : "Only major updates" | "--major-only" : "Only major updates"
+  | "-m" : "Only minor updates" | "--minor-only" : "Only minor updates"
+  | "--patch-only" : "Only patch updates"
+  | "-A" : "Show ages, oldest first" | "--sort-by-age" : "Show ages, oldest first"
+  | "--cooldown-period" : "Override the cooldown period" , @any | "--cooldown-period=" : "Override the cooldown period" ~ @any
+  | "-D" : "Only direct dependencies" | "--direct" : "Only direct dependencies"
+  | "--strict" : "Fail when packages are outdated" ;
+
+outdated_option =
+    no_dev | platform_reqs | locked | format
+  | "-o" : "Show outdated packages only" | "--outdated" : "Show outdated packages only"
+  | "-a" : "Show all installed packages" | "--all" : "Show all installed packages"
+  | "-D" : "Only direct dependencies" | "--direct" : "Only direct dependencies"
+  | "--strict" : "Fail when packages are outdated"
+  | "-M" : "Only major updates" | "--major-only" : "Only major updates"
+  | "-m" : "Only minor updates" | "--minor-only" : "Only minor updates"
+  | "-p" : "Only patch updates" | "--patch-only" : "Only patch updates"
+  | "-A" : "Show ages, oldest first" | "--sort-by-age" : "Show ages, oldest first"
+  | "--cooldown-period" : "Override the cooldown period" , @any | "--cooldown-period=" : "Override the cooldown period" ~ @any
+  | "--ignore" : "Ignore these packages" , @any | "--ignore=" : "Ignore these packages" ~ @any ;
+
+validate_option =
+    "--no-check-all" : "Do not check constraints for being too strict or loose"
+  | "--check-lock" : "Check that the lock file is up to date"
+  | "--no-check-lock" : "Do not check the lock file"
+  | "--no-check-publish" : "Do not check for publish errors"
+  | "--no-check-version" : "Do not warn about the version field"
+  | "-A" : "Validate the installed dependencies too" | "--with-dependencies" : "Validate the installed dependencies too"
+  | "--strict" : "Fail on warnings too" ;
+
+run_option =
+    dev | no_dev
+  | "--timeout" : "Script timeout in seconds, 0 for none" , @number | "--timeout=" : "Script timeout in seconds, 0 for none" ~ @number
+  | "-l" : "List the scripts" | "--list" : "List the scripts" ;
+
+exec_option = "-l" : "List the available binaries" | "--list" : "List the available binaries" ;
+
+init_option =
+    "--name" : "Package name" , @any | "--name=" : "Package name" ~ @any
+  | "--description" : "Package description" , @any | "--description=" : "Package description" ~ @any
+  | "--author" : "Package author" , @any | "--author=" : "Package author" ~ @any
+  | "--type" : "Package type" , @any | "--type=" : "Package type" ~ @any
+  | "--homepage" : "Package homepage" , @any | "--homepage=" : "Package homepage" ~ @any
+  | "--require" : "Require a package, foo/bar:1.0" , @any | "--require=" : "Require a package, foo/bar:1.0" ~ @any
+  | "--require-dev" : "Require a development package" , @any | "--require-dev=" : "Require a development package" ~ @any
+  | "-s" : "Minimum stability" , stability_kind | "--stability" : "Minimum stability" , stability_kind
+  | "--stability=" : "Minimum stability" ~ stability_kind
+  | "-l" : "Package license" , @any | "--license" : "Package license" , @any | "--license=" : "Package license" ~ @any
+  | "--repository" : "Add a custom repository" , @any | "--repository=" : "Add a custom repository" ~ @any
+  | "-a" : "Add a PSR-4 autoload mapping to this directory" , @directory
+  | "--autoload" : "Add a PSR-4 autoload mapping to this directory" , @directory
+  | "--autoload=" : "Add a PSR-4 autoload mapping to this directory" ~ @directory ;
+
+audit_option =
+    no_dev | locked
+  | "-f" : "Output format" , audit_kind | "--format" : "Output format" , audit_kind | "--format=" : "Output format" ~ audit_kind
+  | "--abandoned" : "Behavior on abandoned packages" , abandoned | "--abandoned=" : "Behavior on abandoned packages" ~ abandoned
+  | "--ignore-severity" : "Ignore advisories of this severity" , @any
+  | "--ignore-severity=" : "Ignore advisories of this severity" ~ @any
+  | "--ignore-unreachable" : "Ignore unreachable repositories"
+  | "-D" : "Only audit direct dependencies" | "--direct" : "Only audit direct dependencies" ;
+abandoned = "ignore" | "report" | "fail" ;
+
+why_option =
+    locked
+  | "-r" : "Resolve up to the root package" | "--recursive" : "Resolve up to the root package"
+  | "-t" : "Print a nested tree" | "--tree" : "Print a nested tree" ;
+
+config_option =
+    "-g" : "Use the global config file" | "--global" : "Use the global config file"
+  | "-e" : "Open the config in an editor" | "--editor" : "Open the config in an editor"
+  | "-a" : "Use the auth config file" | "--auth" : "Use the auth config file"
+  | "--unset" : "Unset the setting"
+  | "-l" : "List the settings" | "--list" : "List the settings"
+  | "-f" : "Use this composer.json or config.json" , @file | "--file" : "Use this composer.json or config.json" , @file
+  | "--file=" : "Use this composer.json or config.json" ~ @file
+  | "--absolute" : "Print absolute paths for *-dir values"
+  | "-j" : "JSON decode the value" | "--json" : "JSON decode the value"
+  | "-m" : "Merge the value with the current one" | "--merge" : "Merge the value with the current one"
+  | "--append" : "Append the repository instead of prepending it"
+  | "--source" : "Show where the value comes from" ;
+
+search_option =
+    format
+  | "-N" : "Search package names only" | "--only-name" : "Search package names only"
+  | "-O" : "Search vendor names only" | "--only-vendor" : "Search vendor names only"
+  | "-t" : "Search this package type" , @any | "--type" : "Search this package type" , @any
+  | "--type=" : "Search this package type" ~ @any ;
+
+bump_option =
+    dry_run
+  | "-D" : "Only bump require-dev" | "--dev-only" : "Only bump require-dev"
+  | "-R" : "Only bump require" | "--no-dev-only" : "Only bump require" ;
+
+reinstall_option =
+    prefer | no_progress | platform_reqs | autoloader
+  | "--no-autoloader" : "Skip autoloader generation"
+  | "--type" : "Only reinstall packages of this type" , @any | "--type=" : "Only reinstall packages of this type" ~ @any ;
+
+platform_option = no_dev | format | "--lock" : "Check the lock file only" ;
+
+licenses_option = no_dev | locked | format ;
+
+suggests_option =
+    no_dev
+  | "--by-package" : "Group by suggesting package" | "--by-suggestion" : "Group by suggested package"
+  | "-a" : "Include transitive dependencies" | "--all" : "Include transitive dependencies"
+  | "--list" : "List suggested package names only" ;
+
+archive_option =
+    "-f" : "Archive format" , archive_format | "--format" : "Archive format" , archive_format
+  | "--format=" : "Archive format" ~ archive_format
+  | "--dir" : "Write the archive to this directory" , @directory | "--dir=" : "Write the archive to this directory" ~ @directory
+  | "--file" : "Archive file name" , @any | "--file=" : "Archive file name" ~ @any
+  | "--ignore-filters" : "Ignore filters when archiving" ;
+archive_format = "tar" | "tar.gz" | "tar.bz2" | "zip" ;
+
+browse_option =
+    "-H" : "Open the homepage" | "--homepage" : "Open the homepage"
+  | "-s" : "Only print the URL" | "--show" : "Only print the URL" ;
+
+self_update_option =
+    no_progress
+  | "-r" : "Revert to the previous installation" | "--rollback" : "Revert to the previous installation"
+  | "--clean-backups" : "Delete old backups"
+  | "--update-keys" : "Prompt for a key update"
+  | "--stable" : "Use the stable channel" | "--preview" : "Use the preview channel" | "--snapshot" : "Use the snapshot channel"
+  | "--1" : "Use the stable 1.x channel" | "--2" : "Use the stable 2.x channel"
+  | "--set-channel-only" : "Only store the channel" ;

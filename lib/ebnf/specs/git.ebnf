@@ -1,0 +1,435 @@
+(* git: the most common subcommands and flags, checked against `git <command> -h`
+   and the man pages of git 2.56. Unique-prefix abbreviations of long options
+   (`--forc` for `--force`) are not modelled.
+
+   Conventions:
+   - parse-options flags with a required value accept `--name value` and
+     `--name=value`; short ones accept `-x value` and `-xvalue` (the matcher
+     decomposes short-option clusters itself).
+   - Optional values only exist in the joined form: `--track` or `--track=direct`.
+   - `--` ends the options; only paths follow it. *)
+
+git = { global_option } , [ command ] ;
+
+global_option =
+    "-C" : "Run as if git was started in this path" , @directory
+  | "-c" : "Set a configuration value for this command" , @any
+  | "-p" : "Pipe all output into a pager" | "--paginate" : "Pipe all output into a pager"
+  | "-P" : "Do not pipe output into a pager" | "--no-pager" : "Do not pipe output into a pager"
+  | "--git-dir=" : "Path to the repository" ~ @directory
+  | "--work-tree=" : "Path to the working tree" ~ @directory
+  | "--bare" : "Treat the repository as a bare repository"
+  | "--no-replace-objects" : "Do not use replacement refs"
+  | "-v" : "Print the git version" | "--version" : "Print the git version"
+  | "-h" : "Print the synopsis" | "--help" : "Print the synopsis" ;
+
+command =
+    "switch" : "Switch branches" , { switch_option | @branch | "-" : "The previous branch" }
+  | "checkout" : "Switch branches or restore working tree files" , { checkout_option | @branch | @file | "-" : "The previous branch" } , [ "--" , { @file } ]
+  | "branch" : "List, create, or delete branches" , { branch_option | @branch }
+  | "add" : "Add file contents to the index" , { add_option | @file } , [ "--" , { @file } ]
+  | "restore" : "Restore working tree files" , { restore_option | @file } , [ "--" , { @file } ]
+  | "commit" : "Record changes to the repository" , { commit_option | @file } , [ "--" , { @file } ]
+  | "push" : "Update remote refs along with associated objects" , { push_option } , [ @remote , { push_option | @branch } ]
+  | "pull" : "Fetch from and integrate with another repository or a local branch" , { pull_option } , [ @remote , { pull_option | @branch } ]
+  | "fetch" : "Download objects and refs from another repository" , { fetch_option } , [ @remote , { fetch_option | @branch } ]
+  | "merge" : "Join two or more development histories together" , { merge_option | @branch }
+  | "rebase" : "Reapply commits on top of another base tip" , { rebase_option | @branch }
+  | "stash" : "Stash the changes in a dirty working directory away" , [ stash_command ]
+  | "log" : "Show commit logs" , { log_option | @ref } , [ "--" , { @file } ]
+  | "diff" : "Show changes between commits, commit and working tree, etc" , { diff_option | @ref | @file } , [ "--" , { @file } ]
+  | "status" : "Show the working tree status" , { status_option | @file } , [ "--" , { @file } ] ;
+
+(* Options shared by several commands. *)
+
+quiet = "-q" : "Suppress progress and informational output" | "--quiet" : "Suppress progress and informational output" ;
+verbose = "-v" : "Be more verbose" | "--verbose" : "Be more verbose" ;
+progress = "--progress" : "Force progress reporting" | "--no-progress" : "Do not report progress" ;
+conflict = "--conflict" : "Conflict style for merged files" , conflict_style | "--conflict=" : "Conflict style for merged files" ~ conflict_style ;
+conflict_style = "merge" | "diff3" | "zdiff3" ;
+track =
+    "-t" : "Set up upstream tracking" | "--track" : "Set up upstream tracking"
+  | "--track=" : "Set up upstream tracking" ~ ( "direct" | "inherit" )
+  | "--no-track" : "Do not set up upstream tracking" ;
+color =
+    "--color" : "Use colored output" | "--color=" : "When to use colored output" ~ color_when
+  | "--no-color" : "Turn off colored output" ;
+color_when = "always" | "never" | "auto" ;
+recurse_submodules = "--recurse-submodules" : "Update active submodules too" | "--no-recurse-submodules" : "Do not update submodules" ;
+pathspec_from_file =
+    "--pathspec-from-file" : "Read pathspecs from a file" , @file | "--pathspec-from-file=" : "Read pathspecs from a file" ~ @file
+  | "--pathspec-file-nul" : "Pathspecs in the file are NUL separated" ;
+gpg_sign =
+    "-S" : "GPG-sign commits" | "--gpg-sign" : "GPG-sign commits" | "--gpg-sign=" : "GPG-sign commits with this key" ~ @any
+  | "--no-gpg-sign" : "Do not GPG-sign commits" ;
+cleanup = "--cleanup" : "How to clean up the commit message" , cleanup_mode | "--cleanup=" : "How to clean up the commit message" ~ cleanup_mode ;
+cleanup_mode = "strip" | "whitespace" | "verbatim" | "scissors" | "default" ;
+strategy =
+    "-s" : "Merge strategy to use" , strategy_name | "--strategy" : "Merge strategy to use" , strategy_name
+  | "--strategy=" : "Merge strategy to use" ~ strategy_name
+  | "-X" : "Option for the merge strategy" , @any | "--strategy-option" : "Option for the merge strategy" , @any
+  | "--strategy-option=" : "Option for the merge strategy" ~ @any ;
+strategy_name = "ort" | "recursive" | "resolve" | "octopus" | "ours" | "subtree" ;
+untracked_mode = "no" | "normal" | "all" ;
+autostash = "--autostash" : "Stash local changes before and pop them after" | "--no-autostash" : "Do not stash local changes" ;
+verify = "--verify" : "Run the hooks" | "--no-verify" : "Bypass the hooks" ;
+ip_version = "-4" : "Use IPv4 addresses only" | "--ipv4" : "Use IPv4 addresses only" | "-6" : "Use IPv6 addresses only" | "--ipv6" : "Use IPv6 addresses only" ;
+
+switch_option =
+    "-c" : "Create and switch to a new branch" , @any | "--create" : "Create and switch to a new branch" , @any
+  | "--create=" : "Create and switch to a new branch" ~ @any
+  | "-C" : "Create or reset a branch and switch to it" , @any | "--force-create" : "Create or reset a branch and switch to it" , @any
+  | "--force-create=" : "Create or reset a branch and switch to it" ~ @any
+  | "-d" : "Detach HEAD at the named commit" | "--detach" : "Detach HEAD at the named commit"
+  | "--guess" : "Create the branch from a matching remote-tracking branch" | "--no-guess" : "Do not guess remote-tracking branches"
+  | "--discard-changes" : "Throw away local modifications" | "-f" : "Throw away local modifications" | "--force" : "Throw away local modifications"
+  | "-m" : "Carry local changes over with a three-way merge" | "--merge" : "Carry local changes over with a three-way merge"
+  | conflict | quiet | progress | track | recurse_submodules
+  | "--orphan" : "Create a new unborn branch" , @any | "--orphan=" : "Create a new unborn branch" ~ @any
+  | "--ignore-other-worktrees" : "Allow a branch checked out in another worktree" ;
+
+checkout_option =
+    "-b" : "Create and check out a new branch" , @any
+  | "-B" : "Create or reset a branch and check it out" , @any
+  | "-l" : "Create a reflog for the new branch"
+  | "-d" : "Detach HEAD at the named commit" | "--detach" : "Detach HEAD at the named commit"
+  | "--guess" : "Create the branch from a matching remote-tracking branch" | "--no-guess" : "Do not guess remote-tracking branches"
+  | "-f" : "Throw away local modifications" | "--force" : "Throw away local modifications"
+  | "-m" : "Carry local changes over with a three-way merge" | "--merge" : "Carry local changes over with a three-way merge"
+  | "--ours" : "Check out our version of unmerged files" | "--theirs" : "Check out their version of unmerged files"
+  | "-p" : "Select hunks interactively" | "--patch" : "Select hunks interactively"
+  | "--overlay" : "Never remove files from the index" | "--no-overlay" : "Remove tracked files missing from the source"
+  | conflict | quiet | progress | track | recurse_submodules | pathspec_from_file
+  | "--orphan" : "Create a new unborn branch" , @any | "--orphan=" : "Create a new unborn branch" ~ @any
+  | "--ignore-other-worktrees" : "Allow a branch checked out in another worktree" ;
+
+branch_option =
+    verbose | quiet | track | color
+  | "-u" : "Set the upstream branch" , @branch | "--set-upstream-to" : "Set the upstream branch" , @branch
+  | "--set-upstream-to=" : "Set the upstream branch" ~ @branch
+  | "--unset-upstream" : "Remove the upstream information"
+  | "-r" : "Act on remote-tracking branches" | "--remotes" : "Act on remote-tracking branches"
+  | "-a" : "List local and remote-tracking branches" | "--all" : "List local and remote-tracking branches"
+  | "-d" : "Delete a fully merged branch" | "--delete" : "Delete a fully merged branch" | "-D" : "Delete a branch even if not merged"
+  | "-m" : "Rename a branch" | "--move" : "Rename a branch" | "-M" : "Rename a branch even if the target exists"
+  | "-c" : "Copy a branch" | "--copy" : "Copy a branch" | "-C" : "Copy a branch even if the target exists"
+  | "-l" : "List branches" | "--list" : "List branches"
+  | "--show-current" : "Print the current branch name"
+  | "-f" : "Force creation, rename, or deletion" | "--force" : "Force creation, rename, or deletion"
+  | "--contains" : "Only branches that contain the commit" , [ @ref ] | "--contains=" : "Only branches that contain the commit" ~ @ref
+  | "--no-contains" : "Only branches that do not contain the commit" , [ @ref ] | "--no-contains=" : "Only branches that do not contain the commit" ~ @ref
+  | "--merged" : "Only branches merged into the commit" , [ @ref ] | "--merged=" : "Only branches merged into the commit" ~ @ref
+  | "--no-merged" : "Only branches not merged into the commit" , [ @ref ] | "--no-merged=" : "Only branches not merged into the commit" ~ @ref
+  | "--points-at" : "Only branches pointing at the object" , @ref | "--points-at=" : "Only branches pointing at the object" ~ @ref
+  | "--sort" : "Sort by this key" , @any | "--sort=" : "Sort by this key" ~ @any
+  | "--format" : "Format of each listed branch" , @any | "--format=" : "Format of each listed branch" ~ @any
+  | "-i" : "Sort and filter case-insensitively" | "--ignore-case" : "Sort and filter case-insensitively"
+  | "--edit-description" : "Edit the description of the branch"
+  | "--column" : "List branches in columns" | "--column=" : "Column layout options" ~ @any | "--no-column" : "Do not list in columns" ;
+
+add_option =
+    "-n" : "Do not add, only show what would be added" | "--dry-run" : "Do not add, only show what would be added"
+  | verbose
+  | "-f" : "Allow adding ignored files" | "--force" : "Allow adding ignored files"
+  | "-i" : "Add changes interactively" | "--interactive" : "Add changes interactively"
+  | "-p" : "Select hunks interactively" | "--patch" : "Select hunks interactively"
+  | "-e" : "Edit the diff before adding it" | "--edit" : "Edit the diff before adding it"
+  | "-u" : "Stage modified and deleted tracked files" | "--update" : "Stage modified and deleted tracked files"
+  | "-A" : "Stage all changes, including untracked files" | "--all" : "Stage all changes, including untracked files"
+  | "--no-all" : "Ignore removed files" | "--ignore-removal" : "Ignore removed files"
+  | "-N" : "Record only that the path will be added later" | "--intent-to-add" : "Record only that the path will be added later"
+  | "--refresh" : "Only refresh the stat information in the index"
+  | "--ignore-errors" : "Skip files that cannot be added"
+  | "--ignore-missing" : "With --dry-run, check whether missing files are ignored"
+  | "--renormalize" : "Apply the clean process to all tracked files again"
+  | "--chmod" : "Override the executable bit" , ( "+x" | "-x" ) | "--chmod=" : "Override the executable bit" ~ ( "+x" | "-x" )
+  | pathspec_from_file ;
+
+restore_option =
+    "-s" : "Restore from this tree" , @ref | "--source" : "Restore from this tree" , @ref | "--source=" : "Restore from this tree" ~ @ref
+  | "-S" : "Restore the index" | "--staged" : "Restore the index"
+  | "-W" : "Restore the working tree" | "--worktree" : "Restore the working tree"
+  | "--ignore-unmerged" : "Do not abort on unmerged entries"
+  | "--overlay" : "Never remove files" | "--no-overlay" : "Remove tracked files missing from the source"
+  | "-m" : "Recreate the conflicted merge" | "--merge" : "Recreate the conflicted merge"
+  | "--ours" : "Restore our version of unmerged files" | "--theirs" : "Restore their version of unmerged files"
+  | "-p" : "Select hunks interactively" | "--patch" : "Select hunks interactively"
+  | conflict | quiet | progress | recurse_submodules | pathspec_from_file ;
+
+commit_option =
+    "-a" : "Stage modified and deleted files first" | "--all" : "Stage modified and deleted files first"
+  | "-p" : "Select changes interactively" | "--patch" : "Select changes interactively"
+  | "--interactive" : "Add files interactively"
+  | "-m" : "Use this commit message" , @any | "--message" : "Use this commit message" , @any | "--message=" : "Use this commit message" ~ @any
+  | "-F" : "Read the message from a file" , @file | "--file" : "Read the message from a file" , @file | "--file=" : "Read the message from a file" ~ @file
+  | "-c" : "Reuse and edit the message of a commit" , @ref | "--reedit-message" : "Reuse and edit the message of a commit" , @ref
+  | "--reedit-message=" : "Reuse and edit the message of a commit" ~ @ref
+  | "-C" : "Reuse the message of a commit" , @ref | "--reuse-message" : "Reuse the message of a commit" , @ref
+  | "--reuse-message=" : "Reuse the message of a commit" ~ @ref
+  | "--fixup" : "Make a fixup commit for autosquash" , @ref | "--fixup=" : "Make a fixup commit for autosquash" ~ @ref
+  | "--squash" : "Make a squash commit for autosquash" , @ref | "--squash=" : "Make a squash commit for autosquash" ~ @ref
+  | "-t" : "Use this message template" , @file | "--template" : "Use this message template" , @file | "--template=" : "Use this message template" ~ @file
+  | "--amend" : "Replace the tip of the current branch"
+  | "-e" : "Edit the message" | "--edit" : "Edit the message" | "--no-edit" : "Use the message without launching an editor"
+  | "-s" : "Add a Signed-off-by trailer" | "--signoff" : "Add a Signed-off-by trailer"
+  | "--trailer" : "Add a trailer" , @any | "--trailer=" : "Add a trailer" ~ @any
+  | "--author" : "Override the author" , @any | "--author=" : "Override the author" ~ @any
+  | "--date" : "Override the author date" , @any | "--date=" : "Override the author date" ~ @any
+  | "--reset-author" : "Make me the author"
+  | "--allow-empty" : "Allow a commit with no changes"
+  | "--allow-empty-message" : "Allow an empty message"
+  | "-n" : "Bypass the pre-commit and commit-msg hooks" | verify
+  | "--dry-run" : "Show what would be committed"
+  | "-i" : "Also stage the given paths" | "--include" : "Also stage the given paths"
+  | "-o" : "Commit only the given paths" | "--only" : "Commit only the given paths"
+  | "-u" : "Show untracked files" | "--untracked-files" : "Show untracked files"
+  | "--untracked-files=" : "Show untracked files" ~ untracked_mode
+  | "--status" : "Include the status in the message template" | "--no-status" : "Leave the status out of the message template"
+  | verbose | quiet | cleanup | gpg_sign | pathspec_from_file ;
+
+push_option =
+    verbose | quiet | progress | verify | ip_version
+  | "--all" : "Push all branches" | "--mirror" : "Mirror all refs"
+  | "-d" : "Delete the listed refs" | "--delete" : "Delete the listed refs"
+  | "--tags" : "Push all tags"
+  | "--follow-tags" : "Also push annotated tags reachable from the pushed refs"
+  | "-n" : "Do everything except send the updates" | "--dry-run" : "Do everything except send the updates"
+  | "--porcelain" : "Machine-readable output"
+  | "-f" : "Force updates" | "--force" : "Force updates"
+  | "--force-with-lease" : "Force only if the remote ref is as expected"
+  | "--force-with-lease=" : "Force only if the remote ref is as expected" ~ @any
+  | "--force-if-includes" : "Force only if the remote updates were integrated locally"
+  | "-u" : "Set the upstream of the pushed branches" | "--set-upstream" : "Set the upstream of the pushed branches"
+  | "--prune" : "Remove remote branches without a local counterpart"
+  | "--atomic" : "Update all refs or none"
+  | "-o" : "Transmit an option to the server" , @any | "--push-option" : "Transmit an option to the server" , @any
+  | "--push-option=" : "Transmit an option to the server" ~ @any
+  | "--signed" : "GPG-sign the push" | "--signed=" : "GPG-sign the push" ~ ( "true" | "false" | "if-asked" ) | "--no-signed" : "Do not GPG-sign the push"
+  | "--recurse-submodules" : "Push submodule commits first" , push_recurse_mode
+  | "--recurse-submodules=" : "Push submodule commits first" ~ push_recurse_mode
+  | "--no-recurse-submodules" : "Do not check submodule commits"
+  | "--repo" : "Push to this repository" , @remote | "--repo=" : "Push to this repository" ~ @remote ;
+push_recurse_mode = "check" | "on-demand" | "only" | "no" ;
+
+fetch_like_option =
+    verbose | quiet | progress | ip_version
+  | "--all" : "Fetch all remotes"
+  | "-a" : "Append to FETCH_HEAD" | "--append" : "Append to FETCH_HEAD"
+  | "-f" : "Allow non-fast-forward updates" | "--force" : "Allow non-fast-forward updates"
+  | "-t" : "Fetch all tags" | "--tags" : "Fetch all tags"
+  | "-p" : "Remove remote-tracking refs that no longer exist" | "--prune" : "Remove remote-tracking refs that no longer exist"
+  | "--dry-run" : "Show what would be done"
+  | "-k" : "Keep the downloaded pack" | "--keep" : "Keep the downloaded pack"
+  | "--depth" : "Limit fetching to this many commits" , @number | "--depth=" : "Limit fetching to this many commits" ~ @number
+  | "--deepen" : "Deepen a shallow clone by this many commits" , @number | "--deepen=" : "Deepen a shallow clone by this many commits" ~ @number
+  | "--shallow-since" : "Deepen a shallow clone to this date" , @any | "--shallow-since=" : "Deepen a shallow clone to this date" ~ @any
+  | "--unshallow" : "Convert a shallow clone into a complete one"
+  | "--recurse-submodules" : "Fetch submodules too"
+  | "--recurse-submodules=" : "Fetch submodules too" ~ ( "yes" | "on-demand" | "no" )
+  | "--no-recurse-submodules" : "Do not fetch submodules" ;
+
+pull_option =
+    fetch_like_option | autostash | strategy | gpg_sign | verify | cleanup
+  | "-r" : "Rebase instead of merging" | "--rebase" : "Rebase instead of merging"
+  | "--rebase=" : "Rebase instead of merging" ~ ( "false" | "true" | "merges" | "interactive" )
+  | "--no-rebase" : "Merge instead of rebasing"
+  | "-n" : "Do not show a diffstat" | "--stat" : "Show a diffstat" | "--no-stat" : "Do not show a diffstat"
+  | "--squash" : "Squash into one uncommitted change" | "--no-squash" : "Do not squash"
+  | "--commit" : "Commit the merge result" | "--no-commit" : "Do not commit the merge result"
+  | "-e" : "Edit the merge message" | "--edit" : "Edit the merge message" | "--no-edit" : "Accept the generated merge message"
+  | "--ff" : "Fast-forward when possible" | "--no-ff" : "Always create a merge commit" | "--ff-only" : "Only fast-forward"
+  | "--allow-unrelated-histories" : "Allow merging unrelated histories"
+  | "--set-upstream" : "Set the upstream of the fetched branch" ;
+
+fetch_option =
+    fetch_like_option
+  | "--set-upstream" : "Set the upstream of the fetched branch"
+  | "--atomic" : "Update all local refs or none"
+  | "-m" : "Fetch several remotes or groups" | "--multiple" : "Fetch several remotes or groups"
+  | "-n" : "Do not fetch tags" | "--no-tags" : "Do not fetch tags"
+  | "-P" : "Prune local tags that no longer exist on the remote" | "--prune-tags" : "Prune local tags that no longer exist on the remote"
+  | "-j" : "Parallel jobs" , @number | "--jobs" : "Parallel jobs" , @number | "--jobs=" : "Parallel jobs" ~ @number ;
+
+merge_option =
+    verbose | quiet | progress | autostash | strategy | gpg_sign | verify | cleanup
+  | "-n" : "Do not show a diffstat" | "--stat" : "Show a diffstat" | "--no-stat" : "Do not show a diffstat"
+  | "--log" : "Add shortlog entries to the message" | "--log=" : "Add at most this many shortlog entries" ~ @number
+  | "--no-log" : "Do not add shortlog entries"
+  | "--squash" : "Squash into one uncommitted change" | "--no-squash" : "Do not squash"
+  | "--commit" : "Commit the merge result" | "--no-commit" : "Do not commit the merge result"
+  | "-e" : "Edit the merge message" | "--edit" : "Edit the merge message" | "--no-edit" : "Accept the generated merge message"
+  | "--ff" : "Fast-forward when possible" | "--no-ff" : "Always create a merge commit" | "--ff-only" : "Only fast-forward"
+  | "-m" : "Use this merge message" , @any | "--message" : "Use this merge message" , @any | "--message=" : "Use this merge message" ~ @any
+  | "-F" : "Read the merge message from a file" , @file | "--file" : "Read the merge message from a file" , @file
+  | "--file=" : "Read the merge message from a file" ~ @file
+  | "--abort" : "Abort the merge in progress"
+  | "--quit" : "Forget the merge in progress"
+  | "--continue" : "Conclude the merge after resolving conflicts"
+  | "--allow-unrelated-histories" : "Allow merging unrelated histories"
+  | "--signoff" : "Add a Signed-off-by trailer" | "--no-signoff" : "Do not add a Signed-off-by trailer" ;
+
+rebase_option =
+    verbose | quiet | autostash | strategy | gpg_sign | verify
+  | "--onto" : "Rebase onto this commit" , @ref | "--onto=" : "Rebase onto this commit" ~ @ref
+  | "--keep-base" : "Keep the merge base of upstream and branch"
+  | "--continue" : "Continue after resolving a conflict"
+  | "--skip" : "Skip the current patch"
+  | "--abort" : "Abort and restore the original branch"
+  | "--quit" : "Abort but keep HEAD where it is"
+  | "--edit-todo" : "Edit the todo list"
+  | "--show-current-patch" : "Show the patch being applied"
+  | "-i" : "Edit the list of commits to rebase" | "--interactive" : "Edit the list of commits to rebase"
+  | "-m" : "Use the merge backend" | "--merge" : "Use the merge backend"
+  | "--apply" : "Use the apply backend"
+  | "-x" : "Run a command after each commit" , @any | "--exec" : "Run a command after each commit" , @any
+  | "--exec=" : "Run a command after each commit" ~ @any
+  | "-r" : "Rebase merge commits too" | "--rebase-merges" : "Rebase merge commits too"
+  | "--rebase-merges=" : "Rebase merge commits too" ~ ( "rebase-cousins" | "no-rebase-cousins" )
+  | "--no-rebase-merges" : "Drop merge commits"
+  | "--autosquash" : "Reorder fixup and squash commits" | "--no-autosquash" : "Do not reorder fixup and squash commits"
+  | "--update-refs" : "Update branches pointing at rebased commits" | "--no-update-refs" : "Do not update other branches"
+  | "--root" : "Rebase all commits reachable from the branch"
+  | "--fork-point" : "Use the fork point of upstream" | "--no-fork-point" : "Do not use the fork point"
+  | "-f" : "Replay all commits, even unchanged ones" | "--force-rebase" : "Replay all commits, even unchanged ones"
+  | "--no-ff" : "Replay all commits, even unchanged ones"
+  | "--empty" : "How to handle commits that become empty" , empty_mode | "--empty=" : "How to handle commits that become empty" ~ empty_mode
+  | "--signoff" : "Add a Signed-off-by trailer to each commit"
+  | "--committer-date-is-author-date" : "Use the author date as the committer date"
+  | "--reset-author-date" : "Use the current time as the author date"
+  | "--ignore-whitespace" : "Ignore whitespace when reconciling changes"
+  | "-n" : "Do not show a diffstat" | "--no-stat" : "Do not show a diffstat" | "--stat" : "Show a diffstat" ;
+empty_mode = "drop" | "keep" | "stop" ;
+
+(* `git stash` alone or with push options means `git stash push`, but then
+   paths must follow `--`. *)
+stash_command =
+    "list" : "List the stash entries" , { log_option }
+  | "show" : "Show the changes recorded in a stash entry" , { stash_show_option | diff_option | @stash }
+  | "drop" : "Remove a stash entry" , { quiet | @stash }
+  | "pop" : "Apply a stash entry and remove it" , { quiet | "--index" : "Also restore the index" | @stash }
+  | "apply" : "Apply a stash entry" , { quiet | "--index" : "Also restore the index" | @stash }
+  | "branch" : "Create a branch from a stash entry" , @any , [ @stash ]
+  | "push" : "Save local modifications to a new stash entry" , { stash_push_option | @file } , [ "--" , { @file } ]
+  | "clear" : "Remove all stash entries"
+  | stash_push_option , { stash_push_option } , [ "--" , { @file } ]
+  | "--" , { @file } ;
+
+stash_push_option =
+    quiet
+  | "-p" : "Select hunks interactively" | "--patch" : "Select hunks interactively"
+  | "-S" : "Stash only the staged changes" | "--staged" : "Stash only the staged changes"
+  | "-k" : "Keep the staged changes in the index" | "--keep-index" : "Keep the staged changes in the index"
+  | "--no-keep-index" : "Do not keep the staged changes in the index"
+  | "-u" : "Also stash untracked files" | "--include-untracked" : "Also stash untracked files"
+  | "-a" : "Also stash untracked and ignored files" | "--all" : "Also stash untracked and ignored files"
+  | "-m" : "Describe the stash entry" , @any | "--message" : "Describe the stash entry" , @any
+  | "--message=" : "Describe the stash entry" ~ @any
+  | pathspec_from_file ;
+
+stash_show_option =
+    "-u" : "Include untracked files" | "--include-untracked" : "Include untracked files"
+  | "--only-untracked" : "Show only untracked files" ;
+
+log_option =
+    "--oneline" : "One line per commit"
+  | "--graph" : "Draw the commit graph"
+  | "--all" : "Show all refs"
+  | "--decorate" : "Show ref names" | "--decorate=" : "Show ref names" ~ ( "short" | "full" | "auto" | "no" )
+  | "--no-decorate" : "Do not show ref names"
+  | "--follow" : "Follow renames of a single file"
+  | "-n" : "Limit the number of commits" , @number
+  | "--max-count" : "Limit the number of commits" , @number | "--max-count=" : "Limit the number of commits" ~ @number
+  | "-" : "Limit the number of commits" ~ @number
+  | "--skip" : "Skip this many commits" , @number | "--skip=" : "Skip this many commits" ~ @number
+  | "--since" : "Commits more recent than a date" , @any | "--since=" : "Commits more recent than a date" ~ @any
+  | "--after" : "Commits more recent than a date" , @any | "--after=" : "Commits more recent than a date" ~ @any
+  | "--until" : "Commits older than a date" , @any | "--until=" : "Commits older than a date" ~ @any
+  | "--before" : "Commits older than a date" , @any | "--before=" : "Commits older than a date" ~ @any
+  | "--author" : "Commits by a matching author" , @any | "--author=" : "Commits by a matching author" ~ @any
+  | "--committer" : "Commits by a matching committer" , @any | "--committer=" : "Commits by a matching committer" ~ @any
+  | "--grep" : "Commits whose message matches" , @any | "--grep=" : "Commits whose message matches" ~ @any
+  | "-i" : "Match patterns case-insensitively" | "--regexp-ignore-case" : "Match patterns case-insensitively"
+  | "--all-match" : "Require every --grep to match"
+  | "--invert-grep" : "Commits whose message does not match"
+  | "-S" : "Commits that change the count of a string" , @any
+  | "-G" : "Commits whose diff matches a regex" , @any
+  | "--merges" : "Only merge commits" | "--no-merges" : "No merge commits"
+  | "--first-parent" : "Follow only the first parent of merges"
+  | "--branches" : "All local branches" | "--branches=" : "Local branches matching a pattern" ~ @any
+  | "--tags" : "All tags" | "--tags=" : "Tags matching a pattern" ~ @any
+  | "--remotes" : "All remote-tracking branches" | "--remotes=" : "Remote-tracking branches matching a pattern" ~ @any
+  | "--reverse" : "Show commits in reverse order"
+  | "--topo-order" : "Do not show parents before their children"
+  | "--date-order" : "Order by commit date, parents after children"
+  | "--pretty" : "Pretty-print commits" | "--pretty=" : "Pretty-print commits" ~ pretty_format
+  | "--format=" : "Pretty-print commits" ~ pretty_format
+  | "--abbrev-commit" : "Show abbreviated commit names" | "--no-abbrev-commit" : "Show full commit names"
+  | "--date" : "Date format" , date_format | "--date=" : "Date format" ~ date_format
+  | "--relative-date" : "Show relative dates"
+  | "--left-right" : "Mark which side of a symmetric difference a commit is on"
+  | "--cherry-pick" : "Omit equivalent commits from a symmetric difference"
+  | "--source" : "Show the ref each commit was reached from"
+  | diff_option ;
+
+pretty_format =
+    "oneline" | "short" | "medium" | "full" | "fuller" | "reference" | "email" | "mboxrd" | "raw"
+  | @any : "format:<string> or tformat:<string>" ;
+date_format =
+    "relative" | "local" | "iso" | "iso-strict" | "rfc" | "short" | "raw" | "human" | "unix" | "default"
+  | @any : "format:<strftime>" ;
+
+diff_option =
+    "--cached" : "Compare the index with a commit" | "--staged" : "Compare the index with a commit"
+  | "--merge-base" : "Compare with the merge base"
+  | "--no-index" : "Compare two paths outside a repository"
+  | "-p" : "Generate a patch" | "-u" : "Generate a patch" | "--patch" : "Generate a patch"
+  | "-s" : "Suppress the diff" | "--no-patch" : "Suppress the diff"
+  | "-U" : "Lines of context" ~ @number | "--unified=" : "Lines of context" ~ @number
+  | "--raw" : "Raw diff format"
+  | "--stat" : "Show a diffstat" | "--stat=" : "Diffstat width and limits" ~ @any
+  | "--shortstat" : "Only the summary line of the diffstat"
+  | "--numstat" : "Machine-friendly diffstat"
+  | "--compact-summary" : "Condensed summary of header information"
+  | "--summary" : "Summary of created, renamed, and mode-changed files"
+  | "--name-only" : "Only the names of changed files"
+  | "--name-status" : "Names and status of changed files"
+  | "--check" : "Warn about whitespace errors"
+  | "--minimal" : "Produce the smallest possible diff"
+  | "--patience" : "Use the patience diff algorithm"
+  | "--histogram" : "Use the histogram diff algorithm"
+  | "--diff-algorithm" : "Diff algorithm" , diff_algorithm | "--diff-algorithm=" : "Diff algorithm" ~ diff_algorithm
+  | "--word-diff" : "Show a word diff" | "--word-diff=" : "Show a word diff" ~ ( "color" | "plain" | "porcelain" | "none" )
+  | "--color-moved" : "Color moved lines differently"
+  | "-w" : "Ignore all whitespace" | "--ignore-all-space" : "Ignore all whitespace"
+  | "-b" : "Ignore changes in the amount of whitespace" | "--ignore-space-change" : "Ignore changes in the amount of whitespace"
+  | "--ignore-blank-lines" : "Ignore changes whose lines are all blank"
+  | "-R" : "Swap the two inputs"
+  | "-M" : "Detect renames" | "--find-renames" : "Detect renames" | "--find-renames=" : "Detect renames above this similarity" ~ @any
+  | "--no-renames" : "Turn off rename detection"
+  | "--diff-filter" : "Select files by change type" , @any | "--diff-filter=" : "Select files by change type" ~ @any
+  | "--exit-code" : "Exit with 1 if there were differences"
+  | "--quiet" : "Disable all output"
+  | "-W" : "Show whole functions as context" | "--function-context" : "Show whole functions as context"
+  | "--relative" : "Show paths relative to the current directory" | "--relative=" : "Show paths relative to a directory" ~ @directory
+  | "--no-relative" : "Show paths relative to the top of the repository"
+  | "-z" : "Separate output fields with NUL"
+  | color ;
+diff_algorithm = "patience" | "minimal" | "histogram" | "myers" ;
+
+status_option =
+    verbose
+  | "-s" : "Short format" | "--short" : "Short format"
+  | "-b" : "Show branch information" | "--branch" : "Show branch information"
+  | "--show-stash" : "Show the number of stash entries"
+  | "--porcelain" : "Machine-readable output" | "--porcelain=" : "Machine-readable output" ~ ( "v1" | "v2" )
+  | "--long" : "Long format"
+  | "-z" : "Terminate entries with NUL"
+  | "-u" : "Show untracked files" | "--untracked-files" : "Show untracked files"
+  | "--untracked-files=" : "Show untracked files" ~ untracked_mode
+  | "--ignored" : "Show ignored files" | "--ignored=" : "Show ignored files" ~ ( "traditional" | "no" | "matching" )
+  | "--ignore-submodules" : "Ignore changes to submodules"
+  | "--ignore-submodules=" : "Ignore changes to submodules" ~ ( "none" | "untracked" | "dirty" | "all" )
+  | "--column" : "List untracked files in columns" | "--column=" : "Column layout options" ~ @any | "--no-column" : "Do not list in columns"
+  | "--ahead-behind" : "Compute full ahead and behind counts" | "--no-ahead-behind" : "Do not compute ahead and behind counts"
+  | "--renames" : "Detect renames" | "--no-renames" : "Do not detect renames"
+  | "-M" : "Detect renames" | "--find-renames" : "Detect renames" | "--find-renames=" : "Detect renames above this similarity" ~ @number ;

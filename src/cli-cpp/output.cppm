@@ -74,6 +74,7 @@ enum class Family : std::uint8_t {
   notification,
   command,
   config,
+  completions,
   plugin,
   integration,
   hook,
@@ -92,7 +93,7 @@ enum class Family : std::uint8_t {
 // Each family as it is typed, in the order of `Family`.
 inline constexpr std::array<std::string_view, static_cast<std::size_t>(Family::count)> family_names{
     "workspace", "tab", "pane", "worktree", "agent", "exec", "repository", "project", "file", "machine",
-    "client", "sidebar", "workspace-list", "layout", "notification", "command", "config", "plugin",
+    "client", "sidebar", "workspace-list", "layout", "notification", "command", "config", "completions", "plugin",
     "integration", "hook", "cli", "gui", "server", "runtime", "diagnostics", "history", "proxy", "api", "clipboard"};
 
 inline std::string_view familyName(Family family) noexcept {

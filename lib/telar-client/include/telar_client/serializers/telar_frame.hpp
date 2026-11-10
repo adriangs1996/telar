@@ -28,7 +28,10 @@ namespace telar {
     wrap = 1,
     continuation = 2,
     wide_padding = 4,
-    hyperlinks = 8
+    hyperlinks = 8,
+    // The shell marked the row as the start of its prompt, or a further line of it (OSC 133).
+    prompt = 16,
+    prompt_continuation = 32
   };
   enum class PointerShape : Byte {
     default_shape,
@@ -116,7 +119,7 @@ namespace telar {
         throw EncodingError{"Invalid text metadata counts"};
       }
       for (const auto flags : row_flags) {
-        if ((flags & 0xf0) != 0 || ((flags & 4) != 0 && ((flags & 1) == 0 || cols < 2))) {
+        if ((flags & 0xc0) != 0 || ((flags & 48) == 48) || ((flags & 4) != 0 && ((flags & 1) == 0 || cols < 2))) {
           throw EncodingError{"Invalid text row flags"};
         }
       }

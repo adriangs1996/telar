@@ -1,0 +1,2089 @@
+(* aws: checked against aws-cli 2.37.7 (`aws help`, `aws <service> help` and the
+   command tables the CLI builds from its bundled service models).
+
+   Modelled:
+   - every top-level command `aws help` lists, with the service's full name;
+   - the global options, accepted before the service and anywhere after it;
+   - configure, s3 (cp, mv, rm, sync, ls, mb, rb, presign, website), sts and
+     secretsmanager: every operation; ec2, ecr, ecs, eks, lambda, iam, logs,
+     cloudformation and ssm: their most used operations. The main operations
+     of each have their options;
+   - `wait` lists each modelled service's waiters.
+   Other services and operations accept any words after their name. Options that
+   take a list (--instance-ids a b c) accept any following words, so an unknown
+   option after a list value is not caught. Values are separate words; local paths
+   complete as files, S3 URIs and every other value are free text. *)
+
+aws = { global_option } , [ service ] ;
+
+global_option =
+    "--debug" : "Turn on debug logging"
+  | "--endpoint-url" : "Override the command's default URL" , @any
+  | "--no-verify-ssl" : "Do not verify SSL certificates"
+  | "--no-paginate" : "Disable automatic pagination"
+  | "--output" : "The formatting style for command output" , ( "json" | "text" | "table" | "yaml" | "yaml-stream" | "off" )
+  | "--query" : "A JMESPath query to filter the response data" , @any
+  | "--profile" : "Use a specific profile from your credential file" , @any
+  | "--region" : "The region to use" , @any
+  | "--version" : "Display the version of this tool"
+  | "--color" : "Turn on/off color output" , ( "on" | "off" | "auto" )
+  | "--no-sign-request" : "Do not sign requests"
+  | "--ca-bundle" : "CA certificate bundle to verify SSL certificates" , @file
+  | "--cli-read-timeout" : "Maximum socket read time in seconds" , @number
+  | "--cli-connect-timeout" : "Maximum socket connect time in seconds" , @number
+  | "--cli-binary-format" : "The formatting style for binary blobs" , ( "base64" | "raw-in-base64-out" )
+  | "--no-cli-pager" : "Disable the pager for output"
+  | "--cli-auto-prompt" : "Automatically prompt for CLI input parameters"
+  | "--no-cli-auto-prompt" : "Do not prompt for CLI input parameters"
+  | "--cli-error-format" : "The formatting style for error output" , ( "legacy" | "json" | "yaml" | "text" | "table" | "enhanced" ) ;
+
+(* Options every service operation accepts, and those of paginated operations. *)
+op_input =
+    "--cli-input-json" : "Read arguments from a JSON string" , @any
+  | "--cli-input-yaml" : "Read arguments from a YAML string" , @any
+  | "--generate-cli-skeleton" : "Print a JSON skeleton of the input or output" , [ "input" | "output" | "yaml-input" ] ;
+op_paging =
+    "--starting-token" : "Token to specify where to start paginating" , @any
+  | "--page-size" : "The size of each page to get in the service call" , @number
+  | "--max-items" : "The total number of items to return" , @number ;
+
+service =
+    "cloudformation" : "AWS CloudFormation" , { global_option } , [ cloudformation_command ]
+  | "ec2" : "Amazon Elastic Compute Cloud" , { global_option } , [ ec2_command ]
+  | "ecr" : "Amazon Elastic Container Registry" , { global_option } , [ ecr_command ]
+  | "ecs" : "Amazon EC2 Container Service" , { global_option } , [ ecs_command ]
+  | "eks" : "Amazon Elastic Kubernetes Service" , { global_option } , [ eks_command ]
+  | "iam" : "AWS Identity and Access Management" , { global_option } , [ iam_command ]
+  | "lambda" : "AWS Lambda" , { global_option } , [ lambda_command ]
+  | "logs" : "Amazon CloudWatch Logs" , { global_option } , [ logs_command ]
+  | "secretsmanager" : "AWS Secrets Manager" , { global_option } , [ secretsmanager_command ]
+  | "ssm" : "Amazon Simple Systems Manager (SSM)" , { global_option } , [ ssm_command ]
+  | "sts" : "AWS Security Token Service" , { global_option } , [ sts_command ]
+  | "s3" : "High-level S3 commands: cp, sync, ls, mb, rb" , { global_option } , [ s3_command ]
+  | "configure" : "Configure credentials, regions and profiles" , { global_option } , [ configure_command ]
+  | other_service , { @any }
+  | "help" : "Show the documentation of the AWS CLI" , { @any } ;
+
+other_service =
+    "accessanalyzer" : "Access Analyzer"
+  | "account" : "AWS Account"
+  | "account-access" : "Account Access"
+  | "acm" : "AWS Certificate Manager"
+  | "acm-pca" : "AWS Certificate Manager Private Certificate Authority"
+  | "agent-registry" : "Agent Registry"
+  | "agent-registry-control" : "Agent Registry Control"
+  | "aiops" : "AWS AI Ops"
+  | "amp" : "Amazon Prometheus Service"
+  | "amplify" : "AWS Amplify"
+  | "amplifybackend" : "AmplifyBackend"
+  | "amplifyuibuilder" : "AWS Amplify UI Builder"
+  | "apigateway" : "Amazon API Gateway"
+  | "apigatewaymanagementapi" : "AmazonApiGatewayManagementApi"
+  | "apigatewayv2" : "AmazonApiGatewayV2"
+  | "appconfig" : "Amazon AppConfig"
+  | "appconfigdata" : "AWS AppConfig Data"
+  | "appfabric" : "AppFabric"
+  | "appflow" : "Amazon Appflow"
+  | "appintegrations" : "Amazon AppIntegrations Service"
+  | "application-autoscaling" : "Application Auto Scaling"
+  | "application-insights" : "Amazon CloudWatch Application Insights"
+  | "application-signals" : "Amazon CloudWatch Application Signals"
+  | "applicationcostprofiler" : "AWS Application Cost Profiler"
+  | "appmesh" : "AWS App Mesh"
+  | "apprunner" : "AWS App Runner"
+  | "appstream" : "Amazon AppStream"
+  | "appsync" : "AWS AppSync"
+  | "arc-region-switch" : "ARC - Region switch"
+  | "arc-zonal-shift" : "AWS ARC - Zonal Shift"
+  | "artifact" : "AWS Artifact"
+  | "athena" : "Amazon Athena"
+  | "auditmanager" : "AWS Audit Manager"
+  | "autoscaling" : "Auto Scaling"
+  | "autoscaling-plans" : "AWS Auto Scaling Plans"
+  | "b2bi" : "AWS B2B Data Interchange"
+  | "backup" : "AWS Backup"
+  | "backup-gateway" : "AWS Backup Gateway"
+  | "backupsearch" : "AWS Backup Search"
+  | "batch" : "AWS Batch"
+  | "bcm-dashboards" : "AWS Billing and Cost Management Dashboards"
+  | "bcm-data-exports" : "AWS Billing and Cost Management Data Exports"
+  | "bcm-pricing-calculator" : "AWS Billing and Cost Management Pricing Calculator"
+  | "bcm-recommended-actions" : "AWS Billing and Cost Management Recommended Actions"
+  | "bedrock" : "Amazon Bedrock"
+  | "bedrock-agent" : "Agents for Amazon Bedrock"
+  | "bedrock-agent-runtime" : "Agents for Amazon Bedrock Runtime"
+  | "bedrock-agentcore" : "Amazon Bedrock AgentCore"
+  | "bedrock-agentcore-control" : "Amazon Bedrock AgentCore Control"
+  | "bedrock-data-automation" : "Data Automation for Amazon Bedrock"
+  | "bedrock-data-automation-runtime" : "Runtime for Amazon Bedrock Data Automation"
+  | "bedrock-runtime" : "Amazon Bedrock Runtime"
+  | "billing" : "AWS Billing"
+  | "billingconductor" : "AWSBillingConductor"
+  | "braket" : "Braket"
+  | "budgets" : "AWS Budgets"
+  | "ce" : "AWS Cost Explorer Service"
+  | "chatbot" : "AWS Chatbot"
+  | "chime" : "Amazon Chime"
+  | "chime-sdk-identity" : "Amazon Chime SDK Identity"
+  | "chime-sdk-media-pipelines" : "Amazon Chime SDK Media Pipelines"
+  | "chime-sdk-meetings" : "Amazon Chime SDK Meetings"
+  | "chime-sdk-messaging" : "Amazon Chime SDK Messaging"
+  | "chime-sdk-voice" : "Amazon Chime SDK Voice"
+  | "cleanrooms" : "AWS Clean Rooms Service"
+  | "cleanroomsml" : "AWS Clean Rooms ML"
+  | "cloud9" : "AWS Cloud9"
+  | "cloudcontrol" : "AWS Cloud Control API"
+  | "clouddirectory" : "Amazon CloudDirectory"
+  | "cloudfront" : "Amazon CloudFront"
+  | "cloudfront-keyvaluestore" : "Amazon CloudFront KeyValueStore"
+  | "cloudhsm" : "Amazon CloudHSM"
+  | "cloudhsmv2" : "AWS CloudHSM V2"
+  | "cloudsearch" : "Amazon CloudSearch"
+  | "cloudsearchdomain" : "Amazon CloudSearch Domain"
+  | "cloudtrail" : "AWS CloudTrail"
+  | "cloudtrail-data" : "AWS CloudTrail Data Service"
+  | "cloudwatch" : "Amazon CloudWatch"
+  | "cloudwatchomni" : "CloudWatch Omni"
+  | "codeartifact" : "CodeArtifact"
+  | "codebuild" : "AWS CodeBuild"
+  | "codecatalyst" : "Amazon CodeCatalyst"
+  | "codecommit" : "AWS CodeCommit"
+  | "codeconnections" : "AWS CodeConnections"
+  | "codeguru-reviewer" : "Amazon CodeGuru Reviewer"
+  | "codeguru-security" : "Amazon CodeGuru Security"
+  | "codeguruprofiler" : "Amazon CodeGuru Profiler"
+  | "codepipeline" : "AWS CodePipeline"
+  | "codestar-connections" : "AWS CodeStar connections"
+  | "codestar-notifications" : "AWS CodeStar Notifications"
+  | "cognito-identity" : "Amazon Cognito Identity"
+  | "cognito-idp" : "Amazon Cognito Identity Provider"
+  | "cognito-sync" : "Amazon Cognito Sync"
+  | "comprehend" : "Amazon Comprehend"
+  | "comprehendmedical" : "AWS Comprehend Medical"
+  | "compute-optimizer" : "AWS Compute Optimizer"
+  | "compute-optimizer-automation" : "Compute Optimizer Automation"
+  | "connect" : "Amazon Connect Service"
+  | "connect-contact-lens" : "Amazon Connect Contact Lens"
+  | "connectcampaigns" : "AmazonConnectCampaignService"
+  | "connectcampaignsv2" : "AmazonConnectCampaignServiceV2"
+  | "connectcases" : "Amazon Connect Cases"
+  | "connecthealth" : "Connect Health"
+  | "connectparticipant" : "Amazon Connect Participant Service"
+  | "controlcatalog" : "AWS Control Catalog"
+  | "controltower" : "AWS Control Tower"
+  | "cost-optimization-hub" : "Cost Optimization Hub"
+  | "cur" : "AWS Cost and Usage Report Service"
+  | "customer-profiles" : "Amazon Connect Customer Profiles"
+  | "databrew" : "AWS Glue DataBrew"
+  | "dataexchange" : "AWS Data Exchange"
+  | "datapipeline" : "AWS Data Pipeline"
+  | "datasync" : "AWS DataSync"
+  | "datazone" : "Amazon DataZone"
+  | "dax" : "Amazon DynamoDB Accelerator (DAX)"
+  | "deadline" : "AWSDeadlineCloud"
+  | "detective" : "Amazon Detective"
+  | "devicefarm" : "AWS Device Farm"
+  | "devops-agent" : "AWS DevOps Agent Service"
+  | "devops-guru" : "Amazon DevOps Guru"
+  | "directconnect" : "AWS Direct Connect"
+  | "discovery" : "AWS Application Discovery Service"
+  | "dlm" : "Amazon Data Lifecycle Manager"
+  | "dms" : "AWS Database Migration Service"
+  | "docdb" : "Amazon DocumentDB with MongoDB compatibility"
+  | "docdb-elastic" : "Amazon DocumentDB Elastic Clusters"
+  | "drs" : "Elastic Disaster Recovery Service"
+  | "ds" : "AWS Directory Service"
+  | "ds-data" : "AWS Directory Service Data"
+  | "dsql" : "Amazon Aurora DSQL"
+  | "dynamodb" : "Amazon DynamoDB"
+  | "dynamodbstreams" : "Amazon DynamoDB Streams"
+  | "ebs" : "Amazon Elastic Block Store"
+  | "ec2-instance-connect" : "AWS EC2 Instance Connect"
+  | "ecr-public" : "Amazon Elastic Container Registry Public"
+  | "efs" : "Amazon Elastic File System"
+  | "eks-auth" : "Amazon EKS Auth"
+  | "elasticache" : "Amazon ElastiCache"
+  | "elasticbeanstalk" : "AWS Elastic Beanstalk"
+  | "elb" : "Elastic Load Balancing"
+  | "elbv2" : "Elastic Load Balancing"
+  | "elementalinference" : "AWS Elemental Inference"
+  | "emr" : "Amazon EMR"
+  | "emr-containers" : "Amazon EMR Containers"
+  | "emr-serverless" : "EMR Serverless"
+  | "entityresolution" : "AWS EntityResolution"
+  | "es" : "Amazon Elasticsearch Service"
+  | "events" : "Amazon EventBridge"
+  | "evs" : "Amazon Elastic VMware Service"
+  | "finspace" : "FinSpace User Environment Management service"
+  | "finspace-data" : "FinSpace Public API"
+  | "firehose" : "Amazon Kinesis Firehose"
+  | "fis" : "AWS Fault Injection Simulator"
+  | "fms" : "Firewall Management Service"
+  | "forecast" : "Amazon Forecast Service"
+  | "forecastquery" : "Amazon Forecast Query Service"
+  | "frauddetector" : "Amazon Fraud Detector"
+  | "freetier" : "AWS Free Tier"
+  | "fsx" : "Amazon FSx"
+  | "gamelift" : "Amazon GameLift"
+  | "gameliftstreams" : "Amazon GameLift Streams"
+  | "geo-maps" : "Amazon Location Service Maps V2"
+  | "geo-places" : "Amazon Location Service Places V2"
+  | "geo-routes" : "Amazon Location Service Routes V2"
+  | "glacier" : "Amazon Glacier"
+  | "globalaccelerator" : "AWS Global Accelerator"
+  | "glue" : "AWS Glue"
+  | "grafana" : "Amazon Managed Grafana"
+  | "greengrass" : "AWS Greengrass"
+  | "greengrassv2" : "AWS IoT Greengrass V2"
+  | "groundstation" : "AWS Ground Station"
+  | "guardduty" : "Amazon GuardDuty"
+  | "health" : "AWS Health APIs and Notifications"
+  | "healthlake" : "Amazon HealthLake"
+  | "iam-toolbox" : "IAM Toolbox (Preview)"
+  | "identitystore" : "AWS SSO Identity Store"
+  | "imagebuilder" : "EC2 Image Builder"
+  | "importexport" : "AWS Import/Export"
+  | "inspector" : "Amazon Inspector"
+  | "inspector-scan" : "Inspector Scan"
+  | "inspector2" : "Inspector2"
+  | "interconnect" : "Interconnect"
+  | "internetmonitor" : "Amazon CloudWatch Internet Monitor"
+  | "invoicing" : "AWS Invoicing"
+  | "iot" : "AWS IoT"
+  | "iot-data" : "AWS IoT Data Plane"
+  | "iot-jobs-data" : "AWS IoT Jobs Data Plane"
+  | "iot-managed-integrations" : "Managed integrations for AWS IoT Device Management"
+  | "iotdeviceadvisor" : "AWS IoT Core Device Advisor"
+  | "iotfleetwise" : "AWS IoT FleetWise"
+  | "iotsecuretunneling" : "AWS IoT Secure Tunneling"
+  | "iotsitewise" : "AWS IoT SiteWise"
+  | "iotthingsgraph" : "AWS IoT Things Graph"
+  | "iottwinmaker" : "AWS IoT TwinMaker"
+  | "iotwireless" : "AWS IoT Wireless"
+  | "ivs" : "Amazon Interactive Video Service"
+  | "ivs-realtime" : "Amazon Interactive Video Service RealTime"
+  | "ivschat" : "Amazon Interactive Video Service Chat"
+  | "kafka" : "Managed Streaming for Kafka"
+  | "kafkaconnect" : "Managed Streaming for Kafka Connect"
+  | "kendra" : "AWSKendraFrontendService"
+  | "kendra-ranking" : "Amazon Kendra Intelligent Ranking"
+  | "keyspaces" : "Amazon Keyspaces"
+  | "keyspacesstreams" : "Amazon Keyspaces Streams"
+  | "kinesis" : "Amazon Kinesis"
+  | "kinesis-video-archived-media" : "Amazon Kinesis Video Streams Archived Media"
+  | "kinesis-video-media" : "Amazon Kinesis Video Streams Media"
+  | "kinesis-video-signaling" : "Amazon Kinesis Video Signaling Channels"
+  | "kinesis-video-webrtc-storage" : "Amazon Kinesis Video WebRTC Storage"
+  | "kinesisanalytics" : "Amazon Kinesis Analytics"
+  | "kinesisanalyticsv2" : "Amazon Kinesis Analytics"
+  | "kinesisvideo" : "Amazon Kinesis Video Streams"
+  | "kms" : "AWS Key Management Service"
+  | "lakeformation" : "AWS Lake Formation"
+  | "lambda-core" : "AWS Lambda Core"
+  | "lambda-microvms" : "Lambda MicroVMs"
+  | "launch-wizard" : "AWS Launch Wizard"
+  | "lex-models" : "Amazon Lex Model Building Service"
+  | "lex-runtime" : "Amazon Lex Runtime Service"
+  | "lexv2-models" : "Amazon Lex Model Building V2"
+  | "lexv2-runtime" : "Amazon Lex Runtime V2"
+  | "license-manager" : "AWS License Manager"
+  | "license-manager-linux-subscriptions" : "AWS License Manager Linux Subscriptions"
+  | "license-manager-user-subscriptions" : "AWS License Manager User Subscriptions"
+  | "lightsail" : "Amazon Lightsail"
+  | "location" : "Amazon Location Service"
+  | "lookoutequipment" : "Amazon Lookout for Equipment"
+  | "m2" : "AWSMainframeModernization"
+  | "machinelearning" : "Amazon Machine Learning"
+  | "macie2" : "Amazon Macie 2"
+  | "mailmanager" : "MailManager"
+  | "managedblockchain" : "Amazon Managed Blockchain"
+  | "managedblockchain-query" : "Amazon Managed Blockchain Query"
+  | "marketplace-agreement" : "AWS Marketplace Agreement Service"
+  | "marketplace-catalog" : "AWS Marketplace Catalog Service"
+  | "marketplace-deployment" : "AWS Marketplace Deployment Service"
+  | "marketplace-discovery" : "AWS Marketplace Discovery"
+  | "marketplace-entitlement" : "AWS Marketplace Entitlement Service"
+  | "marketplace-reporting" : "AWS Marketplace Reporting Service"
+  | "marketplacecommerceanalytics" : "AWS Marketplace Commerce Analytics"
+  | "mediaconnect" : "AWS MediaConnect"
+  | "mediaconvert" : "AWS Elemental MediaConvert"
+  | "medialive" : "AWS Elemental MediaLive"
+  | "mediapackage" : "AWS Elemental MediaPackage"
+  | "mediapackage-vod" : "AWS Elemental MediaPackage VOD"
+  | "mediapackagev2" : "AWS Elemental MediaPackage v2"
+  | "mediastore" : "AWS Elemental MediaStore"
+  | "mediastore-data" : "AWS Elemental MediaStore Data Plane"
+  | "mediatailor" : "AWS MediaTailor"
+  | "medical-imaging" : "AWS Health Imaging"
+  | "memorydb" : "Amazon MemoryDB"
+  | "meteringmarketplace" : "AWSMarketplace Metering"
+  | "mgh" : "AWS Migration Hub"
+  | "mgn" : "Application Migration Service"
+  | "migration-hub-refactor-spaces" : "AWS Migration Hub Refactor Spaces"
+  | "migrationhub-config" : "AWS Migration Hub Config"
+  | "migrationhuborchestrator" : "AWS Migration Hub Orchestrator"
+  | "migrationhubstrategy" : "Migration Hub Strategy Recommendations"
+  | "mpa" : "AWS Multi-party Approval"
+  | "mq" : "AmazonMQ"
+  | "mturk" : "Amazon Mechanical Turk"
+  | "mwaa" : "AmazonMWAA"
+  | "mwaa-serverless" : "AmazonMWAAServerless"
+  | "neptune" : "Amazon Neptune"
+  | "neptune-graph" : "Amazon Neptune Graph"
+  | "neptunedata" : "Amazon NeptuneData"
+  | "network-firewall" : "AWS Network Firewall"
+  | "network-security-manager" : "AWS Network Security Manager Customer API"
+  | "networkflowmonitor" : "Network Flow Monitor"
+  | "networkmanager" : "AWS Network Manager"
+  | "networkmonitor" : "Amazon CloudWatch Network Monitor"
+  | "notifications" : "AWS User Notifications"
+  | "notificationscontacts" : "AWS User Notifications Contacts"
+  | "nova-act" : "Nova Act Service"
+  | "oam" : "CloudWatch Observability Access Manager"
+  | "observabilityadmin" : "CloudWatch Observability Admin Service"
+  | "odb" : "odb"
+  | "omics" : "Amazon Omics"
+  | "opensearch" : "Amazon OpenSearch Service"
+  | "opensearchserverless" : "OpenSearch Service Serverless"
+  | "organizations" : "AWS Organizations"
+  | "osis" : "Amazon OpenSearch Ingestion"
+  | "outposts" : "AWS Outposts"
+  | "partnercentral-account" : "Partner Central Account API"
+  | "partnercentral-benefits" : "Partner Central Benefits API"
+  | "partnercentral-channel" : "Partner Central Channel API"
+  | "partnercentral-revenue-measurement" : "Partner Central Revenue Measurement API"
+  | "partnercentral-selling" : "Partner Central Selling API"
+  | "payment-cryptography" : "Payment Cryptography Control Plane"
+  | "payment-cryptography-data" : "Payment Cryptography Data Plane"
+  | "pca-connector-ad" : "PcaConnectorAd"
+  | "pca-connector-scep" : "Private CA Connector for SCEP"
+  | "pcs" : "AWS Parallel Computing Service"
+  | "personalize" : "Amazon Personalize"
+  | "personalize-events" : "Amazon Personalize Events"
+  | "personalize-runtime" : "Amazon Personalize Runtime"
+  | "pi" : "AWS Performance Insights"
+  | "pinpoint" : "Amazon Pinpoint"
+  | "pinpoint-email" : "Amazon Pinpoint Email Service"
+  | "pinpoint-sms-voice" : "Amazon Pinpoint SMS and Voice Service"
+  | "pinpoint-sms-voice-v2" : "Amazon Pinpoint SMS Voice V2"
+  | "pipes" : "Amazon EventBridge Pipes"
+  | "polly" : "Amazon Polly"
+  | "pricing" : "AWS Price List Service"
+  | "pricing-plan-manager" : "PricingPlanManager"
+  | "proton" : "AWS Proton"
+  | "qapps" : "QApps"
+  | "qbusiness" : "QBusiness"
+  | "qconnect" : "Amazon Q Connect"
+  | "quicksight" : "Amazon QuickSight"
+  | "ram" : "AWS Resource Access Manager"
+  | "rbin" : "Amazon Recycle Bin"
+  | "rds" : "Amazon Relational Database Service"
+  | "rds-data" : "AWS RDS DataService"
+  | "redshift" : "Amazon Redshift"
+  | "redshift-data" : "Redshift Data API Service"
+  | "redshift-serverless" : "Redshift Serverless"
+  | "rekognition" : "Amazon Rekognition"
+  | "repostspace" : "AWS re:Post Private"
+  | "resiliencehub" : "AWS Resilience Hub"
+  | "resiliencehubv2" : "AWS Resilience Hub V2"
+  | "resource-explorer-2" : "AWS Resource Explorer"
+  | "resource-groups" : "AWS Resource Groups"
+  | "resourcegroupstaggingapi" : "AWS Resource Groups Tagging API"
+  | "rolesanywhere" : "IAM Roles Anywhere"
+  | "route53" : "Amazon Route 53"
+  | "route53-recovery-cluster" : "Route53 Recovery Cluster"
+  | "route53-recovery-control-config" : "AWS Route53 Recovery Control Config"
+  | "route53-recovery-readiness" : "AWS Route53 Recovery Readiness"
+  | "route53domains" : "Amazon Route 53 Domains"
+  | "route53globalresolver" : "Amazon Route 53 Global Resolver"
+  | "route53profiles" : "Route 53 Profiles"
+  | "route53resolver" : "Amazon Route 53 Resolver"
+  | "rtbfabric" : "RTBFabric"
+  | "rum" : "CloudWatch RUM"
+  | "s3control" : "AWS S3 Control"
+  | "s3files" : "Amazon S3 Files"
+  | "s3outposts" : "Amazon S3 on Outposts"
+  | "s3tables" : "Amazon S3 Tables"
+  | "s3vectors" : "Amazon S3 Vectors"
+  | "sagemaker" : "Amazon SageMaker Service"
+  | "sagemaker-a2i-runtime" : "Amazon Augmented AI Runtime"
+  | "sagemaker-edge" : "Amazon Sagemaker Edge Manager"
+  | "sagemaker-featurestore-runtime" : "Amazon SageMaker Feature Store Runtime"
+  | "sagemaker-geospatial" : "Amazon SageMaker geospatial capabilities"
+  | "sagemaker-metrics" : "Amazon SageMaker Metrics Service"
+  | "sagemaker-runtime" : "Amazon SageMaker Runtime"
+  | "sagemakerjobruntime" : "Sagemaker Job Runtime Service"
+  | "savingsplans" : "AWS Savings Plans"
+  | "scheduler" : "Amazon EventBridge Scheduler"
+  | "schemas" : "Schemas"
+  | "sdb" : "Amazon SimpleDB"
+  | "security-ir" : "Security Incident Response"
+  | "securityagent" : "AWS Security Agent"
+  | "securityhub" : "AWS SecurityHub"
+  | "securitylake" : "Amazon Security Lake"
+  | "serverlessrepo" : "AWSServerlessApplicationRepository"
+  | "service-quotas" : "Service Quotas"
+  | "servicecatalog" : "AWS Service Catalog"
+  | "servicecatalog-appregistry" : "AWS Service Catalog App Registry"
+  | "servicediscovery" : "AWS Cloud Map"
+  | "ses" : "Amazon Simple Email Service"
+  | "sesv2" : "Amazon Simple Email Service"
+  | "shield" : "AWS Shield"
+  | "signer" : "AWS Signer"
+  | "signer-data" : "AWS Signer Data Plane"
+  | "signin" : "AWS Sign-In Service"
+  | "simpledbv2" : "Amazon SimpleDB v2"
+  | "snow-device-management" : "AWS Snow Device Management"
+  | "snowball" : "Amazon Import/Export Snowball"
+  | "sns" : "Amazon Simple Notification Service"
+  | "socialmessaging" : "AWS End User Messaging Social"
+  | "sqs" : "Amazon Simple Queue Service"
+  | "ssm-contacts" : "AWS Systems Manager Incident Manager Contacts"
+  | "ssm-guiconnect" : "AWS SSM-GUIConnect"
+  | "ssm-incidents" : "AWS Systems Manager Incident Manager"
+  | "ssm-quicksetup" : "AWS Systems Manager QuickSetup"
+  | "ssm-sap" : "AWS Systems Manager for SAP"
+  | "sso" : "AWS Single Sign-On"
+  | "sso-admin" : "AWS Single Sign-On Admin"
+  | "sso-oidc" : "AWS SSO OIDC"
+  | "stepfunctions" : "AWS Step Functions"
+  | "storagegateway" : "AWS Storage Gateway"
+  | "supplychain" : "AWS Supply Chain"
+  | "support" : "AWS Support"
+  | "support-app" : "AWS Support App"
+  | "supportauthz" : "SupportAuthZ"
+  | "sustainability" : "AWS Sustainability"
+  | "swf" : "Amazon Simple Workflow Service"
+  | "synthetics" : "Synthetics"
+  | "taxsettings" : "Tax Settings"
+  | "textract" : "Amazon Textract"
+  | "timestream-influxdb" : "Timestream InfluxDB"
+  | "timestream-query" : "Amazon Timestream Query"
+  | "timestream-write" : "Amazon Timestream Write"
+  | "tnb" : "AWS Telco Network Builder"
+  | "transcribe" : "Amazon Transcribe Service"
+  | "transfer" : "AWS Transfer Family"
+  | "translate" : "Amazon Translate"
+  | "trustedadvisor" : "TrustedAdvisor Public API"
+  | "uxc" : "AWS User Experience Customization"
+  | "verifiedpermissions" : "Amazon Verified Permissions"
+  | "voice-id" : "Amazon Voice ID"
+  | "vpc-lattice" : "Amazon VPC Lattice"
+  | "waf" : "AWS WAF"
+  | "waf-regional" : "AWS WAF Regional"
+  | "wafv2" : "AWS WAFV2"
+  | "wellarchitected" : "AWS Well-Architected Tool"
+  | "wickr" : "AWS Wickr Admin API"
+  | "wisdom" : "Amazon Connect Wisdom Service"
+  | "workdocs" : "Amazon WorkDocs"
+  | "workmail" : "Amazon WorkMail"
+  | "workmailmessageflow" : "Amazon WorkMail Message Flow"
+  | "workspaces" : "Amazon WorkSpaces"
+  | "workspaces-instances" : "Amazon Workspaces Instances"
+  | "workspaces-thin-client" : "Amazon WorkSpaces Thin Client"
+  | "workspaces-web" : "Amazon WorkSpaces Web"
+  | "xray" : "AWS X-Ray"
+  | "s3api" : "Amazon Simple Storage Service"
+  | "ddb" : "High-level DynamoDB commands"
+  | "deploy" : "AWS CodeDeploy"
+  | "configservice" : "AWS Config"
+  | "history" : "Commands to interact with the history of CLI commands"
+  | "cli-dev" : "Internal commands for AWS CLI development"
+  | "login" : "Sign in with AWS Console credentials"
+  | "logout" : "Remove cached AWS Console login credentials"
+  | "agent-toolkit" : "AgentToolkit"
+  | "update" : "Update the AWS CLI"
+  | "eventsv2" : "Amazon EventBridgeV2" ;
+
+cloudformation_stack_option =
+    "--template-body" : "Template body" , @any
+  | "--template-url" : "The URL of a file that contains the template body" , @any
+  | "--parameters" : "Parameters" , @any , { @any }
+  | "--no-disable-rollback"
+  | "--rollback-configuration" : "Rollback configuration" , @any
+  | "--capabilities" : "Capabilities" , @any , { @any }
+  | "--resource-types" : "Specifies which resource types you can work with" , @any , { @any }
+  | "--role-arn" : "Role arn" , @any
+  | "--tags" : "Key-value pairs to associate with this stack" , @any , { @any }
+  | "--retain-except-on-create" : "When set to true"
+  | "--no-retain-except-on-create"
+  | "--deployment-config" : "The deployment configuration for this stack operation" , @any
+  | "--disable-validation" : "Disable validation"
+  | "--no-disable-validation" ;
+
+cloudformation_deploy_option =
+    "--template-file" : "The path where your AWS CloudFormation template is located" , @file
+  | "--stack-name" : "The name of the AWS CloudFormation stack you're deploying to" , @any
+  | "--s3-bucket" : "S3 bucket" , @any
+  | "--force-upload" : "Indicates whether to override existing files in the S3 bucket"
+  | "--s3-prefix" : "S3 prefix" , @any
+  | "--kms-key-id" : "Kms key id" , @any
+  | "--parameter-overrides" : "Parameter overrides" , @any , { @any }
+  | "--capabilities" : "Capabilities" , @any , { @any }
+  | "--no-execute-changeset" : "Indicates whether to execute the change set"
+  | "--disable-rollback" : "Disable rollback"
+  | "--no-disable-rollback"
+  | "--role-arn" : "Role arn" , @any
+  | "--notification-arns" : "Notification arns" , @any , { @any }
+  | "--fail-on-empty-changeset" : "Fail on empty changeset"
+  | "--no-fail-on-empty-changeset"
+  | "--tags" : "A list of tags to associate with the stack that is created or updated" , @any , { @any }
+  | global_option ;
+
+cloudformation_package_option =
+    "--template-file" : "The path where your AWS CloudFormation template is located" , @file
+  | "--s3-bucket" : "S3 bucket" , @any
+  | "--s3-prefix" : "S3 prefix" , @any
+  | "--kms-key-id" : "Kms key id" , @any
+  | "--output-template-file" : "Output template file" , @file
+  | "--use-json" : "Use json"
+  | "--force-upload" : "Indicates whether to override existing files in the S3 bucket"
+  | "--metadata" : "Metadata" , @any
+  | global_option ;
+
+cloudformation_create_stack_option =
+    "--stack-name" : "The name that's associated with the stack" , @any
+  | "--disable-rollback" : "Set to true to disable rollback of the stack if stack creation failed"
+  | "--timeout-in-minutes" : "Timeout in minutes" , @any
+  | "--notification-arns" : "The Amazon SNS topic ARNs to publish stack related events" , @any , { @any }
+  | "--on-failure" : "Determines what action will be taken if stack creation fails" , ( "DO_NOTHING" | "ROLLBACK" | "DELETE" )
+  | "--stack-policy-body" : "Structure that contains the stack policy body" , @any
+  | "--stack-policy-url" : "Location of a file that contains the stack policy" , @any
+  | "--client-request-token" : "A unique identifier for this CreateStack request" , @any
+  | "--enable-termination-protection" : "Whether to enable termination protection on the specified stack"
+  | "--no-enable-termination-protection"
+  | cloudformation_stack_option
+  | op_input
+  | global_option ;
+
+cloudformation_update_stack_option =
+    "--stack-name" : "The name or unique stack ID of the stack to update" , @any
+  | "--use-previous-template" : "Use previous template"
+  | "--no-use-previous-template"
+  | "--stack-policy-during-update-body" : "Structure that contains the temporary overriding stack policy body" , @any
+  | "--stack-policy-during-update-url" : "Stack policy during update url" , @any
+  | "--stack-policy-body" : "Structure that contains a new stack policy body" , @any
+  | "--stack-policy-url" : "Location of a file that contains the updated stack policy" , @any
+  | "--notification-arns" : "Notification arns" , @any , { @any }
+  | "--disable-rollback" : "Disable rollback"
+  | "--client-request-token" : "A unique identifier for this UpdateStack request" , @any
+  | cloudformation_stack_option
+  | op_input
+  | global_option ;
+
+cloudformation_delete_stack_option =
+    "--stack-name" : "The name or the unique stack ID that's associated with the stack" , @any
+  | "--retain-resources" : "For stacks in the DELETE_FAILED state" , @any , { @any }
+  | "--role-arn" : "Role arn" , @any
+  | "--client-request-token" : "A unique identifier for this DeleteStack request" , @any
+  | "--deletion-mode" : "Specifies the deletion mode for the stack" , ( "STANDARD" | "FORCE_DELETE_STACK" )
+  | "--deployment-config" : "The deployment configuration for this stack operation" , @any
+  | op_input
+  | global_option ;
+
+cloudformation_describe_stacks_option =
+    "--stack-name" : "If you don't pass a parameter to StackName" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+cloudformation_list_stacks_option =
+    "--stack-status-filter" : "Stack status to use as a filter" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+cloudformation_describe_stack_events_option =
+    "--stack-name" : "The name or the unique stack ID that's associated with the stack" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+cloudformation_describe_stack_resources_option =
+    "--stack-name" : "The name or the unique stack ID that is associated with the stack" , @any
+  | "--logical-resource-id" : "The logical name of the resource as specified in the template" , @any
+  | "--physical-resource-id" : "Physical resource id" , @any
+  | op_input
+  | global_option ;
+
+cloudformation_validate_template_option =
+    "--template-body" : "Template body" , @any
+  | "--template-url" : "The URL of a file that contains the template body" , @any
+  | op_input
+  | global_option ;
+
+cloudformation_waiter =
+    "change-set-create-complete" | "stack-create-complete" | "stack-delete-complete" | "stack-exists" | "stack-import-complete" | "stack-refactor-create-complete" | "stack-refactor-execute-complete" | "stack-rollback-complete" | "stack-update-complete" | "type-registration-complete" ;
+
+cloudformation_operation =
+    "describe-stack-resource" : "Describe stack resource"
+  | "list-stack-resources" : "Returns descriptions of all resources of the specified stack"
+  | "get-template" : "Returns the template body for a specified stack"
+  | "get-template-summary" : "Returns information about a new or existing template"
+  | "create-change-set" : "Create change set"
+  | "describe-change-set" : "Describe change set"
+  | "execute-change-set" : "Execute change set"
+  | "delete-change-set" : "Deletes the specified change set"
+  | "list-change-sets" : "Returns the ID and status of each active change set for a stack"
+  | "list-exports" : "List exports"
+  | "list-imports" : "Lists all stacks that are importing an exported output value"
+  | "cancel-update-stack" : "Cancels an update on the specified stack"
+  | "continue-update-rollback" : "Continue update rollback"
+  | "detect-stack-drift" : "Detects whether a stack's actual configuration differs"
+  | "describe-stack-drift-detection-status" : "Returns information about a stack drift detection operation"
+  | "describe-stack-resource-drifts" : "Describe stack resource drifts"
+  | "update-termination-protection" : "Updates termination protection for the specified stack"
+  | "set-stack-policy" : "Sets a stack policy for a specified stack"
+  | "get-stack-policy" : "Returns the stack policy for a specified stack"
+  | "estimate-template-cost" : "Returns the estimated monthly cost of a template"
+  | "signal-resource" : "Signal resource"
+  | "create-stack-set" : "Creates a StackSet"
+  | "update-stack-set" : "Update stack set"
+  | "delete-stack-set" : "Deletes a StackSet"
+  | "list-stack-sets" : "List stack sets"
+  | "describe-stack-set" : "Returns the description of the specified StackSet"
+  | "list-stack-instances" : "List stack instances"
+  | "create-stack-instances" : "Creates stack instances for the specified accounts"
+  | "delete-stack-instances" : "Deletes stack instances for the specified accounts"
+  | "help" : "Show the documentation of this service" ;
+
+cloudformation_command =
+    "deploy" : "Deploy" , { cloudformation_deploy_option }
+  | "package" : "Package" , { cloudformation_package_option }
+  | "create-stack" : "Creates a stack as specified in the template" , { cloudformation_create_stack_option }
+  | "update-stack" : "Updates a stack as specified in the template" , { cloudformation_update_stack_option }
+  | "delete-stack" : "Deletes a specified stack" , { cloudformation_delete_stack_option }
+  | "describe-stacks" : "Returns the description for the specified stack" , { cloudformation_describe_stacks_option }
+  | "list-stacks" : "List stacks" , { cloudformation_list_stacks_option }
+  | "describe-stack-events" : "Describe stack events" , { cloudformation_describe_stack_events_option }
+  | "describe-stack-resources" : "Describe stack resources" , { cloudformation_describe_stack_resources_option }
+  | "validate-template" : "Validates a specified template" , { cloudformation_validate_template_option }
+  | "wait" : "Wait until a condition is satisfied" , [ cloudformation_waiter , { @any } ]
+  | cloudformation_operation , { @any } ;
+
+ec2_describe_instances_option =
+    "--instance-ids" : "The instance IDs" , @any , { @any }
+  | "--include-managed-resources" : "Indicates whether to include managed resources in the output"
+  | "--no-include-managed-resources"
+  | "--dry-run" : "Checks whether you have the required permissions for the operation"
+  | "--no-dry-run"
+  | "--filters" : "The filters" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+ec2_run_instances_option =
+    "--block-device-mappings" : "The block device mapping" , @any , { @any }
+  | "--image-id" : "The ID of the AMI" , @any
+  | "--instance-type" : "The instance type" , @any
+  | "--ipv6-address-count" : "Ipv6 address count" , @any
+  | "--ipv6-addresses" : "Ipv6 addresses" , @any , { @any }
+  | "--kernel-id" : "The ID of the kernel" , @any
+  | "--key-name" : "The name of the key pair" , @any
+  | "--monitoring" : "Specifies whether detailed monitoring is enabled for the instance" , @any
+  | "--placement" : "The placement for the instance" , @any
+  | "--ramdisk-id" : "The ID of the RAM disk to select" , @any
+  | "--security-group-ids" : "The IDs of the security groups" , @any , { @any }
+  | "--security-groups" : "[Default VPC] The names of the security groups" , @any , { @any }
+  | "--subnet-id" : "The ID of the subnet to launch the instance into" , @any
+  | "--user-data" : "The user data to make available to the instance" , @any
+  | "--elastic-gpu-specification" : "An elastic GPU to associate with the instance" , @any , { @any }
+  | "--elastic-inference-accelerators" : "An elastic inference accelerator to associate with the instance" , @any , { @any }
+  | "--tag-specifications" : "Tag specifications" , @any , { @any }
+  | "--launch-template" : "The launch template" , @any
+  | "--instance-market-options" : "The market (purchasing) option for the instances" , @any
+  | "--credit-specification" : "The credit option for CPU usage of the burstable performance instance" , @any
+  | "--cpu-options" : "The CPU options for the instance" , @any
+  | "--capacity-reservation-specification" : "Information about the Capacity Reservation targeting option" , @any
+  | "--hibernation-options" : "Indicates whether an instance is enabled for hibernation" , @any
+  | "--license-specifications" : "The license configurations" , @any , { @any }
+  | "--metadata-options" : "The metadata options for the instance" , @any
+  | "--enclave-options" : "Enclave options" , @any
+  | "--private-dns-name-options" : "The options for the instance hostname" , @any
+  | "--maintenance-options" : "The maintenance and recovery options for the instance" , @any
+  | "--disable-api-stop" : "Indicates whether an instance is enabled for stop protection"
+  | "--no-disable-api-stop"
+  | "--enable-primary-ipv6" : "If youre launching an instance into a dual-stack or IPv6-only subnet"
+  | "--no-enable-primary-ipv6"
+  | "--network-performance-options" : "Network performance options" , @any
+  | "--operator" : "Reserved for internal use" , @any
+  | "--secondary-interfaces" : "The secondary interfaces to associate with the instance" , @any , { @any }
+  | "--dry-run" : "Checks whether you have the required permissions for the operation"
+  | "--no-dry-run"
+  | "--disable-api-termination" : "Indicates whether termination protection is enabled for the instance"
+  | "--instance-initiated-shutdown-behavior" : "Instance initiated shutdown behavior" , ( "stop" | "terminate" )
+  | "--private-ip-address" : "The primary IPv4 address" , @any
+  | "--client-token" : "Client token" , @any
+  | "--additional-info" : "Reserved" , @any
+  | "--network-interfaces" : "The network interfaces to associate with the instance" , @any , { @any }
+  | "--iam-instance-profile" : "The name or Amazon Resource Name (ARN) of an IAM instance profile" , @any
+  | "--ebs-optimized" : "Indicates whether the instance is optimized for Amazon EBS I/O"
+  | "--no-ebs-optimized"
+  | "--enable-api-termination" : "Indicates whether termination protection is enabled for the instance"
+  | "--count" : "Number of instances to launch" , @any
+  | "--secondary-private-ip-addresses" : "Secondary private ip addresses" , @any
+  | "--secondary-private-ip-address-count" : "Secondary private ip address count" , @any
+  | "--associate-public-ip-address" : "Associate public ip address" , @any
+  | "--no-associate-public-ip-address"
+  | op_input
+  | global_option ;
+
+ec2_start_instances_option =
+    "--instance-ids" : "The IDs of the instances" , @any , { @any }
+  | "--additional-info" : "Reserved" , @any
+  | "--dry-run" : "Checks whether you have the required permissions for the operation"
+  | "--no-dry-run"
+  | op_input
+  | global_option ;
+
+ec2_stop_instances_option =
+    "--instance-ids" : "The IDs of the instances" , @any , { @any }
+  | "--hibernate" : "Hibernate"
+  | "--no-hibernate"
+  | "--skip-os-shutdown" : "Skip os shutdown"
+  | "--no-skip-os-shutdown"
+  | "--dry-run" : "Checks whether you have the required permissions for the operation"
+  | "--no-dry-run"
+  | "--force" : "Forces the instance to stop"
+  | "--no-force"
+  | op_input
+  | global_option ;
+
+ec2_terminate_instances_option =
+    "--instance-ids" : "The IDs of the instances" , @any , { @any }
+  | "--force" : "Forces the instances to terminate"
+  | "--no-force"
+  | "--skip-os-shutdown" : "Skip os shutdown"
+  | "--no-skip-os-shutdown"
+  | "--dry-run" : "Checks whether you have the required permissions for the operation"
+  | "--no-dry-run"
+  | op_input
+  | global_option ;
+
+ec2_reboot_instances_option =
+    "--instance-ids" : "The instance IDs" , @any , { @any }
+  | "--dry-run" : "Checks whether you have the required permissions for the operation"
+  | "--no-dry-run"
+  | op_input
+  | global_option ;
+
+ec2_describe_images_option =
+    "--executable-users" : "Scopes the images by users with explicit launch permissions" , @any , { @any }
+  | "--image-ids" : "The image IDs" , @any , { @any }
+  | "--owners" : "Scopes the results to images with the specified owners" , @any , { @any }
+  | "--include-deprecated" : "Specifies whether to include deprecated AMIs"
+  | "--no-include-deprecated"
+  | "--include-disabled" : "Specifies whether to include disabled AMIs"
+  | "--no-include-disabled"
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | "--filters" : "The filters" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+ec2_describe_security_groups_option =
+    "--group-ids" : "The IDs of the security groups" , @any , { @any }
+  | "--group-names" : "[Default VPC] The names of the security groups" , @any , { @any }
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | "--filters" : "The filters" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+ec2_authorize_security_group_ingress_option =
+    "--group-id" : "The ID of the security group" , @any
+  | "--group-name" : "[Default VPC] The name of the security group" , @any
+  | "--ip-permissions" : "The permissions for the security group rules" , @any , { @any }
+  | "--tag-specifications" : "The tags applied to the security group rule" , @any , { @any }
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | "--protocol" : "Protocol" , @any
+  | "--port" : "For TCP or UDP: The range of ports to allow" , @any
+  | "--cidr" : "The IPv4 address range, in CIDR format" , @any
+  | "--source-group" : "The name or ID of the source security group" , @any
+  | "--group-owner" : "The AWS account ID that owns the source security group" , @any
+  | op_input
+  | global_option ;
+
+ec2_describe_vpcs_option =
+    "--filters" : "The filters" , @any , { @any }
+  | "--vpc-ids" : "The IDs of the VPCs" , @any , { @any }
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | op_input
+  | op_paging
+  | global_option ;
+
+ec2_describe_subnets_option =
+    "--filters" : "The filters" , @any , { @any }
+  | "--subnet-ids" : "The IDs of the subnets" , @any , { @any }
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | op_input
+  | op_paging
+  | global_option ;
+
+ec2_create_tags_option =
+    "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | "--resources" : "The IDs of the resources, separated by spaces" , @any , { @any }
+  | "--tags" : "The tags" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ec2_describe_regions_option =
+    "--region-names" : "The names of the Regions" , @any , { @any }
+  | "--all-regions" : "Indicates whether to display all Regions"
+  | "--no-all-regions"
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | "--filters" : "The filters" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ec2_describe_key_pairs_option =
+    "--key-names" : "The key pair names" , @any , { @any }
+  | "--key-pair-ids" : "The IDs of the key pairs" , @any , { @any }
+  | "--include-public-key" : "If true , the public key material is included in the response"
+  | "--no-include-public-key"
+  | "--dry-run" : "Checks whether you have the required permissions for the action"
+  | "--no-dry-run"
+  | "--filters" : "The filters" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ec2_waiter =
+    "bundle-task-complete" | "conversion-task-cancelled" | "conversion-task-completed" | "conversion-task-deleted" | "customer-gateway-available" | "export-task-cancelled" | "export-task-completed" | "image-available" | "image-exists" | "image-usage-report-available" | "instance-exists" | "instance-running" | "instance-status-ok" | "instance-stopped" | "instance-terminated" | "internet-gateway-exists" | "key-pair-exists" | "nat-gateway-available" | "nat-gateway-deleted" | "network-interface-available" | "password-data-available" | "secondary-network-create-complete" | "secondary-network-delete-complete" | "secondary-subnet-create-complete" | "secondary-subnet-delete-complete" | "security-group-exists" | "security-group-vpc-association-associated" | "security-group-vpc-association-disassociated" | "snapshot-completed" | "snapshot-imported" | "spot-instance-request-fulfilled" | "store-image-task-complete" | "subnet-available" | "system-status-ok" | "volume-available" | "volume-deleted" | "volume-in-use" | "vpc-available" | "vpc-exists" | "vpc-peering-connection-deleted" | "vpc-peering-connection-exists" | "vpn-connection-available" | "vpn-connection-deleted" ;
+
+ec2_operation =
+    "describe-instance-status" : "Describe instance status"
+  | "describe-instance-types" : "Describes the specified instance types"
+  | "modify-instance-attribute" : "Modifies the specified attribute of the specified instance"
+  | "create-image" : "Create image"
+  | "deregister-image" : "Deregisters the specified AMI"
+  | "copy-image" : "Initiates an AMI copy operation"
+  | "create-security-group" : "Creates a security group"
+  | "delete-security-group" : "Deletes a security group"
+  | "authorize-security-group-egress" : "Adds the specified outbound (egress) rules to a security group"
+  | "revoke-security-group-ingress" : "Removes the specified inbound (ingress) rules from a security group"
+  | "revoke-security-group-egress" : "Revoke security group egress"
+  | "create-vpc" : "Creates a VPC with the specified CIDR blocks"
+  | "delete-vpc" : "Deletes the specified VPC"
+  | "create-subnet" : "Creates a subnet in the specified VPC"
+  | "delete-subnet" : "Deletes the specified subnet"
+  | "describe-route-tables" : "Describes your route tables"
+  | "describe-internet-gateways" : "Describes your internet gateways"
+  | "describe-nat-gateways" : "Describes your NAT gateways"
+  | "describe-network-interfaces" : "Describe network interfaces"
+  | "describe-addresses" : "Describe addresses"
+  | "allocate-address" : "Allocates an Elastic IP address to your Amazon Web Services account"
+  | "associate-address" : "Associates an Elastic IP address"
+  | "release-address" : "Releases the specified Elastic IP address"
+  | "describe-volumes" : "Describes the specified EBS volumes or all of your EBS volumes"
+  | "create-volume" : "Create volume"
+  | "attach-volume" : "Attaches an Amazon EBS volume to a running or stopped instance"
+  | "detach-volume" : "Detaches an EBS volume from an instance"
+  | "delete-volume" : "Deletes the specified EBS volume"
+  | "describe-snapshots" : "Describe snapshots"
+  | "create-snapshot" : "Creates a snapshot of an EBS volume and stores it in Amazon S3"
+  | "delete-snapshot" : "Deletes the specified snapshot"
+  | "delete-tags" : "Deletes the specified set of tags from the specified set of resources"
+  | "describe-tags" : "Describes the specified tags for your EC2 resources"
+  | "describe-availability-zones" : "Describes the Availability Zones"
+  | "create-key-pair" : "Create key pair"
+  | "delete-key-pair" : "Deletes the specified key pair"
+  | "import-key-pair" : "Import key pair"
+  | "get-console-output" : "Gets the console output for the specified instance"
+  | "get-password-data" : "Get password data"
+  | "describe-launch-templates" : "Describes one or more launch templates"
+  | "create-launch-template" : "Creates a launch template"
+  | "help" : "Show the documentation of this service" ;
+
+ec2_command =
+    "describe-instances" : "Describes the specified instances or all instances" , { ec2_describe_instances_option }
+  | "run-instances" : "Run instances" , { ec2_run_instances_option }
+  | "start-instances" : "Starts an Amazon EBS-backed instance that you've previously stopped" , { ec2_start_instances_option }
+  | "stop-instances" : "Stops an Amazon EBS-backed instance" , { ec2_stop_instances_option }
+  | "terminate-instances" : "Terminates (deletes) the specified instances" , { ec2_terminate_instances_option }
+  | "reboot-instances" : "Requests a reboot of the specified instances" , { ec2_reboot_instances_option }
+  | "describe-images" : "Describes the specified images (AMIs" , { ec2_describe_images_option }
+  | "describe-security-groups" : "Describe security groups" , { ec2_describe_security_groups_option }
+  | "authorize-security-group-ingress" : "Adds the specified inbound (ingress) rules to a security group" , { ec2_authorize_security_group_ingress_option }
+  | "describe-vpcs" : "Describes your VPCs" , { ec2_describe_vpcs_option }
+  | "describe-subnets" : "Describes your subnets" , { ec2_describe_subnets_option }
+  | "create-tags" : "Create tags" , { ec2_create_tags_option }
+  | "describe-regions" : "Describes the Regions that are enabled for your account" , { ec2_describe_regions_option }
+  | "describe-key-pairs" : "Describes the specified key pairs or all of your key pairs" , { ec2_describe_key_pairs_option }
+  | "wait" : "Wait until a condition is satisfied" , [ ec2_waiter , { @any } ]
+  | ec2_operation , { @any } ;
+
+ecr_get_login_password_option =
+    global_option ;
+
+ecr_describe_repositories_option =
+    "--registry-id" : "Registry id" , @any
+  | "--repository-names" : "A list of repositories to describe" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+ecr_create_repository_option =
+    "--registry-id" : "Registry id" , @any
+  | "--repository-name" : "The name to use for the repository" , @any
+  | "--tags" : "Tags to apply, as Key=k,Value=v" , @any , { @any }
+  | "--image-tag-mutability" : "The tag mutability setting for the repository" , ( "MUTABLE" | "IMMUTABLE" | "IMMUTABLE_WITH_EXCLUSION" | "MUTABLE_WITH_EXCLUSION" )
+  | "--image-tag-mutability-exclusion-filters" : "Image tag mutability exclusion filters" , @any , { @any }
+  | "--image-scanning-configuration" : "The imageScanningConfiguration parameter is being deprecated" , @any
+  | "--encryption-configuration" : "The encryption configuration for the repository" , @any
+  | op_input
+  | global_option ;
+
+ecr_delete_repository_option =
+    "--registry-id" : "Registry id" , @any
+  | "--repository-name" : "The name of the repository to delete" , @any
+  | "--force" : "Force"
+  | "--no-force"
+  | op_input
+  | global_option ;
+
+ecr_describe_images_option =
+    "--registry-id" : "Registry id" , @any
+  | "--repository-name" : "The repository that contains the images to describe" , @any
+  | "--image-ids" : "The list of image IDs for the requested repository" , @any , { @any }
+  | "--filter" : "Filter" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+ecr_list_images_option =
+    "--registry-id" : "Registry id" , @any
+  | "--repository-name" : "The repository with image IDs to be listed" , @any
+  | "--filter" : "The filter key and value with which to filter your ListImages results" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+ecr_batch_delete_image_option =
+    "--registry-id" : "Registry id" , @any
+  | "--repository-name" : "The repository that contains the image to delete" , @any
+  | "--image-ids" : "A list of image ID references that correspond to images to delete" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ecr_waiter =
+    "image-scan-complete" | "lifecycle-policy-preview-complete" ;
+
+ecr_operation =
+    "batch-get-image" : "Gets detailed information for an image"
+  | "put-image" : "Put image"
+  | "describe-image-scan-findings" : "Returns the scan findings for the specified image"
+  | "start-image-scan" : "Starts a basic image vulnerability scan"
+  | "put-image-scanning-configuration" : "The PutImageScanningConfiguration API is being deprecated"
+  | "put-image-tag-mutability" : "Put image tag mutability"
+  | "get-lifecycle-policy" : "Retrieves the lifecycle policy for the specified repository"
+  | "put-lifecycle-policy" : "Creates or updates the lifecycle policy for the specified repository"
+  | "delete-lifecycle-policy" : "Deletes the lifecycle policy associated with the specified repository"
+  | "get-repository-policy" : "Retrieves the repository policy for the specified repository"
+  | "set-repository-policy" : "Set repository policy"
+  | "delete-repository-policy" : "Delete repository policy"
+  | "describe-registry" : "Describes the settings for a registry"
+  | "get-authorization-token" : "Retrieves an authorization token"
+  | "describe-pull-through-cache-rules" : "Returns the pull through cache rules for a registry"
+  | "create-pull-through-cache-rule" : "Creates a pull through cache rule"
+  | "put-replication-configuration" : "Creates or updates the replication configuration for a registry"
+  | "list-tags-for-resource" : "List the tags for an Amazon ECR resource"
+  | "tag-resource" : "Adds specified tags to a resource with the specified ARN"
+  | "untag-resource" : "Deletes specified tags from a resource"
+  | "help" : "Show the documentation of this service" ;
+
+ecr_command =
+    "get-login-password" : "Get login password" , { ecr_get_login_password_option }
+  | "describe-repositories" : "Describes image repositories in a registry" , { ecr_describe_repositories_option }
+  | "create-repository" : "Creates a repository" , { ecr_create_repository_option }
+  | "delete-repository" : "Deletes a repository" , { ecr_delete_repository_option }
+  | "describe-images" : "Returns metadata about the images in a repository" , { ecr_describe_images_option }
+  | "list-images" : "Lists all the image IDs for the specified repository" , { ecr_list_images_option }
+  | "batch-delete-image" : "Deletes a list of specified images within a repository" , { ecr_batch_delete_image_option }
+  | "wait" : "Wait until a condition is satisfied" , [ ecr_waiter , { @any } ]
+  | ecr_operation , { @any } ;
+
+ecs_list_clusters_option =
+    op_input
+  | op_paging
+  | global_option ;
+
+ecs_describe_clusters_option =
+    "--clusters" : "Clusters" , @any , { @any }
+  | "--include" : "Include" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ecs_list_services_option =
+    "--cluster" : "Cluster" , @any
+  | "--launch-type" : "The launch type to use when filtering the ListServices results" , ( "EC2" | "FARGATE" | "EXTERNAL" | "MANAGED_INSTANCES" )
+  | "--scheduling-strategy" : "Scheduling strategy" , ( "REPLICA" | "DAEMON" )
+  | "--resource-management-type" : "Resource management type" , ( "CUSTOMER" | "ECS" )
+  | op_input
+  | op_paging
+  | global_option ;
+
+ecs_describe_services_option =
+    "--cluster" : "Cluster" , @any
+  | "--services" : "A list of services to describe" , @any , { @any }
+  | "--include" : "Determines whether you want to see the resource tags for the service" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ecs_update_service_option =
+    "--cluster" : "Cluster" , @any
+  | "--service" : "The name of the service to update" , @any
+  | "--desired-count" : "Desired count" , @any
+  | "--task-definition" : "Task definition" , @any
+  | "--capacity-provider-strategy" : "The details of a capacity provider strategy" , @any , { @any }
+  | "--deployment-configuration" : "Deployment configuration" , @any
+  | "--availability-zone-rebalancing" : "Availability zone rebalancing" , ( "ENABLED" | "DISABLED" )
+  | "--network-configuration" : "An object representing the network configuration for the service" , @any
+  | "--placement-constraints" : "Placement constraints" , @any , { @any }
+  | "--placement-strategy" : "The task placement strategy objects to update the service to use" , @any , { @any }
+  | "--platform-version" : "The platform version that your tasks in the service run on" , @any
+  | "--force-new-deployment" : "Determines whether to force a new deployment of the service"
+  | "--no-force-new-deployment"
+  | "--health-check-grace-period-seconds" : "The period of time" , @any
+  | "--deployment-controller" : "The deployment controller to use for the service" , @any
+  | "--enable-execute-command" : "Enable execute command"
+  | "--enable-ecs-managed-tags" : "Enable ecs managed tags"
+  | "--no-enable-ecs-managed-tags"
+  | "--load-balancers" : "Load balancers" , @any , { @any }
+  | "--propagate-tags" : "Propagate tags" , ( "TASK_DEFINITION" | "SERVICE" | "NONE" )
+  | "--service-registries" : "You must have a service-linked role when you update this property" , @any , { @any }
+  | "--service-connect-configuration" : "Service connect configuration" , @any
+  | "--volume-configurations" : "The details of the volume that was configuredAtLaunch" , @any , { @any }
+  | "--vpc-lattice-configurations" : "Vpc lattice configurations" , @any , { @any }
+  | "--monitoring" : "The optional monitoring configuration for the service" , @any
+  | "--disable-execute-command" : "Disable execute command"
+  | op_input
+  | global_option ;
+
+ecs_list_tasks_option =
+    "--cluster" : "Cluster" , @any
+  | "--container-instance" : "Container instance" , @any
+  | "--family" : "Family" , @any
+  | "--started-by" : "The startedBy value to filter the task results with" , @any
+  | "--service-name" : "The name of the service to use when filtering the ListTasks results" , @any
+  | "--desired-status" : "The task desired status to use when filtering the ListTasks results" , ( "RUNNING" | "PENDING" | "STOPPED" )
+  | "--launch-type" : "The launch type to use when filtering the ListTasks results" , ( "EC2" | "FARGATE" | "EXTERNAL" | "MANAGED_INSTANCES" )
+  | "--daemon-name" : "The name of the daemon to use when filtering the ListTasks results" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+ecs_describe_tasks_option =
+    "--cluster" : "Cluster" , @any
+  | "--tasks" : "A list of up to 100 task IDs or full ARN entries" , @any , { @any }
+  | "--include" : "Specifies whether you want to see the resource tags for the task" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ecs_run_task_option =
+    "--capacity-provider-strategy" : "The capacity provider strategy to use for the task" , @any , { @any }
+  | "--cluster" : "Cluster" , @any
+  | "--count" : "Count" , @any
+  | "--enable-ecs-managed-tags" : "Specifies whether to use Amazon ECS managed tags for the task"
+  | "--no-enable-ecs-managed-tags"
+  | "--enable-execute-command" : "Enable execute command"
+  | "--group" : "The name of the task group to associate with the task" , @any
+  | "--launch-type" : "The infrastructure to run your standalone task on" , ( "EC2" | "FARGATE" | "EXTERNAL" | "MANAGED_INSTANCES" )
+  | "--network-configuration" : "The network configuration for the task" , @any
+  | "--overrides" : "Overrides" , @any
+  | "--placement-constraints" : "An array of placement constraint objects to use for the task" , @any , { @any }
+  | "--placement-strategy" : "The placement strategy objects to use for the task" , @any , { @any }
+  | "--platform-version" : "The platform version the task uses" , @any
+  | "--propagate-tags" : "Propagate tags" , ( "TASK_DEFINITION" | "SERVICE" | "NONE" )
+  | "--reference-id" : "This parameter is only used by Amazon ECS" , @any
+  | "--started-by" : "An optional tag specified when a task is started" , @any
+  | "--tags" : "Tags to apply, as Key=k,Value=v" , @any , { @any }
+  | "--task-definition" : "Task definition" , @any
+  | "--client-token" : "Client token" , @any
+  | "--volume-configurations" : "The details of the volume that was configuredAtLaunch" , @any , { @any }
+  | "--disable-execute-command" : "Disable execute command"
+  | op_input
+  | global_option ;
+
+ecs_stop_task_option =
+    "--cluster" : "Cluster" , @any
+  | "--task" : "Thefull Amazon Resource Name (ARN) of the task" , @any
+  | "--reason" : "An optional message specified when a task is stopped" , @any
+  | op_input
+  | global_option ;
+
+ecs_execute_command_option =
+    "--cluster" : "Cluster" , @any
+  | "--container" : "The name of the container to execute the command on" , @any
+  | "--command" : "The command to run on the container" , @any
+  | "--interactive" : "Use this flag to run your command in interactive mode"
+  | "--task" : "Task" , @any
+  | "--non-interactive" : "Use this flag to run your command in interactive mode"
+  | op_input
+  | global_option ;
+
+ecs_describe_task_definition_option =
+    "--task-definition" : "The family for the latest ACTIVE revision" , @any
+  | "--include" : "Determines whether to see the resource tags for the task definition" , @any , { @any }
+  | op_input
+  | global_option ;
+
+ecs_list_task_definitions_option =
+    "--family-prefix" : "The full family name to filter the ListTaskDefinitions results with" , @any
+  | "--status" : "Status" , ( "ACTIVE" | "INACTIVE" | "DELETE_IN_PROGRESS" )
+  | "--sort" : "The order to sort the results in" , ( "ASC" | "DESC" )
+  | op_input
+  | op_paging
+  | global_option ;
+
+ecs_waiter =
+    "daemon-active" | "daemon-deployment-stopped" | "daemon-deployment-successful" | "daemon-task-definition-active" | "daemon-task-definition-deleted" | "services-inactive" | "services-stable" | "tasks-running" | "tasks-stopped" ;
+
+ecs_operation =
+    "create-cluster" : "Creates a new Amazon ECS cluster"
+  | "delete-cluster" : "Deletes the specified cluster"
+  | "update-cluster-settings" : "Modifies the settings to use for a cluster"
+  | "create-service" : "Create service"
+  | "delete-service" : "Deletes a specified service within a cluster"
+  | "start-task" : "Start task"
+  | "register-task-definition" : "Register task definition"
+  | "deregister-task-definition" : "Deregisters the specified task definition by family and revision"
+  | "list-task-definition-families" : "List task definition families"
+  | "list-container-instances" : "Returns a list of container instances in a specified cluster"
+  | "describe-container-instances" : "Describes one or more container instances"
+  | "update-container-instances-state" : "Modifies the status of an Amazon ECS container instance"
+  | "describe-capacity-providers" : "Describes one or more of your capacity providers"
+  | "create-capacity-provider" : "Creates a capacity provider"
+  | "put-cluster-capacity-providers" : "Put cluster capacity providers"
+  | "put-account-setting" : "Modifies an account setting"
+  | "list-account-settings" : "Lists the account settings for a specified principal"
+  | "list-tags-for-resource" : "List the tags for an Amazon ECS resource"
+  | "tag-resource" : "Tag resource"
+  | "untag-resource" : "Deletes specified tags from a resource"
+  | "deploy" : "Deploys a new task definition to the specified ECS service"
+  | "help" : "Show the documentation of this service" ;
+
+ecs_command =
+    "list-clusters" : "Returns a list of existing clusters" , { ecs_list_clusters_option }
+  | "describe-clusters" : "Describes one or more of your clusters" , { ecs_describe_clusters_option }
+  | "list-services" : "Returns a list of services" , { ecs_list_services_option }
+  | "describe-services" : "Describes the specified services running in your cluster" , { ecs_describe_services_option }
+  | "update-service" : "Modifies the parameters of a service" , { ecs_update_service_option }
+  | "list-tasks" : "Returns a list of tasks" , { ecs_list_tasks_option }
+  | "describe-tasks" : "Describes a specified task or tasks" , { ecs_describe_tasks_option }
+  | "run-task" : "Starts a new task using the specified task definition" , { ecs_run_task_option }
+  | "stop-task" : "Stops a running task" , { ecs_stop_task_option }
+  | "execute-command" : "Execute command" , { ecs_execute_command_option }
+  | "describe-task-definition" : "Describes a task definition" , { ecs_describe_task_definition_option }
+  | "list-task-definitions" : "List task definitions" , { ecs_list_task_definitions_option }
+  | "wait" : "Wait until a condition is satisfied" , [ ecs_waiter , { @any } ]
+  | ecs_operation , { @any } ;
+
+eks_update_kubeconfig_option =
+    "--name" : "The name of the cluster for which to create a kubeconfig entry" , @any
+  | "--kubeconfig" : "Kubeconfig" , @file
+  | "--role-arn" : "To assume a role for cluster authentication" , @any
+  | "--proxy-url" : "Proxy url" , @any
+  | "--dry-run" : "Dry run"
+  | "--verbose" : "Print more detailed output when writing to the kubeconfig file"
+  | "--alias" : "Alias for the cluster context name" , @any
+  | "--user-alias" : "Alias for the generated user name" , @any
+  | "--assume-role-arn" : "To assume a role for retrieving cluster information" , @any
+  | global_option ;
+
+eks_get_token_option =
+    "--cluster-name" : "Specify the name of the Amazon EKS cluster to create a token for" , @any
+  | "--role-arn" : "Assume this role for credentials when signing the token" , @any
+  | "--cluster-id" : "Specify the id of the Amazon EKS cluster to create a token for" , @any
+  | global_option ;
+
+eks_list_clusters_option =
+    "--include" : "Indicates whether external clusters are included in the returned list" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+eks_describe_cluster_option =
+    "--name" : "The name of your cluster" , @any
+  | op_input
+  | global_option ;
+
+eks_list_nodegroups_option =
+    "--cluster-name" : "The name of your cluster" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+eks_describe_nodegroup_option =
+    "--cluster-name" : "The name of your cluster" , @any
+  | "--nodegroup-name" : "The name of the node group to describe" , @any
+  | op_input
+  | global_option ;
+
+eks_waiter =
+    "addon-active" | "addon-deleted" | "certificate-authority-update-complete" | "cluster-active" | "cluster-deleted" | "fargate-profile-active" | "fargate-profile-deleted" | "nodegroup-active" | "nodegroup-deleted" ;
+
+eks_operation =
+    "create-cluster" : "Creates an Amazon EKS control plane"
+  | "delete-cluster" : "Deletes an Amazon EKS cluster control plane"
+  | "update-cluster-config" : "Updates an Amazon EKS cluster configuration"
+  | "update-cluster-version" : "Updates an Amazon EKS cluster to the specified Kubernetes version"
+  | "create-nodegroup" : "Creates a managed node group for an Amazon EKS cluster"
+  | "delete-nodegroup" : "Deletes a managed node group"
+  | "update-nodegroup-config" : "Updates an Amazon EKS managed node group configuration"
+  | "update-nodegroup-version" : "Update nodegroup version"
+  | "list-addons" : "Lists the installed add-ons"
+  | "describe-addon" : "Describes an Amazon EKS add-on"
+  | "create-addon" : "Creates an Amazon EKS add-on"
+  | "update-addon" : "Updates an Amazon EKS add-on"
+  | "delete-addon" : "Deletes an Amazon EKS add-on"
+  | "describe-addon-versions" : "Describes the versions for an add-on"
+  | "list-fargate-profiles" : "List fargate profiles"
+  | "describe-fargate-profile" : "Describes an Fargate profile"
+  | "create-fargate-profile" : "Creates an Fargate profile for your Amazon EKS cluster"
+  | "delete-fargate-profile" : "Deletes an Fargate profile"
+  | "list-access-entries" : "Lists the access entries for your cluster"
+  | "create-access-entry" : "Creates an access entry"
+  | "delete-access-entry" : "Deletes an access entry"
+  | "associate-access-policy" : "Associates an access policy and its scope to an access entry"
+  | "list-pod-identity-associations" : "List the EKS Pod Identity associations in a cluster"
+  | "create-pod-identity-association" : "Create pod identity association"
+  | "list-updates" : "List updates"
+  | "describe-update" : "Describes an update to an Amazon EKS resource"
+  | "list-tags-for-resource" : "List the tags for an Amazon EKS resource"
+  | "tag-resource" : "Tag resource"
+  | "untag-resource" : "Deletes specified tags from an Amazon EKS resource"
+  | "help" : "Show the documentation of this service" ;
+
+eks_command =
+    "update-kubeconfig" : "Update kubeconfig" , { eks_update_kubeconfig_option }
+  | "get-token" : "Get a token for authentication with an Amazon EKS cluster" , { eks_get_token_option }
+  | "list-clusters" : "List clusters" , { eks_list_clusters_option }
+  | "describe-cluster" : "Describes an Amazon EKS cluster" , { eks_describe_cluster_option }
+  | "list-nodegroups" : "List nodegroups" , { eks_list_nodegroups_option }
+  | "describe-nodegroup" : "Describes a managed node group" , { eks_describe_nodegroup_option }
+  | "wait" : "Wait until a condition is satisfied" , [ eks_waiter , { @any } ]
+  | eks_operation , { @any } ;
+
+iam_list_users_option =
+    "--path-prefix" : "The path prefix for filtering the results" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+iam_create_user_option =
+    "--path" : "The path for the user name" , @any
+  | "--user-name" : "The name of the user to create" , @any
+  | "--permissions-boundary" : "Permissions boundary" , @any
+  | "--tags" : "A list of tags that you want to attach to the new user" , @any , { @any }
+  | op_input
+  | global_option ;
+
+iam_list_roles_option =
+    "--path-prefix" : "The path prefix for filtering the results" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+iam_create_role_option =
+    "--path" : "The path to the role" , @any
+  | "--role-name" : "The name of the role to create" , @any
+  | "--assume-role-policy-document" : "Assume role policy document" , @any
+  | "--description" : "A description of the role" , @any
+  | "--max-session-duration" : "Max session duration" , @any
+  | "--permissions-boundary" : "Permissions boundary" , @any
+  | "--tags" : "A list of tags that you want to attach to the new role" , @any , { @any }
+  | op_input
+  | global_option ;
+
+iam_list_policies_option =
+    "--scope" : "The scope to use for filtering the results" , ( "All" | "AWS" | "Local" )
+  | "--only-attached" : "A flag to filter the results to only the attached policies"
+  | "--no-only-attached"
+  | "--path-prefix" : "The path prefix for filtering the results" , @any
+  | "--policy-usage-filter" : "The policy usage method to use for filtering the results" , ( "PermissionsPolicy" | "PermissionsBoundary" )
+  | op_input
+  | op_paging
+  | global_option ;
+
+iam_attach_role_policy_option =
+    "--role-name" : "The name (friendly name, not ARN) of the role to attach the policy to" , @any
+  | "--policy-arn" : "The Amazon Resource Name (ARN) of the IAM policy you want to attach" , @any
+  | op_input
+  | global_option ;
+
+iam_list_attached_role_policies_option =
+    "--role-name" : "The name (friendly name" , @any
+  | "--path-prefix" : "The path prefix for filtering the results" , @any
+  | op_input
+  | op_paging
+  | global_option ;
+
+iam_waiter =
+    "instance-profile-exists" | "policy-exists" | "role-exists" | "user-exists" ;
+
+iam_operation =
+    "get-user" : "Retrieves information about the specified IAM user"
+  | "delete-user" : "Deletes the specified IAM user"
+  | "update-user" : "Updates the name and/or the path of the specified IAM user"
+  | "list-groups" : "Lists the IAM groups that have the specified path prefix"
+  | "get-group" : "Returns a list of IAM users that are in the specified IAM group"
+  | "create-group" : "Creates a new group"
+  | "delete-group" : "Deletes the specified IAM group"
+  | "add-user-to-group" : "Adds the specified user to the specified group"
+  | "remove-user-from-group" : "Removes the specified user from the specified group"
+  | "list-groups-for-user" : "Lists the IAM groups that the specified IAM user belongs to"
+  | "get-role" : "Retrieves information about the specified role"
+  | "delete-role" : "Deletes the specified role"
+  | "update-role" : "Updates the description or maximum session duration setting of a role"
+  | "update-assume-role-policy" : "Update assume role policy"
+  | "get-policy" : "Retrieves information about the specified managed policy"
+  | "create-policy" : "Creates a new managed policy for your Amazon Web Services account"
+  | "delete-policy" : "Deletes the specified managed policy"
+  | "get-policy-version" : "Get policy version"
+  | "list-policy-versions" : "Lists information about the versions of the specified managed policy"
+  | "create-policy-version" : "Creates a new version of the specified managed policy"
+  | "detach-role-policy" : "Removes the specified managed policy from the specified role"
+  | "attach-user-policy" : "Attaches the specified managed policy to the specified user"
+  | "detach-user-policy" : "Removes the specified managed policy from the specified user"
+  | "list-attached-user-policies" : "List attached user policies"
+  | "attach-group-policy" : "Attaches the specified managed policy to the specified IAM group"
+  | "detach-group-policy" : "Removes the specified managed policy from the specified IAM group"
+  | "list-attached-group-policies" : "List attached group policies"
+  | "put-role-policy" : "Put role policy"
+  | "get-role-policy" : "Get role policy"
+  | "list-role-policies" : "List role policies"
+  | "delete-role-policy" : "Delete role policy"
+  | "put-user-policy" : "Put user policy"
+  | "list-user-policies" : "List user policies"
+  | "create-access-key" : "Create access key"
+  | "delete-access-key" : "Deletes the access key pair associated with the specified IAM user"
+  | "list-access-keys" : "List access keys"
+  | "update-access-key" : "Update access key"
+  | "get-access-key-last-used" : "Get access key last used"
+  | "create-login-profile" : "Creates a password for the specified IAM user"
+  | "delete-login-profile" : "Deletes the password for the specified IAM user or root user"
+  | "list-instance-profiles" : "Lists the instance profiles that have the specified path prefix"
+  | "create-instance-profile" : "Creates a new instance profile"
+  | "add-role-to-instance-profile" : "Adds the specified IAM role to the specified instance profile"
+  | "remove-role-from-instance-profile" : "Remove role from instance profile"
+  | "list-mfa-devices" : "Lists the MFA devices for an IAM user"
+  | "get-account-summary" : "Get account summary"
+  | "list-account-aliases" : "List account aliases"
+  | "create-service-linked-role" : "Create service linked role"
+  | "simulate-principal-policy" : "Simulate principal policy"
+  | "tag-role" : "Adds one or more tags to an IAM role"
+  | "tag-user" : "Adds one or more tags to an IAM user"
+  | "list-open-id-connect-providers" : "List open id connect providers"
+  | "create-open-id-connect-provider" : "Create open id connect provider"
+  | "generate-credential-report" : "Generates a credential report for the Amazon Web Services account"
+  | "get-credential-report" : "Retrieves a credential report for the Amazon Web Services account"
+  | "help" : "Show the documentation of this service" ;
+
+iam_command =
+    "list-users" : "Lists the IAM users that have the specified path prefix" , { iam_list_users_option }
+  | "create-user" : "Creates a new IAM user for your Amazon Web Services account" , { iam_create_user_option }
+  | "list-roles" : "Lists the IAM roles that have the specified path prefix" , { iam_list_roles_option }
+  | "create-role" : "Creates a new role for your Amazon Web Services account" , { iam_create_role_option }
+  | "list-policies" : "List policies" , { iam_list_policies_option }
+  | "attach-role-policy" : "Attaches the specified managed policy to the specified IAM role" , { iam_attach_role_policy_option }
+  | "list-attached-role-policies" : "List attached role policies" , { iam_list_attached_role_policies_option }
+  | "wait" : "Wait until a condition is satisfied" , [ iam_waiter , { @any } ]
+  | iam_operation , { @any } ;
+
+lambda_function_option =
+    "--function-name" : "The name or ARN of the Lambda function" , @any
+  | "--runtime" : "The identifier of the function's runtime" , @any
+  | "--role" : "The Amazon Resource Name (ARN) of the function's execution role" , @any
+  | "--handler" : "Handler" , @any
+  | "--description" : "A description of the function" , @any
+  | "--timeout" : "Timeout" , @any
+  | "--memory-size" : "The amount of memory available to the function at runtime" , @any
+  | "--vpc-config" : "For network connectivity to Amazon Web Services resources in a VPC" , @any
+  | "--dead-letter-config" : "Dead letter config" , @any
+  | "--environment" : "Environment" , @any
+  | "--kms-key-arn" : "Kms key arn" , @any
+  | "--tracing-config" : "Tracing config" , @any
+  | "--layers" : "Layers" , @any , { @any }
+  | "--file-system-configs" : "File system configs" , @any , { @any }
+  | "--image-config" : "Image config" , @any
+  | "--ephemeral-storage" : "The size of the function's /tmp directory in MB" , @any
+  | "--snap-start" : "The function's SnapStart setting" , @any
+  | "--logging-config" : "The function's Amazon CloudWatch Logs configuration settings" , @any
+  | "--capacity-provider-config" : "Capacity provider config" , @any
+  | "--durable-config" : "Configuration settings for durable functions" , @any ;
+
+lambda_list_functions_option =
+    "--master-region" : "For Lambda@Edge functions" , @any
+  | "--function-version" : "Function version" , ( "ALL" )
+  | op_input
+  | op_paging
+  | global_option ;
+
+lambda_get_function_option =
+    "--function-name" : "The name or ARN of the Lambda function, version, or alias" , @any
+  | "--qualifier" : "Qualifier" , @any
+  | op_input
+  | global_option ;
+
+lambda_create_function_option =
+    "--code" : "The code for the function" , @any
+  | "--publish" : "Publish"
+  | "--no-publish"
+  | "--publish-to" : "Specifies where to publish the function version or configuration" , ( "LATEST_PUBLISHED" )
+  | "--package-type" : "The type of deployment package" , ( "Zip" | "Image" )
+  | "--tags" : "A list of tags to apply to the function" , @any
+  | "--code-signing-config-arn" : "To enable code signing for this function" , @any
+  | "--architectures" : "The instruction set architecture that the function supports" , @any , { @any }
+  | "--tenancy-config" : "Configuration for multi-tenant applications that use Lambda functions" , @any
+  | "--zip-file" : "The path to the zip file of the code you are uploading" , @any
+  | lambda_function_option
+  | op_input
+  | global_option ;
+
+lambda_update_function_code_option =
+    "--function-name" : "The name or ARN of the Lambda function" , @any
+  | "--zip-file" : "The path to the zip file of the {param_type} you are uploading" , @any
+  | "--s3-bucket" : "S3 bucket" , @any
+  | "--s3-key" : "The Amazon S3 key of the deployment package" , @any
+  | "--s3-object-version" : "For versioned objects" , @any
+  | "--s3-object-storage-mode" : "Specifies how the deployment package is stored" , ( "COPY" | "REFERENCE" )
+  | "--image-uri" : "URI of a container image in the Amazon ECR registry" , @any
+  | "--architectures" : "The instruction set architecture that the function supports" , @any , { @any }
+  | "--publish" : "Publish"
+  | "--no-publish"
+  | "--publish-to" : "Specifies where to publish the function version or configuration" , ( "LATEST_PUBLISHED" )
+  | "--dry-run" : "Dry run"
+  | "--no-dry-run"
+  | "--revision-id" : "Revision id" , @any
+  | "--source-kms-key-arn" : "Source kms key arn" , @any
+  | op_input
+  | global_option ;
+
+lambda_update_function_configuration_option =
+    "--revision-id" : "Revision id" , @any
+  | lambda_function_option
+  | op_input
+  | global_option ;
+
+lambda_invoke_option =
+    "--function-name" : "The name or ARN of the Lambda function, version, or alias" , @any
+  | "--invocation-type" : "Invocation type" , ( "Event" | "RequestResponse" | "DryRun" )
+  | "--log-type" : "Set to Tail to include the execution log in the response" , ( "None" | "Tail" )
+  | "--client-context" : "Client context" , @any
+  | "--durable-execution-name" : "A unique name for the durable execution" , @any
+  | "--payload" : "The JSON that you want to provide to your Lambda function as input" , @any
+  | "--qualifier" : "Qualifier" , @any
+  | "--tenant-id" : "The identifier of the tenant in a multi-tenant Lambda function" , @any
+  | global_option
+  | @file ;
+
+lambda_waiter =
+    "function-active" | "function-active-v2" | "function-exists" | "function-updated" | "function-updated-v2" | "published-version-active" ;
+
+lambda_operation =
+    "get-function-configuration" : "Returns the version-specific settings of a Lambda function or version"
+  | "delete-function" : "Deletes a Lambda function"
+  | "publish-version" : "Publish version"
+  | "list-versions-by-function" : "Returns a list of versions"
+  | "create-alias" : "Creates an alias for a Lambda function version"
+  | "update-alias" : "Updates the configuration of a Lambda function alias"
+  | "delete-alias" : "Deletes a Lambda function alias"
+  | "list-aliases" : "Returns a list of aliases for a Lambda function"
+  | "get-alias" : "Returns details about a Lambda function alias"
+  | "add-permission" : "Grants a principal permission to use a function"
+  | "remove-permission" : "Remove permission"
+  | "get-policy" : "Returns the resource-based IAM policy for a function"
+  | "publish-layer-version" : "Creates an Lambda layer from a ZIP archive"
+  | "list-layers" : "List layers"
+  | "list-layer-versions" : "Lists the versions of an Lambda layer"
+  | "get-layer-version" : "Returns information about a version of an Lambda layer"
+  | "delete-layer-version" : "Deletes a version of an Lambda layer"
+  | "create-event-source-mapping" : "Creates a mapping between an event source and an Lambda function"
+  | "list-event-source-mappings" : "Lists event source mappings"
+  | "get-event-source-mapping" : "Returns details about an event source mapping"
+  | "update-event-source-mapping" : "Updates an event source mapping"
+  | "delete-event-source-mapping" : "Deletes an event source mapping"
+  | "put-function-concurrency" : "Sets the maximum number of simultaneous executions for a function"
+  | "delete-function-concurrency" : "Removes a concurrent execution limit from a function"
+  | "create-function-url-config" : "Create function url config"
+  | "get-function-url-config" : "Returns details about a Lambda function URL"
+  | "update-function-url-config" : "Updates the configuration for a Lambda function URL"
+  | "delete-function-url-config" : "Deletes a Lambda function URL"
+  | "list-function-url-configs" : "Returns a list of Lambda function URLs for the specified function"
+  | "get-account-settings" : "Get account settings"
+  | "tag-resource" : "Adds tags to a function"
+  | "untag-resource" : "Removes tags from a function"
+  | "list-tags" : "Returns a function"
+  | "help" : "Show the documentation of this service" ;
+
+lambda_command =
+    "list-functions" : "Returns a list of Lambda functions" , { lambda_list_functions_option }
+  | "get-function" : "Returns information about the function or function version" , { lambda_get_function_option }
+  | "create-function" : "Creates a Lambda function" , { lambda_create_function_option }
+  | "update-function-code" : "Updates a Lambda function's code" , { lambda_update_function_code_option }
+  | "update-function-configuration" : "Modify the version-specific settings of a Lambda function" , { lambda_update_function_configuration_option }
+  | "invoke" : "Invokes a Lambda function" , { lambda_invoke_option }
+  | "wait" : "Wait until a condition is satisfied" , [ lambda_waiter , { @any } ]
+  | lambda_operation , { @any } ;
+
+logs_tail_option =
+    "--since" : "From what time to begin displaying logs" , @any
+  | "--follow" : "Whether to continuously poll for new logs"
+  | "--format" : "The format to display the logs" , ( "detailed" | "short" | "json" )
+  | "--filter-pattern" : "The filter pattern to use" , @any
+  | "--log-stream-names" : "The list of stream names to filter logs by" , @any , { @any }
+  | "--log-stream-name-prefix" : "The prefix to filter logs by" , @any
+  | global_option
+  | @any ;
+
+logs_describe_log_groups_option =
+    "--account-identifiers" : "When includeLinkedAccounts is set to true" , @any , { @any }
+  | "--log-group-name-prefix" : "The prefix to match" , @any
+  | "--log-group-name-pattern" : "If you specify a string for this parameter" , @any
+  | "--include-linked-accounts" : "If you are using a monitoring account"
+  | "--no-include-linked-accounts"
+  | "--log-group-class" : "Log group class" , ( "STANDARD" | "INFREQUENT_ACCESS" | "DELIVERY" )
+  | "--log-group-identifiers" : "Use this array to filter the list of log groups returned" , @any , { @any }
+  | op_input
+  | op_paging
+  | global_option ;
+
+logs_describe_log_streams_option =
+    "--log-group-name" : "The name of the log group" , @any
+  | "--log-group-identifier" : "Specify either the name or ARN of the log group to view" , @any
+  | "--log-stream-name-prefix" : "The prefix to match" , @any
+  | "--order-by" : "If the value is LogStreamName" , ( "LogStreamName" | "LastEventTime" )
+  | "--descending" : "If the value is true, results are returned in descending order"
+  | "--no-descending"
+  | op_input
+  | op_paging
+  | global_option ;
+
+logs_filter_log_events_option =
+    "--log-group-name" : "The name of the log group to search" , @any
+  | "--log-group-identifier" : "Log group identifier" , @any
+  | "--log-stream-names" : "Filters the results to only logs from the log streams in this list" , @any , { @any }
+  | "--log-stream-name-prefix" : "Log stream name prefix" , @any
+  | "--start-time" : "The start of the time range" , @any
+  | "--end-time" : "The end of the time range" , @any
+  | "--filter-pattern" : "The filter pattern to use" , @any
+  | "--start-from-head" : "If the value is true, the earliest log events are returned first"
+  | "--no-start-from-head"
+  | "--interleaved" : "If the value is true"
+  | "--no-interleaved"
+  | "--unmask" : "Unmask"
+  | "--no-unmask"
+  | op_input
+  | op_paging
+  | global_option ;
+
+logs_get_log_events_option =
+    "--log-group-name" : "The name of the log group" , @any
+  | "--log-group-identifier" : "Specify either the name or ARN of the log group to view events from" , @any
+  | "--log-stream-name" : "The name of the log stream" , @any
+  | "--start-time" : "The start of the time range" , @any
+  | "--end-time" : "The end of the time range" , @any
+  | "--next-token" : "The token for the next set of items to return" , @any
+  | "--limit" : "The maximum number of log events returned" , @any
+  | "--start-from-head" : "If the value is true, the earliest log events are returned first"
+  | "--no-start-from-head"
+  | "--unmask" : "Unmask"
+  | "--no-unmask"
+  | op_input
+  | global_option ;
+
+logs_start_query_option =
+    "--query-language" : "Specify the query language to use for this query" , ( "CWLI" | "SQL" | "PPL" )
+  | "--log-group-name" : "The log group on which to perform the query" , @any
+  | "--log-group-names" : "The list of log groups to be queried" , @any , { @any }
+  | "--log-group-identifiers" : "The list of log groups to query" , @any , { @any }
+  | "--start-time" : "The beginning of the time range to query" , @any
+  | "--end-time" : "The end of the time range to query" , @any
+  | "--query-string" : "The query string to use" , @any
+  | "--limit" : "The maximum number of log events to return from the query" , @any
+  | op_input
+  | global_option ;
+
+logs_operation =
+    "start-live-tail" : "Starts a Live Tail streaming session for one or more log groups"
+  | "create-log-group" : "Creates a log group with the specified name"
+  | "delete-log-group" : "Delete log group"
+  | "create-log-stream" : "Creates a log stream for the specified log group"
+  | "delete-log-stream" : "Delete log stream"
+  | "put-log-events" : "Uploads a batch of log events to the specified log stream"
+  | "put-retention-policy" : "Sets the retention of the specified log group"
+  | "delete-retention-policy" : "Deletes the specified retention policy"
+  | "get-query-results" : "Returns the results from the specified query"
+  | "stop-query" : "Stops a CloudWatch Logs Insights query that is in progress"
+  | "describe-queries" : "Returns a list of CloudWatch Logs Insights queries that are scheduled"
+  | "describe-query-definitions" : "Describe query definitions"
+  | "put-query-definition" : "Creates or updates a query definition for CloudWatch Logs Insights"
+  | "describe-metric-filters" : "Lists the specified metric filters"
+  | "put-metric-filter" : "Put metric filter"
+  | "delete-metric-filter" : "Deletes the specified metric filter"
+  | "describe-subscription-filters" : "Lists the subscription filters for the specified log group"
+  | "put-subscription-filter" : "Put subscription filter"
+  | "delete-subscription-filter" : "Deletes the specified subscription filter"
+  | "create-export-task" : "Create export task"
+  | "describe-export-tasks" : "Lists the specified export tasks"
+  | "associate-kms-key" : "Associate kms key"
+  | "tag-resource" : "Tag resource"
+  | "untag-resource" : "Removes one or more tags from the specified resource"
+  | "list-tags-for-resource" : "Displays the tags associated with a CloudWatch Logs resource"
+  | "help" : "Show the documentation of this service" ;
+
+logs_command =
+    "tail" : "Tails the logs for a CloudWatch Logs group" , { logs_tail_option }
+  | "describe-log-groups" : "Returns information about log groups" , { logs_describe_log_groups_option }
+  | "describe-log-streams" : "Lists the log streams for the specified log group" , { logs_describe_log_streams_option }
+  | "filter-log-events" : "Lists log events from the specified log group" , { logs_filter_log_events_option }
+  | "get-log-events" : "Lists log events from the specified log stream" , { logs_get_log_events_option }
+  | "start-query" : "Start query" , { logs_start_query_option }
+  | logs_operation , { @any } ;
+
+secretsmanager_create_secret_option =
+    "--name" : "The name of the new secret" , @any
+  | "--client-request-token" : "If you include SecretString or SecretBinary" , @any
+  | "--description" : "The description of the secret" , @any
+  | "--kms-key-id" : "Kms key id" , @any
+  | "--secret-binary" : "The binary data to encrypt and store in the new version of the secret" , @any
+  | "--secret-string" : "The text data to encrypt and store in this new version of the secret" , @any
+  | "--tags" : "A list of tags to attach to the secret" , @any , { @any }
+  | "--add-replica-regions" : "A list of Regions and KMS keys to replicate secrets" , @any , { @any }
+  | "--force-overwrite-replica-secret" : "Force overwrite replica secret"
+  | "--no-force-overwrite-replica-secret"
+  | "--type" : "Type" , @any
+  | op_input
+  | global_option ;
+
+secretsmanager_delete_secret_option =
+    "--secret-id" : "The ARN or name of the secret to delete" , @any
+  | "--recovery-window-in-days" : "Recovery window in days" , @any
+  | "--force-delete-without-recovery" : "Specifies whether to delete the secret without any recovery window"
+  | "--no-force-delete-without-recovery"
+  | op_input
+  | global_option ;
+
+secretsmanager_describe_secret_option =
+    "--secret-id" : "The ARN or name of the secret" , @any
+  | op_input
+  | global_option ;
+
+secretsmanager_get_secret_value_option =
+    "--secret-id" : "The ARN or name of the secret to retrieve" , @any
+  | "--version-id" : "The unique identifier of the version of the secret to retrieve" , @any
+  | "--version-stage" : "The staging label of the version of the secret to retrieve" , @any
+  | op_input
+  | global_option ;
+
+secretsmanager_list_secrets_option =
+    "--include-planned-deletion" : "Specifies whether to include secrets scheduled for deletion"
+  | "--no-include-planned-deletion"
+  | "--filters" : "The filters to apply to the list of secrets" , @any , { @any }
+  | "--sort-order" : "Secrets are listed by CreatedDate" , ( "asc" | "desc" )
+  | "--sort-by" : "If not specified, secrets are listed by CreatedDate" , ( "created-date" | "last-accessed-date" | "last-changed-date" | "name" )
+  | op_input
+  | op_paging
+  | global_option ;
+
+secretsmanager_operation =
+    "batch-get-secret-value" : "Batch get secret value"
+  | "cancel-rotate-secret" : "Turns off automatic rotation"
+  | "delete-resource-policy" : "Deletes the resource-based permission policy attached to the secret"
+  | "get-random-password" : "Generates a random password"
+  | "get-resource-policy" : "Get resource policy"
+  | "list-secret-version-ids" : "Lists the versions of a secret"
+  | "put-resource-policy" : "Attaches a resource-based permission policy to a secret"
+  | "put-secret-value" : "Put secret value"
+  | "remove-regions-from-replication" : "For a secret that is replicated to other Regions"
+  | "replicate-secret-to-regions" : "Replicates the secret to a new Regions"
+  | "restore-secret" : "Restore secret"
+  | "rotate-secret" : "Configures and starts the asynchronous process of rotating the secret"
+  | "stop-replication-to-replica" : "Stop replication to replica"
+  | "tag-resource" : "Attaches tags to a secret"
+  | "untag-resource" : "Removes specific tags from a secret"
+  | "update-secret" : "Modifies the details of a secret"
+  | "update-secret-version-stage" : "Modifies the staging labels attached to a version of a secret"
+  | "validate-resource-policy" : "Validate resource policy"
+  | "help" : "Show the documentation of this service" ;
+
+secretsmanager_command =
+    "create-secret" : "Creates a new secret" , { secretsmanager_create_secret_option }
+  | "delete-secret" : "Deletes a secret and all of its versions" , { secretsmanager_delete_secret_option }
+  | "describe-secret" : "Retrieves the details of a secret" , { secretsmanager_describe_secret_option }
+  | "get-secret-value" : "Get secret value" , { secretsmanager_get_secret_value_option }
+  | "list-secrets" : "List secrets" , { secretsmanager_list_secrets_option }
+  | secretsmanager_operation , { @any } ;
+
+ssm_get_parameter_option =
+    "--name" : "Name" , @any
+  | "--with-decryption" : "Return decrypted values for secure string parameters"
+  | "--no-with-decryption"
+  | op_input
+  | global_option ;
+
+ssm_get_parameters_option =
+    "--names" : "Names" , @any , { @any }
+  | "--with-decryption" : "Return decrypted secure string value"
+  | "--no-with-decryption"
+  | op_input
+  | global_option ;
+
+ssm_get_parameters_by_path_option =
+    "--path" : "The hierarchy for the parameter" , @any
+  | "--recursive" : "Retrieve all parameters within a hierarchy"
+  | "--no-recursive"
+  | "--parameter-filters" : "Filters to limit the request results" , @any , { @any }
+  | "--with-decryption" : "Retrieve all parameters in a hierarchy with their value decrypted"
+  | "--no-with-decryption"
+  | op_input
+  | op_paging
+  | global_option ;
+
+ssm_put_parameter_option =
+    "--name" : "Name" , @any
+  | "--description" : "Information about the parameter that you want to add to the system" , @any
+  | "--value" : "The parameter value that you want to add to the system" , @any
+  | "--type" : "The type of parameter that you want to create" , ( "String" | "StringList" | "SecureString" )
+  | "--key-id" : "Key id" , @any
+  | "--overwrite" : "Overwrite an existing parameter"
+  | "--no-overwrite"
+  | "--allowed-pattern" : "A regular expression used to validate the parameter value" , @any
+  | "--tags" : "Optional metadata that you assign to a resource" , @any , { @any }
+  | "--tier" : "The parameter tier to assign to a parameter" , ( "Standard" | "Advanced" | "Intelligent-Tiering" )
+  | "--policies" : "One or more policies to apply to a parameter" , @any
+  | "--data-type" : "The data type for a String parameter" , @any
+  | op_input
+  | global_option ;
+
+ssm_describe_parameters_option =
+    "--filters" : "This data type is deprecated" , @any , { @any }
+  | "--parameter-filters" : "Filters to limit the request results" , @any , { @any }
+  | "--shared" : "Lists parameters that are shared with you"
+  | "--no-shared"
+  | op_input
+  | op_paging
+  | global_option ;
+
+ssm_start_session_option =
+    "--target" : "The managed node to connect to for the session" , @any
+  | "--document-name" : "Document name" , @any
+  | "--reason" : "The reason for connecting to the instance" , @any
+  | "--parameters" : "Parameters" , @any
+  | op_input
+  | global_option ;
+
+ssm_send_command_option =
+    "--instance-ids" : "The IDs of the managed nodes where the command should run" , @any , { @any }
+  | "--targets" : "Targets" , @any , { @any }
+  | "--document-name" : "Document name" , @any
+  | "--document-version" : "The SSM document version to use in the request" , @any
+  | "--document-hash" : "Document hash" , @any
+  | "--document-hash-type" : "Sha256 or Sha1" , ( "Sha256" | "Sha1" )
+  | "--timeout-seconds" : "Timeout seconds" , @any
+  | "--comment" : "User-specified information about the command" , @any
+  | "--parameters" : "Parameters" , @any
+  | "--output-s3-region" : "(Deprecated) You can no longer specify this parameter" , @any
+  | "--output-s3-bucket-name" : "Output s3 bucket name" , @any
+  | "--output-s3-key-prefix" : "Output s3 key prefix" , @any
+  | "--max-concurrency" : "Max concurrency" , @any
+  | "--max-errors" : "The maximum number of errors allowed without the command failing" , @any
+  | "--service-role-arn" : "Service role arn" , @any
+  | "--notification-config" : "Configurations for sending notifications" , @any
+  | "--cloud-watch-output-config" : "Cloud watch output config" , @any
+  | "--alarm-configuration" : "The CloudWatch alarm you want to apply to your command" , @any
+  | op_input
+  | global_option ;
+
+ssm_waiter =
+    "command-executed" ;
+
+ssm_operation =
+    "delete-parameter" : "Delete a parameter from the system"
+  | "delete-parameters" : "Delete a list of parameters"
+  | "get-parameter-history" : "Retrieves the history of all changes to a parameter"
+  | "label-parameter-version" : "Label parameter version"
+  | "resume-session" : "Reconnects a session to a managed node after it has been disconnected"
+  | "terminate-session" : "Terminate session"
+  | "describe-sessions" : "Describe sessions"
+  | "list-commands" : "List commands"
+  | "list-command-invocations" : "An invocation is copy of a command sent to a specific managed node"
+  | "get-command-invocation" : "Get command invocation"
+  | "cancel-command" : "Attempts to cancel the command specified by the Command ID"
+  | "describe-instance-information" : "Provides information about one or more of your managed nodes"
+  | "start-automation-execution" : "Initiates execution of an Automation runbook"
+  | "get-automation-execution" : "Get detailed information about a particular Automation execution"
+  | "describe-automation-executions" : "Describe automation executions"
+  | "stop-automation-execution" : "Stop an Automation that is currently running"
+  | "list-documents" : "List documents"
+  | "describe-document" : "Describe document"
+  | "get-document" : "Get document"
+  | "create-document" : "Creates a Amazon Web Services Systems Manager (SSM document)"
+  | "update-document" : "Updates one or more values for an SSM document"
+  | "delete-document" : "Delete document"
+  | "create-association" : "Create association"
+  | "list-associations" : "List associations"
+  | "describe-association" : "Describes the association for the specified target or managed node"
+  | "delete-association" : "Delete association"
+  | "get-inventory" : "Query inventory information"
+  | "list-inventory-entries" : "A list of inventory items returned by the request"
+  | "add-tags-to-resource" : "Adds or overwrites one or more tags for the specified resource"
+  | "remove-tags-from-resource" : "Removes tag keys from the specified resource"
+  | "list-tags-for-resource" : "Returns a list of the tags assigned to the specified resource"
+  | "describe-maintenance-windows" : "Retrieves the maintenance windows in an Amazon Web Services account"
+  | "describe-patch-baselines" : "Lists the patch baselines in your Amazon Web Services account"
+  | "describe-instance-patch-states" : "Retrieves the high-level patch state of one or more managed nodes"
+  | "help" : "Show the documentation of this service" ;
+
+ssm_command =
+    "get-parameter" : "Get parameter" , { ssm_get_parameter_option }
+  | "get-parameters" : "Get parameters" , { ssm_get_parameters_option }
+  | "get-parameters-by-path" : "Get parameters by path" , { ssm_get_parameters_by_path_option }
+  | "put-parameter" : "Create or update a parameter in Parameter Store" , { ssm_put_parameter_option }
+  | "describe-parameters" : "Describe parameters" , { ssm_describe_parameters_option }
+  | "start-session" : "Start session" , { ssm_start_session_option }
+  | "send-command" : "Runs commands on one or more managed nodes" , { ssm_send_command_option }
+  | "wait" : "Wait until a condition is satisfied" , [ ssm_waiter , { @any } ]
+  | ssm_operation , { @any } ;
+
+sts_assume_role_option =
+    "--role-arn" : "The Amazon Resource Name (ARN) of the role to assume" , @any
+  | "--role-session-name" : "An identifier for the assumed role session" , @any
+  | "--policy-arns" : "Policy arns" , @any , { @any }
+  | "--policy" : "Policy" , @any
+  | "--duration-seconds" : "The duration, in seconds, of the role session" , @any
+  | "--tags" : "A list of session tags that you want to pass" , @any , { @any }
+  | "--transitive-tag-keys" : "A list of keys for session tags that you want to set as transitive" , @any , { @any }
+  | "--external-id" : "External id" , @any
+  | "--serial-number" : "ARN or serial number of the MFA device" , @any
+  | "--token-code" : "The value provided by the MFA device" , @any
+  | "--source-identity" : "Source identity" , @any
+  | "--provided-contexts" : "Provided contexts" , @any , { @any }
+  | "--minimum-session-token-size" : "The minimum size" , @any
+  | op_input
+  | global_option ;
+
+sts_get_caller_identity_option =
+    op_input
+  | global_option ;
+
+sts_get_session_token_option =
+    "--duration-seconds" : "The duration, in seconds, that the credentials should remain valid" , @any
+  | "--serial-number" : "ARN or serial number of the MFA device" , @any
+  | "--token-code" : "The value provided by the MFA device, if MFA is required" , @any
+  | "--minimum-session-token-size" : "The minimum size" , @any
+  | op_input
+  | global_option ;
+
+sts_operation =
+    "assume-role-with-saml" : "Assume role with saml"
+  | "assume-role-with-web-identity" : "Assume role with web identity"
+  | "assume-root" : "Assume root"
+  | "decode-authorization-message" : "Decode authorization message"
+  | "get-access-key-info" : "Returns the account identifier for the specified access key ID"
+  | "get-delegated-access-token" : "Get delegated access token"
+  | "get-federation-token" : "Get federation token"
+  | "get-web-identity-token" : "Get web identity token"
+  | "help" : "Show the documentation of this service" ;
+
+sts_command =
+    "assume-role" : "Assume role" , { sts_assume_role_option }
+  | "get-caller-identity" : "Get caller identity" , { sts_get_caller_identity_option }
+  | "get-session-token" : "Get session token" , { sts_get_session_token_option }
+  | sts_operation , { @any } ;
+
+s3_transfer_option =
+    "--dryrun" : "Dryrun"
+  | "--quiet" : "Does not display the operations performed from the specified command"
+  | "--include" : "Include" , @any
+  | "--exclude" : "Exclude" , @any
+  | "--acl" : "Sets the ACL for the object when the command is performed" , ( "private" | "public-read" | "public-read-write" | "authenticated-read" | "aws-exec-read" | "bucket-owner-read" | "bucket-owner-full-control" | "log-delivery-write" )
+  | "--follow-symlinks" : "Follow symlinks"
+  | "--no-follow-symlinks"
+  | "--no-guess-mime-type" : "Do not try to guess the mime type for uploaded files"
+  | "--sse" : "Specifies server-side encryption of the object in S3" , [ ( "AES256" | "aws:kms" ) ]
+  | "--sse-c" : "Server-side encryption with a customer-provided key" , [ ( "AES256" ) ]
+  | "--sse-c-key" : "The customer-provided key for SSE-C" , @any
+  | "--sse-kms-key-id" : "Sse kms key id" , @any
+  | "--sse-c-copy-source" : "Sse c copy source" , [ ( "AES256" ) ]
+  | "--sse-c-copy-source-key" : "Sse c copy source key" , @any
+  | "--storage-class" : "The type of storage to use for the object" , ( "STANDARD" | "REDUCED_REDUNDANCY" | "STANDARD_IA" | "ONEZONE_IA" | "INTELLIGENT_TIERING" | "GLACIER" | "DEEP_ARCHIVE" | "GLACIER_IR" )
+  | "--grants" : "Grant specific permissions to individual users or groups" , @any , { @any }
+  | "--website-redirect" : "If the bucket is configured as a website" , @any
+  | "--content-type" : "Specify an explicit content type for this operation" , @any
+  | "--cache-control" : "Specifies caching behavior along the request/reply chain" , @any
+  | "--content-disposition" : "Specifies presentational information for the object" , @any
+  | "--content-encoding" : "Content encodings applied to the object" , @any
+  | "--content-language" : "The language the content is in" , @any
+  | "--expires" : "The date and time at which the object is no longer cacheable" , @any
+  | "--source-region" : "When transferring objects from an s3 bucket to an s3 bucket" , @any
+  | "--only-show-errors" : "Only errors and warnings are displayed"
+  | "--no-progress" : "File transfer progress is not displayed"
+  | "--progress-frequency" : "Number of seconds to wait before updating file transfer progress" , @any
+  | "--progress-multiline" : "Show progress on multiple lines"
+  | "--ignore-glacier-warnings" : "Turns off glacier warnings"
+  | "--force-glacier-transfer" : "Force a transfer request on all Glacier objects"
+  | "--request-payer" : "Confirm that the requester pays for the request" , [ ( "requester" ) ]
+  | "--checksum-mode" : "To retrieve the checksum, this mode must be enabled" , ( "ENABLED" )
+  | "--checksum-algorithm" : "Indicates the algorithm used to create the checksum for the object" , ( "CRC64NVME" | "CRC32" | "SHA256" | "SHA1" | "CRC32C" | "SHA512" | "XXHASH64" | "XXHASH3" | "XXHASH128" )
+  | "--metadata" : "A map of metadata to store with the objects in S3" , @any
+  | "--copy-props" : "Determines which properties are copied from the source S3 object" , ( "none" | "metadata-directive" | "default" | "all" )
+  | "--metadata-directive" : "Sets the x-amz-metadata-directive header for CopyObject operations" , ( "COPY" | "REPLACE" )
+  | "--case-conflict" : "Case conflict" , ( "ignore" | "skip" | "warn" | "error" )
+  | "--no-overwrite" : "This flag prevents overwriting of files at the destination" ;
+
+s3_ls_option =
+    "--recursive" : "Act on all files or objects under the directory or prefix"
+  | "--human-readable" : "Displays file sizes in human readable format"
+  | "--summarize" : "Displays summary information (number of objects, total size)"
+  | "--request-payer" : "Confirm that the requester pays for the request" , [ ( "requester" ) ]
+  | "--bucket-name-prefix" : "Bucket name prefix" , @any
+  | "--bucket-region" : "Bucket region" , @any
+  | global_option
+  | @any ;
+
+s3_website_option =
+    "--index-document" : "Suffix appended to requests for a directory" , @any
+  | "--error-document" : "The object key name to use when a 4XX class error occurs" , @any
+  | global_option
+  | @any ;
+
+s3_cp_option =
+    "--expected-size" : "Expected size in bytes of a stream upload" , @any
+  | "--recursive" : "Act on all files or objects under the directory or prefix"
+  | s3_transfer_option
+  | global_option
+  | @file ;
+
+s3_mv_option =
+    "--recursive" : "Act on all files or objects under the directory or prefix"
+  | "--validate-same-s3-paths" : "Verify that an object is not moved onto itself"
+  | s3_transfer_option
+  | global_option
+  | @file ;
+
+s3_rm_option =
+    "--dryrun" : "Dryrun"
+  | "--quiet" : "Does not display the operations performed from the specified command"
+  | "--recursive" : "Act on all files or objects under the directory or prefix"
+  | "--request-payer" : "Confirm that the requester pays for the request" , [ ( "requester" ) ]
+  | "--include" : "Include" , @any
+  | "--exclude" : "Exclude" , @any
+  | "--only-show-errors" : "Only errors and warnings are displayed"
+  | global_option
+  | @any ;
+
+s3_sync_option =
+    s3_transfer_option
+  | global_option
+  | @file ;
+
+s3_mb_option =
+    "--tags" : "Tags to apply, as Key=k,Value=v" , @any
+  | global_option
+  | @any ;
+
+s3_rb_option =
+    "--force" : "Deletes all objects in the bucket including the bucket itself"
+  | global_option
+  | @any ;
+
+s3_presign_option =
+    "--expires-in" : "Number of seconds until the pre-signed URL expires" , @any
+  | global_option
+  | @any ;
+
+s3_operation =
+    "help" : "Show the documentation of this service" ;
+
+s3_command =
+    "ls" : "List S3 objects and common prefixes under a prefix or all S3 buckets" , { s3_ls_option }
+  | "website" : "Set the website configuration for a bucket" , { s3_website_option }
+  | "cp" : "Copies a local file or S3 object to another location locally or in S3" , { s3_cp_option }
+  | "mv" : "Move a local file or S3 object locally or in S3" , { s3_mv_option }
+  | "rm" : "Deletes an S3 object" , { s3_rm_option }
+  | "sync" : "Syncs directories and S3 prefixes" , { s3_sync_option }
+  | "mb" : "Creates an S3 bucket" , { s3_mb_option }
+  | "rb" : "Deletes an empty S3 bucket" , { s3_rb_option }
+  | "presign" : "Generate a pre-signed URL for an Amazon S3 object" , { s3_presign_option }
+  | s3_operation , { @any } ;
+
+configure_list_option =
+    global_option ;
+
+configure_get_option =
+    "--sso-session" : "The name of the sub-section from which to retrieve a value" , @any
+  | "--services" : "The name of the sub-section from which to retrieve a value" , @any
+  | global_option
+  | @any ;
+
+configure_set_option =
+    "--sso-session" : "The name of the sub-section to configure" , @any
+  | "--services" : "The name of the sub-section to configure" , @any
+  | global_option
+  | @any ;
+
+configure_add_model_option =
+    "--service-model" : "The contents of the service JSON model" , @any
+  | "--service-name" : "Override the service name from the JSON model" , @any
+  | global_option ;
+
+configure_import_option =
+    "--csv" : "The credentials in CSV format generated by the AWS web console" , @any
+  | "--skip-invalid" : "Skip invalid entries instead of failing"
+  | "--profile-prefix" : "Adds the specified prefix to the beginning of all profile names" , @any
+  | global_option ;
+
+configure_list_profiles_option =
+    global_option ;
+
+configure_sso_option =
+    "--no-browser" : "Do not open the verification URL in a browser"
+  | "--use-device-code" : "Use the device code authorization flow"
+  | "--redirect-port" : "The localhost port to use for the Authorization Code callback server" , @any
+  | global_option ;
+
+configure_sso_session_option =
+    global_option ;
+
+configure_mfa_login_option =
+    "--update-profile" : "The profile to update with temporary credentials" , @any
+  | "--duration-seconds" : "The duration, in seconds, that the credentials should remain valid" , @any
+  | "--serial-number" : "ARN or serial number of the MFA device" , @any
+  | global_option ;
+
+configure_export_credentials_option =
+    "--format" : "The output format to display credentials" , ( "process" | "env" | "env-no-export" | "powershell" | "windows-cmd" | "fish" )
+  | global_option ;
+
+configure_agent_toolkit_option =
+    "--yes" : "Skip all prompts and accept the defaults"
+  | global_option ;
+
+configure_wizard_option =
+    global_option ;
+
+configure_operation =
+    "help" : "Show the documentation of this service" ;
+
+configure_command =
+    "list" : "List the configuration used for the profile" , { configure_list_option }
+  | "get" : "Get a configuration value from the config file" , { configure_get_option }
+  | "set" : "Set a configuration value in the config file" , { configure_set_option }
+  | "add-model" : "Add a service JSON model to ~/.aws/models" , { configure_add_model_option }
+  | "import" : "Import CSV credentials generated from the AWS web console" , { configure_import_option }
+  | "list-profiles" : "List the profiles available to the AWS CLI" , { configure_list_profiles_option }
+  | "sso" : "Configure a profile that uses IAM Identity Center" , { configure_sso_option }
+  | "sso-session" : "Configure an SSO session" , { configure_sso_session_option }
+  | "mfa-login" : "Store temporary credentials from an MFA code in a profile" , { configure_mfa_login_option }
+  | "export-credentials" : "Export credentials in various formats" , { configure_export_credentials_option }
+  | "agent-toolkit" : "Set up AI coding agents with AWS skills and the AWS MCP Server" , { configure_agent_toolkit_option }
+  | "wizard" : "Interactive command for creating and configuring AWS resources" , { configure_wizard_option }
+  | configure_operation , { @any } ;

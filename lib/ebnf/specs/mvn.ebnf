@@ -1,0 +1,122 @@
+(* mvn: options checked against `mvn --help` of Apache Maven 3.10.0, phases
+   against `mvn help:list-lifecycle-phases`, and plugin goals against
+   `mvn help:describe -Dplugin=<prefix>` of the current plugin releases
+   (spring-boot: spring-boot-maven-plugin 4.2.0-RC2).
+
+   Options with a value take it as the next word; short ones also accept it
+   joined (`-Dskip=true`, `-Pdev`). Goals of other plugins are written
+   prefix:goal or groupId:artifactId[:version]:goal, so any other word is
+   accepted as a goal. *)
+
+mvn = { option | phase | goal | @any : "Another plugin goal, prefix:goal" } ;
+
+option =
+    "-am" : "Also build the projects the -pl list requires" | "--also-make" : "Also build the projects the -pl list requires"
+  | "-amd" : "Also build the projects that depend on the -pl list"
+  | "--also-make-dependents" : "Also build the projects that depend on the -pl list"
+  | "--artifacts-update-policy" : "Update policy for artifacts" , update_policy
+  | "-B" : "Run in non-interactive batch mode" | "--batch-mode" : "Run in non-interactive batch mode"
+  | "-b" : "Build strategy to use" , @any | "--builder" : "Build strategy to use" , @any
+  | "-C" : "Fail the build if checksums do not match" | "--strict-checksums" : "Fail the build if checksums do not match"
+  | "-c" : "Warn if checksums do not match" | "--lax-checksums" : "Warn if checksums do not match"
+  | "--color" : "Color mode of the output" , color
+  | "-cpu" : "Ignored, kept for compatibility" | "--check-plugin-updates" : "Ignored, kept for compatibility"
+  | "-D" : "Define a user property, name=value" , @any | "--define" : "Define a user property, name=value" , @any
+  | "-e" : "Produce execution error messages" | "--errors" : "Produce execution error messages"
+  | "-emp" : "Encrypt the master security password" , @any
+  | "--encrypt-master-password" : "Encrypt the master security password" , @any
+  | "-ep" : "Encrypt a server password" , @any | "--encrypt-password" : "Encrypt a server password" , @any
+  | "-f" : "Use this POM file or directory" , @file | "--file" : "Use this POM file or directory" , @file
+  | "-fae" : "Fail at the end, building unaffected projects" | "--fail-at-end" : "Fail at the end, building unaffected projects"
+  | "-ff" : "Stop at the first failure" | "--fail-fast" : "Stop at the first failure"
+  | "-fn" : "Never fail the build" | "--fail-never" : "Never fail the build"
+  | "-gs" : "Global settings file" , @file | "--global-settings" : "Global settings file" , @file
+  | "-gt" : "Global toolchains file" , @file | "--global-toolchains" : "Global toolchains file" , @file
+  | "-h" : "Show the help" | "--help" : "Show the help"
+  | "-itr" : "Ignore repositories of transitive dependencies"
+  | "--ignore-transitive-repositories" : "Ignore repositories of transitive dependencies"
+  | "-l" : "Write the build output to this log file" , @file | "--log-file" : "Write the build output to this log file" , @file
+  | "--metadata-update-policy" : "Update policy for metadata" , update_policy
+  | "-N" : "Do not recurse into sub-projects" | "--non-recursive" : "Do not recurse into sub-projects"
+  | "-npr" : "Ignored, kept for compatibility" | "--no-plugin-registry" : "Ignored, kept for compatibility"
+  | "-npu" : "Ignored, kept for compatibility" | "--no-plugin-updates" : "Ignored, kept for compatibility"
+  | "-nsu" : "Suppress SNAPSHOT updates" | "--no-snapshot-updates" : "Suppress SNAPSHOT updates"
+  | "-ntp" : "Do not show transfer progress" | "--no-transfer-progress" : "Do not show transfer progress"
+  | "-o" : "Work offline" | "--offline" : "Work offline"
+  | "-P" : "Activate these profiles, comma separated" , @any
+  | "--activate-profiles" : "Activate these profiles, comma separated" , @any
+  | "-pl" : "Build only these reactor projects, comma separated" , @any
+  | "--projects" : "Build only these reactor projects, comma separated" , @any
+  | "-q" : "Show errors only" | "--quiet" : "Show errors only"
+  | "--raw-streams" : "Ignored, a Maven 4 option"
+  | "-rf" : "Resume the reactor from this project" , @any | "--resume-from" : "Resume the reactor from this project" , @any
+  | "-s" : "User settings file" , @file | "--settings" : "User settings file" , @file
+  | "-t" : "User toolchains file" , @file | "--toolchains" : "User toolchains file" , @file
+  | "-T" : "Thread count, such as 4 or 1C" , @any | "--threads" : "Thread count, such as 4 or 1C" , @any
+  | "-U" : "Check for updated releases and snapshots" | "--update-snapshots" : "Check for updated releases and snapshots"
+  | "-UA" : "Check for missing artifacts again" | "--update-artifacts" : "Check for missing artifacts again"
+  | "-UM" : "Update remote repository metadata" | "--update-metadata" : "Update remote repository metadata"
+  | "-up" : "Ignored, kept for compatibility" | "--update-plugins" : "Ignored, kept for compatibility"
+  | "-v" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "-V" : "Print the version and continue" | "--show-version" : "Print the version and continue"
+  | "-X" : "Produce debug output" | "--debug" : "Produce debug output" ;
+
+update_policy = "always" | "daily" | "never" ;
+color = "auto" | "always" | "never" ;
+
+phase =
+    "pre-clean" : "Phase: before clean" | "clean" : "Phase: remove the build output" | "post-clean" : "Phase: after clean"
+  | "validate" : "Phase: validate the project" | "initialize" : "Phase: initialize the build state"
+  | "generate-sources" : "Phase: generate sources" | "process-sources" : "Phase: process sources"
+  | "generate-resources" : "Phase: generate resources" | "process-resources" : "Phase: copy resources"
+  | "compile" : "Phase: compile the sources" | "process-classes" : "Phase: post-process compiled classes"
+  | "generate-test-sources" : "Phase: generate test sources" | "process-test-sources" : "Phase: process test sources"
+  | "generate-test-resources" : "Phase: generate test resources" | "process-test-resources" : "Phase: copy test resources"
+  | "test-compile" : "Phase: compile the test sources" | "process-test-classes" : "Phase: post-process test classes"
+  | "test" : "Phase: run the unit tests" | "prepare-package" : "Phase: prepare the package"
+  | "package" : "Phase: package the compiled code" | "pre-integration-test" : "Phase: before integration tests"
+  | "integration-test" : "Phase: run the integration tests" | "post-integration-test" : "Phase: after integration tests"
+  | "verify" : "Phase: run checks on the package" | "install" : "Phase: install the package locally"
+  | "deploy" : "Phase: deploy the package remotely"
+  | "pre-site" : "Phase: before site" | "site" : "Phase: generate the project site" | "post-site" : "Phase: after site"
+  | "site-deploy" : "Phase: deploy the site" ;
+
+goal =
+    "clean:clean" : "Remove the build output"
+  | "compiler:compile" : "Compile the main sources" | "compiler:testCompile" : "Compile the test sources"
+  | "surefire:test" : "Run the unit tests"
+  | "failsafe:integration-test" : "Run the integration tests" | "failsafe:verify" : "Verify the integration tests"
+  | "jar:jar" : "Build a jar" | "jar:test-jar" : "Build a jar of the test classes"
+  | "war:war" : "Build a war" | "war:exploded" : "Build an exploded war"
+  | "install:install" : "Install the artifacts locally" | "install:install-file" : "Install a file in the local repository"
+  | "deploy:deploy" : "Deploy the artifacts" | "deploy:deploy-file" : "Deploy a file to a remote repository"
+  | "resources:resources" : "Copy the main resources"
+  | "site:site" : "Generate the site" | "site:run" : "Serve the site" | "site:stage" : "Stage the site"
+  | "dependency:tree" : "Show the dependency tree" | "dependency:list" : "List the dependencies"
+  | "dependency:analyze" : "Find used undeclared and unused dependencies"
+  | "dependency:resolve" : "Resolve the dependencies" | "dependency:resolve-plugins" : "Resolve the plugins"
+  | "dependency:go-offline" : "Download everything needed offline"
+  | "dependency:copy-dependencies" : "Copy the dependencies to a directory"
+  | "dependency:get" : "Download an artifact" | "dependency:build-classpath" : "Print the classpath"
+  | "dependency:purge-local-repository" : "Remove the dependencies from the local repository"
+  | "help:effective-pom" : "Show the effective POM" | "help:effective-settings" : "Show the effective settings"
+  | "help:active-profiles" : "List the active profiles" | "help:all-profiles" : "List all profiles"
+  | "help:describe" : "Describe a plugin or goal" | "help:evaluate" : "Evaluate an expression"
+  | "help:system" : "Show the system properties and environment"
+  | "versions:display-dependency-updates" : "Show dependency updates"
+  | "versions:display-plugin-updates" : "Show plugin updates"
+  | "versions:display-property-updates" : "Show updates of version properties"
+  | "versions:display-parent-updates" : "Show parent updates"
+  | "versions:set" : "Set the project version" | "versions:commit" : "Remove the POM backups"
+  | "versions:revert" : "Restore the POM backups" | "versions:update-parent" : "Update the parent version"
+  | "versions:update-properties" : "Update version properties" | "versions:use-latest-releases" : "Use the latest releases"
+  | "archetype:generate" : "Create a project from an archetype"
+  | "exec:java" : "Run a Java main class" | "exec:exec" : "Run a program"
+  | "release:prepare" : "Prepare a release" | "release:perform" : "Perform a release"
+  | "release:rollback" : "Roll back a release" | "release:clean" : "Clean up after a release"
+  | "javadoc:javadoc" : "Generate the Javadoc" | "javadoc:jar" : "Build a Javadoc jar"
+  | "source:jar" : "Build a sources jar"
+  | "wrapper:wrapper" : "Generate the Maven wrapper"
+  | "spring-boot:run" : "Run the Spring Boot application" | "spring-boot:repackage" : "Repackage as an executable jar"
+  | "spring-boot:build-image" : "Build an OCI image" | "spring-boot:start" : "Start the application for tests"
+  | "spring-boot:stop" : "Stop the application started by start" | "spring-boot:test-run" : "Run the application with the test classpath" ;

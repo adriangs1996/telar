@@ -1,0 +1,73 @@
+(* lsof: checked against `lsof -h` and `man lsof` of lsof 4.91 (macOS) and the
+   manual of lsof 4.99.7 (man.archlinux.org; not installed on the Linux machine
+   checked). Some options exist only on some dialects (-e, -E and -X on Linux,
+   -z on Solaris, -Z with SELinux). Optional values are read joined (-iTCP,
+   -Fpcn, +L1) or as the next word, where they look like a name to list. Names
+   are files, directories or file systems. *)
+
+lsof = { option | @file } , [ "--" : "End of options" , { @file } ] ;
+
+option =
+    "-?" : "Print the help" | "-h" : "Print the help"
+  | "-a" : "AND the selections instead of ORing them"
+  | "-A" : "AFS name list file" , @file
+  | "-b" : "Avoid kernel functions that might block"
+  | "-c" : "Processes whose command starts with this, ^ excludes, /regex/" , @any
+  | "+c" : "Width of the COMMAND column; 0 for full" , @number
+  | "-C" : "Do not report path names from the kernel name cache"
+  | "+d" : "Open files in this directory and its top-level entries" , @directory
+  | "-d" : "File descriptors to select, as cwd,1,3 or ^2" , @any
+  | "+D" : "Open files anywhere below this directory (slow)" , @directory
+  | "-D" : "Device cache function" , ( "?" : "Report the device cache paths" | "b" : "Build the device cache" | "i" : "Ignore the device cache" | "r" : "Read the device cache only" | "u" : "Read and update the device cache" )
+  | "+e" : "Linux: exempt this file system from blocking stat and readlink" , @directory
+  | "-e" : "Linux: exempt this file system from blocking stat calls" , @directory
+  | "+E" : "Linux: show endpoint info and list the endpoint files"
+  | "-E" : "Linux: show endpoint info without listing the endpoint files"
+  | "+f" : "Names are file systems; with c, f, g, G or n, show columns" | "+f" ~ file_structure
+  | "-f" : "Names are plain files; with c, f, g, G or n, hide columns" | "-f" ~ file_structure
+  | "-F" : "Field output for programs; -F? lists the fields" | "-F" ~ @any
+  | "-g" : "Show process group ids, or select these, ^ excludes" | "-g" ~ @any
+  | "-H" : "Human-readable sizes (4.99)"
+  | "-i" : "Network files, or those matching [46][proto][@host][:port]" , [ inet ] | "-i" ~ @any
+  | "-J" : "JSON output (4.99)"
+  | "-j" : "JSON Lines output, one object per file (4.99)"
+  | "-K" : "List tasks (threads); with i, ignore them" | "-K" ~ ( "i" : "Ignore tasks" )
+  | "-k" : "Kernel name list file" , @file
+  | "-l" : "Do not convert user ids to login names"
+  | "+L" : "Show link counts, or files with fewer links than this" | "+L" ~ @number
+  | "-L" : "Do not show link counts" | "-L" ~ @number
+  | "+m" : "Write a mount supplement file, or use this one" | "+m" ~ @file
+  | "-m" : "Alternate kernel memory file" , @file
+  | "+M" : "Show portmapper registrations"
+  | "-M" : "Do not show portmapper registrations"
+  | "-n" : "Do not convert network numbers to host names"
+  | "-N" : "Select NFS files"
+  | "-o" : "Always show file offsets; joined, digits after 0t" | "-o" ~ @number
+  | "-O" : "Do not fork to avoid blocking kernel calls"
+  | "-p" : "Process ids to select, comma separated, ^ excludes" , @process
+  | "-P" : "Do not convert port numbers to port names"
+  | "-Q" : "Ignore failed search terms (4.99)"
+  | "+r" : "Repeat every t seconds until no files are listed" | "+r" ~ @any
+  | "-r" : "Repeat every t seconds forever" | "-r" ~ @any
+  | "-R" : "Show the parent process id"
+  | "-s" : "Show file sizes; joined, select TCP or UDP states" | "-s" ~ @any
+  | "-S" : "Timeout in seconds for kernel functions" | "-S" ~ @number
+  | "-T" : "TCP/TPI info: f, q, s and w; alone disables it" | "-T" ~ @any
+  | "-t" : "Terse output: process ids only"
+  | "-u" : "Login names or user ids to select, ^ excludes" , @any
+  | "-U" : "Select Unix domain socket files"
+  | "-v" : "Print version information"
+  | "-V" : "Report the search items that were not found"
+  | "+w" : "Show warnings"
+  | "-w" : "Suppress warnings"
+  | "-x" : "Cross symlinks (l) and file systems (f) with +d or +D" | "-x" ~ ( "f" | "l" | "fl" | "lf" )
+  | "-X" : "Dialect specific; on Linux, skip TCP and UDP files"
+  | "-z" : "Solaris: show zones, or select this zone" | "-z" ~ @any
+  | "-Z" : "SELinux: show contexts, or select this context" | "-Z" ~ @any ;
+
+file_structure = "c" : "Use count" | "f" : "Structure address" | "g" : "Flag names" | "G" : "Flags in hex" | "n" : "Node address" ;
+
+inet =
+    "4" : "IPv4 files" | "6" : "IPv6 files" | "TCP" : "TCP files" | "UDP" : "UDP files"
+  | "TCP:" : "TCP files on these ports" ~ @any | "UDP:" : "UDP files on these ports" ~ @any
+  | ":" : "Files on these ports or services" ~ @any | "@" : "Files connected to this host" ~ @ssh_host ;

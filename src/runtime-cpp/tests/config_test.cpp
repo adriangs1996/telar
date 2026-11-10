@@ -128,7 +128,7 @@ return telar.config {
     },
   },
   profiles = {
-    selected = {runtime = {history = {path='sub/../history.db', command_filters={'private'}, secrets_filter=false}, session={persist=true, resume_agents=false}}},
+    selected = {runtime = {history = {path='sub/../history.db', command_filters={'private'}, secrets_filter=false}, session={persist=true, resume_agents=false}, ssh_integration=false}},
     other = {runtime = {history = {command_filters={'other-only'}}}},
   },
 }
@@ -140,6 +140,7 @@ return telar.config {
     config::RuntimeValues values{memory};
     config::Loader{memory, values}.load(options, ProcessEnvironment{});
     check(values.capture_output && values.persist_session && !values.resume_agents);
+    check(values.shell_integration && !values.ssh_integration);
     check(std::string_view{values.history_path} == root + "/history.db" && !values.history_filters.secrets);
     check(!values.history_filters.allowsPane("hidden", "/tmp") && !values.history_filters.allowsPane("private", "/tmp"));
     check(values.history_filters.allowsPane("other-only", "/tmp"));

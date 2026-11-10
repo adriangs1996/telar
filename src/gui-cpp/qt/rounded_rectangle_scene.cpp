@@ -3,17 +3,9 @@
 static_assert(true);
 #endif
 
-
 #include "rounded_rectangle_scene.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <string_view>
-#include <algorithm>
-#include <cmath>
 #include "physical_pixel_matrix.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
 #include <QByteArray>
 #include <QSGGeometry>
 #include <QSGGeometryNode>
@@ -26,13 +18,18 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qsgmaterialtype.h>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
-
-
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
@@ -261,7 +258,7 @@ namespace telar::gui::qt {
     // The result is the first of the root's children left unpainted.
     tbc::view<QSGNode *, tbc::lt::a> paintSoftwareBatch(QQuickWindow &window, tbc::view<QSGNode &, tbc::lt::a> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
       auto *next = root.firstChild();
-      for (const auto paint : paints) {
+      for (const auto &paint : paints) {
         auto *current = next;
         next = current == nullptr ? nullptr : current->nextSibling();
         auto *painted = paintSoftwareRoundedRectangleAt(window, current, paint, density);

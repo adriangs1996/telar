@@ -69,6 +69,8 @@ export import telar.runtime.runtime.delivery.client_delivery;
 
 
 export import telar.runtime.execution.execution;
+export import telar.runtime.shell_integration;
+export import telar.runtime.shell_integration.words;
 import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -469,6 +471,10 @@ struct PaneLaunchOptions {
   std::string_view socket;
   ProxyClientConfiguration proxy{};
   control::Policy control_policy{};
+  // The installed shell integration scripts; empty leaves shells as they start.
+  std::string_view shell_integration{};
+  // Whether an integrated shell's `ssh` brings the integration to the hosts it reaches.
+  bool ssh_integration = false;
 };
 
 }
@@ -493,7 +499,8 @@ public:
         history_(history),
         socket_path_(options.socket),
         proxy_(options.proxy),
-        control_policy_(options.control_policy) {}
+        control_policy_(options.control_policy),
+        shell_integration_(memory, options.shell_integration, options.ssh_integration) {}
 
   inline static Pane<Memory> &require(PaneStore<Memory> &panes, std::uint64_t identity) {
     auto *pane = panes.find(identity);
@@ -1001,7 +1008,8 @@ private:
       command.setEnvironment("TELAR_BIN_PATH", model.cli_executable);
     }
     proxy_.apply(command);
-    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits});
+    const auto shell = shell_integration_.apply(command);
+    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
     TELAR_DIAGNOSTIC(pane->counters = &model.metrics.panes);
     pane->generation = identity.generation;
     pane->terminal.controlPolicy() = control_policy_;
@@ -1061,6 +1069,7 @@ private:
   std::string_view socket_path_;
   ProxyClientConfiguration proxy_;
   control::Policy control_policy_;
+  ShellIntegration<Memory> shell_integration_;
 };
 
 }

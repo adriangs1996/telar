@@ -20,8 +20,10 @@ module;
 #include <limits.h>
 #include <poll.h>
 
+#if defined(__APPLE__)
 #include <net/if_dl.h>
 #include <net/route.h>
+#endif
 
 #include <unistd.h>
 
@@ -217,6 +219,9 @@ private:
 
 }
 }
+
+// pfctl and the sessions that drive it exist on macOS only.
+#if defined(__APPLE__)
 
 // Interface: redirect/pf_command.cppm
 export {
@@ -420,6 +425,8 @@ private:
 
 }
 }
+
+#endif
 
 // Interface: redirect/process_token.cppm
 export {

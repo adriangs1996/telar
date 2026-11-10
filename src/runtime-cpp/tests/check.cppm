@@ -52,6 +52,7 @@ void testWorktreeProbe();
 void testPersistence();
 void testObservation();
 void testCommandCapture();
+void testShellIntegration();
 void testMetrics();
 void testCli();
 void testLua();

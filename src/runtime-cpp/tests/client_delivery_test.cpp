@@ -198,6 +198,35 @@ void drainSocket(int descriptor, std::size_t bytes) {
   }
 }
 
+// An integrated shell's state goes to each attachment once per change, ahead of its cells;
+// other panes never send one.
+void shellState() {
+  static_assert(DeliveryLane::shell < DeliveryLane::cells);
+  SystemAllocator memory;
+  RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/shell-delivery.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer peer{memory, model, clients, ClientRole::interactive};
+  auto &client = peer.session();
+  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
+  const auto now = std::chrono::steady_clock::now();
+  auto timeout = std::chrono::nanoseconds::max();
+  check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
+
+  pane.shell_state.shell = IntegratedShell::zsh;
+  pane.shell_state.phase = ShellPhase::prompt;
+  ++pane.shell_revision;
+  check(AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
+  const auto state = peer.receive<PaneShell>();
+  check(state.pane_id == pane.id && state.shell == IntegratedShell::zsh && state.phase == ShellPhase::prompt);
+  check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
+}
+
 void attachmentRotation() {
   SystemAllocator memory;
   RuntimeModel model{memory};
@@ -305,4 +334,5 @@ void testClientDelivery() {
   clipboardOwnership();
   currentState();
   attachmentRotation();
+  shellState();
 }

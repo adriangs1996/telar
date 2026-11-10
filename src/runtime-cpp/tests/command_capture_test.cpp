@@ -288,7 +288,102 @@ static void testOscFragments() {
   }
 }
 
+// A pane with a token trusts only the marks its shell integration signed.
+static void testSignedMarks() {
+  struct Completions {
+    std::vector<CommandCompletion> values;
+
+    void complete(CommandCompletion completion) {
+      values.push_back(completion);
+    }
+  };
+
+  const auto token = ShellToken::generate();
+  const auto signature = ";telar=" + std::string{token.text()};
+  const auto forged = ";telar=" + std::string(ShellToken::length, '0');
+  CommandZones zones{"/", token};
+  Completions sink;
+  zones.feed(byteSpan("\x1b]133;A\x07\x1b]133;B\x07"), {}, sink);
+  zones.feed(byteSpan("\x1b]133;A" + forged + "\x07\x1b]133;B" + forged + "\x07"), {}, sink);
+  check(!zones.markersReady() && !zones.editing());
+
+  zones.feed(byteSpan("\x1b]133;A" + signature + "\x07\x1b]133;B" + signature + "\x07"), {}, sink);
+  check(zones.markersReady() && zones.editing());
+  zones.input(byteSpan("true\r"));
+  zones.feed(byteSpan("\x1b]133;C" + signature + "\x07\x1b]133;D;9\x07\x1b]133;D;9" + forged + "\x07"), {}, sink);
+  check(sink.values.empty());
+  zones.feed(byteSpan("\x1b]133;D;4" + signature + "\x07"), {}, sink);
+  check(sink.values.size() == 1 && sink.values[0].exit_code == 4);
+
+  // The shell redraws its prompt after input already arrived, as zsh does after a paste.
+  zones.feed(byteSpan("\x1b]133;A" + signature + "\x07\x1b]133;B" + signature + "\x07"), {}, sink);
+  zones.input(byteSpan("\x1b[200~ls\x1b[201~\r"));
+  zones.feed(byteSpan("\x1b]133;B" + signature + "\x07\x1b]133;C" + signature + "\x07\x1b]133;D;0" + signature + "\x07"), {}, sink);
+  check(sink.values.size() == 2 && sink.values[1].exit_code == 0);
+}
+
+// `ssh` nests a remote shell: the pane's shell signs a one-time nonce, the remote shell
+// answers with it and its own token, and the pane's token signing a mark again ends it.
+static void testNestedMarks() {
+  struct Completions {
+    std::vector<CommandCompletion> values;
+
+    void complete(CommandCompletion completion) {
+      values.push_back(completion);
+    }
+  };
+
+  const auto token = ShellToken::generate();
+  const auto nonce = ShellToken::generate();
+  const auto remote = ShellToken::generate();
+  const auto signature = ";telar=" + std::string{token.text()};
+  const auto remote_signature = ";telar=" + std::string{remote.text()};
+  const auto answer = "\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{remote.text()} + ";shell=fish\x07";
+  CommandZones zones{"/", token};
+  Completions sink;
+
+  // An answer nobody asked for, or one to a nonce the pane's shell did not sign, is ignored.
+  zones.feed(byteSpan(answer), {}, sink);
+  zones.feed(byteSpan("\x1b]6973;telar=" + std::string(ShellToken::length, '0') + ";nest=" + std::string{nonce.text()} + "\x07" + answer), {}, sink);
+  check(!zones.remote());
+
+  zones.feed(byteSpan("\x1b]133;A" + signature + "\x07\x1b]133;B" + signature + "\x07"), {}, sink);
+  zones.input(byteSpan("ssh host\r"));
+  zones.feed(byteSpan("\x1b]133;C" + signature + "\x07\x1b]6973" + signature + ";nest=" + std::string{nonce.text()} + "\x07"), {}, sink);
+  zones.feed(byteSpan("\x1b]133;A" + remote_signature + "\x07"), {}, sink);
+  check(!zones.remote() && zones.running());
+  zones.feed(byteSpan(answer), {}, sink);
+  check(zones.remote() && zones.remoteShell() == IntegratedShell::fish);
+
+  // The remote shell's marks count; its PATH is not this host's and is not taken.
+  zones.feed(byteSpan("\x1b]133;A" + remote_signature + "\x07\x1b]133;B" + remote_signature + "\x07\x1b]6973" + remote_signature + ";path=/remote\x07"), {}, sink);
+  check(zones.editing() && zones.path().empty());
+  zones.input(byteSpan("false\r"));
+  zones.feed(byteSpan("\x1b]133;C" + remote_signature + "\x07\x1b]133;D;1" + remote_signature + "\x07"), {}, sink);
+  check(sink.values.size() == 1 && sink.values.back().exit_code == 1);
+
+  // The nonce is spent: a second answer cannot replace the remote token.
+  const auto other = ShellToken::generate();
+  zones.feed(byteSpan("\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{other.text()} + "\x07"), {}, sink);
+  zones.feed(byteSpan("\x1b]133;A;telar=" + std::string{other.text()} + "\x07\x1b]133;C" + remote_signature + "\x07"), {}, sink);
+  check(zones.running());
+
+  // ssh returned: the pane's shell marks again, and finishes the ssh command with its status.
+  const auto remote_commands = sink.values.size();
+  zones.feed(byteSpan("\x1b]133;D;5" + signature + "\x07\x1b]133;A" + signature + "\x07"), {}, sink);
+  check(!zones.remote() && zones.remoteShell() == IntegratedShell::none);
+  check(sink.values.size() == remote_commands + 1 && sink.values.back().exit_code == 5);
+  zones.feed(byteSpan("\x1b]133;B" + remote_signature + "\x07"), {}, sink);
+  check(!zones.editing());
+
+  // A nonce the session never answered expires when the pane's shell prompts again.
+  zones.feed(byteSpan("\x1b]6973" + signature + ";nest=" + std::string{nonce.text()} + "\x07\x1b]133;A" + signature + "\x07" + answer), {}, sink);
+  check(!zones.remote());
+}
+
 void testCommandCapture() {
+  testSignedMarks();
+  testNestedMarks();
   testInputBoundaries();
   testRenderedCommand();
   testWrappedAndUnicodeCommand();

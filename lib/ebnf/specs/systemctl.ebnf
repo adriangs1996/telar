@@ -1,0 +1,169 @@
+(* systemctl: the commands and options of `systemctl --help` and `man systemctl`
+   of systemd 262 (Arch Linux). Options may come before or after the command;
+   long ones take their value as --name=value or as the next word. There is no
+   unit provider, so the arguments of commands are free words. *)
+
+systemctl = { option } , [ command ] ;
+
+command =
+    "list-units" : "List units in memory" , { option | @any : "Unit, pattern or argument" }
+  | "list-automounts" : "List automount units in memory" , { option | @any : "Unit, pattern or argument" }
+  | "list-paths" : "List path units in memory" , { option | @any : "Unit, pattern or argument" }
+  | "list-sockets" : "List socket units in memory" , { option | @any : "Unit, pattern or argument" }
+  | "list-timers" : "List timer units in memory" , { option | @any : "Unit, pattern or argument" }
+  | "is-active" : "Check whether units are active" , { option | @any : "Unit, pattern or argument" }
+  | "is-failed" : "Check whether units or the system have failed" , { option | @any : "Unit, pattern or argument" }
+  | "status" : "Show the runtime status of units" , { option | @any : "Unit, pattern or argument" }
+  | "show" : "Show properties of units, jobs or the manager" , { option | @any : "Unit, pattern or argument" }
+  | "cat" : "Show the files and drop-ins of units" , { option | @any : "Unit, pattern or argument" }
+  | "help" : "Show the manual of units" , { option | @any : "Unit, pattern or argument" }
+  | "list-dependencies" : "Show the dependencies of units" , { option | @any : "Unit, pattern or argument" }
+  | "start" : "Start (activate) units" , { option | @any : "Unit, pattern or argument" }
+  | "stop" : "Stop (deactivate) units" , { option | @any : "Unit, pattern or argument" }
+  | "reload" : "Reload units" , { option | @any : "Unit, pattern or argument" }
+  | "restart" : "Start or restart units" , { option | @any : "Unit, pattern or argument" }
+  | "try-restart" : "Restart units if they are active" , { option | @any : "Unit, pattern or argument" }
+  | "enqueue-marked" : "Enqueue jobs for all marked units" , { option }
+  | "reload-or-restart" : "Reload units if possible, else restart them" , { option | @any : "Unit, pattern or argument" }
+  | "try-reload-or-restart" : "If active, reload units if possible, else restart" , { option | @any : "Unit, pattern or argument" }
+  | "isolate" : "Start one unit and stop all others" , { option | @any : "Unit, pattern or argument" }
+  | "kill" : "Send a signal to the processes of units" , { option | @any : "Unit, pattern or argument" }
+  | "clean" : "Remove runtime, cache, state or log data of units" , { option | @any : "Unit, pattern or argument" }
+  | "freeze" : "Freeze the processes of units" , { option | @any : "Unit, pattern or argument" }
+  | "thaw" : "Resume the processes of frozen units" , { option | @any : "Unit, pattern or argument" }
+  | "set-property" : "Set properties of a unit, as PROPERTY=VALUE" , { option | @any : "Unit, pattern or argument" }
+  | "bind" : "Bind-mount a host path into a unit's namespace" , { option | @any : "Unit, pattern or argument" }
+  | "mount-image" : "Mount a host image into a unit's namespace" , { option | @any : "Unit, pattern or argument" }
+  | "service-log-level" : "Get or set the log level of a service" , { option | @any : "Unit, pattern or argument" }
+  | "service-log-target" : "Get or set the log target of a service" , { option | @any : "Unit, pattern or argument" }
+  | "reset-failed" : "Reset the failed state of units" , { option | @any : "Unit, pattern or argument" }
+  | "whoami" : "Show the unit of the caller or of these processes" , { option | @any : "Unit, pattern or argument" }
+  | "list-unit-files" : "List installed unit files" , { option | @any : "Unit, pattern or argument" }
+  | "enable" : "Enable unit files" , { option | @any : "Unit, pattern or argument" }
+  | "disable" : "Disable unit files" , { option | @any : "Unit, pattern or argument" }
+  | "reenable" : "Disable and enable unit files again" , { option | @any : "Unit, pattern or argument" }
+  | "preset" : "Enable or disable unit files by the presets" , { option | @any : "Unit, pattern or argument" }
+  | "preset-all" : "Enable or disable all unit files by the presets" , { option }
+  | "is-enabled" : "Check whether unit files are enabled" , { option | @any : "Unit, pattern or argument" }
+  | "mask" : "Mask units" , { option | @any : "Unit, pattern or argument" }
+  | "unmask" : "Unmask units" , { option | @any : "Unit, pattern or argument" }
+  | "link" : "Link unit files into the search path" , { option | @any : "Unit, pattern or argument" }
+  | "revert" : "Revert unit files to their vendor versions" , { option | @any : "Unit, pattern or argument" }
+  | "add-wants" : "Add a Wants dependency of a target on units" , { option | @any : "Unit, pattern or argument" }
+  | "add-requires" : "Add a Requires dependency of a target on units" , { option | @any : "Unit, pattern or argument" }
+  | "edit" : "Edit unit files" , { option | @any : "Unit, pattern or argument" }
+  | "get-default" : "Print the default target" , { option }
+  | "set-default" : "Set the default target" , { option | @any : "Unit, pattern or argument" }
+  | "list-machines" : "List the host and local containers" , { option | @any : "Unit, pattern or argument" }
+  | "list-jobs" : "List jobs" , { option | @any : "Unit, pattern or argument" }
+  | "cancel" : "Cancel all or some jobs" , { option | @any : "Unit, pattern or argument" }
+  | "show-environment" : "Print the manager environment" , { option }
+  | "set-environment" : "Set manager environment variables, as VAR=VALUE" , { option | @any : "Unit, pattern or argument" }
+  | "unset-environment" : "Unset manager environment variables" , { option | @any : "Unit, pattern or argument" }
+  | "import-environment" : "Import environment variables into the manager" , { option | @any : "Unit, pattern or argument" }
+  | "daemon-reload" : "Reload the systemd manager configuration" , { option }
+  | "daemon-reexec" : "Reexecute the systemd manager" , { option }
+  | "log-level" : "Get or set the manager log level" , { option | @any : "Unit, pattern or argument" }
+  | "log-target" : "Get or set the manager log target" , { option | @any : "Unit, pattern or argument" }
+  | "service-watchdogs" : "Get or set the service watchdog state" , { option | @any : "Unit, pattern or argument" }
+  | "is-system-running" : "Check whether the system is fully running" , { option }
+  | "default" : "Enter the default mode" , { option }
+  | "rescue" : "Enter rescue mode" , { option }
+  | "emergency" : "Enter emergency mode" , { option }
+  | "halt" : "Shut down and halt the system" , { option }
+  | "poweroff" : "Shut down and power off the system" , { option }
+  | "reboot" : "Shut down and reboot the system" , { option }
+  | "kexec" : "Shut down and reboot with kexec" , { option }
+  | "soft-reboot" : "Shut down and reboot userspace" , { option }
+  | "exit" : "Ask the user instance or container to exit" , { option | @any : "Unit, pattern or argument" }
+  | "switch-root" : "Change to a different root file system" , { option | @any : "Unit, pattern or argument" }
+  | "sleep" : "Put the system to sleep" , { option }
+  | "suspend" : "Suspend the system" , { option }
+  | "hibernate" : "Hibernate the system" , { option }
+  | "hybrid-sleep" : "Hibernate and suspend the system" , { option }
+  | "suspend-then-hibernate" : "Suspend, then hibernate after a while" , { option } ;
+
+option =
+    "-h" : "Print the help and exit" | "--help" : "Print the help and exit"
+  | "--version" : "Print the version and exit"
+  | "--system" : "Connect to the system service manager"
+  | "--user" : "Connect to the user service manager"
+  | "-C" : "Connect to the service manager of this capsule" , @any | "--capsule" : "Connect to the service manager of this capsule" , @any | "--capsule=" : "Connect to the service manager of this capsule" ~ @any
+  | "-H" : "Operate on this remote [USER@]HOST" , @ssh_host | "--host" : "Operate on this remote [USER@]HOST" , @ssh_host | "--host=" : "Operate on this remote [USER@]HOST" ~ @ssh_host
+  | "-M" : "Operate on this local container" , @any | "--machine" : "Operate on this local container" , @any | "--machine=" : "Operate on this local container" ~ @any
+  | "-t" : "List units of these types, comma separated" , unit_type | "--type" : "List units of these types, comma separated" , unit_type | "--type=" : "List units of these types, comma separated" ~ unit_type
+  | "--state" : "List units in these states, comma separated" , unit_state | "--state=" : "List units in these states, comma separated" ~ unit_state
+  | "--failed" : "List failed units, as --state=failed"
+  | "-p" : "Show only this property" , @any | "--property" : "Show only this property" , @any | "--property=" : "Show only this property" ~ @any
+  | "-P" : "Print only the value of this property" , @any
+  | "-a" : "Show all properties, or all units in memory" | "--all" : "Show all properties, or all units in memory"
+  | "-l" : "Do not ellipsize unit names" | "--full" : "Do not ellipsize unit names"
+  | "-r" : "Also list units of local containers" | "--recursive" : "Also list units of local containers"
+  | "--reverse" : "Show reverse dependencies with list-dependencies"
+  | "--before" : "Show units ordered before, with list-dependencies"
+  | "--after" : "Show units ordered after, with list-dependencies"
+  | "--with-dependencies" : "Also show the dependencies of the units"
+  | "--job-mode" : "How to deal with already queued jobs" , job_mode | "--job-mode=" : "How to deal with already queued jobs" ~ job_mode
+  | "-T" : "Show the full transaction when enqueuing a job" | "--show-transaction" : "Show the full transaction when enqueuing a job"
+  | "--show-types" : "Show the types of sockets"
+  | "--value" : "Print only the values of properties"
+  | "--check-inhibitors" : "Check inhibitor locks before shutdown or sleep" , ( "auto" | "yes" | "no" ) | "--check-inhibitors=" : "Check inhibitor locks before shutdown or sleep" ~ ( "auto" | "yes" | "no" )
+  | "-i" : "Do not check inhibitors, as --check-inhibitors=no"
+  | "-s" : "Signal to send" , @any | "--signal" : "Signal to send" , @any | "--signal=" : "Signal to send" ~ @any
+  | "--kill-whom" : "Processes to signal" , ( "main" | "control" | "cgroup" | "all" ) | "--kill-whom=" : "Processes to signal" ~ ( "main" | "control" | "cgroup" | "all" )
+  | "--kill-value" : "Value to enqueue with the signal" , @number | "--kill-value=" : "Value to enqueue with the signal" ~ @number
+  | "--kill-subgroup" : "Signal only this sub-control group" , @any | "--kill-subgroup=" : "Signal only this sub-control group" ~ @any
+  | "--what" : "Resources clean removes" , ( "configuration" | "state" | "cache" | "logs" | "runtime" | "fdstore" | "all" ) | "--what=" : "Resources clean removes" ~ ( "configuration" | "state" | "cache" | "logs" | "runtime" | "fdstore" | "all" )
+  | "--now" : "Also start or stop the units when enabling or disabling"
+  | "--dry-run" : "Only print what would be done"
+  | "-q" : "Suppress output" | "--quiet" : "Suppress output"
+  | "-v" : "Show unit logs while executing the operation" | "--verbose" : "Show unit logs while executing the operation"
+  | "--no-warn" : "Suppress several default warnings"
+  | "--wait" : "Wait until the operation completes"
+  | "--no-block" : "Do not wait until the operation finishes"
+  | "--no-wall" : "Do not send a wall message before shutdown"
+  | "--message" : "Reason for the shutdown" , @any | "--message=" : "Reason for the shutdown" ~ @any
+  | "--no-reload" : "Do not reload the daemon after enabling or disabling"
+  | "--legend" : "Show the column headers and hints" , ( "yes" | "no" | "true" | "false" | "1" | "0" | "on" | "off" ) | "--legend=" : "Show the column headers and hints" ~ ( "yes" | "no" | "true" | "false" | "1" | "0" | "on" | "off" )
+  | "--no-pager" : "Do not start a pager"
+  | "--no-ask-password" : "Do not prompt for passwords"
+  | "--global" : "Apply to the user unit files of all users"
+  | "--runtime" : "Apply only until the next reboot"
+  | "-f" : "Override existing symlinks, or shut down immediately" | "--force" : "Override existing symlinks, or shut down immediately"
+  | "--preset-mode" : "Which presets to apply" , ( "full" | "enable-only" | "disable-only" ) | "--preset-mode=" : "Which presets to apply" ~ ( "full" | "enable-only" | "disable-only" )
+  | "--root" : "Operate on unit files under this root directory" , @directory | "--root=" : "Operate on unit files under this root directory" ~ @directory
+  | "--image" : "Operate on unit files in this disk image" , @file | "--image=" : "Operate on unit files in this disk image" ~ @file
+  | "--image-policy" : "Disk image dissection policy" , @any | "--image-policy=" : "Disk image dissection policy" ~ @any
+  | "-n" : "Number of journal lines status shows" , @number | "--lines" : "Number of journal lines status shows" , @number | "--lines=" : "Number of journal lines status shows" ~ @number
+  | "-o" : "Journal output mode for status" , output_mode | "--output" : "Journal output mode for status" , output_mode | "--output=" : "Journal output mode for status" ~ output_mode
+  | "--firmware-setup" : "Show the firmware setup menu on the next boot"
+  | "--boot-loader-menu" : "Show the boot loader menu on the next boot, for this long" , @any | "--boot-loader-menu=" : "Show the boot loader menu on the next boot, for this long" ~ @any
+  | "--boot-loader-entry" : "Boot this boot loader entry next" , @any | "--boot-loader-entry=" : "Boot this boot loader entry next" ~ @any
+  | "--reboot-argument" : "Argument to pass to reboot()" , @any | "--reboot-argument=" : "Argument to pass to reboot()" ~ @any
+  | "--kernel-cmdline" : "Append to the kernel command line for kexec" , @any | "--kernel-cmdline=" : "Append to the kernel command line for kexec" ~ @any
+  | "--kernel-cmdline-reuse" : "Reuse the current kernel command line for kexec"
+  | "--plain" : "Print dependencies as a list instead of a tree"
+  | "--timestamp" : "Format of printed timestamps" , ( "pretty" | "unix" | "us" | "utc" | "us+utc" ) | "--timestamp=" : "Format of printed timestamps" ~ ( "pretty" | "unix" | "us" | "utc" | "us+utc" )
+  | "--read-only" : "Create a read-only bind mount"
+  | "--mkdir" : "Create the mount directory if it is missing"
+  | "--marked" : "Restart or reload the previously marked units"
+  | "--drop-in" : "Edit using this drop-in file name" , @any | "--drop-in=" : "Edit using this drop-in file name" ~ @any
+  | "--when" : "Schedule the shutdown action at this time" , @any | "--when=" : "Schedule the shutdown action at this time" ~ @any
+  | "--stdin" : "Read the new contents of edited files from stdin" ;
+
+unit_type =
+    "service" | "mount" | "swap" | "socket" | "target" | "device" | "automount" | "timer" | "path" | "slice" | "scope"
+  | "help" : "List the unit types" | @any : "Types, comma separated" ;
+
+unit_state =
+    "active" | "inactive" | "failed" | "activating" | "deactivating" | "reloading" | "maintenance" | "refreshing"
+  | "loaded" | "not-found" | "masked" | "running" | "exited" | "dead" | "listening" | "waiting" | "mounted" | "plugged"
+  | "help" : "List the states" | @any : "States, comma separated" ;
+
+job_mode =
+    "fail" | "lenient" | "replace" | "replace-irreversibly" | "isolate" | "ignore-dependencies" | "ignore-requirements"
+  | "flush" | "triggering" | "restart-dependencies" ;
+
+output_mode =
+    "short" | "short-full" | "short-iso" | "short-iso-precise" | "short-precise" | "short-monotonic" | "short-delta"
+  | "short-unix" | "verbose" | "export" | "json" | "json-pretty" | "json-sse" | "json-seq" | "cat" | "with-unit" ;

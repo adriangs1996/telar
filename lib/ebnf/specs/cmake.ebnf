@@ -1,0 +1,198 @@
+(* cmake: checked against `cmake --help`, `cmake --build`, `cmake --install`,
+   `cmake --workflow`, `cmake -E` and `cmake --help-variable` of CMake 4.4.3.
+
+   Conventions:
+   - Short options accept the value joined or separate: `-Bbuild`, `-B build`,
+     `-DCMAKE_BUILD_TYPE=Release`, `-GNinja`.
+   - `-D` offers the common documented cache variables; any other is accepted.
+   - Build targets and preset names come from the project, so any word is
+     accepted for them. *)
+
+cmake =
+    { configure_option | @directory }
+  | { define } , "-P" : "Run a CMake script" , @file , [ "--" : "Pass the rest to the script" , { @any } ]
+  | "--build" : "Build a CMake-generated binary tree" , { build_option | @directory } , [ "--" : "Pass the rest to the native build tool" , { @any } ]
+  | "--install" : "Install a CMake-generated binary tree" , { install_option | @directory }
+  | "--workflow" : "Run a workflow preset" , { workflow_option }
+  | "-E" : "Run a command-line tool" , [ tool , { @any } ]
+  | "--open" : "Open the project in its associated application" , @directory
+  | "--find-package" : "Legacy pkg-config like mode" , { @any } ;
+
+(* Configure mode: generate the build system. *)
+
+configure_option =
+    "-S" : "Source directory" , @directory
+  | "-B" : "Build directory" , @directory
+  | "-C" : "Script that pre-loads the cache" , @file
+  | define
+  | "-U" : "Remove cache entries matching the glob" , @any
+  | "-G" : "Build system generator" , generator
+  | "-T" : "Toolset name for the generator" , @any
+  | "-A" : "Platform name for the generator" , @any
+  | "--toolchain" : "Toolchain file" , @file
+  | "--install-prefix" : "Install directory" , @directory
+  | "--project-file" : "Alternate project file name" , @any
+  | "-Wdev" : "Enable developer warnings" | "-Wno-dev" : "Suppress developer warnings"
+  | "-Wdeprecated" : "Enable deprecation warnings" | "-Wno-deprecated" : "Suppress deprecation warnings"
+  | "-Werror=" : "Make these warnings errors" ~ warning_category
+  | "-Wno-error=" : "Do not make these warnings errors" ~ warning_category
+  | preset | presets_file | list_presets
+  | "--fresh" : "Configure a fresh build tree, removing the cache"
+  | "-L" : "List non-advanced cached variables" | "-LA" : "List all cached variables"
+  | "-LH" : "List cached variables with help" | "-LAH" : "List all cached variables with help"
+  | "-LR" : "Show cached variables matching the regex" , @any | "-LRA" : "Show all cached variables matching the regex" , @any
+  | "-LRH" : "Show cached variables matching the regex, with help" , @any
+  | "-LRAH" : "Show all cached variables matching the regex, with help" , @any
+  | "-N" : "View mode only"
+  | "--graphviz=" : "Write a graphviz graph of dependencies" ~ @file
+  | "--system-information" : "Dump information about this system" , [ @file ]
+  | "--print-config-dir" : "Print the user-wide FileAPI config directory"
+  | "--log-level=" : "Verbosity of messages from CMake files" ~ log_level
+  | "--log-context" : "Prepend context to log messages"
+  | "--debug-trycompile" : "Keep the try_compile build tree"
+  | "--debug-output" : "Put cmake in debug mode"
+  | "--debug-find" : "Put cmake find in debug mode"
+  | "--debug-find-pkg=" : "Limit debug-find to these packages" ~ @any
+  | "--debug-find-var=" : "Limit debug-find to these result variables" ~ @any
+  | "--trace" : "Put cmake in trace mode"
+  | "--trace-expand" : "Trace with variables expanded"
+  | "--trace-format=" : "Output format of the trace" ~ ( "human" | "json-v1" )
+  | "--trace-source=" : "Trace only this CMake file" ~ @file
+  | "--trace-redirect=" : "Write the trace to this file" ~ @file
+  | "--check-system-vars" : "Find problems with variables in system files"
+  | "--compile-no-warning-as-error" : "Ignore COMPILE_WARNING_AS_ERROR"
+  | "--link-no-warning-as-error" : "Ignore LINK_WARNING_AS_ERROR"
+  | "--profiling-format=" : "Profile CMake scripts in this format" ~ "google-trace"
+  | "--profiling-output=" : "Write the profiling data to this file" ~ @file
+  | "-h" : "Print usage information" | "-H" : "Print usage information" | "--help" : "Print usage information" , [ @any , [ @file ] ]
+  | "--version" : "Print the version" , [ @file ] | "--version=" : "Print the version in this format" ~ "json-v1"
+  | "--help-full" : "Print all help manuals" , [ @file ]
+  | "--help-manual" : "Print one help manual" , @any , [ @file ]
+  | "--help-manual-list" : "List the help manuals" , [ @file ]
+  | "--help-command" : "Print the help of one command" , @any , [ @file ]
+  | "--help-command-list" : "List the commands with help" , [ @file ]
+  | "--help-commands" : "Print the cmake-commands manual" , [ @file ]
+  | "--help-diagnostic" : "Print the help of one diagnostic" , @any , [ @file ]
+  | "--help-diagnostic-list" : "List the diagnostics with help" , [ @file ]
+  | "--help-diagnostics" : "Print the cmake-diagnostics manual" , [ @file ]
+  | "--help-module" : "Print the help of one module" , @any , [ @file ]
+  | "--help-module-list" : "List the modules with help" , [ @file ]
+  | "--help-modules" : "Print the cmake-modules manual" , [ @file ]
+  | "--help-policy" : "Print the help of one policy" , @any , [ @file ]
+  | "--help-policy-list" : "List the policies with help" , [ @file ]
+  | "--help-policies" : "Print the cmake-policies manual" , [ @file ]
+  | "--help-property" : "Print the help of one property" , @any , [ @file ]
+  | "--help-property-list" : "List the properties with help" , [ @file ]
+  | "--help-properties" : "Print the cmake-properties manual" , [ @file ]
+  | "--help-variable" : "Print the help of one variable" , @any , [ @file ]
+  | "--help-variable-list" : "List the variables with help" , [ @file ]
+  | "--help-variables" : "Print the cmake-variables manual" , [ @file ] ;
+
+define =
+    "-D" : "Create or update a cache entry: var[:type]=value" , @any
+  | "-DCMAKE_BUILD_TYPE=" : "Build type of single-config generators" ~ build_type
+  | "-DCMAKE_INSTALL_PREFIX=" : "Install directory" ~ @directory
+  | "-DCMAKE_PREFIX_PATH=" : "Directories searched for packages" ~ @directory
+  | "-DCMAKE_TOOLCHAIN_FILE=" : "Toolchain file" ~ @file
+  | "-DCMAKE_C_COMPILER=" : "C compiler" ~ @command
+  | "-DCMAKE_CXX_COMPILER=" : "C++ compiler" ~ @command
+  | "-DCMAKE_CXX_STANDARD=" : "C++ standard" ~ ( "11" | "14" | "17" | "20" | "23" | "26" )
+  | "-DCMAKE_EXPORT_COMPILE_COMMANDS=" : "Write compile_commands.json" ~ on_off
+  | "-DCMAKE_COLOR_DIAGNOSTICS=" : "Color the diagnostics of the compiler" ~ on_off
+  | "-DCMAKE_OSX_ARCHITECTURES=" : "Target architectures on Apple platforms" ~ ( "arm64" | "x86_64" | @any )
+  | "-DBUILD_SHARED_LIBS=" : "Build shared libraries by default" ~ on_off
+  | "-DBUILD_TESTING=" : "Build the tests (CTest module)" ~ on_off ;
+
+build_type = "Debug" | "Release" | "RelWithDebInfo" | "MinSizeRel" | @any ;
+on_off = "ON" | "OFF" ;
+
+generator =
+    "Ninja" : "Generate build.ninja files"
+  | "Ninja Multi-Config" : "Generate build-<Config>.ninja files"
+  | "Unix Makefiles" : "Generate standard UNIX makefiles"
+  | "Xcode" : "Generate Xcode project files"
+  | @any ;
+
+warning_category = "dev" | "deprecated" ;
+
+log_level = "ERROR" | "WARNING" | "NOTICE" | "STATUS" | "VERBOSE" | "DEBUG" | "TRACE" ;
+
+preset = "--preset" : "Use this preset" , @any | "--preset=" : "Use this preset" ~ @any ;
+presets_file = "--presets-file" : "Path to a presets file" , @file | "--presets-file=" : "Path to a presets file" ~ @file ;
+list_presets =
+    "--list-presets" : "List the available presets"
+  | "--list-presets=" : "List the available presets of this type" ~ ( "configure" | "build" | "test" | "package" | "all" ) ;
+
+(* cmake --build *)
+
+build_option =
+    preset | presets_file | list_presets
+  | "-j" : "Build in parallel, with this many jobs" , [ @number ]
+  | "--parallel" : "Build in parallel, with this many jobs" , [ @number ]
+  | "-t" : "Build these targets instead of the default" , target , { target }
+  | "--target" : "Build these targets instead of the default" , target , { target }
+  | "--config" : "Configuration of multi-config generators" , build_type
+  | "--clean-first" : "Build the clean target first"
+  | "--resolve-package-references=" : "Restore package references during the build" ~ ( "on" | "only" | "off" )
+  | "-v" : "Print the build commands" | "--verbose" : "Print the build commands" ;
+
+target = "all" : "The default target" | "clean" : "Remove the build outputs" | "install" : "Install the project" | @any ;
+
+(* cmake --install *)
+
+install_option =
+    "--config" : "Configuration of multi-config generators" , build_type
+  | "--component" : "Install only this component" , @any
+  | "--default-directory-permissions" : "Default permissions of installed directories" , @any
+  | "-j" : "Install in parallel with this many jobs" , @number
+  | "--parallel" : "Install in parallel with this many jobs" , @number
+  | "--prefix" : "Installation prefix" , @directory
+  | "--strip" : "Strip the installed binaries"
+  | "-v" : "Enable verbose output" | "--verbose" : "Enable verbose output" ;
+
+(* cmake --workflow *)
+
+workflow_option =
+    "--preset" : "Workflow preset to run" , @any | "--preset=" : "Workflow preset to run" ~ @any
+  | presets_file
+  | "--list-presets" : "List the available workflow presets"
+  | "--fresh" : "Configure a fresh build tree, removing the cache" ;
+
+(* cmake -E *)
+
+tool =
+    "bin2c" : "Turn a binary file into a C array"
+  | "capabilities" : "Report the capabilities of cmake as JSON"
+  | "cat" : "Concatenate files and print them"
+  | "chdir" : "Run a command in a directory"
+  | "compare_files" : "Check whether two files are the same"
+  | "copy" : "Copy files to a destination"
+  | "copy_directory" : "Copy directory contents to a destination"
+  | "copy_directory_if_different" : "Copy changed directory contents"
+  | "copy_directory_if_newer" : "Copy newer directory contents"
+  | "copy_if_different" : "Copy files whose source changed"
+  | "copy_if_newer" : "Copy files whose source is newer"
+  | "echo" : "Print the arguments"
+  | "echo_append" : "Print the arguments without a newline"
+  | "env" : "Run a command in a modified environment"
+  | "environment" : "Print the current environment"
+  | "make_directory" : "Create directories and their parents"
+  | "md5sum" : "Create MD5 checksums of files"
+  | "sha1sum" : "Create SHA1 checksums of files"
+  | "sha224sum" : "Create SHA224 checksums of files"
+  | "sha256sum" : "Create SHA256 checksums of files"
+  | "sha384sum" : "Create SHA384 checksums of files"
+  | "sha512sum" : "Create SHA512 checksums of files"
+  | "remove" : "Remove files (deprecated, use rm)"
+  | "remove_directory" : "Remove directories (deprecated, use rm)"
+  | "rename" : "Rename a file or directory"
+  | "rm" : "Remove files or directories"
+  | "sleep" : "Sleep for some seconds"
+  | "tar" : "Create or extract a tar or zip archive"
+  | "time" : "Run a command and print the elapsed time"
+  | "touch" : "Touch files"
+  | "touch_nocreate" : "Touch files without creating them"
+  | "create_symlink" : "Create a symbolic link"
+  | "create_hardlink" : "Create a hard link"
+  | "true" : "Exit with code 0"
+  | "false" : "Exit with code 1" ;

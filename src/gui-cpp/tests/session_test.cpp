@@ -531,6 +531,9 @@ void focusedScrollRouting() {
   require(transport.last<SetPaneViewport>().offset == previous_offset, "an untracked scroll action must move three history rows");
   client.scrollFocused(ScrollDirection::down);
   require(transport.last<SetPaneViewport>().offset == initial_offset, "opposite focused scroll actions must restore the viewport");
+  client.scrollFocused(ScrollDirection::down);
+  client.scrollFocused(ScrollDirection::down);
+  require(transport.last<SetPaneViewport>().offset == std::numeric_limits<std::uint32_t>::max() && client.focusedPane()->screen.scroll().offset == history_rows - 1, "scrolling to the bottom asks the runtime to follow the output");
 
   ++frame.frame_id;
   frame.mouse = {.tracking = MouseTracking::normal, .sgr = true};

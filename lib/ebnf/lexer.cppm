@@ -34,6 +34,9 @@ namespace ebnf {
     Aster,
     Minus,
     Dot,
+    Dynamic,
+    Colon,
+    Tilde,
     End,
   };
 
@@ -72,6 +75,11 @@ namespace ebnf {
           continue;
         }
 
+        if (startsComment(source, cursor)) {
+          skipComment(source, cursor);
+          continue;
+        }
+
         if (count == limit - 1) {
           throw std::length_error("Token buffer capacity exceeded");
         }
@@ -105,8 +113,39 @@ namespace ebnf {
       return std::string_view{"ntrfb\\'\""}.find(character) != std::string_view::npos;
     }
 
+    // Literals carry flags and human descriptions, so they accept every printable ASCII character.
     static constexpr auto isCharacter(char character) -> bool {
-      return isLetter(character) || isDigit(character) || isWhitespace(character) || std::string_view{"[]{}()<>\"'=|.,;_-+*?"}.find(character) != std::string_view::npos;
+      return (character >= ' ' && character <= '~') || isWhitespace(character);
+    }
+
+    static constexpr auto isIdentifierCharacter(char character) -> bool {
+      return isLetter(character) || isDigit(character) || character == '_';
+    }
+
+    static constexpr auto startsComment(std::string_view source, std::size_t cursor) -> bool {
+      return source[cursor] == '(' && cursor + 1 < source.size() && source[cursor + 1] == '*';
+    }
+
+    // ISO 14977 comments nest. Their content is ignored, so it may hold any byte.
+    inline static auto skipComment(std::string_view source, std::size_t &cursor) -> void {
+      std::size_t depth = 0;
+
+      while (cursor + 1 < source.size()) {
+        if (source[cursor] == '(' && source[cursor + 1] == '*') {
+          ++depth;
+          cursor += 2;
+        } else if (source[cursor] == '*' && source[cursor + 1] == ')') {
+          cursor += 2;
+
+          if (--depth == 0) {
+            return;
+          }
+        } else {
+          ++cursor;
+        }
+      }
+
+      throw std::invalid_argument("Unterminated comment");
     }
 
     inline static auto readToken(std::string_view source, std::size_t &cursor) -> token {
@@ -116,11 +155,29 @@ namespace ebnf {
       if (isLetter(character)) {
         do {
           ++cursor;
-        } while (cursor < source.size() && (isLetter(source[cursor]) || isDigit(source[cursor]) || source[cursor] == '_'));
+        } while (cursor < source.size() && isIdentifierCharacter(source[cursor]));
 
         return token{
             .kind = token_kind::Identifier,
             .text = source.substr(start, cursor - start),
+        };
+      }
+
+      // A dynamic terminal names a provider, as in `@branch`. The token text excludes the `@`.
+      if (character == '@') {
+        const auto name_start = ++cursor;
+
+        if (cursor == source.size() || !isLetter(source[cursor])) {
+          throw std::invalid_argument("Expected a provider name after @");
+        }
+
+        do {
+          ++cursor;
+        } while (cursor < source.size() && isIdentifierCharacter(source[cursor]));
+
+        return token{
+            .kind = token_kind::Dynamic,
+            .text = source.substr(name_start, cursor - name_start),
         };
       }
 
@@ -219,6 +276,10 @@ namespace ebnf {
         return token_kind::Minus;
       case '.':
         return token_kind::Dot;
+      case ':':
+        return token_kind::Colon;
+      case '~':
+        return token_kind::Tilde;
       default:
         throw std::invalid_argument("Unexpected character outside string literal");
       }

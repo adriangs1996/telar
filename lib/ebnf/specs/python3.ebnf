@@ -1,0 +1,107 @@
+(* python3: the same grammar as python.ebnf, for the python3 command.
+
+   python: checked against `python3 --help` and `python3 --help-xoptions` of
+   CPython 3.14.9 (and 3.11.6, whose options are the same set).
+
+   Conventions:
+   - Options come before the program; `-c` and `-m` end the options, and every
+     word after the command, module, script or `-` belongs to the program.
+   - Short options cluster (`-OO`, `-bb`, `-vv`); those taking a value accept
+     it joined (`-Wignore`) or as the next word.
+   - The module list offers common modules (standard library, pip, pytest);
+     any module name is accepted. *)
+
+python3 = { option } , [ program ] ;
+
+program =
+    "-c" : "Run this program string" , @any , { @any }
+  | "-m" : "Run a library module as a script" , module , { @any }
+  | "-" : "Read the program from stdin" , { @any }
+  | @file : "Run this script" , { @any } ;
+
+option =
+    "-b" : "Warn about str(bytes) and bytes/str comparisons"
+  | "-B" : "Do not write .pyc files"
+  | "-d" : "Parser debugging output (debug builds)"
+  | "-E" : "Ignore PYTHON* environment variables"
+  | "-h" : "Print the help and exit" | "-?" : "Print the help and exit" | "--help" : "Print the help and exit"
+  | "-i" : "Inspect interactively after running the script"
+  | "-I" : "Isolate from the user environment (-E -P -s)"
+  | "-O" : "Remove asserts and __debug__ code"
+  | "-OO" : "Like -O, and also discard docstrings"
+  | "-P" : "Do not prepend an unsafe path to sys.path"
+  | "-q" : "Do not print the version on interactive startup"
+  | "-s" : "Do not add the user site directory to sys.path"
+  | "-S" : "Do not import site on initialization"
+  | "-u" : "Unbuffered stdout and stderr"
+  | "-v" : "Trace import statements"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "-W" : "Warning control: action:message:category:module:lineno" , warning
+  | "-x" : "Skip the first line of the source"
+  | "-X" : "Set an implementation-specific option" , xoption
+  | "--check-hash-based-pycs" : "How to validate hash-based .pyc files" , ( "always" | "default" | "never" )
+  | "--help-env" : "Print help about environment variables"
+  | "--help-xoptions" : "Print help about -X options"
+  | "--help-all" : "Print the complete help" ;
+
+warning =
+    "default" : "Print the first warning per location" | "error" : "Turn warnings into errors"
+  | "ignore" : "Ignore warnings" | "always" : "Print every warning"
+  | "module" : "Print the first warning per module" | "once" : "Print each warning once"
+  | @any ;
+
+xoption =
+    "dev" : "Enable the Python Development Mode"
+  | "faulthandler" : "Dump the traceback on fatal errors"
+  | "importtime" : "Show how long each import takes" | "importtime=2" : "Also log imports of loaded modules"
+  | "tracemalloc" : "Trace memory allocations" | "tracemalloc=" : "Trace allocations with this frame limit" ~ @number
+  | "utf8" : "Enable UTF-8 mode" | "utf8=0" : "Disable UTF-8 mode" | "utf8=1" : "Enable UTF-8 mode"
+  | "warn_default_encoding" : "Warn on encoding=None"
+  | "no_debug_ranges" : "No extra location information in code objects"
+  | "frozen_modules=on" : "Use frozen modules" | "frozen_modules=off" : "Do not use frozen modules"
+  | "int_max_str_digits=" : "Limit int and str conversions to this many digits" ~ @number
+  | "pycache_prefix=" : "Write .pyc files to a parallel tree here" ~ @directory
+  | "cpu_count=" : "Override os.cpu_count()" ~ @any
+  | "perf" : "Support the Linux perf profiler"
+  | "perf_jit" : "Support perf with DWARF information"
+  | "showrefcount" : "Print reference counts (debug builds)"
+  | "disable-remote-debug" : "Disable remote debugging"
+  | "context_aware_warnings=0" : "Warnings use module globals" | "context_aware_warnings=1" : "Warnings use context variables"
+  | "thread_inherit_context=0" : "Threads do not inherit context vars" | "thread_inherit_context=1" : "Threads inherit context vars"
+  | @any ;
+
+module =
+    "venv" : "Create a virtual environment"
+  | "pip" : "Run pip with this interpreter"
+  | "http.server" : "Serve the current directory over HTTP"
+  | "json.tool" : "Validate and pretty-print JSON"
+  | "unittest" : "Run unit tests"
+  | "pytest" : "Run tests with pytest"
+  | "pdb" : "Run a script under the debugger"
+  | "cProfile" : "Profile a script"
+  | "profile" : "Profile a script in pure Python"
+  | "timeit" : "Time small code snippets"
+  | "trace" : "Trace or count executed lines"
+  | "doctest" : "Run the doctests of files"
+  | "pydoc" : "Show documentation"
+  | "ensurepip" : "Install pip into the environment"
+  | "compileall" : "Byte-compile Python sources"
+  | "py_compile" : "Byte-compile Python files"
+  | "zipfile" : "Create or extract zip archives"
+  | "tarfile" : "Create or extract tar archives"
+  | "gzip" : "Compress or decompress gzip files"
+  | "base64" : "Encode or decode base64"
+  | "calendar" : "Print a calendar"
+  | "uuid" : "Generate a UUID"
+  | "sqlite3" : "Open an SQLite shell (3.12+)"
+  | "asyncio" : "Start an asyncio REPL"
+  | "site" : "Show the site configuration"
+  | "sysconfig" : "Show the build configuration"
+  | "platform" : "Print the platform"
+  | "webbrowser" : "Open a URL in a browser"
+  | "tokenize" : "Tokenize Python source"
+  | "ast" : "Dump the syntax tree of Python source"
+  | "dis" : "Disassemble Python source"
+  | "tabnanny" : "Check indentation"
+  | "zipapp" : "Build a zip application"
+  | @any ;

@@ -1,0 +1,71 @@
+(* rake: options of Rake 13.4.2, checked against `rake --help`. Operands are
+   task names, task[arguments] and VAR=value assignments, which only the
+   Rakefile knows, so any word is accepted as one.
+
+   OptionParser rules: a value is `--name value` or `--name=value`, `-x value`
+   or `-xvalue`; an optional value is taken from the next word when it does not
+   start with a dash. *)
+
+rake = { option | @any : "A task, task[args] or VAR=value" } ;
+
+option =
+    "--backtrace" : "Enable full backtraces" , [ out ] | "--backtrace=" : "Enable full backtraces to this stream" ~ out
+  | "--comments" : "Show commented tasks only"
+  | "--job-stats" : "Show job statistics" , [ "history" : "Show the complete job list" ]
+  | "--job-stats=" : "Show job statistics" ~ "history"
+  | "--rules" : "Trace the rules resolution"
+  | "--suppress-backtrace" : "Hide backtrace lines matching this regexp" , @any
+  | "--suppress-backtrace=" : "Hide backtrace lines matching this regexp" ~ @any
+  | "-A" : "Show all tasks, with -T or -D" | "--all" : "Show all tasks, with -T or -D"
+  | "-B" : "Build all prerequisites, even up to date ones" | "--build-all" : "Build all prerequisites, even up to date ones"
+  | "-C" : "Change to this directory first" , [ @directory ]
+  | "--directory" : "Change to this directory first" , [ @directory ]
+  | "--directory=" : "Change to this directory first" ~ @directory
+  | "-D" : "Describe the tasks matching a pattern" , [ @any ]
+  | "--describe" : "Describe the tasks matching a pattern" , [ @any ]
+  | "--describe=" : "Describe the tasks matching this pattern" ~ @any
+  | "-e" : "Run Ruby code and exit" , @any | "--execute" : "Run Ruby code and exit" , @any
+  | "--execute=" : "Run Ruby code and exit" ~ @any
+  | "-E" : "Run Ruby code, then the tasks" , @any | "--execute-continue" : "Run Ruby code, then the tasks" , @any
+  | "--execute-continue=" : "Run Ruby code, then the tasks" ~ @any
+  | "-f" : "Use this rakefile" , [ @file ] | "--rakefile" : "Use this rakefile" , [ @file ]
+  | "--rakefile=" : "Use this rakefile" ~ @file
+  | "-G" : "Ignore system wide rakefiles" | "--no-system" : "Ignore system wide rakefiles"
+  | "--nosystem" : "Ignore system wide rakefiles"
+  | "-g" : "Use system wide rakefiles" | "--system" : "Use system wide rakefiles"
+  | "-I" : "Add this directory to the load path" , @directory
+  | "--libdir" : "Add this directory to the load path" , @directory
+  | "--libdir=" : "Add this directory to the load path" ~ @directory
+  | "-j" : "Maximum number of parallel tasks" , [ @number ] | "--jobs" : "Maximum number of parallel tasks" , [ @number ]
+  | "--jobs=" : "Maximum number of parallel tasks" ~ @number
+  | "-m" : "Treat all tasks as multitasks" | "--multitask" : "Treat all tasks as multitasks"
+  | "-n" : "Dry run without running actions" | "--dry-run" : "Dry run without running actions"
+  | "-N" : "Do not search parent directories for the Rakefile"
+  | "--no-search" : "Do not search parent directories for the Rakefile"
+  | "--nosearch" : "Do not search parent directories for the Rakefile"
+  | "-P" : "Show the tasks and their dependencies" | "--prereqs" : "Show the tasks and their dependencies"
+  | "-p" : "Run Ruby code, print the result and exit" , @any
+  | "--execute-print" : "Run Ruby code, print the result and exit" , @any
+  | "--execute-print=" : "Run Ruby code, print the result and exit" ~ @any
+  | "-q" : "Do not log messages" | "--quiet" : "Do not log messages"
+  | "-r" : "Require this module first" , @any | "--require" : "Require this module first" , @any
+  | "--require=" : "Require this module first" ~ @any
+  | "-R" : "Import the .rake files in this directory" , @directory
+  | "--rakelibdir" : "Import the .rake files in this directory" , @directory
+  | "--rakelibdir=" : "Import the .rake files in this directory" ~ @directory
+  | "--rakelib" : "Import the .rake files in this directory" , @directory
+  | "--rakelib=" : "Import the .rake files in this directory" ~ @directory
+  | "-s" : "Like --quiet, without the directory notice" | "--silent" : "Like --quiet, without the directory notice"
+  | "-t" : "Trace invocations, with full backtraces" , [ out ] | "--trace" : "Trace invocations, with full backtraces" , [ out ]
+  | "--trace=" : "Trace invocations to this stream" ~ out
+  | "-T" : "List the tasks matching a pattern" , [ @any ] | "--tasks" : "List the tasks matching a pattern" , [ @any ]
+  | "--tasks=" : "List the tasks matching this pattern" ~ @any
+  | "-v" : "Log messages to standard output" | "--verbose" : "Log messages to standard output"
+  | "-V" : "Print the version" | "--version" : "Print the version"
+  | "-W" : "Show where the tasks matching a pattern are defined" , [ @any ]
+  | "--where" : "Show where the tasks matching a pattern are defined" , [ @any ]
+  | "--where=" : "Show where the tasks matching this pattern are defined" ~ @any
+  | "-X" : "Disable deprecation warnings" | "--no-deprecation-warnings" : "Disable deprecation warnings"
+  | "-h" : "Show the help" | "-H" : "Show the help" | "--help" : "Show the help" ;
+
+out = "stderr" : "Standard error, the default" | "stdout" : "Standard output" ;

@@ -1,0 +1,320 @@
+(* cargo: checked against `cargo --help`, `cargo --list` and `cargo <command> --help`
+   of cargo 1.93.1, clippy and rustfmt of the same toolchain, and the test binary's
+   `-- --help`.
+
+   Conventions:
+   - clap options with a value accept `--name value` and `--name=value`; short ones
+     accept `-p value` and `-pvalue`.
+   - Options whose value is optional (`--bin [NAME]`) may take the next word as
+     the value.
+   - `+toolchain` picks a rustup toolchain and must come first.
+   - Commands not listed here are external `cargo-<name>` binaries (cargo nextest,
+     cargo watch...): any words are accepted after them, so an unknown command
+     or option is never rejected.
+   - Daily commands are modelled in full; the rest accept any arguments. *)
+
+cargo = [ "+" : "Use this rustup toolchain" ~ toolchain ] , { global_option } , [ command ] ;
+
+toolchain = "stable" | "beta" | "nightly" | @any ;
+
+global_option =
+    common
+  | "-V" : "Print version info and exit" | "--version" : "Print version info and exit"
+  | "--list" : "List installed commands"
+  | "--explain" : "Explain a rustc error code" , @any | "--explain=" : "Explain a rustc error code" ~ @any
+  | "-C" : "Change to this directory first (nightly)" , @directory
+  | lock_option ;
+
+command =
+    ( "build" : "Compile the current package" | "b" : "Compile the current package" ) , { build_option }
+  | ( "check" : "Check the package for errors without building" | "c" : "Check the package for errors without building" ) , { check_option }
+  | ( "run" : "Run a binary or example of the package" | "r" : "Run a binary or example of the package" ) , { run_option } , [ ( "--" : "Pass the rest to the binary" | @file ) , { @any } ]
+  | ( "test" : "Run the tests" | "t" : "Run the tests" ) , { test_option } , [ @any , { test_option } ] , [ "--" : "Pass the rest to the test binary" , { libtest_option | @any } ]
+  | "bench" : "Run the benchmarks" , { bench_option } , [ @any , { bench_option } ] , [ "--" : "Pass the rest to the bench binary" , { libtest_option | @any } ]
+  | ( "doc" : "Build the documentation of the package" | "d" : "Build the documentation of the package" ) , { doc_option }
+  | "clippy" : "Lint the package with Clippy" , { clippy_option } , [ "--" : "Pass lint levels to Clippy" , { lint_level | @any } ]
+  | "fmt" : "Format the package with rustfmt" , { fmt_option } , [ "--" : "Pass the rest to rustfmt" , { @any } ]
+  | "add" : "Add dependencies to the manifest" , { add_option | @any }
+  | ( "remove" : "Remove dependencies from the manifest" | "rm" : "Remove dependencies from the manifest" ) , { remove_option | @any }
+  | "update" : "Update dependencies in Cargo.lock" , { update_option | @any }
+  | "install" : "Install a Rust binary" , { install_option | @any }
+  | "uninstall" : "Remove a Rust binary" , { uninstall_option | @any }
+  | "new" : "Create a new package at a path" , { new_option } , [ @directory , { new_option } ]
+  | "init" : "Create a new package in an existing directory" , { new_option } , [ @directory , { new_option } ]
+  | "clean" : "Remove the target directory" , { clean_option }
+  | "fix" : "Apply rustc lint suggestions automatically" , { fix_option }
+  | "tree" : "Show the dependency graph as a tree" , { tree_option }
+  | "help" : "Show help for a command" , [ command_name ]
+  | other_command , { @any }
+  | @any : "An external cargo-<name> command" , { @any } ;
+
+command_name =
+    "build" | "check" | "run" | "test" | "bench" | "doc" | "clippy" | "fmt" | "add" | "remove" | "update"
+  | "install" | "uninstall" | "new" | "init" | "clean" | "fix" | "tree" | other_command ;
+
+other_command =
+    "config" : "Inspect configuration values"
+  | "fetch" : "Fetch the dependencies from the network"
+  | "generate-lockfile" : "Generate the lockfile for a package"
+  | "info" : "Show information about a package"
+  | "locate-project" : "Print the location of Cargo.toml as JSON"
+  | "login" : "Log in to a registry" | "logout" : "Remove a registry token"
+  | "metadata" : "Print the resolved dependencies as JSON"
+  | "miri" : "Run code in the Miri interpreter"
+  | "owner" : "Manage the owners of a crate on the registry"
+  | "package" : "Assemble the package into a tarball"
+  | "pkgid" : "Print a fully qualified package specification"
+  | "publish" : "Upload the package to the registry"
+  | "report" : "Generate and display reports"
+  | "rustc" : "Compile the package with extra compiler options"
+  | "rustdoc" : "Build the documentation with custom flags"
+  | "search" : "Search the registry for crates"
+  | "vendor" : "Vendor all dependencies locally"
+  | "version" : "Show version information"
+  | "yank" : "Remove a pushed crate from the index"
+  | "read-manifest" : "Print the manifest as JSON (deprecated)"
+  | "verify-project" : "Check the manifest (deprecated)" ;
+
+(* Option groups shared by several commands. *)
+
+common =
+    "-v" : "Use verbose output" | "--verbose" : "Use verbose output"
+  | "-q" : "Do not print cargo log messages" | "--quiet" : "Do not print cargo log messages"
+  | "--color" : "When to color output" , color_when | "--color=" : "When to color output" ~ color_when
+  | "--config" : "Override a configuration value" , @any | "--config=" : "Override a configuration value" ~ @any
+  | "-Z" : "Unstable nightly flag" , @any
+  | "-h" : "Print help" | "--help" : "Print help" ;
+
+color_when = "auto" | "always" | "never" ;
+
+lock_option =
+    "--locked" : "Assert that Cargo.lock will remain unchanged"
+  | "--offline" : "Run without accessing the network"
+  | "--frozen" : "Same as --locked and --offline" ;
+
+manifest =
+    lock_option
+  | "--manifest-path" : "Path to Cargo.toml" , @file | "--manifest-path=" : "Path to Cargo.toml" ~ @file
+  | "--lockfile-path" : "Path to Cargo.lock (unstable)" , @file | "--lockfile-path=" : "Path to Cargo.lock (unstable)" ~ @file
+  | "--ignore-rust-version" : "Ignore the rust-version of packages" ;
+
+package =
+    "-p" : "Package to select" , [ @any ] | "--package" : "Package to select" , [ @any ] | "--package=" : "Package to select" ~ @any ;
+
+workspace =
+    package
+  | "--workspace" : "Select all packages in the workspace"
+  | "--exclude" : "Exclude packages" , @any | "--exclude=" : "Exclude packages" ~ @any
+  | "--all" : "Alias for --workspace (deprecated)" ;
+
+features =
+    "-F" : "Features to activate" , @any | "--features" : "Features to activate" , @any | "--features=" : "Features to activate" ~ @any
+  | "--all-features" : "Activate all available features"
+  | "--no-default-features" : "Do not activate the default feature" ;
+
+bin_example =
+    "--bin" : "Only the named binary" , [ @any ] | "--bin=" : "Only the named binary" ~ @any
+  | "--example" : "Only the named example" , [ @any ] | "--example=" : "Only the named example" ~ @any ;
+
+lib_bins_examples =
+    bin_example
+  | "--lib" : "Only this package's library"
+  | "--bins" : "All binaries"
+  | "--examples" : "All examples" ;
+
+targets =
+    lib_bins_examples
+  | "--tests" : "All targets with test = true"
+  | "--test" : "Only the named test target" , [ @any ] | "--test=" : "Only the named test target" ~ @any
+  | "--benches" : "All targets with bench = true"
+  | "--bench" : "Only the named bench target" , [ @any ] | "--bench=" : "Only the named bench target" ~ @any
+  | "--all-targets" : "All targets" ;
+
+triple = rust_target | @any ;
+rust_target =
+    "x86_64-unknown-linux-gnu" | "x86_64-unknown-linux-musl" | "aarch64-unknown-linux-gnu" | "aarch64-unknown-linux-musl"
+  | "x86_64-apple-darwin" | "aarch64-apple-darwin" | "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu"
+  | "aarch64-pc-windows-msvc" | "wasm32-unknown-unknown" | "wasm32-wasip1" | "wasm32-wasip2" ;
+
+message_format = "human" | "short" | "json" | "json-diagnostic-short" | "json-diagnostic-rendered-ansi" | "json-render-diagnostics" ;
+
+compile =
+    "-j" : "Number of parallel jobs" , @number | "--jobs" : "Number of parallel jobs" , @number | "--jobs=" : "Number of parallel jobs" ~ @number
+  | "--profile" : "Build with this profile" , @any | "--profile=" : "Build with this profile" ~ @any
+  | "--target" : "Build for this target triple" , [ triple ] | "--target=" : "Build for this target triple" ~ triple
+  | "--target-dir" : "Directory for generated artifacts" , @directory | "--target-dir=" : "Directory for generated artifacts" ~ @directory
+  | "--unit-graph" : "Print the build graph as JSON (unstable)"
+  | "--timings" : "Report build timings" | "--timings=" : "Report build timings in these formats" ~ ( "html" | "json" )
+  | "--message-format" : "Error format" , message_format | "--message-format=" : "Error format" ~ message_format ;
+
+release = "-r" : "Build in release mode, with optimizations" | "--release" : "Build in release mode, with optimizations" ;
+keep_going = "--keep-going" : "Do not abort the build at the first error" ;
+incompat = "--future-incompat-report" : "Report future incompatibilities at the end" ;
+
+(* Commands. *)
+
+build_option =
+    common | manifest | workspace | targets | features | compile | release | keep_going | incompat
+  | "--artifact-dir" : "Copy final artifacts to this directory (unstable)" , @directory
+  | "--artifact-dir=" : "Copy final artifacts to this directory (unstable)" ~ @directory ;
+
+check_option = common | manifest | workspace | targets | features | compile | release | keep_going | incompat ;
+
+run_option = common | manifest | package | bin_example | features | compile | release | keep_going ;
+
+test_option =
+    common | manifest | workspace | targets | features | compile | release | incompat
+  | "--doc" : "Test only this library's documentation"
+  | "--no-run" : "Compile, but do not run the tests"
+  | "--no-fail-fast" : "Run all tests regardless of failure" ;
+
+bench_option =
+    common | manifest | workspace | targets | features | compile
+  | "--no-run" : "Compile, but do not run the benchmarks"
+  | "--no-fail-fast" : "Run all benchmarks regardless of failure" ;
+
+libtest_option =
+    "--include-ignored" : "Run ignored and not ignored tests"
+  | "--ignored" : "Run only ignored tests"
+  | "--exclude-should-panic" : "Exclude tests marked should_panic"
+  | "--test" : "Run tests and not benchmarks"
+  | "--bench" : "Run benchmarks instead of tests"
+  | "--list" : "List all tests and benchmarks"
+  | "--fail-fast" : "Stop after the first failure"
+  | "--no-capture" : "Do not capture the output of tests" | "--nocapture" : "Do not capture the output of tests"
+  | "--test-threads" : "Number of threads to run tests on" , @number | "--test-threads=" : "Number of threads to run tests on" ~ @number
+  | "--skip" : "Skip tests whose names contain this" , @any | "--skip=" : "Skip tests whose names contain this" ~ @any
+  | "--exact" : "Match filters exactly"
+  | "--show-output" : "Show the output of successful tests"
+  | "--format" : "Output format" , libtest_format | "--format=" : "Output format" ~ libtest_format
+  | "--color" : "When to color output" , color_when | "--color=" : "When to color output" ~ color_when
+  | "--shuffle" : "Run tests in random order"
+  | "--shuffle-seed" : "Seed for --shuffle" , @number
+  | "--report-time" : "Show the execution time of each test"
+  | "-q" : "One character per test" | "--quiet" : "One character per test" ;
+libtest_format = "pretty" | "terse" | "json" | "junit" ;
+
+doc_option =
+    common | manifest | workspace | lib_bins_examples | features | compile | release | keep_going
+  | "--open" : "Open the docs in a browser"
+  | "--no-deps" : "Do not document the dependencies"
+  | "--document-private-items" : "Document private items" ;
+
+clippy_option =
+    check_option
+  | "--no-deps" : "Lint only the given crate, not its dependencies"
+  | "--fix" : "Apply lint suggestions automatically"
+  | "--allow-dirty" : "Fix even if the working directory has changes"
+  | "--allow-staged" : "Fix even if the working directory has staged changes"
+  | "--explain" : "Print the documentation of a lint" , @any ;
+
+lint_level =
+    "-W" : "Warn about the lint" , @any | "--warn" : "Warn about the lint" , @any
+  | "-A" : "Allow the lint" , @any | "--allow" : "Allow the lint" , @any
+  | "-D" : "Deny the lint" , @any | "--deny" : "Deny the lint" , @any
+  | "-F" : "Forbid the lint" , @any | "--forbid" : "Forbid the lint" , @any ;
+
+fmt_option =
+    "-q" : "Print nothing to stdout" | "--quiet" : "Print nothing to stdout"
+  | "-v" : "Use verbose output" | "--verbose" : "Use verbose output"
+  | "--version" : "Print the rustfmt version"
+  | "-p" : "Package to format" , @any | "--package" : "Package to format" , @any | "--package=" : "Package to format" ~ @any
+  | "--manifest-path" : "Path to Cargo.toml" , @file | "--manifest-path=" : "Path to Cargo.toml" ~ @file
+  | "--message-format" : "Message format" , ( "short" | "json" | "human" )
+  | "--message-format=" : "Message format" ~ ( "short" | "json" | "human" )
+  | "--all" : "Format all packages and their local path dependencies"
+  | "--check" : "Check the formatting without changing files"
+  | "-h" : "Print help" | "--help" : "Print help" ;
+
+dry_run = "-n" : "Do not write any changes" | "--dry-run" : "Do not write any changes" ;
+git_source =
+    "--git" : "Git repository URL" , @any | "--git=" : "Git repository URL" ~ @any
+  | "--branch" : "Git branch to use" , @any | "--branch=" : "Git branch to use" ~ @any
+  | "--tag" : "Git tag to use" , @any | "--tag=" : "Git tag to use" ~ @any
+  | "--rev" : "Git revision to use" , @any | "--rev=" : "Git revision to use" ~ @any
+  | "--path" : "Path to a local crate" , @directory | "--path=" : "Path to a local crate" ~ @directory
+  | "--registry" : "Registry to use" , @any | "--registry=" : "Registry to use" ~ @any ;
+dependency_section =
+    "--dev" : "Development dependency" | "--build" : "Build dependency"
+  | "--target" : "Dependency of this target platform" , triple | "--target=" : "Dependency of this target platform" ~ triple ;
+
+add_option =
+    common | manifest | package | dry_run | git_source | dependency_section
+  | "-F" : "Features to activate" , @any | "--features" : "Features to activate" , @any | "--features=" : "Features to activate" ~ @any
+  | "--no-default-features" : "Disable the default features"
+  | "--default-features" : "Re-enable the default features"
+  | "--optional" : "Mark the dependency as optional" | "--no-optional" : "Mark the dependency as required"
+  | "--public" : "Mark the dependency as public (unstable)" | "--no-public" : "Mark the dependency as private (unstable)"
+  | "--rename" : "Rename the dependency" , @any | "--rename=" : "Rename the dependency" ~ @any
+  | "--base" : "Path base for a local crate (unstable)" , @any | "--base=" : "Path base for a local crate (unstable)" ~ @any ;
+
+remove_option = common | manifest | package | dry_run | dependency_section ;
+
+update_option =
+    common | manifest | dry_run
+  | "--recursive" : "Also update the dependencies of the given packages"
+  | "--precise" : "Update to exactly this version" , @any | "--precise=" : "Update to exactly this version" ~ @any
+  | "-b" : "Update to the latest breaking version (unstable)" | "--breaking" : "Update to the latest breaking version (unstable)"
+  | "-w" : "Only update the workspace packages" | "--workspace" : "Only update the workspace packages" ;
+
+install_option =
+    common | manifest | bin_example | features | compile | keep_going | git_source
+  | "--bins" : "Install all binaries" | "--examples" : "Install all examples"
+  | "--version" : "Version to install" , @any | "--version=" : "Version to install" ~ @any
+  | "--index" : "Registry index to install from" , @any | "--index=" : "Registry index to install from" ~ @any
+  | "--root" : "Directory to install packages into" , @directory | "--root=" : "Directory to install packages into" ~ @directory
+  | "-f" : "Overwrite existing crates or binaries" | "--force" : "Overwrite existing crates or binaries"
+  | "-n" : "Check everything without installing (unstable)" | "--dry-run" : "Check everything without installing (unstable)"
+  | "--no-track" : "Do not save tracking information"
+  | "--list" : "List installed packages and their versions"
+  | "--debug" : "Build in debug mode instead of release" ;
+
+uninstall_option =
+    common | lock_option | package
+  | "--root" : "Directory to uninstall packages from" , @directory | "--root=" : "Directory to uninstall packages from" ~ @directory
+  | "--bin" : "Only uninstall this binary" , @any | "--bin=" : "Only uninstall this binary" ~ @any ;
+
+new_option =
+    common | lock_option
+  | "--vcs" : "Version control system to initialize" , vcs | "--vcs=" : "Version control system to initialize" ~ vcs
+  | "--bin" : "Use a binary template (default)"
+  | "--lib" : "Use a library template"
+  | "--edition" : "Rust edition of the crate" , edition | "--edition=" : "Rust edition of the crate" ~ edition
+  | "--name" : "Package name, defaults to the directory name" , @any | "--name=" : "Package name, defaults to the directory name" ~ @any
+  | "--registry" : "Registry to use" , @any | "--registry=" : "Registry to use" ~ @any ;
+vcs = "git" | "hg" | "pijul" | "fossil" | "none" ;
+edition = "2015" | "2018" | "2021" | "2024" ;
+
+clean_option =
+    common | manifest | release
+  | "--doc" : "Clean only the documentation directory"
+  | "-n" : "Show what would be deleted" | "--dry-run" : "Show what would be deleted"
+  | package | "--workspace" : "Clean the artifacts of the workspace members"
+  | "--profile" : "Clean the artifacts of this profile" , @any | "--profile=" : "Clean the artifacts of this profile" ~ @any
+  | "--target" : "Clean the output for this target triple" , [ triple ] | "--target=" : "Clean the output for this target triple" ~ triple
+  | "--target-dir" : "Directory for generated artifacts" , @directory | "--target-dir=" : "Directory for generated artifacts" ~ @directory ;
+
+fix_option =
+    check_option
+  | "--edition" : "Fix in preparation for the next edition"
+  | "--edition-idioms" : "Fix warnings to migrate to the idioms of an edition"
+  | "--broken-code" : "Fix code even if it has compiler errors"
+  | "--allow-no-vcs" : "Fix code even without a version control system"
+  | "--allow-dirty" : "Fix code even if the working directory has changes"
+  | "--allow-staged" : "Fix code even if the working directory has staged changes" ;
+
+tree_option =
+    common | manifest | workspace | features
+  | "--target" : "Only dependencies of this target triple, or all" , [ triple ] | "--target=" : "Only dependencies of this target triple, or all" ~ triple
+  | "-e" : "Kinds of dependencies to display" , @any | "--edges" : "Kinds of dependencies to display" , @any | "--edges=" : "Kinds of dependencies to display" ~ @any
+  | "-i" : "Invert the tree and focus on this package" , [ @any ] | "--invert" : "Invert the tree and focus on this package" , [ @any ]
+  | "--invert=" : "Invert the tree and focus on this package" ~ @any
+  | "--prune" : "Prune this package from the tree" , @any | "--prune=" : "Prune this package from the tree" ~ @any
+  | "--depth" : "Maximum display depth" , @any | "--depth=" : "Maximum display depth" ~ @any
+  | "--prefix" : "Prefix of each entry" , tree_prefix | "--prefix=" : "Prefix of each entry" ~ tree_prefix
+  | "--no-dedupe" : "Repeat shared dependencies"
+  | "-d" : "Show only dependencies with several versions" | "--duplicates" : "Show only dependencies with several versions"
+  | "--charset" : "Character set of the output" , ( "utf8" | "ascii" ) | "--charset=" : "Character set of the output" ~ ( "utf8" | "ascii" )
+  | "-f" : "Format string for each dependency" , @any | "--format" : "Format string for each dependency" , @any
+  | "--format=" : "Format string for each dependency" ~ @any ;
+tree_prefix = "depth" | "indent" | "none" ;

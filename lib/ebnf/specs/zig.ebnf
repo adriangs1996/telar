@@ -1,0 +1,237 @@
+(* zig: checked against `zig help` and `zig <command> --help` of zig 0.16.0; the
+   options of `zig build` come from `zig build --help` in a `zig init` project.
+
+   Conventions:
+   - The compile commands (build-exe, build-lib, build-obj, test, test-obj, run)
+     list their common options; zig has hundreds more, so any other word is
+     accepted there too.
+   - Several options only exist joined: `-j8`, `-I<dir>`, `-l<lib>`, `-femit-bin=<path>`.
+   - `zig build` steps and `-D` options come from build.zig. The steps every
+     build.zig has, and the `-Dtarget` and `-Doptimize` options of
+     `standardTargetOptions` and `standardOptimizeOption`, are listed; any
+     other word is accepted as a step.
+   - `zig cc`, `zig c++` and the other drop-in tools take their own options. *)
+
+zig = { general } , [ command ] ;
+
+general = "-h" : "Print command-specific usage" | "--help" : "Print command-specific usage" ;
+
+command =
+    "build" : "Build the project from build.zig" , { build_option | step } , [ "--" : "Pass the rest to the run step" , { @any } ]
+  | "fetch" : "Copy a package into the global cache and print its hash" , { fetch_option } , [ @file , { fetch_option } ]
+  | "init" : "Initialize a Zig package in the current directory" , { general | "-m" : "Use the minimal template" | "--minimal" : "Use the minimal template" }
+  | "build-exe" : "Create an executable from source or object files" , { compile_option | @file | @any }
+  | "build-lib" : "Create a library from source or object files" , { compile_option | @file | @any }
+  | "build-obj" : "Create an object from source or object files" , { compile_option | @file | @any }
+  | "test" : "Run the unit tests of the files" , { compile_option | test_option | @file | @any }
+  | "test-obj" : "Create an object for unit testing" , { compile_option | test_option | @file | @any }
+  | "run" : "Create an executable and run it immediately" , { compile_option | @file | @any } , [ "--" : "Pass the rest to the program" , { @any } ]
+  | "ast-check" : "Look for simple compile errors in a file" , { ast_check_option } , [ @file , { ast_check_option } ]
+  | "fmt" : "Reformat Zig source into canonical form" , { fmt_option | @file }
+  | "reduce" : "Minimize a bug report" , { @any }
+  | "translate-c" : "Convert C code to Zig code" , { compile_option | @file | @any }
+  | "ar" : "Combine object files into a static archive" , { @any }
+  | "cc" : "Use Zig as a drop-in C compiler" , { @any }
+  | "c++" : "Use Zig as a drop-in C++ compiler" , { @any }
+  | "dlltool" : "Use Zig as a drop-in dlltool.exe" , { @any }
+  | "lib" : "Use Zig as a drop-in lib.exe" , { @any }
+  | "objcopy" : "Manipulate executables and relocatables" , { @any }
+  | "objdump" : "Print information about executables and relocatables" , { @any }
+  | "ranlib" : "Use Zig as a drop-in ranlib" , { @any }
+  | "rc" : "Use Zig as a drop-in rc.exe" , { @any }
+  | "env" : "Print the lib path, std path, cache directory and version"
+  | "help" : "Print help and exit"
+  | "std" : "View the standard library documentation in a browser" , { std_option }
+  | "libc" : "Print or validate the native libc paths" , { libc_option } , [ @file , { libc_option } ]
+  | "targets" : "List the available compilation targets"
+  | "version" : "Print the version number and exit"
+  | "zen" : "Print the Zen of Zig and exit" ;
+
+color =
+    "--color" : "Enable or disable colored error messages" , color_mode ;
+color_mode = "auto" | "off" | "on" ;
+
+optimize_mode =
+    "Debug" : "Optimizations off, safety on (default)"
+  | "ReleaseFast" : "Optimize for performance, safety off"
+  | "ReleaseSafe" : "Optimize for performance, safety on"
+  | "ReleaseSmall" : "Optimize for small binary, safety off" ;
+
+target =
+    "native" | "x86_64-linux-gnu" | "x86_64-linux-musl" | "aarch64-linux-gnu" | "aarch64-linux-musl"
+  | "x86_64-macos" | "aarch64-macos" | "x86_64-windows-gnu" | "x86_64-windows-msvc" | "aarch64-windows-gnu"
+  | "riscv64-linux-gnu" | "wasm32-wasi" | "wasm32-freestanding" | @any ;
+
+step =
+    "install" : "Copy build artifacts to the prefix path (default)"
+  | "uninstall" : "Remove build artifacts from the prefix path"
+  | @any ;
+
+build_option =
+    general | color
+  | "-l" : "Print the available steps" | "--list-steps" : "Print the available steps"
+  | "-D" : "Set a project option, name=value" ~ @any
+  | "-Dtarget=" : "Target triple, when build.zig declares it" ~ target
+  | "-Doptimize=" : "Optimize mode, when build.zig declares it" ~ optimize_mode
+  | "--search-prefix" : "Add a path to look for binaries, libraries, headers" , @directory
+  | "--sysroot" : "Set the system root directory" , @directory
+  | "--libc" : "File that specifies the libc paths" , @file
+  | "--system" : "Disable package fetching; enable all integrations" , @directory
+  | "-fsys=" : "Enable a system integration" ~ @any
+  | "-fno-sys=" : "Disable a system integration" ~ @any
+  | "-fdarling" : "Run macOS programs with Darling" | "-fno-darling" : "Do not use Darling"
+  | "-fqemu" : "Run foreign-architecture programs with QEMU" | "-fno-qemu" : "Do not use QEMU"
+  | "--libc-runtimes" : "Libc builds for QEMU to run foreign programs" , @directory
+  | "-frosetta" : "Run x86_64 programs with Rosetta" | "-fno-rosetta" : "Do not use Rosetta"
+  | "-fwasmtime" : "Run WASI binaries with wasmtime" | "-fno-wasmtime" : "Do not use wasmtime"
+  | "-fwine" : "Run Windows programs with Wine" | "-fno-wine" : "Do not use Wine"
+  | "-p" : "Where to install files (default: zig-out)" , @directory
+  | "--prefix" : "Where to install files (default: zig-out)" , @directory
+  | "--prefix-lib-dir" : "Where to install libraries" , @directory
+  | "--prefix-exe-dir" : "Where to install executables" , @directory
+  | "--prefix-include-dir" : "Where to install C header files" , @directory
+  | "--release" : "Request release mode"
+  | "--release=" : "Request release mode with this optimization" ~ ( "fast" | "safe" | "small" )
+  | "--verbose" : "Print commands before executing them"
+  | "--error-style" : "How build errors are printed" , error_style
+  | "--multiline-errors" : "How multi-line error messages are printed" , ( "indent" | "newline" | "none" )
+  | "--summary" : "How the build summary is printed" , summary_mode
+  | "-j" : "Limit concurrent jobs" ~ @number
+  | "--maxrss" : "Limit memory usage in bytes" , @number
+  | "--skip-oom-steps" : "Skip steps that would exceed --maxrss"
+  | "--test-timeout" : "Limit the execution time of unit tests" , @any
+  | "--watch" : "Rebuild when source files change"
+  | "--debounce" : "Delay in ms before rebuilding after a change" , @number
+  | "--webui" : "Enable the web interface" | "--webui=" : "Enable the web interface on this IP address" ~ @any
+  | "--fuzz" : "Search for unit test failures continuously" | "--fuzz=" : "Fuzz with this iteration limit" ~ @any
+  | "--time-report" : "Report detailed compilation times"
+  | "-fincremental" : "Enable incremental compilation" | "-fno-incremental" : "Disable incremental compilation"
+  | "--fetch" : "Fetch the dependency tree and exit" | "--fetch=" : "Fetch the dependency tree and exit" ~ ( "needed" | "all" )
+  | "--fork=" : "Override projects of the dependency tree" ~ @directory
+  | "-freference-trace" : "Show a reference trace per compile error"
+  | "-freference-trace=" : "Lines of reference trace per compile error" ~ @number
+  | "-fno-reference-trace" : "Disable the reference trace"
+  | "-fallow-so-scripts" : "Allow .so files to be GNU ld scripts" | "-fno-allow-so-scripts" : "Require .so files to be ELF files"
+  | "--build-file" : "Override the path to build.zig" , @file
+  | "--cache-dir" : "Override the local Zig cache directory" , @directory
+  | "--global-cache-dir" : "Override the global Zig cache directory" , @directory
+  | "--zig-lib-dir" : "Override the Zig lib directory" , @directory
+  | "--build-runner" : "Override the build runner" , @file
+  | "--seed" : "Seed for shuffling dependency traversal" , @any
+  | "--build-id" : "Embed a build ID in binaries" | "--build-id=" : "Embed a build ID of this style" ~ build_id
+  | "--debug-log" : "Enable debugging the compiler" , @any
+  | "--debug-pkg-config" : "Fail on unknown pkg-config flags"
+  | "--debug-rt" : "Debug compiler runtime libraries"
+  | "--verbose-link" : "Print linker invocations"
+  | "--verbose-air" : "Print Zig AIR"
+  | "--verbose-llvm-ir" : "Print LLVM IR" | "--verbose-llvm-ir=" : "Write LLVM IR to this file" ~ @file
+  | "--verbose-llvm-bc=" : "Write LLVM BC to this file" ~ @file
+  | "--verbose-cimport" : "Print C import debug output"
+  | "--verbose-cc" : "Print C compiler invocations"
+  | "--verbose-llvm-cpu-features" : "Print LLVM CPU features" ;
+
+error_style =
+    "verbose" : "Report errors with full context (default)" | "minimal" : "Report errors after the summary"
+  | "verbose_clear" : "Like verbose, clearing the terminal each update" | "minimal_clear" : "Like minimal, clearing the terminal each update" ;
+
+summary_mode =
+    "all" : "The whole build summary" | "new" : "Omit cached steps" | "failures" : "Only failed steps"
+  | "line" : "Only the single-line summary" | "none" : "No build summary" ;
+
+build_id = "fast" | "sha1" | "tree" | "md5" | "uuid" | "none" | @any ;
+
+fetch_option =
+    general
+  | "--global-cache-dir" : "Override the global Zig cache directory" , @directory
+  | "--debug-hash" : "Print verbose hash information"
+  | "--save" : "Add the package to build.zig.zon" | "--save=" : "Add the package to build.zig.zon as this name" ~ @any
+  | "--save-exact" : "Add the package to build.zig.zon with the URL verbatim"
+  | "--save-exact=" : "Add the package to build.zig.zon as this name, URL verbatim" ~ @any ;
+
+fmt_option =
+    general | color
+  | "--stdin" : "Format code from stdin to stdout"
+  | "--check" : "List non-conforming files and fail if any"
+  | "--ast-check" : "Run zig ast-check on every file"
+  | "--exclude" : "Exclude this file or directory" , @file
+  | "--zon" : "Treat all input files as ZON" ;
+
+ast_check_option =
+    general | color
+  | "--zon" : "Treat the input file as ZON"
+  | "-t" : "Print ZIR in text form (debug)" ;
+
+std_option =
+    general
+  | "-p" : "Port to listen on" , @number | "--port" : "Port to listen on" , @number
+  | "--open-browser" : "Open a browser tab" | "--no-open-browser" : "Do not open a browser tab" ;
+
+libc_option =
+    general
+  | "-target" : "Target triple" , target
+  | "-includes" : "Print the libc include directories" ;
+
+test_option =
+    "--test-filter" : "Skip tests that do not match this filter" , @any
+  | "--test-cmd" : "Test execution command, one argument at a time" , @any
+  | "--test-cmd-bin" : "Append the test binary path to the test command"
+  | "--test-no-exec" : "Compile the test binary without running it"
+  | "--test-runner" : "Use a custom test runner" , @file ;
+
+compile_option =
+    general | color
+  | "-j" : "Limit concurrent jobs" ~ @number
+  | "-fincremental" : "Enable incremental compilation" | "-fno-incremental" : "Disable incremental compilation"
+  | "-femit-bin" : "Output machine code (default)" | "-femit-bin=" : "Output machine code to this path" ~ @file
+  | "-fno-emit-bin" : "Do not output machine code"
+  | "-femit-asm" : "Output assembly" | "-femit-asm=" : "Output assembly to this path" ~ @file
+  | "-femit-llvm-ir" : "Output optimized LLVM IR" | "-femit-llvm-ir=" : "Output optimized LLVM IR to this path" ~ @file
+  | "-femit-llvm-bc" : "Output an optimized LLVM module" | "-femit-llvm-bc=" : "Output an optimized LLVM module to this path" ~ @file
+  | "-femit-h" : "Generate a C header file" | "-femit-h=" : "Generate a C header file at this path" ~ @file
+  | "-femit-docs" : "Generate HTML documentation" | "-femit-docs=" : "Generate HTML documentation in this directory" ~ @directory
+  | "--show-builtin" : "Print the source of @import(builtin) and exit"
+  | "--cache-dir" : "Override the local cache directory" , @directory
+  | "--global-cache-dir" : "Override the global cache directory" , @directory
+  | "--zig-lib-dir" : "Override the Zig lib directory" , @directory
+  | "--name" : "Compilation unit name" , @any
+  | "--libc" : "File that specifies the libc paths" , @file
+  | "-x" : "Treat later input files as this language" , @any
+  | "--dep" : "Add an import to the next module" , @any
+  | "-M" : "Create a module: -Mname=src" ~ @any
+  | "--error-limit" : "Maximum number of distinct error values" , @number
+  | "-fllvm" : "Force the LLVM backend" | "-fno-llvm" : "Prevent the LLVM backend"
+  | "-flto" : "Enable link time optimization" | "-fno-lto" : "Disable link time optimization"
+  | "-fPIE" : "Enable position independent executables" | "-fno-PIE" : "Disable position independent executables"
+  | "-freference-trace" : "Show a reference trace per compile error"
+  | "-freference-trace=" : "Lines of reference trace per compile error" ~ @number
+  | "-fno-reference-trace" : "Disable the reference trace"
+  | "-target" : "Target triple, arch-os-abi" , target
+  | "-O" : "Optimization mode" , optimize_mode
+  | "-mcpu" : "Target CPU and feature set" , @any
+  | "-fPIC" : "Enable position independent code" | "-fno-PIC" : "Disable position independent code"
+  | "-fomit-frame-pointer" : "Omit the frame pointer" | "-fno-omit-frame-pointer" : "Keep the frame pointer"
+  | "-fstrip" : "Omit debug symbols" | "-fno-strip" : "Keep debug symbols"
+  | "-fsingle-threaded" : "Assume a single thread" | "-fno-single-threaded" : "Do not assume a single thread"
+  | "-fsanitize-c" : "Detect C undefined behavior" | "-fno-sanitize-c" : "Do not detect C undefined behavior"
+  | "-fsanitize-thread" : "Enable the thread sanitizer" | "-fno-sanitize-thread" : "Disable the thread sanitizer"
+  | "-fvalgrind" : "Include valgrind client requests" | "-fno-valgrind" : "Omit valgrind client requests"
+  | "-ferror-tracing" : "Enable error tracing in release builds" | "-fno-error-tracing" : "Disable error tracing"
+  | "-I" : "Add a directory to the include path" ~ @directory
+  | "-isystem" : "Add a directory to the system include path" , @directory
+  | "-D" : "Define a C macro, name=value" ~ @any
+  | "-cflags" : "Extra flags for the next C sources, ended by --" , { @any } , "--"
+  | "-l" : "Link against a system library" ~ @any | "--library" : "Link against a system library" , @any
+  | "-L" : "Add a library search directory" ~ @directory | "--library-directory" : "Add a library search directory" , @directory
+  | "-rpath" : "Add a runtime library search path" , @directory
+  | "-framework" : "Link against a framework (Darwin)" , @any
+  | "-T" : "Use a custom linker script" ~ @file | "--script" : "Use a custom linker script" , @file
+  | "--sysroot" : "Set the system root directory" , @directory
+  | "-static" : "Link statically" | "-dynamic" : "Link dynamically"
+  | "-rdynamic" : "Add all symbols to the dynamic symbol table"
+  | "-fentry" : "Enable the default entry point" | "-fentry=" : "Override the entry point symbol" ~ @any
+  | "-fno-entry" : "Do not output an entry point"
+  | "--build-id" : "Embed a build ID in binaries" | "--build-id=" : "Embed a build ID of this style" ~ build_id
+  | "-z" : "Linker extension flag" , @any
+  | "--gc-sections" : "Remove unreachable functions and data" | "--no-gc-sections" : "Keep unreachable functions and data"
+  | "--verbose-link" : "Print linker invocations"
+  | "--verbose-cc" : "Print C compiler invocations" ;

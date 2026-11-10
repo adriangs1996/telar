@@ -1,64 +1,14 @@
 module;
 #include "tbc/view.hpp"
-#include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
-#include <stdlib.h>
-#include <zlib.h>
-
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cassert>
+#include "telar_platform/trace_macro.hpp"
 #include <cerrno>
 #include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
+#include <ghostty/vt.h>
 #include <limits.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/uio.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <climits>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include <new>
-#include <termios.h>
-
-#include <poll.h>
-
-#include <dirent.h>
-#if (TELAR_DIAGNOSTICS)
-#include <pthread.h>
-#endif
-#if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
-#include <mach/mach.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <sqlite3.h>
-#include <sys/file.h>
-#include <sys/un.h>
 
 export module telar.runtime.runtime.runtime;
 
@@ -690,6 +640,8 @@ export {
       DescriptionOptions descriptions;
       GraphicsLimits graphics;
       control::Policy control_policy{};
+      std::string_view shell_integration;
+      bool ssh_integration = false;
     };
 
   }
@@ -1636,7 +1588,7 @@ export {
             clients_(memory),
             admissions_(poller_, limits_),
             client_layouts_(memory),
-            panes_(memory, poller_, limits_, PaneLaunchOptions{options.socket, proxy, options.control_policy}, background),
+            panes_(memory, poller_, limits_, PaneLaunchOptions{options.socket, proxy, options.control_policy, options.shell_integration, options.ssh_integration}, background),
             workspaces_(memory),
             worktrees_(memory, limits_),
             executions_(memory, poller_, limits_),
@@ -1673,6 +1625,8 @@ export {
         poller_.watch(metrics_.descriptor(), eventToken(EventSource::worker, 0));
         poller_.watch(runtime_clipboard_.descriptor(), eventToken(EventSource::worker, 0));
         poller_.watch(workspace_git_.descriptor(), eventToken(EventSource::worker, 0));
+        poller_.watch(shell_git_.descriptor(), eventToken(EventSource::worker, 0));
+        poller_.watch(words_.descriptor(), eventToken(EventSource::worker, 0));
         poller_.watch(worktree_detection_.descriptor(), eventToken(EventSource::worker, 0));
         poller_.watch(agent_files_.descriptor(), eventToken(EventSource::worker, 0));
         if (descriptions_.descriptor() >= 0) {
@@ -2083,6 +2037,58 @@ export {
         client.connection.send(RequestCompleted{.request_id = message.request_id});
       }
 
+      // Values for a completion: found where the pane's shell runs, from its own PATH and
+      // directory when its integration reported them.
+      inline void handle(std::uint64_t identity, const CompleteWords &message) {
+        auto &client = requireClient(clients_, identity);
+        const auto *pane = model_.panes.find(message.pane_id);
+        if (pane == nullptr) {
+          throw RequestError{FailureCode::pane_not_found, "Could not complete words"};
+        }
+        // A remote shell's commands, branches and hosts are not this host's to read.
+        if (pane->shell_state.remote) {
+          client.connection.send(CompletionWords{.request_id = message.request_id, .truncated = true, .words = {}});
+          return;
+        }
+        WordRequest request{.client = client.id, .request = message.request_id, .provider = message.provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+        request.prefix.assign(message.prefix);
+        request.directory.assign(pane->shell_zones && !pane->shell_zones->directory().empty() ? pane->shell_zones->directory() : std::string_view{pane->cwd});
+        const char *home = std::getenv("HOME");
+        request.home.assign(home == nullptr ? std::string_view{} : std::string_view{home});
+        const char *runtime_path = std::getenv("PATH");
+        request.path.assign(pane->shell_zones && !pane->shell_zones->path().empty() ? pane->shell_zones->path() : runtime_path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{runtime_path});
+        request.shell = pane->shell_state.shell;
+        if (pane->shell_zones) {
+          request.names = pane->shell_zones->names();
+        }
+        words_.request(request);
+      }
+
+      // A command's completion spec, for a command the pane's shell runs. A remote shell's
+      // commands are its host's, which this runtime cannot tell.
+      inline void handle(std::uint64_t identity, const RequestCommandSpec &message) {
+        auto &client = requireClient(clients_, identity);
+        const auto *pane = model_.panes.find(message.pane_id);
+        if (pane == nullptr) {
+          throw RequestError{FailureCode::pane_not_found, "Could not find a command spec"};
+        }
+        if (pane->shell_state.remote) {
+          client.connection.send(CommandSpec{.request_id = message.request_id, .command = message.command, .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
+          return;
+        }
+        WordRequest request{.client = client.id, .request = message.request_id, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+        request.prefix.assign(message.command);
+        const char *runtime_path = std::getenv("PATH");
+        request.path.assign(pane->shell_zones && !pane->shell_zones->path().empty() ? pane->shell_zones->path() : runtime_path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{runtime_path});
+        request.shell = pane->shell_state.shell;
+        if (pane->shell_zones) {
+          request.names = pane->shell_zones->names();
+        }
+        request.spec = true;
+        request.known_digest = message.known_digest;
+        words_.request(request);
+      }
+
       inline void handle(std::uint64_t identity, const FindPaths &message) {
         auto &client = requireClient(clients_, identity);
         if (!background_.tryPaths(client.id, message, client.connection)) {
@@ -2266,7 +2272,14 @@ export {
 
       inline void handle(std::uint64_t identity, const SetPaneViewport &message) {
         if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
-          attachment->viewport = message.offset;
+          // At or past the bottom the view follows the output, as before any scroll; a row
+          // above it stays put while output grows.
+          std::uint32_t bottom = 0;
+          if (const auto *pane = model_.panes.find(message.pane_id)) {
+            const auto &screen = pane->terminal.screen;
+            bottom = screen.scroll.total_rows - std::min<std::uint32_t>(screen.scroll.total_rows, screen.rows);
+          }
+          attachment->viewport = message.offset >= bottom ? std::nullopt : std::optional{message.offset};
           attachment->frames.requestSnapshot();
         }
       }
@@ -2409,6 +2422,29 @@ export {
         metrics_.collect();
         runtime_clipboard_.collect(clients_);
         workspace_git_.collect(model_, Clock::now());
+        shell_git_.collect([&](const ShellGitResult &result) {
+          auto *pane = model_.panes.find(result.pane);
+          if (pane != nullptr && pane->generation == result.generation && !pane->shell_state.remote && !(pane->git == result.summary)) {
+            pane->git = result.summary;
+            ++pane->git_revision;
+          }
+        });
+        words_.collect([&](const WordResult &result) {
+          auto *client = clients_.find(result.client);
+          if (client == nullptr) {
+            return;
+          }
+          if (result.spec) {
+            client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
+            return;
+          }
+          std::vector<CompletionWord> words;
+          words.reserve(result.words.size());
+          for (const auto &word : result.words) {
+            words.push_back({word.text, word.description});
+          }
+          client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words});
+        });
         worktree_detection_.collect(model_);
         agent_files_.collect(agents_);
         descriptions_.collect(agents_);
@@ -2491,6 +2527,28 @@ export {
           if (pane != nullptr && !pane->exit_status) {
             pane->exit_status = pane->process->reap();
             model_.pane_revision += pane->exit_status.has_value();
+          }
+
+          // A program can change the terminal without printing, as `read -s` does.
+          if (pane != nullptr && !pane->exit_status && pane->shell_state.phase != ShellPhase::prompt) {
+            pane->observeShell();
+          }
+
+          // A remote shell's repository is not on this host: forget the local one it left.
+          if (pane != nullptr && pane->shell_state.remote && (pane->git.repository || !pane->git_directory.view().empty())) {
+            pane->git = {};
+            pane->git_directory.assign(std::string_view{});
+            ++pane->git_revision;
+          }
+
+          // Back at the prompt after a command, or in another directory: read its repository.
+          if (pane != nullptr && pane->shell_zones && !pane->shell_state.remote && pane->shell_state.phase == ShellPhase::prompt) {
+            const auto directory = pane->shell_zones->directory();
+            if (pane->git_commands != pane->shell_state.commands || pane->git_directory.view() != directory) {
+              pane->git_commands = pane->shell_state.commands;
+              pane->git_directory.assign(directory);
+              shell_git_.request(pane->id, pane->generation, directory);
+            }
           }
 
           if (pane != nullptr && pane->exit_status && pane->output_closed && !pane->exit_observed) {
@@ -2677,6 +2735,8 @@ export {
       checkpoint::SessionStore<Memory, Poller, Agents, Background> session_;
       HostMetricsService<NativeHostMetrics> metrics_;
       WorkspaceGitService<Memory, WorkspaceGitProbe<Memory>> workspace_git_;
+      ShellGitService shell_git_;
+      WordService words_;
       WorktreeDetectionService<Memory, WorktreeDetectionProbe> worktree_detection_;
       AgentFileService<Memory, Agents> agent_files_;
       DescriptionService<Memory, Agents, Background> descriptions_;

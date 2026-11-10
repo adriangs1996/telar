@@ -1,0 +1,368 @@
+(* curl: every option `curl --help all` lists, checked against curl 8.23.0 (Arch
+   Linux) and curl 8.7.1 (macOS), plus --include, the name of --show-headers
+   before 8.10.0. curl takes option values as the next word (short ones also
+   joined, as -ofile) and never as --name=value. Boolean options also accept
+   the negated --no-name form the manual documents. Operands are URLs; hosts
+   from the SSH configuration are offered. *)
+
+curl = { option | @ssh_host : "URL to transfer" } ;
+
+option =
+    "--abstract-unix-socket" : "Connect through this abstract Unix domain socket" , @any
+  | "--alt-svc" : "Enable alt-svc with this cache file" , @file
+  | "--anyauth" : "Pick the most secure authentication the server supports"
+  | "-a" : "Append to the target file when uploading" | "--append" : "Append to the target file when uploading"
+  | "--aws-sigv4" : "AWS V4 signature auth: provider1[:provider2[:region[:service]]]" , @any
+  | "--basic" : "Use HTTP Basic authentication"
+  | "--ca-native" : "Load CA certificates from the operating system"
+  | "--cacert" : "CA certificate bundle to verify the peer against" , @file
+  | "--capath" : "CA certificate directory to verify the peer against" , @directory
+  | "-E" : "Client certificate file[:password]" , @any | "--cert" : "Client certificate file[:password]" , @any
+  | "--cert-status" : "Verify the server certificate status with OCSP stapling"
+  | "--cert-type" : "Client certificate type" , cert_type
+  | "--ciphers" : "TLS 1.2 and older cipher list to use" , @any
+  | "--compressed" : "Request a compressed response and decompress it"
+  | "--compressed-ssh" : "Enable SSH compression"
+  | "-K" : "Read options from this config file" , @file | "--config" : "Read options from this config file" , @file
+  | "--connect-timeout" : "Maximum seconds allowed to connect" , @any
+  | "--connect-to" : "Connect to host2:port2 instead of host1:port1" , @any
+  | "-C" : "Resume the transfer at this offset, or - to detect it" , @any
+  | "--continue-at" : "Resume the transfer at this offset, or - to detect it" , @any
+  | "-b" : "Send cookies from this string or file" , @any | "--cookie" : "Send cookies from this string or file" , @any
+  | "-c" : "Save cookies to this file after the transfer" , @file
+  | "--cookie-jar" : "Save cookies to this file after the transfer" , @file
+  | "--create-dirs" : "Create the local directories the output needs"
+  | "--create-file-mode" : "File mode for created files, in octal" , @number
+  | "--crlf" : "Convert LF to CRLF when uploading"
+  | "--crlfile" : "Certificate revocation list file" , @file
+  | "--curves" : "TLS key exchange algorithms to request" , @any
+  | "-d" : "Send this data in a POST request" , @any | "--data" : "Send this data in a POST request" , @any
+  | "--data-ascii" : "Send this data in a POST request" , @any
+  | "--data-binary" : "Send this data in a POST request, without processing" , @any
+  | "--data-raw" : "Send this data in a POST request; @ has no meaning" , @any
+  | "--data-urlencode" : "Send this data URL-encoded in a POST request" , @any
+  | "--delegation" : "What GSS-API may delegate" , ( "none" | "policy" | "always" )
+  | "--digest" : "Use HTTP Digest authentication"
+  | "-q" : "Do not read .curlrc (must be the first option)" | "--disable" : "Do not read .curlrc (must be the first option)"
+  | "--disable-eprt" : "Do not use EPRT or LPRT for active FTP"
+  | "--disable-epsv" : "Do not use EPSV for passive FTP"
+  | "--eprt" : "Use EPRT for active FTP" | "--epsv" : "Use EPSV for passive FTP"
+  | "--disallow-username-in-url" : "Exit if the URL contains a user name"
+  | "--dns-interface" : "Network interface for DNS requests" , @any
+  | "--dns-ipv4-addr" : "Local IPv4 address for DNS requests" , @any
+  | "--dns-ipv6-addr" : "Local IPv6 address for DNS requests" , @any
+  | "--dns-servers" : "DNS servers to use, comma separated" , @any
+  | "--doh-cert-status" : "Verify the DoH server certificate status with OCSP"
+  | "--doh-insecure" : "Do not verify the DoH server certificate"
+  | "--doh-url" : "Resolve host names over DNS-over-HTTPS at this URL" , @any
+  | "--dump-ca-embed" : "Write the embedded CA bundle to standard output"
+  | "-D" : "Write the received headers to this file" , @file
+  | "--dump-header" : "Write the received headers to this file" , @file
+  | "--ech" : "Encrypted Client Hello mode" , ech_config
+  | "--egd-file" : "EGD socket path for random data (deprecated)" , @file
+  | "--engine" : "OpenSSL crypto engine to use, or list" , @any
+  | "--etag-compare" : "Send the ETag in this file as If-None-Match" , @file
+  | "--etag-save" : "Save the received ETag to this file" , @file
+  | "--expect100-timeout" : "Seconds to wait for a 100-continue response" , @any
+  | "-f" : "Fail with no output on HTTP errors" | "--fail" : "Fail with no output on HTTP errors"
+  | "--fail-early" : "Fail on the first transfer error"
+  | "--fail-with-body" : "Fail on HTTP errors but save the body"
+  | "--false-start" : "Enable TLS False Start"
+  | "--follow" : "Follow redirects, changing the method as the spec says"
+  | "-F" : "Add a multipart form field, name=content" , @any
+  | "--form" : "Add a multipart form field, name=content" , @any
+  | "--form-escape" : "Escape form field and file names with backslashes"
+  | "--form-string" : "Add a multipart form field with a literal value" , @any
+  | "--ftp-account" : "FTP account data" , @any
+  | "--ftp-alternative-to-user" : "Command to send if USER and PASS fail" , @any
+  | "--ftp-create-dirs" : "Create missing remote directories"
+  | "--ftp-method" : "How to reach files on an FTP server" , ( "multicwd" | "nocwd" | "singlecwd" )
+  | "--ftp-pasv" : "Use passive FTP (the default)"
+  | "-P" : "Use active FTP; the server connects to this address" , @any
+  | "--ftp-port" : "Use active FTP; the server connects to this address" , @any
+  | "--ftp-pret" : "Send PRET before PASV"
+  | "--ftp-skip-pasv-ip" : "Ignore the address the server suggests for PASV"
+  | "--ftp-ssl-ccc" : "Send CCC after authenticating"
+  | "--ftp-ssl-ccc-mode" : "How to shut down TLS after CCC" , ( "active" | "passive" )
+  | "--ftp-ssl-control" : "Require TLS for login, clear text for transfer"
+  | "-G" : "Put the post data in the URL and use GET" | "--get" : "Put the post data in the URL and use GET"
+  | "-g" : "Disable URL globbing with {} and []" | "--globoff" : "Disable URL globbing with {} and []"
+  | "--happy-eyeballs-timeout-ms" : "Milliseconds to try IPv6 before IPv4" , @number
+  | "--haproxy-clientip" : "Client address to send in the HAProxy PROXY header" , @any
+  | "--haproxy-protocol" : "Send a HAProxy PROXY protocol v1 header"
+  | "-I" : "Fetch the headers only (HEAD)" | "--head" : "Fetch the headers only (HEAD)"
+  | "-H" : "Add this header, or headers from @file" , @any
+  | "--header" : "Add this header, or headers from @file" , @any
+  | "-h" : "Print help, for a category or all" , [ help_subject ]
+  | "--help" : "Print help, for a category or all" , [ help_subject ]
+  | "--hostpubmd5" : "Accept only this MD5 of the SSH host key" , @any
+  | "--hostpubsha256" : "Accept only this SHA256 of the SSH host key" , @any
+  | "--hsts" : "Enable HSTS with this cache file" , @file
+  | "--http0.9" : "Allow HTTP/0.9 responses"
+  | "-0" : "Use HTTP/1.0" | "--http1.0" : "Use HTTP/1.0"
+  | "--http1.1" : "Use HTTP/1.1"
+  | "--http2" : "Use HTTP/2"
+  | "--http2-prior-knowledge" : "Use HTTP/2 without the HTTP/1.1 Upgrade"
+  | "--http3" : "Use HTTP/3, falling back to older versions"
+  | "--http3-only" : "Use HTTP/3 only"
+  | "--ignore-content-length" : "Ignore the Content-Length header"
+  | "-i" : "Include the response headers in the output"
+  | "--show-headers" : "Include the response headers in the output"
+  | "--include" : "Include the response headers in the output (old name)"
+  | "-k" : "Do not verify the server certificate" | "--insecure" : "Do not verify the server certificate"
+  | "--interface" : "Use this network interface, address or host" , @any
+  | "--ip-tos" : "IP type of service or traffic class" , @any
+  | "--ipfs-gateway" : "Gateway for IPFS URLs" , @any
+  | "-4" : "Resolve names to IPv4 addresses only" | "--ipv4" : "Resolve names to IPv4 addresses only"
+  | "-6" : "Resolve names to IPv6 addresses only" | "--ipv6" : "Resolve names to IPv6 addresses only"
+  | "--json" : "Send this JSON in a POST request" , @any
+  | "-j" : "Ignore session cookies read from a file"
+  | "--junk-session-cookies" : "Ignore session cookies read from a file"
+  | "--keepalive-cnt" : "Keepalive probes to send before dropping" , @number
+  | "--keepalive-time" : "Idle seconds before keepalive probes" , @number
+  | "--key" : "Private key file" , @file
+  | "--key-type" : "Private key file type" , ( "DER" | "PEM" | "ENG" )
+  | "--knownhosts" : "SSH known hosts file" , @file
+  | "--krb" : "Kerberos security level for FTP (deprecated)" , ( "clear" | "safe" | "confidential" | "private" )
+  | "--libcurl" : "Write libcurl C code for this command line to a file" , @file
+  | "--limit-rate" : "Maximum transfer rate, as 100K or 1M" , @any
+  | "-l" : "List names only (FTP, POP3, SFTP)" | "--list-only" : "List names only (FTP, POP3, SFTP)"
+  | "--local-port" : "Local port, or range num-num" , @any
+  | "-L" : "Follow redirects" | "--location" : "Follow redirects"
+  | "--location-trusted" : "Follow redirects and send credentials to other hosts"
+  | "--login-options" : "Server login options" , @any
+  | "--mail-auth" : "Originator address of the original email" , @any
+  | "--mail-from" : "Send mail from this address" , @any
+  | "--mail-rcpt" : "Send mail to this address" , @any
+  | "--mail-rcpt-allowfails" : "Allow some RCPT TO commands to fail"
+  | "-M" : "Print the full manual" | "--manual" : "Print the full manual"
+  | "--max-filesize" : "Maximum size of a file to download" , @any
+  | "--max-redirs" : "Maximum number of redirects to follow" , @any
+  | "-m" : "Maximum seconds for the whole transfer" , @any
+  | "--max-time" : "Maximum seconds for the whole transfer" , @any
+  | "--metalink" : "Formerly Metalink; disabled for security reasons"
+  | "--mptcp" : "Use Multipath TCP"
+  | "--negotiate" : "Use HTTP Negotiate (SPNEGO) authentication"
+  | "-n" : "Read user name and password from .netrc" | "--netrc" : "Read user name and password from .netrc"
+  | "--netrc-file" : "Read user name and password from this netrc file" , @file
+  | "--netrc-optional" : "Use .netrc or the URL for credentials"
+  | "-:" : "Use separate options for the next URL" | "--next" : "Use separate options for the next URL"
+  | "--no-alpn" : "Disable the ALPN TLS extension" | "--alpn" : "Enable the ALPN TLS extension"
+  | "-N" : "Disable buffering of the output" | "--no-buffer" : "Disable buffering of the output"
+  | "--buffer" : "Buffer the output"
+  | "--no-clobber" : "Do not overwrite existing files" | "--clobber" : "Overwrite existing files"
+  | "--no-keepalive" : "Disable TCP keepalive" | "--keepalive" : "Enable TCP keepalive"
+  | "--no-npn" : "Disable the NPN TLS extension" | "--npn" : "Enable the NPN TLS extension"
+  | "--no-progress-meter" : "Do not show the progress meter" | "--progress-meter" : "Show the progress meter"
+  | "--no-sessionid" : "Disable TLS session ID caching" | "--sessionid" : "Enable TLS session ID caching"
+  | "--noproxy" : "Hosts that bypass the proxy, comma separated, or *" , @any
+  | "--ntlm" : "Use HTTP NTLM authentication"
+  | "--ntlm-wb" : "NTLM authentication through winbind (deprecated)"
+  | "--oauth2-bearer" : "OAuth 2 bearer token" , @any
+  | "--out-null" : "Discard the response data"
+  | "-o" : "Write the output to this file" , @file | "--output" : "Write the output to this file" , @file
+  | "--output-dir" : "Save output files in this directory" , @directory
+  | "-Z" : "Run transfers in parallel" | "--parallel" : "Run transfers in parallel"
+  | "--parallel-immediate" : "Open new connections instead of waiting to multiplex"
+  | "--parallel-max" : "Maximum parallel transfers" , @number
+  | "--parallel-max-host" : "Maximum connections to a single host" , @number
+  | "--pass" : "Passphrase for the private key" , @any
+  | "--path-as-is" : "Do not squash .. and . sequences in the URL path"
+  | "--pinnedpubkey" : "Public key file or sha256// hashes to pin" , @any
+  | "--post301" : "Do not switch to GET after a 301 redirect"
+  | "--post302" : "Do not switch to GET after a 302 redirect"
+  | "--post303" : "Do not switch to GET after a 303 redirect"
+  | "--preproxy" : "Use this proxy first, as [protocol://]host[:port]" , @any
+  | "-#" : "Show the progress as a bar" | "--progress-bar" : "Show the progress as a bar"
+  | "--proto" : "Protocols to allow, as =http,https or -ftp" , @any
+  | "--proto-default" : "Protocol for URLs without a scheme" , @any
+  | "--proto-redir" : "Protocols to allow on redirects" , @any
+  | "-x" : "Use this proxy, as [protocol://]host[:port]" , @any
+  | "--proxy" : "Use this proxy, as [protocol://]host[:port]" , @any
+  | "--proxy-anyauth" : "Pick any authentication the proxy supports"
+  | "--proxy-basic" : "Use Basic authentication with the proxy"
+  | "--proxy-ca-native" : "Verify the proxy with the operating system's CAs"
+  | "--proxy-cacert" : "CA certificate bundle to verify the proxy against" , @file
+  | "--proxy-capath" : "CA certificate directory to verify the proxy against" , @directory
+  | "--proxy-cert" : "Client certificate[:password] for the proxy" , @any
+  | "--proxy-cert-type" : "Client certificate type for the proxy" , cert_type
+  | "--proxy-ciphers" : "TLS 1.2 and older ciphers for the proxy" , @any
+  | "--proxy-crlfile" : "Certificate revocation list for the proxy" , @file
+  | "--proxy-digest" : "Use Digest authentication with the proxy"
+  | "--proxy-header" : "Add this header to proxy requests, or headers from @file" , @any
+  | "--proxy-http2" : "Use HTTP/2 with an HTTPS proxy"
+  | "--proxy-http3" : "Use HTTP/3 with an HTTPS proxy"
+  | "--proxy-insecure" : "Do not verify the HTTPS proxy certificate"
+  | "--proxy-key" : "Private key for the HTTPS proxy" , @file
+  | "--proxy-key-type" : "Private key file type for the proxy" , ( "DER" | "PEM" | "ENG" )
+  | "--proxy-negotiate" : "Use Negotiate (SPNEGO) authentication with the proxy"
+  | "--proxy-ntlm" : "Use NTLM authentication with the proxy"
+  | "--proxy-pass" : "Passphrase for the proxy private key" , @any
+  | "--proxy-pinnedpubkey" : "Public key file or sha256// hashes to pin the proxy" , @any
+  | "--proxy-service-name" : "SPNEGO service name for the proxy" , @any
+  | "--proxy-ssl-allow-beast" : "Allow the BEAST TLS flaw with the proxy"
+  | "--proxy-ssl-auto-client-cert" : "Send a client certificate to the proxy automatically"
+  | "--proxy-tls13-ciphers" : "TLS 1.3 cipher suites for the proxy" , @any
+  | "--proxy-tlsauthtype" : "TLS authentication type for the proxy" , @any
+  | "--proxy-tlspassword" : "TLS-SRP password for the proxy" , @any
+  | "--proxy-tlsuser" : "TLS-SRP user name for the proxy" , @any
+  | "--proxy-tlsv1" : "Use TLSv1 or later with the proxy"
+  | "-U" : "Proxy user:password" , @any | "--proxy-user" : "Proxy user:password" , @any
+  | "--proxy1.0" : "Use this HTTP/1.0 proxy, as host[:port]" , @any
+  | "-p" : "Tunnel through the HTTP proxy with CONNECT"
+  | "--proxytunnel" : "Tunnel through the HTTP proxy with CONNECT"
+  | "--pubkey" : "SSH public key file" , @file
+  | "-Q" : "Send this command to the server before the transfer" , @any
+  | "--quote" : "Send this command to the server before the transfer" , @any
+  | "--random-file" : "File of random data (deprecated)" , @file
+  | "-r" : "Retrieve only this byte range, as 0-499" , @any
+  | "--range" : "Retrieve only this byte range, as 0-499" , @any
+  | "--rate" : "Maximum request rate for serial transfers, as 2/s" , @any
+  | "--raw" : "Pass HTTP content through without decoding"
+  | "-e" : "Referer URL; ;auto sets it on redirects" , @any
+  | "--referer" : "Referer URL; ;auto sets it on redirects" , @any
+  | "-J" : "Use the file name the server's header gives"
+  | "--remote-header-name" : "Use the file name the server's header gives"
+  | "-O" : "Save to a local file named like the remote file"
+  | "--remote-name" : "Save to a local file named like the remote file"
+  | "--remote-name-all" : "Use the remote file name for every URL"
+  | "-R" : "Give the local file the remote file's time"
+  | "--remote-time" : "Give the local file the remote file's time"
+  | "--remove-on-error" : "Remove the output file on errors"
+  | "-X" : "Request method to use" , request_method
+  | "--request" : "Request method to use" , request_method
+  | "--request-target" : "Request target to use instead of the URL path" , @any
+  | "--resolve" : "Resolve host:port to this address, as host:port:addr" , @any
+  | "--retry" : "Retry this many times on transient errors" , @number
+  | "--retry-all-errors" : "Retry on every error (with --retry)"
+  | "--retry-connrefused" : "Retry on connection refused (with --retry)"
+  | "--retry-delay" : "Seconds to wait between retries" , @any
+  | "--retry-max-time" : "Retry only within this many seconds" , @any
+  | "--sasl-authzid" : "Identity to act as in SASL PLAIN authentication" , @any
+  | "--sasl-ir" : "Send the initial response in SASL authentication"
+  | "--service-name" : "SPNEGO service name" , @any
+  | "-S" : "Show errors even with -s" | "--show-error" : "Show errors even with -s"
+  | "--sigalgs" : "TLS signature algorithms to use" , @any
+  | "-s" : "Silent mode: no progress meter or errors" | "--silent" : "Silent mode: no progress meter or errors"
+  | "--skip-existing" : "Skip the download if the local file exists"
+  | "--socks4" : "Use this SOCKS4 proxy, as host[:port]" , @any
+  | "--socks4a" : "Use this SOCKS4a proxy, as host[:port]" , @any
+  | "--socks5" : "Use this SOCKS5 proxy, as host[:port]" , @any
+  | "--socks5-basic" : "Use user name and password with SOCKS5 proxies"
+  | "--socks5-gssapi" : "Use GSS-API authentication with SOCKS5 proxies"
+  | "--socks5-gssapi-nec" : "Compatibility with the NEC SOCKS5 server"
+  | "--socks5-gssapi-service" : "GSS-API service name for the SOCKS5 proxy" , @any
+  | "--socks5-hostname" : "Use this SOCKS5 proxy, which resolves host names" , @any
+  | "-Y" : "Abort transfers slower than this many bytes per second" , @any
+  | "--speed-limit" : "Abort transfers slower than this many bytes per second" , @any
+  | "-y" : "Seconds of slow transfer before --speed-limit aborts" , @any
+  | "--speed-time" : "Seconds of slow transfer before --speed-limit aborts" , @any
+  | "--ssl" : "Try to use TLS for the protocol"
+  | "--ssl-allow-beast" : "Allow the BEAST TLS flaw for interoperability"
+  | "--ssl-auto-client-cert" : "Send a client certificate automatically (Schannel)"
+  | "--ssl-no-revoke" : "Disable certificate revocation checks (Schannel)"
+  | "--ssl-reqd" : "Require TLS for the protocol"
+  | "--ssl-revoke-best-effort" : "Ignore missing revocation points (Schannel)"
+  | "--ssl-sessions" : "Load and save TLS session tickets in this file" , @file
+  | "-2" : "Formerly SSLv2; now ignored" | "--sslv2" : "Formerly SSLv2; now ignored"
+  | "-3" : "Formerly SSLv3; now ignored" | "--sslv3" : "Formerly SSLv3; now ignored"
+  | "--stderr" : "Write stderr to this file, or - for stdout" , @file
+  | "--styled-output" : "Use bold and colors for HTTP headers"
+  | "--suppress-connect-headers" : "Hide the proxy CONNECT response headers"
+  | "--tcp-fastopen" : "Use TCP Fast Open"
+  | "--tcp-nodelay" : "Set TCP_NODELAY (the default)"
+  | "-t" : "Telnet option, as opt=val" , @any | "--telnet-option" : "Telnet option, as opt=val" , @any
+  | "--tftp-blksize" : "TFTP block size" , @number
+  | "--tftp-no-options" : "Send no TFTP options"
+  | "-z" : "Transfer if newer than this date or file; -date for older" , @any
+  | "--time-cond" : "Transfer if newer than this date or file; -date for older" , @any
+  | "--tls-earlydata" : "Send TLSv1.3 early data (0-RTT)"
+  | "--tls-max" : "Maximum TLS version allowed" , ( "default" | "1.0" | "1.1" | "1.2" | "1.3" )
+  | "--tls13-ciphers" : "TLS 1.3 cipher suites to use" , @any
+  | "--tlsauthtype" : "TLS authentication type (deprecated)" , ( "SRP" )
+  | "--tlspassword" : "TLS-SRP password (deprecated)" , @any
+  | "--tlsuser" : "TLS-SRP user name (deprecated)" , @any
+  | "-1" : "Use TLSv1.0 or later" | "--tlsv1" : "Use TLSv1.0 or later"
+  | "--tlsv1.0" : "Use TLSv1.0 or later"
+  | "--tlsv1.1" : "Use TLSv1.1 or later"
+  | "--tlsv1.2" : "Use TLSv1.2 or later"
+  | "--tlsv1.3" : "Use TLSv1.3 or later"
+  | "--tr-encoding" : "Request a compressed Transfer-Encoding"
+  | "--trace" : "Write a full debug trace to this file, or -" , @file
+  | "--trace-ascii" : "Write a debug trace without hex to this file, or -" , @file
+  | "--trace-config" : "Components to log in the trace, comma separated" , @any
+  | "--trace-ids" : "Add transfer and connection ids to the trace"
+  | "--trace-time" : "Add timestamps to the trace"
+  | "--unix-socket" : "Connect through this Unix domain socket" , @file
+  | "-T" : "Upload this local file" , @file | "--upload-file" : "Upload this local file" , @file
+  | "--upload-flags" : "IMAP flags for uploads, comma separated" , @any
+  | "--url" : "URL to transfer" , @any
+  | "--url-query" : "Add this query part to the URL" , @any
+  | "-B" : "Use ASCII transfer mode" | "--use-ascii" : "Use ASCII transfer mode"
+  | "-u" : "Server user:password" , @any | "--user" : "Server user:password" , @any
+  | "-A" : "User-Agent to send" , @any | "--user-agent" : "User-Agent to send" , @any
+  | "--variable" : "Set a variable, as name=text or name@file" , @any
+  | "-v" : "Verbose output" | "--verbose" : "Verbose output"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit"
+  | "--vlan-priority" : "VLAN priority, 0 to 7" , @number
+  | "-w" : "Print this format after the transfer, or @file" , @any
+  | "--write-out" : "Print this format after the transfer, or @file" , @any
+  | "--xattr" : "Store metadata in extended file attributes"
+  | negated ;
+
+(* The --no- forms the manual documents for boolean options. *)
+negated =
+    "--no-append" : "Turn off --append" | "--no-basic" : "Turn off --basic" | "--no-ca-native" : "Turn off --ca-native"
+  | "--no-cert-status" : "Turn off --cert-status" | "--no-compressed-ssh" : "Turn off --compressed-ssh"
+  | "--no-compressed" : "Turn off --compressed" | "--no-create-dirs" : "Turn off --create-dirs" | "--no-crlf" : "Turn off --crlf"
+  | "--no-digest" : "Turn off --digest" | "--no-disable-eprt" : "Turn off --disable-eprt" | "--no-disable-epsv" : "Turn off --disable-epsv"
+  | "--no-eprt" : "Do not use EPRT or LPRT, as --disable-eprt" | "--no-epsv" : "Do not use EPSV, as --disable-epsv"
+  | "--no-disable" : "Turn off --disable" | "--no-disallow-username-in-url" : "Turn off --disallow-username-in-url"
+  | "--no-doh-cert-status" : "Turn off --doh-cert-status" | "--no-doh-insecure" : "Turn off --doh-insecure"
+  | "--no-dump-ca-embed" : "Turn off --dump-ca-embed" | "--no-fail-early" : "Turn off --fail-early"
+  | "--no-fail-with-body" : "Turn off --fail-with-body" | "--no-fail" : "Turn off --fail" | "--no-false-start" : "Turn off --false-start"
+  | "--no-follow" : "Turn off --follow" | "--no-ftp-create-dirs" : "Turn off --ftp-create-dirs" | "--no-ftp-pret" : "Turn off --ftp-pret"
+  | "--no-ftp-skip-pasv-ip" : "Turn off --ftp-skip-pasv-ip" | "--no-ftp-ssl-ccc" : "Turn off --ftp-ssl-ccc"
+  | "--no-ftp-ssl-control" : "Turn off --ftp-ssl-control" | "--no-get" : "Turn off --get" | "--no-globoff" : "Turn off --globoff"
+  | "--no-haproxy-protocol" : "Turn off --haproxy-protocol" | "--no-head" : "Turn off --head" | "--no-http0.9" : "Turn off --http0.9"
+  | "--no-http2-prior-knowledge" : "Turn off --http2-prior-knowledge" | "--no-ignore-content-length" : "Turn off --ignore-content-length"
+  | "--no-insecure" : "Turn off --insecure" | "--no-junk-session-cookies" : "Turn off --junk-session-cookies"
+  | "--no-list-only" : "Turn off --list-only" | "--no-location-trusted" : "Turn off --location-trusted" | "--no-location" : "Turn off --location"
+  | "--no-mail-rcpt-allowfails" : "Turn off --mail-rcpt-allowfails" | "--no-mptcp" : "Turn off --mptcp" | "--no-negotiate" : "Turn off --negotiate"
+  | "--no-netrc-optional" : "Turn off --netrc-optional" | "--no-netrc" : "Turn off --netrc" | "--no-ntlm" : "Turn off --ntlm"
+  | "--no-parallel-immediate" : "Turn off --parallel-immediate" | "--no-parallel" : "Turn off --parallel"
+  | "--no-path-as-is" : "Turn off --path-as-is" | "--no-post301" : "Turn off --post301" | "--no-post302" : "Turn off --post302"
+  | "--no-post303" : "Turn off --post303" | "--no-progress-bar" : "Turn off --progress-bar" | "--no-proxy-basic" : "Turn off --proxy-basic"
+  | "--no-proxy-ca-native" : "Turn off --proxy-ca-native" | "--no-proxy-digest" : "Turn off --proxy-digest"
+  | "--no-proxy-http2" : "Turn off --proxy-http2" | "--no-proxy-http3" : "Turn off --proxy-http3" | "--no-proxy-insecure" : "Turn off --proxy-insecure"
+  | "--no-proxy-ntlm" : "Turn off --proxy-ntlm" | "--no-proxy-ssl-allow-beast" : "Turn off --proxy-ssl-allow-beast"
+  | "--no-proxy-ssl-auto-client-cert" : "Turn off --proxy-ssl-auto-client-cert" | "--no-proxytunnel" : "Turn off --proxytunnel"
+  | "--no-raw" : "Turn off --raw" | "--no-remote-header-name" : "Turn off --remote-header-name" | "--no-remote-name-all" : "Turn off --remote-name-all"
+  | "--no-remote-time" : "Turn off --remote-time" | "--no-remove-on-error" : "Turn off --remove-on-error"
+  | "--no-retry-all-errors" : "Turn off --retry-all-errors" | "--no-retry-connrefused" : "Turn off --retry-connrefused"
+  | "--no-sasl-ir" : "Turn off --sasl-ir" | "--no-show-error" : "Turn off --show-error" | "--no-show-headers" : "Turn off --show-headers"
+  | "--no-include" : "Turn off --include" | "--no-silent" : "Turn off --silent" | "--no-skip-existing" : "Turn off --skip-existing"
+  | "--no-socks5-gssapi-nec" : "Turn off --socks5-gssapi-nec" | "--no-socks5-gssapi" : "Turn off --socks5-gssapi"
+  | "--no-ssl-allow-beast" : "Turn off --ssl-allow-beast" | "--no-ssl-auto-client-cert" : "Turn off --ssl-auto-client-cert"
+  | "--no-ssl-no-revoke" : "Turn off --ssl-no-revoke" | "--no-ssl-reqd" : "Turn off --ssl-reqd"
+  | "--no-ssl-revoke-best-effort" : "Turn off --ssl-revoke-best-effort" | "--no-ssl" : "Turn off --ssl"
+  | "--no-styled-output" : "Turn off --styled-output" | "--no-suppress-connect-headers" : "Turn off --suppress-connect-headers"
+  | "--no-tcp-fastopen" : "Turn off --tcp-fastopen" | "--no-tcp-nodelay" : "Turn off --tcp-nodelay"
+  | "--no-tftp-no-options" : "Turn off --tftp-no-options" | "--no-tls-earlydata" : "Turn off --tls-earlydata"
+  | "--no-tr-encoding" : "Turn off --tr-encoding" | "--no-trace-ids" : "Turn off --trace-ids" | "--no-trace-time" : "Turn off --trace-time"
+  | "--no-use-ascii" : "Turn off --use-ascii" | "--no-verbose" : "Turn off --verbose" | "--no-xattr" : "Turn off --xattr" ;
+
+cert_type = "PEM" | "DER" | "ENG" | "PROV" | "P12" ;
+
+ech_config =
+    "false" : "Do not attempt ECH (default)" | "grease" : "Send a GREASE ECH extension"
+  | "true" : "Attempt ECH if possible" | "hard" : "Attempt ECH and fail if it is not possible"
+  | @any : "A list as ecl:<b64>, or pn:<name>" ;
+
+request_method = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "CONNECT" | "TRACE" | @any : "Any request method or command" ;
+
+help_subject =
+    "all" : "Every option" | "category" : "List the categories"
+  | "auth" | "connection" | "curl" | "deprecated" | "dns" | "file" | "ftp" | "global" | "http" | "imap" | "ldap"
+  | "mqtt" | "output" | "pop3" | "post" | "proxy" | "scp" | "sftp" | "smtp" | "ssh" | "telnet" | "tftp" | "timeout"
+  | "tls" | "upload" | "verbose" ;

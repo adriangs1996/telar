@@ -14,11 +14,10 @@ export import telar.ebnf.lexer;
 export {
 namespace ebnf {
 
-  using binding_power = int;
-  using NodeId = int;
   using node_handle = uint32_t;
 
   inline constexpr node_handle none_handle{UINT32_MAX};
+  inline constexpr std::size_t max_nesting_depth = 64;
 
   enum class node_kind : std::uint8_t {
     Root,
@@ -31,6 +30,12 @@ namespace ebnf {
     OneOrMore,
     Exception,
     Rule,
+    // `@name`: one word from a provider the caller resolves. `text` is the provider name.
+    Dynamic,
+    // `: "text"` after a Literal or Dynamic: its only child, holding the human description.
+    Description,
+    // `prefix ~ value`: one word that starts with the prefix literal and ends with the value.
+    Glue,
   };
 
   struct flat_node {
@@ -125,16 +130,8 @@ namespace ebnf {
     parsing_ring_buffer tokens_;
     std::size_t token_count_{0};
     std::size_t cursor_{0};
+    std::size_t depth_{0};
     syntax_tree tree_{};
-
-    struct BindingPower {
-      binding_power left;
-      binding_power right;
-    };
-
-    [[nodiscard]] inline auto infixBindingPower(token_kind) const -> std::optional<BindingPower> {
-      throw std::logic_error("infixBindingPower is not implemented");
-    }
 
     inline auto advance() -> token {
       const auto next_token = peek();
@@ -146,8 +143,17 @@ namespace ebnf {
       return next_token;
     }
 
-    inline auto makeBinary(token_kind, NodeId, NodeId) -> NodeId {
-      throw std::logic_error("makeBinary is not implemented");
+    inline auto expect(token_kind kind, const char *message) -> void {
+      if (!consume(kind)) {
+        throw std::invalid_argument(message);
+      }
+    }
+
+    inline auto wrap(node_kind kind, node_handle child) -> node_handle {
+      auto wrapper = flat_node{.kind_ = kind};
+      const auto handle = tree_.addNode(wrapper);
+      tree_.setParent(child, handle);
+      return handle;
     }
 
   public:
@@ -156,6 +162,7 @@ namespace ebnf {
 
     inline auto parse(tbc::view<std::string_view, tbc::lt::a> source) -> tbc::view<syntax_tree, tbc::lt::a> {
       cursor_ = 0;
+      depth_ = 0;
       token_count_ = 0;
       tree_.clear();
       const auto count = tokenizer_.tokenizeSourceIntoBuffer(source, tokens_, tokens_.size());
@@ -214,17 +221,13 @@ namespace ebnf {
     // rule = lhs , S , "=" , S , alternation , S , terminator ;
     inline auto parseRule() -> node_handle {
       auto rule = flat_node{.kind_ = node_kind::Rule};
-      auto identifier = parseIdentifier();
-
-      rule.text_ = identifier;
+      rule.text_ = parseIdentifier();
       const auto rule_handle = tree_.addNode(rule);
 
-      if (!consume(token_kind::Equal)) {
-        throw std::logic_error("Expected an =");
-      }
+      expect(token_kind::Equal, "Expected = after the rule name");
 
-      auto alternation_handler = parseAlternation();
-      tree_.setParent(alternation_handler, rule_handle);
+      const auto body = parseAlternation();
+      tree_.setParent(body, rule_handle);
       parseTerminator();
 
       return rule_handle;
@@ -236,10 +239,7 @@ namespace ebnf {
         return handle;
       }
 
-      auto concatenation = flat_node{.kind_ = node_kind::Concatenation};
-      const auto concat_handle = tree_.addNode(concatenation);
-      tree_.setParent(handle, concat_handle);
-      return concat_handle;
+      return wrap(node_kind::Concatenation, handle);
     }
 
     // alternation = concatenation , ( "|" , concatenation ) * ;
@@ -250,10 +250,8 @@ namespace ebnf {
         return first;
       }
 
-      auto alternation = flat_node{.kind_ = node_kind::Alternative};
-      const auto handle = tree_.addNode(alternation);
-      auto left = ensureConcatenation(first);
-      tree_.setParent(left, handle);
+      const auto handle = wrap(node_kind::Alternative, ensureConcatenation(first));
+      auto left = tree_.getFirstChild(handle);
 
       do {
         const auto sibling_handle = ensureConcatenation(parseConcatenation());
@@ -272,11 +270,9 @@ namespace ebnf {
         return first;
       }
 
-      auto concatenation = flat_node{.kind_ = node_kind::Concatenation};
-      const auto concat_handle = tree_.addNode(concatenation);
-      tree_.setParent(first, concat_handle);
-
+      const auto concat_handle = wrap(node_kind::Concatenation, first);
       auto left = first;
+
       do {
         const auto sibling_handle = parseFactor();
         tree_.setSibling(left, sibling_handle);
@@ -286,101 +282,87 @@ namespace ebnf {
       return concat_handle;
     }
 
-    // factor = term, S, ("?" | "*" | "+" | ("-", S, term ))?
+    // Binary factors keep both operands as ordered children.
+    inline auto makeBinary(node_kind kind, node_handle left) -> node_handle {
+      const auto right = parseTerm();
+      const auto handle = wrap(kind, left);
+      tree_.setSibling(left, right);
+      return handle;
+    }
+
+    // factor = term , S , ( "?" | "*" | "+" | "-" , S , term | "~" , S , term ) ? ;
     inline auto parseFactor() -> node_handle {
       const auto term_handle = parseTerm();
 
       switch (peek().kind) {
-      case token_kind::Question: {
-        consume(token_kind::Question);
-        auto wrapper = flat_node{.kind_ = node_kind::Optional};
-        const auto handle = tree_.addNode(wrapper);
-        tree_.setParent(term_handle, handle);
-        return handle;
-      }
-
-      case token_kind::Aster: {
-        consume(token_kind::Aster);
-        auto wrapper = flat_node{.kind_ = node_kind::ZeroOrMore};
-        const auto handle = tree_.addNode(wrapper);
-        tree_.setParent(term_handle, handle);
-        return handle;
-      }
-
-      case token_kind::Plus: {
-        consume(token_kind::Plus);
-        auto wrapper = flat_node{.kind_ = node_kind::OneOrMore};
-        const auto handle = tree_.addNode(wrapper);
-        tree_.setParent(term_handle, handle);
-        return handle;
-      }
-
-      case token_kind::Minus: {
-        consume(token_kind::Minus);
-        const auto excluded = parseTerm();
-        auto exc = flat_node{.kind_ = node_kind::Exception};
-        const auto handle = tree_.addNode(exc);
-        tree_.setParent(term_handle, handle);
-        tree_.setSibling(term_handle, excluded);
-        return handle;
-      }
-
+      case token_kind::Question:
+        advance();
+        return wrap(node_kind::Optional, term_handle);
+      case token_kind::Aster:
+        advance();
+        return wrap(node_kind::ZeroOrMore, term_handle);
+      case token_kind::Plus:
+        advance();
+        return wrap(node_kind::OneOrMore, term_handle);
+      case token_kind::Minus:
+        advance();
+        return makeBinary(node_kind::Exception, term_handle);
+      case token_kind::Tilde:
+        advance();
+        return makeBinary(node_kind::Glue, term_handle);
+      case token_kind::Colon:
+        throw std::invalid_argument("Descriptions annotate only literals and dynamic terminals");
       default:
         return term_handle;
       }
+    }
+
+    // Recursion depth follows bracket nesting, so it is bounded to keep the stack small.
+    inline auto parseGroup(token_kind closer, const char *message) -> node_handle {
+      if (++depth_ > max_nesting_depth) {
+        throw std::invalid_argument("Brackets nest too deeply");
+      }
+
+      advance();
+      const auto inner = parseAlternation();
+      expect(closer, message);
+      --depth_;
+      return inner;
+    }
+
+    // A terminal may carry one description: terminal , S , ":" , S , string ;
+    inline auto parseTerminal(node_kind kind, std::string_view text) -> node_handle {
+      auto terminal = flat_node{.kind_ = kind, .text_ = text};
+      const auto handle = tree_.addNode(terminal);
+
+      if (consume(token_kind::Colon)) {
+        auto description = flat_node{.kind_ = node_kind::Description, .text_ = parseString()};
+        tree_.setParent(tree_.addNode(description), handle);
+      }
+
+      return handle;
     }
 
     // term = "(" , S , rhs , S , ")"
     // | "[" , S , rhs , S , "]"
     // | "{" , S , rhs , S , "}"
     // | terminal
+    // | "@" , identifier
     // | identifier ;
     inline auto parseTerm() -> node_handle {
-      const auto first_indicator = peek().kind;
-
-      switch (first_indicator) {
+      switch (peek().kind) {
       case token_kind::LParen:
+        return parseGroup(token_kind::RParen, "Expected ) to close the group");
+      case token_kind::LBracket:
+        return wrap(node_kind::Optional, parseGroup(token_kind::RBracket, "Expected ] to close the option"));
       case token_kind::LBrace:
-      case token_kind::LBracket: {
-        consume(first_indicator);
-        const auto inner = parseAlternation();
-
-        if (first_indicator == token_kind::LParen && !consume(token_kind::RParen)) {
-          throw std::logic_error("Was expecting a RParen");
-        }
-
-        if (first_indicator == token_kind::LBrace && !consume(token_kind::RBrace)) {
-          throw std::logic_error("Was expecting a RBrace");
-        }
-
-        if (first_indicator == token_kind::LBracket && !consume(token_kind::RBracket)) {
-          throw std::logic_error("Was expecting a RBracket");
-        }
-
-        if (first_indicator == token_kind::LBracket) {
-          auto wrapper = flat_node{.kind_ = node_kind::Optional};
-          const auto handle = tree_.addNode(wrapper);
-          tree_.setParent(inner, handle);
-          return handle;
-        }
-
-        if (first_indicator == token_kind::LBrace) {
-          auto wrapper = flat_node{.kind_ = node_kind::ZeroOrMore};
-          const auto handle = tree_.addNode(wrapper);
-          tree_.setParent(inner, handle);
-          return handle;
-        }
-
-        return inner;
-      }
-      case token_kind::String: {
-        const auto text = parseString();
-        auto literal = flat_node{.kind_ = node_kind::Literal, .text_ = text};
-        return tree_.addNode(literal);
-      }
+        return wrap(node_kind::ZeroOrMore, parseGroup(token_kind::RBrace, "Expected } to close the repetition"));
+      case token_kind::String:
+        return parseTerminal(node_kind::Literal, advance().text);
+      case token_kind::Dynamic:
+        return parseTerminal(node_kind::Dynamic, advance().text);
       default: {
-        const auto text = parseIdentifier();
-        auto ref = flat_node{.kind_ = node_kind::Reference, .text_ = text};
+        auto ref = flat_node{.kind_ = node_kind::Reference, .text_ = parseIdentifier()};
         return tree_.addNode(ref);
       }
       }
@@ -394,12 +376,10 @@ namespace ebnf {
       return advance().text;
     }
 
-    inline auto parseTerminator() {
-      const auto next_token = peek().kind;
-      if (!(next_token == token_kind::Semicolon || next_token == token_kind::Dot)) {
-        throw std::logic_error("Expected Semicolon or Dot");
+    inline auto parseTerminator() -> void {
+      if (!consume(token_kind::Semicolon) && !consume(token_kind::Dot)) {
+        throw std::invalid_argument("Expected ; or . to end the rule");
       }
-      consume(next_token);
     }
 
     auto parseIdentifier() -> std::string_view;

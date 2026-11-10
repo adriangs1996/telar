@@ -11,8 +11,9 @@ The presets select `.toolchain/toolchain.cmake`; do not mix compiler installatio
 inside an existing build directory. Python 3.9+ and the native development SDK
 are prerequisites. The first test configure fetches verified GoogleTest sources.
 
-The lexer and parser are real module interfaces; link `ebnf::ebnf` and import
-`telar.ebnf.lexer` / `telar.ebnf.parser`. TBC annotation headers remain textual.
+The lexer, parser and matcher are real module interfaces; link `ebnf::ebnf` and
+import `telar.ebnf.lexer`, `telar.ebnf.parser` or `telar.ebnf.matcher`. TBC
+annotation headers remain textual.
 
 ## Build and test
 
@@ -62,21 +63,23 @@ ctest --preset debug -R '^ToolchainTest\.'
 
 ## Lexer and parser boundary
 
-`lexer.hpp` groups ASCII identifiers, numbers, and quoted literals into tokens.
-Whitespace is discarded outside literals and preserved inside them. Both quote
-styles are supported; a `String` token contains the literal text without quotes.
-The lexer follows the character set in the grammar and requires nonempty literals.
-It validates `\n`, `\t`, `\r`, `\f`, `\b`, `\\`, `\'`, and `\"` inside either
-quote style. Escaped quotes do not close a literal. Unknown or incomplete escapes
-throw `std::invalid_argument`. Token and AST text preserve the original escape
-spelling without decoding or allocating new text. Comments are not supported.
+`lexer.cppm` groups ASCII identifiers, numbers, quoted literals and `@name`
+dynamic terminals into tokens. Whitespace and ISO 14977 comments `(* ... *)`,
+which nest and may hold any byte, are discarded outside literals; whitespace is
+preserved inside them. Both quote styles are supported; a `String` token contains
+the literal text without quotes. Literals are nonempty and accept printable ASCII
+plus the whitespace characters; control characters and non-ASCII bytes are
+rejected. The lexer validates `\n`, `\t`, `\r`, `\f`, `\b`, `\\`, `\'`, and `\"`
+inside either quote style. Escaped quotes do not close a literal. Unknown or
+incomplete escapes throw `std::invalid_argument`. Token and AST text preserve the
+original escape spelling without decoding or allocating new text.
 
 `Lexer::tokenizeSourceIntoBuffer` returns the number of tokens written, including
 one final `End`. The capacity argument includes that terminator. Invalid input
 throws `std::invalid_argument`; insufficient capacity throws `std::length_error`
 rather than silently truncating the input. Token text borrows the source storage.
 
-`parser.hpp` consumes complete tokens. `parseIdentifier()` and `parseString()`
+`parser.cppm` consumes complete tokens. `parseIdentifier()` and `parseString()`
 return source-backed views; character recognition and whitespace handling belong
 to the lexer. Tokenizer implementations must return `std::size_t` and include
 `End` in their reported count. `parse()` resets the token cursor before reading.
@@ -87,33 +90,130 @@ Run the lexer and parser-boundary tests with:
 ctest --preset debug -R '^(Lexer\.|Grammar\.)'
 ```
 
-## Parser implementation exercises
+## Syntax tree
 
-`parser.hpp` contains the recursive-descent grammar recognizer. AST construction
-below the rule level remains incomplete; the lexer integration does not finish
-those exercises. `tests/parser_test.cpp` checks rule recognition and the lexer
-boundary, not complete expression trees.
+`parser.cppm` is a recursive-descent parser that builds a flat tree: each node has
+a kind, a source-backed `text`, a first child and a next sibling.
 
-Run the exercises in this order:
+| Source | Node |
+| --- | --- |
+| `name = body ;` (or `.`) | `Rule` with the name in `text` and one body child |
+| `a , b` | `Concatenation` with one child per factor |
+| `a \| b` | `Alternative`; every branch is a `Concatenation`, even of one factor |
+| `( a )` | the inner node; there is no group node |
+| `[ a ]`, `a ?` | `Optional` with one child |
+| `{ a }`, `a *` | `ZeroOrMore` with one child |
+| `a +` | `OneOrMore` with one child |
+| `a - b` | `Exception` with the children `a` and `b` |
+| `"text"`, `'text'` | `Literal`; `text` excludes the quotes |
+| `name` | `Reference`; resolved later, so forward references are allowed |
+| `@name` | `Dynamic`; `text` is the provider name without `@` |
+| `terminal : "text"` | a `Description` child under that `Literal` or `Dynamic` |
+| `"prefix" ~ value` | `Glue` with the children prefix and value |
 
-1. `ctest --preset debug -R '^PrimaryTest\.'`
-2. `ctest --preset debug -R '^Syntax/InvalidPrimaryTest\.'`
-3. `ctest --preset debug -R '^(ExpressionTest\.|Operators/AssociativityTest\.|Syntax/InvalidExpressionTest\.)'`
-4. `ctest --preset debug -R '^(RuleTest\.|RuleListTest\.|Syntax/InvalidGrammarTest\.)'`
+Concatenation needs explicit commas. Every syntax error throws
+`std::invalid_argument`. Brackets nest at most `max_nesting_depth` (64) levels, so
+recursion stays bounded for untrusted specs. The caller must keep the source text
+alive while the tree's text views use it.
 
-Rebuild with `cmake --build --preset debug` before rerunning tests after an edit.
+```sh
+ctest --preset debug -R '^(AST|Alternation|Concatenation|Factor|Term|Rule|Comment|Dynamic|Description|Glue|SyntaxError|Literal)\.'
+```
 
-The initial contract uses explicit commas for concatenation and binary,
-left-associative AST nodes. Parentheses return the inner node; brackets and braces
-create `Optional` and `ZeroOrMore` nodes with one child. A `Rule` stores its name in
-`text` and has one body child. Literal text excludes the surrounding quotes.
-Syntax errors throw `std::invalid_argument`, distinct from the unfinished-method
-exception, so error tests cannot pass merely because a method is unimplemented.
+## Command specs
 
-Identifiers are references, not resolved symbols. Forward references are allowed.
-The caller must keep source text alive while the parser and AST text views use it.
-Implicit concatenation, postfix operators, exception (`-`), and comments
-are outside these initial exercises.
+A command spec is an EBNF grammar over the words of one command line.
+`telar.ebnf.matcher` compiles it and answers completion and validation queries
+with an Earley recognizer whose terminals match whole words. Specs ship in
+`specs/` for `git`, `cd`, `ssh`, `make` and `kill`; their flags were checked
+against `--help` and the man pages of the tools they describe.
+
+```ebnf
+(* The first rule is the start symbol. It matches the words after the command name. *)
+git = { global } , [ command ] ;
+global = "-C" : "Run as if started in this path" , @directory | "--no-pager" ;
+command = "switch" : "Switch branches" , { switch_option | @branch } ;
+switch_option =
+    "-c" : "Create and switch to a new branch" , @any
+  | "--color=" : "When to color" ~ ( "always" | "never" | "auto" )
+  | "-q" | "--quiet" ;
+```
+
+The extensions to ISO 14977:
+
+- `@name` is a dynamic terminal: one word whose values a provider named `name`
+  supplies, such as `@branch`, `@file`, `@directory`, `@command` or `@ssh_host`.
+  The caller resolves providers; the matcher only reports where they are
+  expected. A dynamic terminal matches any word that does not look like an
+  option (a word longer than `-` that starts with `-`), so unknown flags stay
+  invalid. Two names have built-in meaning: `@any` matches every word, including
+  option-like ones, and `@number` matches decimal digits.
+- `terminal : "text"` attaches a description to a literal or dynamic terminal.
+  To describe an alternative, describe its first literal.
+- `"prefix" ~ value` matches one word that starts with the prefix and ends with
+  the value, as in `--color=auto` or `-U5`. The value is a literal, a dynamic
+  terminal, or an alternation of them, possibly through a rule reference. Inside
+  a glued word a dynamic value matches any nonempty rest.
+- Options in any order use the plain EBNF idiom `{ option | operand }`: one
+  repetition of an alternation, compiled to a left-recursive rule whose Earley
+  sets stay small however many options the line has.
+- `--` and positional structure are ordinary grammar, as in
+  `{ option | @file } , [ "--" , { @file } ]`.
+
+A word that no terminal matches whole and that looks like a short-option cluster
+(`-abc`) is read as getopt reads it: the flags `-a -b -c`, where any of them may
+take the rest of the word as its value (`-mmessage`, `-p2222`). Every reading is
+kept, so a few clusters getopt would reject are accepted. Unique-prefix
+abbreviations of long options are not modelled. The exception operator `-` parses
+but is rejected when a spec is compiled.
+
+```cpp
+import telar.ebnf.matcher;
+
+const auto git = ebnf::command_spec::compile(source); // throws on any error
+auto scratch = std::make_unique<ebnf::match_scratch>(); // one per thread
+std::array<ebnf::candidate, 64> out{};
+const std::array<std::string_view, 2> words{"switch", "--quiet"}; // after "git", unquoted
+
+const auto result = git.complete(words, "ma", *scratch, out);
+for (const auto &candidate : std::span{out}.first(result.count)) {
+  // literal: insert prefix + text; provider: resolve text, insert prefix + value.
+}
+
+if (const auto checked = git.check(words, *scratch); checked.status == ebnf::match_status::invalid) {
+  // words[checked.word] is the first word no derivation accepts.
+}
+```
+
+`compile()` throws `std::invalid_argument` for syntax or semantic errors
+(undefined or duplicate rules, `-`, a bad glued value) and `std::length_error`
+past a compile limit. The compiled `command_spec` owns its decoded text, so the
+source can be released; it is immutable and can be shared across threads.
+
+`complete()` returns the candidates valid for the next word that start with
+`partial`, deduplicated and in grammar order (first appearance on a depth-first
+walk from the start rule). Literals filter by prefix; providers are offered unless
+`partial` looks like an option. A partial that starts with a glue prefix yields
+that glue's values with `prefix` set. `check()` reports the first word that cannot
+belong to any command line; `valid` means the words are a viable prefix.
+
+Both queries are `noexcept` and never allocate: all state lives in the caller's
+`match_scratch` (about 140 KiB; allocate it once). Exceeding a limit returns
+`match_status::unknown` instead of a guess. Query limits: `max_words` (256),
+`max_items` (16384 Earley items), `max_set_items` (1024 per set) and `max_sets`
+(1024, words plus decomposed cluster characters). Compile limits: 4096
+nonterminals, terminals and distinct candidates, and 65535 grammar slots.
+
+```sh
+ctest --preset debug -R '^(Matcher|MatcherCompile|Spec|SpecCompile)\.'
+```
+
+The timing benchmark is a disabled test; run it from a Release build:
+
+```sh
+cmake --preset release && cmake --build --preset release
+./out/release/ebnf_tests --gtest_also_run_disabled_tests --gtest_filter='*Benchmark*'
+```
 
 ## Other build configurations
 

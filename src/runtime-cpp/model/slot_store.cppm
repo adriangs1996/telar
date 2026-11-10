@@ -22,6 +22,7 @@ import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.graphics.kitty;
+export import telar.runtime.shell_integration.token;
 
 
 // Interface: model/client_role.cppm
@@ -242,6 +243,8 @@ struct PaneLaunch {
   TerminalSize size;
   MediaBudget &media_budget;
   GraphicsLimits graphics;
+  // Present when the pane runs a shell telar integrated with.
+  std::optional<ShellLaunch> shell{};
 };
 
 }

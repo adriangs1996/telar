@@ -1,0 +1,611 @@
+(* uv: checked against `uv -h` and `uv <command> -h` of uv 0.12.21.
+
+   Conventions:
+   - clap options with a value accept `--name value` and `--name=value`; short
+     ones accept `-p value` and `-pvalue`.
+   - The options in `global` are accepted before and after any command.
+   - Option groups mirror the sections of the help (index, resolver,
+     installer, build, cache); a command lists the groups its help shows.
+   - `uv run` and `uv tool run` stop reading options at the command: every
+     word after it belongs to the command. *)
+
+uv = { global } , [ command ] ;
+
+command =
+    "run" : "Run a command or script" , { run_option | global } , [ "--" : "End of the uv options" ] , [ @command , { @any } ]
+  | "init" : "Create a new project" , { init_option | global | @directory }
+  | "add" : "Add dependencies to the project" , { add_option | global | @any }
+  | "remove" : "Remove dependencies from the project" , { remove_option | global | @any }
+  | "version" : "Read or update the project version" , { version_option | global } , [ @any , { version_option | global } ]
+  | "sync" : "Update the project environment" , { sync_option | global }
+  | "lock" : "Update the project lockfile" , { lock_option | global }
+  | "export" : "Export the lockfile to another format" , { export_option | global }
+  | "tree" : "Display the dependency tree" , { tree_option | global }
+  | "format" : "Format Python code with Ruff" , { format_option | global } , [ "--" : "Pass the rest to Ruff" , { @any } ]
+  | "check" : "Run checks on the project" , { check_option | global }
+  | "audit" : "Audit the project dependencies" , { audit_option | global }
+  | "tool" : "Run and install commands from Python packages" , { global } , [ tool_command ]
+  | "python" : "Manage Python versions and installations" , { global } , [ python_command ]
+  | "pip" : "Manage packages with a pip-compatible interface" , { global } , [ pip_command ]
+  | "venv" : "Create a virtual environment" , { venv_option | global | @directory }
+  | "build" : "Build source distributions and wheels" , { build_command_option | global | @file }
+  | "publish" : "Upload distributions to an index" , { publish_option | global | @file }
+  | "workspace" : "Inspect uv workspaces" , { global } , [ workspace_command ]
+  | "cache" : "Manage the cache" , { global } , [ cache_command ]
+  | "self" : "Manage the uv executable" , { global } , [ self_command ]
+  | "auth" : "Manage authentication" , { global } , [ auth_command ]
+  | "help" : "Display documentation for a command" , { "--no-pager" : "Do not page the help" | global } , { help_topic } ;
+
+help_topic =
+    "run" | "init" | "add" | "remove" | "version" | "sync" | "lock" | "export" | "tree" | "format" | "check"
+  | "audit" | "tool" | "python" | "pip" | "venv" | "build" | "publish" | "workspace" | "cache" | "self" | "auth" | @any ;
+
+global =
+    "-q" : "Use quiet output" | "--quiet" : "Use quiet output"
+  | "-v" : "Use verbose output" | "--verbose" : "Use verbose output"
+  | "--color" : "Control the use of color" , color | "--color=" : "Control the use of color" ~ color
+  | "--system-certs" : "Load TLS certificates from the platform store"
+  | "--offline" : "Disable network access"
+  | "--allow-insecure-host" : "Allow insecure connections to a host" , @any | "--allow-insecure-host=" : "Allow insecure connections to a host" ~ @any
+  | "--no-progress" : "Hide all progress outputs"
+  | "--directory" : "Change to this directory first" , @directory | "--directory=" : "Change to this directory first" ~ @directory
+  | "--project" : "Discover a project in this directory" , @directory | "--project=" : "Discover a project in this directory" ~ @directory
+  | "--config-file" : "Path to a uv.toml file" , @file | "--config-file=" : "Path to a uv.toml file" ~ @file
+  | "--no-config" : "Do not discover configuration files"
+  | "-n" : "Do not read or write the cache" | "--no-cache" : "Do not read or write the cache"
+  | "--cache-dir" : "Path to the cache directory" , @directory | "--cache-dir=" : "Path to the cache directory" ~ @directory
+  | "--managed-python" : "Require uv-managed Python versions"
+  | "--no-managed-python" : "Disable uv-managed Python versions"
+  | "--no-python-downloads" : "Disable automatic Python downloads"
+  | "-h" : "Display the help" | "--help" : "Display the help"
+  | "-V" : "Display the uv version" | "--version" : "Display the uv version" ;
+
+color = "auto" | "always" | "never" ;
+
+(* Option groups. *)
+
+index =
+    "--index" : "Extra index to resolve dependencies with" , @any | "--index=" : "Extra index to resolve dependencies with" ~ @any
+  | "--default-index" : "The default package index" , @any | "--default-index=" : "The default package index" ~ @any
+  | "-i" : "URL of the package index (deprecated)" , @any | "--index-url" : "URL of the package index (deprecated)" , @any
+  | "--index-url=" : "URL of the package index (deprecated)" ~ @any
+  | "--extra-index-url" : "Extra package index URL (deprecated)" , @any | "--extra-index-url=" : "Extra package index URL (deprecated)" ~ @any
+  | "-f" : "Extra locations to search for distributions" , @any | "--find-links" : "Extra locations to search for distributions" , @any
+  | "--find-links=" : "Extra locations to search for distributions" ~ @any
+  | "--no-index" : "Ignore the registry index"
+  | "--index-strategy" : "How to resolve against several indexes" , index_strategy | "--index-strategy=" : "How to resolve against several indexes" ~ index_strategy
+  | keyring ;
+
+index_strategy = "first-index" | "unsafe-first-match" | "unsafe-best-match" ;
+keyring = "--keyring-provider" : "Use keyring for index authentication" , ( "disabled" | "subprocess" ) | "--keyring-provider=" : "Use keyring for index authentication" ~ ( "disabled" | "subprocess" ) ;
+
+exclude_newer =
+    "--exclude-newer" : "Only packages uploaded before this date" , @any | "--exclude-newer=" : "Only packages uploaded before this date" ~ @any
+  | "--exclude-newer-package" : "Upload date limit for one package" , @any | "--exclude-newer-package=" : "Upload date limit for one package" ~ @any ;
+
+no_sources =
+    "--no-sources" : "Ignore the tool.uv.sources table"
+  | "--no-sources-package" : "Ignore tool.uv.sources for a package" , @any | "--no-sources-package=" : "Ignore tool.uv.sources for a package" ~ @any ;
+
+resolution =
+    "--resolution" : "Which compatible versions to select" , resolution_mode | "--resolution=" : "Which compatible versions to select" ~ resolution_mode
+  | "--prerelease" : "How to consider pre-release versions" , prerelease_mode | "--prerelease=" : "How to consider pre-release versions" ~ prerelease_mode
+  | "--prerelease-package" : "Pre-release strategy for one package" , @any | "--prerelease-package=" : "Pre-release strategy for one package" ~ @any
+  | "--fork-strategy" : "How to pick versions across Python versions" , ( "fewest" | "requires-python" )
+  | "--fork-strategy=" : "How to pick versions across Python versions" ~ ( "fewest" | "requires-python" )
+  | exclude_newer | no_sources ;
+
+resolver =
+    "-U" : "Allow package upgrades" | "--upgrade" : "Allow package upgrades"
+  | "-P" : "Allow upgrades of one package" , @any | "--upgrade-package" : "Allow upgrades of one package" , @any
+  | "--upgrade-package=" : "Allow upgrades of one package" ~ @any
+  | "--upgrade-group" : "Allow upgrades of a dependency group" , @any | "--upgrade-group=" : "Allow upgrades of a dependency group" ~ @any
+  | resolution ;
+
+resolution_mode = "highest" | "lowest" | "lowest-direct" ;
+prerelease_mode = "disallow" | "allow" | "if-necessary" | "explicit" | "if-necessary-or-explicit" ;
+
+link_mode = "--link-mode" : "How to install packages from the cache" , link_kind | "--link-mode=" : "How to install packages from the cache" ~ link_kind ;
+link_kind = "clone" | "copy" | "hardlink" | "symlink" ;
+
+installer =
+    "--reinstall" : "Reinstall all packages"
+  | "--reinstall-package" : "Reinstall one package" , @any | "--reinstall-package=" : "Reinstall one package" ~ @any
+  | "--compile-bytecode" : "Compile Python files to bytecode"
+  | link_mode ;
+
+config_setting =
+    "-C" : "Setting for the build backend, KEY=VALUE" , @any | "--config-setting" : "Setting for the build backend, KEY=VALUE" , @any
+  | "--config-setting=" : "Setting for the build backend, KEY=VALUE" ~ @any
+  | "--config-settings-package" : "Build backend setting for one package" , @any | "--config-settings-package=" : "Build backend setting for one package" ~ @any
+  | "--config-setting-package" : "Build backend setting for one package" , @any | "--config-setting-package=" : "Build backend setting for one package" ~ @any
+  | "--no-build-isolation" : "Disable build isolation"
+  | "--no-build-isolation-package" : "Disable build isolation for a package" , @any
+  | "--no-build-isolation-package=" : "Disable build isolation for a package" ~ @any ;
+
+build =
+    config_setting
+  | "--no-build" : "Do not build source distributions"
+  | "--no-build-package" : "Do not build this package from source" , @any | "--no-build-package=" : "Do not build this package from source" ~ @any
+  | "--no-binary" : "Do not install pre-built wheels"
+  | "--no-binary-package" : "Do not install wheels of this package" , @any | "--no-binary-package=" : "Do not install wheels of this package" ~ @any ;
+
+refresh =
+    "--refresh" : "Refresh all cached data"
+  | "--refresh-package" : "Refresh cached data of one package" , @any | "--refresh-package=" : "Refresh cached data of one package" ~ @any ;
+
+python = "-p" : "Python interpreter to use" , @any | "--python" : "Python interpreter to use" , @any | "--python=" : "Python interpreter to use" ~ @any ;
+python_version = "--python-version" : "Python version to target" , @any | "--python-version=" : "Python version to target" ~ @any ;
+python_platform = "--python-platform" : "Platform to install requirements for" , @any | "--python-platform=" : "Platform to install requirements for" ~ @any ;
+
+(* Everything a project command resolves and installs with. *)
+project_env = index | resolver | installer | build | refresh | python ;
+project_lock = index | resolver | link_mode | build | refresh | python ;
+
+extras =
+    "--extra" : "Include the optional dependencies of an extra" , @any | "--extra=" : "Include the optional dependencies of an extra" ~ @any
+  | "--all-extras" : "Include all optional dependencies"
+  | "--no-extra" : "Exclude an extra when using --all-extras" , @any | "--no-extra=" : "Exclude an extra when using --all-extras" ~ @any ;
+
+groups =
+    "--no-dev" : "Disable the development dependency group"
+  | "--only-dev" : "Only the development dependency group"
+  | "--group" : "Include a dependency group" , @any | "--group=" : "Include a dependency group" ~ @any
+  | "--no-group" : "Disable a dependency group" , @any | "--no-group=" : "Disable a dependency group" ~ @any
+  | "--no-default-groups" : "Ignore the default dependency groups"
+  | "--only-group" : "Only include a dependency group" , @any | "--only-group=" : "Only include a dependency group" ~ @any
+  | "--all-groups" : "Include all dependency groups" ;
+
+lock_state =
+    "--locked" : "Assert that uv.lock will not change"
+  | "--frozen" : "Use uv.lock without updating it" ;
+
+package = "--package" : "Act on this workspace package" , @any | "--package=" : "Act on this workspace package" ~ @any ;
+all_packages = "--all-packages" : "Act on all workspace packages" ;
+script = "--script" : "Act on this PEP 723 script" , @file | "--script=" : "Act on this PEP 723 script" ~ @file ;
+no_sync = "--no-sync" : "Do not sync the environment" ;
+active = "--active" : "Prefer the active virtual environment" ;
+no_project = "--no-project" : "Do not discover a project or workspace" ;
+dry_run = "--dry-run" : "Report what would happen without doing it" ;
+output_format = "--output-format" : "Output format" , output_kind | "--output-format=" : "Output format" ~ output_kind ;
+output_kind = "text" | "json" | "sarif" | "auto" ;
+
+no_editable =
+    "--no-editable" : "Install editable dependencies as non-editable"
+  | "--no-editable-package" : "Install this editable package as non-editable" , @any
+  | "--no-editable-package=" : "Install this editable package as non-editable" ~ @any ;
+
+no_install =
+    "--no-install-project" : "Do not install the current project"
+  | "--no-install-workspace" : "Do not install any workspace member"
+  | "--no-install-local" : "Do not install local path dependencies"
+  | "--no-install-package" : "Do not install this package" , @any | "--no-install-package=" : "Do not install this package" ~ @any ;
+
+requirement_files =
+    "-c" : "Constrain versions with requirements files" , @file | "--constraints" : "Constrain versions with requirements files" , @file
+  | "--constraints=" : "Constrain versions with requirements files" ~ @file
+  | "--overrides" : "Override versions with requirements files" , @file | "--overrides=" : "Override versions with requirements files" ~ @file
+  | "--excludes" : "Exclude packages listed in requirements files" , @file | "--excludes=" : "Exclude packages listed in requirements files" ~ @file
+  | "-b" : "Constrain build dependencies with requirements files" , @file
+  | "--build-constraints" : "Constrain build dependencies with requirements files" , @file
+  | "--build-constraints=" : "Constrain build dependencies with requirements files" ~ @file ;
+
+with_packages =
+    "-w" : "Run with these packages installed" , @any | "--with" : "Run with these packages installed" , @any
+  | "--with=" : "Run with these packages installed" ~ @any
+  | "--with-editable" : "Run with these packages installed as editable" , @any
+  | "--with-editable=" : "Run with these packages installed as editable" ~ @any
+  | "--with-requirements" : "Run with the packages of requirements files" , @file
+  | "--with-requirements=" : "Run with the packages of requirements files" ~ @file ;
+
+env_file =
+    "--env-file" : "Load environment variables from a .env file" , @file | "--env-file=" : "Load environment variables from a .env file" ~ @file
+  | "--no-env-file" : "Do not read a .env file" ;
+
+torch_backend = "--torch-backend" : "Backend for PyTorch packages" , @any | "--torch-backend=" : "Backend for PyTorch packages" ~ @any ;
+lfs = "--lfs" : "Use Git LFS for Git dependencies" ;
+cert = "--cert" : "PEM-encoded CA certificate bundle" , @file | "--cert=" : "PEM-encoded CA certificate bundle" ~ @file ;
+system = "--system" : "Use the system Python environment" ;
+break_system = "--break-system-packages" : "Allow modifying an externally managed Python" | "--no-break-system-packages" : "Do not modify an externally managed Python" ;
+target_prefix =
+    "-t" : "Use this target directory" , @directory | "--target" : "Use this target directory" , @directory | "--target=" : "Use this target directory" ~ @directory
+  | "--prefix" : "Use this prefix directory" , @directory | "--prefix=" : "Use this prefix directory" ~ @directory ;
+strict = "--strict" : "Validate the environment afterwards" ;
+python_downloads_json = "--python-downloads-json-url" : "URL of a JSON of custom Python downloads" , @any | "--python-downloads-json-url=" : "URL of a JSON of custom Python downloads" ~ @any ;
+mirrors =
+    "--mirror" : "Source URL of Python downloads" , @any | "--mirror=" : "Source URL of Python downloads" ~ @any
+  | "--pypy-mirror" : "Source URL of PyPy downloads" , @any | "--pypy-mirror=" : "Source URL of PyPy downloads" ~ @any ;
+install_dir = "-i" : "Directory of the Python installations" , @directory | "--install-dir" : "Directory of the Python installations" , @directory | "--install-dir=" : "Directory of the Python installations" ~ @directory ;
+vuln_ignore =
+    "--ignore" : "Ignore a vulnerability by ID" , @any | "--ignore=" : "Ignore a vulnerability by ID" ~ @any
+  | "--ignore-until-fixed" : "Ignore a vulnerability until a fix exists" , @any | "--ignore-until-fixed=" : "Ignore a vulnerability until a fix exists" ~ @any
+  | "--service-format" : "Format of the vulnerability service" , "osv" | "--service-format=" : "Format of the vulnerability service" ~ "osv"
+  | "--service-url" : "URL of the vulnerability service" , @any | "--service-url=" : "URL of the vulnerability service" ~ @any ;
+
+(* Project commands. *)
+
+run_option =
+    project_env | extras | groups | lock_state | no_editable | with_packages | env_file | package | all_packages
+  | no_sync | active | no_project | python_platform
+  | "-m" : "Run a Python module" | "--module" : "Run a Python module"
+  | "--exact" : "Remove extraneous packages when syncing"
+  | "--isolated" : "Run in an isolated virtual environment"
+  | "-s" : "Run the path as a Python script" | "--script" : "Run the path as a Python script"
+  | "--gui-script" : "Run the path as a Python GUI script" ;
+
+init_option =
+    python | no_project
+  | "--name" : "Name of the project" , @any | "--name=" : "Name of the project" ~ @any
+  | "--bare" : "Only create a pyproject.toml"
+  | "--package" : "Build the project as a Python package" | "--no-package" : "Do not build the project as a package"
+  | "--app" : "Create an application project"
+  | "--lib" : "Create a library project"
+  | "--script" : "Create a script"
+  | "--description" : "Description of the project" , @any | "--description=" : "Description of the project" ~ @any
+  | "--no-description" : "Do not add a description"
+  | "--vcs" : "Version control system to initialize" , ( "git" | "none" ) | "--vcs=" : "Version control system to initialize" ~ ( "git" | "none" )
+  | "--build-backend" : "Build backend of the project" , build_backend | "--build-backend=" : "Build backend of the project" ~ build_backend
+  | "--no-readme" : "Do not create a README.md"
+  | "--author-from" : "Where to take the authors from" , ( "auto" | "git" | "none" ) | "--author-from=" : "Where to take the authors from" ~ ( "auto" | "git" | "none" )
+  | "--no-pin-python" : "Do not create a .python-version file"
+  | "--no-workspace" : "Create a standalone project outside any workspace" ;
+
+build_backend = "uv" | "hatch" | "flit" | "pdm" | "poetry" | "setuptools" | "maturin" | "scikit" ;
+
+add_option =
+    project_env | lock_state | no_install | package | script | no_sync | active | lfs
+  | "-r" : "Add the packages listed in requirements files" , @file | "--requirements" : "Add the packages listed in requirements files" , @file
+  | "--requirements=" : "Add the packages listed in requirements files" ~ @file
+  | "-c" : "Constrain versions with requirements files" , @file | "--constraints" : "Constrain versions with requirements files" , @file
+  | "--constraints=" : "Constrain versions with requirements files" ~ @file
+  | "-m" : "Apply this marker to the added packages" , @any | "--marker" : "Apply this marker to the added packages" , @any
+  | "--marker=" : "Apply this marker to the added packages" ~ @any
+  | "--dev" : "Add to the development dependency group"
+  | "--optional" : "Add to the optional dependencies of an extra" , @any | "--optional=" : "Add to the optional dependencies of an extra" ~ @any
+  | "--group" : "Add to a dependency group" , @any | "--group=" : "Add to a dependency group" ~ @any
+  | "--editable" : "Add the requirements as editable"
+  | "--raw" : "Add the dependency as provided"
+  | "--bounds" : "Kind of version specifier to add" , bounds | "--bounds=" : "Kind of version specifier to add" ~ bounds
+  | "--rev" : "Git commit of the dependency" , @any | "--rev=" : "Git commit of the dependency" ~ @any
+  | "--tag" : "Git tag of the dependency" , @any | "--tag=" : "Git tag of the dependency" ~ @any
+  | "--branch" : "Git branch of the dependency" , @any | "--branch=" : "Git branch of the dependency" ~ @any
+  | "--workspace" : "Add the dependency as a workspace member"
+  | "--no-workspace" : "Do not add the dependency as a workspace member" ;
+
+bounds = "lower" | "major" | "minor" | "exact" ;
+
+remove_option =
+    project_env | lock_state | package | script | no_sync | active
+  | "--dev" : "Remove from the development dependency group"
+  | "--optional" : "Remove from the optional dependencies of an extra" , @any | "--optional=" : "Remove from the optional dependencies of an extra" ~ @any
+  | "--group" : "Remove from a dependency group" , @any | "--group=" : "Remove from a dependency group" ~ @any ;
+
+version_option =
+    project_env | lock_state | package | no_sync | active | dry_run | output_format
+  | "--bump" : "Bump the version" , bump | "--bump=" : "Bump the version" ~ bump
+  | "--short" : "Only show the version" ;
+
+bump =
+    "major" : "Increase the major version" | "minor" : "Increase the minor version" | "patch" : "Increase the patch version"
+  | "stable" : "Move from a pre-release to stable" | "alpha" : "Increase the alpha version" | "beta" : "Increase the beta version"
+  | "rc" : "Increase the rc version" | "post" : "Increase the post version" | "dev" : "Increase the dev version" | @any ;
+
+sync_option =
+    project_env | extras | groups | lock_state | no_editable | no_install | package | all_packages | script
+  | active | dry_run | output_format | python_platform
+  | "--inexact" : "Keep extraneous packages"
+  | "--check" : "Check whether the environment is in sync" ;
+
+lock_option =
+    project_lock | script | dry_run
+  | "--check" : "Check whether the lockfile is up to date"
+  | "--check-exists" : "Assert that uv.lock exists" ;
+
+export_option =
+    project_lock | extras | groups | lock_state | no_editable | package | all_packages | script
+  | "--format" : "Format to export to" , export_format | "--format=" : "Format to export to" ~ export_format
+  | "--prune" : "Prune a package from the tree" , @any | "--prune=" : "Prune a package from the tree" ~ @any
+  | "--no-annotate" : "Leave out the source annotations"
+  | "--no-header" : "Leave out the header comment"
+  | "--emit-index-url" : "Include the index URLs"
+  | "--emit-find-links" : "Include the --find-links entries"
+  | "--no-hashes" : "Leave out the hashes"
+  | "-o" : "Write to this file" , @file | "--output-file" : "Write to this file" , @file | "--output-file=" : "Write to this file" ~ @file
+  | "--no-emit-project" : "Leave out the current project"
+  | "--no-emit-workspace" : "Leave out all workspace members"
+  | "--no-emit-local" : "Leave out local path dependencies"
+  | "--no-emit-package" : "Leave out this package" , @any | "--no-emit-package=" : "Leave out this package" ~ @any ;
+
+export_format = "requirements.txt" | "pylock.toml" | "cyclonedx1.5" ;
+
+tree_shape =
+    "-d" : "Maximum depth of the tree" , @number | "--depth" : "Maximum depth of the tree" , @number | "--depth=" : "Maximum depth of the tree" ~ @number
+  | "--prune" : "Prune a package from the tree" , @any | "--prune=" : "Prune a package from the tree" ~ @any
+  | "--package" : "Only show this package" , @any | "--package=" : "Only show this package" ~ @any
+  | "--no-dedupe" : "Do not de-duplicate repeated dependencies"
+  | "--invert" : "Show the reverse dependencies"
+  | "--outdated" : "Show the latest version of each package"
+  | "--show-sizes" : "Show the compressed wheel sizes" ;
+
+tree_option =
+    index | resolver | link_mode | build | python | groups | lock_state | script | tree_shape | python_version | python_platform
+  | "--universal" : "Show a platform-independent tree"
+  | "--format" : "Output format" , ( "text" | "json" ) | "--format=" : "Output format" ~ ( "text" | "json" ) ;
+
+format_option =
+    no_project
+  | "--check" : "Check the formatting without changing files"
+  | "--diff" : "Show a diff of the formatting changes"
+  | "--version" : "Version of Ruff to use" , @any | "--version=" : "Version of Ruff to use" ~ @any
+  | "--exclude-newer" : "Only Ruff versions released before this date" , @any | "--exclude-newer=" : "Only Ruff versions released before this date" ~ @any ;
+
+check_option =
+    index | resolver | installer | build | refresh | python | extras | groups | lock_state | package | all_packages | script | no_sync | no_project
+  | "--fix" : "Apply safe fixes"
+  | "--no-install-project" : "Do not install the current project"
+  | "--isolated" : "Do not change the project state"
+  | "--ty-version" : "Version of ty to use" , @any | "--ty-version=" : "Version of ty to use" ~ @any ;
+
+audit_option =
+    index | resolver | link_mode | build | lock_state | script | python_version | python_platform | output_format | vuln_ignore
+  | "--no-extra" : "Do not audit an extra" , @any | "--no-extra=" : "Do not audit an extra" ~ @any
+  | "--no-dev" : "Do not audit the development group"
+  | "--no-group" : "Do not audit a dependency group" , @any | "--no-group=" : "Do not audit a dependency group" ~ @any
+  | "--no-default-groups" : "Do not audit the default groups"
+  | "--only-group" : "Only audit a dependency group" , @any | "--only-group=" : "Only audit a dependency group" ~ @any
+  | "--only-dev" : "Only audit the development group" ;
+
+venv_option =
+    python | index | exclude_newer | refresh | link_mode | no_project
+  | "--seed" : "Install pip, setuptools and wheel"
+  | "-c" : "Remove existing files at the target" | "--clear" : "Remove existing files at the target"
+  | "--force" : "Allow --clear to remove a non-virtual environment"
+  | "--allow-existing" : "Keep existing files at the target"
+  | "--prompt" : "Prompt prefix of the environment" , @any | "--prompt=" : "Prompt prefix of the environment" ~ @any
+  | "--system-site-packages" : "Give access to the system site packages"
+  | "--relocatable" : "Make the environment relocatable" ;
+
+build_command_option =
+    python | index | resolver | build | link_mode | refresh | package | all_packages
+  | "-o" : "Output directory of the distributions" , @directory | "--out-dir" : "Output directory of the distributions" , @directory
+  | "--out-dir=" : "Output directory of the distributions" ~ @directory
+  | "--sdist" : "Build a source distribution"
+  | "--wheel" : "Build a wheel"
+  | "--no-build-logs" : "Hide the build backend logs"
+  | "--force-pep517" : "Always build through PEP 517"
+  | "--clear" : "Clear the output directory first"
+  | "--no-create-gitignore" : "Do not create a .gitignore in the output directory"
+  | "-b" : "Constrain build dependencies with requirements files" , @file
+  | "--build-constraints" : "Constrain build dependencies with requirements files" , @file
+  | "--build-constraints=" : "Constrain build dependencies with requirements files" ~ @file
+  | "--require-hashes" : "Require a hash for each requirement"
+  | "--no-verify-hashes" : "Do not validate the hashes" ;
+
+publish_option =
+    keyring | dry_run
+  | "--index" : "Configured index to publish to" , @any | "--index=" : "Configured index to publish to" ~ @any
+  | "-u" : "Username for the upload" , @any | "--username" : "Username for the upload" , @any | "--username=" : "Username for the upload" ~ @any
+  | "-p" : "Password for the upload" , @any | "--password" : "Password for the upload" , @any | "--password=" : "Password for the upload" ~ @any
+  | "-t" : "Token for the upload" , @any | "--token" : "Token for the upload" , @any | "--token=" : "Token for the upload" ~ @any
+  | "--trusted-publishing" : "Configure trusted publishing" , trusted | "--trusted-publishing=" : "Configure trusted publishing" ~ trusted
+  | "--publish-url" : "URL of the upload endpoint" , @any | "--publish-url=" : "URL of the upload endpoint" ~ @any
+  | "--check-url" : "Index URL to skip files that already exist" , @any | "--check-url=" : "Index URL to skip files that already exist" ~ @any
+  | "--no-attestations" : "Do not upload attestations" ;
+
+trusted = "automatic" | "always" | "never" ;
+
+(* uv tool *)
+
+tool_command =
+    "run" : "Run a command from a Python package" , { tool_run_option | global } , [ @any , { @any } ]
+  | "install" : "Install the commands of a Python package" , { tool_install_option | global | @any }
+  | "upgrade" : "Upgrade installed tools" , { tool_upgrade_option | global | @any }
+  | ( "list" : "List installed tools" | "ls" : "List installed tools" ) , { tool_list_option | global }
+  | "audit" : "Audit installed tools" , { "--all" : "Audit all installed tools" | output_format | vuln_ignore | global | @any }
+  | "uninstall" : "Uninstall a tool" , { "--all" : "Uninstall all tools" | global | @any }
+  | "update-shell" : "Put the tool executable directory on PATH" , { global }
+  | "dir" : "Show the uv tools directory" , { "--bin" : "Show the executables directory" | global } ;
+
+tool_run_option =
+    project_env | with_packages | requirement_files | env_file | lfs | python_platform | torch_backend
+  | "--from" : "Package that provides the command" , @any | "--from=" : "Package that provides the command" ~ @any
+  | "--isolated" : "Ignore installed tools and use an isolated environment" ;
+
+tool_install_option =
+    project_env | requirement_files | lfs | python_platform | torch_backend
+  | "-w" : "Also install these packages" , @any | "--with" : "Also install these packages" , @any | "--with=" : "Also install these packages" ~ @any
+  | "--with-requirements" : "Also install the packages of requirements files" , @file
+  | "--with-requirements=" : "Also install the packages of requirements files" ~ @file
+  | "-e" : "Install the package in editable mode" | "--editable" : "Install the package in editable mode"
+  | "--with-editable" : "Also install these packages as editable" , @any | "--with-editable=" : "Also install these packages as editable" ~ @any
+  | "--with-executables-from" : "Also install the executables of these packages" , @any
+  | "--with-executables-from=" : "Also install the executables of these packages" ~ @any
+  | "--force" : "Force the installation" ;
+
+tool_upgrade_option =
+    python | resolution | index | installer | build | python_platform
+  | "--all" : "Upgrade all tools" ;
+
+tool_list_option =
+    exclude_newer
+  | "--show-paths" : "Show the path of each tool"
+  | "--show-version-specifiers" : "Show the version specifiers of each tool"
+  | "--show-with" : "Show the extra requirements of each tool"
+  | "--show-extras" : "Show the extras of each tool"
+  | "--show-python" : "Show the Python version of each tool"
+  | "--outdated" : "List outdated tools" ;
+
+(* uv python *)
+
+python_command =
+    ( "list" : "List the Python installations" | "ls" : "List the Python installations" ) , { python_list_option | global } , [ @any ]
+  | "install" : "Download and install Python versions" , { python_install_option | global | @any }
+  | "upgrade" : "Upgrade installed Python versions" , { python_upgrade_option | global | @any }
+  | "find" : "Search for a Python installation" , { python_find_option | global } , [ @any ]
+  | "pin" : "Pin a Python version" , { python_pin_option | global } , [ @any ]
+  | "dir" : "Show the Python installation directory" , { "--bin" : "Show the executables directory" | global }
+  | "uninstall" : "Uninstall Python versions" , { install_dir | "--all" : "Uninstall all managed Python versions" | global | @any }
+  | "update-shell" : "Put the Python executable directory on PATH" , { global } ;
+
+python_list_option =
+    python_downloads_json | output_format
+  | "--all-versions" : "List all versions, including old patches"
+  | "--all-platforms" : "List downloads for all platforms"
+  | "--all-arches" : "List downloads for all architectures"
+  | "--only-installed" : "Only show installed versions"
+  | "--only-downloads" : "Only show available downloads"
+  | "--show-urls" : "Show the download URLs" ;
+
+python_install_option =
+    install_dir | mirrors | python_downloads_json
+  | "--no-bin" : "Do not install a Python executable into bin"
+  | "--no-registry" : "Do not register in the Windows registry"
+  | "-r" : "Reinstall the version if installed" | "--reinstall" : "Reinstall the version if installed"
+  | "-f" : "Replace existing Python executables" | "--force" : "Replace existing Python executables"
+  | "-U" : "Upgrade to the latest patch version" | "--upgrade" : "Upgrade to the latest patch version"
+  | "--default" : "Use as the default Python version"
+  | "--compile-bytecode" : "Compile the standard library to bytecode" ;
+
+python_upgrade_option =
+    install_dir | mirrors | python_downloads_json
+  | "-r" : "Reinstall the latest patch if installed" | "--reinstall" : "Reinstall the latest patch if installed"
+  | "--compile-bytecode" : "Compile the standard library to bytecode" ;
+
+python_find_option =
+    no_project | script | python_downloads_json
+  | "--system" : "Only find system interpreters"
+  | "--show-version" : "Show the version instead of the path"
+  | "--resolve-links" : "Resolve symlinks in the path" ;
+
+python_pin_option =
+    no_project | python_downloads_json
+  | "--resolved" : "Write the resolved interpreter path"
+  | "--global" : "Update the global pin"
+  | "--rm" : "Remove the pin" ;
+
+(* uv pip *)
+
+pip_command =
+    "install" : "Install packages into an environment" , { pip_install_option | global | @any }
+  | "uninstall" : "Uninstall packages from an environment" , { pip_uninstall_option | global | @any }
+  | "compile" : "Compile requirements into a lock file" , { pip_compile_option | global | @file }
+  | "sync" : "Sync an environment with a lock file" , { pip_sync_option | global | @file }
+  | "freeze" : "List installed packages in requirements format" , { pip_freeze_option | global }
+  | "list" : "List installed packages" , { pip_list_option | global }
+  | "show" : "Show information about installed packages" , { pip_show_option | global | @any }
+  | "tree" : "Display the dependency tree of an environment" , { pip_tree_option | global }
+  | "check" : "Verify installed packages have compatible dependencies" , { python | system | cert | python_version | python_platform | global } ;
+
+pip_binary =
+    "--no-build" : "Do not build source distributions"
+  | "--no-binary" : "Do not use wheels of these packages" , @any | "--no-binary=" : "Do not use wheels of these packages" ~ @any
+  | "--only-binary" : "Only use wheels of these packages" , @any | "--only-binary=" : "Only use wheels of these packages" ~ @any ;
+
+requirements_option =
+    "-r" : "Use the packages listed in requirements files" , @file | "--requirements" : "Use the packages listed in requirements files" , @file
+  | "--requirements=" : "Use the packages listed in requirements files" ~ @file ;
+
+pip_extras =
+    "--extra" : "Include the optional dependencies of an extra" , @any | "--extra=" : "Include the optional dependencies of an extra" ~ @any
+  | "--all-extras" : "Include all optional dependencies"
+  | "--group" : "Install a dependency group of pyproject.toml" , @any | "--group=" : "Install a dependency group of pyproject.toml" ~ @any ;
+
+hashes = "--require-hashes" : "Require a hash for each requirement" | "--no-verify-hashes" : "Do not validate the hashes" ;
+
+pip_install_option =
+    index | resolver | installer | config_setting | refresh | python | requirements_option | requirement_files | no_editable
+  | cert | hashes | system | break_system | target_prefix | pip_binary | python_version | python_platform | strict
+  | dry_run | output_format | torch_backend | pip_extras
+  | "-e" : "Install an editable package from a path" , @any | "--editable" : "Install an editable package from a path" , @any
+  | "--editable=" : "Install an editable package from a path" ~ @any
+  | "--no-deps" : "Only install the listed packages"
+  | "--exact" : "Remove extraneous packages"
+  | "--check" : "Check whether the environment satisfies the requirements"
+  | "--user" : "Install to the user site (unsupported)" ;
+
+pip_uninstall_option =
+    python | keyring | system | break_system | target_prefix | dry_run | cert | requirements_option ;
+
+pip_compile_option =
+    index | resolver | link_mode | config_setting | refresh | python | python_version | requirement_files | cert | system
+  | pip_binary | python_platform | torch_backend | pip_extras
+  | "--no-deps" : "Only include the listed packages"
+  | "-o" : "Write to this requirements.txt or pylock.toml" , @file | "--output-file" : "Write to this requirements.txt or pylock.toml" , @file
+  | "--output-file=" : "Write to this requirements.txt or pylock.toml" ~ @file
+  | "--format" : "Output format" , ( "requirements.txt" | "pylock.toml" ) | "--format=" : "Output format" ~ ( "requirements.txt" | "pylock.toml" )
+  | "--no-strip-extras" : "Include extras in the output"
+  | "--no-strip-markers" : "Include environment markers in the output"
+  | "--no-annotate" : "Leave out the source annotations"
+  | "--no-header" : "Leave out the header comment"
+  | "--annotation-style" : "Style of the annotations" , ( "line" | "split" ) | "--annotation-style=" : "Style of the annotations" ~ ( "line" | "split" )
+  | "--custom-compile-command" : "Command shown in the header" , @any | "--custom-compile-command=" : "Command shown in the header" ~ @any
+  | "--generate-hashes" : "Include distribution hashes"
+  | "--universal" : "Resolve for all platforms"
+  | "--no-emit-package" : "Leave out this package" , @any | "--no-emit-package=" : "Leave out this package" ~ @any
+  | "--emit-index-url" : "Include the index URLs"
+  | "--emit-find-links" : "Include the --find-links entries"
+  | "--emit-build-options" : "Include --no-binary and --only-binary entries"
+  | "--emit-index-annotation" : "Annotate the index of each package" ;
+
+pip_sync_option =
+    index | exclude_newer | no_sources | installer | refresh | python | cert | hashes | system | break_system | target_prefix
+  | pip_binary | python_version | python_platform | strict | dry_run | output_format | torch_backend | pip_extras
+  | "-C" : "Setting for the build backend, KEY=VALUE" , @any | "--config-setting" : "Setting for the build backend, KEY=VALUE" , @any
+  | "--config-setting=" : "Setting for the build backend, KEY=VALUE" ~ @any
+  | "--config-settings-package" : "Build backend setting for one package" , @any | "--config-settings-package=" : "Build backend setting for one package" ~ @any
+  | "--no-build-isolation" : "Disable build isolation"
+  | "-c" : "Constrain versions with requirements files" , @file | "--constraints" : "Constrain versions with requirements files" , @file
+  | "--constraints=" : "Constrain versions with requirements files" ~ @file
+  | "-b" : "Constrain build dependencies with requirements files" , @file
+  | "--build-constraints" : "Constrain build dependencies with requirements files" , @file
+  | "--build-constraints=" : "Constrain build dependencies with requirements files" ~ @file
+  | "--allow-empty-requirements" : "Allow clearing the environment with empty requirements"
+  | "--no-allow-empty-requirements" : "Refuse empty requirements"
+  | "--check" : "Check whether the environment matches the requirements" ;
+
+exclude =
+    "--exclude-editable" : "Leave out editable packages"
+  | "--exclude" : "Leave out this package" , @any | "--exclude=" : "Leave out this package" ~ @any ;
+
+pip_freeze_option =
+    python | exclude | strict | system | target_prefix | cert
+  | "--path" : "Only list packages in this path" , @directory | "--path=" : "Only list packages in this path" ~ @directory ;
+
+pip_list_option =
+    python | index | exclude_newer | exclude | strict | cert | system | target_prefix
+  | "-e" : "Only editable projects" | "--editable" : "Only editable projects"
+  | "--format" : "Output format" , ( "columns" | "freeze" | "json" ) | "--format=" : "Output format" ~ ( "columns" | "freeze" | "json" )
+  | "--outdated" : "List outdated packages" ;
+
+pip_show_option =
+    python | strict | system | target_prefix | cert
+  | "-f" : "List the installed files" | "--files" : "List the installed files" ;
+
+pip_tree_option =
+    python | index | exclude_newer | tree_shape | strict | cert | system
+  | "--show-version-specifiers" : "Show the version constraints of each package" ;
+
+(* Other commands. *)
+
+workspace_command =
+    "metadata" : "View metadata about the workspace" , { project_lock | script | lock_state | active | "--sync" : "Sync the environment for module ownership" | "--exact" : "Remove extraneous packages when syncing" | global }
+  | "dir" : "Display the path of a workspace member" , { package | global }
+  | "list" : "List the members of the workspace" , { "--paths" : "Show paths instead of names" | "--scripts" : "List the standalone scripts" | global } ;
+
+cache_command =
+    "clean" : "Clear the cache, or the entries of packages" , { "--force" : "Ignore in-use checks" | global | @any }
+  | "prune" : "Prune dangling cache entries" , { "--ci" : "Optimize the cache for CI" | "--force" : "Ignore in-use checks" | global }
+  | "dir" : "Show the cache directory" , { global }
+  | "size" : "Show the cache size" , { "-H" : "Human-readable size" | "--human" : "Human-readable size" | output_format | global } ;
+
+self_command =
+    "update" : "Update uv" , { "--token" : "GitHub token for the request" , @any | "--token=" : "GitHub token for the request" ~ @any | dry_run | global } , [ @any ]
+  | "version" : "Display the uv version" , { "--short" : "Only print the version" | output_format | global } ;
+
+auth_command =
+    "login" : "Log in to a service" , { auth_option | "--password" : "Password for the service" , @any | "--password=" : "Password for the service" ~ @any | "-t" : "Token for the service" , @any | "--token" : "Token for the service" , @any | "--token=" : "Token for the service" ~ @any | global | @any }
+  | "logout" : "Log out of a service" , { auth_option | global | @any }
+  | "token" : "Show the token of a service" , { auth_option | global | @any }
+  | "dir" : "Show the credentials directory" , { global } ;
+
+auth_option = keyring | "-u" : "Username for the service" , @any | "--username" : "Username for the service" , @any | "--username=" : "Username for the service" ~ @any ;

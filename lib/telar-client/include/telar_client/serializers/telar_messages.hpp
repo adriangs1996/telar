@@ -79,6 +79,8 @@ namespace telar {
     complete_clipboard_desktop = 0x49,
     paste_pane_clipboard = 0x4a,
     read_runtime_clipboard = 0x4b,
+    complete_words = 0x4c,
+    request_command_spec = 0x4d,
   };
 
   enum class ServerTag : Byte {
@@ -137,6 +139,11 @@ namespace telar {
     clipboard_desktop_cancel = 0xb9,
     runtime_clipboard_chunk = 0xba,
     pane_list = 0xbb,
+    pane_shell = 0xbc,
+    pane_git = 0xbd,
+    completion_words = 0xbe,
+    pane_blocks = 0xbf,
+    command_spec = 0xc0,
   };
 
   struct RequestRuntimeState {
@@ -1205,6 +1212,59 @@ namespace telar {
         if (!alphanumeric && byte != '.' && byte != '-') {
           throw EncodingError{"Invalid notification host"};
         }
+      }
+    }
+  };
+
+  // One value a completion provider found.
+  struct CompletionWord {
+    std::string_view text{};
+    std::string_view description{};
+  };
+
+  template <>
+  struct BodySchema<CompletionWord>
+      : Serializer<Field<&CompletionWord::text, DisplayText16<256, false>, "text">,
+                   Field<&CompletionWord::description, DisplayText16<256>, "description">> {
+    static void validate(const CompletionWord &value) {
+      if (value.text.empty()) {
+        throw EncodingError{"Empty completion word"};
+      }
+    }
+  };
+
+  enum class CommandBlockState : Byte {
+    running = 0,
+    succeeded = 1,
+    failed = 2,
+    interrupted = 3,
+  };
+
+  // One command an integrated shell ran: the rows its prompt and command line take, from the
+  // top of the scrollback as a viewport counts them, its first line and how it ended.
+  struct CommandBlock {
+    std::uint32_t row = 0;
+    std::uint16_t rows = 0;
+    // Lines of the command after the first.
+    std::uint16_t lines = 0;
+    CommandBlockState state{};
+    std::int32_t status = 0;
+    std::uint32_t duration_ms = 0;
+    std::string_view command{};
+  };
+
+  template <>
+  struct BodySchema<CommandBlock>
+      : Serializer<Field<&CommandBlock::row, u32, "row">,
+                   Field<&CommandBlock::rows, u16, "rows">,
+                   Field<&CommandBlock::lines, u16, "lines">,
+                   Field<&CommandBlock::state, EnumByte<CommandBlockState, 3>, "state">,
+                   Field<&CommandBlock::status, i32, "status">,
+                   Field<&CommandBlock::duration_ms, u32, "duration_ms">,
+                   Field<&CommandBlock::command, DisplayText16<256>, "command">> {
+    static void validate(const CommandBlock &value) {
+      if (value.rows == 0) {
+        throw EncodingError{"Command block without rows"};
       }
     }
   };

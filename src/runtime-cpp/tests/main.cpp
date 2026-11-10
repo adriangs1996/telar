@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
     testPersistence();
     testObservation();
     testCommandCapture();
+    testShellIntegration();
     testMetrics();
     testCli();
     testLua();

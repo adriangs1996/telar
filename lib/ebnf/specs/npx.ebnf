@@ -1,0 +1,35 @@
+(* npx: checked against `npx --help` and `npm help exec` of npm 12.1.0, whose
+   npx runs `npm exec`. All npx options come before the package; every word
+   after the package belongs to the command it runs. `-p` means --package here,
+   not --parseable as in npm. Options with a value accept `--name value` and
+   `--name=value`. *)
+
+npx = { option } , [ @any , { @any } ] ;
+
+option =
+    "-p" : "Package to install before running" , @any
+  | "--package" : "Package to install before running" , @any | "--package=" : "Package to install before running" ~ @any
+  | "-c" : "Run this shell command" , @any | "--call" : "Run this shell command" , @any | "--call=" : "Run this shell command" ~ @any
+  | "-y" : "Install missing packages without asking" | "--yes" : "Install missing packages without asking"
+  | "-n" : "Fail instead of installing missing packages" | "--no" : "Fail instead of installing missing packages"
+  | "-w" : "Run in this workspace" , @any | "--workspace" : "Run in this workspace" , @any
+  | "--workspace=" : "Run in this workspace" ~ @any
+  | "--workspaces" : "Run in all configured workspaces" | "--ws" : "Run in all configured workspaces"
+  | "--include-workspace-root" : "Include the workspace root"
+  | "--allow-scripts" : "Packages whose install scripts may run" , @any
+  | "--allow-scripts=" : "Packages whose install scripts may run" ~ @any
+  | "--strict-allow-scripts" : "Fail when an unapproved install script would run"
+  | "--dangerously-allow-all-scripts" : "Run every install script"
+  | "--shell" : "Shell to run the command in" , @command | "--shell=" : "Shell to run the command in" ~ @command
+  | "--script-shell" : "Shell to run the command in" , @command | "--script-shell=" : "Shell to run the command in" ~ @command
+  | "--registry" : "Base URL of the npm registry" , @any | "--registry=" : "Base URL of the npm registry" ~ @any
+  | "--prefer-offline" : "Use cached data, fetch only what is missing"
+  | "--prefer-online" : "Revalidate cached data with the registry"
+  | "--offline" : "Never hit the network"
+  | "-q" : "Log only warnings and errors" | "--quiet" : "Log only warnings and errors"
+  | "-s" : "Log nothing" | "--silent" : "Log nothing"
+  | "--loglevel" : "What level of logs to report" , loglevel | "--loglevel=" : "What level of logs to report" ~ loglevel
+  | "-h" : "Show quick help" | "--help" : "Show quick help"
+  | "-v" : "Print the npm version" | "--version" : "Print the npm version" ;
+
+loglevel = "silent" | "error" | "warn" | "notice" | "http" | "info" | "verbose" | "silly" ;

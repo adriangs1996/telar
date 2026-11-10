@@ -1,0 +1,1393 @@
+(* docker: every command `docker --help` lists, checked against `docker <command> --help`
+   of Docker 29.8 with Buildx 0.37 and Compose v5.5. The Docker Desktop plugins (mcp,
+   model) and the swarm commands `docker --help` hides outside a swarm (service, stack,
+   node, secret, config) are left out.
+
+   Conventions:
+   - Global options go before the command, compose options before its subcommand.
+   - Options with a value accept `--name value` and `--name=value`; short ones accept
+     `-x value` and `-xvalue` (the matcher decomposes short-option clusters itself).
+   - Daily commands model every option. The rest list their options and accept any
+     word after them, so a valid line is never marked invalid.
+   - Container, image, network, volume and context names have no provider yet: @any.
+   - run, create and exec stop reading options at the image or container; the words
+     after it belong to the command run inside the container.
+   - `opt_*` rules are options several commands share. *)
+
+docker = { global_option } , [ command ] ;
+
+global_option =
+    "--config" : "Location of client config files" , @directory | "--config=" : "Location of client config files" ~ @directory
+  | "-c" : "Name of the context to use to connect to the daemon" , @any | "--context" : "Name of the context to use to connect to the daemon" , @any | "--context=" : "Name of the context to use to connect to the daemon" ~ @any
+  | "-D" : "Enable debug mode" | "--debug" : "Enable debug mode"
+  | "-H" : "Daemon socket to connect to" , @any | "--host" : "Daemon socket to connect to" , @any | "--host=" : "Daemon socket to connect to" ~ @any
+  | "-l" : "Set the logging level ('debug', 'info', 'warn', 'error', 'fatal')" , log_level | "--log-level" : "Set the logging level ('debug', 'info', 'warn', 'error', 'fatal')" , log_level | "--log-level=" : "Set the logging level ('debug', 'info', 'warn', 'error', 'fatal')" ~ log_level
+  | "--tls" : "Use TLS"
+  | "--tlscacert" : "Trust certs signed only by this CA" , @file | "--tlscacert=" : "Trust certs signed only by this CA" ~ @file
+  | "--tlscert" : "Path to TLS certificate file" , @file | "--tlscert=" : "Path to TLS certificate file" ~ @file
+  | "--tlskey" : "Path to TLS key file" , @file | "--tlskey=" : "Path to TLS key file" ~ @file
+  | "--tlsverify" : "Use TLS and verify the remote"
+  | "-v" : "Print version information and quit" | "--version" : "Print version information and quit" ;
+
+create_option =
+    "--add-host" : "Add a custom host-to-IP mapping (host:ip)" , @any | "--add-host=" : "Add a custom host-to-IP mapping (host:ip)" ~ @any
+  | "--annotation" : "Add an annotation to the container (passed through to the OCI runtime)" , @any | "--annotation=" : "Add an annotation to the container (passed through to the OCI runtime)" ~ @any
+  | "-a" : "Attach to STDIN, STDOUT or STDERR" , @any | "--attach" : "Attach to STDIN, STDOUT or STDERR" , @any | "--attach=" : "Attach to STDIN, STDOUT or STDERR" ~ @any
+  | opt_blkio_weight
+  | "--blkio-weight-device" : "Block IO weight (relative device weight)" , @any | "--blkio-weight-device=" : "Block IO weight (relative device weight)" ~ @any
+  | opt_cap_add
+  | opt_cap_drop
+  | "--cgroup-parent" : "Optional parent cgroup for the container" , @any | "--cgroup-parent=" : "Optional parent cgroup for the container" ~ @any
+  | "--cgroupns" : "Cgroup namespace to use (host or private)" , @any | "--cgroupns=" : "Cgroup namespace to use (host or private)" ~ @any
+  | "--cidfile" : "Write the container ID to the file" , @file | "--cidfile=" : "Write the container ID to the file" ~ @file
+  | opt_cpu_period
+  | opt_cpu_quota
+  | "--cpu-rt-period" : "Limit CPU real-time period in microseconds" , @any | "--cpu-rt-period=" : "Limit CPU real-time period in microseconds" ~ @any
+  | "--cpu-rt-runtime" : "Limit CPU real-time runtime in microseconds" , @any | "--cpu-rt-runtime=" : "Limit CPU real-time runtime in microseconds" ~ @any
+  | opt_cpu_shares
+  | opt_cpus
+  | opt_cpuset_cpus
+  | opt_cpuset_mems
+  | "--device" : "Add a host device to the container" , @any | "--device=" : "Add a host device to the container" ~ @any
+  | "--device-cgroup-rule" : "Add a rule to the cgroup allowed devices list" , @any | "--device-cgroup-rule=" : "Add a rule to the cgroup allowed devices list" ~ @any
+  | "--device-read-bps" : "Limit read rate (bytes per second) from a device" , @any | "--device-read-bps=" : "Limit read rate (bytes per second) from a device" ~ @any
+  | "--device-read-iops" : "Limit read rate (IO per second) from a device" , @any | "--device-read-iops=" : "Limit read rate (IO per second) from a device" ~ @any
+  | "--device-write-bps" : "Limit write rate (bytes per second) to a device" , @any | "--device-write-bps=" : "Limit write rate (bytes per second) to a device" ~ @any
+  | "--device-write-iops" : "Limit write rate (IO per second) to a device" , @any | "--device-write-iops=" : "Limit write rate (IO per second) to a device" ~ @any
+  | "--dns" : "Set custom DNS servers" , @any | "--dns=" : "Set custom DNS servers" ~ @any
+  | "--dns-option" : "Set DNS options" , @any | "--dns-option=" : "Set DNS options" ~ @any
+  | "--dns-search" : "Set custom DNS search domains" , @any | "--dns-search=" : "Set custom DNS search domains" ~ @any
+  | "--domainname" : "Container NIS domain name" , @any | "--domainname=" : "Container NIS domain name" ~ @any
+  | "--entrypoint" : "Overwrite the default ENTRYPOINT of the image" , @any | "--entrypoint=" : "Overwrite the default ENTRYPOINT of the image" ~ @any
+  | opt_env
+  | opt_env_file
+  | "--expose" : "Expose a port or a range of ports" , @any | "--expose=" : "Expose a port or a range of ports" ~ @any
+  | "--gpus" : "GPU devices to add to the container ('all' to pass all GPUs)" , @any | "--gpus=" : "GPU devices to add to the container ('all' to pass all GPUs)" ~ @any
+  | "--group-add" : "Add additional groups to join" , @any | "--group-add=" : "Add additional groups to join" ~ @any
+  | "--health-cmd" : "Command to run to check health" , @any | "--health-cmd=" : "Command to run to check health" ~ @any
+  | "--health-interval" : "Time between running the check (ms|s|m|h)" , @any | "--health-interval=" : "Time between running the check (ms|s|m|h)" ~ @any
+  | "--health-retries" : "Consecutive failures needed to report unhealthy" , @any | "--health-retries=" : "Consecutive failures needed to report unhealthy" ~ @any
+  | "--health-start-interval" : "Time between running the check during the start period (ms|s|m|h)" , @any | "--health-start-interval=" : "Time between running the check during the start period (ms|s|m|h)" ~ @any
+  | "--health-start-period" : "Start period before the health-retries countdown (ms|s|m|h)" , @any | "--health-start-period=" : "Start period before the health-retries countdown (ms|s|m|h)" ~ @any
+  | "--health-timeout" : "Maximum time to allow one check to run (ms|s|m|h)" , @any | "--health-timeout=" : "Maximum time to allow one check to run (ms|s|m|h)" ~ @any
+  | "-h" : "Container host name" , @any | "--hostname" : "Container host name" , @any | "--hostname=" : "Container host name" ~ @any
+  | "--init" : "Run an init that forwards signals and reaps processes"
+  | opt_interactive
+  | "--ip" : "IPv4 address (e.g., 172.30.100.104)" , @any | "--ip=" : "IPv4 address (e.g., 172.30.100.104)" ~ @any
+  | "--ip6" : "IPv6 address (e.g., 2001:db8::33)" , @any | "--ip6=" : "IPv6 address (e.g., 2001:db8::33)" ~ @any
+  | "--ipc" : "IPC mode to use" , @any | "--ipc=" : "IPC mode to use" ~ @any
+  | "--isolation" : "Container isolation technology" , @any | "--isolation=" : "Container isolation technology" ~ @any
+  | "-l" : "Set meta data on a container" , @any | "--label" : "Set meta data on a container" , @any | "--label=" : "Set meta data on a container" ~ @any
+  | "--label-file" : "Read in a line delimited file of labels" , @file | "--label-file=" : "Read in a line delimited file of labels" ~ @file
+  | opt_link
+  | "--link-local-ip" : "Container IPv4/IPv6 link-local addresses" , @any | "--link-local-ip=" : "Container IPv4/IPv6 link-local addresses" ~ @any
+  | "--log-driver" : "Logging driver for the container" , @any | "--log-driver=" : "Logging driver for the container" ~ @any
+  | "--log-opt" : "Log driver options" , @any | "--log-opt=" : "Log driver options" ~ @any
+  | "--mac-address" : "Container MAC address (e.g., 92:d0:c6:0a:29:33)" , @any | "--mac-address=" : "Container MAC address (e.g., 92:d0:c6:0a:29:33)" ~ @any
+  | opt_memory
+  | opt_memory_reservation
+  | "--memory-swap" : "Swap limit equal to memory plus swap: '-1' to enable unlimited swap" , @any | "--memory-swap=" : "Swap limit equal to memory plus swap: '-1' to enable unlimited swap" ~ @any
+  | "--memory-swappiness" : "Tune container memory swappiness (0 to 100)" , @any | "--memory-swappiness=" : "Tune container memory swappiness (0 to 100)" ~ @any
+  | "--mount" : "Attach a filesystem mount to the container" , @any | "--mount=" : "Attach a filesystem mount to the container" ~ @any
+  | opt_name
+  | "--network" : "Connect a container to a network" , network_mode | "--network=" : "Connect a container to a network" ~ network_mode
+  | "--network-alias" : "Add network-scoped alias for the container" , @any | "--network-alias=" : "Add network-scoped alias for the container" ~ @any
+  | "--no-healthcheck" : "Disable any container-specified HEALTHCHECK"
+  | "--oom-kill-disable" : "Disable OOM Killer"
+  | "--oom-score-adj" : "Tune host's OOM preferences (-1000 to 1000)" , @any | "--oom-score-adj=" : "Tune host's OOM preferences (-1000 to 1000)" ~ @any
+  | "--pid" : "PID namespace to use" , @any | "--pid=" : "PID namespace to use" ~ @any
+  | opt_pids_limit
+  | opt_platform
+  | "--privileged" : "Give extended privileges to this container"
+  | opt_publish
+  | "-P" : "Publish all exposed ports to random ports" | "--publish-all" : "Publish all exposed ports to random ports"
+  | "--pull" : "Pull the image first ('always', 'missing', 'never')" , pull_value | "--pull=" : "Pull the image first ('always', 'missing', 'never')" ~ pull_value
+  | "-q" : "Suppress the pull output" | "--quiet" : "Suppress the pull output"
+  | "--read-only" : "Mount the container's root filesystem as read only"
+  | opt_restart
+  | "--rm" : "Remove the container and its anonymous volumes when it exits"
+  | "--runtime" : "Runtime to use for this container" , @any | "--runtime=" : "Runtime to use for this container" ~ @any
+  | "--security-opt" : "Security Options" , @any | "--security-opt=" : "Security Options" ~ @any
+  | "--shm-size" : "Size of /dev/shm" , @any | "--shm-size=" : "Size of /dev/shm" ~ @any
+  | "--stop-signal" : "Signal to stop the container" , @any | "--stop-signal=" : "Signal to stop the container" ~ @any
+  | "--stop-timeout" : "Timeout (in seconds) to stop a container" , @any | "--stop-timeout=" : "Timeout (in seconds) to stop a container" ~ @any
+  | "--storage-opt" : "Storage driver options for the container" , @any | "--storage-opt=" : "Storage driver options for the container" ~ @any
+  | "--sysctl" : "Sysctl options" , @any | "--sysctl=" : "Sysctl options" ~ @any
+  | "--tmpfs" : "Mount a tmpfs directory" , @any | "--tmpfs=" : "Mount a tmpfs directory" ~ @any
+  | opt_tty
+  | opt_ulimit
+  | "--umask" : "Set umask for the container" , @any | "--umask=" : "Set umask for the container" ~ @any
+  | "--use-api-socket" : "Bind mount Docker API socket and required auth"
+  | "-u" : "Username or UID (format: <name|uid>[:<group|gid>])" , @any | "--user" : "Username or UID (format: <name|uid>[:<group|gid>])" , @any | "--user=" : "Username or UID (format: <name|uid>[:<group|gid>])" ~ @any
+  | "--userns" : "User namespace to use" , @any | "--userns=" : "User namespace to use" ~ @any
+  | "--uts" : "UTS namespace to use" , @any | "--uts=" : "UTS namespace to use" ~ @any
+  | opt_volume
+  | "--volume-driver" : "Optional volume driver for the container" , @any | "--volume-driver=" : "Optional volume driver for the container" ~ @any
+  | "--volumes-from" : "Mount volumes from the specified container(s)" , @any | "--volumes-from=" : "Mount volumes from the specified container(s)" ~ @any
+  | opt_workdir ;
+
+run_option =
+    create_option
+  | opt_detach
+  | opt_detach_keys
+  | "--sig-proxy" : "Proxy received signals to the process" ;
+
+exec_option =
+    "-d" : "Detached mode: run command in the background" | "--detach" : "Detached mode: run command in the background"
+  | opt_detach_keys
+  | opt_env
+  | opt_env_file
+  | opt_interactive
+  | "--privileged" : "Give extended privileges to the command"
+  | opt_tty
+  | "-u" : "Username or UID (format: '<name|uid>[:<group|gid>]')" , @any | "--user" : "Username or UID (format: '<name|uid>[:<group|gid>]')" , @any | "--user=" : "Username or UID (format: '<name|uid>[:<group|gid>]')" ~ @any
+  | opt_workdir ;
+
+ps_option =
+    opt_all
+  | opt_filter
+  | opt_format
+  | "-n" : "Show n last created containers (includes all states)" , @any | "--last" : "Show n last created containers (includes all states)" , @any | "--last=" : "Show n last created containers (includes all states)" ~ @any
+  | "-l" : "Show the latest created container (includes all states)" | "--latest" : "Show the latest created container (includes all states)"
+  | opt_no_trunc
+  | "-q" : "Only display container IDs" | "--quiet" : "Only display container IDs"
+  | opt_size ;
+
+build_option =
+    "--add-host" : "Add a custom host-to-IP mapping (format: 'host:ip')" , @any | "--add-host=" : "Add a custom host-to-IP mapping (format: 'host:ip')" ~ @any
+  | "--allow" : "Allow extra privileged entitlement" , @any | "--allow=" : "Allow extra privileged entitlement" ~ @any
+  | "--annotation" : "Add annotation to the image" , @any | "--annotation=" : "Add annotation to the image" ~ @any
+  | "--attest" : "Attestation parameters (format: 'type=sbom,generator=image')" , @any | "--attest=" : "Attestation parameters (format: 'type=sbom,generator=image')" ~ @any
+  | "--build-arg" : "Set build-time variables" , @any | "--build-arg=" : "Set build-time variables" ~ @any
+  | "--build-context" : "Additional build contexts (e.g., name=path)" , @any | "--build-context=" : "Additional build contexts (e.g., name=path)" ~ @any
+  | opt_builder
+  | "--cache-from" : "External cache sources" , @any | "--cache-from=" : "External cache sources" ~ @any
+  | "--cache-to" : "Cache export destinations" , @any | "--cache-to=" : "Cache export destinations" ~ @any
+  | opt_call
+  | "--cgroup-parent" : "Set the parent cgroup for the 'RUN' instructions during build" , @any | "--cgroup-parent=" : "Set the parent cgroup for the 'RUN' instructions during build" ~ @any
+  | opt_check
+  | opt_debug
+  | "-f" : "Name of the Dockerfile" , @file | "--file" : "Name of the Dockerfile" , @file | "--file=" : "Name of the Dockerfile" ~ @file
+  | "--iidfile" : "Write the image ID to a file" , @file | "--iidfile=" : "Write the image ID to a file" ~ @file
+  | "--label" : "Set metadata for an image" , @any | "--label=" : "Set metadata for an image" ~ @any
+  | "--load" : "Shorthand for '--output=type=docker'"
+  | opt_metadata_file
+  | "--network" : "Set the networking mode for the 'RUN' instructions during build" , network_mode | "--network=" : "Set the networking mode for the 'RUN' instructions during build" ~ network_mode
+  | opt_no_cache
+  | "--no-cache-filter" : "Do not cache specified stages" , @any | "--no-cache-filter=" : "Do not cache specified stages" ~ @any
+  | "-o" : "Output destination (format: 'type=local,dest=path')" , @any | "--output" : "Output destination (format: 'type=local,dest=path')" , @any | "--output=" : "Output destination (format: 'type=local,dest=path')" ~ @any
+  | "--platform" : "Set target platform for build" , @any | "--platform=" : "Set target platform for build" ~ @any
+  | "--policy" : "Policy configuration" , @any | "--policy=" : "Policy configuration" ~ @any
+  | opt_progress
+  | "--provenance" : "Shorthand for '--attest=type=provenance'" , @any | "--provenance=" : "Shorthand for '--attest=type=provenance'" ~ @any
+  | opt_pull
+  | "--push" : "Shorthand for '--output=type=registry,unpack=false'"
+  | "-q" : "Suppress the build output and print image ID on success" | "--quiet" : "Suppress the build output and print image ID on success"
+  | "--resource" : "Resource limits for build containers" , @any | "--resource=" : "Resource limits for build containers" ~ @any
+  | "--sbom" : "Shorthand for '--attest=type=sbom'" , @any | "--sbom=" : "Shorthand for '--attest=type=sbom'" ~ @any
+  | "--secret" : "Secret to expose to the build" , @any | "--secret=" : "Secret to expose to the build" ~ @any
+  | "--shm-size" : "Shared memory size for build containers" , @any | "--shm-size=" : "Shared memory size for build containers" ~ @any
+  | "--ssh" : "SSH agent socket or keys to expose to the build" , @any | "--ssh=" : "SSH agent socket or keys to expose to the build" ~ @any
+  | "-t" : "Image identifier (format: '[registry/]repository[:tag]')" , @any | "--tag" : "Image identifier (format: '[registry/]repository[:tag]')" , @any | "--tag=" : "Image identifier (format: '[registry/]repository[:tag]')" ~ @any
+  | "--target" : "Set the target build stage to build" , @any | "--target=" : "Set the target build stage to build" ~ @any
+  | opt_ulimit ;
+
+bake_option =
+    "--allow" : "Allow build to access specified resources" , @any | "--allow=" : "Allow build to access specified resources" ~ @any
+  | opt_builder
+  | opt_call
+  | opt_check
+  | opt_debug
+  | "-f" : "Build definition file" , @file | "--file" : "Build definition file" , @file | "--file=" : "Build definition file" ~ @file
+  | "--list" : "List targets or variables" , @any | "--list=" : "List targets or variables" ~ @any
+  | "--load" : "Shorthand for '--set=*.output=type=docker'"
+  | opt_metadata_file
+  | opt_no_cache
+  | "--policy" : "Global policy evaluation options" , @any | "--policy=" : "Global policy evaluation options" ~ @any
+  | "--print" : "Print the options without building"
+  | opt_progress
+  | "--provenance" : "Shorthand for '--set=*.attest=type=provenance'" , @any | "--provenance=" : "Shorthand for '--set=*.attest=type=provenance'" ~ @any
+  | opt_pull
+  | "--push" : "Shorthand for '--set=*.output=type=registry'"
+  | "--sbom" : "Shorthand for '--set=*.attest=type=sbom'" , @any | "--sbom=" : "Shorthand for '--set=*.attest=type=sbom'" ~ @any
+  | "--set" : "Override target value (e.g., 'targetpattern.key=value')" , @any | "--set=" : "Override target value (e.g., 'targetpattern.key=value')" ~ @any
+  | "--var" : "Set a variable value (e.g., 'name=value')" , @any | "--var=" : "Set a variable value (e.g., 'name=value')" ~ @any ;
+
+pull_option =
+    "-a" : "Download all tagged images in the repository" | "--all-tags" : "Download all tagged images in the repository"
+  | opt_platform
+  | opt_quiet ;
+
+push_option =
+    "-a" : "Push all tags of an image to the repository" | "--all-tags" : "Push all tags of an image to the repository"
+  | "--platform" : "Push a platform-specific manifest as a single-platform image" , @any | "--platform=" : "Push a platform-specific manifest as a single-platform image" ~ @any
+  | opt_quiet ;
+
+images_option =
+    "-a" : "Show all images" | "--all" : "Show all images"
+  | "--digests" : "Show digests"
+  | opt_filter
+  | opt_format
+  | opt_no_trunc
+  | opt_quiet2
+  | "--tree" : "List multi-platform images as a tree (EXPERIMENTAL)" ;
+
+login_option =
+    "-p" : "Password or Personal Access Token (PAT), or '-' to read from stdin" , @any | "--password" : "Password or Personal Access Token (PAT), or '-' to read from stdin" , @any | "--password=" : "Password or Personal Access Token (PAT), or '-' to read from stdin" ~ @any
+  | "--password-stdin" : "Take the Password or Personal Access Token (PAT) from stdin"
+  | "-u" : "Username" , @any | "--username" : "Username" , @any | "--username=" : "Username" ~ @any ;
+
+search_option =
+    opt_filter
+  | "--format" : "Pretty-print search using a Go template" , format | "--format=" : "Pretty-print search using a Go template" ~ format
+  | "--limit" : "Max number of search results" , @any | "--limit=" : "Max number of search results" ~ @any
+  | opt_no_trunc ;
+
+version_option = opt_format2 ;
+
+attach_option =
+    opt_detach_keys
+  | opt_no_stdin
+  | opt_sig_proxy ;
+
+commit_option =
+    "-a" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')" , @any | "--author" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')" , @any | "--author=" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')" ~ @any
+  | opt_change
+  | "-m" : "Commit message" , @any | "--message" : "Commit message" , @any | "--message=" : "Commit message" ~ @any
+  | "--no-pause" : "Disable pausing container during commit" ;
+
+cp_option =
+    opt_archive
+  | "-L" : "Always follow symlinks in SRC_PATH" | "--follow-link" : "Always follow symlinks in SRC_PATH"
+  | "-q" : "Suppress progress output during copy" | "--quiet" : "Suppress progress output during copy" ;
+
+events_option =
+    opt_filter
+  | "--format" : "Format output: 'json' or a Go template" , format | "--format=" : "Format output: 'json' or a Go template" ~ format
+  | "--since" : "Show all events created since timestamp" , @any | "--since=" : "Show all events created since timestamp" ~ @any
+  | "--until" : "Stream events until this timestamp" , @any | "--until=" : "Stream events until this timestamp" ~ @any ;
+
+export_option = opt_output ;
+
+history_option =
+    opt_format
+  | "-H" : "Print sizes and dates in human readable format" | "--human" : "Print sizes and dates in human readable format"
+  | opt_no_trunc
+  | "--platform" : "Show history for the given platform" , @any | "--platform=" : "Show history for the given platform" ~ @any
+  | opt_quiet2 ;
+
+import_option =
+    opt_change
+  | "-m" : "Set commit message for imported image" , @any | "--message" : "Set commit message for imported image" , @any | "--message=" : "Set commit message for imported image" ~ @any
+  | opt_platform ;
+
+inspect_option =
+    opt_format2
+  | "-s" : "Display total file sizes if the type is container" | "--size" : "Display total file sizes if the type is container"
+  | "--type" : "Only inspect objects of the given type" , @any | "--type=" : "Only inspect objects of the given type" ~ @any ;
+
+kill_option = opt_signal ;
+
+load_option =
+    "-i" : "Read from tar archive file, instead of STDIN" , @file | "--input" : "Read from tar archive file, instead of STDIN" , @file | "--input=" : "Read from tar archive file, instead of STDIN" ~ @file
+  | "--platform" : "Load only the given platform(s)" , @any | "--platform=" : "Load only the given platform(s)" ~ @any
+  | "-q" : "Suppress the load output" | "--quiet" : "Suppress the load output" ;
+
+logs_option =
+    "--details" : "Show extra details provided to logs"
+  | opt_follow
+  | opt_since
+  | "-n" : "Number of lines to show from the end of the logs" , @any | "--tail" : "Number of lines to show from the end of the logs" , @any | "--tail=" : "Number of lines to show from the end of the logs" ~ @any
+  | opt_timestamps
+  | opt_until ;
+
+restart_option =
+    opt_signal
+  | "-t" : "Seconds to wait before killing the container" , @any | "--timeout" : "Seconds to wait before killing the container" , @any | "--timeout=" : "Seconds to wait before killing the container" ~ @any ;
+
+rm_option =
+    "-f" : "Force the removal of a running container (uses SIGKILL)" | "--force" : "Force the removal of a running container (uses SIGKILL)"
+  | "-l" : "Remove the specified link" | "--link" : "Remove the specified link"
+  | "-v" : "Remove anonymous volumes associated with the container" | "--volumes" : "Remove anonymous volumes associated with the container" ;
+
+rmi_option =
+    "-f" : "Force removal of the image" | "--force" : "Force removal of the image"
+  | "--no-prune" : "Do not delete untagged parents"
+  | "--platform" : "Remove only the given platform variant" , @any | "--platform=" : "Remove only the given platform variant" ~ @any ;
+
+save_option =
+    opt_output
+  | "--platform" : "Save only the given platform(s)" , @any | "--platform=" : "Save only the given platform(s)" ~ @any ;
+
+start_option =
+    "-a" : "Attach STDOUT/STDERR and forward signals" | "--attach" : "Attach STDOUT/STDERR and forward signals"
+  | "--checkpoint" : "Restore from this checkpoint" , @any | "--checkpoint=" : "Restore from this checkpoint" ~ @any
+  | "--checkpoint-dir" : "Use a custom checkpoint storage directory" , @any | "--checkpoint-dir=" : "Use a custom checkpoint storage directory" ~ @any
+  | opt_detach_keys
+  | "-i" : "Attach container's STDIN" | "--interactive" : "Attach container's STDIN" ;
+
+stats_option =
+    opt_all
+  | opt_format
+  | opt_no_stream
+  | opt_no_trunc2 ;
+
+update_option =
+    opt_blkio_weight
+  | opt_cpu_period
+  | opt_cpu_quota
+  | "--cpu-rt-period" : "Limit the CPU real-time period in microseconds" , @any | "--cpu-rt-period=" : "Limit the CPU real-time period in microseconds" ~ @any
+  | "--cpu-rt-runtime" : "Limit the CPU real-time runtime in microseconds" , @any | "--cpu-rt-runtime=" : "Limit the CPU real-time runtime in microseconds" ~ @any
+  | opt_cpu_shares
+  | opt_cpus
+  | opt_cpuset_cpus
+  | opt_cpuset_mems
+  | opt_memory
+  | opt_memory_reservation
+  | "--memory-swap" : "Swap limit equal to memory plus swap: -1 to enable unlimited swap" , @any | "--memory-swap=" : "Swap limit equal to memory plus swap: -1 to enable unlimited swap" ~ @any
+  | opt_pids_limit
+  | opt_restart ;
+
+buildx_dap_command = "build" : "Start a build" , { @any } ;
+
+buildx_history_inspect_command = "attachment" : "Inspect a build record attachment" , { @any } ;
+
+buildx_history_command =
+    "inspect" : "Inspect a build record" , [ buildx_history_inspect_command ]
+  | "export" : "Export build records into Docker Desktop bundle" , { @any }
+  | "import" : "Import build records into Docker Desktop" , { @any }
+  | "logs" : "Print the logs of a build record" , { @any }
+  | "ls" : "List build records" , { @any }
+  | "open" : "Open a build record in Docker Desktop" , { @any }
+  | "rm" : "Remove build records" , { @any }
+  | "trace" : "Show the OpenTelemetry trace of a build record" , { @any } ;
+
+buildx_imagetools_command =
+    "create" : "Create a new image based on source images" , { @any }
+  | "inspect" : "Show details of an image in the registry" , { @any } ;
+
+buildx_policy_command =
+    "eval" : "Evaluate policy for a source" , { @any }
+  | "test" : "Run policy tests" , { @any } ;
+
+buildx_create_option =
+    "--append" : "Append a node to builder instead of changing it"
+  | "--bootstrap" : "Boot builder after creation"
+  | "--buildkitd-config" : "BuildKit daemon config file" , @any | "--buildkitd-config=" : "BuildKit daemon config file" ~ @any
+  | "--buildkitd-flags" : "BuildKit daemon flags" , @any | "--buildkitd-flags=" : "BuildKit daemon flags" ~ @any
+  | opt_debug
+  | "--driver" : "Driver to use (available: 'docker-container', 'kubernetes', 'remote')" , @any | "--driver=" : "Driver to use (available: 'docker-container', 'kubernetes', 'remote')" ~ @any
+  | "--driver-opt" : "Options for the driver" , @any | "--driver-opt=" : "Options for the driver" ~ @any
+  | "--leave" : "Remove a node from builder instead of changing it"
+  | "--name" : "Builder instance name" , @any | "--name=" : "Builder instance name" ~ @any
+  | "--node" : "Create/modify node with given name" , @any | "--node=" : "Create/modify node with given name" ~ @any
+  | "--platform" : "Fixed platforms for current node" , @any | "--platform=" : "Fixed platforms for current node" ~ @any
+  | opt_timeout
+  | "--use" : "Set the current builder instance" ;
+
+buildx_dial_stdio_option =
+    opt_builder2
+  | opt_debug
+  | "--platform" : "Target platform: this is used for node selection"
+  | "--progress" : "Set type of progress output ('auto', 'plain', 'rawjson', 'tty')" ;
+
+buildx_du_option =
+    opt_builder
+  | opt_debug
+  | opt_filter2
+  | opt_format3
+  | opt_timeout
+  | "--verbose" : "Shorthand for '--format=pretty'" ;
+
+buildx_inspect_option =
+    "--bootstrap" : "Ensure builder has booted before inspecting"
+  | opt_builder
+  | opt_debug
+  | opt_timeout ;
+
+buildx_ls_option =
+    opt_debug
+  | opt_format3
+  | opt_no_trunc
+  | opt_timeout ;
+
+buildx_prune_option =
+    "-a" : "Include internal/frontend images" | "--all" : "Include internal/frontend images"
+  | opt_builder
+  | opt_debug
+  | opt_filter2
+  | opt_force
+  | "--max-used-space" : "Maximum amount of disk space allowed to keep for cache" , @any | "--max-used-space=" : "Maximum amount of disk space allowed to keep for cache" ~ @any
+  | "--min-free-space" : "Target amount of free disk space after pruning" , @any | "--min-free-space=" : "Target amount of free disk space after pruning" ~ @any
+  | "--reserved-space" : "Amount of disk space always allowed to keep for cache" , @any | "--reserved-space=" : "Amount of disk space always allowed to keep for cache" ~ @any
+  | opt_timeout
+  | "--verbose" : "Provide a more verbose output" ;
+
+buildx_rm_option =
+    "--all-inactive" : "Remove all inactive builders"
+  | opt_builder
+  | opt_debug
+  | opt_force
+  | "--keep-daemon" : "Keep the BuildKit daemon running"
+  | "--keep-state" : "Keep BuildKit state"
+  | opt_timeout ;
+
+buildx_stop_option =
+    opt_builder2
+  | opt_debug ;
+
+buildx_use_option =
+    opt_builder
+  | opt_debug
+  | "--default" : "Set builder as default for current context"
+  | "--global" : "Builder persists context changes" ;
+
+buildx_version_option = opt_debug ;
+
+buildx_command =
+    "dap" : "Start debug adapter protocol compatible debugger" , [ buildx_dap_command ]
+  | "history" : "Commands to work on build records" , [ buildx_history_command ]
+  | "imagetools" : "Commands to work on images in registry" , [ buildx_imagetools_command ]
+  | "policy" : "Commands for working with build policies" , [ buildx_policy_command ]
+  | "bake" : "Build from a file" , { bake_option | @any }
+  | "build" : "Start a build" , { build_option | @directory | "-" : "Read the context from stdin" }
+  | "create" : "Create a new builder instance" , { buildx_create_option | @any }
+  | "dial-stdio" : "Proxy current stdio streams to builder instance" , { buildx_dial_stdio_option | @any }
+  | "du" : "Disk usage" , { buildx_du_option }
+  | "inspect" : "Inspect current builder instance" , { buildx_inspect_option | @any }
+  | "ls" : "List builder instances" , { buildx_ls_option }
+  | "prune" : "Remove build cache" , { buildx_prune_option }
+  | "rm" : "Remove one or more builder instances" , { buildx_rm_option | @any }
+  | "stop" : "Stop builder instance" , { buildx_stop_option | @any }
+  | "use" : "Set the current builder instance" , { buildx_use_option | @any }
+  | "version" : "Show buildx version information" , { buildx_version_option | @any } ;
+
+buildx_group_option =
+    opt_builder
+  | opt_debug ;
+
+checkpoint_create_option =
+    opt_checkpoint_dir
+  | "--leave-running" : "Leave the container running after checkpoint" ;
+
+checkpoint_ls_option = opt_checkpoint_dir ;
+
+checkpoint_command =
+    "create" : "Create a checkpoint from a running container" , { checkpoint_create_option | @any }
+  | "ls" : "List checkpoints for a container" , { checkpoint_ls_option | @any }
+  | "rm" : "Remove a checkpoint" , { checkpoint_ls_option | @any } ;
+
+compose_global_option =
+    "--all-resources" : "Include all resources, even those not used by services"
+  | "--ansi" : "Control when to print ANSI control characters ('never'|'always'|'auto')" , ansi_value | "--ansi=" : "Control when to print ANSI control characters ('never'|'always'|'auto')" ~ ansi_value
+  | "--compatibility" : "Run compose in backward compatibility mode"
+  | opt_dry_run
+  | "--env-file" : "Specify an alternate environment file" , @file | "--env-file=" : "Specify an alternate environment file" ~ @file
+  | "-f" : "Compose configuration files" , @file | "--file" : "Compose configuration files" , @file | "--file=" : "Compose configuration files" ~ @file
+  | "--parallel" : "Control max parallelism, -1 for unlimited" , @any | "--parallel=" : "Control max parallelism, -1 for unlimited" ~ @any
+  | "--profile" : "Specify a profile to enable" , @any | "--profile=" : "Specify a profile to enable" ~ @any
+  | "--progress" : "Set type of progress output (auto, tty, plain, json, quiet)" , progress_value3 | "--progress=" : "Set type of progress output (auto, tty, plain, json, quiet)" ~ progress_value3
+  | "--project-directory" : "Specify an alternate working directory" , @directory | "--project-directory=" : "Specify an alternate working directory" ~ @directory
+  | "-p" : "Project name" , @any | "--project-name" : "Project name" , @any | "--project-name=" : "Project name" ~ @any ;
+
+compose_bridge_command =
+    "convert" : "Convert compose files to Kubernetes manifests, Helm charts or others" , { @any } ;
+
+compose_attach_option =
+    "--detach-keys" : "Override the key sequence for detaching from a container"
+  | opt_dry_run
+  | opt_index
+  | opt_no_stdin
+  | opt_sig_proxy ;
+
+compose_build_option =
+    "--build-arg" : "Set build-time variables for services" , @any | "--build-arg=" : "Set build-time variables for services" ~ @any
+  | "--builder" : "Set builder to use" , @any | "--builder=" : "Set builder to use" ~ @any
+  | "--check" : "Check build configuration"
+  | opt_dry_run
+  | "-m" : "Set memory limit for the build container" , @any | "--memory" : "Set memory limit for the build container" , @any | "--memory=" : "Set memory limit for the build container" ~ @any
+  | opt_no_cache
+  | "--print" : "Print equivalent bake file"
+  | "--provenance" : "Add a provenance attestation" , @any | "--provenance=" : "Add a provenance attestation" ~ @any
+  | "--pull" : "Always attempt to pull a newer version of the image"
+  | "--push" : "Push service images"
+  | "-q" : "Suppress the build output" | "--quiet" : "Suppress the build output"
+  | "--sbom" : "Add a SBOM attestation" , @any | "--sbom=" : "Add a SBOM attestation" ~ @any
+  | "--ssh" : "Set SSH authentications used when building service images" , @any | "--ssh=" : "Set SSH authentications used when building service images" ~ @any
+  | "--with-dependencies" : "Also build dependencies (transitively)" ;
+
+compose_commit_option =
+    "-a" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')" | "--author" : "Author (e.g., 'John Hannibal Smith <hannibal@a-team.com>')"
+  | "-c" : "Apply Dockerfile instruction to the created image" | "--change" : "Apply Dockerfile instruction to the created image"
+  | opt_dry_run
+  | opt_index
+  | "-m" : "Commit message" | "--message" : "Commit message"
+  | "-p" : "Pause container during commit" | "--pause" : "Pause container during commit" ;
+
+compose_config_option =
+    opt_dry_run
+  | "--environment" : "Print environment used for interpolation"
+  | opt_format3
+  | "--hash" : "Print the service config hash, one per line" , @any | "--hash=" : "Print the service config hash, one per line" ~ @any
+  | "--images" : "Print the image names, one per line"
+  | "--lock-image-digests" : "Produces an override file with image digests"
+  | "--models" : "Print the model names, one per line"
+  | "--networks" : "Print the network names, one per line"
+  | "--no-consistency" : "Don't check model consistency, which may produce invalid output"
+  | "--no-env-resolution" : "Don't resolve service env files"
+  | "--no-interpolate" : "Don't interpolate environment variables"
+  | "--no-normalize" : "Don't normalize compose model"
+  | "--no-path-resolution" : "Don't resolve file paths"
+  | "-o" : "Save to file" , @file | "--output" : "Save to file" , @file | "--output=" : "Save to file" ~ @file
+  | "--profiles" : "Print the profile names, one per line"
+  | "-q" : "Only validate the configuration, don't print anything" | "--quiet" : "Only validate the configuration, don't print anything"
+  | opt_resolve_image_digests
+  | "--services" : "Print the service names, one per line"
+  | "--variables" : "Print model variables and default values"
+  | "--volumes" : "Print the volume names, one per line" ;
+
+compose_cp_option =
+    "--all" : "Include containers created by the run command"
+  | opt_archive
+  | opt_dry_run
+  | "-L" : "Always follow symbol link in SRC_PATH" | "--follow-link" : "Always follow symbol link in SRC_PATH"
+  | opt_index2 ;
+
+compose_create_option =
+    opt_build
+  | opt_dry_run
+  | opt_force_recreate
+  | opt_no_build
+  | opt_no_recreate
+  | "--pull" : "Pull image before running ('always'|'missing'|'never'|'build')" , pull_value2 | "--pull=" : "Pull image before running ('always'|'missing'|'never'|'build')" ~ pull_value2
+  | opt_quiet_pull
+  | opt_remove_orphans
+  | opt_scale
+  | opt_yes ;
+
+compose_down_option =
+    opt_dry_run
+  | opt_remove_orphans
+  | "--rmi" : "Remove images used by services" , rmi_value | "--rmi=" : "Remove images used by services" ~ rmi_value
+  | opt_timeout2
+  | "-v" : "Remove the Compose file's named volumes and anonymous volumes" | "--volumes" : "Remove the Compose file's named volumes and anonymous volumes" ;
+
+compose_events_option =
+    opt_dry_run
+  | "--json" : "Output events as a stream of json objects"
+  | "--since" : "Show all events created since timestamp"
+  | "--until" : "Stream events until this timestamp" ;
+
+compose_exec_option =
+    "-d" : "Detached mode: Run command in the background" | "--detach" : "Detached mode: Run command in the background"
+  | opt_dry_run
+  | opt_env
+  | opt_index2
+  | opt_no_tty
+  | "--privileged" : "Give extended privileges to the process"
+  | "-u" : "Run the command as this user" , @any | "--user" : "Run the command as this user" , @any | "--user=" : "Run the command as this user" ~ @any
+  | "-w" : "Path to workdir directory for this command" , @any | "--workdir" : "Path to workdir directory for this command" , @any | "--workdir=" : "Path to workdir directory for this command" ~ @any ;
+
+compose_export_option =
+    opt_dry_run
+  | opt_index
+  | "-o" : "Write to a file, instead of STDOUT" | "--output" : "Write to a file, instead of STDOUT" ;
+
+compose_images_option =
+    opt_dry_run
+  | opt_format3
+  | opt_quiet3 ;
+
+compose_kill_option =
+    opt_dry_run
+  | opt_remove_orphans
+  | "-s" : "SIGNAL to send to the container" , @any | "--signal" : "SIGNAL to send to the container" , @any | "--signal=" : "SIGNAL to send to the container" ~ @any ;
+
+compose_logs_option =
+    opt_dry_run
+  | opt_follow
+  | opt_index2
+  | opt_no_color
+  | opt_no_log_prefix
+  | opt_since
+  | "-n" : "Number of lines to show from the end of the logs for each container" , @any | "--tail" : "Number of lines to show from the end of the logs for each container" , @any | "--tail=" : "Number of lines to show from the end of the logs for each container" ~ @any
+  | opt_timestamps
+  | opt_until ;
+
+compose_ls_option =
+    "-a" : "Show all stopped Compose projects" | "--all" : "Show all stopped Compose projects"
+  | opt_dry_run
+  | "--filter" : "Filter output based on conditions provided" , @any | "--filter=" : "Filter output based on conditions provided" ~ @any
+  | opt_format3
+  | "-q" : "Only display project names" | "--quiet" : "Only display project names" ;
+
+compose_pause_option = opt_dry_run ;
+
+compose_port_option =
+    opt_dry_run
+  | opt_index
+  | "--protocol" : "Tcp or udp" ;
+
+compose_ps_option =
+    "-a" : "Show all stopped containers (including those created by the run command)" | "--all" : "Show all stopped containers (including those created by the run command)"
+  | opt_dry_run
+  | "--filter" : "Filter services by a property (supported filters: status)" , @any | "--filter=" : "Filter services by a property (supported filters: status)" ~ @any
+  | opt_format
+  | opt_no_trunc
+  | "--orphans" : "Include orphaned services (not declared by project)"
+  | opt_quiet3
+  | "--services" : "Display services"
+  | "--status" : "Filter services by status" , @any | "--status=" : "Filter services by status" ~ @any ;
+
+compose_publish_option =
+    "--app" : "Published compose application (includes referenced images)"
+  | opt_dry_run
+  | "--oci-version" : "OCI image/artifact specification version"
+  | opt_resolve_image_digests
+  | "--with-env" : "Include environment variables in the published OCI artifact"
+  | "-y" : "Assume 'yes' as answer to all prompts" | "--yes" : "Assume 'yes' as answer to all prompts" ;
+
+compose_pull_option =
+    opt_dry_run
+  | "--ignore-buildable" : "Ignore images that can be built"
+  | "--ignore-pull-failures" : "Pull what it can and ignores images with pull failures"
+  | "--include-deps" : "Also pull services declared as dependencies"
+  | "--policy" : "Apply pull policy ('missing'|'always')" , policy_value | "--policy=" : "Apply pull policy ('missing'|'always')" ~ policy_value
+  | "-q" : "Pull without printing progress information" | "--quiet" : "Pull without printing progress information" ;
+
+compose_push_option =
+    opt_dry_run
+  | "--ignore-push-failures" : "Push what it can and ignores images with push failures"
+  | "--include-deps" : "Also push images of services declared as dependencies"
+  | "-q" : "Push without printing progress information" | "--quiet" : "Push without printing progress information" ;
+
+compose_restart_option =
+    opt_dry_run
+  | "--no-deps" : "Don't restart dependent services"
+  | opt_timeout2 ;
+
+compose_rm_option =
+    opt_dry_run
+  | "-f" : "Don't ask to confirm removal" | "--force" : "Don't ask to confirm removal"
+  | "-s" : "Stop the containers, if required, before removing" | "--stop" : "Stop the containers, if required, before removing"
+  | "-v" : "Remove any anonymous volumes attached to containers" | "--volumes" : "Remove any anonymous volumes attached to containers" ;
+
+compose_run_option =
+    "--build" : "Build image before starting container"
+  | opt_cap_add
+  | opt_cap_drop
+  | opt_detach
+  | opt_dry_run
+  | "--entrypoint" : "Override the entrypoint of the image" , @any | "--entrypoint=" : "Override the entrypoint of the image" ~ @any
+  | opt_env
+  | "--env-from-file" : "Set environment variables from file" , @file | "--env-from-file=" : "Set environment variables from file" ~ @file
+  | opt_interactive
+  | "-l" : "Add or override a label" , @any | "--label" : "Add or override a label" , @any | "--label=" : "Add or override a label" ~ @any
+  | opt_name
+  | opt_no_deps
+  | opt_no_tty
+  | opt_publish
+  | opt_pull2
+  | "-q" : "Don't print anything to STDOUT" | "--quiet" : "Don't print anything to STDOUT"
+  | "--quiet-build" : "Suppress progress output from the build process"
+  | opt_quiet_pull
+  | opt_remove_orphans
+  | "--rm" : "Automatically remove the container when it exits"
+  | "-P" : "Run command with all service's ports enabled and mapped to the host" | "--service-ports" : "Run command with all service's ports enabled and mapped to the host"
+  | "--use-aliases" : "Use the service's network aliases in the networks it joins"
+  | "-u" : "Run as specified username or uid" , @any | "--user" : "Run as specified username or uid" , @any | "--user=" : "Run as specified username or uid" ~ @any
+  | opt_volume
+  | opt_workdir ;
+
+compose_scale_option =
+    opt_dry_run
+  | opt_no_deps ;
+
+compose_start_option =
+    opt_dry_run
+  | opt_wait
+  | opt_wait_timeout ;
+
+compose_stats_option =
+    opt_all
+  | opt_dry_run
+  | opt_format4
+  | opt_no_stream
+  | opt_no_trunc2 ;
+
+compose_stop_option =
+    opt_dry_run
+  | opt_timeout2 ;
+
+compose_up_option =
+    "--abort-on-container-exit" : "Stops all containers if any container was stopped"
+  | "--abort-on-container-failure" : "Stops all containers if any container exited with failure"
+  | "--always-recreate-deps" : "Recreate dependent containers"
+  | "--attach" : "Restrict attaching to the specified services" , @any | "--attach=" : "Restrict attaching to the specified services" ~ @any
+  | "--attach-dependencies" : "Automatically attach to log output of dependent services"
+  | opt_build
+  | "-d" : "Detached mode: Run containers in the background" | "--detach" : "Detached mode: Run containers in the background"
+  | opt_dry_run
+  | "--exit-code-from" : "Return the exit code of the selected service container" , @any | "--exit-code-from=" : "Return the exit code of the selected service container" ~ @any
+  | opt_force_recreate
+  | "--menu" : "Enable interactive shortcuts when running attached"
+  | "--no-attach" : "Do not attach (stream logs) to the specified services" , @any | "--no-attach=" : "Do not attach (stream logs) to the specified services" ~ @any
+  | opt_no_build
+  | opt_no_color
+  | opt_no_deps
+  | opt_no_log_prefix
+  | opt_no_recreate
+  | "--no-start" : "Don't start the services after creating them"
+  | opt_pull2
+  | "--quiet-build" : "Suppress the build output"
+  | opt_quiet_pull
+  | opt_remove_orphans
+  | "-V" : "Recreate anonymous volumes instead of reusing the previous ones" | "--renew-anon-volumes" : "Recreate anonymous volumes instead of reusing the previous ones"
+  | opt_scale
+  | "-t" : "Timeout in seconds for container shutdown" , @any | "--timeout" : "Timeout in seconds for container shutdown" , @any | "--timeout=" : "Timeout in seconds for container shutdown" ~ @any
+  | "--timestamps" : "Show timestamps"
+  | opt_wait
+  | opt_wait_timeout
+  | "-w" : "Watch source code and rebuild/refresh containers when files are updated" | "--watch" : "Watch source code and rebuild/refresh containers when files are updated"
+  | opt_yes ;
+
+compose_version_option =
+    opt_dry_run
+  | "-f" : "Format the output" , format | "--format" : "Format the output" , format | "--format=" : "Format the output" ~ format
+  | "--short" : "Shows only Compose's version number" ;
+
+compose_volumes_option =
+    opt_dry_run
+  | opt_format4
+  | opt_quiet4 ;
+
+compose_wait_option =
+    "--down-project" : "Drops project when the first container stops"
+  | opt_dry_run ;
+
+compose_watch_option =
+    opt_dry_run
+  | "--no-up" : "Do not build & start services before watching"
+  | "--prune" : "Prune dangling images on rebuild"
+  | "--quiet" : "Hide build output" ;
+
+compose_command =
+    "bridge" : "Convert compose files into another model" , [ compose_bridge_command ]
+  | "attach" : "Attach local stdin, stdout and stderr to a service's container" , { compose_attach_option | @compose_service | @any }
+  | "build" : "Build or rebuild services" , { compose_build_option | @compose_service }
+  | "commit" : "Create a new image from a service container's changes" , { compose_commit_option | @compose_service | @any }
+  | "config" : "Parse, resolve and render compose file in canonical format" , { compose_config_option | @compose_service }
+  | "cp" : "Copy files between a service container and the local filesystem" , { compose_cp_option | @file | "-" : "Stream a tar archive through stdin or stdout" }
+  | "create" : "Creates containers for a service" , { compose_create_option | @compose_service }
+  | "down" : "Stop and remove containers, networks" , { compose_down_option | @compose_service }
+  | "events" : "Receive real time events from containers" , { compose_events_option | @compose_service | @any }
+  | "exec" : "Execute a command in a running container" , { compose_exec_option } , [ @compose_service , { @any } ]
+  | "export" : "Export a service container's filesystem as a tar archive" , { compose_export_option | @compose_service | @any }
+  | "images" : "List images used by the created containers" , { compose_images_option | @compose_service }
+  | "kill" : "Force stop service containers" , { compose_kill_option | @compose_service }
+  | "logs" : "View output from containers" , { compose_logs_option | @compose_service }
+  | "ls" : "List running compose projects" , { compose_ls_option }
+  | "pause" : "Pause services" , { compose_pause_option | @compose_service | @any }
+  | "port" : "Print the public port for a port binding" , { compose_port_option | @compose_service | @any }
+  | "ps" : "List containers" , { compose_ps_option | @compose_service }
+  | "publish" : "Publish compose application" , { compose_publish_option | @compose_service | @any }
+  | "pull" : "Pull service images" , { compose_pull_option | @compose_service }
+  | "push" : "Push service images" , { compose_push_option | @compose_service }
+  | "restart" : "Restart service containers" , { compose_restart_option | @compose_service }
+  | "rm" : "Removes stopped service containers" , { compose_rm_option | @compose_service }
+  | "run" : "Run a one-off command on a service" , { compose_run_option } , [ @compose_service , { @any } ]
+  | "scale" : "Scale services" , { compose_scale_option | @compose_service | @any }
+  | "start" : "Start services" , { compose_start_option | @compose_service }
+  | "stats" : "Display a live stream of container(s) resource usage statistics" , { compose_stats_option | @compose_service | @any }
+  | "stop" : "Stop services" , { compose_stop_option | @compose_service }
+  | "top" : "Display the running processes" , { compose_pause_option | @compose_service }
+  | "unpause" : "Unpause services" , { compose_pause_option | @compose_service | @any }
+  | "up" : "Create and start containers" , { compose_up_option | @compose_service }
+  | "version" : "Show the Docker Compose version information" , { compose_version_option }
+  | "volumes" : "List volumes" , { compose_volumes_option | @compose_service | @any }
+  | "wait" : "Block until containers of all (or specified) services stop" , { compose_wait_option | @compose_service | @any }
+  | "watch" : "Rebuild or refresh service containers when their files change" , { compose_watch_option | @compose_service } ;
+
+container_inspect_option =
+    opt_format5
+  | opt_size ;
+
+prune_option =
+    opt_filter3
+  | opt_force ;
+
+container_command =
+    "attach" : "Attach local stdin, stdout and stderr to a running container" , { attach_option | @any }
+  | "commit" : "Create a new image from a container's changes" , { commit_option | @any }
+  | "cp" : "Copy files/folders between a container and the local filesystem" , { cp_option | @file | "-" : "Stream a tar archive through stdin or stdout" }
+  | "create" : "Create a new container" , { create_option } , [ @any , { @any } ]
+  | "diff" : "Inspect changes to files or directories on a container's filesystem" , { @any }
+  | "exec" : "Execute a command in a running container" , { exec_option } , [ @any , { @any } ]
+  | "export" : "Export a container's filesystem as a tar archive" , { export_option | @any }
+  | "inspect" : "Display detailed information on one or more containers" , { container_inspect_option | @any }
+  | "kill" : "Kill one or more running containers" , { kill_option | @any }
+  | "logs" : "Fetch the logs of a container" , { logs_option | @any }
+  | "ls" : "List containers" , { ps_option }
+  | "pause" : "Pause all processes within one or more containers" , { @any }
+  | "port" : "List port mappings or a specific mapping for the container" , { @any }
+  | "prune" : "Remove all stopped containers" , { prune_option }
+  | "rename" : "Rename a container" , { @any }
+  | "restart" : "Restart one or more containers" , { restart_option | @any }
+  | "rm" : "Remove one or more containers" , { rm_option | @any }
+  | "run" : "Create and run a new container from an image" , { run_option } , [ @any , { @any } ]
+  | "start" : "Start one or more stopped containers" , { start_option | @any }
+  | "stats" : "Display a live stream of container(s) resource usage statistics" , { stats_option | @any }
+  | "stop" : "Stop one or more running containers" , { restart_option | @any }
+  | "top" : "Display the running processes of a container" , [ @any , { @any } ]
+  | "unpause" : "Unpause all processes within one or more containers" , { @any }
+  | "update" : "Update configuration of one or more containers" , { update_option | @any }
+  | "wait" : "Block until one or more containers stop, then print their exit codes" , { @any } ;
+
+context_create_option =
+    "--description" : "Description of the context" , @any | "--description=" : "Description of the context" ~ @any
+  | "--docker" : "Set the docker endpoint" , @any | "--docker=" : "Set the docker endpoint" ~ @any
+  | "--from" : "Create context from a named context" , @any | "--from=" : "Create context from a named context" ~ @any ;
+
+context_ls_option =
+    opt_format
+  | "-q" : "Only show context names" | "--quiet" : "Only show context names" ;
+
+context_rm_option =
+    "-f" : "Force the removal of a context in use" | "--force" : "Force the removal of a context in use" ;
+
+context_update_option =
+    "--description" : "Description of the context"
+  | "--docker" : "Set the docker endpoint" ;
+
+context_command =
+    "create" : "Create a context" , { context_create_option | @any }
+  | "export" : "Export a context to a tar archive FILE or a tar stream on STDOUT" , { @any }
+  | "import" : "Import a context from a tar or zip file" , { @any }
+  | "inspect" : "Display detailed information on one or more contexts" , { version_option | @any }
+  | "ls" : "List contexts" , { context_ls_option }
+  | "rm" : "Remove one or more contexts" , { context_rm_option | @any }
+  | "show" : "Print the name of the current context"
+  | "update" : "Update a context" , { context_update_option | @any }
+  | "use" : "Set the default docker context" , { @any } ;
+
+image_inspect_option =
+    opt_format5
+  | "--platform" : "Inspect a specific platform of the multi-platform image" ;
+
+image_prune_option =
+    "-a" : "Remove all unused images, not just dangling ones" | "--all" : "Remove all unused images, not just dangling ones"
+  | opt_filter3
+  | opt_force ;
+
+image_command =
+    "build" : "Build an image from a Dockerfile" , { build_option | @directory | "-" : "Read the context from stdin" }
+  | "history" : "Show the history of an image" , { history_option | @any }
+  | "import" : "Import the contents from a tarball to create a filesystem image" , { import_option | @file | "-" : "Read the tarball from stdin" }
+  | "inspect" : "Display detailed information on one or more images" , { image_inspect_option | @any }
+  | "load" : "Load an image from a tar archive or STDIN" , { load_option }
+  | "ls" : "List images" , { images_option | @any }
+  | "prune" : "Remove unused images" , { image_prune_option }
+  | "pull" : "Download an image from a registry" , { pull_option | @any }
+  | "push" : "Upload an image to a registry" , { push_option | @any }
+  | "rm" : "Remove one or more images" , { rmi_option | @any }
+  | "save" : "Save one or more images to a tar archive (streamed to STDOUT by default)" , { save_option | @any }
+  | "tag" : "Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE" , { @any } ;
+
+manifest_annotate_option =
+    "--arch" : "Set architecture"
+  | "--os" : "Set operating system"
+  | "--os-features" : "Set operating system feature"
+  | "--os-version" : "Set operating system version"
+  | "--variant" : "Set architecture variant" ;
+
+manifest_create_option =
+    "-a" : "Amend an existing manifest list" | "--amend" : "Amend an existing manifest list"
+  | opt_insecure ;
+
+manifest_inspect_option =
+    opt_insecure
+  | "-v" : "Output additional info including layers and platform" | "--verbose" : "Output additional info including layers and platform" ;
+
+manifest_push_option =
+    "--insecure" : "Allow push to an insecure registry"
+  | "-p" : "Remove the local manifest list after push" | "--purge" : "Remove the local manifest list after push" ;
+
+manifest_command =
+    "annotate" : "Add additional information to a local image manifest" , { manifest_annotate_option | @any }
+  | "create" : "Create a local manifest list for annotating and pushing to a registry" , { manifest_create_option | @any }
+  | "inspect" : "Display an image manifest, or manifest list" , { manifest_inspect_option | @any }
+  | "push" : "Push a manifest list to a repository" , { manifest_push_option | @any }
+  | "rm" : "Delete one or more manifest lists from local storage" , { @any } ;
+
+network_connect_option =
+    "--alias" : "Add network-scoped alias for the container" , @any | "--alias=" : "Add network-scoped alias for the container" ~ @any
+  | "--driver-opt" : "Driver options for the network" , @any | "--driver-opt=" : "Driver options for the network" ~ @any
+  | "--gw-priority" : "Highest gw-priority provides the default gateway" , @any | "--gw-priority=" : "Highest gw-priority provides the default gateway" ~ @any
+  | "--ip" : "IPv4 address (e.g., '172.30.100.104')" , @any | "--ip=" : "IPv4 address (e.g., '172.30.100.104')" ~ @any
+  | "--ip6" : "IPv6 address (e.g., '2001:db8::33')" , @any | "--ip6=" : "IPv6 address (e.g., '2001:db8::33')" ~ @any
+  | opt_link
+  | "--link-local-ip" : "Add a link-local address for the container" , @any | "--link-local-ip=" : "Add a link-local address for the container" ~ @any ;
+
+network_create_option =
+    "--attachable" : "Enable manual container attachment"
+  | "--aux-address" : "Auxiliary IPv4 or IPv6 addresses used by Network driver" , @any | "--aux-address=" : "Auxiliary IPv4 or IPv6 addresses used by Network driver" ~ @any
+  | "--config-from" : "The network from which to copy the configuration" , @any | "--config-from=" : "The network from which to copy the configuration" ~ @any
+  | "--config-only" : "Create a configuration only network"
+  | "-d" : "Driver to manage the Network" , @any | "--driver" : "Driver to manage the Network" , @any | "--driver=" : "Driver to manage the Network" ~ @any
+  | "--gateway" : "IPv4 or IPv6 Gateway for the master subnet" , @any | "--gateway=" : "IPv4 or IPv6 Gateway for the master subnet" ~ @any
+  | "--ingress" : "Create swarm routing-mesh network"
+  | "--internal" : "Restrict external access to the network"
+  | "--ip-range" : "Allocate container ip from a sub-range" , @any | "--ip-range=" : "Allocate container ip from a sub-range" ~ @any
+  | "--ipam-driver" : "IP Address Management Driver" , @any | "--ipam-driver=" : "IP Address Management Driver" ~ @any
+  | "--ipam-opt" : "Set IPAM driver specific options" , @any | "--ipam-opt=" : "Set IPAM driver specific options" ~ @any
+  | "--ipv4" : "Enable or disable IPv4 address assignment"
+  | "--ipv6" : "Enable or disable IPv6 address assignment"
+  | "--label" : "Set metadata on a network" , @any | "--label=" : "Set metadata on a network" ~ @any
+  | opt_opt
+  | "--scope" : "Control the network's scope" , @any | "--scope=" : "Control the network's scope" ~ @any
+  | "--subnet" : "Subnet in CIDR format that represents a network segment" , @any | "--subnet=" : "Subnet in CIDR format that represents a network segment" ~ @any ;
+
+network_disconnect_option =
+    "-f" : "Force the container to disconnect from a network" | "--force" : "Force the container to disconnect from a network" ;
+
+network_inspect_option =
+    opt_format2
+  | "-v" : "Verbose output for diagnostics" | "--verbose" : "Verbose output for diagnostics" ;
+
+network_ls_option =
+    "-f" : "Provide filter values (e.g. 'driver=bridge')" , @any | "--filter" : "Provide filter values (e.g. 'driver=bridge')" , @any | "--filter=" : "Provide filter values (e.g. 'driver=bridge')" ~ @any
+  | opt_format
+  | "--no-trunc" : "Do not truncate the output"
+  | "-q" : "Only display network IDs" | "--quiet" : "Only display network IDs" ;
+
+network_rm_option =
+    "-f" : "Do not error if the network does not exist" | "--force" : "Do not error if the network does not exist" ;
+
+network_command =
+    "connect" : "Connect a container to a network" , { network_connect_option | @any }
+  | "create" : "Create a network" , { network_create_option | @any }
+  | "disconnect" : "Disconnect a container from a network" , { network_disconnect_option | @any }
+  | "inspect" : "Display detailed information on one or more networks" , { network_inspect_option | @any }
+  | "ls" : "List networks" , { network_ls_option }
+  | "prune" : "Remove all unused networks" , { prune_option }
+  | "rm" : "Remove one or more networks" , { network_rm_option | @any } ;
+
+plugin_create_option = "--compress" : "Compress the context using gzip" ;
+
+plugin_disable_option =
+    "-f" : "Force the disable of an active plugin" | "--force" : "Force the disable of an active plugin" ;
+
+plugin_enable_option = "--timeout" : "HTTP client timeout (in seconds)" ;
+
+plugin_inspect_option = opt_format5 ;
+
+plugin_install_option =
+    "--alias" : "Local name for plugin"
+  | "--disable" : "Do not enable the plugin on install"
+  | opt_grant_all_permissions ;
+
+plugin_ls_option =
+    "-f" : "Provide filter values (e.g. 'enabled=true')" | "--filter" : "Provide filter values (e.g. 'enabled=true')"
+  | opt_format4
+  | opt_no_trunc
+  | "-q" : "Only display plugin IDs" | "--quiet" : "Only display plugin IDs" ;
+
+plugin_rm_option =
+    "-f" : "Force the removal of an active plugin" | "--force" : "Force the removal of an active plugin" ;
+
+plugin_upgrade_option =
+    opt_grant_all_permissions
+  | "--skip-remote-check" : "Do not check if specified remote plugin matches existing plugin image" ;
+
+plugin_command =
+    "create" : "Create a plugin from a rootfs and configuration" , { plugin_create_option | @any }
+  | "disable" : "Disable a plugin" , { plugin_disable_option | @any }
+  | "enable" : "Enable a plugin" , { plugin_enable_option | @any }
+  | "inspect" : "Display detailed information on one or more plugins" , { plugin_inspect_option | @any }
+  | "install" : "Install a plugin" , { plugin_install_option | @any }
+  | "ls" : "List plugins" , { plugin_ls_option | @any }
+  | "push" : "Push a plugin to a registry" , { @any }
+  | "rm" : "Remove one or more plugins" , { plugin_rm_option | @any }
+  | "set" : "Change settings for a plugin" , { @any }
+  | "upgrade" : "Upgrade an existing plugin" , { plugin_upgrade_option | @any } ;
+
+system_df_option =
+    opt_format
+  | "-v" : "Show detailed information on space usage" | "--verbose" : "Show detailed information on space usage" ;
+
+system_prune_option =
+    "-a" : "Remove all unused images not just dangling ones" | "--all" : "Remove all unused images not just dangling ones"
+  | "--filter" : "Provide filter values (e.g. 'label=<key>=<value>')" , @any | "--filter=" : "Provide filter values (e.g. 'label=<key>=<value>')" ~ @any
+  | opt_force
+  | "--volumes" : "Prune anonymous volumes" ;
+
+system_command =
+    "df" : "Show docker disk usage" , { system_df_option }
+  | "events" : "Get real time events from the server" , { events_option }
+  | "info" : "Display system-wide information" , { version_option }
+  | "prune" : "Remove unused data" , { system_prune_option } ;
+
+volume_create_option =
+    "-d" : "Specify volume driver name" , @any | "--driver" : "Specify volume driver name" , @any | "--driver=" : "Specify volume driver name" ~ @any
+  | "--label" : "Set metadata for a volume" , @any | "--label=" : "Set metadata for a volume" ~ @any
+  | opt_opt ;
+
+volume_ls_option =
+    "-f" : "Provide filter values (e.g. 'dangling=true')" , @any | "--filter" : "Provide filter values (e.g. 'dangling=true')" , @any | "--filter=" : "Provide filter values (e.g. 'dangling=true')" ~ @any
+  | opt_format
+  | opt_quiet4 ;
+
+volume_prune_option =
+    "-a" : "Remove all unused volumes, not just anonymous ones" | "--all" : "Remove all unused volumes, not just anonymous ones"
+  | "--filter" : "Provide filter values (e.g. 'label=<label>')" , @any | "--filter=" : "Provide filter values (e.g. 'label=<label>')" ~ @any
+  | opt_force ;
+
+volume_rm_option =
+    "-f" : "Force the removal of one or more volumes" | "--force" : "Force the removal of one or more volumes" ;
+
+volume_command =
+    "create" : "Create a volume" , { volume_create_option | @any }
+  | "inspect" : "Display detailed information on one or more volumes" , { version_option | @any }
+  | "ls" : "List volumes" , { volume_ls_option }
+  | "prune" : "Remove unused local volumes" , { volume_prune_option }
+  | "rm" : "Remove one or more volumes" , { volume_rm_option | @any } ;
+
+swarm_init_option =
+    opt_advertise_addr
+  | "--autolock" : "Enable manager autolocking"
+  | opt_availability
+  | "--cert-expiry" : "Validity period for node certificates (ns|us|ms|s|m|h)"
+  | opt_data_path_addr
+  | "--data-path-port" : "Port number to use for data path traffic (1024 - 49151)"
+  | "--default-addr-pool" : "Default address pool in CIDR format"
+  | "--default-addr-pool-mask-length" : "Default address pool subnet mask length"
+  | "--dispatcher-heartbeat" : "Dispatcher heartbeat period (ns|us|ms|s|m|h)"
+  | "--external-ca" : "Specifications of one or more certificate signing endpoints"
+  | "--force-new-cluster" : "Force create a new cluster from current state"
+  | opt_listen_addr
+  | "--max-snapshots" : "Number of additional Raft snapshots to retain"
+  | "--snapshot-interval" : "Number of log entries between Raft snapshots"
+  | "--task-history-limit" : "Task history retention limit" ;
+
+swarm_join_option =
+    opt_advertise_addr
+  | opt_availability
+  | opt_data_path_addr
+  | opt_listen_addr
+  | "--token" : "Token for entry into the swarm" ;
+
+swarm_command =
+    "init" : "Initialize a swarm" , { swarm_init_option | @any }
+  | "join" : "Join a swarm as a node and/or manager" , { swarm_join_option | @any } ;
+
+command =
+    "run" : "Create and run a new container from an image" , { run_option } , [ @any , { @any } ]
+  | "exec" : "Execute a command in a running container" , { exec_option } , [ @any , { @any } ]
+  | "ps" : "List containers" , { ps_option }
+  | "build" : "Build an image from a Dockerfile" , { build_option | @directory | "-" : "Read the context from stdin" }
+  | "bake" : "Build from a file" , { bake_option | @any }
+  | "pull" : "Download an image from a registry" , { pull_option | @any }
+  | "push" : "Upload an image to a registry" , { push_option | @any }
+  | "images" : "List images" , { images_option | @any }
+  | "login" : "Authenticate to a registry" , { login_option | @any }
+  | "logout" : "Log out from a registry" , { @any }
+  | "search" : "Search Docker Hub for images" , { search_option | @any }
+  | "version" : "Show the Docker version information" , { version_option }
+  | "info" : "Display system-wide information" , { version_option }
+  | "builder" : "Manage builds" , { buildx_group_option } , [ buildx_command ]
+  | "buildx" : "Docker Buildx" , { buildx_group_option } , [ buildx_command ]
+  | "checkpoint" : "Manage checkpoints" , [ checkpoint_command ]
+  | "compose" : "Docker Compose" , { compose_global_option } , [ compose_command ]
+  | "container" : "Manage containers" , [ container_command ]
+  | "context" : "Manage contexts" , [ context_command ]
+  | "image" : "Manage images" , [ image_command ]
+  | "manifest" : "Manage Docker image manifests and manifest lists" , [ manifest_command ]
+  | "network" : "Manage networks" , [ network_command ]
+  | "plugin" : "Manage plugins" , [ plugin_command ]
+  | "system" : "Manage Docker" , [ system_command ]
+  | "volume" : "Manage volumes" , [ volume_command ]
+  | "swarm" : "Manage Swarm" , [ swarm_command ]
+  | "attach" : "Attach local stdin, stdout and stderr to a running container" , { attach_option | @any }
+  | "commit" : "Create a new image from a container's changes" , { commit_option | @any }
+  | "cp" : "Copy files/folders between a container and the local filesystem" , { cp_option | @file | "-" : "Stream a tar archive through stdin or stdout" }
+  | "create" : "Create a new container" , { create_option } , [ @any , { @any } ]
+  | "diff" : "Inspect changes to files or directories on a container's filesystem" , { @any }
+  | "events" : "Get real time events from the server" , { events_option }
+  | "export" : "Export a container's filesystem as a tar archive" , { export_option | @any }
+  | "history" : "Show the history of an image" , { history_option | @any }
+  | "import" : "Import the contents from a tarball to create a filesystem image" , { import_option | @file | "-" : "Read the tarball from stdin" }
+  | "inspect" : "Return low-level information on Docker objects" , { inspect_option | @any }
+  | "kill" : "Kill one or more running containers" , { kill_option | @any }
+  | "load" : "Load an image from a tar archive or STDIN" , { load_option }
+  | "logs" : "Fetch the logs of a container" , { logs_option | @any }
+  | "pause" : "Pause all processes within one or more containers" , { @any }
+  | "port" : "List port mappings or a specific mapping for the container" , { @any }
+  | "rename" : "Rename a container" , { @any }
+  | "restart" : "Restart one or more containers" , { restart_option | @any }
+  | "rm" : "Remove one or more containers" , { rm_option | @any }
+  | "rmi" : "Remove one or more images" , { rmi_option | @any }
+  | "save" : "Save one or more images to a tar archive (streamed to STDOUT by default)" , { save_option | @any }
+  | "start" : "Start one or more stopped containers" , { start_option | @any }
+  | "stats" : "Display a live stream of container(s) resource usage statistics" , { stats_option | @any }
+  | "stop" : "Stop one or more running containers" , { restart_option | @any }
+  | "tag" : "Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE" , { @any }
+  | "top" : "Display the running processes of a container" , [ @any , { @any } ]
+  | "unpause" : "Unpause all processes within one or more containers" , { @any }
+  | "update" : "Update configuration of one or more containers" , { update_option | @any }
+  | "wait" : "Block until one or more containers stop, then print their exit codes" , { @any } ;
+
+opt_blkio_weight =
+    "--blkio-weight" : "Block IO (relative weight), between 10 and 1000, or 0 to disable" , @any | "--blkio-weight=" : "Block IO (relative weight), between 10 and 1000, or 0 to disable" ~ @any ;
+
+opt_cap_add =
+    "--cap-add" : "Add Linux capabilities" , @any | "--cap-add=" : "Add Linux capabilities" ~ @any ;
+
+opt_cap_drop =
+    "--cap-drop" : "Drop Linux capabilities" , @any | "--cap-drop=" : "Drop Linux capabilities" ~ @any ;
+
+opt_cpu_period =
+    "--cpu-period" : "Limit CPU CFS (Completely Fair Scheduler) period" , @any | "--cpu-period=" : "Limit CPU CFS (Completely Fair Scheduler) period" ~ @any ;
+
+opt_cpu_quota =
+    "--cpu-quota" : "Limit CPU CFS (Completely Fair Scheduler) quota" , @any | "--cpu-quota=" : "Limit CPU CFS (Completely Fair Scheduler) quota" ~ @any ;
+
+opt_cpu_shares =
+    "-c" : "CPU shares (relative weight)" , @any | "--cpu-shares" : "CPU shares (relative weight)" , @any | "--cpu-shares=" : "CPU shares (relative weight)" ~ @any ;
+
+opt_cpus = "--cpus" : "Number of CPUs" , @any | "--cpus=" : "Number of CPUs" ~ @any ;
+
+opt_cpuset_cpus =
+    "--cpuset-cpus" : "CPUs in which to allow execution (0-3, 0,1)" , @any | "--cpuset-cpus=" : "CPUs in which to allow execution (0-3, 0,1)" ~ @any ;
+
+opt_cpuset_mems =
+    "--cpuset-mems" : "MEMs in which to allow execution (0-3, 0,1)" , @any | "--cpuset-mems=" : "MEMs in which to allow execution (0-3, 0,1)" ~ @any ;
+
+opt_env =
+    "-e" : "Set environment variables" , @any | "--env" : "Set environment variables" , @any | "--env=" : "Set environment variables" ~ @any ;
+
+opt_env_file =
+    "--env-file" : "Read in a file of environment variables" , @file | "--env-file=" : "Read in a file of environment variables" ~ @file ;
+
+opt_interactive =
+    "-i" : "Keep STDIN open even if not attached" | "--interactive" : "Keep STDIN open even if not attached" ;
+
+opt_link =
+    "--link" : "Add link to another container" , @any | "--link=" : "Add link to another container" ~ @any ;
+
+opt_memory =
+    "-m" : "Memory limit" , @any | "--memory" : "Memory limit" , @any | "--memory=" : "Memory limit" ~ @any ;
+
+opt_memory_reservation =
+    "--memory-reservation" : "Memory soft limit" , @any | "--memory-reservation=" : "Memory soft limit" ~ @any ;
+
+opt_name =
+    "--name" : "Assign a name to the container" , @any | "--name=" : "Assign a name to the container" ~ @any ;
+
+opt_pids_limit =
+    "--pids-limit" : "Tune container pids limit (set -1 for unlimited)" , @any | "--pids-limit=" : "Tune container pids limit (set -1 for unlimited)" ~ @any ;
+
+opt_platform =
+    "--platform" : "Set platform if server is multi-platform capable" , @any | "--platform=" : "Set platform if server is multi-platform capable" ~ @any ;
+
+opt_publish =
+    "-p" : "Publish a container's port(s) to the host" , @any | "--publish" : "Publish a container's port(s) to the host" , @any | "--publish=" : "Publish a container's port(s) to the host" ~ @any ;
+
+opt_restart =
+    "--restart" : "Restart policy to apply when a container exits" , restart_policy | "--restart=" : "Restart policy to apply when a container exits" ~ restart_policy ;
+
+opt_tty = "-t" : "Allocate a pseudo-TTY" | "--tty" : "Allocate a pseudo-TTY" ;
+
+opt_ulimit = "--ulimit" : "Ulimit options" , @any | "--ulimit=" : "Ulimit options" ~ @any ;
+
+opt_volume =
+    "-v" : "Bind mount a volume" , @any | "--volume" : "Bind mount a volume" , @any | "--volume=" : "Bind mount a volume" ~ @any ;
+
+opt_workdir =
+    "-w" : "Working directory inside the container" , @any | "--workdir" : "Working directory inside the container" , @any | "--workdir=" : "Working directory inside the container" ~ @any ;
+
+opt_detach =
+    "-d" : "Run container in background and print container ID" | "--detach" : "Run container in background and print container ID" ;
+
+opt_detach_keys =
+    "--detach-keys" : "Override the key sequence for detaching a container" , @any | "--detach-keys=" : "Override the key sequence for detaching a container" ~ @any ;
+
+opt_all = "-a" : "Show all containers" | "--all" : "Show all containers" ;
+
+opt_filter =
+    "-f" : "Filter output based on conditions provided" , @any | "--filter" : "Filter output based on conditions provided" , @any | "--filter=" : "Filter output based on conditions provided" ~ @any ;
+
+opt_format =
+    "--format" : "Format output: 'table', 'table TEMPLATE', 'json' or a Go template" , format | "--format=" : "Format output: 'table', 'table TEMPLATE', 'json' or a Go template" ~ format ;
+
+opt_no_trunc = "--no-trunc" : "Don't truncate output" ;
+
+opt_size = "-s" : "Display total file sizes" | "--size" : "Display total file sizes" ;
+
+opt_builder =
+    "--builder" : "Override the configured builder instance" , @any | "--builder=" : "Override the configured builder instance" ~ @any ;
+
+opt_call =
+    "--call" : "Set method for evaluating build ('check', 'outline', 'targets')" , call_value | "--call=" : "Set method for evaluating build ('check', 'outline', 'targets')" ~ call_value ;
+
+opt_check = "--check" : "Shorthand for '--call=check'" ;
+
+opt_debug = "-D" : "Enable debug logging" | "--debug" : "Enable debug logging" ;
+
+opt_metadata_file =
+    "--metadata-file" : "Write build result metadata to a file" , @file | "--metadata-file=" : "Write build result metadata to a file" ~ @file ;
+
+opt_no_cache = "--no-cache" : "Do not use cache when building the image" ;
+
+opt_progress =
+    "--progress" : "Set type of progress output" , progress_value | "--progress=" : "Set type of progress output" ~ progress_value ;
+
+opt_pull = "--pull" : "Pull image before running ('always', 'missing', 'never')" ;
+
+opt_quiet = "-q" : "Suppress verbose output" | "--quiet" : "Suppress verbose output" ;
+
+opt_quiet2 = "-q" : "Only show image IDs" | "--quiet" : "Only show image IDs" ;
+
+opt_format2 =
+    "-f" : "Format output: 'json' or a Go template" , format | "--format" : "Format output: 'json' or a Go template" , format | "--format=" : "Format output: 'json' or a Go template" ~ format ;
+
+opt_no_stdin = "--no-stdin" : "Do not attach STDIN" ;
+
+opt_sig_proxy = "--sig-proxy" : "Proxy all received signals to the process" ;
+
+opt_change =
+    "-c" : "Apply Dockerfile instruction to the created image" , @any | "--change" : "Apply Dockerfile instruction to the created image" , @any | "--change=" : "Apply Dockerfile instruction to the created image" ~ @any ;
+
+opt_archive =
+    "-a" : "Archive mode (copy all uid/gid information)" | "--archive" : "Archive mode (copy all uid/gid information)" ;
+
+opt_output =
+    "-o" : "Write to a file, instead of STDOUT" , @file | "--output" : "Write to a file, instead of STDOUT" , @file | "--output=" : "Write to a file, instead of STDOUT" ~ @file ;
+
+opt_signal =
+    "-s" : "Signal to send to the container" , @any | "--signal" : "Signal to send to the container" , @any | "--signal=" : "Signal to send to the container" ~ @any ;
+
+opt_follow = "-f" : "Follow log output" | "--follow" : "Follow log output" ;
+
+opt_since =
+    "--since" : "Show logs since a timestamp or a relative time such as 42m" , @any | "--since=" : "Show logs since a timestamp or a relative time such as 42m" ~ @any ;
+
+opt_timestamps = "-t" : "Show timestamps" | "--timestamps" : "Show timestamps" ;
+
+opt_until =
+    "--until" : "Show logs before a timestamp or a relative time such as 42m" , @any | "--until=" : "Show logs before a timestamp or a relative time such as 42m" ~ @any ;
+
+opt_no_stream = "--no-stream" : "Disable streaming stats and only pull the first result" ;
+
+opt_no_trunc2 = "--no-trunc" : "Do not truncate output" ;
+
+opt_timeout =
+    "--timeout" : "Override the default timeout for loading builder status" , @any | "--timeout=" : "Override the default timeout for loading builder status" ~ @any ;
+
+opt_builder2 = "--builder" : "Override the configured builder instance" ;
+
+opt_filter2 = "--filter" : "Provide filter values" , @any | "--filter=" : "Provide filter values" ~ @any ;
+
+opt_format3 = "--format" : "Format the output" , format | "--format=" : "Format the output" ~ format ;
+
+opt_force = "-f" : "Do not prompt for confirmation" | "--force" : "Do not prompt for confirmation" ;
+
+opt_checkpoint_dir = "--checkpoint-dir" : "Use a custom checkpoint storage directory" ;
+
+opt_dry_run = "--dry-run" : "Execute command in dry run mode" ;
+
+opt_index = "--index" : "Index of the container if service has multiple replicas" ;
+
+opt_resolve_image_digests = "--resolve-image-digests" : "Pin image tags to digests" ;
+
+opt_index2 =
+    "--index" : "Index of the container if service has multiple replicas" , @any | "--index=" : "Index of the container if service has multiple replicas" ~ @any ;
+
+opt_build = "--build" : "Build images before starting containers" ;
+
+opt_force_recreate = "--force-recreate" : "Recreate containers even if their configuration did not change" ;
+
+opt_no_build = "--no-build" : "Don't build an image, even if it's policy" ;
+
+opt_no_recreate = "--no-recreate" : "If containers already exist, don't recreate them" ;
+
+opt_quiet_pull = "--quiet-pull" : "Pull without printing progress information" ;
+
+opt_remove_orphans = "--remove-orphans" : "Remove containers for services not defined in the Compose file" ;
+
+opt_scale =
+    "--scale" : "Scale SERVICE to NUM instances" , @any | "--scale=" : "Scale SERVICE to NUM instances" ~ @any ;
+
+opt_yes =
+    "-y" : "Assume 'yes' as answer to all prompts and run non-interactively" | "--yes" : "Assume 'yes' as answer to all prompts and run non-interactively" ;
+
+opt_timeout2 =
+    "-t" : "Specify a shutdown timeout in seconds" , @any | "--timeout" : "Specify a shutdown timeout in seconds" , @any | "--timeout=" : "Specify a shutdown timeout in seconds" ~ @any ;
+
+opt_no_tty = "-T" : "Disable pseudo-TTY allocation" | "--no-tty" : "Disable pseudo-TTY allocation" ;
+
+opt_quiet3 = "-q" : "Only display IDs" | "--quiet" : "Only display IDs" ;
+
+opt_no_color = "--no-color" : "Produce monochrome output" ;
+
+opt_no_log_prefix = "--no-log-prefix" : "Don't print prefix in logs" ;
+
+opt_no_deps = "--no-deps" : "Don't start linked services" ;
+
+opt_pull2 =
+    "--pull" : "Pull image before running ('always'|'missing'|'never')" , pull_value | "--pull=" : "Pull image before running ('always'|'missing'|'never')" ~ pull_value ;
+
+opt_wait = "--wait" : "Wait for services to be running|healthy" ;
+
+opt_wait_timeout =
+    "--wait-timeout" : "Maximum seconds to wait for the project to be running or healthy" , @any | "--wait-timeout=" : "Maximum seconds to wait for the project to be running or healthy" ~ @any ;
+
+opt_format4 = "--format" : "Format output: 'table', 'table TEMPLATE', 'json' or a Go template" ;
+
+opt_quiet4 = "-q" : "Only display volume names" | "--quiet" : "Only display volume names" ;
+
+opt_format5 =
+    "-f" : "Format output: 'json' or a Go template" | "--format" : "Format output: 'json' or a Go template" ;
+
+opt_filter3 =
+    "--filter" : "Provide filter values (e.g. 'until=<timestamp>')" , @any | "--filter=" : "Provide filter values (e.g. 'until=<timestamp>')" ~ @any ;
+
+opt_insecure = "--insecure" : "Allow communication with an insecure registry" ;
+
+opt_opt =
+    "-o" : "Set driver specific options" , @any | "--opt" : "Set driver specific options" , @any | "--opt=" : "Set driver specific options" ~ @any ;
+
+opt_grant_all_permissions = "--grant-all-permissions" : "Grant all permissions necessary to run the plugin" ;
+
+opt_advertise_addr = "--advertise-addr" : "Advertised address (format: '<ip|interface>[:port]')" ;
+
+opt_availability = "--availability" : "Availability of the node ('active', 'pause', 'drain')" ;
+
+opt_data_path_addr = "--data-path-addr" : "Address or interface to use for data path traffic" ;
+
+opt_listen_addr = "--listen-addr" : "Listen address (format: '<ip|interface>[:port]')" ;
+
+restart_policy =
+    "no" : "Never restart" | "always" : "Always restart" | "unless-stopped" : "Restart unless stopped by the user"
+  | "on-failure" : "Restart on a nonzero exit, on-failure:N at most N times" | @any ;
+
+network_mode = "bridge" : "The default bridge network" | "host" : "The host's network stack" | "none" : "No networking" | @any ;
+
+log_level = "debug" | "info" | "warn" | "error" | "fatal" ;
+
+format = "table" : "Table with column headers" | "json" : "One JSON object per line" | @any ;
+
+pull_value = "always" | "missing" | "never" ;
+
+call_value = "check" | "outline" | "targets" ;
+
+progress_value = "auto" | "none" | "plain" | "quiet" | "rawjson" | "tty" ;
+
+ansi_value = "never" | "always" | "auto" ;
+
+progress_value3 = "auto" | "tty" | "plain" | "json" | "quiet" ;
+
+pull_value2 = "always" | "missing" | "never" | "build" ;
+
+rmi_value = "local" | "all" ;
+
+policy_value = "missing" | "always" ;

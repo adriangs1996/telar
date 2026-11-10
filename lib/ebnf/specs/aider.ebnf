@@ -1,0 +1,176 @@
+(* aider: aider 0.86.2. Not installed where this spec was written: it follows the argparse
+   definitions in aider/args.py of tag v0.86.2 (github.com/Aider-AI/aider). The CLI changes
+   fast: options added later stay invalid until the spec is updated. Unique-prefix
+   abbreviations of long options (`--mod` for `--model`) are not modelled.
+
+   Conventions (argparse):
+   - Options with a value accept `--name value` and `--name=value`; short ones `-x value`
+     and `-xvalue`.
+   - Boolean switches come in pairs: `--pretty` and `--no-pretty`.
+   - Positional words are files to edit; `--` ends the options. *)
+
+aider = { option | @file } , [ "--" , { @file } ] ;
+
+edit_format =
+    "architect" | "ask" | "context" | "diff" | "diff-fenced" | "editor-diff" | "editor-diff-fenced"
+  | "editor-whole" | "help" | "patch" | "udiff" | "udiff-simple" | "whole" ;
+map_refresh = "auto" | "always" | "files" | "manual" ;
+voice_format = "wav" | "mp3" | "webm" ;
+line_endings = "platform" | "lf" | "crlf" ;
+shell = "bash" | "tcsh" | "zsh" ;
+
+option =
+    "-h" : "Show the help message and exit" | "--help" : "Show the help message and exit"
+  | "--version" : "Show the version number and exit"
+
+  (* Main model and API keys. *)
+  | "--model" : "Model for the main chat" , @any | "--model=" : "Model for the main chat" ~ @any
+  | "--openai-api-key" : "The OpenAI API key" , @any | "--openai-api-key=" : "The OpenAI API key" ~ @any
+  | "--anthropic-api-key" : "The Anthropic API key" , @any | "--anthropic-api-key=" : "The Anthropic API key" ~ @any
+  | "--openai-api-base" : "The API base URL" , @any | "--openai-api-base=" : "The API base URL" ~ @any
+  | "--openai-api-type" : "Deprecated, use --set-env OPENAI_API_TYPE=" , @any
+  | "--openai-api-version" : "Deprecated, use --set-env OPENAI_API_VERSION=" , @any
+  | "--openai-api-deployment-id" : "Deprecated, use --set-env OPENAI_API_DEPLOYMENT_ID=" , @any
+  | "--openai-organization-id" : "Deprecated, use --set-env OPENAI_ORGANIZATION=" , @any
+  | "--set-env" : "Set an environment variable, NAME=value" , @any | "--set-env=" : "Set an environment variable, NAME=value" ~ @any
+  | "--api-key" : "Set a provider's API key, provider=key" , @any | "--api-key=" : "Set a provider's API key, provider=key" ~ @any
+
+  (* Model settings. *)
+  | "--list-models" : "List known models matching this name" , @any | "--models" : "List known models matching this name" , @any
+  | "--list-models=" : "List known models matching this name" ~ @any
+  | "--model-settings-file" : "Model settings for unknown models" , @file | "--model-settings-file=" : "Model settings for unknown models" ~ @file
+  | "--model-metadata-file" : "Context window and costs for unknown models" , @file | "--model-metadata-file=" : "Context window and costs for unknown models" ~ @file
+  | "--alias" : "Add a model alias, ALIAS:MODEL" , @any | "--alias=" : "Add a model alias, ALIAS:MODEL" ~ @any
+  | "--reasoning-effort" : "Set the reasoning_effort API parameter" , @any | "--reasoning-effort=" : "Set the reasoning_effort API parameter" ~ @any
+  | "--thinking-tokens" : "Thinking token budget, 0 disables" , @any | "--thinking-tokens=" : "Thinking token budget, 0 disables" ~ @any
+  | "--verify-ssl" : "Verify the SSL cert of model endpoints" | "--no-verify-ssl" : "Do not verify the SSL cert of model endpoints"
+  | "--timeout" : "Timeout in seconds for API calls" , @any | "--timeout=" : "Timeout in seconds for API calls" ~ @any
+  | "--edit-format" : "Edit format the LLM should use" , edit_format | "--chat-mode" : "Edit format the LLM should use" , edit_format
+  | "--edit-format=" : "Edit format the LLM should use" ~ edit_format | "--chat-mode=" : "Edit format the LLM should use" ~ edit_format
+  | "--architect" : "Use the architect edit format for the main chat"
+  | "--auto-accept-architect" : "Accept architect changes automatically" | "--no-auto-accept-architect" : "Ask before accepting architect changes"
+  | "--weak-model" : "Model for commit messages and summaries" , @any | "--weak-model=" : "Model for commit messages and summaries" ~ @any
+  | "--editor-model" : "Model for editor tasks" , @any | "--editor-model=" : "Model for editor tasks" ~ @any
+  | "--editor-edit-format" : "Edit format for the editor model" , edit_format | "--editor-edit-format=" : "Edit format for the editor model" ~ edit_format
+  | "--show-model-warnings" : "Warn about models without metadata" | "--no-show-model-warnings" : "Do not warn about models without metadata"
+  | "--check-model-accepts-settings" : "Check that the model accepts the settings"
+  | "--no-check-model-accepts-settings" : "Do not check that the model accepts the settings"
+  | "--max-chat-history-tokens" : "Soft token limit before summarizing history" , @number
+  | "--max-chat-history-tokens=" : "Soft token limit before summarizing history" ~ @number
+
+  (* Cache and repo map. *)
+  | "--cache-prompts" : "Enable caching of prompts" | "--no-cache-prompts" : "Disable caching of prompts"
+  | "--cache-keepalive-pings" : "Pings every 5 minutes to keep the cache warm" , @number
+  | "--cache-keepalive-pings=" : "Pings every 5 minutes to keep the cache warm" ~ @number
+  | "--map-tokens" : "Tokens for the repo map, 0 disables" , @number | "--map-tokens=" : "Tokens for the repo map, 0 disables" ~ @number
+  | "--map-refresh" : "How often the repo map is refreshed" , map_refresh | "--map-refresh=" : "How often the repo map is refreshed" ~ map_refresh
+  | "--map-multiplier-no-files" : "Map token multiplier when no files are given" , @any
+  | "--map-multiplier-no-files=" : "Map token multiplier when no files are given" ~ @any
+
+  (* History files. *)
+  | "--input-history-file" : "The chat input history file" , @file | "--input-history-file=" : "The chat input history file" ~ @file
+  | "--chat-history-file" : "The chat history file" , @file | "--chat-history-file=" : "The chat history file" ~ @file
+  | "--restore-chat-history" : "Restore the previous chat history" | "--no-restore-chat-history" : "Do not restore the previous chat history"
+  | "--llm-history-file" : "Log the conversation with the LLM to this file" , @file | "--llm-history-file=" : "Log the conversation with the LLM to this file" ~ @file
+
+  (* Output. *)
+  | "--dark-mode" : "Colors for a dark terminal background"
+  | "--light-mode" : "Colors for a light terminal background"
+  | "--pretty" : "Pretty, colorized output" | "--no-pretty" : "Plain output"
+  | "--stream" : "Stream responses" | "--no-stream" : "Do not stream responses"
+  | "--user-input-color" : "Color for user input" , @any | "--user-input-color=" : "Color for user input" ~ @any
+  | "--tool-output-color" : "Color for tool output" , @any | "--tool-output-color=" : "Color for tool output" ~ @any
+  | "--tool-error-color" : "Color for tool error messages" , @any | "--tool-error-color=" : "Color for tool error messages" ~ @any
+  | "--tool-warning-color" : "Color for tool warning messages" , @any | "--tool-warning-color=" : "Color for tool warning messages" ~ @any
+  | "--assistant-output-color" : "Color for assistant output" , @any | "--assistant-output-color=" : "Color for assistant output" ~ @any
+  | "--completion-menu-color" : "Color for the completion menu" , @any
+  | "--completion-menu-bg-color" : "Background color for the completion menu" , @any
+  | "--completion-menu-current-color" : "Color for the current completion item" , @any
+  | "--completion-menu-current-bg-color" : "Background color for the current completion item" , @any
+  | "--code-theme" : "Markdown code theme, such as monokai" , @any | "--code-theme=" : "Markdown code theme, such as monokai" ~ @any
+  | "--show-diffs" : "Show diffs when committing changes"
+
+  (* Git. *)
+  | "--git" : "Look for a git repo" | "--no-git" : "Do not look for a git repo"
+  | "--gitignore" : "Add .aider* to .gitignore" | "--no-gitignore" : "Do not add .aider* to .gitignore"
+  | "--add-gitignore-files" : "Allow editing files listed in .gitignore" | "--no-add-gitignore-files" : "Keep .gitignore files out of scope"
+  | "--aiderignore" : "The aider ignore file" , @file | "--aiderignore=" : "The aider ignore file" ~ @file
+  | "--subtree-only" : "Only consider files in the current subtree"
+  | "--auto-commits" : "Commit LLM changes automatically" | "--no-auto-commits" : "Do not commit LLM changes automatically"
+  | "--dirty-commits" : "Commit when the repo is dirty" | "--no-dirty-commits" : "Do not commit when the repo is dirty"
+  | "--attribute-author" : "Credit aider in the git author name" | "--no-attribute-author" : "Do not credit aider in the author name"
+  | "--attribute-committer" : "Credit aider in the git committer name" | "--no-attribute-committer" : "Do not credit aider in the committer name"
+  | "--attribute-commit-message-author" : "Prefix messages of aider changes with aider:"
+  | "--no-attribute-commit-message-author" : "Do not prefix messages of aider changes"
+  | "--attribute-commit-message-committer" : "Prefix all commit messages with aider:"
+  | "--no-attribute-commit-message-committer" : "Do not prefix all commit messages"
+  | "--attribute-co-authored-by" : "Credit aider with a Co-authored-by trailer" | "--no-attribute-co-authored-by" : "No Co-authored-by trailer"
+  | "--git-commit-verify" : "Run git pre-commit hooks" | "--no-git-commit-verify" : "Skip git pre-commit hooks"
+  | "--commit" : "Commit all pending changes, then exit"
+  | "--commit-prompt" : "Custom prompt for commit messages" , @any | "--commit-prompt=" : "Custom prompt for commit messages" ~ @any
+  | "--dry-run" : "Do not modify files" | "--no-dry-run" : "Modify files"
+  | "--skip-sanity-check-repo" : "Skip the sanity check of the git repository"
+  | "--watch-files" : "Watch files for AI coding comments" | "--no-watch-files" : "Do not watch files for AI comments"
+
+  (* Fixing and committing. *)
+  | "--lint" : "Lint and fix the given or dirty files"
+  | "--lint-cmd" : "Lint command per language, such as python: flake8" , @any | "--lint-cmd=" : "Lint command per language" ~ @any
+  | "--auto-lint" : "Lint after changes" | "--no-auto-lint" : "Do not lint after changes"
+  | "--test-cmd" : "Command to run the tests" , @any | "--test-cmd=" : "Command to run the tests" ~ @any
+  | "--auto-test" : "Run the tests after changes" | "--no-auto-test" : "Do not run the tests after changes"
+  | "--test" : "Run the tests, fix problems, then exit"
+
+  (* Analytics and upgrades. *)
+  | "--analytics" : "Enable analytics for this session" | "--no-analytics" : "Disable analytics for this session"
+  | "--analytics-log" : "Log analytics events to this file" , @file | "--analytics-log=" : "Log analytics events to this file" ~ @file
+  | "--analytics-disable" : "Permanently disable analytics"
+  | "--analytics-posthog-host" : "Custom PostHog instance" , @any
+  | "--analytics-posthog-project-api-key" : "Custom PostHog project" , @any
+  | "--just-check-update" : "Check for updates; status in the exit code"
+  | "--check-update" : "Check for new versions on launch" | "--no-check-update" : "Do not check for new versions"
+  | "--show-release-notes" : "Show release notes of a new version" | "--no-show-release-notes" : "Do not show release notes"
+  | "--install-main-branch" : "Install the latest version from main"
+  | "--upgrade" : "Upgrade aider from PyPI" | "--update" : "Upgrade aider from PyPI"
+
+  (* Modes. *)
+  | "-m" : "Send one message, process the reply, then exit" , @any | "--message" : "Send one message, process the reply, then exit" , @any
+  | "--msg" : "Send one message, process the reply, then exit" , @any
+  | "--message=" : "Send one message, process the reply, then exit" ~ @any | "--msg=" : "Send one message, process the reply, then exit" ~ @any
+  | "-f" : "Send the message in this file, then exit" , @file | "--message-file" : "Send the message in this file, then exit" , @file
+  | "--message-file=" : "Send the message in this file, then exit" ~ @file
+  | "--gui" : "Run aider in your browser" | "--browser" : "Run aider in your browser"
+  | "--no-gui" : "Do not run aider in the browser" | "--no-browser" : "Do not run aider in the browser"
+  | "--copy-paste" : "Copy and paste chat with a web UI" | "--no-copy-paste" : "No copy and paste with a web UI"
+  | "--apply" : "Apply the changes in this file, then exit" , @file | "--apply=" : "Apply the changes in this file, then exit" ~ @file
+  | "--apply-clipboard-edits" : "Apply clipboard contents as edits"
+  | "--exit" : "Do the startup work, then exit"
+  | "--show-repo-map" : "Print the repo map and exit"
+  | "--show-prompts" : "Print the system prompts and exit"
+
+  (* Voice. *)
+  | "--voice-format" : "Audio format for voice recording" , voice_format | "--voice-format=" : "Audio format for voice recording" ~ voice_format
+  | "--voice-language" : "Voice language as an ISO 639-1 code" , @any | "--voice-language=" : "Voice language as an ISO 639-1 code" ~ @any
+  | "--voice-input-device" : "Input device for voice recording" , @any | "--voice-input-device=" : "Input device for voice recording" ~ @any
+
+  (* Other settings. *)
+  | "--disable-playwright" : "Never install Playwright for web scraping"
+  | "--file" : "A file to edit" , @file | "--file=" : "A file to edit" ~ @file
+  | "--read" : "A read-only file" , @file | "--read=" : "A read-only file" ~ @file
+  | "--vim" : "Use VI editing mode"
+  | "--chat-language" : "Language of the chat" , @any | "--chat-language=" : "Language of the chat" ~ @any
+  | "--commit-language" : "Language of commit messages" , @any | "--commit-language=" : "Language of commit messages" ~ @any
+  | "--yes-always" : "Always say yes to every confirmation"
+  | "-v" : "Enable verbose output" | "--verbose" : "Enable verbose output"
+  | "--load" : "Run the /commands in this file on launch" , @file | "--load=" : "Run the /commands in this file on launch" ~ @file
+  | "--encoding" : "Encoding for input and output" , @any | "--encoding=" : "Encoding for input and output" ~ @any
+  | "--line-endings" : "Line endings for written files" , line_endings | "--line-endings=" : "Line endings for written files" ~ line_endings
+  | "-c" : "The config file" , @file | "--config" : "The config file" , @file | "--config=" : "The config file" ~ @file
+  | "--env-file" : "The .env file to load" , @file | "--env-file=" : "The .env file to load" ~ @file
+  | "--suggest-shell-commands" : "Suggest shell commands" | "--no-suggest-shell-commands" : "Do not suggest shell commands"
+  | "--fancy-input" : "Input with history and completion" | "--no-fancy-input" : "Plain input"
+  | "--multiline" : "Multi-line input, Meta-Enter submits" | "--no-multiline" : "Single-line input"
+  | "--notifications" : "Ring the bell when a response is ready" | "--no-notifications" : "No bell when a response is ready"
+  | "--notifications-command" : "Command to run instead of the bell" , @any | "--notifications-command=" : "Command to run instead of the bell" ~ @any
+  | "--detect-urls" : "Offer to add URLs to the chat" | "--no-detect-urls" : "Do not offer to add URLs"
+  | "--editor" : "Editor for the /editor command" , @any | "--editor=" : "Editor for the /editor command" ~ @any
+  | "--shell-completions" : "Print the completion script for this shell" , shell | "--shell-completions=" : "Print the completion script for this shell" ~ shell ;

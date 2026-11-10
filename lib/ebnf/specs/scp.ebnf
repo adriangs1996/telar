@@ -1,0 +1,35 @@
+(* scp: OpenSSH scp, checked against `man scp` of OpenSSH 10.3p1 (macOS) and
+   10.6p1 (Arch Linux), which document the same options. Sources and the target
+   are local paths, [user@]host:[path] or scp://[user@]host[:port][/path]; local
+   files and SSH hosts are offered. *)
+
+scp = { option | @file | @ssh_host } , [ "--" , { @file | @ssh_host } ] ;
+
+option =
+    "-3" : "Copy between two remote hosts through the local host"
+  | "-4" : "Use IPv4 addresses only"
+  | "-6" : "Use IPv6 addresses only"
+  | "-A" : "Forward the authentication agent"
+  | "-B" : "Batch mode: never ask for passwords"
+  | "-C" : "Enable compression"
+  | "-c" : "Cipher to use, passed to ssh" , @any
+  | "-D" : "Connect to this local SFTP server program instead" , @file
+  | "-F" : "Use this ssh configuration file" , @file
+  | "-i" : "Identity (private key) file" , @file
+  | "-J" : "Connect through these jump hosts, comma separated" , @ssh_host
+  | "-l" : "Limit the bandwidth, in Kbit/s" , @number
+  | "-O" : "Use the legacy SCP protocol instead of SFTP"
+  | "-o" : "Pass an ssh option, Option=value" , @any
+  | "-P" : "Port on the remote host" , @number
+  | "-p" : "Preserve modification and access times and modes"
+  | "-q" : "Quiet: no progress meter or ssh warnings"
+  | "-R" : "Copy between remote hosts directly from the origin host"
+  | "-r" : "Copy directories recursively"
+  | "-S" : "Program to use for the encrypted connection" , @command
+  | "-T" : "Disable strict file name checking"
+  | "-v" : "Verbose mode"
+  | "-X" : "SFTP option" , sftp_option ;
+
+sftp_option =
+    "nrequests=" : "Concurrent SFTP requests (default 64)" ~ @number
+  | "buffer=" : "SFTP buffer size per request (default 32KB)" ~ @any ;

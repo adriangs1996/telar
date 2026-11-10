@@ -174,6 +174,8 @@ inline constexpr std::array client_requests{
     NamedValue{.name = "complete_clipboard_desktop", .value = static_cast<std::uint64_t>(ClientTag::complete_clipboard_desktop)},
     NamedValue{.name = "paste_pane_clipboard", .value = static_cast<std::uint64_t>(ClientTag::paste_pane_clipboard)},
     NamedValue{.name = "read_runtime_clipboard", .value = static_cast<std::uint64_t>(ClientTag::read_runtime_clipboard)},
+    NamedValue{.name = "complete_words", .value = static_cast<std::uint64_t>(ClientTag::complete_words)},
+    NamedValue{.name = "request_command_spec", .value = static_cast<std::uint64_t>(ClientTag::request_command_spec)},
 };
 
 inline constexpr std::array server_messages{
@@ -232,6 +234,11 @@ inline constexpr std::array server_messages{
     NamedValue{.name = "clipboard_desktop_cancel", .value = static_cast<std::uint64_t>(ServerTag::clipboard_desktop_cancel)},
     NamedValue{.name = "runtime_clipboard_chunk", .value = static_cast<std::uint64_t>(ServerTag::runtime_clipboard_chunk)},
     NamedValue{.name = "pane_list", .value = static_cast<std::uint64_t>(ServerTag::pane_list)},
+    NamedValue{.name = "pane_shell", .value = static_cast<std::uint64_t>(ServerTag::pane_shell)},
+    NamedValue{.name = "pane_git", .value = static_cast<std::uint64_t>(ServerTag::pane_git)},
+    NamedValue{.name = "completion_words", .value = static_cast<std::uint64_t>(ServerTag::completion_words)},
+    NamedValue{.name = "pane_blocks", .value = static_cast<std::uint64_t>(ServerTag::pane_blocks)},
+    NamedValue{.name = "command_spec", .value = static_cast<std::uint64_t>(ServerTag::command_spec)},
 };
 
 inline constexpr std::array agent_statuses{

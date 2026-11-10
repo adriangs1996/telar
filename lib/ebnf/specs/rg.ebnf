@@ -1,0 +1,219 @@
+(* rg: ripgrep 15.2.0, checked against `rg --help` on macOS 26 and Arch Linux
+   (identical). The first operand is the pattern unless -e or -f gives one; the
+   rest are paths. After `--` the pattern may start with a dash. Deprecated and
+   debug-only flags are left out. *)
+
+rg = { option | @file } , [ "--" , { @any } ] ;
+
+option =
+    (* Input *)
+    "-e" : "A pattern to search for" , @any
+  | "--regexp" : "A pattern to search for" , @any | "--regexp=" : "A pattern to search for" ~ @any
+  | "-f" : "Search for the patterns in this file" , @file
+  | "--file" : "Search for the patterns in this file" , @file | "--file=" : "Search for the patterns in this file" ~ @file
+  | "--pre" : "Search the output of this command for each path" , @command
+  | "--pre=" : "Search the output of this command for each path" ~ @command
+  | "--no-pre" : "Do not use a preprocessor"
+  | "--pre-glob" : "Run the preprocessor only on files matching this glob" , @any
+  | "--pre-glob=" : "Run the preprocessor only on files matching this glob" ~ @any
+  | "-z" : "Search in compressed files" | "--search-zip" : "Search in compressed files"
+  | "--no-search-zip" : "Do not search in compressed files"
+    (* Search *)
+  | "-s" : "Search case sensitively" | "--case-sensitive" : "Search case sensitively"
+  | "--crlf" : "Use CRLF line terminators" | "--no-crlf" : "Do not use CRLF line terminators"
+  | "--dfa-size-limit" : "Upper size limit of the regex DFA" , @any
+  | "--dfa-size-limit=" : "Upper size limit of the regex DFA" ~ @any
+  | "-E" : "Text encoding of the files to search" , @any
+  | "--encoding" : "Text encoding of the files to search" , @any
+  | "--encoding=" : "Text encoding of the files to search" ~ @any
+  | "--no-encoding" : "Detect the text encoding automatically"
+  | "--engine" : "Regex engine to use" , engine | "--engine=" : "Regex engine to use" ~ engine
+  | "-F" : "Treat all patterns as literals" | "--fixed-strings" : "Treat all patterns as literals"
+  | "--no-fixed-strings" : "Treat patterns as regular expressions"
+  | "-i" : "Search case insensitively" | "--ignore-case" : "Search case insensitively"
+  | "-v" : "Print lines that do not match" | "--invert-match" : "Print lines that do not match"
+  | "--no-invert-match" : "Print lines that match"
+  | "-x" : "Match whole lines only" | "--line-regexp" : "Match whole lines only"
+  | "-m" : "Limit the number of matching lines per file" , @number
+  | "--max-count" : "Limit the number of matching lines per file" , @number
+  | "--max-count=" : "Limit the number of matching lines per file" ~ @number
+  | "--mmap" : "Search with memory maps when possible" | "--no-mmap" : "Never search with memory maps"
+  | "-U" : "Search across multiple lines" | "--multiline" : "Search across multiple lines"
+  | "--no-multiline" : "Search one line at a time"
+  | "--multiline-dotall" : "Make . match line terminators" | "--no-multiline-dotall" : "Do not make . match line terminators"
+  | "--no-unicode" : "Disable Unicode mode" | "--unicode" : "Enable Unicode mode"
+  | "--null-data" : "Use NUL as the line terminator"
+  | "-P" : "Use PCRE2 regexes" | "--pcre2" : "Use PCRE2 regexes" | "--no-pcre2" : "Do not use PCRE2 regexes"
+  | "--regex-size-limit" : "Size limit of the compiled regex" , @any
+  | "--regex-size-limit=" : "Size limit of the compiled regex" ~ @any
+  | "-S" : "Search case insensitively if the pattern is all lowercase" | "--smart-case" : "Search case insensitively if the pattern is all lowercase"
+  | "--stop-on-nonmatch" : "Stop searching a file after a non-match"
+  | "-a" : "Search binary files as if they were text" | "--text" : "Search binary files as if they were text"
+  | "--no-text" : "Do not search binary files as text"
+  | "-j" : "Approximate number of threads to use" , @number
+  | "--threads" : "Approximate number of threads to use" , @number
+  | "--threads=" : "Approximate number of threads to use" ~ @number
+  | "-w" : "Match whole words only" | "--word-regexp" : "Match whole words only"
+    (* Filter *)
+  | "--binary" : "Search binary files" | "--no-binary" : "Do not search binary files"
+  | "-L" : "Follow symbolic links" | "--follow" : "Follow symbolic links" | "--no-follow" : "Do not follow symbolic links"
+  | "-g" : "Include or exclude paths matching this glob" , @any
+  | "--glob" : "Include or exclude paths matching this glob" , @any
+  | "--glob=" : "Include or exclude paths matching this glob" ~ @any
+  | "--glob-case-insensitive" : "Match all globs case insensitively"
+  | "--no-glob-case-insensitive" : "Match globs case sensitively"
+  | "-." : "Search hidden files and directories" | "--hidden" : "Search hidden files and directories"
+  | "--no-hidden" : "Skip hidden files and directories"
+  | "--iglob" : "Include or exclude paths matching this glob, ignoring case" , @any
+  | "--iglob=" : "Include or exclude paths matching this glob, ignoring case" ~ @any
+  | "--ignore-file" : "Use this additional ignore file" , @file
+  | "--ignore-file=" : "Use this additional ignore file" ~ @file
+  | "--ignore-file-case-insensitive" : "Match ignore files case insensitively"
+  | "--no-ignore-file-case-insensitive" : "Match ignore files case sensitively"
+  | "-d" : "Descend at most this many directories" , @number
+  | "--max-depth" : "Descend at most this many directories" , @number
+  | "--max-depth=" : "Descend at most this many directories" ~ @number
+  | "--max-filesize" : "Skip files larger than this size, as 50K or 80M" , @any
+  | "--max-filesize=" : "Skip files larger than this size, as 50K or 80M" ~ @any
+  | "--no-ignore" : "Do not use ignore files" | "--ignore" : "Use ignore files"
+  | "--no-ignore-dot" : "Do not use .ignore or .rgignore files"
+  | "--no-ignore-exclude" : "Do not use local exclusion files"
+  | "--no-ignore-files" : "Do not use --ignore-file arguments"
+  | "--no-ignore-global" : "Do not use global ignore files"
+  | "--no-ignore-parent" : "Do not use ignore files in parent directories"
+  | "--no-ignore-vcs" : "Do not use ignore files from source control"
+  | "--no-require-git" : "Use .gitignore outside of git repositories"
+  | "--one-file-system" : "Skip directories on other file systems"
+  | "--no-one-file-system" : "Cross file system boundaries"
+  | "-t" : "Only search files of this type" , file_type
+  | "--type" : "Only search files of this type" , file_type
+  | "--type=" : "Only search files of this type" ~ file_type
+  | "-T" : "Do not search files of this type" , file_type
+  | "--type-not" : "Do not search files of this type" , file_type
+  | "--type-not=" : "Do not search files of this type" ~ file_type
+  | "--type-add" : "Add a glob to a file type, as name:glob" , @any
+  | "--type-add=" : "Add a glob to a file type, as name:glob" ~ @any
+  | "--type-clear" : "Clear the globs of a file type" , file_type
+  | "--type-clear=" : "Clear the globs of a file type" ~ file_type
+  | "-u" : "Reduce filtering; repeat up to 3 times" | "--unrestricted" : "Reduce filtering; repeat up to 3 times"
+    (* Output *)
+  | "-A" : "Show this many lines after each match" , @number
+  | "--after-context" : "Show this many lines after each match" , @number
+  | "--after-context=" : "Show this many lines after each match" ~ @number
+  | "-B" : "Show this many lines before each match" , @number
+  | "--before-context" : "Show this many lines before each match" , @number
+  | "--before-context=" : "Show this many lines before each match" ~ @number
+  | "-C" : "Show this many lines before and after each match" , @number
+  | "--context" : "Show this many lines before and after each match" , @number
+  | "--context=" : "Show this many lines before and after each match" ~ @number
+  | "--block-buffered" : "Force block buffering" | "--no-block-buffered" : "Do not force block buffering"
+  | "-b" : "Print the byte offset of each matching line" | "--byte-offset" : "Print the byte offset of each matching line"
+  | "--no-byte-offset" : "Do not print byte offsets"
+  | "--color" : "When to use color" , color_when | "--color=" : "When to use color" ~ color_when
+  | "--colors" : "Color settings, as type:attribute:value" , @any
+  | "--colors=" : "Color settings, as type:attribute:value" ~ @any
+  | "--column" : "Show column numbers" | "--no-column" : "Do not show column numbers"
+  | "--context-separator" : "Separator between context chunks" , @any
+  | "--context-separator=" : "Separator between context chunks" ~ @any
+  | "--no-context-separator" : "Print no separator between context chunks"
+  | "--field-context-separator" : "Field separator for context lines" , @any
+  | "--field-context-separator=" : "Field separator for context lines" ~ @any
+  | "--field-match-separator" : "Field separator for matching lines" , @any
+  | "--field-match-separator=" : "Field separator for matching lines" ~ @any
+  | "--heading" : "Group matches under each file name" | "--no-heading" : "Print the file name on every line"
+  | "-h" : "Print short help and exit" | "--help" : "Print the help and exit"
+  | "--hostname-bin" : "Program that prints this system's hostname" , @file
+  | "--hostname-bin=" : "Program that prints this system's hostname" ~ @file
+  | "--hyperlink-format" : "Format of hyperlinks, or an alias" , hyperlink_format
+  | "--hyperlink-format=" : "Format of hyperlinks, or an alias" ~ hyperlink_format
+  | "--include-zero" : "Include files with zero matches in summaries"
+  | "--no-include-zero" : "Leave out files with zero matches"
+  | "--line-buffered" : "Force line buffering" | "--no-line-buffered" : "Do not force line buffering"
+  | "-n" : "Show line numbers" | "--line-number" : "Show line numbers"
+  | "-N" : "Suppress line numbers" | "--no-line-number" : "Suppress line numbers"
+  | "-M" : "Omit lines longer than this many bytes" , @number
+  | "--max-columns" : "Omit lines longer than this many bytes" , @number
+  | "--max-columns=" : "Omit lines longer than this many bytes" ~ @number
+  | "--max-columns-preview" : "Show a preview of lines over the limit"
+  | "--no-max-columns-preview" : "Do not preview lines over the limit"
+  | "-0" : "Print a NUL byte after file paths" | "--null" : "Print a NUL byte after file paths"
+  | "-o" : "Print only the matched parts of lines" | "--only-matching" : "Print only the matched parts of lines"
+  | "--path-separator" : "Path separator for printing paths" , @any
+  | "--path-separator=" : "Path separator for printing paths" ~ @any
+  | "--passthru" : "Print both matching and non-matching lines"
+  | "-p" : "Colors, headings and line numbers" | "--pretty" : "Colors, headings and line numbers"
+  | "-q" : "Print nothing; exit status reports a match" | "--quiet" : "Print nothing; exit status reports a match"
+  | "-r" : "Replace every match with this text" , @any
+  | "--replace" : "Replace every match with this text" , @any
+  | "--replace=" : "Replace every match with this text" ~ @any
+  | "--sort" : "Sort the results in ascending order" , sort_key
+  | "--sort=" : "Sort the results in ascending order" ~ sort_key
+  | "--sortr" : "Sort the results in descending order" , sort_key
+  | "--sortr=" : "Sort the results in descending order" ~ sort_key
+  | "--trim" : "Trim leading whitespace from matches" | "--no-trim" : "Do not trim leading whitespace"
+  | "--vimgrep" : "Print results in a vim compatible format"
+  | "-H" : "Print the file path of each matching line" | "--with-filename" : "Print the file path of each matching line"
+  | "-I" : "Never print the file path with matches" | "--no-filename" : "Never print the file path with matches"
+    (* Output modes *)
+  | "-c" : "Count the matching lines of each file" | "--count" : "Count the matching lines of each file"
+  | "--count-matches" : "Count every match of each file"
+  | "-l" : "Print the paths with at least one match" | "--files-with-matches" : "Print the paths with at least one match"
+  | "--files-without-match" : "Print the paths with no match"
+  | "--json" : "Print results as JSON Lines" | "--no-json" : "Do not print results as JSON"
+    (* Logging *)
+  | "--debug" : "Show debug messages"
+  | "--trace" : "Show trace messages"
+  | "--no-ignore-messages" : "Suppress ignore file parse errors"
+  | "--no-messages" : "Suppress some error messages" | "--messages" : "Show error messages"
+  | "--stats" : "Print statistics about the search" | "--no-stats" : "Do not print statistics"
+    (* Other behaviors *)
+  | "--files" : "Print each file that would be searched"
+  | "--generate" : "Generate a man page or completion script" , generate_kind
+  | "--generate=" : "Generate a man page or completion script" ~ generate_kind
+  | "--no-config" : "Never read configuration files"
+  | "--pcre2-version" : "Print the PCRE2 version and exit"
+  | "--type-list" : "Print the supported file types and exit"
+  | "-V" : "Print the version and exit" | "--version" : "Print the version and exit" ;
+
+engine =
+    "default" : "The default engine, usually the fastest" | "pcre2" : "PCRE2, for look-around and backreferences"
+  | "auto" : "Pick an engine for each pattern" ;
+color_when =
+    "never" : "Never use colors" | "auto" : "Use colors on a terminal" | "always" : "Always use colors"
+  | "ansi" : "Always use ANSI escapes" ;
+sort_key =
+    "none" : "Do not sort" | "path" : "By file path" | "modified" : "By last modified time"
+  | "accessed" : "By last access time" | "created" : "By creation time" ;
+hyperlink_format =
+    "default" | "none" | "cursor" | "file" | "grep+" | "kitty" | "macvim" | "textmate" | "vscode"
+  | "vscode-insiders" | "vscodium" | @any : "A format such as file://{host}{path}" ;
+generate_kind =
+    "man" : "Man page in roff" | "complete-bash" : "Bash completion script" | "complete-zsh" : "Zsh completion script"
+  | "complete-fish" : "Fish completion script" | "complete-powershell" : "PowerShell completion script" ;
+
+(* The types `rg --type-list` prints, plus ones added with --type-add. *)
+file_type =
+    "ada" | "agda" | "aidl" | "alire" | "amake" | "asciidoc" | "asm" | "asp" | "ats" | "avro" | "awk"
+   | "bat" | "batch" | "bazel" | "bitbake" | "boxlang" | "brotli" | "buildstream" | "bzip2" | "c"
+   | "cabal" | "candid" | "carp" | "cbor" | "ceylon" | "cfml" | "clojure" | "cmake" | "cmd" | "cml"
+   | "coffeescript" | "config" | "container" | "coq" | "cpp" | "creole" | "crystal" | "cs" | "csharp"
+   | "cshtml" | "csproj" | "css" | "csv" | "cuda" | "cython" | "d" | "dart" | "devicetree" | "dhall"
+   | "diff" | "dita" | "docker" | "dockercompose" | "dts" | "dvc" | "ebuild" | "edn" | "elisp"
+   | "elixir" | "elm" | "erb" | "erlang" | "fennel" | "fidl" | "fish" | "flatbuffers" | "fortran"
+   | "fsharp" | "fut" | "gap" | "gdscript" | "gleam" | "gn" | "go" | "gprbuild" | "gradle" | "graphql"
+   | "groovy" | "gzip" | "h" | "haml" | "hare" | "haskell" | "hbs" | "hs" | "html" | "hurl" | "hy"
+   | "idris" | "janet" | "java" | "jinja" | "jl" | "js" | "json" | "jsonl" | "julia" | "jupyter" | "k"
+   | "kconfig" | "kotlin" | "lean" | "less" | "license" | "lilypond" | "lisp" | "llvm" | "lock" | "log"
+   | "lua" | "lz4" | "lzma" | "m4" | "make" | "mako" | "man" | "markdown" | "matlab" | "md" | "meson"
+   | "minified" | "mint" | "mk" | "ml" | "mojo" | "motoko" | "msbuild" | "nim" | "nix" | "objc"
+   | "objcpp" | "ocaml" | "org" | "pants" | "pascal" | "pdf" | "perl" | "php" | "pkgbuild" | "po"
+   | "pod" | "postscript" | "prolog" | "proto" | "protobuf" | "ps" | "puppet" | "purs" | "py"
+   | "python" | "qmake" | "qml" | "qrc" | "qui" | "r" | "racket" | "raku" | "rdoc" | "readme"
+   | "reasonml" | "red" | "rescript" | "robot" | "rocq" | "rst" | "ruby" | "rust" | "sass" | "scala"
+   | "scdoc" | "seed7" | "sh" | "slim" | "smarty" | "sml" | "solidity" | "soy" | "spark" | "spec"
+   | "sql" | "ssa" | "stylus" | "sv" | "svelte" | "svg" | "swift" | "swig" | "systemd" | "taskpaper"
+   | "tcl" | "tex" | "texinfo" | "textile" | "tf" | "thrift" | "toml" | "ts" | "twig" | "txt"
+   | "typescript" | "typoscript" | "typst" | "usd" | "v" | "vala" | "vb" | "vcl" | "verilog" | "vhdl"
+   | "vim" | "vimscript" | "vue" | "webidl" | "wgsl" | "wiki" | "xml" | "xz" | "yacc" | "yaml" | "yang"
+   | "z" | "zig" | "zsh" | "zstd"
+  | @any : "A type added with --type-add" ;

@@ -1,0 +1,210 @@
+(* terraform: every command `terraform -help` lists, checked against
+   `terraform -help <command>` of Terraform v1.15.8.
+
+   Conventions:
+   - Options take one dash, as the help prints them; Go's flag package also reads
+     `--name`, which is not modelled.
+   - Options with a value accept `-name value` and `-name=value`. Boolean options are
+     bare (`-upgrade`) or joined (`-lock=false`), never `-lock false`.
+   - -chdir takes its directory only joined, as terraform requires.
+   - Options stop at the first operand, as Go's flag package reads them, so operands
+     come last.
+   - Resource addresses, workspaces, outputs and providers have no provider yet: @any.
+   - stacks is a plugin with its own commands; its words are not checked. *)
+
+terraform = { global_option } , [ command ] ;
+
+global_option =
+    "-chdir=" : "Switch to this working directory first" ~ @directory
+  | "-help" : "Show the help of terraform or of the command"
+  | "-version" : "Show the current Terraform version" ;
+
+command =
+    "init" : "Prepare your working directory for other commands" , { init_option }
+  | "validate" : "Check whether the configuration is valid" , { validate_option }
+  | "plan" : "Show changes required by the current configuration" , { plan_option }
+  | "apply" : "Create or update infrastructure" , { apply_option } , [ @file ]
+  | "destroy" : "Destroy previously-created infrastructure" , { apply_option }
+  | "console" : "Try Terraform expressions at an interactive command prompt" , { console_option }
+  | "fmt" : "Reformat your configuration in the standard style" , { fmt_option } , { @file | "-" : "Read the configuration from stdin" }
+  | "force-unlock" : "Release a stuck lock on the current workspace" , [ "-force" : "Don't ask for input for unlock confirmation" ] , [ @any ]
+  | "get" : "Install or upgrade remote Terraform modules" , { get_option }
+  | "graph" : "Generate a Graphviz graph of the steps in an operation" , { graph_option }
+  | "import" : "Associate existing infrastructure with a Terraform resource" , { import_option } , [ @any , [ @any ] ]
+  | "login" : "Obtain and save credentials for a remote host" , [ @any ]
+  | "logout" : "Remove locally-stored credentials for a remote host" , [ @any ]
+  | "metadata" : "Metadata related commands" , [ "functions" : "Show signatures and descriptions of the available functions" , [ json ] ]
+  | "modules" : "Show all declared modules in a working directory" , { json | var }
+  | "output" : "Show output values from your root module" , { output_option } , [ @any ]
+  | "providers" : "Show the providers required for this configuration" , ( providers_command | { test_directory | var } , [ @directory ] )
+  | "query" : "Search and list remote infrastructure with Terraform" , { query_option }
+  | "refresh" : "Update the state to match remote systems" , { refresh_option }
+  | "show" : "Show the current state or a saved plan" , { no_color | json } , [ @file ]
+  | "stacks" : "Manage HCP Terraform stack operations" , { @any }
+  | "state" : "Advanced state management" , [ state_command ]
+  | "taint" : "Mark a resource instance as not fully functional" , { taint_option | var } , [ @any ]
+  | "test" : "Execute integration tests for Terraform modules" , { test_option }
+  | "untaint" : "Remove the 'tainted' state from a resource instance" , { taint_option } , [ @any ]
+  | "version" : "Show the current Terraform version" , [ json ]
+  | "workspace" : "Workspace management" , [ workspace_command ] ;
+
+(* Options several commands share. *)
+
+bool = "true" | "false" ;
+var =
+    "-var" : "Set an input variable, as NAME=VALUE" , @any | "-var=" : "Set an input variable, as NAME=VALUE" ~ @any
+  | "-var-file" : "Load input variable values from this file" , @file | "-var-file=" : "Load input variable values from this file" ~ @file ;
+no_color = "-no-color" : "Do not color the output" ;
+json = "-json" : "Print machine-readable JSON output" ;
+input =
+    "-input" : "Ask for input for variables if not directly set"
+  | "-input=" : "Whether to ask for input for variables not directly set" ~ bool ;
+lock =
+    "-lock" : "Hold a state lock during the operation"
+  | "-lock=" : "Whether to hold a state lock during the operation" ~ bool
+  | "-lock-timeout" : "Duration to retry a state lock" , @any | "-lock-timeout=" : "Duration to retry a state lock" ~ @any ;
+parallelism = "-parallelism" : "Limit the number of concurrent operations" , @number | "-parallelism=" : "Limit the number of concurrent operations" ~ @number ;
+compact_warnings = "-compact-warnings" : "Show warnings without errors in a compact form" ;
+ignore_remote_version = "-ignore-remote-version" : "Ignore incompatible local and remote Terraform versions" ;
+test_directory = "-test-directory" : "Set the Terraform test directory" , @directory | "-test-directory=" : "Set the Terraform test directory" ~ @directory ;
+state_path = "-state" : "Path to the state file (legacy local backend)" , @file | "-state=" : "Path to the state file (legacy local backend)" ~ @file ;
+backup = "-backup" : "Back up the existing state file to this path" , @file | "-backup=" : "Back up the existing state file to this path" ~ @file ;
+target = "-target" : "Limit the operation to this resource and its dependencies" , @any | "-target=" : "Limit the operation to this resource and its dependencies" ~ @any ;
+generate_config_out = "-generate-config-out" : "Write generated configuration to this new file" , @file | "-generate-config-out=" : "Write generated configuration to this new file" ~ @file ;
+auto_approve = "-auto-approve" : "Skip interactive approval" ;
+
+(* Plan customization, which plan, apply and destroy accept. *)
+plan_mode =
+    "-destroy" : "Plan to destroy all objects managed by this configuration"
+  | "-refresh-only" : "Only check whether remote objects match the state"
+  | "-refresh" : "Check for external changes to remote objects"
+  | "-refresh=" : "Whether to check for external changes to remote objects" ~ bool
+  | "-replace" : "Force replacement of this resource instance" , @any | "-replace=" : "Force replacement of this resource instance" ~ @any
+  | target | var ;
+
+init_option =
+    "-backend" : "Initialize the backend or HCP Terraform"
+  | "-backend=" : "Whether to initialize the backend or HCP Terraform" ~ bool
+  | "-backend-config" : "Backend configuration file or key=value to merge" , @any
+  | "-backend-config=" : "Backend configuration file or key=value to merge" ~ @any
+  | "-force-copy" : "Answer yes to the prompts about copying state data"
+  | "-from-module" : "Copy this module into the directory first" , @any | "-from-module=" : "Copy this module into the directory first" ~ @any
+  | "-get" : "Download the modules of this configuration" | "-get=" : "Whether to download the modules of this configuration" ~ bool
+  | input | lock | no_color | json
+  | "-plugin-dir" : "Directory of plugin binaries, overriding the search paths" , @directory
+  | "-plugin-dir=" : "Directory of plugin binaries, overriding the search paths" ~ @directory
+  | "-reconfigure" : "Reconfigure a backend, ignoring any saved configuration"
+  | "-migrate-state" : "Reconfigure a backend and migrate any existing state"
+  | "-upgrade" : "Install the latest allowed module and provider versions"
+  | "-lockfile" : "Dependency lockfile mode" , "readonly" | "-lockfile=" : "Dependency lockfile mode" ~ "readonly"
+  | ignore_remote_version | test_directory | var
+  | "-enable-pluggable-state-storage-experiment" : "Experimental: init with pluggable state storage"
+  | "-create-default-workspace" : "Experimental: create the default workspace"
+  | "-create-default-workspace=" : "Experimental: create the default workspace" ~ bool ;
+
+validate_option =
+    json | no_color
+  | "-no-tests" : "Do not validate test files"
+  | test_directory
+  | "-query" : "Also validate .tfquery.hcl files"
+  | var ;
+
+plan_option =
+    plan_mode | compact_warnings | input | lock | no_color | parallelism | state_path | generate_config_out
+  | "-detailed-exitcode" : "Exit 0 when there are no changes, 1 on errors, 2 with changes"
+  | "-out" : "Write the plan to this file" , @file | "-out=" : "Write the plan to this file" ~ @file ;
+
+apply_option =
+    plan_mode | auto_approve | backup | compact_warnings | lock | input | no_color | parallelism | state_path
+  | "-state-out" : "Legacy local backend: write the state to this file" , @file
+  | "-state-out=" : "Legacy local backend: write the state to this file" ~ @file ;
+
+console_option =
+    state_path
+  | "-plan" : "Evaluate expressions against a new plan's planned state"
+  | var ;
+
+fmt_option =
+    "-list" : "List files whose formatting differs" | "-list=" : "Whether to list files whose formatting differs" ~ bool
+  | "-write" : "Write the result to the source files" | "-write=" : "Whether to write the result to the source files" ~ bool
+  | "-diff" : "Display diffs of formatting changes"
+  | "-check" : "Check if the input is formatted, exiting nonzero if not"
+  | no_color
+  | "-recursive" : "Also process files in subdirectories" ;
+
+get_option =
+    "-update" : "Check downloaded modules for updates and install them"
+  | no_color | test_directory | var ;
+
+graph_option =
+    "-plan" : "Render the graph of this plan file" , @file | "-plan=" : "Render the graph of this plan file" ~ @file
+  | "-draw-cycles" : "Highlight any cycles in the graph"
+  | "-type" : "Type of operation graph to output" , graph_type | "-type=" : "Type of operation graph to output" ~ graph_type
+  | "-module-depth" : "Deprecated: depth of modules to show" , @number | "-module-depth=" : "Deprecated: depth of modules to show" ~ @number
+  | var ;
+graph_type = "plan" | "plan-refresh-only" | "plan-destroy" | "apply" ;
+
+import_option =
+    "-config" : "Directory of configuration that configures the provider" , @directory
+  | "-config=" : "Directory of configuration that configures the provider" ~ @directory
+  | input | lock | no_color | var | ignore_remote_version ;
+
+output_option =
+    state_path | no_color | json
+  | "-raw" : "Print a string value directly, without quoting" ;
+
+providers_command =
+    "lock" : "Write out dependency locks for the configured providers" , { providers_lock_option } , { @any }
+  | "mirror" : "Save local copies of all required provider plugins" , { providers_mirror_option } , [ @directory ]
+  | "schema" : "Show schemas for the providers used in the configuration" , { json | var } ;
+platform = "-platform" : "Target platform, as os_arch" , @any | "-platform=" : "Target platform, as os_arch" ~ @any ;
+providers_lock_option =
+    "-fs-mirror" : "Consult this filesystem mirror directory" , @directory | "-fs-mirror=" : "Consult this filesystem mirror directory" ~ @directory
+  | "-net-mirror" : "Consult this network mirror URL" , @any | "-net-mirror=" : "Consult this network mirror URL" ~ @any
+  | platform
+  | "-enable-plugin-cache" : "Use the globally configured plugin cache"
+  | test_directory | var ;
+providers_mirror_option =
+    platform
+  | "-lock-file" : "Use the provider lock file" | "-lock-file=" : "Whether to use the provider lock file" ~ bool
+  | var ;
+
+query_option = var | generate_config_out | json | no_color ;
+
+refresh_option = compact_warnings | input | lock | no_color | parallelism | target | var | state_path ;
+
+state_command =
+    "identities" : "List the identities of resources in the state" , { state_list_option | json } , { @any }
+  | "list" : "List resources in the state" , { state_list_option } , { @any }
+  | "mv" : "Move an item in the state" , { state_change_option } , [ @any , [ @any ] ]
+  | "pull" : "Pull current state and output to stdout" , { var }
+  | "push" : "Update remote state from a local state file" , { "-force" : "Write the state even if lineages don't match" | lock | var } , [ @file | "-" : "Read the state from stdin" ]
+  | "replace-provider" : "Replace provider in the state" , { auto_approve | lock | ignore_remote_version | var } , [ @any , [ @any ] ]
+  | "rm" : "Remove instances from the state" , { state_change_option | backup | state_path } , { @any }
+  | "show" : "Show a resource in the state" , { state_path } , [ @any ] ;
+state_list_option =
+    state_path
+  | "-id" : "Only instances whose id attribute equals this" , @any | "-id=" : "Only instances whose id attribute equals this" ~ @any ;
+state_change_option =
+    "-dry-run" : "Print what would change without changing anything"
+  | lock | ignore_remote_version | var ;
+
+taint_option =
+    "-allow-missing" : "Succeed even if the resource is missing"
+  | lock | ignore_remote_version ;
+
+test_option =
+    "-cloud-run" : "Run the tests remotely on HCP Terraform from this module" , @any
+  | "-cloud-run=" : "Run the tests remotely on HCP Terraform from this module" ~ @any
+  | "-filter" : "Only run this test file" , @file | "-filter=" : "Only run this test file" ~ @file
+  | json
+  | "-junit-xml" : "Save a JUnit XML test report to this file" , @file | "-junit-xml=" : "Save a JUnit XML test report to this file" ~ @file
+  | no_color | parallelism | var
+  | "-verbose" : "Print the plan or state of each run block" ;
+
+workspace_command =
+    "delete" : "Delete a workspace" , { "-force" : "Remove the workspace even if it manages resources" | lock } , [ @any ]
+  | "list" : "List Workspaces"
+  | "new" : "Create a new workspace" , { lock | "-state" : "Copy this state file into the new workspace" , @file | "-state=" : "Copy this state file into the new workspace" ~ @file } , [ @any ]
+  | "select" : "Select a workspace" , { "-or-create" : "Create the workspace if it doesn't exist" | "-or-create=" : "Whether to create the workspace if it doesn't exist" ~ bool } , [ @any ]
+  | "show" : "Show the name of the current workspace" ;

@@ -1,0 +1,68 @@
+(* ping: the union of iputils ping 20250605 (Arch Linux, `ping -h` and `man ping`)
+   and the BSD ping of macOS 26 (`man ping`). Where a flag means different things,
+   the description names both; where only one of them reads a value, both readings
+   are allowed. Operands are the destination (iputils also takes hops before it);
+   hosts from the SSH configuration are offered. *)
+
+ping = { option | @ssh_host } ;
+
+option =
+    "-3" : "Linux: do not round the RTT"
+  | "-4" : "Linux: use IPv4"
+  | "-6" : "Linux: use IPv6"
+  | "-A" : "Linux: adaptive ping; macOS: beep when a reply is missing"
+  | "-a" : "Audible ping: beep on each reply"
+  | "-B" : "Linux: do not change the source address"
+  | "-b" : "Linux: allow broadcast; macOS: bind to this interface" | "-b" : "Linux: allow broadcast; macOS: bind to this interface" , @any
+  | "-C" : "Linux: call connect() on the socket; macOS: avoid cellular"
+  | "-c" : "Stop after this many replies" , @number
+  | "-D" : "Linux: print timestamps; macOS: set the Don't Fragment bit"
+  | "-d" : "Set SO_DEBUG on the socket"
+  | "-e" : "Linux: identifier for the ping session" , @number
+  | "-F" : "Linux: IPv6 flow label" , @any
+  | "-f" : "Flood ping"
+  | "-G" : "macOS: largest payload of a sweeping ping" , @number
+  | "-g" : "macOS: smallest payload of a sweeping ping" , @number
+  | "-H" : "Linux: force reverse DNS resolution"
+  | "-h" : "Linux: print the help; macOS: sweep size increment" | "-h" : "Linux: print the help; macOS: sweep size increment" , @number
+  | "-I" : "Interface name or address to send from" , @any
+  | "-i" : "Seconds between packets" , @any
+  | "-K" : "macOS: network service type" , @any
+  | "-k" : "macOS: traffic class" , ( "BK_SYS" | "BK" | "BE" | "RD" | "OAM" | "AV" | "RV" | "VI" | "VO" | "CTL" )
+  | "-L" : "Suppress loopback of multicast packets"
+  | "-l" : "Send this many packets at once before normal pinging" , @number
+  | "-M" : "Linux: path MTU discovery; macOS: mask or timestamp request" , pmtu_or_request
+  | "-m" : "Linux: mark outgoing packets; macOS: IP time to live" , @number
+  | "-N" : "Linux: IPv6 node information query" , @any
+  | "-n" : "Numeric output, no reverse DNS"
+  | "-O" : "Linux: report outstanding replies"
+  | "-o" : "macOS: exit after one reply"
+  | "-P" : "macOS: IPsec policy" , @any
+  | "-p" : "Pad bytes to fill the packet, in hex" , @any
+  | "-Q" : "Linux: quality of service bits; macOS: hide ICMP errors" , @any | "-Q" : "Linux: quality of service bits; macOS: hide ICMP errors"
+  | "-q" : "Quiet: print only the summary"
+  | "-R" : "Record route"
+  | "-r" : "Bypass routing and send directly on the attached network"
+  | "-S" : "Linux: SO_SNDBUF size; macOS: source address" , @any
+  | "-s" : "Number of data bytes to send" , @number
+  | "-T" : "Linux: IP timestamp option; macOS: multicast time to live" , timestamp_or_ttl
+  | "-t" : "Linux: IP time to live; macOS: seconds before exiting" , @number
+  | "-U" : "Linux: print user-to-user latency"
+  | "-V" : "Linux: print the version"
+  | "-v" : "Verbose output"
+  | "-W" : "Linux: seconds to wait for a reply; macOS: milliseconds" , @any
+  | "-w" : "Linux: seconds before exiting" , @number
+  | "-z" : "macOS: type of service" , @any
+  | "--apple-connect" : "macOS: connect the socket to the destination"
+  | "--apple-time" : "macOS: print the time each packet was received"
+  | "--apple-print-id" : "macOS: print the ICMP echo id"
+  | "--apple-print-req" : "macOS: print the ICMP echo request" ;
+
+pmtu_or_request =
+    "do" : "Set DF, reject packets too large" | "want" : "Discover PMTU, fragment large packets locally"
+  | "probe" : "Set DF and bypass PMTU checks" | "dont" : "Do not set DF"
+  | "mask" : "macOS: ICMP mask request" | "time" : "macOS: ICMP timestamp request" ;
+
+timestamp_or_ttl =
+    "tsonly" : "Timestamps only" | "tsandaddr" : "Timestamps and addresses"
+  | "tsprespec" : "Timestamps of prespecified hops" | @number : "macOS: time to live" ;

@@ -1,0 +1,159 @@
+(* gemini: Gemini CLI 0.67.0. Not installed where this spec was written: it follows the
+   yargs definitions of release v0.67.0 (packages/cli/src/config/config.ts and
+   packages/cli/src/commands in github.com/google-gemini/gemini-cli). The CLI changes fast:
+   options added later stay invalid until the spec is updated. Hidden testing options
+   (--fake-responses, --record-responses) are left out.
+
+   Conventions (the CLI uses yargs):
+   - Options with a value accept `--name value` and `--name=value`.
+   - -d, -h and -v are global: every subcommand takes them.
+   - The query is free text in any number of words, so the line after the first query
+     word accepts anything. *)
+
+gemini = { option } , [ command | @any , { option | @any } ] ;
+
+approval_mode =
+    "default" : "Prompt for approval"
+  | "auto_edit" : "Auto-approve edit tools"
+  | "yolo" : "Auto-approve all tools"
+  | "plan" : "Read-only mode" ;
+output_format = "text" | "json" | "stream-json" ;
+list_format = "text" | "json" ;
+
+global =
+    "-d" : "Run in debug mode" | "--debug" : "Run in debug mode"
+  | "-h" : "Show help" | "--help" : "Show help"
+  | "-v" : "Show version number" | "--version" : "Show version number" ;
+
+option =
+    global
+  | "-m" : "Model" , @any | "--model" : "Model" , @any | "--model=" : "Model" ~ @any
+  | "-p" : "Run headless with this prompt" , @any | "--prompt" : "Run headless with this prompt" , @any | "--prompt=" : "Run headless with this prompt" ~ @any
+  | "-i" : "Run this prompt, then continue interactively" , @any | "--prompt-interactive" : "Run this prompt, then continue interactively" , @any
+  | "--prompt-interactive=" : "Run this prompt, then continue interactively" ~ @any
+  | "--skip-trust" : "Trust the current workspace for this session"
+  | "-w" : "Start in a new git worktree" , [ @any ] | "--worktree" : "Start in a new git worktree" , [ @any ] | "--worktree=" : "Start in a new git worktree" ~ @any
+  | "-s" : "Run in a sandbox" | "--sandbox" : "Run in a sandbox"
+  | "-y" : "Automatically accept all actions (YOLO mode)" | "--yolo" : "Automatically accept all actions (YOLO mode)"
+  | "--approval-mode" : "Approval mode" , approval_mode | "--approval-mode=" : "Approval mode" ~ approval_mode
+  | "--policy" : "Additional policy files or directories" , @file | "--policy=" : "Additional policy files or directories" ~ @file
+  | "--admin-policy" : "Additional admin policy files or directories" , @file | "--admin-policy=" : "Additional admin policy files or directories" ~ @file
+  | "--acp" : "Start the agent in ACP mode"
+  | "--experimental-acp" : "Start in ACP mode (deprecated, use --acp)"
+  | "--allowed-mcp-server-names" : "Allowed MCP server names" , @any | "--allowed-mcp-server-names=" : "Allowed MCP server names" ~ @any
+  | "--allowed-tools" : "Tools allowed without confirmation (deprecated)" , @any | "--allowed-tools=" : "Tools allowed without confirmation (deprecated)" ~ @any
+  | "-e" : "Extensions to use" , @any | "--extensions" : "Extensions to use" , @any | "--extensions=" : "Extensions to use" ~ @any
+  | "-l" : "List all available extensions and exit" | "--list-extensions" : "List all available extensions and exit"
+  | "--list-models" : "List available Gemini models and exit"
+  | "-r" : "Resume a session: latest or an index" , [ resume ] | "--resume" : "Resume a session: latest or an index" , [ resume ]
+  | "--resume=" : "Resume a session: latest or an index" ~ resume
+  | "--session-file" : "Load a session from a JSON file" , @file | "--session-file=" : "Load a session from a JSON file" ~ @file
+  | "--session-id" : "Start a new session with this UUID" , @any | "--session-id=" : "Start a new session with this UUID" ~ @any
+  | "--list-sessions" : "List the sessions of this project and exit"
+  | "--delete-session" : "Delete a session by index" , @number | "--delete-session=" : "Delete a session by index" ~ @number
+  | "--include-directories" : "Additional workspace directories" , @directory | "--include-directories=" : "Additional workspace directories" ~ @directory
+  | "--screen-reader" : "Enable screen reader mode"
+  | "-o" : "Output format" , output_format | "--output-format" : "Output format" , output_format | "--output-format=" : "Output format" ~ output_format
+  | "--raw-output" : "Do not sanitize model output"
+  | "--accept-raw-output-risk" : "Suppress the --raw-output security warning" ;
+
+resume = "latest" : "The most recent session" | @number ;
+
+command =
+    "mcp" : "Manage MCP servers" , { global } , mcp_command
+  | ( "extensions" : "Manage Gemini CLI extensions" | "extension" : "Manage Gemini CLI extensions" ) , { global } , extensions_command
+  | ( "skills" : "Manage agent skills" | "skill" : "Manage agent skills" ) , { global } , skills_command
+  | ( "hooks" : "Manage Gemini CLI hooks" | "hook" : "Manage Gemini CLI hooks" ) , { global } , hooks_command
+  | "gemma" : "Manage local Gemma model routing" , { global } , gemma_command
+  | "models" : "Manage or list Gemini models" , { models_option } , [ "list" : "List available Gemini models" , { models_option } ] ;
+
+models_option = global | "-o" : "Output format" , list_format | "--output-format" : "Output format" , list_format | "--output-format=" : "Output format" ~ list_format ;
+
+(* mcp *)
+
+mcp_scope_name = "user" : "User settings" | "project" : "Project settings (default)" ;
+mcp_scope = "-s" : "Configuration scope" , mcp_scope_name | "--scope" : "Configuration scope" , mcp_scope_name | "--scope=" : "Configuration scope" ~ mcp_scope_name ;
+transport = "stdio" : "Local process (default)" | "sse" : "Server-sent events" | "http" : "Streamable HTTP" ;
+
+mcp_command =
+    "add" : "Add a server" , { mcp_add_option } , @any , { mcp_add_option } , ( @command | @any ) , { mcp_add_option | @any } , [ "--" , { @any } ]
+  | "remove" : "Remove a server" , { global | mcp_scope } , @any , { global | mcp_scope }
+  | "list" : "List all configured MCP servers" , { global }
+  | "enable" : "Enable an MCP server" , { global | "--session" : "Clear a session-only disable" } , @any , { global | "--session" : "Clear a session-only disable" }
+  | "disable" : "Disable an MCP server" , { global | "--session" : "Disable for the current session only" } , @any , { global | "--session" : "Disable for the current session only" } ;
+
+mcp_add_option =
+    global | mcp_scope
+  | "-t" : "Transport type" , transport | "--transport" : "Transport type" , transport | "--type" : "Transport type" , transport
+  | "--transport=" : "Transport type" ~ transport
+  | "-e" : "Set an environment variable, KEY=value" , @any | "--env" : "Set an environment variable, KEY=value" , @any
+  | "-H" : "Set an HTTP header for SSE and HTTP" , @any | "--header" : "Set an HTTP header for SSE and HTTP" , @any
+  | "--timeout" : "Connection timeout in milliseconds" , @number | "--timeout=" : "Connection timeout in milliseconds" ~ @number
+  | "--trust" : "Trust the server, bypassing tool confirmations"
+  | "--description" : "Description for the server" , @any | "--description=" : "Description for the server" ~ @any
+  | "--include-tools" : "Tools to include, comma separated" , @any , { @any }
+  | "--exclude-tools" : "Tools to exclude, comma separated" , @any , { @any } ;
+
+(* extensions *)
+
+consent = "--consent" : "Acknowledge the risks and skip the confirmation" ;
+setting_scope = "user" | "workspace" | "system" | "systemdefaults" | "session" ;
+extension_scope = "--scope" : "Settings scope" , setting_scope | "--scope=" : "Settings scope" ~ setting_scope ;
+template = "custom-commands" | "exclude-tools" | "hooks" | "mcp-server" | "policies" | "skills" | "themes-example" ;
+
+extensions_command =
+    "install" : "Install an extension from a git URL or local path" , { extension_install_option } , ( @directory | @any ) , { extension_install_option }
+  | "uninstall" : "Uninstall one or more extensions" , { global | "--all" : "Uninstall all installed extensions" | @any }
+  | "list" : "List installed extensions" , { models_option }
+  | "update" : "Update all extensions or a named one" , { global | "--all" : "Update all extensions" | @any }
+  | "disable" : "Disable an extension" , { global | extension_scope } , @any , { global | extension_scope }
+  | "enable" : "Enable an extension" , { global | extension_scope } , @any , { global | extension_scope }
+  | "link" : "Link an extension from a local path" , { global | consent } , @directory , { global | consent }
+  | "new" : "Create an extension from a boilerplate example" , { global } , @directory , { global } , [ template , { global } ]
+  | "validate" : "Validate an extension from a local path" , { global } , @directory , { global }
+  | "config" : "Configure extension settings" , { global | config_scope } , [ @any , { global | config_scope } , [ @any , { global | config_scope } ] ] ;
+
+config_scope = "--scope" : "Scope to set the setting in" , ( "user" | "workspace" ) | "--scope=" : "Scope to set the setting in" ~ ( "user" | "workspace" ) ;
+
+extension_install_option =
+    global | consent
+  | "--ref" : "The git ref to install from" , @any | "--ref=" : "The git ref to install from" ~ @any
+  | "--auto-update" : "Enable auto-update for this extension"
+  | "--pre-release" : "Enable pre-release versions"
+  | "--skip-settings" : "Skip configuring settings on install" ;
+
+(* skills *)
+
+skill_scope_name = "user" : "Global" | "workspace" : "This workspace" ;
+skill_scope = "--scope" : "Skill scope" , skill_scope_name | "--scope=" : "Skill scope" ~ skill_scope_name ;
+
+skills_command =
+    "list" : "List discovered agent skills" , { global | "--all" : "Include built-in skills" }
+  | "enable" : "Enable an agent skill" , { global } , @any , { global }
+  | "disable" : "Disable an agent skill" , { global | skill_scope | "-s" : "Skill scope" , skill_scope_name } , @any , { global | skill_scope | "-s" : "Skill scope" , skill_scope_name }
+  | "install" : "Install an agent skill from a git URL or local path" , { skill_install_option } , ( @directory | @any ) , { skill_install_option }
+  | "link" : "Link an agent skill from a local path" , { global | skill_scope | consent } , @directory , { global | skill_scope | consent }
+  | "uninstall" : "Uninstall an agent skill by name" , { global | skill_scope } , @any , { global | skill_scope } ;
+
+skill_install_option =
+    global | skill_scope | consent
+  | "--path" : "Sub-path within the repository" , @any | "--path=" : "Sub-path within the repository" ~ @any ;
+
+hooks_command = "migrate" : "Migrate hooks from Claude Code" , { global | "--from-claude" : "Migrate from Claude Code hooks" } ;
+
+(* gemma *)
+
+port = "--port" : "Port of the LiteRT server" , @number | "--port=" : "Port of the LiteRT server" ~ @number ;
+
+gemma_command =
+    "setup" : "Download and configure Gemma local routing" , { global | port
+      | "--skip-model" : "Skip the model download"
+      | "--start" : "Start the server after setup (default)" | "--no-start" : "Do not start the server after setup"
+      | "--force" : "Download the binary and model again"
+      | "--consent" : "Skip the consent prompt" }
+  | "start" : "Start the LiteRT-LM server" , { global | port }
+  | "stop" : "Stop the LiteRT-LM server" , { global | port }
+  | "status" : "Check Gemma local routing status" , { global | port }
+  | "logs" : "View the LiteRT-LM server logs" , { global
+      | "-n" : "Show the last N lines and exit" , @number | "--lines" : "Show the last N lines and exit" , @number
+      | "-f" : "Follow the log output" | "--follow" : "Follow the log output" } ;

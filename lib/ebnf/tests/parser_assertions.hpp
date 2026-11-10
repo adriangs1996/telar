@@ -63,6 +63,12 @@ namespace ebnf {
       return "Minus";
     case token_kind::Dot:
       return "Dot";
+    case token_kind::Dynamic:
+      return "Dynamic";
+    case token_kind::Colon:
+      return "Colon";
+    case token_kind::Tilde:
+      return "Tilde";
     case token_kind::End:
       return "End";
     }
@@ -92,6 +98,12 @@ namespace ebnf {
       return "Exception";
     case node_kind::Rule:
       return "Rule";
+    case node_kind::Dynamic:
+      return "Dynamic";
+    case node_kind::Description:
+      return "Description";
+    case node_kind::Glue:
+      return "Glue";
     }
 
     return "Unknown";

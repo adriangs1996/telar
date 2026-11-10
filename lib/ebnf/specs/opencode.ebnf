@@ -1,0 +1,191 @@
+(* opencode: opencode 1.18.30, checked against `opencode --help` and the --help of each
+   subcommand of that version. The CLI changes fast: this spec follows 1.18.30 and options
+   added later stay invalid until it is updated.
+
+   Conventions (the CLI uses yargs):
+   - Options with a value accept `--name value` and `--name=value`.
+   - Array options (`--cors`, `--file`, `--env`) take every word up to the next option.
+   - -h, -v, --print-logs, --log-level and --pure are global.
+   - The messages of `run` are free text: any words.
+   - The debugging tools under `debug` only model their names; their arguments are any
+     words. *)
+
+opencode = { root_option } , [ command | @directory , { root_option } ] ;
+
+log_level = "DEBUG" | "INFO" | "WARN" | "ERROR" ;
+
+global =
+    "-h" : "Show help" | "--help" : "Show help"
+  | "-v" : "Show version number" | "--version" : "Show version number"
+  | "--print-logs" : "Print logs to stderr"
+  | "--log-level" : "Log level" , log_level | "--log-level=" : "Log level" ~ log_level
+  | "--pure" : "Run without external plugins" ;
+
+server_option =
+    "--port" : "Port to listen on" , @number | "--port=" : "Port to listen on" ~ @number
+  | "--hostname" : "Hostname to listen on" , @any | "--hostname=" : "Hostname to listen on" ~ @any
+  | "--mdns" : "Enable mDNS service discovery"
+  | "--mdns-domain" : "Custom domain name for mDNS" , @any | "--mdns-domain=" : "Custom domain name for mDNS" ~ @any
+  | "--cors" : "Additional domains to allow for CORS" , @any , { @any } ;
+
+model = "-m" : "Model as provider/model" , @any | "--model" : "Model as provider/model" , @any | "--model=" : "Model as provider/model" ~ @any ;
+agent = "--agent" : "Agent to use" , @any | "--agent=" : "Agent to use" ~ @any ;
+session =
+    "-c" : "Continue the last session" | "--continue" : "Continue the last session"
+  | "-s" : "Session id to continue" , @any | "--session" : "Session id to continue" , @any | "--session=" : "Session id to continue" ~ @any
+  | "--fork" : "Fork the session when continuing" ;
+auto = "--auto" : "Auto-approve permissions not explicitly denied" ;
+mini =
+    "--mini" : "Start the minimal interactive interface"
+  | "--no-replay" : "Disable mini session history replay"
+  | "--replay-limit" : "Cap mini replay to the newest N messages" , @number | "--replay-limit=" : "Cap mini replay to the newest N messages" ~ @number ;
+basic_auth =
+    "-p" : "Basic auth password" , @any | "--password" : "Basic auth password" , @any | "--password=" : "Basic auth password" ~ @any
+  | "-u" : "Basic auth username" , @any | "--username" : "Basic auth username" , @any | "--username=" : "Basic auth username" ~ @any ;
+
+root_option =
+    global | server_option | model | agent | session | auto | mini
+  | "--prompt" : "Prompt to use" , @any | "--prompt=" : "Prompt to use" ~ @any ;
+
+command =
+    "completion" : "Generate shell completion script" , { global }
+  | "acp" : "Start the ACP (Agent Client Protocol) server" , { global | server_option
+      | "--cwd" : "Working directory" , @directory | "--cwd=" : "Working directory" ~ @directory }
+  | "mcp" : "Manage MCP servers" , { global } , mcp_command
+  | "attach" : "Attach to a running opencode server" , { attach_option } , @any , { attach_option }
+  | "run" : "Run opencode with a message" , { run_option | @any }
+  | "debug" : "Debugging and troubleshooting tools" , { global } , debug_command , { @any }
+  | ( "providers" : "Manage AI providers and credentials" | "auth" : "Manage AI providers and credentials" ) , { global } , providers_command
+  | "agent" : "Manage agents" , { global } , agent_command
+  | "upgrade" : "Upgrade opencode" , { upgrade_option } , [ @any , { upgrade_option } ]
+  | "uninstall" : "Uninstall opencode and remove its files" , { uninstall_option }
+  | "serve" : "Start a headless opencode server" , { global | server_option }
+  | "web" : "Start the server and open the web interface" , { global | server_option }
+  | "models" : "List all available models" , { models_option } , [ @any , { models_option } ]
+  | "stats" : "Show token usage and cost statistics" , { stats_option }
+  | "export" : "Export session data as JSON" , { export_option } , [ @any , { export_option } ]
+  | "import" : "Import session data from a JSON file or URL" , { global } , ( @file | @any ) , { global }
+  | "github" : "Manage the GitHub agent" , { global } , github_command
+  | "pr" : "Check out a GitHub PR branch, then run opencode" , { global } , @number , { global }
+  | "session" : "Manage sessions" , { global } , session_command
+  | ( "plugin" : "Install a plugin and update the config" | "plug" : "Install a plugin and update the config" ) , { plugin_option } , @any , { plugin_option }
+  | "db" : "Database tools" , { db_option } , [ "path" : "Print the database path" , { global } | @any , { db_option } ] ;
+
+mcp_command =
+    "add" : "Add an MCP server" , { mcp_add_option } , [ @any , { mcp_add_option } ]
+  | ( "list" : "List MCP servers and their status" | "ls" : "List MCP servers and their status" ) , { global }
+  | "auth" : "Authenticate with an OAuth MCP server" , { global } , [ ( "list" : "List OAuth-capable servers" | "ls" : "List OAuth-capable servers" | @any ) , { global } ]
+  | "logout" : "Remove an MCP server's OAuth credentials" , { global } , [ @any , { global } ]
+  | "debug" : "Debug the OAuth connection of a server" , { global } , @any , { global } ;
+
+mcp_add_option =
+    global
+  | "--url" : "URL of a remote MCP server" , @any | "--url=" : "URL of a remote MCP server" ~ @any
+  | "--env" : "Environment variables for a local server, KEY=VALUE" , @any , { @any }
+  | "--header" : "HTTP headers for a remote server, KEY=VALUE" , @any , { @any } ;
+
+attach_option =
+    global | session | basic_auth | mini
+  | "--dir" : "Directory to run in" , @directory | "--dir=" : "Directory to run in" ~ @directory ;
+
+run_format = "default" : "Formatted output" | "json" : "Raw JSON events" ;
+run_option =
+    global | session | model | agent | auto | basic_auth
+  | "--command" : "The command to run; the message holds its args" , @any | "--command=" : "The command to run; the message holds its args" ~ @any
+  | "--share" : "Share the session"
+  | "--format" : "Output format" , run_format | "--format=" : "Output format" ~ run_format
+  | "-f" : "Files to attach to the message" , @file , { @file } | "--file" : "Files to attach to the message" , @file , { @file }
+  | "--title" : "Title for the session" , [ @any ] | "--title=" : "Title for the session" ~ @any
+  | "--attach" : "Attach to a running server, such as http://localhost:4096" , @any | "--attach=" : "Attach to a running server" ~ @any
+  | "--dir" : "Directory to run in, remote when attaching" , @directory | "--dir=" : "Directory to run in, remote when attaching" ~ @directory
+  | "--port" : "Port for the local server" , [ @number ] | "--port=" : "Port for the local server" ~ @number
+  | "--variant" : "Model variant, such as high, max or minimal" , @any | "--variant=" : "Model variant, such as high, max or minimal" ~ @any
+  | "--thinking" : "Show thinking blocks"
+  | "-i" : "Run in direct interactive split-footer mode" | "--interactive" : "Run in direct interactive split-footer mode" ;
+
+debug_command =
+    "config" : "Show the resolved configuration"
+  | "lsp" : "LSP debugging utilities"
+  | "rg" : "Ripgrep debugging utilities"
+  | "file" : "File system debugging utilities"
+  | "scrap" : "List all known projects"
+  | "skill" : "List all available skills"
+  | "snapshot" : "Snapshot debugging utilities"
+  | "startup" : "Print startup timing"
+  | "agent" : "Show an agent's configuration"
+  | "v2" : "Debug the v2 catalog and built-in plugins"
+  | "info" : "Show debug information"
+  | "paths" : "Show global paths"
+  | "wait" : "Wait indefinitely" ;
+
+providers_command =
+    ( "list" : "List providers and credentials" | "ls" : "List providers and credentials" ) , { global }
+  | "login" : "Log in to a provider" , { providers_login_option } , [ @any , { providers_login_option } ]
+  | "logout" : "Log out from a configured provider" , { global } , [ @any , { global } ] ;
+
+providers_login_option =
+    global
+  | "-p" : "Provider id or name to log in to" , @any | "--provider" : "Provider id or name to log in to" , @any | "--provider=" : "Provider id or name to log in to" ~ @any
+  | "-m" : "Login method label" , @any | "--method" : "Login method label" , @any | "--method=" : "Login method label" ~ @any ;
+
+agent_mode = "all" | "primary" | "subagent" ;
+agent_command =
+    "create" : "Create a new agent" , { agent_create_option }
+  | "list" : "List all available agents" , { global } ;
+
+agent_create_option =
+    global | model
+  | "--path" : "Directory to generate the agent file in" , @directory | "--path=" : "Directory to generate the agent file in" ~ @directory
+  | "--description" : "What the agent should do" , @any | "--description=" : "What the agent should do" ~ @any
+  | "--mode" : "Agent mode" , agent_mode | "--mode=" : "Agent mode" ~ agent_mode
+  | "--permissions" : "Permissions to allow, comma separated" , @any | "--permissions=" : "Permissions to allow, comma separated" ~ @any
+  | "--tools" : "Permissions to allow, comma separated" , @any | "--tools=" : "Permissions to allow, comma separated" ~ @any ;
+
+install_method = "curl" | "npm" | "pnpm" | "bun" | "brew" | "choco" | "scoop" ;
+upgrade_option =
+    global
+  | "-m" : "Installation method" , install_method | "--method" : "Installation method" , install_method
+  | "--method=" : "Installation method" ~ install_method ;
+
+uninstall_option =
+    global
+  | "-c" : "Keep configuration files" | "--keep-config" : "Keep configuration files"
+  | "-d" : "Keep session data and snapshots" | "--keep-data" : "Keep session data and snapshots"
+  | "--dry-run" : "Show what would be removed"
+  | "-f" : "Skip confirmation prompts" | "--force" : "Skip confirmation prompts" ;
+
+models_option =
+    global
+  | "--verbose" : "Include metadata such as costs"
+  | "--refresh" : "Refresh the models cache from models.dev" ;
+
+stats_option =
+    global
+  | "--days" : "Stats for the last N days" , @number | "--days=" : "Stats for the last N days" ~ @number
+  | "--tools" : "Number of tools to show" , @number | "--tools=" : "Number of tools to show" ~ @number
+  | "--models" : "Show model statistics, optionally the top N" , [ @number ] | "--models=" : "Show the top N models" ~ @number
+  | "--project" : "Filter by project" , @any | "--project=" : "Filter by project" ~ @any ;
+
+export_option = global | "--sanitize" : "Redact sensitive transcript and file data" ;
+
+github_command =
+    "install" : "Install the GitHub agent" , { global }
+  | "run" : "Run the GitHub agent" , { global
+      | "--event" : "GitHub mock event to run the agent for" , @any | "--event=" : "GitHub mock event to run the agent for" ~ @any
+      | "--token" : "GitHub personal access token" , @any | "--token=" : "GitHub personal access token" ~ @any } ;
+
+session_format = "table" | "json" ;
+session_command =
+    "list" : "List sessions" , { global
+      | "-n" : "Limit to the N most recent sessions" , @number | "--max-count" : "Limit to the N most recent sessions" , @number
+      | "--max-count=" : "Limit to the N most recent sessions" ~ @number
+      | "--format" : "Output format" , session_format | "--format=" : "Output format" ~ session_format }
+  | "delete" : "Delete a session" , { global } , @any , { global } ;
+
+plugin_option =
+    global
+  | "-g" : "Install in the global config" | "--global" : "Install in the global config"
+  | "-f" : "Replace an existing plugin version" | "--force" : "Replace an existing plugin version" ;
+
+db_format = "json" | "tsv" ;
+db_option = global | "--format" : "Output format" , db_format | "--format=" : "Output format" ~ db_format ;

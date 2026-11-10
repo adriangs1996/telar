@@ -20,6 +20,8 @@ set(TELAR_GUI_BATCH_SIZE ${telar_gui_batch_default} CACHE STRING "Sources compil
 
 get_filename_component(TELAR_ROOT "../.." ABSOLUTE)
 add_subdirectory("${TELAR_ROOT}/lib/telar-config" "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
+add_subdirectory("${TELAR_ROOT}/lib/telar-shell" "${CMAKE_CURRENT_BINARY_DIR}/telar-shell")
+add_subdirectory("${TELAR_ROOT}/lib/ebnf" "${CMAKE_CURRENT_BINARY_DIR}/ebnf")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(Threads REQUIRED)
 
@@ -32,6 +34,7 @@ include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/box_curve.cpp platform/awake_clock.cpp platform/wall_clock.cpp)
 telar_modules(gui-core)
+target_link_libraries(gui-core PUBLIC telar::shell ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
 target_link_libraries(gui-core PUBLIC telar::config gui-harfbuzz)
 target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)
@@ -337,6 +340,16 @@ if(BUILD_TESTING)
   target_link_libraries(gui-suggestion-state-test PRIVATE gui-core gui-unicode)
   add_test(NAME gui-suggestion-state COMMAND gui-suggestion-state-test)
   add_dependencies(gui-lint gui-suggestion-state-test)
+
+  add_executable(gui-prompt-editor-test tests/prompt_editor_test.cpp)
+  target_link_libraries(gui-prompt-editor-test PRIVATE gui-core)
+  add_test(NAME gui-prompt-editor COMMAND gui-prompt-editor-test)
+  add_dependencies(gui-lint gui-prompt-editor-test)
+
+  add_executable(gui-prompt-session-test tests/prompt_session_test.cpp)
+  target_link_libraries(gui-prompt-session-test PRIVATE gui-core gui-test-fixtures)
+  add_test(NAME gui-prompt-session COMMAND gui-prompt-session-test)
+  add_dependencies(gui-lint gui-prompt-session-test)
 
   add_executable(gui-suggestion-session-test tests/suggestion_session_test.cpp)
   target_link_libraries(gui-suggestion-session-test PRIVATE gui-core gui-test-fixtures)
@@ -732,7 +745,7 @@ if(TELAR_GUI_NATIVE)
     target_compile_definitions(gui-quick PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1)
   endif()
 
-  target_sources(gui-quick PRIVATE qt/attachment_controller.cpp qt/plugin_controller.cpp)
+  target_sources(gui-quick PRIVATE qt/attachment_controller.cpp qt/plugin_controller.cpp qt/prompt_controller.cpp)
   target_sources(gui-quick PRIVATE qt/component_controller.cpp qt/pick_controller.cpp qt/element_controller.cpp qt/element_slots.cpp qt/element_slots.hpp)
   target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
   target_sources(gui-quick PRIVATE qt/history_controller.cpp qt/history_pointer.cpp qt/tab_drag_controller.cpp qt/binding_controller.cpp qt/key_bindings.cpp qt/copy_controller.cpp qt/link_controller.cpp)
@@ -810,8 +823,8 @@ if(TELAR_GUI_NATIVE)
     URI Telar.Gui
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
-    SOURCES qt/attachment_image.cpp qt/attachment_image.hpp qt/attachment_shelf.cpp qt/attachment_shelf.hpp qt/native_agent_status.cpp qt/native_agent_status.hpp qt/native_rounded_rectangle.cpp qt/native_rounded_rectangle.hpp qt/application.cpp qt/application.hpp qt/runtime_connection.cpp qt/runtime_connection.hpp qt/terminal_item.cpp qt/terminal_item.hpp qt/configuration_source.cpp qt/configuration_source.hpp qt/lua_host.cpp qt/lua_host.hpp qt/element_layout.cpp qt/element_layout.hpp qt/element_canvas.cpp qt/element_canvas.hpp qt/graphics_scene.cpp qt/graphics_scene.hpp qt/tab_strip_layout.cpp qt/tab_strip_layout.hpp qt/provider_mark.cpp qt/provider_mark.hpp qt/native_chrome_text.cpp qt/native_chrome_text.hpp qt/native_chrome_icon.cpp qt/native_chrome_icon.hpp qt/native_cell_text.cpp qt/native_cell_text.hpp qt/native_mode_layout.cpp qt/native_mode_layout.hpp
-    QML_FILES qt/ComponentFit.js qt/Elements.js qt/ElementNode.qml qt/ElementHost.qml qt/ComponentPick.qml qt/ComponentBranch.qml qt/ComponentNode.qml qt/ComponentTree.qml qt/ComponentOverflow.qml qt/ComponentSlot.qml qt/ComponentPanel.qml qt/AttachmentShelf.qml qt/AttachmentModal.qml qt/PeekPanel.qml qt/LinkStatus.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/PromptPanel.qml qt/PromptField.qml qt/PromptActions.qml qt/WorkspaceFormPanel.qml qt/FormTextField.qml qt/KeyboardAction.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneActions.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/ApplicationTile.qml qt/ElevationShadow.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/ProjectSwitcher.qml qt/WorkspaceIdentity.qml qt/WorkspaceRail.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml)
+    SOURCES qt/attachment_image.cpp qt/attachment_image.hpp qt/attachment_shelf.cpp qt/attachment_shelf.hpp qt/native_agent_status.cpp qt/native_agent_status.hpp qt/native_rounded_rectangle.cpp qt/native_rounded_rectangle.hpp qt/application.cpp qt/application.hpp qt/runtime_connection.cpp qt/runtime_connection.hpp qt/terminal_item.cpp qt/terminal_item.hpp qt/configuration_source.cpp qt/configuration_source.hpp qt/lua_host.cpp qt/lua_host.hpp qt/element_layout.cpp qt/element_layout.hpp qt/element_canvas.cpp qt/element_canvas.hpp qt/graphics_scene.cpp qt/graphics_scene.hpp qt/tab_strip_layout.cpp qt/tab_strip_layout.hpp qt/provider_mark.cpp qt/provider_mark.hpp qt/native_chrome_text.cpp qt/native_chrome_text.hpp qt/native_chrome_icon.cpp qt/native_chrome_icon.hpp qt/native_cell_text.cpp qt/native_cell_text.hpp qt/native_mode_layout.cpp qt/native_mode_layout.hpp qt/prompt_island.cpp qt/prompt_island.hpp
+    QML_FILES qt/ComponentFit.js qt/Elements.js qt/ElementNode.qml qt/ElementHost.qml qt/ComponentPick.qml qt/ComponentBranch.qml qt/ComponentNode.qml qt/ComponentTree.qml qt/ComponentOverflow.qml qt/ComponentSlot.qml qt/ComponentPanel.qml qt/AttachmentShelf.qml qt/AttachmentModal.qml qt/PeekPanel.qml qt/LinkStatus.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/PromptPanel.qml qt/PromptField.qml qt/PromptActions.qml qt/WorkspaceFormPanel.qml qt/FormTextField.qml qt/KeyboardAction.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneActions.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/ApplicationTile.qml qt/ElevationShadow.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/ProjectSwitcher.qml qt/WorkspaceIdentity.qml qt/WorkspaceRail.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml qt/PromptIsland.qml qt/PromptGlass.qml qt/CommandSeparators.qml qt/CommandRail.qml)
 
   qt_add_executable(telar-gui main.cpp)
   if(APPLE)
@@ -907,6 +920,12 @@ if(TELAR_GUI_NATIVE)
     endif()
 
     add_test(NAME gui-machine-window COMMAND gui-machine-window-test)
+    qt_add_executable(gui-prompt-window-test tests/prompt_window_test.cpp)
+    target_link_libraries(gui-prompt-window-test PRIVATE gui-quick gui-quickplugin Qt6::Test gui-test-fixtures)
+    target_include_directories(gui-prompt-window-test PRIVATE tests)
+    add_test(NAME gui-prompt-window COMMAND gui-prompt-window-test)
+    set_tests_properties(gui-prompt-window PROPERTIES ENVIRONMENT "QT_QUICK_BACKEND=software;QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
+    add_dependencies(gui-lint gui-prompt-window-test)
     set_tests_properties(gui-machine-window PROPERTIES ENVIRONMENT "QT_QUICK_BACKEND=software;QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
     add_dependencies(gui-lint gui-machine-window-test)
     qt_add_executable(gui-machine-profiles-source-test tests/machine_profiles_source_test.cpp)

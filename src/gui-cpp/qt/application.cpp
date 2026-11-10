@@ -806,6 +806,9 @@ void Application::presentChange(Change change) {
   case Change::terminal:
     reconcileAttachmentFrame(session().changedPane());
     emit terminalChanged(session().changedPane());
+    if (session().takeChromeChange() && !refresh_timer_.isActive()) {
+      refresh_timer_.start();
+    }
     if (dialog_ == QLatin1StringView("paths")) {
       emit pathPickerGeometryChanged();
     }
@@ -1315,7 +1318,10 @@ void Application::executeWindowAction(Action action) {
   } else if (action == Action::new_workspace || action == Action::rename_tab || action == Action::rename_workspace) {
     showDialog(dialogName(action));
   } else if (action == Action::copy_mode) {
-    if (dialog_.isEmpty()) {
+    if (dialog_.isEmpty() && session().enterBlocks()) {
+      emit promptChanged(session().changedPane());
+      emit terminalChanged(session().changedPane());
+    } else if (dialog_.isEmpty()) {
       static_cast<void>(session().enterCopyMode());
       emit stateChanged();
       if (const auto &copy = session().copyMode().state()) {
@@ -1429,6 +1435,7 @@ void Application::paste(std::uint64_t pane_id, const QString &text) {
   } catch (const std::exception &error) {
     fail(error);
   }
+  publishPromptWrite();
 }
 
 void Application::resize(std::uint64_t pane_id, TerminalSize size) {

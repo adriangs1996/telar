@@ -1,52 +1,7 @@
 module;
 #include "tbc/view.hpp"
-#include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
-#include <stdlib.h>
-#include <zlib.h>
-
-#include <cstdint>
-#include <cstddef>
 #include "telar_base/diagnostics/config.hpp"
-#include <cerrno>
-#include <pthread.h>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
-#include <cassert>
-#include <limits.h>
-#include <poll.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-
-#include <sqlite3.h>
-
-
-#include <cstdio>
-#include <cstdlib>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <csignal>
-#include <sys/uio.h>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <climits>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include <new>
-
-#include <dirent.h>
+#include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.runtime.media_service;
 

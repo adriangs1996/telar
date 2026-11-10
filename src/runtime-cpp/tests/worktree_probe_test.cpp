@@ -9,6 +9,7 @@ static_assert(true);
 #include <cstring>
 #include <cstddef>
 #include <cerrno>
+#include <cstdlib>
 #include <sys/types.h>
 #include <limits.h>
 #include <poll.h>

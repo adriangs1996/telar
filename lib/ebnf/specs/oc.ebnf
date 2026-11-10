@@ -1,0 +1,1573 @@
+(* oc: the OpenShift client. Every command `oc --help` lists, checked against
+   `oc <command> --help` and `oc options` of oc 4.16.13. OpenShift resource types
+   come from the examples and usage lines of that help (bc, dc, is, istag, routes, ...).
+
+   Conventions:
+   - The global options (`oc options`) are accepted before and after the command.
+   - Options with a value accept `--name value` and `--name=value`; short ones accept
+     `-x value` and `-xvalue`. Boolean flags are modelled bare; `--flag=false` is not.
+   - --dry-run, --validate and --cascade take their value only joined (--dry-run=client),
+     as pflag reads options that have a default for the bare flag.
+   - Resource names, pods, containers, projects and contexts have no provider yet:
+     @any. Resource types are offered as literals after get, describe, delete, ...
+   - Words after `--` in exec, rsh, run and debug belong to the command run in the pod.
+   - The subcommands of adm, image, policy, registry, secrets and the less used create
+     and set subcommands are listed by name; their words are not checked.
+   - `opt_*` rules are options several commands share. *)
+
+oc = { global_option } , [ command ] ;
+
+global_option =
+    "--as" : "Username to impersonate for the operation" , @any | "--as=" : "Username to impersonate for the operation" ~ @any
+  | "--as-group" : "Group to impersonate for the operation" , @any | "--as-group=" : "Group to impersonate for the operation" ~ @any
+  | "--as-uid" : "UID to impersonate for the operation" , @any | "--as-uid=" : "UID to impersonate for the operation" ~ @any
+  | "--cache-dir" : "Default cache directory" , @directory | "--cache-dir=" : "Default cache directory" ~ @directory
+  | opt_certificate_authority
+  | "--client-certificate" : "Path to a client certificate file for TLS" , @file | "--client-certificate=" : "Path to a client certificate file for TLS" ~ @file
+  | "--client-key" : "Path to a client key file for TLS" , @file | "--client-key=" : "Path to a client key file for TLS" ~ @file
+  | "--cluster" : "The name of the kubeconfig cluster to use" , @any | "--cluster=" : "The name of the kubeconfig cluster to use" ~ @any
+  | "--context" : "The name of the kubeconfig context to use" , @any | "--context=" : "The name of the kubeconfig context to use" ~ @any
+  | "--disable-compression" : "Opt-out of response compression for all requests to the server"
+  | opt_insecure_skip_tls_verify
+  | "--kubeconfig" : "Path to the kubeconfig file to use for CLI requests" , @file | "--kubeconfig=" : "Path to the kubeconfig file to use for CLI requests" ~ @file
+  | "--log-flush-frequency" : "Maximum number of seconds between log flushes" , @any | "--log-flush-frequency=" : "Maximum number of seconds between log flushes" ~ @any
+  | "--loglevel" : "Set the level of log output (0-10)" , @any | "--loglevel=" : "Set the level of log output (0-10)" ~ @any
+  | "--match-server-version" : "Require server version to match client version"
+  | "-n" : "The namespace scope for this CLI request" , @any | "--namespace" : "The namespace scope for this CLI request" , @any | "--namespace=" : "The namespace scope for this CLI request" ~ @any
+  | "--profile" : "Name of profile to capture" , profile_value | "--profile=" : "Name of profile to capture" ~ profile_value
+  | "--profile-output" : "Name of the file to write the profile to" , @file | "--profile-output=" : "Name of the file to write the profile to" ~ @file
+  | "--request-timeout" : "The length of time to wait before giving up on a single server request" , @any | "--request-timeout=" : "The length of time to wait before giving up on a single server request" ~ @any
+  | "-s" : "The address and port of the Kubernetes API server" , @any | "--server" : "The address and port of the Kubernetes API server" , @any | "--server=" : "The address and port of the Kubernetes API server" ~ @any
+  | "--tls-server-name" : "Server name to use for server certificate validation" , @any | "--tls-server-name=" : "Server name to use for server certificate validation" ~ @any
+  | opt_token
+  | "--user" : "The name of the kubeconfig user to use" , @any | "--user=" : "The name of the kubeconfig user to use" ~ @any
+  | "-v" : "Number for the log level verbosity" , @any | "--v" : "Number for the log level verbosity" , @any | "--v=" : "Number for the log level verbosity" ~ @any
+  | "--vmodule" : "Comma-separated list of pattern=N settings for file-filtered logging" , @any | "--vmodule=" : "Comma-separated list of pattern=N settings for file-filtered logging" ~ @any
+  | "--warnings-as-errors" : "Treat warnings from the server as errors" ;
+
+login_option =
+    "-c" : "Port for the callback server when using --web" , @any | "--callback-port" : "Port for the callback server when using --web" , @any | "--callback-port=" : "Port for the callback server when using --web" ~ @any
+  | "--client-id" : "Experimental: Client ID for external OIDC issuer" , @any | "--client-id=" : "Experimental: Client ID for external OIDC issuer" ~ @any
+  | "--client-secret" : "Experimental: Client secret for external OIDC issuer" , @any | "--client-secret=" : "Experimental: Client secret for external OIDC issuer" ~ @any
+  | "--exec-plugin" : "Experimental: credentials exec plugin type for an external OIDC issuer" , @any | "--exec-plugin=" : "Experimental: credentials exec plugin type for an external OIDC issuer" ~ @any
+  | "--extra-scopes" : "Experimental: Extra scopes for external OIDC issuer" , @any | "--extra-scopes=" : "Experimental: Extra scopes for external OIDC issuer" ~ @any
+  | "--issuer-url" : "Experimental: Issuer url for external issuer" , @any | "--issuer-url=" : "Experimental: Issuer url for external issuer" ~ @any
+  | "--oidc-certificate-authority" : "Experimental: CA bundle for the external OIDC issuer" , @any | "--oidc-certificate-authority=" : "Experimental: CA bundle for the external OIDC issuer" ~ @any
+  | "-p" : "Password for server" , @any | "--password" : "Password for server" , @any | "--password=" : "Password for server" ~ @any
+  | "-u" : "Username for server" , @any | "--username" : "Username for server" , @any | "--username=" : "Username for server" ~ @any
+  | "-w" : "Login with web browser" | "--web" : "Login with web browser"
+  | opt_certificate_authority
+  | opt_insecure_skip_tls_verify
+  | opt_token ;
+
+new_project_option =
+    "--description" : "Project description" , @any | "--description=" : "Project description" ~ @any
+  | "--display-name" : "Project display name" , @any | "--display-name=" : "Project display name" ~ @any
+  | "--skip-config-write" : "Do not switch kubeconfig to the new project" ;
+
+new_app_option =
+    opt_allow_missing_images
+  | opt_allow_missing_imagestream_tags
+  | opt_allow_missing_template_keys
+  | "--as-deployment-config" : "Create the application as a deployment config"
+  | "--as-test" : "Create a test deployment that scales down once it succeeds"
+  | opt_binary
+  | "--build-env" : "Environment variable for each build image, as key=value" , @any | "--build-env=" : "Environment variable for each build image, as key=value" ~ @any
+  | "--build-env-file" : "File of environment variables to set in each build image" , @any | "--build-env-file=" : "File of environment variables to set in each build image" ~ @any
+  | "--code" : "Source code to use to build this application" , @any | "--code=" : "Source code to use to build this application" ~ @any
+  | opt_context_dir
+  | opt_dry_run
+  | opt_env
+  | opt_env_file
+  | "-f" : "Path to a template file to use for the app" , @any | "--file" : "Path to a template file to use for the app" , @any | "--file=" : "Path to a template file to use for the app" ~ @any
+  | "--grant-install-rights" : "Let components use your token to install software into the project"
+  | "--group" : "Indicate components that should be grouped together as <comp1>+<comp2>" , @any | "--group=" : "Indicate components that should be grouped together as <comp1>+<comp2>" ~ @any
+  | opt_ignore_unknown_parameters
+  | "--image" : "Name of a container image to include in the app" , @any | "--image=" : "Name of a container image to include in the app" ~ @any
+  | "-i" : "Name of an existing image stream to use to deploy an app" , @any | "--image-stream" : "Name of an existing image stream to use to deploy an app" , @any | "--image-stream=" : "Name of an existing image stream to use to deploy an app" ~ @any
+  | opt_import_mode
+  | opt_insecure_registry
+  | "-l" : "Label to set in all resources for this application" , @any | "--labels" : "Label to set in all resources for this application" , @any | "--labels=" : "Label to set in all resources for this application" ~ @any
+  | "-L" : "List all local templates and image streams that can be used to create" | "--list" : "List all local templates and image streams that can be used to create"
+  | "--name" : "Set name to use for generated application artifacts" , @any | "--name=" : "Set name to use for generated application artifacts" ~ @any
+  | "--no-install" : "Do not run images that describe themselves as installable"
+  | opt_output
+  | opt_output_version
+  | opt_param
+  | "--param-file" : "File containing parameter values to set/override in the template" , @any | "--param-file=" : "File containing parameter values to set/override in the template" ~ @any
+  | "-S" : "Search templates, image streams and images matching the arguments" | "--search" : "Search templates, image streams and images matching the arguments"
+  | opt_show_all
+  | opt_show_labels
+  | opt_show_managed_fields
+  | opt_sort_by
+  | opt_source_secret
+  | opt_strategy
+  | "--template" : "Name of a stored template to use in the app" , @any | "--template=" : "Name of a stored template to use in the app" ~ @any ;
+
+status_option =
+    "-A" : "Display status for all namespaces (must have cluster admin)" | "--all-namespaces" : "Display status for all namespaces (must have cluster admin)"
+  | opt_output
+  | "--suggest" : "See details for resolving issues" ;
+
+project_option = "-q" : "Display only the project name" | "--short" : "Display only the project name" ;
+
+projects_option = "-q" : "Display only the project names" | "--short" : "Display only the project names" ;
+
+explain_option =
+    "--api-version" : "Use given api-version (group/version) of the resource" , @any | "--api-version=" : "Use given api-version (group/version) of the resource" ~ @any
+  | "--output" : "Format in which to render the schema" , output_format | "--output=" : "Format in which to render the schema" ~ output_name
+  | "--recursive" : "When true, print the name of all the fields recursively" ;
+
+rollout_cancel_option =
+    opt_allow_missing_template_keys
+  | opt_filename
+  | opt_kustomize
+  | opt_output
+  | opt_recursive
+  | opt_show_managed_fields
+  | opt_template ;
+
+rollout_history_option =
+    opt_allow_missing_template_keys
+  | opt_filename
+  | opt_kustomize
+  | opt_output
+  | opt_recursive
+  | "--revision" : "See the details, including podTemplate of the revision specified" , @any | "--revision=" : "See the details, including podTemplate of the revision specified" ~ @any
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template ;
+
+rollout_latest_option =
+    "--again" : "Deploy the current pod template without updating state from triggers"
+  | opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_output
+  | opt_show_managed_fields
+  | opt_template ;
+
+rollout_pause_option =
+    opt_allow_missing_template_keys
+  | opt_field_manager
+  | opt_filename
+  | opt_kustomize
+  | opt_output
+  | opt_recursive
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template ;
+
+rollout_status_option =
+    opt_filename
+  | opt_kustomize
+  | opt_recursive
+  | "--revision" : "Pin to a specific revision for showing its status" , @any | "--revision=" : "Pin to a specific revision for showing its status" ~ @any
+  | opt_selector
+  | "--timeout" : "The length of time to wait before ending watch, zero means never" , @any | "--timeout=" : "The length of time to wait before ending watch, zero means never" ~ @any
+  | "-w" : "Watch the status of the rollout until it's done" | "--watch" : "Watch the status of the rollout until it's done" ;
+
+rollout_undo_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_filename
+  | opt_kustomize
+  | opt_output
+  | opt_recursive
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template
+  | "--to-revision" : "The revision to rollback to" , @any | "--to-revision=" : "The revision to rollback to" ~ @any ;
+
+rollout_command =
+    "cancel" : "Cancel the in-progress deployment" , { rollout_cancel_option | global_option | @any }
+  | "history" : "View rollout history" , { rollout_history_option | global_option | resource_type | @any }
+  | "latest" : "Start a new rollout of a deployment config from its triggers" , { rollout_latest_option | global_option | @any }
+  | "pause" : "Mark the provided resource as paused" , { rollout_pause_option | global_option | resource_type | @any }
+  | "restart" : "Restart a resource" , { rollout_pause_option | global_option | resource_type | @any }
+  | "resume" : "Resume a paused resource" , { rollout_pause_option | global_option | resource_type | @any }
+  | "retry" : "Retry the latest failed rollout" , { rollout_cancel_option | global_option | @any }
+  | "status" : "Show the status of the rollout" , { rollout_status_option | global_option | resource_type | @any }
+  | "undo" : "Undo a previous rollout" , { rollout_undo_option | global_option | resource_type | @any } ;
+
+rollback_option =
+    opt_allow_missing_template_keys
+  | "--change-scaling-settings" : "Include the previous replica count and selector in the rollback"
+  | "--change-strategy" : "Include the previous deployment's strategy in the rollback"
+  | "--change-triggers" : "Include the previous deployment's triggers in the rollback"
+  | "-d" : "Describe the rollback instead of performing it" | "--dry-run" : "Describe the rollback instead of performing it" | "--dry-run=" : "Describe the rollback instead of performing it" ~ ( "none" | "server" | "client" )
+  | opt_output
+  | opt_show_managed_fields
+  | opt_template
+  | "--to-version" : "A config version to rollback to" , @any | "--to-version=" : "A config version to rollback to" ~ @any ;
+
+new_build_option =
+    opt_allow_missing_images
+  | opt_allow_missing_imagestream_tags
+  | opt_allow_missing_template_keys
+  | opt_binary
+  | opt_build_arg
+  | "--build-config-map" : "ConfigMap and destination to use as an input for the build" , @any | "--build-config-map=" : "ConfigMap and destination to use as an input for the build" ~ @any
+  | "--build-secret" : "Secret and destination to use as an input for the build" , @any | "--build-secret=" : "Secret and destination to use as an input for the build" ~ @any
+  | "--code" : "Source code in the build configuration" , @any | "--code=" : "Source code in the build configuration" ~ @any
+  | opt_context_dir
+  | "-D" : "Dockerfile contents to build, implies --strategy=docker" , @any | "--dockerfile" : "Dockerfile contents to build, implies --strategy=docker" , @any | "--dockerfile=" : "Dockerfile contents to build, implies --strategy=docker" ~ @any
+  | opt_dry_run
+  | "-e" : "Environment variable for the resulting image, as key=value" , @any | "--env" : "Environment variable for the resulting image, as key=value" , @any | "--env=" : "Environment variable for the resulting image, as key=value" ~ @any
+  | opt_env_file
+  | "--image" : "Name of a container image to use as a builder" , @any | "--image=" : "Name of a container image to use as a builder" ~ @any
+  | "-i" : "Name of an image stream to to use as a builder" , @any | "--image-stream" : "Name of an image stream to to use as a builder" , @any | "--image-stream=" : "Name of an image stream to to use as a builder" ~ @any
+  | opt_import_mode
+  | opt_insecure_registry
+  | "-l" : "Label to set in all generated resources" , @any | "--labels" : "Label to set in all generated resources" , @any | "--labels=" : "Label to set in all generated resources" ~ @any
+  | "--name" : "Set name to use for generated build artifacts" , @any | "--name=" : "Set name to use for generated build artifacts" ~ @any
+  | "--no-output" : "The build output will not be pushed anywhere"
+  | opt_output
+  | opt_output_version
+  | "--push-secret" : "Secret for pushing the output image" , @any | "--push-secret=" : "Secret for pushing the output image" ~ @any
+  | opt_show_all
+  | opt_show_labels
+  | opt_show_managed_fields
+  | "--source-image" : "Specify an image to use as source for the build" , @any | "--source-image=" : "Specify an image to use as source for the build" ~ @any
+  | "--source-image-path" : "Path to copy from the source image, and its build destination" , @any | "--source-image-path=" : "Path to copy from the source image, and its build destination" ~ @any
+  | opt_source_secret
+  | opt_strategy
+  | opt_template
+  | "--to" : "Push built images to this image stream tag" , @any | "--to=" : "Push built images to this image stream tag" ~ @any
+  | "--to-docker" : "Have the build output push to a Docker repository" ;
+
+start_build_option =
+    opt_allow_missing_template_keys
+  | opt_build_arg
+  | "--build-loglevel" : "Specify the log level for the build log output" , @any | "--build-loglevel=" : "Specify the log level for the build log output" ~ @any
+  | "--commit" : "Specify the source code commit identifier the build should use" , @any | "--commit=" : "Specify the source code commit identifier the build should use" ~ @any
+  | "-e" : "Environment variable for the build container, as key=value" , @any | "--env" : "Environment variable for the build container, as key=value" , @any | "--env=" : "Environment variable for the build container, as key=value" ~ @any
+  | "--exclude" : "With --from-dir, regex of files to exclude from the build" , @any | "--exclude=" : "With --from-dir, regex of files to exclude from the build" ~ @any
+  | "-F" : "Start a build and watch its logs until it completes or fails" | "--follow" : "Start a build and watch its logs until it completes or fails"
+  | "--from-archive" : "An archive to be extracted before the build and used as the binary input" , @any | "--from-archive=" : "An archive to be extracted before the build and used as the binary input" ~ @any
+  | "--from-build" : "Specify the name of a build which should be re-run" , @any | "--from-build=" : "Specify the name of a build which should be re-run" ~ @any
+  | "--from-dir" : "A directory to archive and use as the binary input for a build" , @any | "--from-dir=" : "A directory to archive and use as the binary input for a build" ~ @any
+  | "--from-file" : "A file to use as the binary input for the build" , @any | "--from-file=" : "A file to use as the binary input for the build" ~ @any
+  | "--from-repo" : "Local source repository to use as the binary input" , @any | "--from-repo=" : "Local source repository to use as the binary input" ~ @any
+  | "--from-webhook" : "Specify a generic webhook URL for an existing build config to trigger" , @any | "--from-webhook=" : "Specify a generic webhook URL for an existing build config to trigger" ~ @any
+  | "--git-post-receive" : "The contents of the post-receive hook to trigger a build" , @any | "--git-post-receive=" : "The contents of the post-receive hook to trigger a build" ~ @any
+  | "--git-repository" : "The path to the git repository for post-receive" , @any | "--git-repository=" : "The path to the git repository for post-receive" ~ @any
+  | "--incremental" : "Override the incremental setting of a source-strategy build"
+  | "--list-webhooks" : "List the webhooks for the specified build config or build" , @any | "--list-webhooks=" : "List the webhooks for the specified build config or build" ~ @any
+  | "--no-cache" : "Override the noCache setting of a docker-strategy build"
+  | opt_output
+  | opt_show_managed_fields
+  | opt_template
+  | "-w" : "Wait for the build, exit nonzero if it fails" | "--wait" : "Wait for the build, exit nonzero if it fails" ;
+
+cancel_build_option =
+    "--dump-logs" : "Specify if the build logs for the cancelled build should be shown"
+  | "--restart" : "Start a new build after cancelling the current one"
+  | "--state" : "Only cancel builds in this state" , @any | "--state=" : "Only cancel builds in this state" ~ @any ;
+
+import_image_option =
+    "--all" : "Import all tags from the source"
+  | opt_allow_missing_template_keys
+  | "--confirm" : "Allow the image stream import location to be set or changed"
+  | "--dry-run" : "Fetch image information without creating or updating an image stream" | "--dry-run=" : "Fetch image information without creating or updating an image stream" ~ ( "none" | "server" | "client" )
+  | "--from" : "A container image repository to import images from" , @any | "--from=" : "A container image repository to import images from" ~ @any
+  | opt_import_mode
+  | "--insecure" : "Allow registries with invalid HTTPS certificates or plain HTTP"
+  | opt_output
+  | opt_reference_policy
+  | "--scheduled" : "Import each image periodically from its remote repository"
+  | opt_show_managed_fields
+  | opt_template ;
+
+tag_option =
+    "--alias" : "Should the destination tag be updated whenever the source tag changes"
+  | "-d" : "Delete the provided spec tags" | "--delete" : "Delete the provided spec tags"
+  | opt_import_mode
+  | "--insecure" : "The image registry uses HTTP or a self-signed certificate"
+  | "--reference" : "Should the destination tag continue to pull from the source namespace"
+  | opt_reference_policy
+  | "--scheduled" : "Import the image periodically from its remote repository"
+  | "--source" : "Optional hint for the source type" , @any | "--source=" : "Optional hint for the source type" ~ @any ;
+
+create_configmap_option =
+    opt_allow_missing_template_keys
+  | "--append-hash" : "Append a hash of the configmap to its name"
+  | opt_dry_run2
+  | opt_field_manager
+  | "--from-env-file" : "File of key=val lines to create the config map from" , @file | "--from-env-file=" : "File of key=val lines to create the config map from" ~ @file
+  | opt_from_file
+  | "--from-literal" : "Specify a key and literal value to insert in configmap" , @any | "--from-literal=" : "Specify a key and literal value to insert in configmap" ~ @any
+  | opt_output
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_cronjob_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_image
+  | opt_output
+  | "--restart" : "Job's restart policy. supported values: OnFailure, Never" , @any | "--restart=" : "Job's restart policy. supported values: OnFailure, Never" ~ @any
+  | opt_save_config
+  | "--schedule" : "A schedule in the Cron format the job should be run with" , @any | "--schedule=" : "A schedule in the Cron format the job should be run with" ~ @any
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_deployment_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | "--image" : "Image names to run" , @any | "--image=" : "Image names to run" ~ @any
+  | opt_output
+  | opt_port
+  | "-r" : "Number of replicas to create" , @any | "--replicas" : "Number of replicas to create" , @any | "--replicas=" : "Number of replicas to create" ~ @any
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_ingress_option =
+    opt_allow_missing_template_keys
+  | "--annotation" : "Annotation to insert in the ingress object" , @any | "--annotation=" : "Annotation to insert in the ingress object" ~ @any
+  | "--class" : "Ingress Class to be used" , @any | "--class=" : "Ingress Class to be used" ~ @any
+  | "--default-backend" : "Default service for backend, in format of svcname:port" , @any | "--default-backend=" : "Default service for backend, in format of svcname:port" ~ @any
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_output
+  | "--rule" : "Rule in format host/path=service:port[,tls=secretname]" , @any | "--rule=" : "Rule in format host/path=service:port[,tls=secretname]" ~ @any
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_job_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | "--from" : "The name of the resource to create a Job from" , @any | "--from=" : "The name of the resource to create a Job from" ~ @any
+  | opt_image
+  | opt_output
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_namespace_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_output
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_route_command =
+    "edge" : "Create a route that uses edge TLS termination" , { global_option | @any }
+  | "passthrough" : "Create a route that uses passthrough TLS termination" , { global_option | @any }
+  | "reencrypt" : "Create a route that uses reencrypt TLS termination" , { global_option | @any } ;
+
+create_secret_docker_registry_option =
+    opt_allow_missing_template_keys
+  | opt_append_hash
+  | "--docker-email" : "Email for Docker registry" , @any | "--docker-email=" : "Email for Docker registry" ~ @any
+  | "--docker-password" : "Password for Docker registry authentication" , @any | "--docker-password=" : "Password for Docker registry authentication" ~ @any
+  | "--docker-server" : "Server location for Docker registry" , @any | "--docker-server=" : "Server location for Docker registry" ~ @any
+  | "--docker-username" : "Username for Docker registry authentication" , @any | "--docker-username=" : "Username for Docker registry authentication" ~ @any
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_from_file
+  | opt_output
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_secret_generic_option =
+    opt_allow_missing_template_keys
+  | opt_append_hash
+  | opt_dry_run2
+  | opt_field_manager
+  | "--from-env-file" : "File of key=val lines to create the secret from" , @file | "--from-env-file=" : "File of key=val lines to create the secret from" ~ @file
+  | opt_from_file
+  | "--from-literal" : "Specify a key and literal value to insert in secret" , @any | "--from-literal=" : "Specify a key and literal value to insert in secret" ~ @any
+  | opt_output
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | "--type" : "The type of secret to create" , @any | "--type=" : "The type of secret to create" ~ @any
+  | opt_validate ;
+
+create_secret_tls_option =
+    opt_allow_missing_template_keys
+  | opt_append_hash
+  | "--cert" : "Path to PEM encoded public key certificate" , @any | "--cert=" : "Path to PEM encoded public key certificate" ~ @any
+  | opt_dry_run2
+  | opt_field_manager
+  | "--key" : "Path to private key associated with given certificate" , @any | "--key=" : "Path to private key associated with given certificate" ~ @any
+  | opt_output
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate ;
+
+create_secret_command =
+    "docker-registry" : "Create a secret for use with a Docker registry" , { create_secret_docker_registry_option | global_option | @any }
+  | "generic" : "Create a secret from a local file, directory, or literal value" , { create_secret_generic_option | global_option | @any }
+  | "tls" : "Create a TLS secret" , { create_secret_tls_option | global_option | @any } ;
+
+create_service_command =
+    "clusterip" : "Create a ClusterIP service" , { global_option | @any }
+  | "externalname" : "Create an ExternalName service" , { global_option | @any }
+  | "loadbalancer" : "Create a LoadBalancer service" , { global_option | @any }
+  | "nodeport" : "Create a NodePort service" , { global_option | @any } ;
+
+create_token_option =
+    opt_allow_missing_template_keys
+  | "--audience" : "Audience of the requested token" , @any | "--audience=" : "Audience of the requested token" ~ @any
+  | "--bound-object-kind" : "Kind of an object to bind the token to" , @any | "--bound-object-kind=" : "Kind of an object to bind the token to" ~ @any
+  | "--bound-object-name" : "Name of an object to bind the token to" , @any | "--bound-object-name=" : "Name of an object to bind the token to" ~ @any
+  | "--bound-object-uid" : "UID of an object to bind the token to" , @any | "--bound-object-uid=" : "UID of an object to bind the token to" ~ @any
+  | "--duration" : "Requested lifetime of the issued token" , @any | "--duration=" : "Requested lifetime of the issued token" ~ @any
+  | opt_output
+  | opt_show_managed_fields
+  | opt_template ;
+
+create_command =
+    "build" : "Create a new build" , { global_option | @any }
+  | "clusterresourcequota" : "Create a cluster resource quota" , { global_option | @any }
+  | "clusterrole" : "Create a cluster role" , { global_option | @any }
+  | "clusterrolebinding" : "Create a cluster role binding for a particular cluster role" , { global_option | @any }
+  | "configmap" : "Create a config map from a local file, directory or literal value" , { create_configmap_option | global_option | @any }
+  | "cronjob" : "Create a cron job with the specified name" , { create_cronjob_option | global_option | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "deployment" : "Create a deployment with the specified name" , { create_deployment_option | global_option | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "deploymentconfig" : "Create a deployment config with default options that uses a given image" , { global_option | @any }
+  | "identity" : "Manually create an identity" , { global_option | @any }
+  | "imagestream" : "Create a new empty image stream" , { global_option | @any }
+  | "imagestreamtag" : "Create a new image stream tag" , { global_option | @any }
+  | "ingress" : "Create an ingress with the specified name" , { create_ingress_option | global_option | @any }
+  | "job" : "Create a job with the specified name" , { create_job_option | global_option | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "namespace" : "Create a namespace with the specified name" , { create_namespace_option | global_option | @any }
+  | "poddisruptionbudget" : "Create a pod disruption budget with the specified name" , { global_option | @any }
+  | "priorityclass" : "Create a priority class with the specified name" , { global_option | @any }
+  | "quota" : "Create a quota with the specified name" , { global_option | @any }
+  | "role" : "Create a role with single rule" , { global_option | @any }
+  | "rolebinding" : "Create a role binding for a particular role or cluster role" , { global_option | @any }
+  | "route" : "Expose containers externally via secured routes" , { global_option } , [ create_route_command ]
+  | "secret" : "Create a secret using a specified subcommand" , { global_option } , [ create_secret_command ]
+  | "service" : "Create a service using a specified subcommand" , { global_option } , [ create_service_command ]
+  | "serviceaccount" : "Create a service account with the specified name" , { create_namespace_option | global_option | @any }
+  | "token" : "Request a service account token" , { create_token_option | global_option | @any }
+  | "user" : "Manually create a user (only needed if automatic creation is disabled)" , { global_option | @any }
+  | "useridentitymapping" : "Manually map an identity to a user" , { global_option | @any } ;
+
+create_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | "--edit" : "Edit the API resource before creating"
+  | opt_field_manager
+  | "-f" : "Filename, directory, or URL to files to use to create the resource" , @file | "--filename" : "Filename, directory, or URL to files to use to create the resource" , @file | "--filename=" : "Filename, directory, or URL to files to use to create the resource" ~ @file
+  | opt_kustomize
+  | opt_output
+  | "--raw" : "Raw URI to POST to the server" , @any | "--raw=" : "Raw URI to POST to the server" ~ @any
+  | opt_recursive
+  | opt_save_config
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template
+  | opt_validate
+  | "--windows-line-endings" : "Only relevant if --edit=true" ;
+
+apply_command =
+    "edit-last-applied" : "Edit latest last-applied-configuration annotations of a resource/object" , { global_option | @any }
+  | "set-last-applied" : "Set the last-applied-configuration annotation from a file" , { global_option | @any }
+  | "view-last-applied" : "View the last-applied-configuration annotations of a resource" , { global_option | @any } ;
+
+apply_option =
+    opt_all
+  | opt_allow_missing_template_keys
+  | opt_cascade
+  | opt_dry_run2
+  | opt_field_manager
+  | "-f" : "The files that contain the configurations to apply" , @file | "--filename" : "The files that contain the configurations to apply" , @file | "--filename=" : "The files that contain the configurations to apply" ~ @file
+  | opt_force
+  | opt_force_conflicts
+  | opt_grace_period
+  | opt_kustomize2
+  | "--openapi-patch" : "Use openapi to calculate the diff when it describes the resource"
+  | opt_output
+  | "--overwrite" : "Resolve conflicts with the values of the modified configuration"
+  | "--prune" : "Delete applied objects that no longer appear in the configs"
+  | "--prune-allowlist" : "Overwrite the default allowlist with <group/version/kind> for --prune" , @any | "--prune-allowlist=" : "Overwrite the default allowlist with <group/version/kind> for --prune" ~ @any
+  | opt_recursive
+  | opt_selector
+  | opt_server_side
+  | opt_show_managed_fields
+  | opt_template
+  | opt_timeout
+  | opt_validate
+  | opt_wait ;
+
+get_option =
+    opt_all_namespaces
+  | opt_allow_missing_template_keys
+  | opt_chunk_size
+  | opt_field_selector
+  | opt_filename
+  | "--ignore-not-found" : "Exit with 0 when the object does not exist"
+  | opt_kustomize
+  | "-L" : "Comma-separated labels to show as columns" , @any | "--label-columns" : "Comma-separated labels to show as columns" , @any | "--label-columns=" : "Comma-separated labels to show as columns" ~ @any
+  | opt_no_headers
+  | opt_output
+  | "--output-watch-events" : "Output watch event objects when --watch or --watch-only is used"
+  | "--raw" : "Raw URI to request from the server" , @any | "--raw=" : "Raw URI to request from the server" ~ @any
+  | opt_recursive
+  | opt_selector
+  | "--server-print" : "Have the server return the appropriate table output"
+  | "--show-kind" : "List the resource type for the requested object(s)"
+  | opt_show_labels
+  | opt_show_managed_fields
+  | opt_sort_by
+  | "--subresource" : "If specified, gets the subresource of the requested object" , @any | "--subresource=" : "If specified, gets the subresource of the requested object" ~ @any
+  | opt_template
+  | "-w" : "After listing/getting the requested object, watch for changes" | "--watch" : "After listing/getting the requested object, watch for changes"
+  | "--watch-only" : "Watch for changes to the requested object, without listing/getting first" ;
+
+describe_option =
+    opt_all_namespaces
+  | opt_chunk_size
+  | "-f" : "Filename, directory, or URL to files containing the resource to describe" , @file | "--filename" : "Filename, directory, or URL to files containing the resource to describe" , @file | "--filename=" : "Filename, directory, or URL to files containing the resource to describe" ~ @file
+  | opt_kustomize
+  | opt_recursive
+  | opt_selector
+  | "--show-events" : "Display events related to the described object" ;
+
+edit_option =
+    opt_allow_missing_template_keys
+  | opt_field_manager
+  | opt_filename2
+  | opt_kustomize
+  | opt_output
+  | "--output-patch" : "Output the patch if the resource is edited"
+  | opt_recursive
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_subresource
+  | opt_template
+  | opt_validate
+  | "--windows-line-endings" : "Defaults to the line ending native to your platform" ;
+
+set_env_option =
+    opt_all
+  | opt_allow_missing_template_keys
+  | "-c" : "The names of containers in the selected pod templates to change" , @any | "--containers" : "The names of containers in the selected pod templates to change" , @any | "--containers=" : "The names of containers in the selected pod templates to change" ~ @any
+  | opt_dry_run2
+  | opt_env
+  | opt_field_manager
+  | opt_filename2
+  | "--from" : "The name of a resource from which to inject environment variables" , @any | "--from=" : "The name of a resource from which to inject environment variables" ~ @any
+  | opt_kustomize
+  | "--list" : "Display the environment and any changes in the standard format"
+  | opt_local
+  | opt_output
+  | "--overwrite" : "Allow environment to be overwritten"
+  | "--prefix" : "Prefix to append to variable names" , @any | "--prefix=" : "Prefix to append to variable names" ~ @any
+  | opt_recursive
+  | "--resolve" : "Show secret or configmap references when listing variables"
+  | opt_resource_version
+  | "-l" : "Selector (label query) to filter on" , @any | "--selector" : "Selector (label query) to filter on" , @any | "--selector=" : "Selector (label query) to filter on" ~ @any
+  | opt_show_managed_fields
+  | opt_template ;
+
+set_image_option =
+    opt_all2
+  | opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_filename
+  | opt_kustomize
+  | opt_local
+  | opt_output
+  | opt_recursive
+  | opt_selector
+  | opt_show_managed_fields
+  | "--source" : "The image source type" , @any | "--source=" : "The image source type" ~ @any
+  | opt_template ;
+
+set_resources_option =
+    opt_all2
+  | opt_allow_missing_template_keys
+  | "-c" : "Containers of the pod templates to change, wildcards allowed" , @any | "--containers" : "Containers of the pod templates to change, wildcards allowed" , @any | "--containers=" : "Containers of the pod templates to change, wildcards allowed" ~ @any
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_filename
+  | opt_kustomize
+  | "--limits" : "The resource requirement requests for this container" , @any | "--limits=" : "The resource requirement requests for this container" ~ @any
+  | "--local" : "Set resources will NOT contact api-server but run locally"
+  | opt_output
+  | opt_recursive
+  | "--requests" : "The resource requirement requests for this container" , @any | "--requests=" : "The resource requirement requests for this container" ~ @any
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template ;
+
+set_command =
+    "build-hook" : "Update a build hook on a build config" , { global_option | @any }
+  | "build-secret" : "Update a build secret on a build config" , { global_option | @any }
+  | "data" : "Update the data within a config map or secret" , { global_option | @any }
+  | "deployment-hook" : "Update a deployment hook on a deployment config" , { global_option | @any }
+  | "env" : "Update environment variables on a pod template" , { set_env_option | global_option | resource_type | @any }
+  | "image" : "Update the image of a pod template" , { set_image_option | global_option | resource_type | @any }
+  | "image-lookup" : "Change how images are resolved when deploying applications" , { global_option | @any }
+  | "probe" : "Update a probe on a pod template" , { global_option | @any }
+  | "resources" : "Update resource requests/limits on objects with pod templates" , { set_resources_option | global_option | resource_type | @any }
+  | "route-backends" : "Update the backends for a route" , { global_option | @any }
+  | "selector" : "Set the selector on a resource" , { global_option | @any }
+  | "serviceaccount" : "Update the service account of a resource" , { global_option | @any }
+  | "subject" : "Update the user, group or service account of a role binding" , { global_option | @any }
+  | "triggers" : "Update the triggers on one or more objects" , { global_option | @any }
+  | "volumes" : "Update volumes on a pod template" , { global_option | @any } ;
+
+label_option =
+    opt_all2
+  | opt_all_namespaces2
+  | opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_field_selector
+  | opt_filename
+  | opt_kustomize
+  | "--list" : "Display the labels for a given resource"
+  | "--local" : "Label will NOT contact api-server but run locally"
+  | opt_output
+  | "--overwrite" : "Allow labels to be overwritten"
+  | opt_recursive
+  | opt_resource_version
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template ;
+
+annotate_option =
+    opt_all2
+  | opt_all_namespaces2
+  | opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_field_selector
+  | opt_filename
+  | opt_kustomize
+  | "--list" : "Display the annotations for a given resource"
+  | opt_local2
+  | opt_output
+  | "--overwrite" : "Allow annotations to be overwritten"
+  | opt_recursive
+  | opt_resource_version
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template ;
+
+expose_option =
+    opt_allow_missing_template_keys
+  | "--cluster-ip" : "ClusterIP to be assigned to the service" , @any | "--cluster-ip=" : "ClusterIP to be assigned to the service" ~ @any
+  | opt_dry_run2
+  | "--external-ip" : "Additional external IP address to accept for the service" , @any | "--external-ip=" : "Additional external IP address to accept for the service" ~ @any
+  | opt_field_manager
+  | opt_filename
+  | "--hostname" : "Set a hostname for the new route" , @any | "--hostname=" : "Set a hostname for the new route" ~ @any
+  | opt_kustomize
+  | "-l" : "Labels to apply to the service created by this call" , @any | "--labels" : "Labels to apply to the service created by this call" , @any | "--labels=" : "Labels to apply to the service created by this call" ~ @any
+  | "--load-balancer-ip" : "IP to assign to the LoadBalancer" , @any | "--load-balancer-ip=" : "IP to assign to the LoadBalancer" ~ @any
+  | opt_name
+  | opt_output
+  | opt_override_type
+  | opt_overrides
+  | "--path" : "Set a path for the new route" , @any | "--path=" : "Set a path for the new route" ~ @any
+  | "--port" : "The port that the service should serve on" , @any | "--port=" : "The port that the service should serve on" ~ @any
+  | "--protocol" : "The network protocol for the service to be created" , @any | "--protocol=" : "The network protocol for the service to be created" ~ @any
+  | opt_recursive
+  | opt_save_config
+  | "--selector" : "A label selector to use for this service" , @any | "--selector=" : "A label selector to use for this service" ~ @any
+  | "--session-affinity" : "If non-empty, set the session affinity for the service to this" , @any | "--session-affinity=" : "If non-empty, set the session affinity for the service to this" ~ @any
+  | opt_show_managed_fields
+  | "--target-port" : "Container port, by name or number, that receives the traffic" , @any | "--target-port=" : "Container port, by name or number, that receives the traffic" ~ @any
+  | opt_template
+  | "--type" : "Service type: ClusterIP, NodePort, LoadBalancer or ExternalName" , @any | "--type=" : "Service type: ClusterIP, NodePort, LoadBalancer or ExternalName" ~ @any
+  | "--wildcard-policy" : "Sets the WildcardPolicy for the hostname, the default is 'None'" , @any | "--wildcard-policy=" : "Sets the WildcardPolicy for the hostname, the default is 'None'" ~ @any ;
+
+delete_option =
+    "--all" : "Delete all resources, in the namespace of the specified resource types"
+  | opt_all_namespaces
+  | opt_cascade
+  | opt_dry_run2
+  | opt_field_selector
+  | "-f" : "Containing the resource to delete" , @file | "--filename" : "Containing the resource to delete" , @file | "--filename=" : "Containing the resource to delete" ~ @file
+  | opt_force
+  | opt_grace_period
+  | "--ignore-not-found" : "Treat 'resource not found' as a successful delete"
+  | "-i" : "Delete resource only when user confirms" | "--interactive" : "Delete resource only when user confirms"
+  | opt_kustomize2
+  | "--now" : "Resources are signaled for immediate shutdown (same as --grace-period=1)"
+  | "-o" : "Output mode" , output_format | "--output" : "Output mode" , output_format | "--output=" : "Output mode" ~ output_name
+  | "--raw" : "Raw URI to DELETE to the server" , @any | "--raw=" : "Raw URI to DELETE to the server" ~ @any
+  | opt_recursive
+  | opt_selector
+  | opt_timeout
+  | opt_wait ;
+
+scale_option =
+    opt_all
+  | opt_allow_missing_template_keys
+  | "--current-replicas" : "Precondition for current size" , @any | "--current-replicas=" : "Precondition for current size" ~ @any
+  | opt_dry_run2
+  | opt_filename
+  | opt_kustomize
+  | opt_output
+  | opt_recursive
+  | "--replicas" : "The new desired number of replicas" , @any | "--replicas=" : "The new desired number of replicas" ~ @any
+  | "--resource-version" : "Precondition for resource version" , @any | "--resource-version=" : "Precondition for resource version" ~ @any
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template
+  | "--timeout" : "Time to wait before giving up on a scale, 0 to not wait" , @any | "--timeout=" : "Time to wait before giving up on a scale, 0 to not wait" ~ @any ;
+
+autoscale_option =
+    opt_allow_missing_template_keys
+  | "--cpu-percent" : "The target average CPU utilization over all the pods" , @any | "--cpu-percent=" : "The target average CPU utilization over all the pods" ~ @any
+  | opt_dry_run2
+  | opt_field_manager
+  | opt_filename
+  | opt_kustomize
+  | "--max" : "The upper limit for the number of pods that can be set by the autoscaler" , @any | "--max=" : "The upper limit for the number of pods that can be set by the autoscaler" ~ @any
+  | "--min" : "The lower limit for the number of pods that can be set by the autoscaler" , @any | "--min=" : "The lower limit for the number of pods that can be set by the autoscaler" ~ @any
+  | opt_name
+  | opt_output
+  | opt_recursive
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_template ;
+
+secrets_command =
+    "link" : "Link secrets to a service account" , { global_option | @any }
+  | "unlink" : "Detach secrets from a service account" , { global_option | @any } ;
+
+logs_option =
+    "--all-containers" : "Get all containers' logs in the pod(s)"
+  | "-c" : "Print the logs of this container" , @any | "--container" : "Print the logs of this container" , @any | "--container=" : "Print the logs of this container" ~ @any
+  | "-f" : "Specify if the logs should be streamed" | "--follow" : "Specify if the logs should be streamed"
+  | "--ignore-errors" : "Make errors non-fatal while following pod logs"
+  | "--insecure-skip-tls-verify-backend" : "Skip verifying the identity of the kubelet that logs are requested from"
+  | "--limit-bytes" : "Maximum bytes of logs to return" , @any | "--limit-bytes=" : "Maximum bytes of logs to return" ~ @any
+  | "--max-log-requests" : "Maximum concurrent logs to follow with a selector" , @any | "--max-log-requests=" : "Maximum concurrent logs to follow with a selector" ~ @any
+  | opt_pod_running_timeout
+  | "--prefix" : "Prefix each log line with the log source (pod name and container name)"
+  | "-p" : "Print the logs of the previous instance of the container" | "--previous" : "Print the logs of the previous instance of the container"
+  | opt_selector
+  | "--since" : "Only return logs newer than a relative duration like 5s, 2m, or 3h" , @any | "--since=" : "Only return logs newer than a relative duration like 5s, 2m, or 3h" ~ @any
+  | "--since-time" : "Only return logs after a specific date (RFC3339)" , @any | "--since-time=" : "Only return logs after a specific date (RFC3339)" ~ @any
+  | "--tail" : "Lines of recent log file to display" , @any | "--tail=" : "Lines of recent log file to display" ~ @any
+  | "--timestamps" : "Include timestamps on each line in the log output"
+  | "--version" : "View the logs of this build or deployment version" , @any | "--version=" : "View the logs of this build or deployment version" ~ @any ;
+
+rsh_option =
+    opt_container
+  | "-f" : "To use to rsh into the resource" , @file | "--filename" : "To use to rsh into the resource" , @file | "--filename=" : "To use to rsh into the resource" ~ @file
+  | opt_no_tty
+  | opt_pod_running_timeout
+  | "--shell" : "Path to the shell command" , @any | "--shell=" : "Path to the shell command" ~ @any
+  | opt_tty ;
+
+rsync_option =
+    "--compress" : "Compress file data during the transfer"
+  | "-c" : "Container within the pod" , @any | "--container" : "Container within the pod" , @any | "--container=" : "Container within the pod" ~ @any
+  | "--delete" : "Delete files not present in source"
+  | "--exclude" : "When specified, exclude files matching pattern" , @any | "--exclude=" : "When specified, exclude files matching pattern" ~ @any
+  | "--include" : "When specified, include files matching pattern" , @any | "--include=" : "When specified, include files matching pattern" ~ @any
+  | "--no-perms" : "Do not transfer permissions"
+  | "--progress" : "Show progress during transfer"
+  | "-q" : "Suppress non-error messages" | "--quiet" : "Suppress non-error messages"
+  | "--strategy" : "Specify which strategy to use for copy: rsync, rsync-daemon, or tar" , @any | "--strategy=" : "Specify which strategy to use for copy: rsync, rsync-daemon, or tar" ~ @any
+  | "-w" : "Watch directory for changes and resync automatically" | "--watch" : "Watch directory for changes and resync automatically" ;
+
+port_forward_option =
+    "--address" : "Addresses to listen on (comma separated)" , @any | "--address=" : "Addresses to listen on (comma separated)" ~ @any
+  | opt_pod_running_timeout ;
+
+debug_option =
+    opt_allow_missing_template_keys
+  | "--as-root" : "Try to run the container as the root user"
+  | "--as-user" : "Try to run the container as a specific user UID" , @any | "--as-user=" : "Try to run the container as a specific user UID" ~ @any
+  | opt_container
+  | opt_dry_run2
+  | "-f" : "Filename, directory, or URL to files to read a template" , @file | "--filename" : "Filename, directory, or URL to files to read a template" , @file | "--filename=" : "Filename, directory, or URL to files to read a template" ~ @file
+  | "--image" : "Override the image used by the targeted container" , @any | "--image=" : "Override the image used by the targeted container" ~ @any
+  | "--image-stream" : "Specify an image stream containing a debug image to run" , @any | "--image-stream=" : "Specify an image stream containing a debug image to run" ~ @any
+  | "--keep-annotations" : "Keep the original pod annotations"
+  | "--keep-init-containers" : "Run the init containers for the pod"
+  | "--keep-labels" : "Keep the original pod labels"
+  | "--keep-liveness" : "Keep the original pod liveness probes"
+  | "--keep-readiness" : "Keep the original pod readiness probes"
+  | "--keep-startup" : "Keep the original startup probes"
+  | opt_kustomize
+  | "-I" : "Do not pass stdin to the container" | "--no-stdin" : "Do not pass stdin to the container"
+  | opt_no_tty
+  | "--node-name" : "Node to run on" , @any | "--node-name=" : "Node to run on" ~ @any
+  | "--one-container" : "Run only the selected container, remove all others"
+  | opt_output
+  | "--preserve-pod" : "The pod will not be deleted after the debug command exits"
+  | "-q" : "No informational messages will be printed" | "--quiet" : "No informational messages will be printed"
+  | opt_recursive
+  | opt_show_labels
+  | opt_show_managed_fields
+  | opt_template
+  | "--to-namespace" : "Override the namespace to create the pod into" , @any | "--to-namespace=" : "Override the namespace to create the pod into" ~ @any
+  | opt_tty ;
+
+exec_option =
+    opt_container
+  | "-f" : "To use to exec into the resource" , @file | "--filename" : "To use to exec into the resource" , @file | "--filename=" : "To use to exec into the resource" ~ @file
+  | opt_pod_running_timeout
+  | opt_quiet
+  | opt_stdin
+  | opt_tty2 ;
+
+proxy_option =
+    "--accept-hosts" : "Regular expression for hosts that the proxy should accept" , @any | "--accept-hosts=" : "Regular expression for hosts that the proxy should accept" ~ @any
+  | "--accept-paths" : "Regular expression for paths that the proxy should accept" , @any | "--accept-paths=" : "Regular expression for paths that the proxy should accept" ~ @any
+  | "--address" : "The IP address on which to serve on" , @any | "--address=" : "The IP address on which to serve on" ~ @any
+  | "--api-prefix" : "Prefix to serve the proxied API under" , @any | "--api-prefix=" : "Prefix to serve the proxied API under" ~ @any
+  | "--append-server-path" : "Append the kube context server path to each request"
+  | "--disable-filter" : "Disable request filtering in the proxy"
+  | "--keepalive" : "Keep-alive period of an active network connection" , @any | "--keepalive=" : "Keep-alive period of an active network connection" ~ @any
+  | "-p" : "The port on which to run the proxy" , @any | "--port" : "The port on which to run the proxy" , @any | "--port=" : "The port on which to run the proxy" ~ @any
+  | "--reject-methods" : "Regular expression for HTTP methods that the proxy should reject" , @any | "--reject-methods=" : "Regular expression for HTTP methods that the proxy should reject" ~ @any
+  | "--reject-paths" : "Regular expression for paths that the proxy should reject" , @any | "--reject-paths=" : "Regular expression for paths that the proxy should reject" ~ @any
+  | "-u" : "Unix socket on which to run the proxy" , @any | "--unix-socket" : "Unix socket on which to run the proxy" , @any | "--unix-socket=" : "Unix socket on which to run the proxy" ~ @any
+  | "-w" : "Also serve static files from this directory" , @any | "--www" : "Also serve static files from this directory" , @any | "--www=" : "Also serve static files from this directory" ~ @any
+  | "-P" : "Prefix to serve static files under" , @any | "--www-prefix" : "Prefix to serve static files under" , @any | "--www-prefix=" : "Prefix to serve static files under" ~ @any ;
+
+attach_option =
+    opt_container
+  | opt_pod_running_timeout
+  | opt_quiet
+  | opt_stdin
+  | opt_tty2 ;
+
+run_option =
+    opt_allow_missing_template_keys
+  | "--annotations" : "Annotations to apply to the pod" , @any | "--annotations=" : "Annotations to apply to the pod" ~ @any
+  | "--attach" : "Wait for the pod to start running, then attach to it"
+  | "--command" : "Use extra arguments as the container's command, not its args"
+  | opt_dry_run2
+  | "--env" : "Environment variables to set in the container" , @any | "--env=" : "Environment variables to set in the container" ~ @any
+  | "--expose" : "Create a ClusterIP service associated with the pod"
+  | opt_field_manager
+  | "--image" : "The image for the container to run" , @any | "--image=" : "The image for the container to run" ~ @any
+  | "--image-pull-policy" : "The image pull policy for the container" , @any | "--image-pull-policy=" : "The image pull policy for the container" ~ @any
+  | "-l" : "Comma separated labels to apply to the pod" , @any | "--labels" : "Comma separated labels to apply to the pod" , @any | "--labels=" : "Comma separated labels to apply to the pod" ~ @any
+  | "--leave-stdin-open" : "Leave stdin open after the first attach completes"
+  | opt_output
+  | opt_override_type
+  | opt_overrides
+  | opt_pod_running_timeout
+  | opt_port
+  | "--privileged" : "Run the container in privileged mode"
+  | "-q" : "Suppress prompt messages" | "--quiet" : "Suppress prompt messages"
+  | "--restart" : "The restart policy for this Pod" , @any | "--restart=" : "The restart policy for this Pod" ~ @any
+  | "--rm" : "Delete the pod after it exits"
+  | opt_save_config
+  | opt_show_managed_fields
+  | "-i" : "Keep stdin open on the container in the pod, even if nothing is attached" | "--stdin" : "Keep stdin open on the container in the pod, even if nothing is attached"
+  | opt_template
+  | "-t" : "Allocate a TTY for the container in the pod" | "--tty" : "Allocate a TTY for the container in the pod" ;
+
+cp_option =
+    opt_container
+  | "--no-preserve" : "Do not preserve ownership and permissions in the container"
+  | "--retries" : "Set number of retries to complete a copy operation from a container" , @any | "--retries=" : "Set number of retries to complete a copy operation from a container" ~ @any ;
+
+wait_option =
+    opt_all
+  | opt_all_namespaces
+  | opt_allow_missing_template_keys
+  | opt_field_selector
+  | "-f" : "Identifying the resource" , @file | "--filename" : "Identifying the resource" , @file | "--filename=" : "Identifying the resource" ~ @file
+  | "--for" : "Condition to wait on: delete, condition=NAME or jsonpath=EXPR" , @any | "--for=" : "Condition to wait on: delete, condition=NAME or jsonpath=EXPR" ~ @any
+  | opt_local2
+  | opt_output
+  | opt_recursive
+  | opt_selector
+  | opt_show_managed_fields
+  | opt_template
+  | "--timeout" : "The length of time to wait before giving up" , @any | "--timeout=" : "The length of time to wait before giving up" ~ @any ;
+
+events_option =
+    opt_all_namespaces
+  | opt_allow_missing_template_keys
+  | opt_chunk_size
+  | "--for" : "Filter events to only those pertaining to the specified resource" , @any | "--for=" : "Filter events to only those pertaining to the specified resource" ~ @any
+  | "--no-headers" : "When using the default output format, don't print headers"
+  | opt_output
+  | opt_show_managed_fields
+  | opt_template
+  | "--types" : "Output only events of given types" , @any | "--types=" : "Output only events of given types" ~ @any
+  | "-w" : "After listing the requested events, watch for more events" | "--watch" : "After listing the requested events, watch for more events" ;
+
+adm_catalog_command = "mirror" : "Mirror an operator-registry catalog" , { global_option | @any } ;
+
+adm_certificate_command =
+    "approve" : "Approve a certificate signing request" , { global_option | @any }
+  | "deny" : "Deny a certificate signing request" , { global_option | @any } ;
+
+adm_groups_command =
+    "add-users" : "Add users to a group" , { global_option | @any }
+  | "new" : "Create a new group" , { global_option | @any }
+  | "prune" : "Remove groups whose external provider records are gone" , { global_option | @any }
+  | "remove-users" : "Remove users from a group" , { global_option | @any }
+  | "sync" : "Sync OpenShift groups with records from an external provider" , { global_option | @any } ;
+
+adm_migrate_command =
+    "icsp" : "Update imagecontentsourcepolicy file(s) to imagedigestmirrorset file(s)" , { global_option | @any }
+  | "template-instances" : "Update template instances to point to the latest group-version-kinds" , { global_option | @any } ;
+
+adm_ocp_certificates_command =
+    "monitor-certificates" : "Watch platform certificates" , { global_option | @any }
+  | "regenerate-leaf" : "Regenerate client and serving certificates of an OpenShift cluster" , { global_option | @any }
+  | "regenerate-machine-config-server-serving-cert" : "Regenerate the machine config operator certificates" , { global_option | @any }
+  | "regenerate-top-level" : "Regenerate the top level certificates in an OpenShift cluster" , { global_option | @any }
+  | "remove-old-trust" : "Remove old CAs from the platform trust bundle config maps" , { global_option | @any }
+  | "update-ignition-ca-bundle-for-machine-config-server" : "Update user-data secrets to use the new MCO certificates" , { global_option | @any } ;
+
+adm_pod_network_command =
+    "isolate-projects" : "Isolate project network" , { global_option | @any }
+  | "join-projects" : "Join project network" , { global_option | @any }
+  | "make-projects-global" : "Make project network global" , { global_option | @any } ;
+
+adm_policy_command =
+    "add-cluster-role-to-group" : "Add a role to groups for all projects in the cluster" , { global_option | @any }
+  | "add-cluster-role-to-user" : "Add a role to users for all projects in the cluster" , { global_option | @any }
+  | "add-role-to-group" : "Add a role to groups for the project" , { global_option | @any }
+  | "add-role-to-user" : "Add a role to users or service accounts for the current project" , { global_option | @any }
+  | "add-scc-to-group" : "Add a security context constraint to groups" , { global_option | @any }
+  | "add-scc-to-user" : "Add a security context constraint to users or a service account" , { global_option | @any }
+  | "remove-cluster-role-from-group" : "Remove a role from groups for all projects in the cluster" , { global_option | @any }
+  | "remove-cluster-role-from-user" : "Remove a role from users for all projects in the cluster" , { global_option | @any }
+  | "remove-group" : "Remove group from the project" , { global_option | @any }
+  | "remove-role-from-group" : "Remove a role from groups for the project" , { global_option | @any }
+  | "remove-role-from-user" : "Remove a role from users for the project" , { global_option | @any }
+  | "remove-scc-from-group" : "Remove a group from a security context constraint" , { global_option | @any }
+  | "remove-scc-from-user" : "Remove a user from a security context constraint" , { global_option | @any }
+  | "remove-user" : "Remove user from the project" , { global_option | @any }
+  | "scc-review" : "Check which service account can create a pod" , { global_option | @any }
+  | "scc-subject-review" : "Check whether a user or a service account can create a pod" , { global_option | @any }
+  | "who-can" : "List who can perform the specified action on a resource" , { global_option | @any } ;
+
+adm_prune_command =
+    "auth" : "Remove references to these roles, cluster roles, users and groups" , { global_option | @any }
+  | "builds" : "Remove old completed and failed builds" , { global_option | @any }
+  | "deployments" : "Remove old completed and failed deployment configs" , { global_option | @any }
+  | "groups" : "Remove groups whose external provider records are gone" , { global_option | @any }
+  | "images" : "Remove unreferenced images" , { global_option | @any }
+  | "renderedmachineconfigs" : "Prunes rendered MachineConfigs in an OpenShift cluster" , { global_option | @any } ;
+
+adm_release_command =
+    "extract" : "Extract the contents of an update payload to disk" , { global_option | @any }
+  | "info" : "Display information about a release" , { global_option | @any }
+  | "mirror" : "Mirror a release to a different image registry location" , { global_option | @any }
+  | "new" : "Create a new OpenShift release" , { global_option | @any } ;
+
+adm_top_command =
+    "images" : "Show usage statistics for images" , { global_option | @any }
+  | "imagestreams" : "Show usage statistics for image streams" , { global_option | @any }
+  | "node" : "Display resource (CPU/memory) usage of nodes" , { global_option | @any }
+  | "pod" : "Display resource (CPU/memory) usage of pods" , { global_option | @any } ;
+
+adm_upgrade_command = "channel" : "Set or clear the update channel" , { global_option | @any } ;
+
+adm_command =
+    "build-chain" : "Output the inputs and dependencies of your builds" , { global_option | @any }
+  | "catalog" : "Tools for managing the OpenShift OLM Catalogs" , { global_option } , [ adm_catalog_command ]
+  | "certificate" : "Approve or reject certificate requests" , { global_option } , [ adm_certificate_command ]
+  | "copy-to-node" : "Copies specified files to the node" , { global_option | @any }
+  | "cordon" : "Mark node as unschedulable" , { global_option | @any }
+  | "create-bootstrap-project-template" : "Create a bootstrap project template" , { global_option | @any }
+  | "create-error-template" : "Create an error page template" , { global_option | @any }
+  | "create-login-template" : "Create a login template" , { global_option | @any }
+  | "create-provider-selection-template" : "Create a provider selection template" , { global_option | @any }
+  | "drain" : "Drain node in preparation for maintenance" , { global_option | @any }
+  | "groups" : "Manage groups" , { global_option } , [ adm_groups_command ]
+  | "inspect" : "Collect debugging data for a given resource" , { global_option | @any }
+  | "migrate" : "Migrate data in the cluster" , { global_option } , [ adm_migrate_command ]
+  | "must-gather" : "Launch a new instance of a pod for gathering debug information" , { global_option | @any }
+  | "new-project" : "Create a new project" , { global_option | @any }
+  | "node-logs" : "Display and filter node logs" , { global_option | @any }
+  | "ocp-certificates" : "Tools for managing a cluster's certificates" , { global_option } , [ adm_ocp_certificates_command ]
+  | "pod-network" : "Manage pod network" , { global_option } , [ adm_pod_network_command ]
+  | "policy" : "Manage cluster authorization and security policy" , { global_option } , [ adm_policy_command ]
+  | "prune" : "Remove older versions of resources from the server" , { global_option } , [ adm_prune_command ]
+  | "reboot-machine-config-pool" : "Initiate reboot of the specified MachineConfigPool" , { global_option | @any }
+  | "release" : "Tools for managing the OpenShift release process" , { global_option } , [ adm_release_command ]
+  | "restart-kubelet" : "Restarts kubelet on the specified nodes" , { global_option | @any }
+  | "taint" : "Update the taints on one or more nodes" , { global_option | @any }
+  | "top" : "Show usage statistics of resources on the server" , { global_option } , [ adm_top_command ]
+  | "uncordon" : "Mark node as schedulable" , { global_option | @any }
+  | "upgrade" : "Upgrade a cluster or adjust the upgrade channel" , { global_option } , [ adm_upgrade_command ]
+  | "verify-image-signature" : "Verify the image identity contained in the image signature" , { global_option | @any }
+  | "wait-for-node-reboot" : "Wait for nodes to reboot after reboot-machine-config-pool" , { global_option | @any }
+  | "wait-for-stable-cluster" : "Wait for the platform operators to become stable" , { global_option | @any } ;
+
+replace_option =
+    opt_allow_missing_template_keys
+  | opt_cascade
+  | opt_dry_run2
+  | opt_field_manager
+  | "-f" : "The files that contain the configurations to replace" , @file | "--filename" : "The files that contain the configurations to replace" , @file | "--filename=" : "The files that contain the configurations to replace" ~ @file
+  | opt_force
+  | opt_grace_period
+  | opt_kustomize2
+  | opt_output
+  | "--raw" : "Raw URI to PUT to the server" , @any | "--raw=" : "Raw URI to PUT to the server" ~ @any
+  | opt_recursive
+  | opt_save_config
+  | opt_show_managed_fields
+  | opt_subresource
+  | opt_template
+  | opt_timeout
+  | opt_validate
+  | opt_wait ;
+
+patch_option =
+    opt_allow_missing_template_keys
+  | opt_dry_run2
+  | opt_field_manager
+  | "-f" : "Filename, directory, or URL to files identifying the resource to update" , @file | "--filename" : "Filename, directory, or URL to files identifying the resource to update" , @file | "--filename=" : "Filename, directory, or URL to files identifying the resource to update" ~ @file
+  | opt_kustomize
+  | "--local" : "Patch the content of the file, not the server-side resource"
+  | opt_output
+  | "-p" : "The patch to be applied to the resource JSON file" , @any | "--patch" : "The patch to be applied to the resource JSON file" , @any | "--patch=" : "The patch to be applied to the resource JSON file" ~ @any
+  | "--patch-file" : "A file containing a patch to be applied to the resource" , @any | "--patch-file=" : "A file containing a patch to be applied to the resource" ~ @any
+  | opt_recursive
+  | opt_show_managed_fields
+  | opt_subresource
+  | opt_template
+  | "--type" : "The type of patch being provided" , @any | "--type=" : "The type of patch being provided" ~ @any ;
+
+process_option =
+    opt_allow_missing_template_keys
+  | "-f" : "Filename or URL to file to read a template" , @file | "--filename" : "Filename or URL to file to read a template" , @file | "--filename=" : "Filename or URL to file to read a template" ~ @file
+  | opt_ignore_unknown_parameters
+  | "-l" : "Label to set in all resources for this template" , @any | "--labels" : "Label to set in all resources for this template" , @any | "--labels=" : "Label to set in all resources for this template" ~ @any
+  | "--local" : "If true process the template locally instead of contacting the server"
+  | opt_output
+  | opt_param
+  | "--param-file" : "File of template parameter values to set or override" , @any | "--param-file=" : "File of template parameter values to set or override" ~ @any
+  | "--parameters" : "Do not process but only print available parameters"
+  | "--raw" : "Output the processed template instead of the template's objects"
+  | opt_show_managed_fields
+  | opt_template ;
+
+extract_option =
+    "--confirm" : "Overwrite files that already exist"
+  | "-f" : "Filename, directory, or URL to file to identify to extract the resource" | "--filename" : "Filename, directory, or URL to file to identify to extract the resource"
+  | "--keys" : "An optional list of keys to extract"
+  | "--to" : "Directory to extract files to" ;
+
+observe_option =
+    "-A" : "List the requested object(s) across all projects" | "--all-namespaces" : "List the requested object(s) across all projects"
+  | opt_allow_missing_template_keys
+  | "-d" : "A command to run when resources are deleted" | "--delete" : "A command to run when resources are deleted"
+  | "--exit-after" : "Exit with status code 0 after the provided duration, optional"
+  | "--listen-addr" : "Interface for the metrics and health endpoints"
+  | "--maximum-errors" : "Exit after this many errors have been detected with"
+  | "--names" : "A command that will list all of the currently known names, optional"
+  | "--object-env-var" : "Env var that receives the serialized object"
+  | "--once" : "Exit with a status code 0 after all current objects have been processed"
+  | "-o" : "Output format" | "--output" : "Output format"
+  | "--print-metrics-on-exit" : "On exit write all metrics to stdout"
+  | "-q" : "Do not print each event before running the command" | "--quiet" : "Do not print each event before running the command"
+  | "--resync-period" : "Reprocess every item as a Sync event at this interval"
+  | "--retry-count" : "The number of times to retry a failing command before continuing"
+  | "--retry-on-exit-code" : "If any command returns this exit code, retry up to --retry-count times"
+  | "-l" : "Selector (label query) to filter on, supports '=', '==', and '!='" | "--selector" : "Selector (label query) to filter on, supports '=', '==', and '!='"
+  | "--template" : "Template string or file for -o go-template or go-template-file"
+  | "--type-env-var" : "Env var that receives the event type" ;
+
+policy_command =
+    "add-role-to-group" : "Add a role to groups for the project" , { global_option | @any }
+  | "add-role-to-user" : "Add a role to users or service accounts for the current project" , { global_option | @any }
+  | "remove-group" : "Remove group from the project" , { global_option | @any }
+  | "remove-role-from-group" : "Remove a role from groups for the project" , { global_option | @any }
+  | "remove-role-from-user" : "Remove a role from users for the project" , { global_option | @any }
+  | "remove-user" : "Remove user from the project" , { global_option | @any }
+  | "scc-review" : "Check which service account can create a pod" , { global_option | @any }
+  | "scc-subject-review" : "Check whether a user or a service account can create a pod" , { global_option | @any }
+  | "who-can" : "List who can perform the specified action on a resource" , { global_option | @any } ;
+
+auth_can_i_option =
+    opt_all_namespaces2
+  | "--list" : "Prints all allowed actions"
+  | "--no-headers" : "Prints allowed actions without headers"
+  | "-q" : "Suppress output and just return the exit code" | "--quiet" : "Suppress output and just return the exit code"
+  | "--subresource" : "SubResource such as pod/log or deployment/scale" , @any | "--subresource=" : "SubResource such as pod/log or deployment/scale" ~ @any ;
+
+auth_whoami_option =
+    opt_allow_missing_template_keys
+  | opt_output
+  | opt_show_managed_fields
+  | opt_template ;
+
+auth_command =
+    "can-i" : "Check whether an action is allowed" , { auth_can_i_option | global_option | resource_type | @any }
+  | "reconcile" : "Reconcile rules of RBAC roles, cluster roles and their bindings" , { global_option | @any }
+  | "whoami" : "Experimental: Check self subject attributes" , { auth_whoami_option | global_option } ;
+
+image_command =
+    "append" : "Add layers to images and push them to a registry" , { global_option | @any }
+  | "extract" : "Copy files from an image to the file system" , { global_option | @any }
+  | "info" : "Display information about an image" , { global_option | @any }
+  | "mirror" : "Mirror images from one repository to another" , { global_option | @any } ;
+
+registry_command = "login" : "Log in to the integrated registry" , { global_option | @any } ;
+
+idle_option =
+    "--all" : "Select all services in the namespace"
+  | "-A" : "Select services across all namespaces" | "--all-namespaces" : "Select services across all namespaces"
+  | "--dry-run" : "Only print the annotations that would be written" | "--dry-run=" : "Only print the annotations that would be written" ~ ( "none" | "server" | "client" )
+  | "--resource-names-file" : "File containing list of services whose scalable resources to idle" , @any | "--resource-names-file=" : "File containing list of services whose scalable resources to idle" ~ @any
+  | "-l" : "Selector (label query) to use to select services" , @any | "--selector" : "Selector (label query) to use to select services" , @any | "--selector=" : "Selector (label query) to use to select services" ~ @any ;
+
+api_resources_option =
+    "--api-group" : "Limit to resources in the specified API group" , @any | "--api-group=" : "Limit to resources in the specified API group" ~ @any
+  | "--cached" : "Use the cached list of resources if available"
+  | "--categories" : "Limit to resources that belong to the specified categories" , @any | "--categories=" : "Limit to resources that belong to the specified categories" ~ @any
+  | "--namespaced" : "List namespaced resources, or cluster-wide ones when false"
+  | opt_no_headers
+  | opt_output
+  | "--sort-by" : "If non-empty, sort list of resources using specified field" , @any | "--sort-by=" : "If non-empty, sort list of resources using specified field" ~ @any
+  | "--verbs" : "Limit to resources that support the specified verbs" , @any | "--verbs=" : "Limit to resources that support the specified verbs" ~ @any ;
+
+cluster_info_command =
+    "dump" : "Dump relevant information for debugging and diagnosis" , { global_option | @any } ;
+
+diff_option =
+    "--concurrency" : "Number of objects to diff in parallel" , @any | "--concurrency=" : "Number of objects to diff in parallel" ~ @any
+  | opt_field_manager
+  | "-f" : "Filename, directory, or URL to files contains the configuration to diff" , @file | "--filename" : "Filename, directory, or URL to files contains the configuration to diff" , @file | "--filename=" : "Filename, directory, or URL to files contains the configuration to diff" ~ @file
+  | opt_force_conflicts
+  | opt_kustomize
+  | "--prune" : "Include resources that would be deleted by pruning"
+  | "--prune-allowlist" : "Overwrite the default whitelist with <group/version/kind> for --prune" , @any | "--prune-allowlist=" : "Overwrite the default whitelist with <group/version/kind> for --prune" ~ @any
+  | opt_recursive
+  | opt_selector
+  | opt_server_side
+  | "--show-managed-fields" : "Include managed fields in the diff" ;
+
+kustomize_option =
+    "--as-current-user" : "Run the function with the uid and gid of the command executor"
+  | "--enable-alpha-plugins" : "Enable kustomize plugins"
+  | "--enable-helm" : "Enable use of the Helm chart inflator generator"
+  | "-e" : "A list of environment variables to be used by functions" , @any | "--env" : "A list of environment variables to be used by functions" , @any | "--env=" : "A list of environment variables to be used by functions" ~ @any
+  | "--helm-command" : "Helm command (path to executable)" , @any | "--helm-command=" : "Helm command (path to executable)" ~ @any
+  | "--load-restrictor" : "LoadRestrictionsNone lets kustomizations load files outside their root" , @any | "--load-restrictor=" : "LoadRestrictionsNone lets kustomizations load files outside their root" ~ @any
+  | "--mount" : "A list of storage options read from the filesystem" , @any | "--mount=" : "A list of storage options read from the filesystem" ~ @any
+  | "--network" : "Enable network access for functions that declare it"
+  | "--network-name" : "The docker network to run the container in" , @any | "--network-name=" : "The docker network to run the container in" ~ @any
+  | "-o" : "If specified, write output to this path" , output_format | "--output" : "If specified, write output to this path" , output_format | "--output=" : "If specified, write output to this path" ~ output_name ;
+
+get_token_option =
+    "--auto-open-browser" : "Specify browser is automatically opened or not"
+  | "--callback-address" : "Callback address the external OIDC issuer redirects to"
+  | "--client-id" : "Client ID of the user managed by the external OIDC provider"
+  | "--client-secret" : "Client Secret of the user managed by the external OIDC provider"
+  | "--extra-scopes" : "Extra scopes for the auth request to the external OIDC provider"
+  | "--issuer-url" : "Issuer URL of the external OIDC provider" ;
+
+config_get_contexts_option =
+    opt_no_headers
+  | opt_output ;
+
+config_refresh_ca_bundle_option =
+    "--dry-run" : "Display the CA bundle, but don't make any changes to the kubeconfig" | "--dry-run=" : "Display the CA bundle, but don't make any changes to the kubeconfig" ~ ( "none" | "server" | "client" ) ;
+
+config_set_option = "--set-raw-bytes" : "Write a []byte value as given, without base64 decoding" ;
+
+config_set_cluster_option =
+    "--certificate-authority" : "Path to certificate-authority file for the cluster entry in kubeconfig" , @file | "--certificate-authority=" : "Path to certificate-authority file for the cluster entry in kubeconfig" ~ @file
+  | "--embed-certs" : "Embed-certs for the cluster entry in kubeconfig"
+  | "--insecure-skip-tls-verify" : "Insecure-skip-tls-verify for the cluster entry in kubeconfig"
+  | "--proxy-url" : "Proxy-url for the cluster entry in kubeconfig" , @any | "--proxy-url=" : "Proxy-url for the cluster entry in kubeconfig" ~ @any
+  | "--server" : "Server for the cluster entry in kubeconfig" , @any | "--server=" : "Server for the cluster entry in kubeconfig" ~ @any
+  | "--tls-server-name" : "Tls-server-name for the cluster entry in kubeconfig" , @any | "--tls-server-name=" : "Tls-server-name for the cluster entry in kubeconfig" ~ @any ;
+
+config_set_context_option =
+    "--cluster" : "Cluster for the context entry in kubeconfig" , @any | "--cluster=" : "Cluster for the context entry in kubeconfig" ~ @any
+  | "--current" : "Modify the current context"
+  | "--namespace" : "Namespace for the context entry in kubeconfig" , @any | "--namespace=" : "Namespace for the context entry in kubeconfig" ~ @any
+  | "--user" : "User for the context entry in kubeconfig" , @any | "--user=" : "User for the context entry in kubeconfig" ~ @any ;
+
+config_set_credentials_option =
+    "--auth-provider" : "Auth provider for the user entry in kubeconfig" , @any | "--auth-provider=" : "Auth provider for the user entry in kubeconfig" ~ @any
+  | "--auth-provider-arg" : "'key=value' arguments for the auth provider" , @any | "--auth-provider-arg=" : "'key=value' arguments for the auth provider" ~ @any
+  | "--client-certificate" : "Path to client-certificate file for the user entry in kubeconfig" , @file | "--client-certificate=" : "Path to client-certificate file for the user entry in kubeconfig" ~ @file
+  | "--client-key" : "Path to client-key file for the user entry in kubeconfig" , @file | "--client-key=" : "Path to client-key file for the user entry in kubeconfig" ~ @file
+  | "--embed-certs" : "Embed client cert/key for the user entry in kubeconfig"
+  | "--exec-api-version" : "API version of the user's exec credential plugin" , @any | "--exec-api-version=" : "API version of the user's exec credential plugin" ~ @any
+  | "--exec-arg" : "New arguments for the user's exec credential plugin" , @any | "--exec-arg=" : "New arguments for the user's exec credential plugin" ~ @any
+  | "--exec-command" : "Command for the exec credential plugin for the user entry in kubeconfig" , @any | "--exec-command=" : "Command for the exec credential plugin for the user entry in kubeconfig" ~ @any
+  | "--exec-env" : "'key=value' environment values for the exec credential plugin" , @any | "--exec-env=" : "'key=value' environment values for the exec credential plugin" ~ @any
+  | "--password" : "Password for the user entry in kubeconfig" , @any | "--password=" : "Password for the user entry in kubeconfig" ~ @any
+  | "--token" : "Token for the user entry in kubeconfig" , @any | "--token=" : "Token for the user entry in kubeconfig" ~ @any
+  | "--username" : "Username for the user entry in kubeconfig" , @any | "--username=" : "Username for the user entry in kubeconfig" ~ @any ;
+
+config_view_option =
+    opt_allow_missing_template_keys
+  | "--flatten" : "Flatten the resulting kubeconfig file into self-contained output"
+  | "--merge" : "Merge the full hierarchy of kubeconfig files"
+  | "--minify" : "Remove all information not used by current-context from the output"
+  | opt_output
+  | "--raw" : "Display raw byte data and sensitive data"
+  | opt_show_managed_fields
+  | opt_template ;
+
+config_command =
+    "current-context" : "Display the current-context" , { global_option }
+  | "delete-cluster" : "Delete the specified cluster from the kubeconfig" , { global_option | @any }
+  | "delete-context" : "Delete the specified context from the kubeconfig" , { global_option | @any }
+  | "delete-user" : "Delete the specified user from the kubeconfig" , { global_option | @any }
+  | "get-clusters" : "Display clusters defined in the kubeconfig" , { global_option }
+  | "get-contexts" : "Describe one or many contexts" , { config_get_contexts_option | global_option | @any }
+  | "get-users" : "Display users defined in the kubeconfig" , { global_option }
+  | "new-admin-kubeconfig" : "Generate, make the server trust, and display a new admin.kubeconfig" , { global_option }
+  | "new-kubelet-bootstrap-kubeconfig" : "Generate, trust and display a new kubelet kubeconfig" , { global_option }
+  | "refresh-ca-bundle" : "Update the OpenShift CA bundle by contacting the apiserver" , { config_refresh_ca_bundle_option | global_option | @any }
+  | "rename-context" : "Rename a context from the kubeconfig file" , { global_option | @any }
+  | "set" : "Set an individual value in a kubeconfig file" , { config_set_option | global_option | @any }
+  | "set-cluster" : "Set a cluster entry in kubeconfig" , { config_set_cluster_option | global_option | @any }
+  | "set-context" : "Set a context entry in kubeconfig" , { config_set_context_option | global_option | @any }
+  | "set-credentials" : "Set a user entry in kubeconfig" , { config_set_credentials_option | global_option | @any }
+  | "unset" : "Unset an individual value in a kubeconfig file" , { global_option | @any }
+  | "use-context" : "Set the current-context in a kubeconfig file" , { global_option | @any }
+  | "view" : "Display merged kubeconfig settings or a specified kubeconfig file" , { config_view_option | global_option } ;
+
+whoami_option =
+    "--show-console" : "Print the current server's web console URL"
+  | "-c" : "Print the current user context name" | "--show-context" : "Print the current user context name"
+  | "--show-server" : "Print the current server's REST API URL"
+  | "-t" : "Print the token the current session is using" | "--show-token" : "Print the token the current session is using" ;
+
+plugin_command = "list" : "List all visible plugin executables on a user's PATH" , { global_option | @any } ;
+
+version_option =
+    "--client" : "Client version only (no server required)"
+  | "-o" : "One of 'yaml' or 'json'" , output_format | "--output" : "One of 'yaml' or 'json'" , output_format | "--output=" : "One of 'yaml' or 'json'" ~ output_name ;
+
+command =
+    "login" : "Log in to a server" , { login_option | global_option | @any }
+  | "new-project" : "Request a new project" , { new_project_option | global_option | @any }
+  | "new-app" : "Create a new application" , { new_app_option | global_option | @any }
+  | "status" : "Show an overview of the current project" , { status_option | global_option | @any }
+  | "project" : "Switch to another project" , { project_option | global_option | @any }
+  | "projects" : "Display existing projects" , { projects_option | global_option }
+  | "explain" : "Get documentation for a resource" , { explain_option | global_option | resource_type | @any }
+  | "rollout" : "Manage a Kubernetes deployment or OpenShift deployment config" , { global_option } , [ rollout_command ]
+  | "rollback" : "Revert part of an application back to a previous deployment" , { rollback_option | global_option | resource_type | @any }
+  | "new-build" : "Create a new build configuration" , { new_build_option | global_option | @any }
+  | "start-build" : "Start a new build" , { start_build_option | global_option | @any }
+  | "cancel-build" : "Cancel running, pending, or new builds" , { cancel_build_option | global_option | @any }
+  | "import-image" : "Import images from a container image registry" , { import_image_option | global_option | @any }
+  | "tag" : "Tag existing images into image streams" , { tag_option | global_option | @any }
+  | "create" : "Create a resource from a file or from stdin" , { create_option | global_option } , [ create_command ]
+  | "apply" : "Apply a configuration to a resource by file name or stdin" , { apply_option | global_option } , [ apply_command ]
+  | "get" : "Display one or many resources" , { get_option | global_option | resource_type | @any }
+  | "describe" : "Show details of a specific resource or group of resources" , { describe_option | global_option | resource_type | @any }
+  | "edit" : "Edit a resource on the server" , { edit_option | global_option | resource_type | @any }
+  | "set" : "Commands that help set specific features on objects" , { global_option } , [ set_command ]
+  | "label" : "Update the labels on a resource" , { label_option | global_option | resource_type | @any }
+  | "annotate" : "Update the annotations on a resource" , { annotate_option | global_option | resource_type | @any }
+  | "expose" : "Expose a replicated application as a service or route" , { expose_option | global_option | resource_type | @any }
+  | "delete" : "Delete resources by file, stdin, name or label selector" , { delete_option | global_option | resource_type | @any }
+  | "scale" : "Set a new size for a deployment, replica set, or replication controller" , { scale_option | global_option | resource_type | @any }
+  | "autoscale" : "Autoscale a deployment config, deployment, replica or stateful set" , { autoscale_option | global_option | resource_type | @any }
+  | "secrets" : "Manage secrets" , { global_option } , [ secrets_command ]
+  | "logs" : "Print the logs for a container in a pod" , { logs_option | global_option | @any }
+  | "rsh" : "Start a shell session in a container" , { rsh_option | global_option | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "rsync" : "Copy files between a local file system and a pod" , { rsync_option | global_option | @file }
+  | "port-forward" : "Forward one or more local ports to a pod" , { port_forward_option | global_option | @any }
+  | "debug" : "Launch a new instance of a pod for debugging" , { debug_option | global_option | resource_type | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "exec" : "Execute a command in a container" , { exec_option | global_option | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "proxy" : "Run a proxy to the Kubernetes API server" , { proxy_option | global_option | @any }
+  | "attach" : "Attach to a running container" , { attach_option | global_option | @any }
+  | "run" : "Run a particular image on the cluster" , { run_option | global_option | @any } , [ "--" : "End of options, the command follows" , { @any } ]
+  | "cp" : "Copy files and directories to and from containers" , { cp_option | global_option | @file }
+  | "wait" : "Experimental: Wait for a specific condition on one or many resources" , { wait_option | global_option | resource_type | @any }
+  | "events" : "List events" , { events_option | global_option | @any }
+  | "adm" : "Tools for managing a cluster" , { global_option } , [ adm_command ]
+  | "replace" : "Replace a resource by file name or stdin" , { replace_option | global_option | @any }
+  | "patch" : "Update fields of a resource" , { patch_option | global_option | resource_type | @any }
+  | "process" : "Process a template into list of resources" , { process_option | global_option | @file }
+  | "extract" : "Extract secrets or config maps to disk" , { extract_option | global_option | @any }
+  | "observe" : "Observe changes to resources and react to them (experimental)" , { observe_option | global_option | @any }
+  | "policy" : "Manage authorization policy" , { global_option } , [ policy_command ]
+  | "auth" : "Inspect authorization" , { global_option } , [ auth_command ]
+  | "image" : "Useful commands for managing images" , { global_option } , [ image_command ]
+  | "registry" : "Commands for working with the registry" , { global_option } , [ registry_command ]
+  | "idle" : "Idle scalable resources" , { idle_option | global_option | resource_type | @any }
+  | "api-versions" : "Print the supported API versions on the server as group/version" , { global_option }
+  | "api-resources" : "Print the supported API resources on the server" , { api_resources_option | global_option }
+  | "cluster-info" : "Display cluster information" , { global_option } , [ cluster_info_command ]
+  | "diff" : "Diff the live version against a would-be applied version" , { diff_option | global_option | @any }
+  | "kustomize" : "Build a kustomization target from a directory or URL" , { kustomize_option | global_option | @file }
+  | "get-token" : "Experimental: get a token from an external OIDC issuer" , { get_token_option | global_option | @any }
+  | "logout" : "End the current server session" , { global_option }
+  | "config" : "Modify kubeconfig files" , { global_option } , [ config_command ]
+  | "whoami" : "Return information about the current session" , { whoami_option | global_option }
+  | "completion" : "Output shell completion code for the specified shell" , [ "bash" | "zsh" | "fish" | "powershell" ]
+  | "plugin" : "Provides utilities for interacting with plugins" , { global_option } , [ plugin_command ]
+  | "version" : "Print the client and server version information" , { version_option | global_option } ;
+
+opt_certificate_authority =
+    "--certificate-authority" : "Path to a cert file for the certificate authority" , @file | "--certificate-authority=" : "Path to a cert file for the certificate authority" ~ @file ;
+
+opt_insecure_skip_tls_verify = "--insecure-skip-tls-verify" : "The server's certificate will not be checked for validity" ;
+
+opt_token =
+    "--token" : "Bearer token for authentication to the API server" , @any | "--token=" : "Bearer token for authentication to the API server" ~ @any ;
+
+opt_allow_missing_images = "--allow-missing-images" : "Use referenced images even when they cannot be found" ;
+
+opt_allow_missing_imagestream_tags =
+    "--allow-missing-imagestream-tags" : "Indicates that image stream tags that don't exist should still be used" ;
+
+opt_allow_missing_template_keys = "--allow-missing-template-keys" : "Ignore template errors for missing fields or map keys" ;
+
+opt_binary = "--binary" : "Expect binary contents instead of a source URL" ;
+
+opt_context_dir =
+    "--context-dir" : "Context directory to be used for the build" , @any | "--context-dir=" : "Context directory to be used for the build" ~ @any ;
+
+opt_dry_run =
+    "--dry-run" : "Show the result of the operation without performing it" | "--dry-run=" : "Show the result of the operation without performing it" ~ ( "none" | "server" | "client" ) ;
+
+opt_env =
+    "-e" : "Environment variable to set in each container, as key=value" , @any | "--env" : "Environment variable to set in each container, as key=value" , @any | "--env=" : "Environment variable to set in each container, as key=value" ~ @any ;
+
+opt_env_file =
+    "--env-file" : "File of environment variables to set in each container" , @any | "--env-file=" : "File of environment variables to set in each container" ~ @any ;
+
+opt_ignore_unknown_parameters =
+    "--ignore-unknown-parameters" : "Keep going when a parameter does not exist in the template" ;
+
+opt_import_mode =
+    "--import-mode" : "Imports the full manifest list of a tag when set to 'PreserveOriginal'" , @any | "--import-mode=" : "Imports the full manifest list of a tag when set to 'PreserveOriginal'" ~ @any ;
+
+opt_insecure_registry =
+    "--insecure-registry" : "Referenced images are on insecure registries, skip certificate checks" ;
+
+opt_output =
+    "-o" : "Output format" , output_format | "--output" : "Output format" , output_format | "--output=" : "Output format" ~ output_name ;
+
+opt_output_version =
+    "--output-version" : "The preferred API versions of the output objects" , @any | "--output-version=" : "The preferred API versions of the output objects" ~ @any ;
+
+opt_param =
+    "-p" : "Template parameter to set or override, as KEY=VALUE" , @any | "--param" : "Template parameter to set or override, as KEY=VALUE" , @any | "--param=" : "Template parameter to set or override, as KEY=VALUE" ~ @any ;
+
+opt_show_all =
+    "-a" : "When printing, show all resources" | "--show-all" : "When printing, show all resources" ;
+
+opt_show_labels = "--show-labels" : "When printing, show all labels as the last column" ;
+
+opt_show_managed_fields =
+    "--show-managed-fields" : "Keep the managedFields when printing objects in JSON or YAML format" ;
+
+opt_sort_by =
+    "--sort-by" : "If non-empty, sort list types using this field specification" , @any | "--sort-by=" : "If non-empty, sort list types using this field specification" ~ @any ;
+
+opt_source_secret =
+    "--source-secret" : "Secret for cloning a private git repository" , @any | "--source-secret=" : "Secret for cloning a private git repository" ~ @any ;
+
+opt_strategy =
+    "--strategy" : "Specify the build strategy to use if you don't want to detect" , @any | "--strategy=" : "Specify the build strategy to use if you don't want to detect" ~ @any ;
+
+opt_filename =
+    "-f" : "File, directory or URL identifying the resource" , @file | "--filename" : "File, directory or URL identifying the resource" , @file | "--filename=" : "File, directory or URL identifying the resource" ~ @file ;
+
+opt_kustomize =
+    "-k" : "Process the kustomization directory" , @directory | "--kustomize" : "Process the kustomization directory" , @directory | "--kustomize=" : "Process the kustomization directory" ~ @directory ;
+
+opt_recursive =
+    "-R" : "Process the directory used in -f, --filename recursively" | "--recursive" : "Process the directory used in -f, --filename recursively" ;
+
+opt_template =
+    "--template" : "Template string or file for -o go-template or go-template-file" , @any | "--template=" : "Template string or file for -o go-template or go-template-file" ~ @any ;
+
+opt_selector =
+    "-l" : "Selector (label query) to filter on, supports '=', '==', and '!='" , @any | "--selector" : "Selector (label query) to filter on, supports '=', '==', and '!='" , @any | "--selector=" : "Selector (label query) to filter on, supports '=', '==', and '!='" ~ @any ;
+
+opt_dry_run2 =
+    "--dry-run" : "Dry run strategy: 'none', 'server' or 'client'" | "--dry-run=" : "Dry run strategy: 'none', 'server' or 'client'" ~ ( "none" | "server" | "client" ) ;
+
+opt_field_manager =
+    "--field-manager" : "Name of the manager used to track field ownership" , @any | "--field-manager=" : "Name of the manager used to track field ownership" ~ @any ;
+
+opt_build_arg =
+    "--build-arg" : "Specify a key-value pair to pass to Docker during the build" , @any | "--build-arg=" : "Specify a key-value pair to pass to Docker during the build" ~ @any ;
+
+opt_reference_policy =
+    "--reference-policy" : "Allow to request pullthrough for external image when set to 'local'" , @any | "--reference-policy=" : "Allow to request pullthrough for external image when set to 'local'" ~ @any ;
+
+opt_from_file =
+    "--from-file" : "File to add, keyed by its basename or as key=path" , @any | "--from-file=" : "File to add, keyed by its basename or as key=path" ~ @any ;
+
+opt_save_config = "--save-config" : "The configuration of current object will be saved in its annotation" ;
+
+opt_validate =
+    "--validate" : "Must be one of: strict (or true), warn, ignore (or false)" | "--validate=" : "Must be one of: strict (or true), warn, ignore (or false)" ~ ( "strict" | "warn" | "ignore" | "true" | "false" ) ;
+
+opt_image = "--image" : "Image name to run" , @any | "--image=" : "Image name to run" ~ @any ;
+
+opt_port =
+    "--port" : "The port that this container exposes" , @any | "--port=" : "The port that this container exposes" ~ @any ;
+
+opt_append_hash = "--append-hash" : "Append a hash of the secret to its name" ;
+
+opt_all = "--all" : "Select all resources in the namespace of the specified resource types" ;
+
+opt_cascade =
+    "--cascade" : "Must be 'background', 'orphan', or 'foreground'" | "--cascade=" : "Must be 'background', 'orphan', or 'foreground'" ~ ( "background" | "orphan" | "foreground" ) ;
+
+opt_force = "--force" : "Immediately remove resources from API and bypass graceful deletion" ;
+
+opt_force_conflicts = "--force-conflicts" : "Server-side apply will force the changes against conflicts" ;
+
+opt_grace_period =
+    "--grace-period" : "Period of time in seconds given to the resource to terminate gracefully" , @any | "--grace-period=" : "Period of time in seconds given to the resource to terminate gracefully" ~ @any ;
+
+opt_kustomize2 =
+    "-k" : "Process a kustomization directory" , @directory | "--kustomize" : "Process a kustomization directory" , @directory | "--kustomize=" : "Process a kustomization directory" ~ @directory ;
+
+opt_server_side = "--server-side" : "Apply runs in the server instead of the client" ;
+
+opt_timeout =
+    "--timeout" : "Time to wait before giving up on a delete, 0 to size it by object" , @any | "--timeout=" : "Time to wait before giving up on a delete, 0 to size it by object" ~ @any ;
+
+opt_wait = "--wait" : "Wait for resources to be gone before returning" ;
+
+opt_all_namespaces =
+    "-A" : "List the requested object(s) across all namespaces" | "--all-namespaces" : "List the requested object(s) across all namespaces" ;
+
+opt_chunk_size =
+    "--chunk-size" : "Return large lists in chunks rather than all at once" , @any | "--chunk-size=" : "Return large lists in chunks rather than all at once" ~ @any ;
+
+opt_field_selector =
+    "--field-selector" : "Selector (field query) to filter on, supports '=', '==', and '!='" , @any | "--field-selector=" : "Selector (field query) to filter on, supports '=', '==', and '!='" ~ @any ;
+
+opt_no_headers = "--no-headers" : "Don't print headers in the default or custom-columns output" ;
+
+opt_filename2 =
+    "-f" : "Filename, directory, or URL to files to use to edit the resource" , @file | "--filename" : "Filename, directory, or URL to files to use to edit the resource" , @file | "--filename=" : "Filename, directory, or URL to files to use to edit the resource" ~ @file ;
+
+opt_subresource =
+    "--subresource" : "Operate on this subresource of the object" , @any | "--subresource=" : "Operate on this subresource of the object" ~ @any ;
+
+opt_local = "--local" : "Set image will NOT contact api-server but run locally" ;
+
+opt_resource_version =
+    "--resource-version" : "Update only if this is the object's current resource version" , @any | "--resource-version=" : "Update only if this is the object's current resource version" ~ @any ;
+
+opt_all2 = "--all" : "Select all resources, in the namespace of the specified resource types" ;
+
+opt_all_namespaces2 =
+    "-A" : "Check the specified action in all namespaces" | "--all-namespaces" : "Check the specified action in all namespaces" ;
+
+opt_local2 = "--local" : "Annotation will NOT contact api-server but run locally" ;
+
+opt_name =
+    "--name" : "The name for the newly created object" , @any | "--name=" : "The name for the newly created object" ~ @any ;
+
+opt_override_type =
+    "--override-type" : "Method to override the generated object: json, merge or strategic" , @any | "--override-type=" : "Method to override the generated object: json, merge or strategic" ~ @any ;
+
+opt_overrides =
+    "--overrides" : "An inline JSON override for the generated object" , @any | "--overrides=" : "An inline JSON override for the generated object" ~ @any ;
+
+opt_pod_running_timeout =
+    "--pod-running-timeout" : "The length of time to wait until at least one pod is running" , @any | "--pod-running-timeout=" : "The length of time to wait until at least one pod is running" ~ @any ;
+
+opt_container =
+    "-c" : "Container name" , @any | "--container" : "Container name" , @any | "--container=" : "Container name" ~ @any ;
+
+opt_no_tty =
+    "-T" : "Disable pseudo-terminal allocation" | "--no-tty" : "Disable pseudo-terminal allocation" ;
+
+opt_tty =
+    "-t" : "Force a pseudo-terminal to be allocated" | "--tty" : "Force a pseudo-terminal to be allocated" ;
+
+opt_quiet =
+    "-q" : "Only print output from the remote session" | "--quiet" : "Only print output from the remote session" ;
+
+opt_stdin = "-i" : "Pass stdin to the container" | "--stdin" : "Pass stdin to the container" ;
+
+opt_tty2 = "-t" : "Stdin is a TTY" | "--tty" : "Stdin is a TTY" ;
+
+(* Resource types: the built-in ones of the resource types table in the kubectl
+   reference (kubernetes.io/docs/reference/kubectl), with their short names.
+   TYPE/NAME, TYPE.GROUP and custom resources go through @any. *)
+resource_type =
+    "all" : "Every resource of the common types"
+  | "pods" : "Pods" | "po" : "Pods"
+  | "deployments" : "Deployments" | "deploy" : "Deployments"
+  | "services" : "Services" | "svc" : "Services"
+  | "replicasets" : "Replica sets" | "rs" : "Replica sets"
+  | "statefulsets" : "Stateful sets" | "sts" : "Stateful sets"
+  | "daemonsets" : "Daemon sets" | "ds" : "Daemon sets"
+  | "jobs" : "Jobs" | "cronjobs" : "Cron jobs" | "cj" : "Cron jobs"
+  | "configmaps" : "Config maps" | "cm" : "Config maps"
+  | "secrets" : "Secrets"
+  | "namespaces" : "Namespaces" | "ns" : "Namespaces"
+  | "nodes" : "Nodes" | "no" : "Nodes"
+  | "persistentvolumeclaims" : "Persistent volume claims" | "pvc" : "Persistent volume claims"
+  | "persistentvolumes" : "Persistent volumes" | "pv" : "Persistent volumes"
+  | "ingresses" : "Ingresses" | "ing" : "Ingresses" | "ingressclasses" : "Ingress classes"
+  | "serviceaccounts" : "Service accounts" | "sa" : "Service accounts"
+  | "events" : "Events" | "ev" : "Events"
+  | "endpoints" : "Endpoints" | "ep" : "Endpoints" | "endpointslices" : "Endpoint slices"
+  | "horizontalpodautoscalers" : "Horizontal pod autoscalers" | "hpa" : "Horizontal pod autoscalers"
+  | "networkpolicies" : "Network policies" | "netpol" : "Network policies"
+  | "poddisruptionbudgets" : "Pod disruption budgets" | "pdb" : "Pod disruption budgets"
+  | "replicationcontrollers" : "Replication controllers" | "rc" : "Replication controllers"
+  | "resourcequotas" : "Resource quotas" | "quota" : "Resource quotas"
+  | "limitranges" : "Limit ranges" | "limits" : "Limit ranges"
+  | "storageclasses" : "Storage classes" | "sc" : "Storage classes"
+  | "roles" : "Roles" | "rolebindings" : "Role bindings"
+  | "clusterroles" : "Cluster roles" | "clusterrolebindings" : "Cluster role bindings"
+  | "customresourcedefinitions" : "Custom resource definitions" | "crd" : "Custom resource definitions"
+  | "priorityclasses" : "Priority classes" | "pc" : "Priority classes"
+  | "certificatesigningrequests" : "Certificate signing requests" | "csr" : "Certificate signing requests"
+  | "leases" : "Leases" | "controllerrevisions" : "Controller revisions"
+  | "mutatingwebhookconfigurations" : "Mutating admission webhooks"
+  | "validatingwebhookconfigurations" : "Validating admission webhooks"
+  | "routes" : "OpenShift routes" | "deploymentconfigs" : "OpenShift deployment configs" | "dc" : "OpenShift deployment configs"
+  | "buildconfigs" : "OpenShift build configs" | "bc" : "OpenShift build configs" | "builds" : "OpenShift builds"
+  | "imagestreams" : "OpenShift image streams" | "is" : "OpenShift image streams"
+  | "imagestreamtags" : "OpenShift image stream tags" | "istag" : "OpenShift image stream tags"
+  | "projects" : "OpenShift projects" | "templates" : "OpenShift templates" ;
+
+(* -o FORMAT, with the joined forms jsonpath=..., custom-columns=..., go-template=... *)
+output_format =
+    "json" : "JSON" | "yaml" : "YAML" | "wide" : "Plain text with more columns" | "name" : "Only TYPE/NAME"
+  | "jsonpath=" : "Fields picked by a JSONPath template" ~ @any
+  | "jsonpath-as-json=" : "JSONPath results as JSON" ~ @any
+  | "jsonpath-file=" : "JSONPath template from a file" ~ @file
+  | "custom-columns=" : "Columns, as NAME:.json.path pairs" ~ @any
+  | "custom-columns-file=" : "Columns from a file" ~ @file
+  | "go-template=" : "Fields picked by a Go template" ~ @any
+  | "go-template-file=" : "Go template from a file" ~ @file
+  | "template=" : "Fields picked by a Go template" ~ @any
+  | "templatefile=" : "Go template from a file" ~ @file ;
+
+(* The value of --output=FORMAT, where the template forms are a single glued word. *)
+output_name = "json" | "yaml" | "wide" | "name" | @any ;
+
+profile_value = "none" | "cpu" | "heap" | "goroutine" | "threadcreate" | "block" | "mutex" ;

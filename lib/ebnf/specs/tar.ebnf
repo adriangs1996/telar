@@ -1,0 +1,328 @@
+(* tar: the union of GNU tar 1.35 (`tar --help` and `man tar` on Arch Linux) and
+   bsdtar 3.5.3 (libarchive 3.7.4, `man tar` on macOS 26). Where a short option
+   differs between them, its description names both meanings.
+
+   Both read a first word without a dash as bundled flags, as in `tar xzf a.tgz`:
+   the values of its flags (f, C, b, T, X) follow as the next words, in order.
+   The grammar offers the common bundles and accepts any other one after a mode
+   letter; their values are read as operands. *)
+
+tar = [ bundle ] , { option | @file } , [ "--" , { @file } ] ;
+
+bundle =
+    "c" : "Create a new archive" | "c" ~ bundle_flags
+  | "x" : "Extract files from an archive" | "x" ~ bundle_flags
+  | "t" : "List the contents of an archive" | "t" ~ bundle_flags
+  | "r" : "Append files to an archive" | "r" ~ bundle_flags
+  | "u" : "Append files newer than their archived copies" | "u" ~ bundle_flags
+  | "A" : "GNU: append tar files to an archive" | "A" ~ bundle_flags
+  | "d" : "GNU: compare the archive with the file system" | "d" ~ bundle_flags ;
+
+bundle_flags =
+    "f" : "Archive file follows" | "v" : "Verbose"
+  | "vf" : "Verbose, archive file follows"
+  | "zf" : "With gzip, archive file follows" | "zvf" : "With gzip, verbose, archive file follows"
+  | "vzf" : "With gzip, verbose, archive file follows"
+  | "jf" : "With bzip2, archive file follows" | "jvf" : "With bzip2, verbose, archive file follows"
+  | "vjf" : "With bzip2, verbose, archive file follows"
+  | "Jf" : "With xz, archive file follows" | "Jvf" : "With xz, verbose, archive file follows"
+  | "vJf" : "With xz, verbose, archive file follows"
+  | "af" : "Compress by suffix, archive file follows" | "avf" : "Compress by suffix, verbose, archive file follows"
+  | "pf" : "Keep permissions, archive file follows" | "pvf" : "Keep permissions, verbose, archive file follows"
+  | @any : "Other bundled flags" ;
+
+option =
+    (* Main operation mode *)
+    "-c" : "Create a new archive" | "--create" : "Create a new archive"
+  | "-x" : "Extract files from an archive" | "--extract" : "Extract files from an archive"
+  | "--get" : "Extract files from an archive"
+  | "-t" : "List the contents of an archive" | "--list" : "List the contents of an archive"
+  | "-r" : "Append files to an archive" | "--append" : "Append files to an archive"
+  | "-u" : "Append files newer than their archived copies" | "--update" : "Append files newer than their archived copies"
+  | "-A" : "GNU: append tar files to an archive" | "--catenate" : "Append tar files to an archive"
+  | "--concatenate" : "Append tar files to an archive"
+  | "-d" : "GNU: compare the archive with the file system" | "--diff" : "Compare the archive with the file system"
+  | "--compare" : "Compare the archive with the file system"
+  | "--delete" : "GNU: delete members from the archive"
+  | "--test-label" : "GNU: test the archive volume label and exit"
+    (* Archive and compression *)
+  | "-f" : "Use this archive file or device" , @file
+  | "--file" : "Use this archive file or device" , @file | "--file=" : "Use this archive file or device" ~ @file
+  | "-a" : "Pick the compression from the archive suffix" | "--auto-compress" : "Pick the compression from the archive suffix"
+  | "--no-auto-compress" : "GNU: do not pick the compression from the suffix"
+  | "-z" : "Filter the archive through gzip" | "--gzip" : "Filter the archive through gzip"
+  | "--gunzip" : "Filter the archive through gzip" | "--ungzip" : "GNU: filter the archive through gzip"
+  | "-j" : "Filter the archive through bzip2" | "--bzip2" : "Filter the archive through bzip2"
+  | "--bzip" : "BSD: filter the archive through bzip2" | "--bunzip2" : "BSD: filter the archive through bzip2"
+  | "-y" : "BSD: compress with bzip2"
+  | "-J" : "Filter the archive through xz" | "--xz" : "Filter the archive through xz"
+  | "-Z" : "Filter the archive through compress" | "--compress" : "Filter the archive through compress"
+  | "--uncompress" : "Filter the archive through compress"
+  | "--lzip" : "GNU: filter the archive through lzip"
+  | "--lzma" : "Filter the archive through lzma"
+  | "--lzop" : "Filter the archive through lzop"
+  | "--zstd" : "Filter the archive through zstd"
+  | "--lz4" : "BSD: compress with lz4"
+  | "--lrzip" : "BSD: compress with lrzip"
+  | "-I" : "GNU: filter through this program; BSD: same as -T" , @file
+  | "--use-compress-program" : "Filter the archive through this program" , @file
+  | "--use-compress-program=" : "Filter the archive through this program" ~ @file
+  | "-H" : "GNU: create in this format; BSD: follow command line symlinks"
+  | "-H" , archive_format
+  | "--format" : "Archive format to create" , archive_format
+  | "--format=" : "Archive format to create" ~ archive_format
+  | "--old-archive" : "GNU: same as --format=v7" | "--portability" : "GNU: same as --format=v7"
+  | "--posix" : "Same as --format=posix (BSD: pax)"
+  | "--pax-option" : "GNU: control pax keywords" , @any
+  | "--pax-option=" : "GNU: control pax keywords" ~ @any
+  | "--options" : "BSD: options for the format modules, comma separated" , @any
+  | "--passphrase" : "BSD: passphrase for encrypted archives" , @any
+  | "-V" : "GNU: volume name of the archive" , @any
+  | "--label" : "Volume name of the archive" , @any | "--label=" : "Volume name of the archive" ~ @any
+    (* Operation modifiers *)
+  | "-g" : "GNU: new GNU-format incremental backup with this snapshot file" , @file
+  | "--listed-incremental" : "New GNU-format incremental backup with this snapshot file" , @file
+  | "--listed-incremental=" : "New GNU-format incremental backup with this snapshot file" ~ @file
+  | "-G" : "GNU: old GNU-format incremental backup" | "--incremental" : "Old GNU-format incremental backup"
+  | "--check-device" : "GNU: check device numbers in incremental archives"
+  | "--no-check-device" : "GNU: do not check device numbers in incremental archives"
+  | "--hole-detection" : "GNU: how to detect holes in sparse files" , hole_method
+  | "--hole-detection=" : "GNU: how to detect holes in sparse files" ~ hole_method
+  | "--ignore-failed-read" : "GNU: do not fail on unreadable files"
+  | "--level" : "GNU: dump level for a listed-incremental archive" , @number
+  | "--level=" : "GNU: dump level for a listed-incremental archive" ~ @number
+  | "-n" : "GNU: the archive is seekable; BSD: do not recurse"
+  | "--seek" : "GNU: the archive is seekable" | "--no-seek" : "GNU: the archive is not seekable"
+  | "--occurrence" : "GNU: process only the first occurrence of each file"
+  | "--occurrence=" : "GNU: process only this occurrence of each file" ~ @number
+  | "--sparse-version" : "GNU: sparse format version, as MAJOR.MINOR" , @any
+  | "--sparse-version=" : "GNU: sparse format version, as MAJOR.MINOR" ~ @any
+  | "-S" : "Handle sparse files efficiently" | "--sparse" : "GNU: handle sparse files efficiently"
+  | "--read-sparse" : "BSD: read sparse file information from disk"
+  | "--no-read-sparse" : "BSD: do not read sparse file information"
+  | "-q" : "BSD: stop after the first match of each operand" | "--fast-read" : "BSD: stop after the first match of each operand"
+    (* File selection *)
+  | "--add-file" : "GNU: add this file, even if it starts with a dash" , @any
+  | "--add-file=" : "GNU: add this file, even if it starts with a dash" ~ @any
+  | "-C" : "Change to this directory first" , @directory
+  | "--directory" : "Change to this directory first" , @directory
+  | "--directory=" : "Change to this directory first" ~ @directory
+  | "--cd" : "BSD: change to this directory first" , @directory
+  | "--exclude" : "Exclude files matching this pattern" , @any
+  | "--exclude=" : "Exclude files matching this pattern" ~ @any
+  | "--include" : "BSD: process only files matching this pattern" , @any
+  | "--exclude-backups" : "GNU: exclude backup and lock files"
+  | "--exclude-caches" : "GNU: exclude contents of directories with CACHEDIR.TAG"
+  | "--exclude-caches-all" : "GNU: exclude directories with CACHEDIR.TAG"
+  | "--exclude-caches-under" : "GNU: exclude everything under directories with CACHEDIR.TAG"
+  | "--exclude-ignore" : "GNU: read exclude patterns from this file in each directory" , @any
+  | "--exclude-ignore=" : "GNU: read exclude patterns from this file in each directory" ~ @any
+  | "--exclude-ignore-recursive" : "GNU: like --exclude-ignore, for subdirectories too" , @any
+  | "--exclude-ignore-recursive=" : "GNU: like --exclude-ignore, for subdirectories too" ~ @any
+  | "--exclude-tag" : "GNU: exclude contents of directories containing this file" , @any
+  | "--exclude-tag=" : "GNU: exclude contents of directories containing this file" ~ @any
+  | "--exclude-tag-all" : "GNU: exclude directories containing this file" , @any
+  | "--exclude-tag-all=" : "GNU: exclude directories containing this file" ~ @any
+  | "--exclude-tag-under" : "GNU: exclude everything under directories with this file" , @any
+  | "--exclude-tag-under=" : "GNU: exclude everything under directories with this file" ~ @any
+  | "--exclude-vcs" : "Exclude version control system directories"
+  | "--exclude-vcs-ignores" : "GNU: read exclude patterns from VCS ignore files"
+  | "-X" : "Exclude the patterns listed in this file" , @file
+  | "--exclude-from" : "Exclude the patterns listed in this file" , @file
+  | "--exclude-from=" : "Exclude the patterns listed in this file" ~ @file
+  | "-T" : "Read the names to process from this file" , @file
+  | "--files-from" : "Read the names to process from this file" , @file
+  | "--files-from=" : "Read the names to process from this file" ~ @file
+  | "--null" : "Names read with -T are NUL separated"
+  | "--no-null" : "GNU: cancel --null"
+  | "--recursion" : "GNU: recurse into directories (default)"
+  | "--no-recursion" : "Do not recurse into directories"
+  | "--norecurse" : "BSD: do not recurse into directories"
+  | "--unquote" : "GNU: unquote file names (default)" | "--no-unquote" : "GNU: do not unquote file names"
+  | "--verbatim-files-from" : "GNU: -T reads names verbatim"
+  | "--no-verbatim-files-from" : "GNU: -T treats names starting with a dash as options"
+  | "--anchored" : "GNU: patterns match the start of file names"
+  | "--no-anchored" : "GNU: patterns match after any /"
+  | "--ignore-case" : "GNU: ignore case in patterns" | "--no-ignore-case" : "GNU: case sensitive patterns"
+  | "--wildcards" : "GNU: use wildcards in patterns" | "--no-wildcards" : "GNU: match patterns verbatim"
+  | "--wildcards-match-slash" : "GNU: wildcards match /"
+  | "--no-wildcards-match-slash" : "GNU: wildcards do not match /"
+  | "-h" : "Follow symbolic links" | "--dereference" : "Follow symbolic links"
+  | "-L" : "GNU: tape length in KiB; BSD: follow symbolic links"
+  | "-L" , @number
+  | "--tape-length" : "GNU: change tape after this many KiB" , @number
+  | "--tape-length=" : "GNU: change tape after this many KiB" ~ @number
+  | "--hard-dereference" : "GNU: archive the files hard links refer to"
+  | "-K" : "GNU: begin at this member" , @any
+  | "--starting-file" : "GNU: begin at this member" , @any
+  | "--starting-file=" : "GNU: begin at this member" ~ @any
+  | "-N" : "GNU: only store files newer than this date or file" , @any
+  | "--newer" : "Only files newer than this date" , @any | "--newer=" : "Only files newer than this date" ~ @any
+  | "--after-date" : "GNU: only files newer than this date or file" , @any
+  | "--after-date=" : "GNU: only files newer than this date or file" ~ @any
+  | "--newer-mtime" : "Only files modified after this date" , @any
+  | "--newer-mtime=" : "Only files modified after this date" ~ @any
+  | "--newer-than" : "BSD: only files newer than this file" , @file
+  | "--newer-mtime-than" : "BSD: only files modified after this file" , @file
+  | "--older" : "BSD: only files older than this date" , @any
+  | "--older-mtime" : "BSD: only files modified before this date" , @any
+  | "--older-than" : "BSD: only files older than this file" , @file
+  | "--older-mtime-than" : "BSD: only files modified before this file" , @file
+  | "--nodump" : "BSD: skip files with the nodump flag"
+  | "--one-file-system" : "Stay in the local file system"
+  | "-P" : "Do not strip leading / from file names" | "--absolute-names" : "GNU: do not strip leading / from file names"
+  | "--absolute-paths" : "BSD: do not strip leading / from file names"
+  | "--backup" : "GNU: back up files before removal"
+  | "--backup=" : "GNU: back up files before removal, of this kind" ~ backup_control
+  | "--suffix" : "GNU: suffix for backups" , @any | "--suffix=" : "GNU: suffix for backups" ~ @any
+    (* Overwrite control *)
+  | "--keep-directory-symlink" : "GNU: keep existing symlinks to directories"
+  | "--keep-newer-files" : "Do not replace files newer than their archived copies"
+  | "-k" : "Do not replace existing files" | "--keep-old-files" : "Do not replace existing files"
+  | "--no-overwrite-dir" : "GNU: keep the metadata of existing directories"
+  | "--one-top-level" : "GNU: extract into a directory named after the archive"
+  | "--one-top-level=" : "GNU: extract into this directory" ~ @directory
+  | "--overwrite" : "GNU: overwrite existing files when extracting"
+  | "--overwrite-dir" : "GNU: overwrite the metadata of existing directories"
+  | "--recursive-unlink" : "GNU: empty hierarchies before extracting a directory"
+  | "--remove-files" : "GNU: remove files after adding them to the archive"
+  | "--skip-old-files" : "GNU: silently skip existing files"
+  | "-U" : "Remove each file before extracting over it" | "--unlink-first" : "Remove each file before extracting over it"
+  | "--unlink" : "BSD: remove each file before extracting over it"
+  | "--safe-writes" : "BSD: extract files atomically" | "--no-safe-writes" : "BSD: do not extract files atomically"
+  | "-W" : "GNU: verify the archive after writing it" | "--verify" : "GNU: verify the archive after writing it"
+    (* Output stream *)
+  | "--ignore-command-error" : "GNU: ignore exit codes of children"
+  | "--no-ignore-command-error" : "GNU: treat non-zero exit codes of children as errors"
+  | "-O" : "Extract files to standard output" | "--to-stdout" : "Extract files to standard output"
+  | "--to-command" : "GNU: pipe extracted files to this command" , @command
+  | "--to-command=" : "GNU: pipe extracted files to this command" ~ @command
+    (* File attributes *)
+  | "--atime-preserve" : "GNU: preserve access times of archived files"
+  | "--atime-preserve=" : "GNU: preserve access times this way" ~ ( "replace" | "system" )
+  | "--clamp-mtime" : "GNU: set --mtime only on more recent files"
+  | "--delay-directory-restore" : "GNU: restore directory times and modes at the end"
+  | "--no-delay-directory-restore" : "GNU: cancel --delay-directory-restore"
+  | "--group" : "Use this group for added files" , @any | "--group=" : "Use this group for added files" ~ @any
+  | "--group-map" : "GNU: map group IDs and names with this file" , @file
+  | "--group-map=" : "GNU: map group IDs and names with this file" ~ @file
+  | "--gid" : "BSD: use this group ID for added files" , @number
+  | "--gname" : "BSD: use this group name for added files" , @any
+  | "--owner" : "Use this owner for added files" , @any | "--owner=" : "Use this owner for added files" ~ @any
+  | "--owner-map" : "GNU: map user IDs and names with this file" , @file
+  | "--owner-map=" : "GNU: map user IDs and names with this file" ~ @file
+  | "--uid" : "BSD: use this user ID for added files" , @number
+  | "--uname" : "BSD: use this user name for added files" , @any
+  | "--mode" : "GNU: force this symbolic mode on added files" , @any
+  | "--mode=" : "GNU: force this symbolic mode on added files" ~ @any
+  | "--mtime" : "GNU: set the mtime of added files from a date or file" , @any
+  | "--mtime=" : "GNU: set the mtime of added files from a date or file" ~ @any
+  | "-m" : "Do not extract file modification times" | "--touch" : "GNU: do not extract file modification times"
+  | "--modification-time" : "BSD: do not extract file modification times"
+  | "--same-owner" : "Extract files with their archived owners"
+  | "--no-same-owner" : "Extract files as yourself"
+  | "--no-same-permissions" : "Apply the umask to extracted permissions"
+  | "--numeric-owner" : "Use numbers for user and group names"
+  | "-p" : "Extract file permissions" | "--preserve-permissions" : "Extract file permissions"
+  | "--same-permissions" : "GNU: extract file permissions" | "--insecure" : "BSD: extract file permissions"
+  | "--sort" : "GNU: directory sorting order" , ( "none" | "name" | "inode" )
+  | "--sort=" : "GNU: directory sorting order" ~ ( "none" | "name" | "inode" )
+  | "-s" : "GNU: members are in archive order; BSD: rename with /old/new/"
+  | "-s" , @any
+  | "--preserve-order" : "GNU: members are in archive order" | "--same-order" : "GNU: members are in archive order"
+  | "-o" : "Create: old format; extract: do not restore owners"
+  | "--acls" : "Archive or extract ACLs" | "--no-acls" : "Do not archive or extract ACLs"
+  | "--selinux" : "GNU: archive or extract SELinux contexts" | "--no-selinux" : "GNU: ignore SELinux contexts"
+  | "--xattrs" : "Archive or extract extended attributes" | "--no-xattrs" : "Ignore extended attributes"
+  | "--xattrs-exclude" : "GNU: exclude xattr keys matching this pattern" , @any
+  | "--xattrs-exclude=" : "GNU: exclude xattr keys matching this pattern" ~ @any
+  | "--xattrs-include" : "GNU: include xattr keys matching this pattern" , @any
+  | "--xattrs-include=" : "GNU: include xattr keys matching this pattern" ~ @any
+  | "--fflags" : "BSD: archive or extract file flags" | "--no-fflags" : "BSD: ignore file flags"
+  | "--clear-nochange-fflags" : "BSD: clear file flags that prevent removal"
+  | "--mac-metadata" : "BSD: archive or extract macOS metadata"
+  | "--no-mac-metadata" : "BSD: ignore macOS metadata"
+  | "--hfsCompression" : "BSD: compress extracted files with HFS+ compression"
+  | "--nopreserveHFSCompression" : "BSD: do not keep HFS+ compression"
+  | "--chroot" : "BSD: chroot to the current directory before extracting"
+    (* Devices and blocking *)
+  | "--force-local" : "GNU: the archive file is local even with a colon"
+  | "-F" : "GNU: run this script at the end of each tape" , @file
+  | "--info-script" : "GNU: run this script at the end of each tape" , @file
+  | "--info-script=" : "GNU: run this script at the end of each tape" ~ @file
+  | "--new-volume-script" : "GNU: run this script at the end of each tape" , @file
+  | "--new-volume-script=" : "GNU: run this script at the end of each tape" ~ @file
+  | "-M" : "GNU: multi-volume archive" | "--multi-volume" : "GNU: multi-volume archive"
+  | "--rmt-command" : "GNU: use this rmt command" , @command
+  | "--rmt-command=" : "GNU: use this rmt command" ~ @command
+  | "--rsh-command" : "GNU: use this remote shell instead of rsh" , @command
+  | "--rsh-command=" : "GNU: use this remote shell instead of rsh" ~ @command
+  | "--volno-file" : "GNU: keep the volume number in this file" , @file
+  | "--volno-file=" : "GNU: keep the volume number in this file" ~ @file
+  | "-b" : "Blocks of 512 bytes per record" , @number
+  | "--blocking-factor" : "GNU: blocks of 512 bytes per record" , @number
+  | "--blocking-factor=" : "GNU: blocks of 512 bytes per record" ~ @number
+  | "--block-size" : "BSD: blocks of 512 bytes per record" , @number
+  | "-B" : "Reblock as it reads" | "--read-full-records" : "GNU: reblock as it reads"
+  | "--read-full-blocks" : "BSD: reblock as it reads"
+  | "-i" : "GNU: ignore zeroed blocks" | "--ignore-zeros" : "Ignore zeroed blocks"
+  | "--record-size" : "GNU: bytes per record, a multiple of 512" , @number
+  | "--record-size=" : "GNU: bytes per record, a multiple of 512" ~ @number
+    (* Name transformations *)
+  | "--strip-components" : "Strip this many leading components from names" , @number
+  | "--strip-components=" : "Strip this many leading components from names" ~ @number
+  | "--transform" : "GNU: transform names with a sed expression" , @any
+  | "--transform=" : "GNU: transform names with a sed expression" ~ @any
+  | "--xform" : "GNU: transform names with a sed expression" , @any
+  | "--xform=" : "GNU: transform names with a sed expression" ~ @any
+    (* Informative output *)
+  | "--checkpoint" : "GNU: show progress every 10 records"
+  | "--checkpoint=" : "GNU: show progress every this many records" ~ @number
+  | "--checkpoint-action" : "GNU: run this action on each checkpoint" , @any
+  | "--checkpoint-action=" : "GNU: run this action on each checkpoint" ~ @any
+  | "--full-time" : "GNU: print file times in full resolution"
+  | "--index-file" : "GNU: send verbose output to this file" , @file
+  | "--index-file=" : "GNU: send verbose output to this file" ~ @file
+  | "-l" : "Warn if not all links are archived" | "--check-links" : "Warn if not all links are archived"
+  | "--no-quote-chars" : "GNU: do not quote these characters" , @any
+  | "--no-quote-chars=" : "GNU: do not quote these characters" ~ @any
+  | "--quote-chars" : "GNU: also quote these characters" , @any
+  | "--quote-chars=" : "GNU: also quote these characters" ~ @any
+  | "--quoting-style" : "GNU: quoting style for names" , quoting_style
+  | "--quoting-style=" : "GNU: quoting style for names" ~ quoting_style
+  | "-R" : "GNU: show the block number of each message" | "--block-number" : "GNU: show the block number of each message"
+  | "--show-defaults" : "GNU: show the tar defaults"
+  | "--show-omitted-dirs" : "GNU: list directories that do not match"
+  | "--show-snapshot-field-ranges" : "GNU: show the valid ranges of snapshot fields"
+  | "--show-transformed-names" : "GNU: show names after transformation"
+  | "--show-stored-names" : "GNU: show names after transformation"
+  | "--totals" : "Print the total bytes processed"
+  | "--totals=" : "GNU: print the total bytes on this signal" ~ totals_signal
+  | "--utc" : "GNU: print modification times in UTC"
+  | "-v" : "List the files processed" | "--verbose" : "List the files processed"
+  | "--warning" : "GNU: enable or disable a warning" , @any
+  | "--warning=" : "GNU: enable or disable a warning" ~ @any
+  | "-w" : "Ask for confirmation of every action" | "--interactive" : "Ask for confirmation of every action"
+  | "--confirmation" : "Ask for confirmation of every action"
+    (* Other *)
+  | "-?" : "GNU: print the help and exit" | "--help" : "Print the help and exit"
+  | "--restrict" : "GNU: disable potentially harmful options"
+  | "--usage" : "GNU: print a short usage message"
+  | "--version" : "Print the version and exit" ;
+
+archive_format =
+    "gnu" : "GNU tar 1.13 format" | "oldgnu" : "GNU tar 1.12 format" | "pax" : "POSIX 1003.1-2001 (pax)"
+  | "posix" : "Same as pax" | "ustar" : "POSIX 1003.1-1988 (ustar)" | "v7" : "Old V7 tar format"
+  | "cpio" : "BSD: cpio" | "shar" : "BSD: shell archive"
+  | @any : "BSD: another libarchive format" ;
+hole_method = "seek" | "raw" ;
+backup_control =
+    "none" : "Never make backups" | "off" : "Never make backups"
+  | "t" : "Make numbered backups" | "numbered" : "Make numbered backups"
+  | "nil" : "Numbered if numbered backups exist" | "existing" : "Numbered if numbered backups exist"
+  | "never" : "Always make simple backups" | "simple" : "Always make simple backups" ;
+quoting_style =
+    "literal" | "shell" | "shell-always" | "shell-escape" | "shell-escape-always" | "c" | "c-maybe"
+  | "escape" | "locale" | "clocale" ;
+totals_signal =
+    "SIGHUP" | "SIGQUIT" | "SIGINT" | "SIGUSR1" | "SIGUSR2" | "HUP" | "QUIT" | "INT" | "USR1" | "USR2" ;

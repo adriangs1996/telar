@@ -1,0 +1,118 @@
+(* ls: the union of GNU ls (coreutils 9.12, `ls --help` on Arch Linux) and BSD ls
+   (`man ls` on macOS 26). Where a short option differs between them, its
+   description names both meanings. Long options are GNU only. *)
+
+ls = { option | @file } , [ "--" , { @file } ] ;
+
+option =
+    "-a" : "Show entries starting with ." | "--all" : "Show entries starting with ."
+  | "-A" : "Show dotfiles except . and .." | "--almost-all" : "Show dotfiles except . and .."
+  | "--author" : "With -l, print the author of each file"
+  | "-b" : "Print C-style escapes for nongraphic characters" | "--escape" : "Print C-style escapes for nongraphic characters"
+  | "--block-size" : "With -l, scale sizes by this size, as K or M" , @any
+  | "--block-size=" : "With -l, scale sizes by this size, as K or M" ~ @any
+  | "-B" : "GNU: hide backups ending with ~; BSD: octal escapes"
+  | "--ignore-backups" : "Do not list entries ending with ~"
+  | "-c" : "Sort by or show the status change time"
+  | "-C" : "List entries by columns"
+  | "--color" : "Colorize the output"
+  | "--color=" : "When to colorize the output" ~ when
+  | "-d" : "List directories themselves, not their contents" | "--directory" : "List directories themselves, not their contents"
+  | "-D" : "GNU: Emacs dired output; BSD: strftime date format for -l"
+  | "-D" , @any
+  | "--dired" : "Generate output for Emacs dired mode"
+  | "-f" : "Do not sort, and show all entries"
+  | "-F" : "Append an indicator (one of */=>@|) to entries"
+  | "--classify" : "Append an indicator (one of */=>@|) to entries"
+  | "--classify=" : "When to append an indicator to entries" ~ when
+  | "--file-type" : "Like -F, except do not append *"
+  | "--format" : "Output format" , format | "--format=" : "Output format" ~ format
+  | "--full-time" : "Like -l --time-style=full-iso"
+  | "-g" : "GNU: like -l without the owner; BSD: no effect"
+  | "--group-directories-first" : "Group directories before files"
+  | "-G" : "GNU: omit group names in -l; BSD: colorize the output"
+  | "--no-group" : "In a long listing, do not print group names"
+  | "-h" : "With -l and -s, print sizes like 1K 234M 2G" | "--human-readable" : "With -l and -s, print sizes like 1K 234M 2G"
+  | "--si" : "Like -h, but use powers of 1000"
+  | "-H" : "Follow symbolic links listed on the command line"
+  | "--dereference-command-line" : "Follow symbolic links listed on the command line"
+  | "--dereference-command-line-symlink-to-dir" : "Follow command line symbolic links to directories"
+  | "--hide" : "Hide entries matching this shell pattern" , @any
+  | "--hide=" : "Hide entries matching this shell pattern" ~ @any
+  | "--hyperlink" : "Hyperlink file names"
+  | "--hyperlink=" : "When to hyperlink file names" ~ when
+  | "--indicator-style" : "Append indicators of this style" , indicator_style
+  | "--indicator-style=" : "Append indicators of this style" ~ indicator_style
+  | "-i" : "Print the inode number of each file" | "--inode" : "Print the inode number of each file"
+  | "-I" : "GNU: hide entries matching a pattern; BSD: keep -A off for root"
+  | "-I" , @any
+  | "--ignore" : "Hide entries matching this shell pattern" , @any
+  | "--ignore=" : "Hide entries matching this shell pattern" ~ @any
+  | "-k" : "Use 1024-byte blocks for sizes" | "--kibibytes" : "Use 1024-byte blocks for sizes"
+  | "-l" : "Use a long listing format"
+  | "-L" : "Show the targets of symbolic links" | "--dereference" : "Show the targets of symbolic links"
+  | "-m" : "List entries separated by commas"
+  | "-n" : "Like -l, but list numeric user and group IDs" | "--numeric-uid-gid" : "Like -l, but list numeric user and group IDs"
+  | "-N" : "Print entry names without quoting" | "--literal" : "Print entry names without quoting"
+  | "-o" : "Like -l, but do not list group information"
+  | "-O" : "BSD: include the file flags in -l output"
+  | "-p" : "Append / to directories"
+  | "-P" : "BSD: list a symbolic link itself, not its target"
+  | "-q" : "Print ? instead of nongraphic characters" | "--hide-control-chars" : "Print ? instead of nongraphic characters"
+  | "--show-control-chars" : "Show nongraphic characters as they are"
+  | "-Q" : "Enclose entry names in double quotes" | "--quote-name" : "Enclose entry names in double quotes"
+  | "--quoting-style" : "Quoting style for entry names" , quoting_style
+  | "--quoting-style=" : "Quoting style for entry names" ~ quoting_style
+  | "-r" : "Reverse the sort order" | "--reverse" : "Reverse the sort order"
+  | "-R" : "List subdirectories recursively" | "--recursive" : "List subdirectories recursively"
+  | "-s" : "Print the allocated size of each file, in blocks" | "--size" : "Print the allocated size of each file, in blocks"
+  | "-S" : "Sort by file size, largest first"
+  | "--sort" : "Sort by this key instead of name" , sort_key | "--sort=" : "Sort by this key instead of name" ~ sort_key
+  | "--time" : "Timestamp to show or sort by" , time_word | "--time=" : "Timestamp to show or sort by" ~ time_word
+  | "--time-style" : "Time and date format for -l" , time_style
+  | "--time-style=" : "Time and date format for -l" ~ time_style
+  | "-t" : "Sort by time, newest first"
+  | "-T" : "GNU: tab stops every this many columns; BSD: full times in -l"
+  | "-T" , @number
+  | "--tabsize" : "Assume tab stops every this many columns" , @number
+  | "--tabsize=" : "Assume tab stops every this many columns" ~ @number
+  | "-u" : "Sort by or show the access time"
+  | "-U" : "GNU: do not sort; BSD: sort by or show the creation time"
+  | "-v" : "GNU: natural sort of version numbers; BSD: raw nongraphic chars"
+  | "-w" : "GNU: output width in columns (0 is no limit); BSD: raw output"
+  | "-w" , @number
+  | "--width" : "Set the output width in columns, 0 for no limit" , @number
+  | "--width=" : "Set the output width in columns, 0 for no limit" ~ @number
+  | "-W" : "BSD: display whiteouts"
+  | "-x" : "List entries by lines instead of by columns"
+  | "-X" : "GNU: sort by extension; BSD: do not cross file systems"
+  | "-y" : "BSD: with -t, sort the alphabetical output the same way"
+  | "-Z" : "Print the security context of each file" | "--context" : "Print the security context of each file"
+  | "--zero" : "End each output line with NUL, not newline"
+  | "-1" : "List one entry per line"
+  | "-@" : "BSD: show extended attribute keys and sizes in -l"
+  | "-e" : "BSD: print the access control list in -l"
+  | "-%" : "BSD: mark dataless files and directories with %"
+  | "-," : "BSD: group file sizes by thousands in -l"
+  | "--help" : "Print the help and exit"
+  | "--version" : "Print the version and exit" ;
+
+when = "always" | "auto" | "never" ;
+format =
+    "across" : "Like -x" | "horizontal" : "Like -x" | "commas" : "Like -m" | "long" : "Like -l"
+  | "single-column" : "Like -1" | "verbose" : "Like -l" | "vertical" : "Like -C" ;
+indicator_style =
+    "none" : "No indicators" | "slash" : "Like -p" | "file-type" : "Like --file-type" | "classify" : "Like -F" ;
+quoting_style =
+    "literal" | "locale" | "shell" | "shell-always" | "shell-escape" | "shell-escape-always" | "c" | "escape" ;
+sort_key =
+    "none" : "Like -U" | "size" : "Like -S" | "time" : "Like -t" | "version" : "Like -v"
+  | "extension" : "Like -X" | "name" : "By name" | "width" : "By name width" ;
+time_word =
+    "atime" : "Access time" | "access" : "Access time" | "use" : "Access time"
+  | "ctime" : "Status change time" | "status" : "Status change time"
+  | "mtime" : "Modification time" | "modification" : "Modification time"
+  | "birth" : "Creation time" | "creation" : "Creation time" ;
+time_style =
+    "full-iso" | "long-iso" | "iso" | "locale"
+  | @any : "A +FORMAT for date(1), or a posix- prefixed style" ;

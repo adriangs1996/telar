@@ -1,0 +1,376 @@
+(* bun: checked against `bun --help` and `bun <command> --help` of Bun 1.3.14.
+
+   Conventions:
+   - Options shown as `--name=<val>` accept `--name=value` and `--name value`;
+     short ones accept `-r value` and `-rvalue`.
+   - Runtime options come before the command; `bun <file>` runs a file and
+     `bun <script>` a package script, like `bun run`. Words after the file or
+     script belong to it.
+   - The package manager commands share the options in `install_common`. *)
+
+bun = { runtime_option | top_option } , [ command ] ;
+
+command =
+    "run" : "Run a file or a package script" , { runtime_option | run_option } , [ target ]
+  | "test" : "Run the unit tests" , { test_option | @file }
+  | "x" : "Run a package binary, installing it if needed" , { x_option } , [ @any , { @any } ]
+  | "repl" : "Start a REPL session" , { runtime_option }
+  | "exec" : "Run a shell script with the Bun shell" , [ @any ]
+  | ( "install" : "Install the dependencies of package.json" | "i" : "Install the dependencies of package.json" ) , { install_option | @any }
+  | ( "add" : "Add a dependency to package.json" | "a" : "Add a dependency to package.json" ) , { add_option | @any }
+  | ( "remove" : "Remove a dependency from package.json" | "rm" : "Remove a dependency from package.json" | "r" : "Remove a dependency from package.json" ) , { install_common | @any }
+  | "update" : "Update outdated dependencies" , { update_option | @any }
+  | "outdated" : "Show the latest versions of outdated dependencies" , { outdated_option | @any }
+  | "audit" : "Check installed packages for vulnerabilities" , { audit_option }
+  | "link" : "Register or link a local package" , { install_common | @any }
+  | "unlink" : "Unregister a local package" , { install_common }
+  | "publish" : "Publish a package to the npm registry" , { publish_option | @file }
+  | "patch" : "Prepare a package for patching" , { patch_option | @any }
+  | "list" : "List the dependency tree" , [ "--all" : "List the entire dependency tree" ]
+  | "pm" : "Package manager utilities" , { pm_flag } , [ pm_command ]
+  | "info" : "Show package metadata from the registry" , { install_common | "--json" : "Output JSON" | @any }
+  | "why" : "Explain why a package is installed" , { why_option | @any }
+  | "build" : "Bundle TypeScript and JavaScript" , { build_option | @file }
+  | "init" : "Start a project from a built-in template" , { init_option | @directory }
+  | ( "create" : "Create a project from a template" | "c" : "Create a project from a template" ) , [ @any , { @any } ]
+  | "upgrade" : "Upgrade Bun" , [ "--canary" : "Install the latest canary build" ]
+  | "feedback" : "Send feedback to the Bun team" , { @file }
+  | "help" : "Print the help" , [ @any ]
+  | target ;
+
+target =
+    @file : "Run this file" , { @any }
+  | @package_script : "Run this package script" , { @any } ;
+
+top_option =
+    "-v" : "Print the version" | "--version" : "Print the version"
+  | "--revision" : "Print the version with the revision" ;
+
+runtime_option =
+    "--watch" : "Restart the process when files change"
+  | "--hot" : "Reload the code in place when files change"
+  | "--no-clear-screen" : "Do not clear the screen on reload"
+  | "--smol" : "Use less memory, collecting garbage more often"
+  | "-r" : "Import a module before the others" , @file
+  | "--preload" : "Import a module before the others" , @file | "--preload=" : "Import a module before the others" ~ @file
+  | "--require" : "Alias of --preload" , @file | "--require=" : "Alias of --preload" ~ @file
+  | "--import" : "Alias of --preload" , @file | "--import=" : "Alias of --preload" ~ @file
+  | "--inspect" : "Activate the debugger" | "--inspect=" : "Activate the debugger on this address" ~ @any
+  | "--inspect-wait" : "Activate the debugger and wait for a connection" | "--inspect-wait=" : "Activate the debugger and wait for a connection" ~ @any
+  | "--inspect-brk" : "Activate the debugger and break on the first line" | "--inspect-brk=" : "Activate the debugger and break on the first line" ~ @any
+  | "--cpu-prof" : "Write a CPU profile on exit"
+  | "--cpu-prof-name" : "File name of the CPU profile" , @any | "--cpu-prof-name=" : "File name of the CPU profile" ~ @any
+  | "--cpu-prof-dir" : "Directory of the CPU profile" , @directory | "--cpu-prof-dir=" : "Directory of the CPU profile" ~ @directory
+  | "--cpu-prof-md" : "Write the CPU profile as markdown"
+  | "--cpu-prof-interval" : "CPU sampling interval in microseconds" , @number | "--cpu-prof-interval=" : "CPU sampling interval in microseconds" ~ @number
+  | "--heap-prof" : "Write a heap snapshot on exit"
+  | "--heap-prof-name" : "File name of the heap profile" , @any | "--heap-prof-name=" : "File name of the heap profile" ~ @any
+  | "--heap-prof-dir" : "Directory of the heap profile" , @directory | "--heap-prof-dir=" : "Directory of the heap profile" ~ @directory
+  | "--heap-prof-md" : "Write a markdown heap profile on exit"
+  | "--if-present" : "Exit without an error if the entrypoint is missing"
+  | "--no-install" : "Disable auto-install"
+  | "--install" : "Auto-install behavior" , install_mode | "--install=" : "Auto-install behavior" ~ install_mode
+  | "-i" : "Auto-install missing dependencies"
+  | "-e" : "Evaluate a script" , @any | "--eval" : "Evaluate a script" , @any | "--eval=" : "Evaluate a script" ~ @any
+  | "-p" : "Evaluate a script and print the result" , @any | "--print" : "Evaluate a script and print the result" , @any
+  | "--print=" : "Evaluate a script and print the result" ~ @any
+  | "--prefer-offline" : "Resolve packages from disk without staleness checks"
+  | "--prefer-latest" : "Always check npm for the latest matching versions"
+  | "--port" : "Default port for Bun.serve" , @number | "--port=" : "Default port for Bun.serve" ~ @number
+  | "--conditions" : "Custom conditions to resolve" , @any | "--conditions=" : "Custom conditions to resolve" ~ @any
+  | "--fetch-preconnect" : "Preconnect to a URL while code loads" , @any | "--fetch-preconnect=" : "Preconnect to a URL while code loads" ~ @any
+  | "--experimental-http2-fetch" : "Offer HTTP/2 in fetch()"
+  | "--experimental-http3-fetch" : "Upgrade fetch() to HTTP/3 when offered"
+  | "--max-http-header-size" : "Maximum size of HTTP headers in bytes" , @number
+  | "--max-http-header-size=" : "Maximum size of HTTP headers in bytes" ~ @number
+  | "--dns-result-order" : "Order of DNS lookup results" , dns_order | "--dns-result-order=" : "Order of DNS lookup results" ~ dns_order
+  | "--expose-gc" : "Expose gc() on the global object"
+  | "--no-deprecation" : "Silence deprecation warnings"
+  | "--throw-deprecation" : "Throw on deprecations"
+  | "--title" : "Process title" , @any | "--title=" : "Process title" ~ @any
+  | "--zero-fill-buffers" : "Zero-fill Buffer.allocUnsafe"
+  | "--use-system-ca" : "Use the system certificate authorities"
+  | "--use-openssl-ca" : "Use the OpenSSL CA store"
+  | "--use-bundled-ca" : "Use the bundled CA store"
+  | "--redis-preconnect" : "Preconnect to $REDIS_URL at startup"
+  | "--sql-preconnect" : "Preconnect to PostgreSQL at startup"
+  | "--no-addons" : "Throw when process.dlopen is called"
+  | "--unhandled-rejections" : "Unhandled rejection behavior" , rejections | "--unhandled-rejections=" : "Unhandled rejection behavior" ~ rejections
+  | "--console-depth" : "Depth of console.log inspection" , @number | "--console-depth=" : "Depth of console.log inspection" ~ @number
+  | "--user-agent" : "Default User-Agent header" , @any | "--user-agent=" : "Default User-Agent header" ~ @any
+  | "--cron-title" : "Title for cron execution mode" , @any | "--cron-title=" : "Title for cron execution mode" ~ @any
+  | "--cron-period" : "Cron period for cron execution mode" , @any | "--cron-period=" : "Cron period for cron execution mode" ~ @any
+  | "--main-fields" : "Fields of package.json to look up for the entry" , @any | "--main-fields=" : "Fields of package.json to look up for the entry" ~ @any
+  | "--preserve-symlinks" : "Preserve symlinks when resolving files"
+  | "--preserve-symlinks-main" : "Preserve symlinks when resolving the entry point"
+  | "--extension-order" : "Order of extensions to resolve" , @any | "--extension-order=" : "Order of extensions to resolve" ~ @any
+  | "--tsconfig-override" : "Use this tsconfig.json" , @file | "--tsconfig-override=" : "Use this tsconfig.json" ~ @file
+  | transpile_option
+  | "--env-file" : "Load environment variables from this file" , @file | "--env-file=" : "Load environment variables from this file" ~ @file
+  | "--no-env-file" : "Do not load .env files"
+  | "--cwd" : "Change to this directory first" , @directory | "--cwd=" : "Change to this directory first" ~ @directory
+  | "-c" : "Use this bunfig.toml" , @file | "--config" : "Use this bunfig.toml" , @file | "--config=" : "Use this bunfig.toml" ~ @file
+  | "-h" : "Print the help" | "--help" : "Print the help"
+  | "--silent" : "Do not print the script command"
+  | "--no-orphans" : "Exit with the parent and kill all descendants" ;
+
+transpile_option =
+    "-d" : "Substitute K:V while parsing" , @any | "--define" : "Substitute K:V while parsing" , @any | "--define=" : "Substitute K:V while parsing" ~ @any
+  | "--drop" : "Remove calls to this function" , @any | "--drop=" : "Remove calls to this function" ~ @any
+  | "--feature" : "Enable a feature flag for dead-code elimination" , @any | "--feature=" : "Enable a feature flag for dead-code elimination" ~ @any
+  | "-l" : "Loader for an extension, .ext:loader" , @any | "--loader" : "Loader for an extension, .ext:loader" , @any
+  | "--loader=" : "Loader for an extension, .ext:loader" ~ @any
+  | "--no-macros" : "Disable macros"
+  | "--jsx-factory" : "JSX element function of the classic runtime" , @any | "--jsx-factory=" : "JSX element function of the classic runtime" ~ @any
+  | "--jsx-fragment" : "JSX fragment function" , @any | "--jsx-fragment=" : "JSX fragment function" ~ @any
+  | "--jsx-import-source" : "Module that provides the JSX factories" , @any | "--jsx-import-source=" : "Module that provides the JSX factories" ~ @any
+  | "--jsx-runtime" : "JSX runtime" , jsx_runtime | "--jsx-runtime=" : "JSX runtime" ~ jsx_runtime
+  | "--jsx-side-effects" : "Treat JSX elements as having side effects"
+  | "--ignore-dce-annotations" : "Ignore tree-shaking annotations" ;
+
+install_mode = "auto" | "fallback" | "force" ;
+dns_order = "verbatim" | "ipv4first" | "ipv6first" ;
+rejections = "strict" | "throw" | "warn" | "none" | "warn-with-error-code" ;
+jsx_runtime = "automatic" | "classic" ;
+
+run_option =
+    "--elide-lines" : "Lines of script output shown with --filter" , @number | "--elide-lines=" : "Lines of script output shown with --filter" ~ @number
+  | "-F" : "Run in workspace packages matching a pattern" , @any | "--filter" : "Run in workspace packages matching a pattern" , @any
+  | "--filter=" : "Run in workspace packages matching a pattern" ~ @any
+  | "-b" : "Run with Bun instead of Node.js" | "--bun" : "Run with Bun instead of Node.js"
+  | "--shell" : "Shell for package.json scripts" , ( "bun" | "system" ) | "--shell=" : "Shell for package.json scripts" ~ ( "bun" | "system" )
+  | "--workspaces" : "Run in all workspace packages"
+  | "--parallel" : "Run several scripts at once"
+  | "--sequential" : "Run several scripts one by one"
+  | "--no-exit-on-error" : "Keep running the other scripts when one fails" ;
+
+test_option =
+    "--no-orphans" : "Exit with the parent and kill all descendants"
+  | "--timeout" : "Per-test timeout in milliseconds" , @number | "--timeout=" : "Per-test timeout in milliseconds" ~ @number
+  | "-u" : "Update the snapshot files" | "--update-snapshots" : "Update the snapshot files"
+  | "--rerun-each" : "Re-run each test file this many times" , @number | "--rerun-each=" : "Re-run each test file this many times" ~ @number
+  | "--retry" : "Default retry count for all tests" , @number | "--retry=" : "Default retry count for all tests" ~ @number
+  | "--todo" : "Include tests marked test.todo()"
+  | "--only" : "Run only tests marked .only()"
+  | "--pass-with-no-tests" : "Exit with 0 when no tests are found"
+  | "--concurrent" : "Run all tests concurrently"
+  | "--randomize" : "Run tests in random order"
+  | "--seed" : "Random seed for the test order" , @number | "--seed=" : "Random seed for the test order" ~ @number
+  | "--coverage" : "Generate a coverage profile"
+  | "--coverage-reporter" : "Coverage report format" , ( "text" | "lcov" ) | "--coverage-reporter=" : "Coverage report format" ~ ( "text" | "lcov" )
+  | "--coverage-dir" : "Directory for coverage files" , @directory | "--coverage-dir=" : "Directory for coverage files" ~ @directory
+  | "--bail" : "Stop after the first failure" | "--bail=" : "Stop after this many failures" ~ @number
+  | "-t" : "Run only tests whose name matches a regex" , @any | "--test-name-pattern" : "Run only tests whose name matches a regex" , @any
+  | "--test-name-pattern=" : "Run only tests whose name matches a regex" ~ @any
+  | "--reporter" : "Test reporter format" , ( "junit" | "dots" ) | "--reporter=" : "Test reporter format" ~ ( "junit" | "dots" )
+  | "--reporter-outfile" : "Output file of the reporter" , @file | "--reporter-outfile=" : "Output file of the reporter" ~ @file
+  | "--dots" : "Use the dots reporter"
+  | "--only-failures" : "Only show failing tests"
+  | "--max-concurrency" : "Maximum concurrent tests" , @number | "--max-concurrency=" : "Maximum concurrent tests" ~ @number
+  | "--path-ignore-patterns" : "Globs of test paths to ignore" , @any | "--path-ignore-patterns=" : "Globs of test paths to ignore" ~ @any
+  | "--changed" : "Only run tests affected by changed files" | "--changed=" : "Only run tests affected by changes since this ref" ~ @branch
+  | "--isolate" : "Run each test file in a fresh global object"
+  | "--parallel" : "Run test files in parallel workers" | "--parallel=" : "Run test files in this many workers" ~ @number
+  | "--parallel-delay" : "Milliseconds before spawning more workers" , @number | "--parallel-delay=" : "Milliseconds before spawning more workers" ~ @number
+  | "--shard" : "Run one shard of the test files, like 1/3" , @any | "--shard=" : "Run one shard of the test files, like 1/3" ~ @any
+  | "-h" : "Print the help" | "--help" : "Print the help" ;
+
+x_option =
+    "--bun" : "Run with Bun instead of Node.js"
+  | "-p" : "Package that provides the binary" , @any | "--package" : "Package that provides the binary" , @any
+  | "--package=" : "Package that provides the binary" ~ @any
+  | "--verbose" : "Verbose output while installing"
+  | "--no-install" : "Do not install missing packages"
+  | "--silent" : "Do not print the script command" ;
+
+install_common =
+    "-y" : "Write a yarn.lock file (yarn v1)" | "--yarn" : "Write a yarn.lock file (yarn v1)"
+  | "-p" : "Do not install devDependencies" | "--production" : "Do not install devDependencies"
+  | "--no-save" : "Do not update package.json or the lockfile"
+  | "--save" : "Save to package.json (the default)"
+  | "--ca" : "Certificate Authority signing certificate" , @any | "--ca=" : "Certificate Authority signing certificate" ~ @any
+  | "--cafile" : "File with the CA certificate" , @file | "--cafile=" : "File with the CA certificate" ~ @file
+  | "--dry-run" : "Do not make any change"
+  | "--frozen-lockfile" : "Disallow changes to the lockfile"
+  | "-f" : "Fetch the latest versions and reinstall everything" | "--force" : "Fetch the latest versions and reinstall everything"
+  | "--cache-dir" : "Directory of the cache" , @directory | "--cache-dir=" : "Directory of the cache" ~ @directory
+  | "--no-cache" : "Ignore the manifest cache"
+  | "--quiet" : "Only show the tarball name when packing"
+  | "--verbose" : "Verbose logging"
+  | "--no-progress" : "Hide the progress bar"
+  | "--no-summary" : "Do not print a summary"
+  | "--no-verify" : "Skip verifying new packages"
+  | "--ignore-scripts" : "Skip the lifecycle scripts of package.json"
+  | "--trust" : "Add the packages to trustedDependencies"
+  | "-g" : "Install globally" | "--global" : "Install globally"
+  | "--backend" : "Platform-specific install optimization" , backend | "--backend=" : "Platform-specific install optimization" ~ backend
+  | "--registry" : "Registry to use" , @any | "--registry=" : "Registry to use" ~ @any
+  | "--concurrent-scripts" : "Maximum concurrent lifecycle scripts" , @number | "--concurrent-scripts=" : "Maximum concurrent lifecycle scripts" ~ @number
+  | "--network-concurrency" : "Maximum concurrent network requests" , @number | "--network-concurrency=" : "Maximum concurrent network requests" ~ @number
+  | "--save-text-lockfile" : "Save a text lockfile"
+  | "--omit" : "Leave out this dependency type" , dep_type | "--omit=" : "Leave out this dependency type" ~ dep_type
+  | "--lockfile-only" : "Write the lockfile without installing"
+  | "--linker" : "Linker strategy" , ( "isolated" | "hoisted" ) | "--linker=" : "Linker strategy" ~ ( "isolated" | "hoisted" )
+  | "--minimum-release-age" : "Only use versions at least this many seconds old" , @number
+  | "--minimum-release-age=" : "Only use versions at least this many seconds old" ~ @number
+  | "--cpu" : "CPU architecture for optional dependencies" , @any | "--cpu=" : "CPU architecture for optional dependencies" ~ @any
+  | "--os" : "Operating system for optional dependencies" , @any | "--os=" : "Operating system for optional dependencies" ~ @any
+  | "-c" : "Use this bunfig.toml" , @file | "--config" : "Use this bunfig.toml" , @file | "--config=" : "Use this bunfig.toml" ~ @file
+  | "--silent" : "Do not log anything"
+  | "--cwd" : "Change to this directory first" , @directory | "--cwd=" : "Change to this directory first" ~ @directory
+  | "-h" : "Print the help" | "--help" : "Print the help" ;
+
+backend = "clonefile" | "hardlink" | "symlink" | "copyfile" ;
+dep_type = "dev" | "optional" | "peer" ;
+
+save_kind =
+    "-d" : "Add to devDependencies" | "--dev" : "Add to devDependencies"
+  | "--optional" : "Add to optionalDependencies"
+  | "--peer" : "Add to peerDependencies"
+  | "-E" : "Add the exact version instead of a range" | "--exact" : "Add the exact version instead of a range"
+  | "-a" : "Install the dependencies of the given files" | "--analyze" : "Install the dependencies of the given files"
+  | "--only-missing" : "Only add dependencies not already present" ;
+
+filter = "--filter" : "Only the workspaces matching a pattern" , @any | "--filter=" : "Only the workspaces matching a pattern" ~ @any ;
+
+install_option = install_common | save_kind | filter ;
+add_option = install_common | save_kind ;
+
+update_option =
+    install_common | filter
+  | "--latest" : "Update to the latest versions"
+  | "-i" : "Pick the updates interactively" | "--interactive" : "Pick the updates interactively"
+  | "-r" : "Update in all workspaces" | "--recursive" : "Update in all workspaces" ;
+
+outdated_option =
+    install_common
+  | "-F" : "Only the workspaces matching a pattern" , @any | filter
+  | "-r" : "Check all workspaces" | "--recursive" : "Check all workspaces" ;
+
+publish_option =
+    install_common
+  | "--access" : "Access level of scoped packages" , ( "public" | "restricted" ) | "--access=" : "Access level of scoped packages" ~ ( "public" | "restricted" )
+  | "--tag" : "Tag of the release" , @any | "--tag=" : "Tag of the release" ~ @any
+  | "--otp" : "One-time password" , @any | "--otp=" : "One-time password" ~ @any
+  | "--auth-type" : "Type of one-time password authentication" , @any | "--auth-type=" : "Type of one-time password authentication" ~ @any
+  | "--gzip-level" : "The gzip compression level" , @number | "--gzip-level=" : "The gzip compression level" ~ @number
+  | "--tolerate-republish" : "Do not fail when the version already exists" ;
+
+patch_option =
+    install_common
+  | "--commit" : "Install the package with the changes in a directory"
+  | "--patches-dir" : "Directory for the patch file" , @directory | "--patches-dir=" : "Directory for the patch file" ~ @directory ;
+
+audit_option =
+    "--json" : "Output JSON"
+  | "--audit-level" : "Minimum severity to report" , audit_level | "--audit-level=" : "Minimum severity to report" ~ audit_level
+  | "--ignore" : "Ignore this CVE" , @any | "--ignore=" : "Ignore this CVE" ~ @any ;
+
+audit_level = "low" | "moderate" | "high" | "critical" ;
+
+why_option =
+    "--top" : "Show only the top of the dependency tree"
+  | "--depth" : "Maximum depth of the tree" , @number | "--depth=" : "Maximum depth of the tree" ~ @number ;
+
+build_option =
+    "--watch" : "Rebuild when files change"
+  | "--no-clear-screen" : "Do not clear the screen on rebuild"
+  | "--conditions" : "Custom conditions to resolve" , @any | "--conditions=" : "Custom conditions to resolve" ~ @any
+  | "--production" : "Set NODE_ENV=production and minify"
+  | "--compile" : "Build a standalone executable"
+  | "--compile-exec-argv" : "Arguments prepended to execArgv of the executable" , @any
+  | "--compile-exec-argv=" : "Arguments prepended to execArgv of the executable" ~ @any
+  | "--compile-autoload-dotenv" : "Load .env files in the executable" | "--no-compile-autoload-dotenv" : "Do not load .env files in the executable"
+  | "--compile-autoload-bunfig" : "Load bunfig.toml in the executable" | "--no-compile-autoload-bunfig" : "Do not load bunfig.toml in the executable"
+  | "--compile-autoload-tsconfig" : "Load tsconfig.json in the executable" | "--no-compile-autoload-tsconfig" : "Do not load tsconfig.json in the executable"
+  | "--compile-autoload-package-json" : "Load package.json in the executable" | "--no-compile-autoload-package-json" : "Do not load package.json in the executable"
+  | "--compile-executable-path" : "Bun executable to cross-compile with" , @file | "--compile-executable-path=" : "Bun executable to cross-compile with" ~ @file
+  | "--bytecode" : "Use a bytecode cache"
+  | "--target" : "Execution environment of the bundle" , build_target | "--target=" : "Execution environment of the bundle" ~ build_target
+  | "--outdir" : "Output directory" , @directory | "--outdir=" : "Output directory" ~ @directory
+  | "--outfile" : "Output file" , @file | "--outfile=" : "Output file" ~ @file
+  | "--metafile" : "Write build metadata as JSON" , @file | "--metafile=" : "Write build metadata as JSON" ~ @file
+  | "--metafile-md" : "Write the module graph as markdown" , @file | "--metafile-md=" : "Write the module graph as markdown" ~ @file
+  | "--sourcemap" : "Generate sourcemaps" , sourcemap | "--sourcemap=" : "Generate sourcemaps" ~ sourcemap
+  | "--banner" : "Banner added to the output" , @any | "--banner=" : "Banner added to the output" ~ @any
+  | "--footer" : "Footer added to the output" , @any | "--footer=" : "Footer added to the output" ~ @any
+  | "--format" : "Module format of the output" , build_format | "--format=" : "Module format of the output" ~ build_format
+  | "--root" : "Root directory of multiple entry points" , @directory | "--root=" : "Root directory of multiple entry points" ~ @directory
+  | "--splitting" : "Enable code splitting"
+  | "--public-path" : "Prefix for import paths in the bundle" , @any | "--public-path=" : "Prefix for import paths in the bundle" ~ @any
+  | "-e" : "Keep this module external" , @any | "--external" : "Keep this module external" , @any | "--external=" : "Keep this module external" ~ @any
+  | "--allow-unresolved" : "Allow unresolved dynamic imports matching globs" , @any
+  | "--allow-unresolved=" : "Allow unresolved dynamic imports matching globs" ~ @any
+  | "--reject-unresolved" : "Fail on unresolvable dynamic imports"
+  | "--packages" : "Bundle dependencies or keep them external" , ( "external" | "bundle" )
+  | "--packages=" : "Bundle dependencies or keep them external" ~ ( "external" | "bundle" )
+  | "--entry-naming" : "File name template of entry points" , @any | "--entry-naming=" : "File name template of entry points" ~ @any
+  | "--chunk-naming" : "File name template of chunks" , @any | "--chunk-naming=" : "File name template of chunks" ~ @any
+  | "--asset-naming" : "File name template of assets" , @any | "--asset-naming=" : "File name template of assets" ~ @any
+  | "--react-fast-refresh" : "Enable the React Fast Refresh transform"
+  | "--no-bundle" : "Transpile only, do not bundle"
+  | "--emit-dce-annotations" : "Re-emit DCE annotations in bundles"
+  | "--minify" : "Enable all minification"
+  | "--minify-syntax" : "Minify syntax and inline data"
+  | "--minify-whitespace" : "Minify whitespace"
+  | "--minify-identifiers" : "Minify identifiers"
+  | "--keep-names" : "Keep function and class names when minifying"
+  | "--css-chunking" : "Chunk CSS files together"
+  | "--app" : "Build a web app with Bun Bake (experimental)"
+  | "--server-components" : "Enable server components (experimental)"
+  | "--env" : "Inline environment variables into the bundle" , @any | "--env=" : "Inline environment variables into the bundle" ~ @any
+  | "--windows-hide-console" : "Hide the console of a Windows executable"
+  | "--windows-icon" : "Icon of a Windows executable" , @file | "--windows-icon=" : "Icon of a Windows executable" ~ @file
+  | "--windows-title" : "Product name of a Windows executable" , @any | "--windows-title=" : "Product name of a Windows executable" ~ @any
+  | "--windows-publisher" : "Company name of a Windows executable" , @any | "--windows-publisher=" : "Company name of a Windows executable" ~ @any
+  | "--windows-version" : "Version of a Windows executable" , @any | "--windows-version=" : "Version of a Windows executable" ~ @any
+  | "--windows-description" : "Description of a Windows executable" , @any | "--windows-description=" : "Description of a Windows executable" ~ @any
+  | "--windows-copyright" : "Copyright of a Windows executable" , @any | "--windows-copyright=" : "Copyright of a Windows executable" ~ @any
+  | transpile_option
+  | "-h" : "Print the help" | "--help" : "Print the help" ;
+
+build_target = "browser" | "bun" | "node" ;
+build_format = "esm" | "cjs" | "iife" ;
+sourcemap = "linked" | "inline" | "external" | "none" ;
+
+init_option =
+    "-y" : "Accept the default options" | "--yes" : "Accept the default options"
+  | "-m" : "Only initialize type definitions" | "--minimal" : "Only initialize type definitions"
+  | "-r" : "Initialize a React project" | "--react" : "Initialize a React project"
+  | "--react=" : "Initialize a React project with this setup" ~ ( "tailwind" | "shadcn" )
+  | "-h" : "Print the help" | "--help" : "Print the help" ;
+
+pm_flag = "-g" : "Use the global folders" | "--all" : "Apply to all packages" ;
+
+pm_command =
+    "scan" : "Scan the lockfile for vulnerabilities"
+  | "pack" : "Create a tarball of the workspace" , { pack_option }
+  | "bin" : "Print the bin folder" , { "-g" : "Print the global bin folder" }
+  | "ls" : "List the dependency tree" , { "--all" : "List the entire dependency tree" }
+  | "why" : "Explain why a package is installed" , [ @any ]
+  | "whoami" : "Print the npm username"
+  | "view" : "View package metadata from the registry" , [ @any , { @any } ]
+  | "version" : "Bump the version and create a git tag" , [ version_bump ]
+  | "pkg" : "Manage package.json" , [ ( "get" : "Print fields" | "set" : "Set fields" | "delete" : "Delete fields" | "fix" : "Fix common errors" ) , { @any } ]
+  | "hash" : "Print the hash of the lockfile"
+  | "hash-string" : "Print the string the lockfile hash is made of"
+  | "hash-print" : "Print the hash stored in the lockfile"
+  | "cache" : "Print the cache folder" , [ "rm" : "Clear the cache" ]
+  | "migrate" : "Migrate another lockfile without installing"
+  | "untrusted" : "Print untrusted dependencies with scripts"
+  | "trust" : "Run the scripts of untrusted dependencies" , { "--all" : "Trust all untrusted dependencies" | @any }
+  | "default-trusted" : "Print the default trusted dependencies" ;
+
+pack_option =
+    "--dry-run" : "Do everything except writing the tarball"
+  | "--destination" : "Directory to save the tarball in" , @directory
+  | "--filename" : "File name of the tarball" , @file
+  | "--ignore-scripts" : "Do not run the pack scripts"
+  | "--gzip-level" : "The gzip compression level" , @number
+  | "--quiet" : "Only print the tarball file name" ;
+
+version_bump =
+    "patch" : "Bump the patch version" | "minor" : "Bump the minor version" | "major" : "Bump the major version"
+  | "prepatch" : "Bump to a patch prerelease" | "preminor" : "Bump to a minor prerelease"
+  | "premajor" : "Bump to a major prerelease" | "prerelease" : "Bump the prerelease"
+  | "from-git" : "Use the latest git tag" | @any ;

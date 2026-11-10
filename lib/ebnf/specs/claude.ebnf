@@ -1,0 +1,305 @@
+(* claude: Claude Code 2.1.319, checked against `claude --help` and the --help of every
+   subcommand of that version. The CLI changes fast: this spec follows 2.1.319 and options
+   added later stay invalid until it is updated.
+
+   Conventions (the CLI uses commander):
+   - Options with a value accept `--name value` and `--name=value`; short ones `-x value`
+     and `-xvalue`.
+   - Options with an optional value (`--resume [value]`) take the next word when it is not
+     an option.
+   - Variadic options (`--add-dir <directories...>`) take every word up to the next option.
+   - The prompt is one free-text word (quote it); options may follow it. *)
+
+claude = { option } , [ command | @any , { option } ] ;
+
+model = "opus" : "Latest Opus model" | "sonnet" : "Latest Sonnet model" | "fable" : "Latest Fable model" | @any ;
+permission_mode =
+    "acceptEdits" : "Accept file edits without asking" | "auto" : "Let a classifier approve actions"
+  | "bypassPermissions" : "Skip every permission check" | "manual" : "Ask before every action"
+  | "dontAsk" : "Deny anything not allowed in advance" | "plan" : "Plan without making changes" ;
+effort = "low" | "medium" | "high" | "xhigh" | "max" ;
+output_format = "text" : "Plain text (default)" | "json" : "A single JSON result" | "stream-json" : "Realtime streaming JSON" ;
+input_format = "text" : "Plain text (default)" | "stream-json" : "Realtime streaming JSON input" ;
+setting_sources = "user" | "project" | "local" | @any ;
+toggle = "true" | "false" | "1" | "0" | "yes" | "no" | "on" | "off" ;
+help = "-h" : "Display help for command" | "--help" : "Display help for command" ;
+json = "--json" : "Output as JSON" ;
+
+option =
+    "--add-dir" : "Additional directories to allow tool access to" , @directory , { @directory }
+  | "--agent" : "Agent for the current session" , @any | "--agent=" : "Agent for the current session" ~ @any
+  | "--agents" : "JSON object or file defining custom agents" , @any | "--agents=" : "JSON object or file defining custom agents" ~ @any
+  | "--allow-dangerously-skip-permissions" : "Make bypassing permission checks available"
+  | "--allowedTools" : "Tool names to allow" , @any , { @any } | "--allowed-tools" : "Tool names to allow" , @any , { @any }
+  | "--append-system-prompt" : "Append to the default system prompt" , @any | "--append-system-prompt=" : "Append to the default system prompt" ~ @any
+  | "--autocompact" : "Auto-compact window size: auto or tokens" , ( "auto" | @any ) | "--autocompact=" : "Auto-compact window size: auto or tokens" ~ ( "auto" | @any )
+  | "--ax-screen-reader" : "Render screen-reader friendly output"
+  | "--bg" : "Start the session in the background" | "--background" : "Start the session in the background"
+  | "--bare" : "Minimal mode: skip hooks, plugins, memory and CLAUDE.md"
+  | "--betas" : "Beta headers to include in API requests" , @any , { @any }
+  | "--brief" : "Enable the SendUserMessage tool"
+  | "--chrome" : "Enable Claude in Chrome integration" | "--no-chrome" : "Disable Claude in Chrome integration"
+  | "--cloud" : "Create or attach to a cloud session" , [ @any ] | "--cloud=" : "Create or attach to a cloud session" ~ @any
+  | "-c" : "Continue the most recent conversation" | "--continue" : "Continue the most recent conversation"
+  | "--dangerously-skip-permissions" : "Bypass all permission checks"
+  | "-d" : "Enable debug mode, optionally filtered" , [ @any ] | "--debug" : "Enable debug mode, optionally filtered" , [ @any ]
+  | "--debug=" : "Debug categories, such as hooks,mcp" ~ @any
+  | "--debug-file" : "Write debug logs to this file" , @file | "--debug-file=" : "Write debug logs to this file" ~ @file
+  | "--desktop" : "Open in the Claude Desktop app"
+  | "--disable-slash-commands" : "Disable all skills and commands"
+  | "--disallowedTools" : "Tool names to deny" , @any , { @any } | "--disallowed-tools" : "Tool names to deny" , @any , { @any }
+  | "--effort" : "Effort level for the session" , effort | "--effort=" : "Effort level for the session" ~ effort
+  | "--environment" : "Run a new cloud session on this environment" , @any | "--environment=" : "Run a new cloud session on this environment" ~ @any
+  | "--exclude-dynamic-system-prompt-sections" : "Move per-machine prompt sections to the first message"
+  | "--fallback-model" : "Models to fall back to when overloaded" , model | "--fallback-model=" : "Models to fall back to when overloaded" ~ model
+  | "--file" : "File resources to download: file_id:relative_path" , @any , { @any }
+  | "--fork-session" : "Use a new session id when resuming"
+  | "--forward-subagent-text" : "Forward subagent text and thinking blocks"
+  | "--from-pr" : "Resume a session linked to a PR" , [ @any ] | "--from-pr=" : "Resume a session linked to a PR" ~ @any
+  | help
+  | "--ide" : "Connect to the IDE on startup"
+  | "--include-hook-events" : "Include hook events in the output stream"
+  | "--include-partial-messages" : "Include partial message chunks"
+  | "--input-format" : "Input format with --print" , input_format | "--input-format=" : "Input format with --print" ~ input_format
+  | "--json-schema" : "JSON Schema for structured output" , @any | "--json-schema=" : "JSON Schema for structured output" ~ @any
+  | "--max-budget-usd" : "Maximum dollars to spend with --print" , @any | "--max-budget-usd=" : "Maximum dollars to spend with --print" ~ @any
+  | "--mcp-config" : "Load MCP servers from JSON files or strings" , @any , { @any }
+  | "--model" : "Model for the session" , model | "--model=" : "Model for the session" ~ model
+  | "-n" : "Display name for the session" , @any | "--name" : "Display name for the session" , @any | "--name=" : "Display name for the session" ~ @any
+  | "--no-session-persistence" : "Do not save the session to disk"
+  | "--output-format" : "Output format with --print" , output_format | "--output-format=" : "Output format with --print" ~ output_format
+  | "--permission-mode" : "Permission mode for the session" , permission_mode | "--permission-mode=" : "Permission mode for the session" ~ permission_mode
+  | "--permission-prompts" : "Who answers permission prompts with --print" , ( "host" | "none" )
+  | "--permission-prompts=" : "Who answers permission prompts with --print" ~ ( "host" | "none" )
+  | "--plugin-dir" : "Load a plugin from a directory or .zip" , @file | "--plugin-dir=" : "Load a plugin from a directory or .zip" ~ @file
+  | "--plugin-url" : "Fetch a plugin .zip from a URL" , @any | "--plugin-url=" : "Fetch a plugin .zip from a URL" ~ @any
+  | "-p" : "Print the response and exit" | "--print" : "Print the response and exit"
+  | "--prompt-suggestions" : "Enable prompt suggestions" , [ toggle ] | "--prompt-suggestions=" : "Enable prompt suggestions" ~ toggle
+  | "--remote-control" : "Start with Remote Control enabled" , [ @any ] | "--remote-control=" : "Start with Remote Control enabled" ~ @any
+  | "--remote-control-session-name-prefix" : "Prefix for Remote Control session names" , @any
+  | "--remote-control-session-name-prefix=" : "Prefix for Remote Control session names" ~ @any
+  | "--replay-user-messages" : "Re-emit user messages from stdin on stdout"
+  | "--restricted" : "Remove tools that run code and ignore settings files"
+  | "-r" : "Resume a conversation by id or name" , [ @any ] | "--resume" : "Resume a conversation by id or name" , [ @any ]
+  | "--resume=" : "Resume a conversation by id or name" ~ @any
+  | "--safe-mode" : "Start with all customizations disabled"
+  | "--session-id" : "Use this session id (a UUID)" , @any | "--session-id=" : "Use this session id (a UUID)" ~ @any
+  | "--setting-sources" : "Setting sources to load, comma separated" , setting_sources | "--setting-sources=" : "Setting sources to load, comma separated" ~ setting_sources
+  | "--settings" : "Settings JSON file or string" , ( @file | @any ) | "--settings=" : "Settings JSON file or string" ~ @file
+  | "--strict-mcp-config" : "Only use MCP servers from --mcp-config"
+  | "--system-prompt" : "System prompt for the session" , @any | "--system-prompt=" : "System prompt for the session" ~ @any
+  | "--system-prompt-snapshot" : "Record the system prompt once per conversation" , ( "on" | "off" )
+  | "--system-prompt-snapshot=" : "Record the system prompt once per conversation" ~ ( "on" | "off" )
+  | "--teleport" : "Resume a teleport session" , [ @any ] | "--teleport=" : "Resume a teleport session" ~ @any
+  | "--tmux" : "Create a tmux session for the worktree" | "--tmux=" : "Create a tmux session for the worktree" ~ "classic" : "Use traditional tmux"
+  | "--tools" : "Built-in tools to make available" , @any , { @any }
+  | "--verbose" : "Override verbose mode setting from config"
+  | "-v" : "Output the version number" | "--version" : "Output the version number"
+  | "-w" : "Create a git worktree for the session" , [ @any ] | "--worktree" : "Create a git worktree for the session" , [ @any ]
+  | "--worktree=" : "Create a git worktree for the session" ~ @any ;
+
+command =
+    "agents" : "Manage background agents" , { agents_option }
+  | "attach" : "Open a background session in this terminal" , { help } , @any , { help }
+  | "auth" : "Manage authentication" , { help } , [ auth_command ]
+  | "auto-mode" : "Inspect or reset auto mode configuration" , { help } , [ auto_mode_command ]
+  | "doctor" : "Check the health of the installation" , { help }
+  | "gateway" : "Run the enterprise auth/telemetry gateway" , { gateway_option }
+  | "import" : "Import config from another coding agent" , { import_option } , [ import_source , { import_option } ]
+  | "install" : "Install the Claude Code native build" , { install_option } , [ install_target , { install_option } ]
+  | "logs" : "Print a background session's recent output" , { help } , @any , { help }
+  | "mcp" : "Configure and manage MCP servers" , { help } , [ mcp_command ]
+  | ( "plugin" : "Manage Claude Code plugins" | "plugins" : "Manage Claude Code plugins" ) , { help } , [ plugin_command ]
+  | "purge" : "Delete a project's Claude Code data" , { purge_option | @directory }
+  | "respawn" : "Restart background sessions on the current version" , { help | "--all" : "Restart every background session" | @any }
+  | "rm" : "Delete a background session and its worktree" , { rm_option | @any }
+  | "setup-token" : "Set up a long-lived authentication token" , { help }
+  | ( "stop" : "Stop a background session" | "kill" : "Stop a background session" ) , { help } , @any , { help }
+  | "ultrareview" : "Run a cloud multi-agent code review" , { ultrareview_option | @branch | @number }
+  | ( "update" : "Check for updates and install them" | "upgrade" : "Check for updates and install them" ) , { help } ;
+
+agents_option =
+    help | "--add-dir" : "Directory to allow in dispatched sessions" , @directory
+  | "--agent" : "Default agent for dispatched sessions" , @any
+  | "--all" : "With --json, include completed sessions"
+  | "--allow-dangerously-skip-permissions" : "Make bypass-permissions mode available"
+  | "--cwd" : "Only sessions started under this path" , @directory
+  | "--dangerously-skip-permissions" : "Alias for --permission-mode bypassPermissions"
+  | "--effort" : "Default effort for dispatched sessions" , effort
+  | "--json" : "Print active sessions as JSON and exit"
+  | "--mcp-config" : "MCP configuration for dispatched sessions" , @any
+  | "--model" : "Default model for dispatched sessions" , model
+  | "--permission-mode" : "Default permission mode for dispatched sessions" , permission_mode
+  | "--plugin-dir" : "Load plugins from this directory" , @file
+  | "--restricted" : "Start dispatched sessions in restricted mode"
+  | "--setting-sources" : "Setting sources to load, comma separated" , setting_sources
+  | "--settings" : "Settings file or JSON string" , ( @file | @any )
+  | "--strict-mcp-config" : "Only use MCP servers from --mcp-config" ;
+
+auth_command =
+    "login" : "Sign in to your Anthropic account" , { help | "--claudeai" : "Use a Claude subscription (default)"
+      | "--console" : "Use Anthropic Console API billing" | "--email" : "Pre-populate the email address" , @any
+      | "--sso" : "Force the SSO login flow" }
+  | "logout" : "Log out from your Anthropic account" , { help }
+  | "status" : "Show authentication status" , { help | "--json" : "Output as JSON (default)" | "--text" : "Output as human-readable text" }
+  | "help" : "Display help for a command" , [ "login" | "logout" | "status" ] ;
+
+auto_mode_command =
+    "config" : "Print the effective auto mode config as JSON" , { help }
+  | "critique" : "Get AI feedback on your auto mode rules" , { help | "--model" : "Model to use" , model }
+  | "defaults" : "Print the default auto mode rules as JSON" , { help | "--label" : "Only rules whose label starts with this" , @any }
+  | "reset" : "Reset auto mode configuration to the defaults" , { help | "-y" : "Skip the confirmation prompt" | "--yes" : "Skip the confirmation prompt" }
+  | "help" : "Display help for a command" , [ "config" | "critique" | "defaults" | "reset" ] ;
+
+gateway_option = help | "--config" : "Path to the gateway YAML config" , @file ;
+
+import_source = "codex" : "Import from Codex" | "gemini" : "Import from Gemini CLI" | "cursor" : "Import from Cursor" ;
+import_option =
+    help | "--dry-run" : "Show what would be imported without writing"
+  | "--yes" : "Skip the interactive picker" | "--yes=" : "Digest from the /import preview" ~ @any ;
+
+install_target = "stable" : "The stable channel" | "latest" : "The latest release" | @any ;
+install_option = help | "--force" : "Install even if already installed" ;
+
+purge_option =
+    help | "--all" : "Purge state for every project"
+  | "--dry-run" : "List what would be deleted"
+  | "-i" : "Prompt for each item" | "--interactive" : "Prompt for each item"
+  | "-y" : "Skip the confirmation prompt" | "--yes" : "Skip the confirmation prompt" ;
+
+rm_option =
+    help
+  | "--discard-unpushed" : "Discard the worktree's unpushed commits: commit@worktree" , @any
+  | "--force-remove-worktree" : "Delete the worktree directory anyway" , @any ;
+
+ultrareview_option =
+    help | "--json" : "Print the raw bugs.json payload"
+  | "--no-post" : "Do not post the findings to the PR (default)"
+  | "--post" : "Post the findings to the PR as a comment"
+  | "--timeout" : "Maximum minutes to wait (default 45)" , @number
+  | "--trust-workspace" : "Trust the current folder for this run only" ;
+
+(* mcp *)
+
+scope = "local" : "This project, only for you" | "user" : "All your projects" | "project" : "Shared through .mcp.json" ;
+mcp_scope = "-s" : "Configuration scope" , scope | "--scope" : "Configuration scope" , scope | "--scope=" : "Configuration scope" ~ scope ;
+client_secret = "--client-secret" : "Prompt for the OAuth client secret" ;
+transport = "stdio" : "Local process (default)" | "sse" : "Server-sent events" | "http" : "Streamable HTTP" ;
+
+mcp_command =
+    "add" : "Add an MCP server" , { mcp_add_option } , @any , { mcp_add_option }
+      , [ ( @command | @any ) , { mcp_add_option | @any } ] , [ "--" , @command , { @any } ]
+  | "add-from-claude-desktop" : "Import MCP servers from Claude Desktop" , { help | mcp_scope }
+  | "add-json" : "Add an MCP server from a JSON string" , { help | mcp_scope | client_secret } , @any , { help | mcp_scope | client_secret } , @any , { help | mcp_scope | client_secret }
+  | "get" : "Get details about an MCP server" , { help } , @any , { help }
+  | "list" : "List configured MCP servers" , { help }
+  | "login" : "Authenticate with an MCP server" , { help | "--no-browser" : "Print the authorization URL instead" } , @any , { help | "--no-browser" : "Print the authorization URL instead" }
+  | "logout" : "Clear stored OAuth credentials for a server" , { help } , @any , { help }
+  | "remove" : "Remove an MCP server" , { help | mcp_scope } , @any , { help | mcp_scope }
+  | "reset-project-choices" : "Reset approved and rejected .mcp.json servers" , { help }
+  | "serve" : "Start the Claude Code MCP server" , { help | "-d" : "Enable debug mode" | "--debug" : "Enable debug mode" | "--verbose" : "Override verbose mode setting" }
+  | "help" : "Display help for a command" , [ @any ] ;
+
+mcp_add_option =
+    help | mcp_scope | client_secret
+  | "--callback-port" : "Fixed port for the OAuth callback" , @number | "--callback-port=" : "Fixed port for the OAuth callback" ~ @number
+  | "--client-id" : "OAuth client id for HTTP/SSE servers" , @any | "--client-id=" : "OAuth client id for HTTP/SSE servers" ~ @any
+  | "-e" : "Set environment variables, KEY=value" , @any , { @any } | "--env" : "Set environment variables, KEY=value" , @any , { @any }
+  | "-H" : "Set headers for HTTP/SSE servers" , @any , { @any } | "--header" : "Set headers for HTTP/SSE servers" , @any , { @any }
+  | "-t" : "Transport type" , transport | "--transport" : "Transport type" , transport | "--transport=" : "Transport type" ~ transport ;
+
+(* plugin *)
+
+plugin_scope_name = "user" | "project" | "local" ;
+plugin_scope = "-s" : "Installation scope" , plugin_scope_name | "--scope" : "Installation scope" , plugin_scope_name | "--scope=" : "Installation scope" ~ plugin_scope_name ;
+plugin_json = "--json" : "Print one machine-readable result line" ;
+yes = "-y" : "Skip the confirmation prompt" | "--yes" : "Skip the confirmation prompt" ;
+dry_run = "--dry-run" : "Show what would happen without doing it" ;
+accept_command = "--accept-command" : "Accept the marketplace command with this sha256" , @any ;
+
+plugin_command =
+    "configure" : "Show or save a plugin's options" , { help | json | "--values-stdin" : "Read option values from stdin as JSON" | @any }
+  | "details" : "Show a plugin's components and token cost" , { help | @any }
+  | "disable" : "Disable an enabled plugin" , { help | plugin_json | plugin_scope | "-a" : "Disable all enabled plugins" | "--all" : "Disable all enabled plugins" | @any }
+  | "enable" : "Enable a disabled plugin" , { help | plugin_json | plugin_scope | @any }
+  | "eval" : "Run a plugin's eval cases" , { eval_option | @file | @any }
+  | ( "init" : "Scaffold a new plugin" | "new" : "Scaffold a new plugin" ) , { init_option | @any }
+  | ( "install" : "Install a plugin from a marketplace" | "i" : "Install a plugin from a marketplace" ) , { install_plugin_option | @any }
+  | "list" : "List installed plugins" , { help | json | "--available" : "Include plugins from marketplaces (with --json)"
+      | "--data-size" : "Measure saved data directories (with --json)" , [ @any ] }
+  | "marketplace" : "Manage Claude Code marketplaces" , { help } , [ marketplace_command ]
+  | ( "prune" : "Remove unneeded auto-installed dependencies" | "autoremove" : "Remove unneeded auto-installed dependencies" ) , { help | dry_run | plugin_scope | yes }
+  | "tag" : "Create a release git tag for a plugin" , { tag_option | @directory }
+  | "test" : "Run a mod's tests" , { help | @directory }
+  | ( "uninstall" : "Uninstall an installed plugin" | "remove" : "Uninstall an installed plugin" ) , { uninstall_option | @any }
+  | "update" : "Update a plugin to the latest version" , { help | plugin_json | yes | accept_command
+      | "-s" : "Installation scope" , ( plugin_scope_name | "managed" ) | "--scope" : "Installation scope" , ( plugin_scope_name | "managed" ) | @any }
+  | "validate" : "Validate a plugin or marketplace" , { help | json | "--strict" : "Treat warnings as errors"
+      | "--profile" : "Also apply the checks of this catalog" , "directory" | @file }
+  | "help" : "Display help for a command" , [ @any ] ;
+
+eval_option =
+    help
+  | "--ablation" : "Run a no-plugin baseline arm" , ( "none" | "with-without" )
+  | "--allow-real-servers" : "Also start the plugin's real MCP servers"
+  | "--allow-tools" : "Grant gated tools" , @any , { @any }
+  | "--case" : "Filter cases by name glob" , @any
+  | "-j" : "Agent runs at once, 1-8" , @number | "--concurrency" : "Agent runs at once, 1-8" , @number
+  | "--disallow-tools" : "Built-in tools to keep from Claude" , @any , { @any }
+  | "--eval-dir" : "Directory below the plugin with the cases" , @directory
+  | "--json" : "Print or write the full run result as JSON" , [ @file ]
+  | "--judge-model" : "Model for LLM graders" , model
+  | "--keep-temp" : "Keep scaffold directories"
+  | "--max-cost-usd" : "Hard cost ceiling in dollars" , @any
+  | "--mocks" : "Mock stand-ins for MCP servers" , ( "record" | "off" )
+  | "--model" : "Model for all cases" , model
+  | "--no-publish" : "Keep the HTML report local"
+  | "--no-scaffold" : "Skip scaffold_script"
+  | "--output-dir" : "Directory for aggregate-result.json" , @directory
+  | "--publish-report" : "Require publishing the report to claude.ai"
+  | "--report" : "Write the HTML report to this path" , @file
+  | "--runs" : "Runs per case" , @number
+  | "--scaffold" : "Run each case's scaffold_script"
+  | "--tag" : "Filter cases by tag" , @any , { @any }
+  | "--threshold" : "Exit 1 if a case scores below this, 0..1" , @any
+  | "--trust-plugin" : "Trust the plugin and skip the trust prompt"
+  | "--verbose" : "Log per-message trace events" ;
+
+init_option =
+    help
+  | "--author" : "Author name" , @any
+  | "--author-email" : "Author email" , @any
+  | "--description" : "Manifest description" , @any
+  | "-f" : "Overwrite an existing .claude-plugin/" | "--force" : "Overwrite an existing .claude-plugin/"
+  | "--with" : "Also scaffold these components" , component , { component } ;
+component = "skills" | "agents" | "hooks" | "mcp" | "lsp" | "output-style" | "channel" ;
+
+install_plugin_option =
+    help | plugin_json | yes | accept_command
+  | "--config" : "Set a userConfig option, key=value" , @any
+  | "--marketplace" : "Install from the marketplace at this source" , @any
+  | "--registry" : "npm registry for package@npm installs" , @any
+  | plugin_scope ;
+
+uninstall_option =
+    help | plugin_json | plugin_scope | yes
+  | "--keep-data" : "Keep the plugin's data directory"
+  | "--prune" : "Also remove unneeded auto-installed dependencies" ;
+
+tag_option =
+    help | "--dry-run" : "Print what would be tagged"
+  | "-f" : "Skip the dirty-tree and existing-tag checks" | "--force" : "Skip the dirty-tree and existing-tag checks"
+  | "-m" : "Tag annotation message" , @any | "--message" : "Tag annotation message" , @any
+  | "--push" : "Push the tag after creating it"
+  | "--remote" : "Remote to push to (default origin)" , @remote ;
+
+marketplace_command =
+    "add" : "Add a marketplace from a URL, path or GitHub repo" , { help | plugin_json
+      | "--claudeai" : "Add a marketplace that claude.ai hosts for you"
+      | "--scope" : "Where to declare the marketplace" , plugin_scope_name
+      | "--sparse" : "Limit the checkout to these directories" , @any , { @any } | @directory | @any }
+  | "list" : "List configured marketplaces" , { help | json }
+  | ( "remove" : "Remove a configured marketplace" | "rm" : "Remove a configured marketplace" ) , { help | plugin_json
+      | "--scope" : "Remove the declaration from this scope" , plugin_scope_name | @any }
+  | "update" : "Update marketplaces from their source" , { help | plugin_json | @any }
+  | "help" : "Display help for a command" , [ @any ] ;
