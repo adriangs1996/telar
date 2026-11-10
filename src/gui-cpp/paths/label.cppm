@@ -482,7 +482,7 @@ public:
     return PasteEncoding::encode<PathPickerLimits::quoted_bytes>(quoted->view(), choice.bracketed);
   }
 
-private:
+  // A word the shell reads as written, with nothing to quote or expand.
   [[nodiscard]] inline static bool plain(std::string_view word) noexcept {
     return std::ranges::all_of(word, [](char byte) {
       constexpr std::string_view literal_punctuation = "_-./+@%,:";

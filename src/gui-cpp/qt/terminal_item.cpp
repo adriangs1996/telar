@@ -427,24 +427,47 @@ void TerminalItem::setPromptCaret(const QRectF &caret) {
   }
 }
 
-// The rows of the shell's prompt the cursor sits in, which telar's editor stands in for: from
-// the nearest row the shell marked as a prompt start down to the cursor. Only at the bottom of
-// the scrollback, and only while the editor has the pane.
-static std::pair<std::size_t, std::size_t> promptRows(const Screen<ApplicationAllocator> &screen, bool editing) {
-  if (!editing || screen.scroll().offset != copyGrid(screen).maximumOffset()) {
-    return {0, 0};
+struct PromptRows {
+  std::size_t first = 0;
+  std::size_t count = 0;
+  // Whether the last row is the cursor's, where the command's separator will be.
+  bool cursor = false;
+};
+
+// The rows of the shell's prompt the cursor sits in, which telar's editor stands in for, while
+// the editor has the pane: from the nearest row the shell marked as a prompt start down to the
+// cursor. Scrolled up, the cursor may sit below the view with the prompt's first rows still at
+// its bottom: those count only past `live_from`, where the last command's rows end, counted
+// from the top of the scrollback, and run to the view's last row.
+static PromptRows promptRows(const Screen<ApplicationAllocator> &screen, bool editing, std::uint64_t live_from) {
+  const auto rows = static_cast<std::size_t>(screen.rows());
+  if (!editing || rows == 0) {
+    return {};
   }
+  const auto offset = static_cast<std::uint64_t>(screen.scroll().offset);
+  const auto bottom = static_cast<std::uint64_t>(copyGrid(screen).maximumOffset());
   const auto &cursor = screen.cursor();
-  if (cursor.y >= screen.rows()) {
-    return {0, 0};
+  const bool below = offset < bottom && !cursor.visible;
+  const std::size_t last = below ? rows - 1 : cursor.y;
+  if (last >= rows) {
+    return {};
   }
   constexpr std::size_t search = 8;
-  for (std::size_t row = cursor.y + 1; row-- > 0 && cursor.y - row < search;) {
+  for (std::size_t row = last + 1; row-- > 0 && last - row < search;) {
     if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
-      return {row, static_cast<std::size_t>(cursor.y) - row + 1};
+      // The cursor is at or under the scrollback's live screen, at most `search` rows under its prompt.
+      if (below && (offset + row < live_from || offset + row + search <= bottom)) {
+        return {};
+      }
+      return {row, last - row + 1, !below};
     }
   }
-  return {0, 0};
+  return {};
+}
+
+// Where the last command's rows end, counted from the top of the scrollback: the live prompt is past it.
+static std::uint64_t liveFrom(const auto &blocks) noexcept {
+  return blocks.empty() ? 0 : static_cast<std::uint64_t>(blocks.back().row) + blocks.back().rows;
 }
 
 static QString blockState(CommandBlockState state) {
@@ -468,16 +491,28 @@ void TerminalItem::refreshBlocks() {
   QVariantList separators;
   QVariantList rail;
   int prompt_row = -1;
+  int prompt_top = -1;
+  int cursor_row = -1;
+  int screen_rows = 0;
+  int rows_below = 0;
   hidden_rows_.clear();
   if (current != nullptr && application_ != nullptr) {
     const auto &screen = current->screen;
     const auto rows = static_cast<std::size_t>(screen.rows());
     hidden_rows_.assign(rows, 0);
-    const auto [first, count] = promptRows(screen, application_->promptSurface(pane_id_) == prompt::Surface::editor);
+    const auto [first, count, cursor] = promptRows(screen, application_->promptSurface(pane_id_) == prompt::Surface::editor, liveFrom(current->blocks));
     std::fill_n(hidden_rows_.begin() + static_cast<std::ptrdiff_t>(std::min(first, rows)), std::min(count, rows - std::min(first, rows)), std::uint8_t{1});
-    // The command's own row, where its separator will be.
-    prompt_row = count == 0 ? -1 : static_cast<int>(first + count - 1);
-    // Output held while the command flies to its separator.
+    // The command's own row, where its separator will be, and the prompt's first.
+    prompt_row = count == 0 || !cursor ? -1 : static_cast<int>(first + count - 1);
+    prompt_top = count == 0 ? -1 : static_cast<int>(first);
+    // On the live screen the cursor is always in view, wherever the program hid it.
+    const auto offset = static_cast<std::uint64_t>(screen.scroll().offset);
+    const auto bottom = static_cast<std::uint64_t>(copyGrid(screen).maximumOffset());
+    const auto &shown = screen.cursor();
+    cursor_row = !screen.modes().alternate_screen && (offset >= bottom || shown.visible) && shown.y < rows ? static_cast<int>(shown.y) : -1;
+    screen_rows = static_cast<int>(rows);
+    rows_below = bottom > offset ? static_cast<int>(std::min<std::uint64_t>(bottom - offset, std::numeric_limits<int>::max())) : 0;
+    // Output held while the line turns into its separator.
     if (held_from_ && !screen.modes().alternate_screen) {
       const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
       for (std::size_t row = 0; row < rows; ++row) {
@@ -515,6 +550,13 @@ void TerminalItem::refreshBlocks() {
       }
     }
   }
+  if (prompt_top != prompt_top_ || cursor_row != cursor_row_ || screen_rows != rows_ || rows_below != rows_below_) {
+    prompt_top_ = prompt_top;
+    cursor_row_ = cursor_row;
+    rows_ = screen_rows;
+    rows_below_ = rows_below;
+    emit placeChanged();
+  }
   if (separators != separators_ || rail != rail_ || prompt_row != prompt_row_ || font_.cell != shown_cell_) {
     separators_ = std::move(separators);
     rail_ = std::move(rail);
@@ -542,8 +584,8 @@ void TerminalItem::holdOutput() {
     return;
   }
   const auto &screen = current->screen;
-  const auto [first, count] = promptRows(screen, true);
-  const auto row = count == 0 ? static_cast<std::size_t>(screen.cursor().y) : first;
+  const auto prompt = promptRows(screen, true, liveFrom(current->blocks));
+  const auto row = prompt.count == 0 ? static_cast<std::size_t>(screen.cursor().y) : prompt.first;
   held_from_ = static_cast<std::uint64_t>(screen.scroll().offset) + row;
   reveal_rows_ = 0;
   // Never longer than a moment, whatever becomes of the flight.

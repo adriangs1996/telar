@@ -425,8 +425,52 @@ void islandBlocks() {
   require(!client.selectedBlock(1), "Esc goes back to the prompt");
 }
 
+// Ctrl-R and the path search start from the line the island holds, and the path chosen
+// replaces the word it started from.
+void islandSearches() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  FrameBody frame;
+  frame.pane_id = 1;
+  frame.frame_id = 1;
+  frame.scroll.total_rows = 1;
+  deliverSingleCell(client, frame);
+  deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work"});
+  deliver(client, atPrompt());
+  auto configuration = client.configuration();
+  configuration.prompt.mode = PromptMode::telar;
+  client.configure(configuration);
+
+  typeKeys(client, "cat src/ma");
+  require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::search_history, "Ctrl-R at the prompt searches the history");
+  require(client.island(1)->editor().text().view() == "cat src/ma", "opening the search keeps the line");
+
+  require(client.beginPathPicker(), "the path search opens over the island");
+  require(client.pathSeed() == "src/ma" && transport.last<FindPaths>().query == "src/ma", "the path search starts from the word before the caret");
+  auto request = transport.last<FindPaths>();
+  std::array matches{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}};
+  deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
+  auto before = transport.sent.size();
+  require(client.insertPath(0, false), "a found path inserts");
+  require(transport.inputSince(before).empty() && client.island(1)->editor().text().view() == "cat src/main.cpp", "the path replaces the word in the island");
+
+  typeKeys(client, " ~/x");
+  require(client.beginPathPicker() && client.pathSeed().empty() && transport.last<FindPaths>().query.empty(), "a word that is not a plain relative path starts the search empty");
+  request = transport.last<FindPaths>();
+  matches[0] = PathMatch{.path = "a.txt", .kind = PathKind::file};
+  deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
+  require(client.insertPath(0, false) && client.island(1)->editor().text().view() == "cat src/main.cpp ~/xa.txt", "without a word the path goes in at the caret");
+
+  deliver(client, running(1));
+  typeKeys(client, "x");
+  require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::edited, "Ctrl-R while a command runs stays in the queue");
+}
+
 int main() {
   islandRunsCommands();
+  islandSearches();
   islandBindings();
   islandCompletes();
   islandBlocks();

@@ -20,8 +20,8 @@ namespace telar::gui::qt {
 
 // How long a typed character takes to rise into place, and a completed one to sweep in; a
 // completion sweeps one character after another, this far apart.
-static constexpr qint64 rise_ms = 140;
-static constexpr qint64 sweep_ms = 420;
+static constexpr qint64 rise_ms = 70;
+static constexpr qint64 sweep_ms = 200;
 static constexpr qint64 sweep_step_ms = 16;
 static constexpr qint64 ghost_ms = 300;
 static constexpr std::size_t maximum_fresh = 200;
@@ -419,21 +419,6 @@ int PromptIsland::status() const noexcept {
   return pane == nullptr ? 0 : pane->shell.status;
 }
 
-QString PromptIsland::skin() const {
-  if (application_ == nullptr) {
-    return QStringLiteral("halo");
-  }
-  switch (application_->configuration().prompt.skin) {
-  case PromptSkin::glass:
-    return QStringLiteral("glass");
-  case PromptSkin::ink:
-    return QStringLiteral("ink");
-  case PromptSkin::halo:
-    break;
-  }
-  return QStringLiteral("halo");
-}
-
 QString PromptIsland::motion() const {
   if (application_ == nullptr) {
     return QStringLiteral("spring");
@@ -624,11 +609,6 @@ void PromptIsland::placeRuns() {
     return QColor::fromRgbF(static_cast<float>(from.redF() + (to.redF() - from.redF()) * amount), static_cast<float>(from.greenF() + (to.greenF() - from.greenF()) * amount), static_cast<float>(from.blueF() + (to.blueF() - from.blueF()) * amount), static_cast<float>(from.alphaF() + (to.alphaF() - from.alphaF()) * amount));
   };
 
-  if (first_row_ == 0) {
-    const auto current = mode();
-    const bool normal = current == QLatin1StringView("normal") || current.startsWith(QLatin1StringView("visual"));
-    place(normal ? QStringLiteral("\u276E") : QStringLiteral("\u276F"), 0, 0, colors_.value(failed_ ? QStringLiteral("red") : QStringLiteral("accent")).value<QColor>());
-  }
   QVariantList glows;
   for (const auto &run : layout_.runs) {
     if (static_cast<int>(run.row) >= first_row_ && static_cast<int>(run.row) < last_row) {

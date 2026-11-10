@@ -59,8 +59,13 @@ void Application::scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row) {
 
 bool Application::promptKey(std::uint64_t pane_id, const prompt::KeyPress &key) {
   try {
-    if (session().promptKey(pane_id, key) == prompt::Outcome::terminal) {
+    const auto outcome = session().promptKey(pane_id, key);
+    if (outcome == prompt::Outcome::terminal) {
       return false;
+    }
+    if (outcome == prompt::Outcome::search_history) {
+      execute(Action::history);
+      return true;
     }
   } catch (const std::exception &error) {
     // A command the shell cannot receive (controls, size) stays in the editor.

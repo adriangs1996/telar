@@ -128,6 +128,36 @@ QVariantList pathRows(const PathPickerPage &page, const PathPickerGeometry &geom
 
 }
 
+QVariantList Application::pathPickerRows(int columns, int first, int count) const {
+  const auto &page = session().pathPicker();
+  const auto &matches = page.matches();
+  const auto begin = std::min(static_cast<std::size_t>(std::max(0, first)), matches.size());
+  const auto end = std::min(matches.size(), begin + static_cast<std::size_t>(std::max(0, count)));
+  const auto width = static_cast<std::uint16_t>(std::clamp(columns, 1, static_cast<int>(std::numeric_limits<std::uint16_t>::max())));
+  QVariantList rows;
+  rows.reserve(static_cast<qsizetype>(end - begin));
+  for (auto index = begin; index < end; ++index) {
+    const auto &match = matches[index];
+    PathLabel label;
+    label.layout(page.path(match), match.highlights(), width);
+    QVariantList runs;
+    runs.reserve(static_cast<qsizetype>(label.runs().size()));
+    for (const auto &run : label.runs()) {
+      runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == PathLabelTone::match}});
+    }
+
+    rows.append(QVariantMap{
+        {QStringLiteral("index"), static_cast<qulonglong>(index)},
+        {QStringLiteral("path"), toQString(page.path(match))},
+        {QStringLiteral("directory"), match.kind == PathKind::directory},
+        {QStringLiteral("selected"), index == path_selection_},
+        {QStringLiteral("runs"), std::move(runs)},
+    });
+  }
+
+  return rows;
+}
+
 PathPickerPlacement Application::pathPlacement() const {
   const auto &workbench = session().workbenchGeometry();
   const auto host = workbench.cellArea();

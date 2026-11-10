@@ -13,6 +13,9 @@ Popup {
     readonly property bool customMode: historyMode || paletteMode || pathMode || machineMode || peekMode
     readonly property var activeSearch: peekMode ? (peekBrowser.item?.queryField ?? standardField) : machineMode ? (machineBrowser.item?.queryField ?? standardField) : pathMode ? (pathBrowser.item?.queryField ?? standardField) : historyMode ? historyQuery : paletteMode ? (paletteBrowser.item?.queryField ?? standardField) : standardField
     readonly property bool paletteMode: telar.dialog === "palette"
+    // The focused pane's prompt line hosts the history and path searches; the history's
+    // inspector still opens here, over it.
+    readonly property bool islandHosted: telar.islandSearch.length > 0 && !(historyMode && telar.historyState.inspecting)
     readonly property bool listing: historyMode || paletteMode
     readonly property bool promptMode: telar.dialog.length > 0 && !customMode
     readonly property bool workspaceMode: telar.dialog === "new-workspace"
@@ -72,7 +75,7 @@ Popup {
 
     readonly property rect historyBounds: telar.historyGeometry.bounds
     readonly property rect paletteBounds: paletteMode ? telar.paletteGeometry.bounds : Qt.rect(0, 0, 0, 0)
-    readonly property rect pathBounds: pathMode ? telar.pathPickerGeometry.bounds : Qt.rect(0, 0, 0, 0)
+    readonly property rect pathBounds: pathMode && telar.islandSearch.length === 0 ? telar.pathPickerGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect machineBounds: machineMode ? telar.machinePromptGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect peekBounds: peekMode ? telar.peekGeometry.bounds : Qt.rect(0, 0, 0, 0)
     x: peekMode ? peekBounds.x : machineMode ? machineBounds.x : pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
@@ -86,8 +89,22 @@ Popup {
     padding: customMode ? 0 : 22 * ratio
     closePolicy: customMode ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     onClosed: {
-        if (telar.dialog.length > 0)
+        if (telar.dialog.length > 0 && !root.islandHosted)
             telar.execute(GuiController.Action.cancel);
+    }
+
+    // The inspector opens and closes over the prompt line's search.
+    onIslandHostedChanged: {
+        if (telar.dialog.length === 0) {
+            return;
+        }
+
+        if (root.islandHosted) {
+            root.close();
+        } else if (!root.opened) {
+            root.open();
+            root.activeSearch.forceActiveFocus();
+        }
     }
 
     Overlay.modal: Rectangle {
@@ -111,6 +128,11 @@ Popup {
                     root.promptGeneration += 1;
                 }
 
+                if (root.islandHosted) {
+                    root.close();
+                    return;
+                }
+
                 root.open();
                 root.activeSearch.forceActiveFocus();
             } else {
@@ -126,7 +148,7 @@ Popup {
             if (historyQuery.text !== state.editorText) {
                 historyQuery.text = state.editorText;
             }
-            if (!state.inspecting && !telar.historyLoading) {
+            if (!state.inspecting && !telar.historyLoading && !root.islandHosted) {
                 historyQuery.forceActiveFocus();
             }
         }
@@ -158,7 +180,7 @@ Popup {
         Loader {
             id: pathBrowser
             anchors.fill: parent
-            active: root.pathMode
+            active: root.pathMode && telar.islandSearch.length === 0
             sourceComponent: PathPickerPanel {
                 controller: telar
                 ratio: root.ratio

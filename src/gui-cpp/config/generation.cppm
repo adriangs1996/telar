@@ -697,7 +697,7 @@ private:
         destination = static_cast<Choice>(std::ranges::find(names, value.string()) - names.begin());
       }
     };
-    table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
+    table.onlyFields({"mode", "motion", "ghost", "keymap", "max_lines", "bindings"});
     const auto bindings = table.field("bindings");
     if (bindings.present()) {
       prompt.bindings.clear();
@@ -714,7 +714,6 @@ private:
       }
     }
     choose("mode", {"classic", "telar"}, prompt.mode);
-    choose("skin", {"halo", "glass", "ink"}, prompt.skin);
     choose("motion", {"spring", "ease", "none"}, prompt.motion);
     choose("keymap", {"emacs", "vim"}, prompt.keymap);
     prompt.ghost = table.field("ghost").boolean(prompt.ghost);

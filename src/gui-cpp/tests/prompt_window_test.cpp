@@ -208,9 +208,9 @@ void type(TerminalItem &terminal, std::string_view text) {
 class PromptWindowTest : public QObject {
   Q_OBJECT
 
-  // The island takes the keys of a shell at its prompt, sends the finished command as one
-  // paste and Enter, and stands in for the shell's prompt row.
-  Q_SLOT static void islandEditsAndRunsCommands() {
+  // The prompt line takes the keys of a shell at its prompt, sends the finished command as one
+  // paste and Enter, and stands in for the shell's prompt rows.
+  Q_SLOT static void lineEditsAndRunsCommands() {
     ApplicationAllocator memory;
     Application application{memory};
     QTemporaryDir directory;
@@ -218,8 +218,7 @@ class PromptWindowTest : public QObject {
     const auto config = directory.filePath(QStringLiteral("config.lua"));
     QFile file{config};
     QVERIFY(file.open(QIODevice::WriteOnly));
-    const auto skin = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_SKIN", QStringLiteral("halo"));
-    file.write(QStringLiteral("return {api_version=2,client={prompt={mode='telar',skin='%1'}}}").arg(skin).toUtf8());
+    file.write("return {api_version=2,client={prompt={mode='telar'}}}");
     file.close();
     application.loadConfiguration(config, {}, {});
     QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
@@ -252,16 +251,16 @@ class PromptWindowTest : public QObject {
         {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
         {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject *>(&terminal))},
     };
-    const auto island = createChrome(engine, QStringLiteral("PromptIsland"), properties);
-    QVERIFY(island);
-    island->setParentItem(&terminal);
+    const auto line = createChrome(engine, QStringLiteral("PromptLine"), properties);
+    QVERIFY(line);
+    line->setParentItem(&terminal);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
     terminal.forceActiveFocus();
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
 
-    // A paste shows in the island at once, without a key after it.
-    const auto *editor = island->findChild<PromptIsland *>();
+    // A paste shows on the line at once, without a key after it.
+    const auto *editor = line->findChild<PromptIsland *>();
     QVERIFY(editor != nullptr && editor->empty());
     application.paste(pane_id, QStringLiteral("echo pasted"));
     QVERIFY2(!editor->empty(), "the paste shows without another key");
@@ -272,14 +271,20 @@ class PromptWindowTest : public QObject {
     const auto before = runtime.count(ClientTag::pane_input);
     type(terminal, "git log --oneline -n 3 | grep fix");
     QCOMPARE(runtime.count(ClientTag::pane_input), before);
-    QTRY_VERIFY_WITH_TIMEOUT(island->isVisible(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(line->property("inputShown").toBool(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminal.promptRow() >= 0, wait_ms);
-    // Without focus the island steps aside, and the shell's own prompt stays hidden.
-    island->setProperty("focused", false);
-    QVERIFY(!island->isVisible());
+    // A one-row prompt on the screen's last row: the context takes the prompt's row and the
+    // editor the one past the screen, which the terminal rises by.
+    QCOMPARE(terminal.promptTop(), rows - 1);
+    QCOMPARE(terminal.promptRow(), rows - 1);
+    QCOMPARE(line->property("anchor").toInt(), rows - 1);
+    QCOMPARE(line->property("liftRows").toInt(), 1);
+    QVERIFY(!line->property("docked").toBool());
+    // Without focus the line stays, dimmed, and the shell's own prompt stays hidden.
+    line->setProperty("focused", false);
+    QVERIFY(line->property("inputShown").toBool());
     QVERIFY(terminal.promptRow() >= 0);
-    island->setProperty("focused", true);
-    QVERIFY(island->isVisible());
+    line->setProperty("focused", true);
     QTest::qWait(900);
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_SCREENSHOT");
@@ -290,19 +295,24 @@ class PromptWindowTest : public QObject {
     QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
     QCoreApplication::sendEvent(&terminal, &enter);
     QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::pane_input) > before, wait_ms);
-    // The command left at once; its output waits for the flight to its separator to land.
-    QVERIFY(island->property("flying").toBool() && terminal.outputHeld());
-    QTRY_VERIFY_WITH_TIMEOUT(!island->property("flying").toBool() && !terminal.outputHeld(), 1000);
+    // The command left at once; its output waits for the line to turn into its separator, and
+    // the terminal settles back meanwhile.
+    QVERIFY(line->property("flying").toBool() && terminal.outputHeld());
+    QCOMPARE(line->property("liftRows").toInt(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(!line->property("flying").toBool() && !terminal.outputHeld(), 1000);
     const auto sent = runtime.inputText();
     QVERIFY2(sent.ends_with("\x1b[200~git log --oneline -n 3 | grep fix\x1b[201~\r"), sent.c_str());
 
     runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 3});
     QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane_id), prompt::Surface::running, wait_ms);
     type(terminal, "make test");
+    // The cursor sits after text, as a program asking a question leaves it: the keys go to the
+    // program, and the separators show the key that interrupts it.
+    QVERIFY(!line->property("queueing").toBool());
+    QVERIFY(!line->property("interruptKey").toString().isEmpty());
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto running = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_RUNNING_SCREENSHOT");
     if (!running.isEmpty()) {
-      // Past the spring that reshapes the island, so the picture shows where it settles.
       QTest::qWait(1200);
       QVERIFY(window.grabWindow().save(running, "PNG"));
     }
@@ -310,16 +320,14 @@ class PromptWindowTest : public QObject {
     // Tab opens the spec's choices above the command.
     runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .commands = 1, .status = 2});
     QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane_id), prompt::Surface::editor, wait_ms);
-    // A command that failed shakes the island.
-    QTRY_COMPARE_WITH_TIMEOUT(island->property("outcome").toString(), QStringLiteral("failure"), wait_ms);
     QKeyEvent clear{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
     QCoreApplication::sendEvent(&terminal, &clear);
-    // The command's block arrives: its outcome stands in for the empty editor for a moment,
-    // its prompt row turns into a separator and the rail beside the pane gets its dot.
+    // The command's block arrives: its prompt row turns into a separator, which offers the
+    // way to its error while the editor waits, and the rail beside the pane gets its dot.
     const std::array blocks{CommandBlock{.row = 0, .rows = 1, .lines = 0, .state = CommandBlockState::failed, .status = 2, .duration_ms = 1500, .command = "git log --oneline -n 3 | grep fix"}};
     runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = blocks});
-    QTRY_VERIFY_WITH_TIMEOUT(island->property("concluded").toBool() && island->property("concludedFailed").toBool(), wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(terminal.separators().size(), 1, wait_ms);
+    QVERIFY(line->property("offerFailure").toBool());
     QCOMPARE(terminal.separators().front().toMap().value(QStringLiteral("command")).toString(), QStringLiteral("git log --oneline -n 3 | grep fix"));
     QCOMPARE(terminal.separators().front().toMap().value(QStringLiteral("state")).toString(), QStringLiteral("failed"));
     QCOMPARE(terminal.rail().size(), 1);
@@ -329,7 +337,6 @@ class PromptWindowTest : public QObject {
     QCOMPARE(application.commandPresence(pane_id, "git"), CommandPresence::found);
     const auto asked = runtime.count(ClientTag::complete_words);
     type(terminal, "gti s");
-    QVERIFY(!island->property("concluded").toBool());
     QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::complete_words) > asked, wait_ms);
     const auto presence = runtime.last<CompleteWords>();
     QCOMPARE(presence.prefix, std::string_view{"gti"});
@@ -370,9 +377,199 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
   }
 
-  // The whole chain with nothing faked: the runtime integrates a real zsh, the island takes the
+  // At the shell's prompt, the history and path searches open on the prompt line instead of a
+  // dialog: they start from the line, take the keyboard, and give it back as they close.
+  Q_SLOT static void lineHostsSearches() {
+    ApplicationAllocator memory;
+    Application application{memory};
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto config = directory.filePath(QStringLiteral("config.lua"));
+    QFile file{config};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("return {api_version=2,client={prompt={mode='telar'}}}");
+    file.close();
+    application.loadConfiguration(config, {}, {});
+    QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("runtime.sock"))));
+    QQuickWindow window;
+    window.resize(QSize{820, 420});
+    application.setWindow(window);
+    application.open(listener.fullServerName());
+    QVERIFY(waitForGuiCondition([&] { return listener.hasPendingConnections(); }, wait_ms));
+    std::unique_ptr<QLocalSocket> socket{listener.nextPendingConnection()};
+    WireRuntime runtime{*socket};
+    QVERIFY(waitForGuiCondition([&] { return application.connected(); }, wait_ms));
+    runtime.send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(runtime));
+    sendPromptScreen(runtime, 1);
+    runtime.send(PaneCwd{.pane_id = pane_id, .cwd = "/work"});
+    runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
+    QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane_id), prompt::Surface::editor, wait_ms);
+
+    TerminalItem terminal{window.contentItem()};
+    terminal.setApplication(&application);
+    terminal.setPaneId(QString::number(pane_id));
+    terminal.setSize(QSizeF{820, 420});
+    QQmlEngine engine;
+    const QVariantMap properties{
+        {QStringLiteral("application"), QVariant::fromValue(&application)},
+        {QStringLiteral("paneId"), QString::number(pane_id)},
+        {QStringLiteral("colors"), application.colors()},
+        {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
+        {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject *>(&terminal))},
+    };
+    const auto line = createChrome(engine, QStringLiteral("PromptLine"), properties);
+    QVERIFY(line);
+    line->setParentItem(&terminal);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
+    terminal.forceActiveFocus();
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+
+    // Ctrl-R searches the history for the line, each command once.
+    type(terminal, "git s");
+    const auto queries = runtime.count(ClientTag::query_history);
+    QKeyEvent search{QEvent::KeyPress, Qt::Key_R, NativeKeyAdapter::control_modifier};
+    QCoreApplication::sendEvent(&terminal, &search);
+    QCOMPARE(application.islandSearch(), QStringLiteral("history"));
+    // The line also loads its suggestions from the history; the search's query is the line.
+    QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::query_history) > queries && runtime.last<QueryHistory>().query == "git s", wait_ms);
+    const auto query = runtime.last<QueryHistory>();
+    QVERIFY(query.distinct);
+    const std::array entries{
+        HistoryEntry{.id = 3, .pane_id = pane_id, .started_at_ms = 1'700'000'300'000, .exit_code = 0, .command = "git status --short", .cwd = "/work"},
+        HistoryEntry{.id = 2, .pane_id = pane_id, .started_at_ms = 1'700'000'200'000, .exit_code = 1, .command = "git stash pop", .cwd = "/work"},
+        HistoryEntry{.id = 1, .pane_id = pane_id, .started_at_ms = 1'700'000'100'000, .exit_code = 0, .command = "git switch main", .cwd = "/work"},
+    };
+    runtime.send(HistoryResults{.request_id = query.request_id, .snapshot_id = 3, .entries = entries});
+    QTRY_COMPARE_WITH_TIMEOUT(application.historyState().value(QStringLiteral("count")).toInt(), 3, wait_ms);
+    auto *field = line->findChild<QQuickItem *>(QStringLiteral("promptSearch"));
+    QVERIFY(field != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), wait_ms);
+    QCOMPARE(field->property("text").toString(), QStringLiteral("git s"));
+    // The rows run down from the query: down goes to an older command. The line needs the
+    // query's row and the rows found past the screen, which the terminal rises by.
+    QTRY_COMPARE_WITH_TIMEOUT(line->property("rowCount").toInt(), 2 + 3, wait_ms);
+    QCOMPARE(line->property("liftRows").toInt(), line->property("anchor").toInt() + 5 - rows);
+    QKeyEvent down{QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier};
+    QCoreApplication::sendEvent(field, &down);
+    QTRY_COMPARE_WITH_TIMEOUT(application.historyState().value(QStringLiteral("selection")).toInt(), 1, wait_ms);
+    QTest::qWait(900);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    if (const auto picture = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_HISTORY_SCREENSHOT"); !picture.isEmpty()) {
+      QVERIFY(window.grabWindow().save(picture, "PNG"));
+    }
+    // Esc closes it and leaves the line as it was.
+    QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+    QCoreApplication::sendEvent(field, &escape);
+    QVERIFY(application.dialog().isEmpty());
+    QVERIFY(application.promptIsland(pane_id)->editor().text().view() == "git s");
+
+    // The path search starts from the word before the caret and writes the path over it.
+    application.execute(Application::Action::path_picker);
+    QCOMPARE(application.islandSearch(), QStringLiteral("paths"));
+    QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::find_paths) != 0, wait_ms);
+    const auto find = runtime.last<FindPaths>();
+    QCOMPARE(find.query, std::string_view{"s"});
+    const std::array paths{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "scripts/setup.sh", .kind = PathKind::file}};
+    runtime.send(PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = paths});
+    QTRY_COMPARE_WITH_TIMEOUT(application.pathPickerState().value(QStringLiteral("count")).toInt(), 3, wait_ms);
+    field = line->findChild<QQuickItem *>(QStringLiteral("promptSearch"));
+    QVERIFY(field != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), wait_ms);
+    QTest::qWait(900);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    if (const auto picture = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_PATHS_SCREENSHOT"); !picture.isEmpty()) {
+      QVERIFY(window.grabWindow().save(picture, "PNG"));
+    }
+    QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+    QCoreApplication::sendEvent(field, &enter);
+    QVERIFY(application.dialog().isEmpty());
+    const std::string written{application.promptIsland(pane_id)->editor().text().view()};
+    QVERIFY2(written == "git src/main.cpp", written.c_str());
+  }
+
+  // In a narrow pane the line turns compact: the mode's chip gives its columns to the context,
+  // which never runs past them.
+  Q_SLOT static void lineTurnsCompactWhenNarrow() {
+    ApplicationAllocator memory;
+    Application application{memory};
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto config = directory.filePath(QStringLiteral("config.lua"));
+    QFile file{config};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("return {api_version=2,client={prompt={mode='telar',keymap='vim'}}}");
+    file.close();
+    application.loadConfiguration(config, {}, {});
+    QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("runtime.sock"))));
+    QQuickWindow window;
+    window.resize(QSize{820, 300});
+    application.setWindow(window);
+    application.open(listener.fullServerName());
+    QVERIFY(waitForGuiCondition([&] { return listener.hasPendingConnections(); }, wait_ms));
+    std::unique_ptr<QLocalSocket> socket{listener.nextPendingConnection()};
+    WireRuntime runtime{*socket};
+    QVERIFY(waitForGuiCondition([&] { return application.connected(); }, wait_ms));
+    runtime.send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(runtime));
+    sendPromptScreen(runtime, 1);
+    constexpr std::string_view cwd = "/home/user/projects/telar";
+    runtime.send(PaneCwd{.pane_id = pane_id, .cwd = cwd});
+    runtime.send(PaneGit{.pane_id = pane_id, .repository = true, .branch = "feat/shell-integration"});
+    runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
+    QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane_id), prompt::Surface::editor, wait_ms);
+
+    TerminalItem terminal{window.contentItem()};
+    terminal.setApplication(&application);
+    terminal.setPaneId(QString::number(pane_id));
+    terminal.setSize(QSizeF{820, 300});
+    QQmlEngine engine;
+    const QVariantMap properties{
+        {QStringLiteral("application"), QVariant::fromValue(&application)},
+        {QStringLiteral("paneId"), QString::number(pane_id)},
+        {QStringLiteral("colors"), application.colors()},
+        {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
+        {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject *>(&terminal))},
+    };
+    const auto line = createChrome(engine, QStringLiteral("PromptLine"), properties);
+    QVERIFY(line);
+    line->setParentItem(&terminal);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
+    terminal.forceActiveFocus();
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    // The editor takes its keymap with its first key.
+    type(terminal, "ls");
+
+    const auto context = [&] { return line->property("contextText").toMap(); };
+    QTRY_COMPARE_WITH_TIMEOUT(context().value(QStringLiteral("branch")).toString(), QStringLiteral("⎇ feat/shell-integration"), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(line->property("modeShown").toBool(), wait_ms);
+    QVERIFY(!line->property("compact").toBool());
+    QCOMPARE(context().value(QStringLiteral("directory")).toString(), QString::fromUtf8(cwd.data(), static_cast<qsizetype>(cwd.size())));
+
+    terminal.setSize(QSizeF{300, 300});
+    QTRY_VERIFY_WITH_TIMEOUT(line->property("compact").toBool(), wait_ms);
+    const auto narrow = context();
+    const auto directory_text = narrow.value(QStringLiteral("directory")).toString();
+    const auto branch_text = narrow.value(QStringLiteral("branch")).toString();
+    QVERIFY2(directory_text.startsWith(QStringLiteral("…/")), qPrintable(directory_text));
+    const auto span = directory_text.size() + (branch_text.isEmpty() ? 0 : branch_text.size() + 2);
+    QVERIFY2(span <= line->property("contextColumns").toInt(), qPrintable(directory_text + QStringLiteral(" ") + branch_text));
+
+    terminal.setSize(QSizeF{820, 300});
+    QTRY_VERIFY_WITH_TIMEOUT(!line->property("compact").toBool(), wait_ms);
+  }
+
+  // The whole chain with nothing faked: the runtime integrates a real zsh, the line takes the
   // keys, and the shell runs the command it receives. Needs TELAR_GUI_TEST_RUNTIME.
-  Q_SLOT static void islandRunsInARealShell() {
+  Q_SLOT static void lineRunsInARealShell() {
     const auto executable = qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME");
     if (executable.isEmpty() || !QFileInfo::exists(QStringLiteral("/bin/zsh"))) {
       QSKIP("Set TELAR_GUI_TEST_RUNTIME to a runtime executable; needs /bin/zsh");
@@ -427,7 +624,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     terminal.setApplication(&application);
     terminal.setPaneId(QString::number(pane));
     terminal.setSize(QSizeF{720, 300});
-    // The pieces a pane stacks over its terminal: the separators, the rail and the island.
+    // The pieces a pane stacks over its terminal: the separators, the rail and the line.
     QQmlEngine engine;
     const auto grid = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
     const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject *>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}});
@@ -436,12 +633,12 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     rail->setParentItem(&terminal);
     rail->setPosition({700, 12});
     rail->setHeight(180);
-    const auto island = createChrome(engine, QStringLiteral("PromptIsland"), {{QStringLiteral("application"), QVariant::fromValue(&application)}, {QStringLiteral("paneId"), QString::number(pane)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}, {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject *>(&terminal))}});
-    island->setParentItem(&terminal);
+    const auto line = createChrome(engine, QStringLiteral("PromptLine"), {{QStringLiteral("application"), QVariant::fromValue(&application)}, {QStringLiteral("paneId"), QString::number(pane)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}, {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject *>(&terminal))}});
+    line->setParentItem(&terminal);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
     terminal.forceActiveFocus();
-    const auto marker = directory.filePath(QStringLiteral("ran-by-island"));
+    const auto marker = directory.filePath(QStringLiteral("ran-by-line"));
     type(terminal, ("touch " + marker).toStdString());
     QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
     QCoreApplication::sendEvent(&terminal, &enter);
@@ -456,18 +653,18 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // A command sent before is suggested as its start is typed, for a key to take it.
     {
       type(terminal, "tou");
-      const auto *editor = island->findChild<PromptIsland *>();
+      const auto *editor = line->findChild<PromptIsland *>();
       QTRY_VERIFY_WITH_TIMEOUT(editor != nullptr && editor->suggesting(), runtime_wait_ms);
       QCOMPARE(editor->mode(), QStringLiteral("emacs"));
       QKeyEvent erase{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
       QCoreApplication::sendEvent(&terminal, &erase);
       QTRY_VERIFY_WITH_TIMEOUT(!editor->suggesting(), runtime_wait_ms);
     }
-    // A command that fails: its block says so, and the island offers the way to its error.
+    // A command that fails: its block says so, and its separator offers the way to its error.
     type(terminal, "ls /nonexistent-telar");
     QCoreApplication::sendEvent(&terminal, &enter);
     QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 2 && application.pane(pane)->blocks.back().state == CommandBlockState::failed, runtime_wait_ms);
-    QTRY_VERIFY_WITH_TIMEOUT(island->property("concluded").toBool() && island->property("concludedFailed").toBool(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(line->property("offerFailure").toBool() && terminal.separators().back().toMap().value(QStringLiteral("state")).toString() == QStringLiteral("failed"), runtime_wait_ms);
     QCOMPARE(terminal.rail().size(), 2);
     // The runtime finds the commands the shell runs, and only those.
     type(terminal, "gti x && ls ./");
@@ -480,7 +677,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QVERIFY(window.grabWindow().save(blocks, "PNG"));
     }
     // A full-screen program comes and goes: the commands before it keep their blocks, and the
-    // island takes the keys again once the shell is back at its prompt.
+    // line takes the keys again once the shell is back at its prompt.
     {
       QKeyEvent erase{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
       QCoreApplication::sendEvent(&terminal, &erase);
@@ -497,13 +694,13 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->blocks.size() == before_vim + 1, qPrintable(QStringLiteral("blocks %1, before %2").arg(application.pane(pane)->blocks.size()).arg(before_vim)), runtime_wait_ms);
       const auto inputs = application.pane(pane)->shell.commands;
       type(terminal, "echo after-vim");
-      QVERIFY2(application.promptIsland(pane)->editor().text().view() == "echo after-vim", "the island takes the keys again");
+      QVERIFY2(application.promptIsland(pane)->editor().text().view() == "echo after-vim", "the line takes the keys again");
       QCoreApplication::sendEvent(&terminal, &enter);
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == inputs + 1 && application.pane(pane)->blocks.size() == before_vim + 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminal.promptRow() >= 0, runtime_wait_ms);
     }
     // Scrolled back to the bottom, the view follows the output, and the shell's prompt stays
-    // hidden under the island: after more output, and after `clear`.
+    // hidden under the line: after more output, and after `clear`. Scrolled up, the line docks.
     {
       const auto at_bottom = [&] {
         const auto &screen = application.pane(pane)->screen;
@@ -519,8 +716,10 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
       application.scroll(PaneScrollDelta{.pane_id = pane, .rows = 3});
       QTRY_VERIFY_WITH_TIMEOUT(!at_bottom(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(line->property("docked").toBool() && terminal.rowsBelow() == 3, runtime_wait_ms);
       application.scroll(PaneScrollDelta{.pane_id = pane, .rows = -3});
       QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!line->property("docked").toBool(), runtime_wait_ms);
       const auto where = [&] { return QStringLiteral("offset %1 of %2 rows, prompt row %3").arg(application.pane(pane)->screen.scroll().offset).arg(application.pane(pane)->screen.scroll().total_rows).arg(terminal.promptRow()); };
       run("seq 30");
       QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.promptRow() >= 0, qPrintable(where()), runtime_wait_ms);

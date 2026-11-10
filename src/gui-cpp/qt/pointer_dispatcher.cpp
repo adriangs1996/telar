@@ -95,7 +95,9 @@ void PointerDispatcher::setWindow(QQuickWindow &window) {
 // Cocoa's native phase keeps fractional scroll across momentum and distinguishes
 // cancellation before Qt merges those phases into its wheel-event stream.
 bool PointerDispatcher::handleNativeScroll(std::string_view event_type, const void *message) {
-  if (window_.isNull() || application_.dialog_ != QStringView{u"history"}) {
+  // The prompt line scrolls its own rows; the modal takes the wheel only while it shows.
+  const bool island = application_.island_search_pane_ != 0 && !application_.session().historyBrowser().state().inspecting;
+  if (window_.isNull() || application_.dialog_ != QStringView{u"history"} || island) {
     return false;
   }
 

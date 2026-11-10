@@ -9,6 +9,8 @@ NativeFormField {
     required property var colors
     property string placeholderText: ""
     property string placeholderPrefix: ""
+    // Off where the host draws its own caret at `regions.caret`.
+    property bool drawsCaret: true
     readonly property var regions: layout
     readonly property real placeholderAlpha: 0.7
     readonly property real prefixPlaceholderAlpha: 0.55
@@ -77,7 +79,7 @@ NativeFormField {
         width: root.regions.caret.width
         height: root.regions.caret.height
         color: root.colors.text
-        visible: root.formControl && root.activeFocus && root.regions.available
+        visible: root.drawsCaret && root.formControl && root.activeFocus && root.regions.available
     }
 
     NativeRoundedRectangle {
@@ -89,6 +91,6 @@ NativeFormField {
         borderColor: root.colors.accent
         borderWidth: 1 / Screen.devicePixelRatio
         radius: 0
-        visible: !root.formControl && root.activeFocus && root.regions.available
+        visible: root.drawsCaret && !root.formControl && root.activeFocus && root.regions.available
     }
 }

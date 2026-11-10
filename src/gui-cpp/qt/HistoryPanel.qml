@@ -48,129 +48,32 @@ Item {
         }
     }
 
+    HistoryKeys {
+        id: keys
+        controller: root.controller
+        queryField: root.queryField
+        pageInspector: older => (inspector.item as HistoryInspector)?.page(older)
+    }
+
     function moveSelection(delta) {
-        if (!actionable) {
-            return;
-        }
-
-        const selected = root.browserState.selection + delta;
-        if (selected >= root.browserState.count && root.browserState.canOlder) {
-            root.controller.executeHistory(GuiController.HistoryAction.older);
-        } else if (selected < 0 && root.browserState.canNewer) {
-            root.controller.executeHistory(GuiController.HistoryAction.newer);
-        } else {
-            root.controller.selectHistoryRow(Math.max(0, Math.min(root.browserState.count - 1, selected)));
-        }
-    }
-
-    function cycleScope() {
-        const scopes = ["global", "workspace", "cwd", "pane"];
-        const next = (scopes.indexOf(root.browserState.scope) + 1) % scopes.length;
-        root.controller.setHistoryFilters({scope: scopes[next]});
-    }
-
-    function cycleAuthor() {
-        const authors = ["human", "agent", "all"];
-        const next = (authors.indexOf(root.browserState.author) + 1) % authors.length;
-        root.controller.setHistoryFilters({author: authors[next]});
+        keys.moveSelection(delta);
     }
 
     function cycleFilter(event) {
-        if (event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) !== 0) {
-            root.cycleAuthor();
-        } else {
-            root.cycleScope();
-        }
+        keys.cycleFilter(event);
     }
 
     function cancelHistory() {
-        if (root.browserState.inspecting) {
-            root.controller.executeHistory(GuiController.HistoryAction.inspect);
-        } else {
-            root.controller.execute(GuiController.Action.cancel);
-        }
-    }
-
-    function submit(event) {
-        if ((event.modifiers & Qt.AltModifier) !== 0) {
-            root.controller.executeHistory(GuiController.HistoryAction.visit);
-        } else {
-            root.controller.useHistoryRow(root.browserState.selection, (event.modifiers & Qt.ShiftModifier) !== 0);
-        }
-    }
-
-    function pageKey(older) {
-        if (!root.browserState.inspecting) {
-            root.controller.executeHistory(older ? GuiController.HistoryAction.older : GuiController.HistoryAction.newer);
-            return;
-        }
-
-        const view = inspector.item as HistoryInspector;
-        view?.page(older);
+        keys.cancel();
     }
 
     function handleKey(event) {
-        if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
-            pageKey(event.key === Qt.Key_PageUp);
-            return true;
-        }
-
-        const control = (event.modifiers & root.controller.controlModifier) !== 0;
-        const command = (event.modifiers & root.controller.superModifier) !== 0;
-        if (command && event.key === Qt.Key_Backspace) {
-            root.controller.executeHistory(GuiController.HistoryAction.erase);
-            return true;
-        }
-
-        if ((control || command) && event.key === Qt.Key_C) {
-            if (root.queryField && root.queryField.selectionStart !== root.queryField.selectionEnd) {
-                root.queryField.copy();
-            } else {
-                root.controller.executeHistory(GuiController.HistoryAction.copy);
-            }
-
-            return true;
-        }
-
-        if (!control || (event.modifiers & Qt.AltModifier) !== 0) {
-            return false;
-        }
-
-        switch (event.key) {
-        case Qt.Key_D:
-            root.controller.executeHistory(GuiController.HistoryAction.erase);
-            return true;
-        case Qt.Key_O:
-            root.controller.executeHistory(GuiController.HistoryAction.inspect);
-            return true;
-        case Qt.Key_H:
-            if (command || (event.modifiers & Qt.ShiftModifier) !== 0) {
-                return false;
-            }
-
-            cancelHistory();
-            return true;
-        case Qt.Key_L:
-            if (command || (event.modifiers & Qt.ShiftModifier) !== 0) {
-                return false;
-            }
-
-            root.controller.useHistoryRow(root.browserState.selection);
-            return true;
-        case Qt.Key_J:
-            moveSelection(-1);
-            return true;
-        case Qt.Key_K:
-            moveSelection(1);
-            return true;
-        default:
-            return false;
-        }
+        return keys.handle(event);
     }
 
     Keys.onPressed: event => event.accepted = root.handleKey(event)
-    Keys.onReturnPressed: event => root.submit(event)
-    Keys.onEnterPressed: event => root.submit(event)
+    Keys.onReturnPressed: event => keys.submit(event)
+    Keys.onEnterPressed: event => keys.submit(event)
     Keys.onEscapePressed: root.cancelHistory()
     Keys.onUpPressed: root.moveSelection(1)
     Keys.onDownPressed: root.moveSelection(-1)

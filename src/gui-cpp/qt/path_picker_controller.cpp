@@ -54,7 +54,7 @@ void Application::showPathPicker() {
     return;
   }
 
-  path_query_.clear();
+  path_query_ = toQString(session().pathSeed());
   path_selection_ = 0;
   showDialog(QStringLiteral("paths"));
   refreshPathPicker();
@@ -102,7 +102,8 @@ void Application::movePathSelection(int delta) {
     return;
   }
 
-  const auto flipped = pathPlacement().flipped;
+  // The prompt line lists the paths downward from its search; a flipped dialog, upward.
+  const auto flipped = island_search_pane_ == 0 && pathPlacement().flipped;
   const auto direction = flipped ? -static_cast<std::int64_t>(delta) : static_cast<std::int64_t>(delta);
   const auto maximum = count == 0 ? 0 : static_cast<std::int64_t>(count - 1);
   path_selection_ = static_cast<std::size_t>(std::clamp(static_cast<std::int64_t>(path_selection_) + direction, std::int64_t{0}, maximum));

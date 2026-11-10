@@ -104,31 +104,34 @@ static void testFuzzyOrderingShapes(Memory &memory) {
     });
 
     std::array<Byte, 128 * 1024> storage;
-    for (const bool distinct : {false, true}) {
-      std::set<std::string_view> seen;
-      std::vector<std::size_t> expected;
-      for (const auto index : order) {
-        if (distinct && !seen.insert(commands[index]).second) {
-          continue;
+    // "gb" ranks fuzzily in memory; an empty query pages in SQL, where distinct counts commands.
+    for (const std::string_view query : {std::string_view{"gb"}, std::string_view{}}) {
+      for (const bool distinct : {false, true}) {
+        std::set<std::string_view> seen;
+        std::vector<std::size_t> expected;
+        for (const auto index : order) {
+          if (distinct && !seen.insert(commands[index]).second) {
+            continue;
+          }
+
+          if (query.empty() || commands[index].starts_with(query)) {
+            expected.push_back(index);
+          }
         }
 
-        if (commands[index].starts_with("gb")) {
-          expected.push_back(index);
-        }
-      }
-
-      for (std::size_t offset = 0; offset <= expected.size() + page_size; offset += page_size) {
-        store.query(QueryHistory{.request_id = 2, .query = "gb", .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = page_size, .offset = static_cast<std::uint32_t>(offset)}, reply);
-        const auto result = decodeReply<HistoryResults>(reply, storage);
-        const auto start = std::min(offset, expected.size());
-        const auto size = std::min(page_size, expected.size() - start);
-        check(result.snapshot_id == count && result.entries.size() == size);
-        check(result.has_more == (start + size < expected.size()));
-        for (std::size_t index = 0; index < size; ++index) {
-          const auto wanted = expected[start + index];
-          check(result.entries[index].id == wanted + 1);
-          check(result.entries[index].started_at_ms == entries[wanted].started_at_ms);
-          check(result.entries[index].command == commands[wanted]);
+        for (std::size_t offset = 0; offset <= expected.size() + page_size; offset += page_size) {
+          store.query(QueryHistory{.request_id = 2, .query = query, .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = page_size, .offset = static_cast<std::uint32_t>(offset)}, reply);
+          const auto result = decodeReply<HistoryResults>(reply, storage);
+          const auto start = std::min(offset, expected.size());
+          const auto size = std::min(page_size, expected.size() - start);
+          check(result.snapshot_id == count && result.entries.size() == size);
+          check(result.has_more == (start + size < expected.size()));
+          for (std::size_t index = 0; index < size; ++index) {
+            const auto wanted = expected[start + index];
+            check(result.entries[index].id == wanted + 1);
+            check(result.entries[index].started_at_ms == entries[wanted].started_at_ms);
+            check(result.entries[index].command == commands[wanted]);
+          }
         }
       }
     }

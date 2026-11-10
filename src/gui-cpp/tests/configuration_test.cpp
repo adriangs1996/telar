@@ -101,9 +101,9 @@ void require(bool condition, const char *message) {
 }
 
 void promptPreferences() {
-  const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", skin = "glass", motion = "none", ghost = false, max_lines = 4}}})", .profile = {}});
+  const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", motion = "none", ghost = false, max_lines = 4}}})", .profile = {}});
   const auto &prompt = configuration.prompt;
-  require(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.skin == PromptSkin::glass && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.max_lines == 4, "every prompt field must be read");
+  require(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.max_lines == 4, "every prompt field must be read");
   require(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration{}, "the prompt stays classic by default");
   const auto bound = read({.source = R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "submit"}, {keys = "H", action = "line_start", mode = "normal"}}}}})", .profile = {}});
   require(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == 8, "prompt bindings must be read with their action and mode");

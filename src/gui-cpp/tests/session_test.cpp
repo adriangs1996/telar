@@ -720,6 +720,7 @@ void historyReplay() {
   client.queryHistory("recent");
   const auto query = transport.last<QueryHistory>();
   require(query.author == HistoryAuthorFilter::human && query.match == HistoryMatch::fuzzy, "default history queries must use human authors and fuzzy search");
+  require(query.distinct, "history search must list each command once");
   const std::array entries{
       HistoryEntry{.id = 1, .pane_id = 1, .command = "echo safe"},
       HistoryEntry{.id = 2, .pane_id = 1, .command = "echo partial", .command_truncated = true},

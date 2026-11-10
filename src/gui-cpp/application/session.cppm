@@ -1106,9 +1106,15 @@ public:
     }
 
     path_picker_.begin(pane->id, pane->cwd);
-    requestPaths({});
+    seedPathPicker(pane->id);
+    requestPaths(path_seed_.text.view());
 
     return true;
+  }
+
+  // The word the island's search for a path started from, which the path chosen replaces.
+  [[nodiscard]] inline std::string_view pathSeed() const noexcept {
+    return path_seed_.text.view();
   }
 
   inline bool requestPaths(std::string_view query) {
@@ -1181,6 +1187,7 @@ public:
 
   inline void closePathPicker() noexcept {
     path_picker_.close();
+    path_seed_ = {};
   }
 
   inline bool insertPath(std::size_t selection, bool absolute) {
@@ -1204,7 +1211,9 @@ public:
     }
 
     try {
-      if (editor) {
+      if (editor && replacePathSeed(pane->id, paste->view())) {
+        prompt_written_ = pane->id;
+      } else if (editor) {
         promptText(pane->id, paste->view());
       } else {
         input(pane->id, paste->view());
@@ -1215,7 +1224,7 @@ public:
       return false;
     }
 
-    path_picker_.close();
+    closePathPicker();
 
     return true;
   }
@@ -1538,7 +1547,8 @@ public:
 
   inline void queryHistory(std::string_view query, HistoryFilters filters) {
     const auto parsed = HistorySearch::parse(query, filters.failed_only);
-    QueryHistory request{.request_id = nextRequest(), .query = parsed.query, .failed_only = parsed.failed_only, .author = filters.author, .match = configuration_.history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy};
+    // Each command once, at its newest run that passes the filters.
+    QueryHistory request{.request_id = nextRequest(), .query = parsed.query, .failed_only = parsed.failed_only, .author = filters.author, .match = configuration_.history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
     resolveHistoryScope(request, filters.scope);
     sendHistory(history_.begin(request));
   }
@@ -1895,6 +1905,48 @@ public:
   }
 
 private:
+  // At the island's prompt, the search starts from the word before the caret when it is a
+  // plain relative path, as `src/ma` is; anything else starts empty and inserts at the caret.
+  inline void seedPathPicker(std::uint64_t pane_id) {
+    path_seed_ = {};
+    const auto found = islands_.find(pane_id);
+    if (promptSurface(pane_id) != prompt::Surface::editor || found == islands_.end()) {
+      return;
+    }
+
+    const auto &text = found->second.island.editor().text();
+    const auto before = text.view().substr(0, text.cursor());
+    const auto space = before.find_last_of(" \t\n");
+    const auto begin = space == std::string_view::npos ? 0 : space + 1;
+    const auto word = before.substr(begin);
+    if (word.empty() || word.size() > PathPickerLimits::query_bytes || word.front() == '/' || word.front() == '~' || !PathInsertion::plain(word)) {
+      return;
+    }
+
+    path_seed_.pane_id = pane_id;
+    path_seed_.begin = begin;
+    path_seed_.text.assign(word);
+  }
+
+  // Writes `path` over the word the search started from, while the editor still holds it.
+  inline bool replacePathSeed(std::uint64_t pane_id, std::string_view path) {
+    const auto word = path_seed_.text.view();
+    const auto found = islands_.find(pane_id);
+    if (path_seed_.pane_id != pane_id || word.empty() || found == islands_.end()) {
+      return false;
+    }
+
+    auto &island = found->second.island;
+    const auto &text = island.editor().text();
+    const auto end = path_seed_.begin + word.size();
+    if (text.cursor() != end || text.view().substr(path_seed_.begin, word.size()) != word) {
+      return false;
+    }
+
+    island.replaceText(path_seed_.begin, end, path);
+    return true;
+  }
+
   enum class RequestKind : std::uint8_t {
     open_default,
     attach,
@@ -4913,6 +4965,13 @@ private:
   tbc::view<HistoryBrowser<Memory>, tbc::lt::a> history_;
   tbc::view<PeekScreen<Memory>, tbc::lt::a> peek_;
   PathPickerPage path_picker_;
+  // The relative word before the island's caret when the path search opened over it.
+  struct PathSeed {
+    std::uint64_t pane_id = 0;
+    std::size_t begin = 0;
+    runtime::FixedText<PathPickerLimits::query_bytes> text;
+  };
+  PathSeed path_seed_;
   SuggestionState suggestion_;
   tbc::view<Vector<Byte, Memory>, tbc::lt::a> decode_;
   tbc::view<String<Memory>, tbc::lt::a> clipboard_;

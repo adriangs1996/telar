@@ -198,6 +198,13 @@ Item {
                 width: pane.contentWidth
                 height: pane.contentHeight
                 clip: true
+                // The terminal and what is drawn over its rows rise together while the prompt line
+                // needs rows past the screen's last, so the line never covers output.
+                property real rise: promptLine.lift
+                Behavior on rise {
+                    enabled: promptLine.moving
+                    NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                }
 
                 NativeRoundedRectangle {
                     objectName: "paneTerminalBackground"
@@ -208,6 +215,7 @@ Item {
 
                 TerminalView {
                     id: terminal
+                    transform: Translate { y: -viewport.rise }
 
                     // Commit the terminal grid once; animate only its viewport.
                     width: pane.record.content.width
@@ -259,7 +267,9 @@ Item {
                     }
 
                     Rectangle {
-                        anchors.fill: parent
+                        // Down to the viewport's bottom while the terminal rises.
+                        width: parent.width
+                        height: parent.height + viewport.rise
                         visible: pane.framed && !pane.record.focused
                         color: Qt.rgba(root.application.colors.background.r, root.application.colors.background.g, root.application.colors.background.b, 1)
                         opacity: pane.record.dimAlpha
@@ -310,29 +320,22 @@ Item {
                 // command beside the pane to reach it.
                 CommandSeparators {
                     view: terminal
+                    transform: Translate { y: -viewport.rise }
                     colors: root.application.colors
                     grid: root.application.windowGeometry.typography.grid
                     ratio: root.ratio
-                    moving: island.moving
-                    landing: island.landing
-                    holding: island.flying
+                    moving: promptLine.moving
+                    landing: promptLine.landing
+                    holding: promptLine.flying
+                    interruptKey: promptLine.interruptKey
+                    queueing: promptLine.queueing
+                    secret: promptLine.secret
+                    offerFailure: promptLine.offerFailure
                 }
 
-                CommandRail {
-                    view: terminal
-                    colors: root.application.colors
-                    ratio: root.ratio
-                    moving: island.moving
-                    anchors.right: parent.right
-                    anchors.rightMargin: 4 * root.ratio
-                    anchors.top: parent.top
-                    anchors.topMargin: 12 * root.ratio
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: (island.visible ? island.height : 0) + 28 * root.ratio
-                }
-
-                PromptIsland {
-                    id: island
+                PromptLine {
+                    id: promptLine
+                    transform: Translate { y: -viewport.rise }
                     application: root.application
                     paneId: pane.record.key
                     colors: root.application.colors
@@ -340,6 +343,19 @@ Item {
                     terminal: terminal
                     ratio: root.ratio
                     focused: pane.record.focused
+                }
+
+                CommandRail {
+                    view: terminal
+                    colors: root.application.colors
+                    ratio: root.ratio
+                    moving: promptLine.moving
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4 * root.ratio
+                    anchors.top: parent.top
+                    anchors.topMargin: 12 * root.ratio
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 28 * root.ratio
                 }
             }
 

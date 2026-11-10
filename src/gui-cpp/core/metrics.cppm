@@ -423,12 +423,6 @@ enum class PromptMode : std::uint8_t {
   telar,
 };
 
-enum class PromptSkin : std::uint8_t {
-  halo,
-  glass,
-  ink,
-};
-
 enum class PromptMotion : std::uint8_t {
   spring,
   ease,
@@ -458,7 +452,6 @@ struct PromptConfiguration {
   static constexpr std::uint8_t maximum_max_lines = 64;
 
   PromptMode mode = PromptMode::classic;
-  PromptSkin skin = PromptSkin::halo;
   PromptMotion motion = PromptMotion::spring;
   PromptKeymap keymap = PromptKeymap::emacs;
   bool ghost = true;

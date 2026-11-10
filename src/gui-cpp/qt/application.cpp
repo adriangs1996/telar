@@ -1308,7 +1308,13 @@ void Application::executeWindowAction(Action action) {
     history_filters_ = {.author = session().configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
     session().inspectHistory(false);
     showDialog(QStringLiteral("history"));
-    searchHistory({});
+    // In the island, the search starts from the line being written.
+    QString seed;
+    if (const auto *island = island_search_pane_ == 0 ? nullptr : session().island(island_search_pane_)) {
+      seed = toQString(island->editor().text().view());
+      seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    }
+    searchHistory(seed);
   } else if (action == Action::palette || action == Action::goto_picker) {
     showPalette(action == Action::palette ? PaletteMode::actions : PaletteMode::navigate);
   } else if (action == Action::path_picker) {
@@ -1487,6 +1493,12 @@ void Application::showDialog(const QString &kind, const QString &text) {
     resetWorkspaceForm();
   }
 
+  // The focused pane's prompt line hosts the history and path searches while its shell waits
+  // for a command; anywhere else they open as a dialog.
+  const auto *focused = session().focusedPane();
+  const bool searching = kind == QLatin1StringView("history") || kind == QLatin1StringView("paths");
+  island_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
+
   dialog_ = kind;
   dialog_text_ = text;
   emit dialogChanged();
@@ -1531,6 +1543,14 @@ qreal Application::windowControls() const {
 
 QString Application::dialog() const {
   return dialog_;
+}
+
+QString Application::islandSearch() const {
+  return island_search_pane_ == 0 ? QString{} : dialog_;
+}
+
+QString Application::islandSearchPane() const {
+  return island_search_pane_ == 0 ? QString{} : QString::number(island_search_pane_);
 }
 
 QString Application::dialogText() const {

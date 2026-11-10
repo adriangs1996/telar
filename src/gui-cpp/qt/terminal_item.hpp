@@ -82,6 +82,14 @@ class TerminalItem : public QQuickItem {
   Q_PROPERTY(QVariantList rail READ rail NOTIFY blocksChanged)
   Q_PROPERTY(int promptRow READ promptRow NOTIFY blocksChanged)
   Q_PROPERTY(QSizeF cell READ cellSize NOTIFY blocksChanged)
+  // Where telar's prompt line stands: the first row of the shell's hidden prompt, or -1; the
+  // live cursor's row, where a running program prints, or -1 when it is out of view; the
+  // screen's rows; and the rows of scrollback below the view. They change with every line a
+  // program prints, so they notify apart from the blocks, which rebuild the separators.
+  Q_PROPERTY(int promptTop READ promptTop NOTIFY placeChanged)
+  Q_PROPERTY(int cursorRow READ cursorRow NOTIFY placeChanged)
+  Q_PROPERTY(int rows READ rows NOTIFY placeChanged)
+  Q_PROPERTY(int rowsBelow READ rowsBelow NOTIFY placeChanged)
 
 public:
   explicit TerminalItem(QQuickItem *parent = nullptr);
@@ -109,9 +117,21 @@ public:
   [[nodiscard]] QVariantList separators() const;
   [[nodiscard]] QVariantList rail() const;
   [[nodiscard]] int promptRow() const noexcept;
+  [[nodiscard]] int promptTop() const noexcept {
+    return prompt_top_;
+  }
+  [[nodiscard]] int cursorRow() const noexcept {
+    return cursor_row_;
+  }
+  [[nodiscard]] int rows() const noexcept {
+    return rows_;
+  }
+  [[nodiscard]] int rowsBelow() const noexcept {
+    return rows_below_;
+  }
   // Selects the command at `index` among the rail's, oldest first, and shows it.
   Q_INVOKABLE void selectBlock(int index);
-  // While a command the editor sent flies to its separator, the rows from its prompt down
+  // While the line the editor sent turns into its separator, the rows from its prompt down
   // stay unpainted; released, the first screen of its output enters line by line. The
   // command runs all along: only what is shown waits, and never longer than a moment.
   Q_INVOKABLE void holdOutput();
@@ -129,6 +149,7 @@ signals:
   void preeditChanged();
   void promptCaretChanged();
   void blocksChanged();
+  void placeChanged();
 
 protected:
   void updatePolish() override;
@@ -217,6 +238,10 @@ private:
   QVariantList separators_;
   QVariantList rail_;
   int prompt_row_ = -1;
+  int prompt_top_ = -1;
+  int cursor_row_ = -1;
+  int rows_ = 0;
+  int rows_below_ = 0;
   QSizeF shown_cell_;
   // Output held from this row on, counted from the top of the scrollback, and then revealed
   // from it: `reveal_rows_` rows, one every `reveal_step_ms_`.

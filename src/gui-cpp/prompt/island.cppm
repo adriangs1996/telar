@@ -31,6 +31,8 @@ enum class Outcome : std::uint8_t {
   ignored,
   // Tab: the owner works out the choices and offers them.
   complete,
+  // Ctrl-R at the shell's prompt: the owner searches the history from the line.
+  search_history,
 };
 
 // The choices Tab offered, over the word they would replace.
@@ -185,6 +187,12 @@ public:
     editor_.insertText(text);
   }
 
+  // Writes `text` over [begin, end) of the line, as a path chosen for the word there does.
+  inline void replaceText(std::size_t begin, std::size_t end, std::string_view text) {
+    closeMenu();
+    editor_.text().replace(begin, end, text);
+  }
+
   inline const std::optional<Menu> &menu() const noexcept {
     return menu_;
   }
@@ -309,7 +317,7 @@ private:
     case Request::complete:
       return Outcome::complete;
     case Request::history_search:
-      return Outcome::edited;
+      return surface == Surface::editor ? Outcome::search_history : Outcome::edited;
     case Request::unhandled:
       return Outcome::ignored;
     }

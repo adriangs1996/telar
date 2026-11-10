@@ -25,8 +25,9 @@ Item {
         }
     }
 
-    function submit(event) {
-        controller.insertPath((event.modifiers & (Qt.AltModifier | Qt.ShiftModifier)) !== 0);
+    PathKeys {
+        id: keys
+        controller: root.controller
     }
 
     Component.onCompleted: {
@@ -69,8 +70,8 @@ Item {
         onLimitReached: requested => root.controller.reportPathQueryLimit(requested)
         Keys.onDownPressed: root.controller.movePathSelection(1)
         Keys.onUpPressed: root.controller.movePathSelection(-1)
-        Keys.onReturnPressed: event => root.submit(event)
-        Keys.onEnterPressed: event => root.submit(event)
+        Keys.onReturnPressed: event => keys.submit(event)
+        Keys.onEnterPressed: event => keys.submit(event)
         Keys.onTabPressed: root.controller.descendPath()
         Keys.onBacktabPressed: root.controller.ascendPath()
         Keys.onEscapePressed: {
@@ -78,20 +79,7 @@ Item {
                 root.controller.execute(GuiController.Action.cancel);
             }
         }
-        Keys.onPressed: event => {
-            const control = root.controller.controlModifier;
-            if ((event.modifiers & control) === 0 || (event.modifiers & Qt.AltModifier) !== 0) {
-                event.accepted = false;
-            } else if (event.key === Qt.Key_J || event.key === Qt.Key_K) {
-                root.controller.movePathSelection(event.key === Qt.Key_J ? 1 : -1);
-            } else if (event.key === Qt.Key_H) {
-                root.controller.execute(GuiController.Action.cancel);
-            } else if (event.key === Qt.Key_L) {
-                root.controller.insertPath(false);
-            } else {
-                event.accepted = false;
-            }
-        }
+        Keys.onPressed: event => event.accepted = keys.handle(event)
     }
 
     CellText {

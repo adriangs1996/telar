@@ -1276,6 +1276,23 @@ absolute, Tab browses the selected directory and Shift+Tab its parent. Up and
 Down, or Ctrl+K and Ctrl+J, move the selection; Ctrl+K and Ctrl+J move it in
 every list prompt. Its default binding is `prefix`, then `f`.
 
+In `telar` prompt mode, telar's command editor replaces the shell's prompt on
+the prompt's own rows: a row with the directory, the Git branch and the vim mode,
+then the command, laid out as the separator it becomes when it runs. Tab's
+choices and the searches open under the command. When the editor needs rows past
+the screen's last, the terminal moves up by that many rows instead of covering
+output. Scrolled away from the prompt, the editor stays at the bottom of the
+pane. While a command runs, text typed for the next command appears on a line
+under its output, and a password prompt shows its dots there too.
+
+While the focused pane's shell waits for a command, the history search and the
+path picker open under the command instead of in a dialog. The command becomes
+the query: the history search starts from the whole command, and the path picker
+from the plain relative word before the caret, which the chosen path replaces.
+Ctrl+R opens the history search, with the newest matches first under the query.
+Its inspector (Ctrl+O) still opens as a dialog. The history search lists each
+command once, at its newest run that passes the filters.
+
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
 Press `v` or Space for a character selection, `V` for a line selection, then

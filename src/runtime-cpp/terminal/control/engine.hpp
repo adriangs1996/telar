@@ -107,11 +107,13 @@ public:
   }
 
   void ordinary(std::span<const std::uint8_t> input) {
+    history_erased_ = false;
     responses_.release();
     state_.write(input);
   }
 
   [[gnu::noinline]] std::size_t ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
+    history_erased_ = false;
     const auto remaining = input.subspan(offset);
     if (ascii_detail::eligible(remaining) && state_.canWriteAscii()) {
       return offset + ordinaryAscii(remaining);
@@ -164,6 +166,8 @@ public:
     if (awaiting_media_) {
       return false;
     }
+    // A retry already ran the sequence, and whatever it left of the flag stays.
+    const bool history_erased = !prepared_ && std::exchange(history_erased_, false);
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == 4 || operation == 5) {
@@ -184,7 +188,7 @@ public:
       reply_.clear();
       switch (sequence.kind) {
       case Kind::escape: escape(sequence); break;
-      case Kind::csi: csi(sequence); break;
+      case Kind::csi: csi(sequence, history_erased); break;
       case Kind::dcs: dcs(sequence); break;
       case Kind::osc: osc(sequence); break;
       case Kind::apc: apc(sequence); break;
@@ -330,7 +334,7 @@ private:
     }
   }
 
-  void csi(Sequence sequence) {
+  void csi(Sequence sequence, bool history_erased) {
     const auto body = sequence.body();
     if (body == "5n") {
       operatingStatus();
@@ -353,6 +357,18 @@ private:
     }
 
     switch (parameters.final) {
+    case 'H':
+    case 'f':
+      if (modifiers.empty()) {
+        history_erased_ = history_erased;
+      }
+      break;
+    case 'J':
+      if (modifiers.empty() && parameters.count <= 1) {
+        eraseDisplay(sequence, parameters.count == 0 ? 0 : parameters.values[0], history_erased);
+        return;
+      }
+      break;
     case 'h':
     case 'l':
       if (modifiers == "?") {
@@ -436,6 +452,19 @@ private:
     }
 
     passthrough(sequence);
+  }
+
+  // `clear` erases the scrollback before the screen (ED 3, CUP, ED 2), and Ghostty moves a screen
+  // whose last line is a prompt into the scrollback on ED 2 rather than erase it. The scrollback
+  // is erased again after it, so nothing of the screen the program asked to erase stays.
+  void eraseDisplay(Sequence sequence, unsigned mode, bool history_erased) {
+    static constexpr std::array<std::uint8_t, 4> erase_history{0x1b, '[', '3', 'J'};
+    passthrough(sequence);
+    if (mode == 3) {
+      history_erased_ = true;
+    } else if (mode == 2 && history_erased) {
+      state_.write(erase_history);
+    }
   }
 
   void privateModes(const Parameters &parameters) {
@@ -808,6 +837,8 @@ private:
   bool streamed_media_ = false;
   bool prepared_ = false;
   bool clipboard_before_reply_ = false;
+  // The scrollback was just erased, with at most the cursor moved since.
+  bool history_erased_ = false;
   std::array<bool, desktop_modes.size()> saved_desktop_modes_{};
   std::size_t capability_offset_ = 0;
   bool paste_events_ = false;

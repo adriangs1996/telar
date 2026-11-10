@@ -192,6 +192,9 @@ class Application final : public QObject {
   Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
   Q_PROPERTY(QString dialog READ dialog NOTIFY dialogChanged)
   Q_PROPERTY(QString dialogText READ dialogText NOTIFY dialogChanged)
+  // The history or path search the focused pane's prompt line hosts in place of the dialog.
+  Q_PROPERTY(QString islandSearch READ islandSearch NOTIFY dialogChanged)
+  Q_PROPERTY(QString islandSearchPane READ islandSearchPane NOTIFY dialogChanged)
   Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
   Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
   Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
@@ -369,6 +372,8 @@ public:
   Q_INVOKABLE void searchPaths(const QString &text);
   Q_INVOKABLE void reportPathQueryLimit(qulonglong requested_bytes);
   Q_INVOKABLE void movePathSelection(int delta);
+  // The paths from `first` on, at most `count`, cut to `columns` cells, for the prompt line's rows.
+  Q_INVOKABLE QVariantList pathPickerRows(int columns, int first, int count) const;
   Q_INVOKABLE void descendPath();
   Q_INVOKABLE void ascendPath();
   Q_INVOKABLE void insertPath(bool absolute);
@@ -488,6 +493,8 @@ public:
   [[nodiscard]] bool connected() const;
   [[nodiscard]] QString dialog() const;
   [[nodiscard]] QString dialogText() const;
+  [[nodiscard]] QString islandSearch() const;
+  [[nodiscard]] QString islandSearchPane() const;
 
 signals:
   void historyInspectionScrolled(int lines);
@@ -963,6 +970,8 @@ private:
   QString dialog_;
   QString dialog_text_;
   std::uint64_t dialog_generation_ = 0;
+  // The pane whose prompt line hosts the open history or path search, or 0 for the dialog.
+  std::uint64_t island_search_pane_ = 0;
   QPointer<QQuickWindow> window_;
   std::uint64_t window_generation_ = 0;
   QMetaObject::Connection screen_refresh_connection_;

@@ -841,7 +841,10 @@ public:
     }
     appendMatch(sql, request.query);
     appendFilters(sql, request);
-    sql += " ORDER BY started_at_ms DESC, id DESC LIMIT ?7 OFFSET ?8";
+    // A distinct page counts its offset in commands, not rows: SQL cannot cut it, so the rows
+    // stream newest first and stop once the page and one more command are found.
+    const bool distinct = request.distinct && request.entry_id == 0;
+    sql += distinct ? " ORDER BY started_at_ms DESC, id DESC" : " ORDER BY started_at_ms DESC, id DESC LIMIT ?7 OFFSET ?8";
     Statement statement{database_, sql};
     statement.bind(1, integer(request.snapshot_id));
     if (request.entry_id != 0) {
@@ -849,14 +852,24 @@ public:
     }
     bindMatch(statement, request.query);
     bindFilters(statement, request);
-    statement.bind(7, static_cast<std::int64_t>(request.limit) + 1);
-    statement.bind(8, request.offset);
+    if (!distinct) {
+      statement.bind(7, static_cast<std::int64_t>(request.limit) + 1);
+      statement.bind(8, request.offset);
+    }
 
     HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, Memory>{memory_}};
+    std::uint32_t skipped = 0;
     bool more = false;
     while (statement.next()) {
-      if (request.distinct && !seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(6))).second) {
-        continue;
+      if (distinct) {
+        if (!seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(6))).second) {
+          continue;
+        }
+
+        if (skipped < request.offset) {
+          ++skipped;
+          continue;
+        }
       }
 
       if (rows_.entries().size() == request.limit || !rows_.append(statement)) {

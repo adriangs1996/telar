@@ -80,8 +80,32 @@ static void testTerminalStorage() {
 #endif
 }
 
+// `clear` erases the scrollback before the screen; Ghostty would move a screen ending in a prompt
+// back into it. ^L at a prompt, without ED 3, still keeps the screen in the scrollback.
+static void testClearAtPrompt() {
+  SystemAllocator memory;
+  Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
+  std::string history;
+  for (std::size_t row = 0; row < 20; ++row) {
+    history += "output\r\n";
+  }
+  terminal.feed(bytes(history + "\x1b]133;A\x07$ \x1b]133;B\x07clear\r\n\x1b]133;C\x07"));
+  terminal.feed(bytes("\x1b[3J\x1b[H\x1b[2J"));
+  terminal.refresh();
+  check(terminal.screen.scroll.total_rows == terminal.screen.rows);
+
+  terminal.feed(bytes("\x1b]133;A\x07$ \x1b]133;B\x07\x1b[H\x1b[2J"));
+  terminal.refresh();
+  check(terminal.screen.scroll.total_rows > terminal.screen.rows);
+
+  terminal.feed(bytes("\x1b[3Jprinted\r\n\x1b]133;A\x07$ \x1b]133;B\x07\x1b[H\x1b[2J"));
+  terminal.refresh();
+  check(terminal.screen.scroll.total_rows > terminal.screen.rows);
+}
+
 void testTerminal() {
   testTerminalStorage();
+  testClearAtPrompt();
   {
     SystemAllocator memory;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};

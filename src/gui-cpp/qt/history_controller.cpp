@@ -61,6 +61,7 @@ import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.platform.notification_commands;
+import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
 import telar.gui.text.json_unsigned_integer;
 
@@ -110,6 +111,18 @@ HistoryAuthorFilter parseAuthor(const QString &author) {
   }
 
   throw EncodingError{"Unknown history author filter"};
+}
+
+// The words the dialog's filter chips show for `value`.
+template <std::size_t Count>
+QString filterLabel(const std::array<HistoryFilterLabels::Choice, Count> &choices, const QString &value) {
+  for (const auto &choice : choices) {
+    if (QLatin1StringView{choice.value.data(), static_cast<qsizetype>(choice.value.size())} == value) {
+      return toQString(choice.text);
+    }
+  }
+
+  return value;
 }
 
 QString phaseName(HistoryPhase phase) {
@@ -219,6 +232,8 @@ QVariantMap Application::historyState() const {
       {QStringLiteral("effectiveScope"), scopeName(browser.scope())},
       {QStringLiteral("scopeValue"), history_scope_value_},
       {QStringLiteral("author"), authorName(history_filters_.author)},
+      {QStringLiteral("scopeLabel"), filterLabel(HistoryFilterLabels::scopes, scopeName(browser.scope()))},
+      {QStringLiteral("authorLabel"), filterLabel(HistoryFilterLabels::authors, authorName(history_filters_.author))},
       {QStringLiteral("failedOnly"), parsed.failed_only},
       {QStringLiteral("grouped"), parsed.query.empty()},
       {QStringLiteral("query"), toQString(parsed.query)},

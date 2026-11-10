@@ -29,10 +29,10 @@ namespace telar::gui::qt {
 class Application;
 class NativeCellText;
 
-// telar's command editor as the island draws it: the command in the terminal's font, coloured
-// by how the shell reads it and wrapped at the island's width. It holds no state of its own;
-// the session owns the editor, and this item paints it and publishes what QML needs to shape
-// the island around it.
+// telar's command editor as the prompt line draws it: the command in the terminal's font,
+// coloured by how the shell reads it and wrapped at the line's width, from the layout's indent;
+// the line draws the prompt's mark before it. It holds no state of its own; the session owns the
+// editor, and this item paints it and publishes what QML needs to lay the line out around it.
 class PromptIsland : public QQuickItem {
   Q_OBJECT
   QML_NAMED_ELEMENT(NativePromptEditor)
@@ -68,8 +68,7 @@ class PromptIsland : public QQuickItem {
   // Commands the shell finished and the last one's exit status, for the island's outcome.
   Q_PROPERTY(int commands READ commands NOTIFY stateChanged)
   Q_PROPERTY(int status READ status NOTIFY stateChanged)
-  // client.prompt.skin and client.prompt.motion.
-  Q_PROPERTY(QString skin READ skin NOTIFY stateChanged)
+  // client.prompt.motion.
   Q_PROPERTY(QString motion READ motion NOTIFY stateChanged)
   // The completion menu: at most a page of choices around the selected one.
   Q_PROPERTY(QVariantList choices READ choices NOTIFY stateChanged)
@@ -130,7 +129,6 @@ public:
   [[nodiscard]] int progress() const noexcept;
   [[nodiscard]] int commands() const noexcept;
   [[nodiscard]] int status() const noexcept;
-  [[nodiscard]] QString skin() const;
   [[nodiscard]] QString motion() const;
   [[nodiscard]] QVariantList choices() const;
   [[nodiscard]] int choice() const noexcept;
