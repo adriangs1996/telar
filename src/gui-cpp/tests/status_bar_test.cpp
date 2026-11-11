@@ -88,11 +88,12 @@ QVariantMap barProperties(const HostMetrics &metrics) {
 
 using BarContent = components::Content<components::Capacity{.nodes = 8, .text = 256, .samples = 64, .actions = 0}>;
 
-void appendNode(BarContent &content, components::Node node, std::string_view text = {}, std::string_view detail = {}) {
+void appendNode(BarContent &content, components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
   components::Input input{};
   input.node = node;
   input.text = text;
   input.detail = detail;
+  input.url = url;
   content.append(input);
 }
 
@@ -192,7 +193,7 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
   }
 
-  Q_SLOT static void inlineMetersReserveTheirTextAndTrack_data() {
+  Q_SLOT static void inlineMetersLeadWithARing_data() {
     QTest::addColumn<bool>("compact");
     QTest::addColumn<bool>("labelled");
     QTest::addColumn<QString>("detail");
@@ -205,7 +206,7 @@ private:
     QTest::newRow("scaled") << false << true << QString{} << qreal{1.5};
   }
 
-  Q_SLOT static void inlineMetersReserveTheirTextAndTrack() {
+  Q_SLOT static void inlineMetersLeadWithARing() {
     QFETCH(bool, compact);
     QFETCH(bool, labelled);
     QFETCH(QString, detail);
@@ -228,10 +229,10 @@ private:
     window.resize(1000, bar_height);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("componentMeterTrack")).size(), 2, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 2, wait_ms);
     QVERIFY(!window.grabWindow().isNull());
-    for (const auto *track : visualItems(*tree, QStringLiteral("componentMeterTrack"))) {
-      const auto *meter = track->parentItem();
+    for (const auto *ring : visualItems(*tree, QStringLiteral("componentMeterRing"))) {
+      const auto *meter = ring->parentItem();
       const auto *label = meter->findChild<QQuickItem *>(QStringLiteral("componentMeterLabel"));
       const auto *value = meter->findChild<QQuickItem *>(QStringLiteral("componentMeterValue"));
       QVERIFY(label != nullptr && value != nullptr);
@@ -242,21 +243,21 @@ private:
       if (labelled || !detail.isEmpty()) {
         QCOMPARE(value->property("text").toString(), expected_value);
       }
-      QVERIFY(label->property("emphasized").toBool());
+      QVERIFY(!label->property("emphasized").toBool());
       QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("subtext0")).value<QColor>());
-      constexpr qreal track_width = 24;
-      constexpr qreal track_height = 3;
+      constexpr qreal ring_side = 16;
       constexpr qreal part_gap = 5;
       const auto label_gap = labelled ? part_gap * ratio : 0;
-      QCOMPARE(track->isVisible(), !compact);
-      QCOMPARE(track->width(), compact ? qreal{0} : track_width * ratio);
-      QCOMPARE(track->height(), track_height * ratio);
-      QTRY_COMPARE_WITH_TIMEOUT(track->x(), label->width() + label_gap, wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(value->x(), label->width() + label_gap + (compact ? 0 : (track_width + part_gap) * ratio), wait_ms);
+      const auto ring_width = compact ? qreal{0} : (ring_side + part_gap) * ratio;
+      QCOMPARE(ring->isVisible(), !compact);
+      QCOMPARE(ring->width(), ring_side * ratio);
+      QCOMPARE(ring->height(), ring_side * ratio);
+      QTRY_COMPARE_WITH_TIMEOUT(label->x(), ring_width, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(value->x(), ring_width + label->width() + label_gap, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(meter->width(), value->x() + value->width(), wait_ms);
       QVERIFY(meter->boundingRect().contains(value->mapRectToItem(meter, value->boundingRect())));
       if (!compact) {
-        QVERIFY(meter->boundingRect().contains(track->mapRectToItem(meter, track->boundingRect())));
+        QVERIFY(meter->boundingRect().contains(ring->mapRectToItem(meter, ring->boundingRect())));
       }
     }
   }
@@ -286,30 +287,54 @@ private:
     QCOMPARE(full_samples, 1);
   }
 
-  Q_SLOT static void groupsHaveAutomaticSeparators() {
+  Q_SLOT static void onlyClickableGroupsGetAPillTintedByTheirAlert() {
     QQuickWindow window;
     QQmlEngine engine;
     BarContent content;
     appendNode(content, {.kind = components::Kind::group});
     appendNode(content, {.kind = components::Kind::label, .parent = 0}, "Clock");
-    appendNode(content, {.kind = components::Kind::group});
-    appendNode(content, {.kind = components::Kind::label, .parent = 2}, "GPU");
+    appendNode(content, {.kind = components::Kind::group}, {}, {}, "https://example.com");
+    appendNode(content, {.kind = components::Kind::meter, .parent = 2, .tone = components::Tone::warning, .value = 600}, "7d");
     const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
     tree->setParentItem(window.contentItem());
     window.resize(1000, bar_height);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    const auto separators = [&] {
-      auto items = visualItems(*tree, QStringLiteral("componentGroupSeparator"));
-      items.removeIf([](const QQuickItem *item) { return !item->isVisible(); });
-      return items;
-    };
-    QTRY_COMPARE_WITH_TIMEOUT(separators().size(), 1, wait_ms);
-    const QVariantMap levels{{QStringLiteral("0"), 2}, {QStringLiteral("1"), 2}};
-    QVERIFY(tree->setProperty("fittedLevels", levels));
-    QTRY_COMPARE_WITH_TIMEOUT(separators().size(), 0, wait_ms);
-    QVERIFY(tree->setProperty("horizontal", false));
-    QTRY_COMPARE_WITH_TIMEOUT(separators().size(), 0, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barPill")).size(), 1, wait_ms);
+    QCOMPARE(visualItems(*tree, QStringLiteral("componentGroupSeparator")).size(), 0);
+    const auto *pill = visualItems(*tree, QStringLiteral("barPill")).front();
+    QCOMPARE(pill->property("severity").toInt(), 1);
+    QCOMPARE(pill->height(), qreal{22});
+  }
+
+  Q_SLOT static void summariesNameTheWorstEntryAndCountTheRest() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    BarContent content;
+    appendNode(content, {.kind = components::Kind::group}, "system");
+    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = 300}, "disk");
+    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::warning, .value = 920}, "net");
+    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::danger, .value = 990}, "gpu");
+    const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+    tree->setParentItem(window.contentItem());
+    window.resize(1000, bar_height);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barRingArc")).size(), 3, wait_ms);
+    const auto labels = visualItems(*tree, QStringLiteral("systemSummaryLabel"));
+    const auto extras = visualItems(*tree, QStringLiteral("systemSummaryExtra"));
+    QCOMPARE(labels.size(), 1);
+    QCOMPARE(extras.size(), 1);
+    const auto *label = labels.front();
+    const auto *extra = extras.front();
+    QCOMPARE(label->property("text").toString(), QStringLiteral("gpu 99%"));
+    QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("red")).value<QColor>());
+    QVERIFY(extra->isVisible());
+    QCOMPARE(extra->property("text").toString(), QStringLiteral("+1"));
+    QCOMPARE(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 0);
+    const auto *pill = visualItems(*tree, QStringLiteral("barPill")).front();
+    QCOMPARE(pill->property("severity").toInt(), 2);
+    QVERIFY(!window.grabWindow().isNull());
   }
 
   Q_SLOT static void liveMetricsAndResizesRenderWithoutQmlErrors() {

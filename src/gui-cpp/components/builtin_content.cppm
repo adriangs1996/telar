@@ -53,10 +53,12 @@ inline BarContent builtinContent(SourceKind kind) {
   input.node.priority = builtin_priority;
   if (kind == SourceKind::metrics) {
     input.node.kind = Kind::group;
+    input.text = "system";
     const auto group = content.append(input);
+    input.text = {};
     input.node.kind = Kind::metric;
     input.node.parent = group;
-    for (const auto metric : std::array{BarMetric::cpu, BarMetric::memory, BarMetric::battery}) {
+    for (const auto metric : std::array{BarMetric::battery, BarMetric::cpu, BarMetric::memory}) {
       input.node.metric = metric;
       content.append(input);
     }

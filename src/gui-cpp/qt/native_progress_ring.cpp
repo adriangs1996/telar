@@ -77,6 +77,30 @@ void NativeProgressRing::setTurns(qreal turns) {
   }
 }
 
+qreal NativeProgressRing::strokeWidth() const noexcept {
+  return stroke_width_;
+}
+
+void NativeProgressRing::setStrokeWidth(qreal width) {
+  if (std::isfinite(width) && width >= 0 && width <= std::numeric_limits<float>::max() && stroke_width_ != width) {
+    stroke_width_ = width;
+    update();
+    emit strokeWidthChanged();
+  }
+}
+
+QColor NativeProgressRing::trackColor() const {
+  return track_color_;
+}
+
+void NativeProgressRing::setTrackColor(const QColor &color) {
+  if (color.isValid() && track_color_ != color) {
+    track_color_ = color;
+    update();
+    emit trackColorChanged();
+  }
+}
+
 QSGNode *NativeProgressRing::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
   auto root = std::unique_ptr<QSGNode>{previous};
   if (window() == nullptr || width() <= 0 || height() <= 0 || color_.alphaF() <= 0) {
@@ -84,9 +108,10 @@ QSGNode *NativeProgressRing::updatePaintNode(QSGNode *previous, [[maybe_unused]]
   }
 
   const Color color{.r = color_.redF(), .g = color_.greenF(), .b = color_.blueF(), .a = color_.alphaF()};
+  const auto track = track_color_.isValid() ? std::optional<Color>{Color{.r = track_color_.redF(), .g = track_color_.greenF(), .b = track_color_.blueF(), .a = track_color_.alphaF()}} : std::nullopt;
 
   return paintRoundedShapes<ProgressRing::maximum_paints>(*this, root.release(), [&](auto append, Rect area) {
-    ProgressRing{.area = area, .color = color, .fraction = static_cast<float>(fraction_), .rotation = static_cast<float>(turns_)}.visit(append);
+    ProgressRing{.area = area, .color = color, .fraction = static_cast<float>(fraction_), .rotation = static_cast<float>(turns_), .stroke_width = static_cast<float>(stroke_width_), .track = track}.visit(append);
   });
 }
 

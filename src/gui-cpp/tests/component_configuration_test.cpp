@@ -92,10 +92,11 @@ void builtinContent() {
   const auto metrics = components::builtinContent(components::SourceKind::metrics);
   const auto nodes = metrics.nodes();
   require(nodes.size() == 4 && nodes.front().kind == components::Kind::group && nodes.front().parent == components::Node::no_parent, "builtin metrics must retain the original root group");
-  constexpr std::array names{BarMetric::cpu, BarMetric::memory, BarMetric::battery};
+  require(metrics.text(nodes.front().text) == "system", "builtin metrics must name their summary");
+  constexpr std::array names{BarMetric::battery, BarMetric::cpu, BarMetric::memory};
   for (std::size_t index = 0; index < names.size(); ++index) {
     const auto &node = nodes[index + 1];
-    require(node.kind == components::Kind::metric && node.parent == 0 && node.metric == names[index], "builtin metrics must retain original child order and ownership");
+    require(node.kind == components::Kind::metric && node.parent == 0 && node.metric == names[index], "builtin metrics must list their arcs from the battery, then CPU and memory");
   }
 
   for (const auto &node : nodes) {

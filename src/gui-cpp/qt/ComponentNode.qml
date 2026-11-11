@@ -19,29 +19,61 @@ KeyboardAction {
     property var fittedLevels: ({})
     readonly property real gap: 6 * ratio
     readonly property int maximumBlockLines: 8
-    readonly property real iconSide: (node.kind === "callout" ? 18 : node.kind === "group" ? 14 : 16) * ratio
-    readonly property real trackWidth: 24 * ratio
-    readonly property real meterGap: 5 * ratio
+    readonly property real iconSide: (node.kind === "callout" ? 18 : node.kind === "group" ? 14 : 16) * barScale
+    // Bar chrome follows the chrome text, which scales with the terminal font; 12 px is its default.
+    readonly property real barScale: ratio * (typography.small ?? 12) / 12
+    // A bar meter's ring; compacting a meter drops it.
+    readonly property real trackWidth: 16 * barScale
+    readonly property real meterGap: 5 * barScale
+    // A group with a summary name shows one indicator for its entries and fits as a single item.
+    readonly property bool summary: node.kind === "group" && node.text.length > 0
+    readonly property bool container: node.kind === "group" && !summary
+    readonly property var metricNames: ["cpu", "memory", "battery"]
     readonly property bool block: ["heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"].indexOf(node.kind) >= 0
     readonly property bool hasIcon: node.glyph.length > 0 || node.providerMark !== 0 || node.telarMark
     readonly property bool hasTooltip: (surface.nodes ?? []).some(child => child.parent === node.index && child.tooltip)
     readonly property real compactWidthDelta: node.kind === "meter" ? trackWidth + meterGap : 0
     readonly property real focusRadius: 4 * ratio
     readonly property string activationIdentity: surface.identity + ":" + surface.generation + ":" + surface.source + ":" + node.index + ":" + node.actionIdentity
-    readonly property real unreducedWidth: node.kind === "group" ? (visual.item?.unreducedWidth ?? 0) : implicitWidth + (compact ? compactWidthDelta : 0)
+    readonly property real unreducedWidth: container ? (visual.item?.unreducedWidth ?? 0) : implicitWidth + (compact ? compactWidthDelta : 0)
     readonly property var fitNodes: [{
         index: node.index, parent: node.parent, priority: node.priority,
-        group: node.kind === "group", meter: node.kind === "meter",
-        width: node.kind === "group" ? (visual.item?.chromeWidth ?? 0) : unreducedWidth,
+        group: container, meter: node.kind === "meter",
+        width: container ? (visual.item?.chromeWidth ?? 0) : unreducedWidth,
         compactDelta: compactWidthDelta,
         childGap: visual.item?.childGap, leadingGap: visual.item?.leadingGap,
-    }].concat(node.kind === "group" ? (visual.item?.fitNodes ?? []) : [])
+    }].concat(container ? (visual.item?.fitNodes ?? []) : [])
 
     implicitWidth: visual.item?.implicitWidth ?? 0
     implicitHeight: visual.item?.implicitHeight ?? rowHeight
     opacity: node.faint ? 0.6 : 1
     interactive: node.clickable && node.kind !== "button"
     onActivated: root.activate()
+
+    // The worst alert in a node and its descendants: 0 none, 1 warning, 2 danger.
+    function severityOf(index) {
+        const nodes = surface.nodes ?? [];
+        const metrics = controller?.hostMetrics ?? ({});
+        let worst = 0;
+        for (const candidate of nodes) {
+            if (candidate.tooltip || worst === 2) {
+                continue;
+            }
+
+            let ancestor = candidate.index;
+            while (ancestor >= 0 && ancestor !== index) {
+                ancestor = nodes[ancestor]?.parent ?? -1;
+            }
+            if (ancestor !== index) {
+                continue;
+            }
+
+            const level = candidate.kind === "metric" ? (metrics[metricNames[candidate.metric]]?.severity ?? 0) : candidate.tone === 5 ? 2 : candidate.tone === 4 ? 1 : 0;
+            worst = Math.max(worst, level);
+        }
+
+        return worst;
+    }
 
     function activate() {
         controller.activateComponent(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
@@ -67,7 +99,7 @@ KeyboardAction {
         height: root.height
         sourceComponent: {
             switch (root.node.kind) {
-            case "group": return root.surface.kind === "metrics" ? builtinMetrics : group;
+            case "group": return root.summary ? summaryView : group;
             case "icon": case "mark": return icon;
             case "meter": case "meter_row": return meter;
             case "sparkline": return sparkline;
@@ -214,26 +246,30 @@ KeyboardAction {
     }
 
     Component {
-        id: builtinMetrics
-        MetricsGroup {
-            metrics: root.controller.hostMetrics
-            nodes: root.surface.nodes ?? []
-            fittedLevels: root.fittedLevels
+        id: summaryView
+        SystemSummary {
+            controller: root.controller
+            surface: root.surface
+            node: root.node
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            implicitHeight: root.rowHeight
+            rowHeight: root.rowHeight
         }
     }
 
     Component {
         id: group
         Item {
-            readonly property real padding: root.barGroup ? root.gap : 0
+            // Only a bar group that does something on click gets an outline.
+            readonly property bool pill: root.barGroup && root.node.clickable
+            readonly property real padding: pill ? 9 * root.barScale : 0
+            readonly property real leadingPadding: pill && root.hasIcon ? 5 * root.barScale : padding
             readonly property real childGap: root.gap
-            readonly property real leadingGap: root.barGroup ? childGap : 0
+            // In a bar the gap after a mark is counted by the fit, so the children start right after it.
+            readonly property real leadingGap: root.barGroup && root.hasIcon ? childGap : 0
             readonly property real markWidth: root.hasIcon ? root.iconSide + childGap : 0
-            readonly property real chromeWidth: root.barGroup ? 2 * padding + (root.hasIcon ? root.iconSide : -childGap) : markWidth
+            readonly property real chromeWidth: root.barGroup ? leadingPadding + padding + (root.hasIcon ? root.iconSide : 0) : markWidth
             readonly property real childWidth: childrenTree.implicitWidth
             readonly property real fullChildWidth: childrenTree.item?.fullWidth ?? 0
             readonly property real unreducedWidth: chromeWidth + fullChildWidth + (fullChildWidth > 0 ? leadingGap : 0)
@@ -241,7 +277,18 @@ KeyboardAction {
             implicitWidth: chromeWidth + childWidth + (childWidth > 0 ? leadingGap : 0)
             implicitHeight: root.rowHeight
             Loader {
-                x: parent.padding
+                y: Math.round((parent.height - height) / 2)
+                width: parent.width
+                height: Math.min(parent.height, 22 * root.barScale)
+                active: parent.pill
+                sourceComponent: BarPill {
+                    colors: root.colors
+                    severity: root.severityOf(root.node.index)
+                    ratio: root.ratio
+                }
+            }
+            Loader {
+                x: parent.leadingPadding
                 width: root.iconSide
                 height: parent.height
                 active: root.hasIcon
@@ -249,7 +296,7 @@ KeyboardAction {
             }
             ComponentBranch {
                 id: childrenTree
-                x: parent.padding + parent.markWidth
+                x: parent.leadingPadding + parent.markWidth
                 width: implicitWidth
                 height: parent.height
                 controller: root.controller
@@ -279,18 +326,32 @@ KeyboardAction {
             readonly property real labelShare: 0.38
             readonly property real labelWidth: Math.round(width * labelShare)
             readonly property real track: !panel && !root.compact ? root.trackWidth : 0
+            // In the bar the ring leads: ring, label, value.
+            readonly property real ringWidth: track > 0 ? track + root.meterGap : 0
             readonly property real labelGap: !panel && root.node.text.length > 0 ? root.meterGap : 0
-            implicitWidth: meterLabel.implicitWidth + (panel ? 0 : labelGap + meterValue.implicitWidth + (track > 0 ? root.meterGap + track : 0))
+            implicitWidth: meterLabel.implicitWidth + (panel ? 0 : ringWidth + labelGap + meterValue.implicitWidth)
             implicitHeight: panel ? (root.node.detail.length > 0 ? detailedHeight : lineHeight) : root.rowHeight
+            BarRing {
+                objectName: "componentMeterRing"
+                y: Math.round((parent.height - height) / 2)
+                width: implicitWidth
+                height: implicitHeight
+                visible: parent.track > 0
+                side: root.trackWidth
+                segments: [root.node.ink]
+                fraction: Math.max(0, Math.min(1, root.node.value))
+                trackColor: root.colors.surface1
+                ratio: root.ratio
+            }
             ChromeText {
                 id: meterLabel
                 objectName: "componentMeterLabel"
+                x: parent.panel ? 0 : parent.ringWidth
                 width: parent.panel ? parent.labelWidth : implicitWidth
                 height: parent.panel ? parent.lineHeight : parent.height
                 text: root.node.text
                 color: parent.panel ? root.colors.text : root.colors.subtext0
                 pixelSize: parent.panel ? root.typography.body : root.typography.small
-                emphasized: !parent.panel
                 elide: Text.ElideNone
             }
             ChromeText {
@@ -307,7 +368,7 @@ KeyboardAction {
             ChromeText {
                 id: meterValue
                 objectName: "componentMeterValue"
-                x: parent.panel ? parent.width - width : meterTrack.x + meterTrack.width + (parent.track > 0 ? root.meterGap : 0)
+                x: parent.panel ? parent.width - width : meterLabel.x + meterLabel.width + parent.labelGap
                 width: parent.panel ? Math.min(parent.width, parent.numberWidth) : implicitWidth
                 height: parent.height
                 text: !parent.panel && root.node.detail.length > 0 ? root.node.detail : Math.round(root.node.value * 100) + "%"
@@ -320,11 +381,11 @@ KeyboardAction {
                 // An id named "track" shadows the numeric property used to measure the meter.
                 id: meterTrack
                 objectName: "componentMeterTrack"
-                x: parent.panel ? parent.labelWidth + parent.columnGap : meterLabel.width + parent.labelGap
+                x: parent.labelWidth + parent.columnGap
                 y: Math.round((parent.height - height) / 2)
-                width: parent.panel ? Math.max(0, parent.width - parent.numberWidth - parent.columnGap - x) : parent.track
-                height: (parent.panel ? 4 : 3) * root.ratio
-                visible: parent.panel || parent.track > 0
+                width: Math.max(0, parent.width - parent.numberWidth - parent.columnGap - x)
+                height: 4 * root.ratio
+                visible: parent.panel
                 NativeRoundedRectangle {
                     anchors.fill: parent
                     color: root.colors.surface1

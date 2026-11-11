@@ -136,6 +136,8 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
         {QStringLiteral("clickable"), action.has_value() || node.url.length != 0},
         {QStringLiteral("actionIdentity"), componentActionIdentity(action, content.text(node.url), named)},
         {QStringLiteral("ink"), componentColor(node.style.foreground, theme, ink)},
+        // 0 neutral, 1 muted, 2 accent, 3 success, 4 warning, 5 danger: bar chrome tints by the worst of a group.
+        {QStringLiteral("tone"), static_cast<int>(node.tone)},
         {QStringLiteral("background"), componentColor(node.style.background, theme, Color{.a = 0})},
         {QStringLiteral("bold"), node.style.bold},
         {QStringLiteral("italic"), node.style.italic},

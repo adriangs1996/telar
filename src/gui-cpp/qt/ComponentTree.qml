@@ -108,7 +108,6 @@ Item {
 
             delegate: ComponentNode {
                 required property var record
-                required property int index
                 controller: root.controller
                 surface: root.surface
                 node: record
@@ -123,23 +122,6 @@ Item {
                 compact: (root.levels[node.index] ?? ComponentFit.Level.full) === ComponentFit.Level.compact
                 visible: (root.levels[node.index] ?? ComponentFit.Level.full) !== ComponentFit.Level.hidden
                 onFitNodesChanged: Qt.callLater(root.refit)
-
-                Rectangle {
-                    objectName: "componentGroupSeparator"
-                    readonly property var previous: {
-                        for (let sibling = index - 1; sibling >= 0; --sibling) {
-                            const item = rowRepeater.itemAt(sibling);
-                            if (item && item.visible && item.width > 0) return item.node;
-                        }
-                        return null;
-                    }
-                    x: -root.gap / 2
-                    y: (root.rowHeight - height) / 2
-                    width: 1 / Screen.devicePixelRatio
-                    height: Math.min(root.rowHeight, 12 * root.ratio)
-                    color: root.colors.surface1
-                    visible: root.barRow && previous !== null && (record.kind === "group" || previous.kind === "group")
-                }
             }
         }
 

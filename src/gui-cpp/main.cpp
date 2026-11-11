@@ -5,34 +5,6 @@ static_assert(true);
 
 
 #include "application/dependencies.hpp"
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <stdexcept>
-#include <charconv>
-#include <concepts>
-#include <cstring>
-#include <string_view>
-#include <system_error>
-#include <span>
-#include "telar_base/memory/fixed_text.hpp"
-#include <optional>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <algorithm>
-#include "core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <exception>
-#include <bit>
-#include <limits>
-#include <new>
-#include <sys/param.h>
-#include "telar_client/codecs/telar_wire.hpp"
-#include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <stop_token>
 #include "platform/window.hpp"
 #include "qt/application.hpp"
 #include "qt/bundled_fonts.hpp"
@@ -55,10 +27,10 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <QtQuick/qquickwindow.h>
 #include <cstdlib>
-#include <iostream>
 
 
 
+import std;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;

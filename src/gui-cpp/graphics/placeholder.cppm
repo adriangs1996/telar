@@ -460,19 +460,28 @@ struct ProgressRing {
   Color color;
   float fraction = 0;
   float rotation = 0;
+  // Zero derives the stroke from the side.
+  float stroke_width = 0;
+  // Without a track colour the track is the ring's colour at track_alpha; a transparent one draws no track.
+  std::optional<Color> track = std::nullopt;
 
   template <typename Visitor>
   inline void visit(Visitor visitor) const {
     const auto side = std::min(area.width, area.height);
-    if (!std::isfinite(side) || side <= 0 || !std::isfinite(fraction) || !std::isfinite(rotation)) {
+    if (!std::isfinite(side) || side <= 0 || !std::isfinite(fraction) || !std::isfinite(rotation) || !std::isfinite(stroke_width)) {
       return;
     }
 
-    const auto stroke = std::min(side / 4, std::max(1.0F, side * stroke_ratio));
+    const auto stroke = stroke_width > 0 ? std::min(side / 2, stroke_width) : std::min(side / 4, std::max(1.0F, side * stroke_ratio));
     const Point origin{.x = area.x + ((area.width - side) / 2), .y = area.y + ((area.height - side) / 2)};
-    auto track = color;
-    track.a *= track_alpha;
-    visitor(RoundedRectanglePaint{.origin = origin, .shape = RoundedRectangle::resolve({.x = side, .y = side}, {.border = track, .radius = side / 2, .border_width = stroke})});
+    auto ring_track = track.value_or(color);
+    if (!track) {
+      ring_track.a *= track_alpha;
+    }
+
+    if (ring_track.a > 0) {
+      visitor(RoundedRectanglePaint{.origin = origin, .shape = RoundedRectangle::resolve({.x = side, .y = side}, {.border = ring_track, .radius = side / 2, .border_width = stroke})});
+    }
     const auto filled = std::clamp(fraction, 0.0F, 1.0F);
     if (filled == 0) {
       return;

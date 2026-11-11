@@ -69,6 +69,131 @@ private:
 }
 }
 
+// Interface: core/metric_levels.cppm
+export {
+namespace telar::gui {
+
+enum class BarMetric : std::uint8_t {
+  cpu,
+  memory,
+  battery,
+};
+
+enum class MetricSeverity : std::uint8_t {
+  normal,
+  warning,
+  danger,
+};
+
+// The thresholds that turn a host metric into a warning or a danger.
+struct MetricLevels {
+  static constexpr std::uint8_t cpu_warning = 90;
+  static constexpr std::uint8_t cpu_danger = 98;
+  static constexpr std::uint8_t memory_warning = 85;
+  static constexpr std::uint8_t memory_danger = 95;
+  static constexpr std::uint8_t battery_warning = 20;
+  static constexpr std::uint8_t battery_danger = 10;
+
+  [[nodiscard]] inline static bool available(BarMetric metric, const SystemMetrics &sample) noexcept {
+    return sample.revision != 0 && (metric != BarMetric::battery || sample.has_battery);
+  }
+
+  // How full the metric is, 0..100: memory in use of the total, or the battery's charge.
+  [[nodiscard]] inline static std::uint8_t percent(BarMetric metric, const SystemMetrics &sample) noexcept {
+    switch (metric) {
+    case BarMetric::cpu:
+      return sample.cpu_percent;
+    case BarMetric::memory:
+      if (sample.memory_total_decigib == 0) {
+        return 0;
+      }
+
+      return static_cast<std::uint8_t>(std::min<unsigned>(100, ((sample.memory_used_decigib * 100U) + (sample.memory_total_decigib / 2U)) / sample.memory_total_decigib));
+    case BarMetric::battery:
+      return sample.battery_percent;
+    }
+
+    return 0;
+  }
+
+  // The severity the thresholds give. `margin` moves every threshold that many
+  // points away from the current value, so a level is kept until the value has
+  // clearly left it.
+  [[nodiscard]] inline static MetricSeverity severity(BarMetric metric, const SystemMetrics &sample, int margin = 0) noexcept {
+    if (!available(metric, sample) || (metric == BarMetric::memory && sample.memory_total_decigib == 0)) {
+      return MetricSeverity::normal;
+    }
+
+    const int value = percent(metric, sample);
+    const auto rising = [&](int warning, int danger) noexcept {
+      return value + margin >= danger ? MetricSeverity::danger : value + margin >= warning ? MetricSeverity::warning
+                                                                                            : MetricSeverity::normal;
+    };
+    switch (metric) {
+    case BarMetric::cpu:
+      return rising(cpu_warning, cpu_danger);
+    case BarMetric::memory:
+      return rising(memory_warning, memory_danger);
+    case BarMetric::battery:
+      return value - margin <= battery_danger ? MetricSeverity::danger : value - margin <= battery_warning ? MetricSeverity::warning
+                                                                                                        : MetricSeverity::normal;
+    }
+
+    return MetricSeverity::normal;
+  }
+};
+
+// Each metric's severity, debounced: a CPU or memory peak must last
+// `confirm_samples` samples before it raises the level, and a level falls only
+// once the value is `release_margin` points past its threshold. The battery
+// moves slowly, so its rises are immediate.
+class MetricAlerts {
+public:
+  static constexpr std::uint8_t confirm_samples = 3;
+  static constexpr int release_margin = 5;
+
+  inline void update(const SystemMetrics &sample) noexcept {
+    for (std::size_t index = 0; index < states_.size(); ++index) {
+      const auto metric = static_cast<BarMetric>(index);
+      auto &state = states_[index];
+      if (!MetricLevels::available(metric, sample)) {
+        state = {};
+        continue;
+      }
+
+      const auto raw = MetricLevels::severity(metric, sample);
+      if (raw > state.current) {
+        state.pending_count = raw == state.pending ? state.pending_count + 1 : 1;
+        state.pending = raw;
+        if (metric == BarMetric::battery || state.pending_count >= confirm_samples) {
+          state.current = raw;
+          state.pending_count = 0;
+        }
+        continue;
+      }
+
+      state.pending_count = 0;
+      state.current = std::min(state.current, MetricLevels::severity(metric, sample, release_margin));
+    }
+  }
+
+  [[nodiscard]] inline MetricSeverity severity(BarMetric metric) const noexcept {
+    return states_[static_cast<std::size_t>(metric)].current;
+  }
+
+private:
+  struct State {
+    MetricSeverity current = MetricSeverity::normal;
+    MetricSeverity pending = MetricSeverity::normal;
+    std::uint8_t pending_count = 0;
+  };
+
+  std::array<State, 3> states_{};
+};
+
+}
+}
+
 // Interface: core/json_writer.cppm
 export {
 namespace telar::gui {

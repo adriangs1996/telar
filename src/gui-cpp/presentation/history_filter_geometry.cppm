@@ -16,6 +16,7 @@ export module telar.gui.presentation.history_filter_geometry;
 import std;
 
 export import telar.gui.core.metrics;
+export import telar.gui.core.json_writer;
 export import telar.gui.text.json_unsigned_integer;
 
 
@@ -32,23 +33,19 @@ import telar.gui.core.primitives;
 export {
 namespace telar::gui {
 
-enum class BarMetric : std::uint8_t {
-  cpu,
-  memory,
-  battery,
-};
-
 struct BarMetrics {
   static constexpr std::size_t value_capacity = 16;
-  static constexpr std::uint8_t cpu_warning = 90;
-  static constexpr std::uint8_t cpu_danger = 98;
-  static constexpr std::uint8_t battery_warning = 20;
-  static constexpr std::uint8_t battery_danger = 10;
+  static constexpr std::uint8_t cpu_warning = MetricLevels::cpu_warning;
+  static constexpr std::uint8_t cpu_danger = MetricLevels::cpu_danger;
+  static constexpr std::uint8_t memory_warning = MetricLevels::memory_warning;
+  static constexpr std::uint8_t memory_danger = MetricLevels::memory_danger;
+  static constexpr std::uint8_t battery_warning = MetricLevels::battery_warning;
+  static constexpr std::uint8_t battery_danger = MetricLevels::battery_danger;
   static constexpr std::uint16_t tenths_per_unit = 10;
   using Value = BoundedText<value_capacity>;
 
   [[nodiscard]] inline static bool available(BarMetric metric, const SystemMetrics &sample) noexcept {
-    return sample.revision != 0 && (metric != BarMetric::battery || sample.has_battery);
+    return MetricLevels::available(metric, sample);
   }
 
   [[nodiscard]] inline static std::string_view glyph(BarMetric metric) noexcept {
@@ -90,31 +87,32 @@ struct BarMetrics {
     return result;
   }
 
-  [[nodiscard]] inline static PaletteRole ink(BarMetric metric, const SystemMetrics &sample) noexcept {
-    if (!available(metric, sample)) {
+  [[nodiscard]] inline static std::uint8_t percent(BarMetric metric, const SystemMetrics &sample) noexcept {
+    return MetricLevels::percent(metric, sample);
+  }
+
+  [[nodiscard]] inline static MetricSeverity severity(BarMetric metric, const SystemMetrics &sample, int margin = 0) noexcept {
+    return MetricLevels::severity(metric, sample, margin);
+  }
+
+  [[nodiscard]] inline static PaletteRole ink(MetricSeverity severity) noexcept {
+    switch (severity) {
+    case MetricSeverity::normal:
       return PaletteRole::text;
-    }
-
-    switch (metric) {
-    case BarMetric::cpu:
-      if (sample.cpu_percent >= cpu_danger) {
-        return PaletteRole::red;
-      }
-
-      return sample.cpu_percent >= cpu_warning ? PaletteRole::yellow : PaletteRole::text;
-    case BarMetric::battery:
-      if (sample.battery_percent <= battery_danger) {
-        return PaletteRole::red;
-      }
-
-      return sample.battery_percent <= battery_warning ? PaletteRole::yellow : PaletteRole::text;
-    case BarMetric::memory:
-      return PaletteRole::text;
+    case MetricSeverity::warning:
+      return PaletteRole::yellow;
+    case MetricSeverity::danger:
+      return PaletteRole::red;
     }
 
     return PaletteRole::text;
   }
+
+  [[nodiscard]] inline static PaletteRole ink(BarMetric metric, const SystemMetrics &sample) noexcept {
+    return ink(severity(metric, sample));
+  }
 };
+
 
 }
 }

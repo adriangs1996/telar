@@ -728,7 +728,12 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   return node;
 }
 
+void TerminalItem::bypassInputMethod() noexcept {
+  input_method_bypassed_ = true;
+}
+
 void TerminalItem::keyPressEvent(QKeyEvent *event) {
+  input_method_bypassed_ = false;
   const auto *current = pane();
   if (current == nullptr || application_ == nullptr) {
     return;
@@ -812,6 +817,7 @@ bool TerminalItem::sendKeyPress(const QKeyEvent &event, const InputModes &modes)
 }
 
 void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
+  input_method_bypassed_ = false;
   if (application_ != nullptr && application_->handleBindingKey(*event, *this, !preedit_.isEmpty())) {
     event->accept();
 
@@ -875,7 +881,7 @@ QVariant TerminalItem::inputMethodQuery(Qt::InputMethodQuery query) const {
   const auto &cursor = current->screen.cursor();
   switch (query) {
   case Qt::ImEnabled:
-    return current->attached;
+    return current->attached && !input_method_bypassed_;
   case Qt::ImCursorRectangle:
     if (application_ != nullptr && application_->editsPrompt(pane_id_) && prompt_caret_.isValid()) {
       return prompt_caret_;

@@ -1705,6 +1705,8 @@ public:
       }
       shape.action_field = value.field("on_click").present() ? "on_click" : nullptr;
       shape.url = text(value, "url");
+      // A summary group shows one indicator for its metrics and meters, named by this text.
+      shape.text = text(value, "summary");
       break;
     case ComponentKind::key_value:
       shape.text = text(value, "key");
@@ -1787,7 +1789,7 @@ private:
       value.onlyFields({"ui", "priority"});
       break;
     case ComponentKind::group:
-      value.onlyFields({"ui", "mark", "icon", "tooltip", "on_click", "url", "priority", "tone"}, true);
+      value.onlyFields({"ui", "mark", "icon", "tooltip", "on_click", "url", "priority", "tone", "summary"}, true);
       break;
     case ComponentKind::key_value:
       value.onlyFields({"ui", "key", "value", "tone", "priority"});

@@ -215,6 +215,7 @@ public:
 
     sample_ = sample;
     history_.push(sample.cpu_percent);
+    alerts_.update(sample);
 
     return true;
   }
@@ -227,9 +228,14 @@ public:
     return history_;
   }
 
+  [[nodiscard]] inline MetricSeverity severity(BarMetric metric) const noexcept {
+    return alerts_.severity(metric);
+  }
+
 private:
   SystemMetrics sample_{};
   CpuHistory history_;
+  MetricAlerts alerts_;
 };
 
 }

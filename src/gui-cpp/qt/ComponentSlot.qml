@@ -16,7 +16,7 @@ Item {
     readonly property var hiddenRoots: visual.item?.hiddenRoots ?? []
     readonly property var fitNodes: visual.item?.fitNodes ?? []
     readonly property real overflowWidth: visual.item?.overflowWidth ?? 0
-    readonly property real gap: 16 * ratio
+    readonly property real gap: 12 * ratio
     readonly property real diagnosticWidth: 8 * ratio
     readonly property real errorWidth: (surface.error ?? "").length > 0 ? diagnosticWidth : 0
     implicitWidth: Math.max(visual.item?.implicitWidth ?? 0, errorWidth)

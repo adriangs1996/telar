@@ -108,6 +108,8 @@ public:
   [[nodiscard]] bool backgroundProvided() const noexcept;
   void setBackgroundProvided(bool provided);
   [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+  // The next key press skips the input method so a binding receives it, composing or not.
+  void bypassInputMethod() noexcept;
   [[nodiscard]] QString hoveredLink() const;
   [[nodiscard]] QVariantMap linkPreview() const;
   Q_INVOKABLE void setLinkPreviewBounds(const QRectF &bounds);
@@ -268,6 +270,7 @@ private:
   bool keyboard_ = false;
   bool background_provided_ = false;
   bool window_active_ = false;
+  bool input_method_bypassed_ = false;
 
   struct PressedKey {
     int key = 0;

@@ -81,22 +81,6 @@ NativeRoundedRectangle {
             }
             readonly property int maximumOverflowCount: [leftSlot.fitNodes, centerSlot.fitNodes, rightSlot.fitNodes, legacySlot.fitNodes].reduce((total, nodes) => total + nodes.filter(node => node.parent < 0).length, 0)
 
-            Repeater {
-                model: [leftSlot, centerSlot, rightSlot, legacySlot]
-
-                delegate: NativeRoundedRectangle {
-                    required property var modelData
-                    objectName: "statusCapsule"
-                    x: modelData.x - root.capsuleInset
-                    y: (components.height - height) / 2
-                    width: modelData.width + 2 * root.capsuleInset
-                    height: root.capsuleHeight
-                    radius: height / 2
-                    color: Qt.alpha(root.colors.chromeText, 0.07)
-                    visible: modelData.width > 0
-                }
-            }
-
             ComponentSlot {
                 id: leftSlot
                 controller: root.controller

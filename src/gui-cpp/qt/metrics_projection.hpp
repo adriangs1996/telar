@@ -36,16 +36,23 @@ inline QString paletteName(PaletteRole role) {
   return QString::fromLatin1(palette_names[static_cast<std::size_t>(role)]);
 }
 
-inline QVariantMap metricRecord(BarMetric metric, const SystemMetrics &sample) {
-  const auto ink = BarMetrics::ink(metric, sample);
+inline QVariantMap metricRecord(BarMetric metric, const HostMetrics &metrics) {
+  constexpr std::array names{"cpu", "memory", "battery"};
+  const auto &sample = metrics.sample();
+  const auto severity = metrics.severity(metric);
+  const auto ink = BarMetrics::ink(severity);
 
   return {
+      {QStringLiteral("name"), QString::fromLatin1(names[static_cast<std::size_t>(metric)])},
       {QStringLiteral("available"), BarMetrics::available(metric, sample)},
+      // A machine without a battery has nothing to measure; the summary leaves it out instead of showing it as unknown.
+      {QStringLiteral("absent"), metric == BarMetric::battery && sample.revision != 0 && !sample.has_battery},
       {QStringLiteral("glyph"), toQString(BarMetrics::glyph(metric))},
       {QStringLiteral("text"), toQString(BarMetrics::value(metric, sample).view())},
       {QStringLiteral("ink"), paletteName(ink)},
       {QStringLiteral("mark"), paletteName(ink == PaletteRole::text ? PaletteRole::subtext0 : ink)},
-      {QStringLiteral("percent"), metric == BarMetric::battery ? sample.battery_percent : sample.cpu_percent},
+      {QStringLiteral("percent"), BarMetrics::percent(metric, sample)},
+      {QStringLiteral("severity"), static_cast<int>(severity)},
   };
 }
 
@@ -57,9 +64,9 @@ inline QVariantMap metricsRecord(const HostMetrics &metrics) {
   }
 
   return {
-      {QStringLiteral("cpu"), metricRecord(BarMetric::cpu, metrics.sample())},
-      {QStringLiteral("memory"), metricRecord(BarMetric::memory, metrics.sample())},
-      {QStringLiteral("battery"), metricRecord(BarMetric::battery, metrics.sample())},
+      {QStringLiteral("cpu"), metricRecord(BarMetric::cpu, metrics)},
+      {QStringLiteral("memory"), metricRecord(BarMetric::memory, metrics)},
+      {QStringLiteral("battery"), metricRecord(BarMetric::battery, metrics)},
       {QStringLiteral("history"), history},
   };
 }

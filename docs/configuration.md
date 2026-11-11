@@ -670,8 +670,8 @@ Each position accepts one source:
 
 - `telar.bar.tabs()` renders the built-in tabs and is valid only once in the
   bottom bar.
-- `telar.bar.metrics()` renders the latest runtime CPU, used-memory and
-  optional battery values, the same as `telar.bar.static(telar.ui.metrics())`.
+- `telar.bar.metrics()` renders the runtime's battery, CPU and memory as one
+  system summary, the same as `telar.bar.static(telar.ui.metrics())`.
 - `telar.bar.machines()` renders a chip per machine the window holds, with
   its link state, attention and latest CPU sample, and nothing while the
   window holds only this machine.
@@ -696,13 +696,13 @@ alone, as in `ui.clock("%H:%M")`.
 | `ui.label` | `text` (shorthand), `tone`, and the segment style fields below |
 | `ui.icon` | `name` (shorthand), a built-in icon, or `glyph`, one grapheme of at most 16 bytes; `tone` |
 | `ui.mark` | `name` (shorthand): `claude`, `codex`, `pi` or `telar`, drawn from Telar's own artwork |
-| `ui.meter` | `value` 0..1, `label`, `text` (shown instead of the percentage), `marker` 0..1, `tone` |
+| `ui.meter` | `value` 0..1, `label`, `text` (shown instead of the percentage), `marker` 0..1, `tone`; in a bar it draws a ring before its label |
 | `ui.sparkline` | `values`, non-negative numbers, of which the last 120 are kept; `max` (their largest by default); `tone` |
 | `ui.badge` | `text` (shorthand), `tone` |
 | `ui.clock` | `format` (shorthand, default `%H:%M`), `tone` |
 | `ui.metric` | `name` (shorthand): `cpu`, `memory` or `battery` |
-| `ui.metrics(names)` | a group of metrics, `{ "cpu", "memory", "battery" }` by default |
-| `ui.group` | children in its list part, `mark` or `icon`, `tooltip`, `on_click`, `url` |
+| `ui.metrics(names, options)` | a summary group of metrics, `{ "battery", "cpu", "memory" }` by default; `options.summary` renames it, `false` lists the metrics one by one |
+| `ui.group` | children in its list part, `mark` or `icon`, `tooltip`, `on_click`, `url`, `summary` |
 
 Every component also accepts `priority`, 0 to 100. Components default to 50
 and a group's children inherit the group's priority.
@@ -715,12 +715,28 @@ use plain text and quiet shapes; colour is kept for attention.
 %A %b %B %%`; other bytes are copied. It needs no `every_ms`: the client
 repaints on the next minute, or second when the format shows seconds, and only
 while a clock is configured. `ui.metric` reads the runtime's latest sample; the
-CPU metric draws the recent samples as a sparkline and turns `warning` at 90%
-and `danger` at 98%, the battery at 20% and 10%. A host without a battery
-omits it.
+CPU metric turns `warning` at 90% and `danger` at 98%, memory at 85% and 95%
+of the total, the battery at 20% and 10%. A CPU or memory peak must last three
+samples before it raises a level, and a level clears only once the value is 5
+points past its threshold. A host without a battery omits it.
 
-A group draws its mark or icon and its children with even spacing, and Telar
-draws a hairline between a group and its neighbours. `tooltip` is a string or a
+A group with `summary`, a name such as `"system"`, shows one indicator for its
+metrics and meters instead of each of them: a ring with an arc per entry, in
+order clockwise from the top, each in its entry's state. While every entry is
+below its threshold the indicator shows the name; otherwise it shows the worst
+entry and its value, ties going to the earlier one, and `+N` for the others in
+`warning` or `danger`. Hovering or clicking it lists every entry. A meter's
+`tone` is its state, so a script can add arcs of its own:
+
+```lua
+local system = ui.metrics({ "battery", "cpu", "memory" })
+system[#system + 1] = ui.meter({ label = "gpu", value = gpu / 100, tone = gpu >= 90 and "warning" or "neutral" })
+```
+
+A group draws its mark or icon and its children with even spacing. In a bar, a
+group with `on_click` or `url` gets an outline, tinted yellow or red while one
+of its components is in `warning` or `danger`; groups without one stay plain
+text. `tooltip` is a string or a
 list of components, which may also use the panel blocks `heading`, `text`,
 `meter_row`, `kv` and `divider`. The native app shows it above the group while
 the pointer rests on it. `on_click` is a `telar.action` value run when the
@@ -730,7 +746,7 @@ component in `ui.group` to give it one.
 
 When the bottom bar is narrower than its components, Telar reduces the
 component with the lowest priority one step at a time, the later one on ties:
-a meter first drops its track, any other component disappears, and a group
+a meter first drops its ring, a summary disappears whole, any other component disappears, and a group
 disappears once none of its children is visible. A `warning` tone adds 20 to a
 component's priority while the bar is fitted and `danger` adds 40, so a
 component asking for attention is the last to go. Top-level components that

@@ -99,10 +99,17 @@ for kind, key in pairs({
 	end
 end
 
--- A group of built-in host metrics, each formatted by Telar.
-function telar.ui.metrics(names)
+-- The built-in host metrics as one summary: a ring with an arc per metric,
+-- named by the worst one when any crosses its threshold. Append meters to the
+-- returned group to add arcs of your own. `summary = false` lists the metrics
+-- one by one instead; a string renames the summary.
+function telar.ui.metrics(names, options)
+	options = options or {}
 	local group = { ui = "group" }
-	for index, name in ipairs(names or { "cpu", "memory", "battery" }) do
+	if options.summary ~= false then
+		group.summary = options.summary or "system"
+	end
+	for index, name in ipairs(names or { "battery", "cpu", "memory" }) do
 		group[index] = telar.ui.metric(name)
 	end
 	return group

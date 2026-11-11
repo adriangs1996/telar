@@ -4713,7 +4713,16 @@ return {api_version=2, client={keybindings={
       auto *terminal = terminalIn(window_->contentItem());
       QVERIFY(terminal != nullptr);
       terminal->forceActiveFocus();
-      QTest::keyClick(window_, command.key, Qt::AltModifier);
+      // macOS hands an Option dead key to the input method unless the focus item refuses it.
+      QVERIFY(terminal->inputMethodQuery(Qt::ImEnabled).toBool());
+      QKeyEvent override{QEvent::ShortcutOverride, command.key, Qt::AltModifier, QString{}};
+      QCoreApplication::sendEvent(window_, &override);
+      QVERIFY(override.isAccepted());
+      QVERIFY(!terminal->inputMethodQuery(Qt::ImEnabled).toBool());
+      const QPointer guarded{terminal};
+      QTest::keyPress(window_, command.key, Qt::AltModifier);
+      QVERIFY(guarded.isNull() || guarded->inputMethodQuery(Qt::ImEnabled).toBool());
+      QTest::keyRelease(window_, command.key, Qt::AltModifier);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != source_id, runtime_wait_ms);
       const auto expected = QStringLiteral("GUI_COMMAND_%1:%2:%3").arg(QString::fromUtf8(command.marker), source_directory, QString::fromUtf8(command.argument));
@@ -5757,34 +5766,29 @@ return {api_version=2, client={keybindings={
     const auto caption = QStringLiteral("Priority λ ").repeated(8);
     const auto *label = componentItem(QStringLiteral("label"), caption);
     QVERIFY(label != nullptr);
-    const auto cpu_items = [this] {
-      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("cpuMetric"));
+    const auto summary_rings = [this] {
+      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("systemSummaryRing"));
       items.removeIf([](const QQuickItem *item) {
         return !item->isVisible();
       });
       return items;
     };
-    QTRY_VERIFY_WITH_TIMEOUT(!cpu_items().isEmpty(), runtime_wait_ms);
-    const auto *cpu = cpu_items().front();
-    const auto *metrics = cpu->parentItem()->parentItem();
-    const auto ratio = metrics->property("ratio").toReal();
-    const auto full_width = metrics->implicitWidth();
+    QTRY_VERIFY_WITH_TIMEOUT(!summary_rings().isEmpty(), runtime_wait_ms);
+    const auto *summary = summary_rings().front()->parentItem();
+    const auto ratio = summary->property("ratio").toReal();
+    const auto full_width = summary->implicitWidth();
     constexpr qreal bar_spacing = 40;
-    // The bottom bar starts right of the full-height sidebar, and each slot sits in a capsule.
-    constexpr qreal capsule_padding = 48;
+    // The bottom bar starts right of the full-height sidebar; the summary fits or hides as one item.
     const auto bar_left = client_->windowGeometry().value(QStringLiteral("status")).toRectF().x();
-    const auto narrow_width = qCeil(bar_left + label->implicitWidth() + ((bar_spacing + capsule_padding) * ratio) + (full_width / 2));
+    const auto narrow_width = qCeil(bar_left + label->implicitWidth() + (bar_spacing * ratio) + (full_width / 2));
     QVERIFY(narrow_width >= window_->minimumWidth());
     window_->resize(narrow_width, original_size.height());
-    QTRY_VERIFY_WITH_TIMEOUT(metrics->width() < full_width, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(summary_rings().isEmpty(), runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("label"), caption) != nullptr, runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     const auto *retained = componentItem(QStringLiteral("label"), caption);
     const QRectF viewport{QPointF{}, QSizeF{window_->size()}};
     QVERIFY(viewport.contains(retained->mapRectToScene(retained->boundingRect())));
-    auto memory_items = test::visualItems(*window_->contentItem(), QStringLiteral("memoryMetric"));
-    QVERIFY(!memory_items.isEmpty());
-    QVERIFY(!memory_items.front()->isVisible());
     const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_BUILTIN_FIT_SCREENSHOT");
     if (!screenshot.isEmpty()) {
       QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
@@ -5829,8 +5833,9 @@ return {api_version=2, client={keybindings={
     QVERIFY(group != nullptr);
     const auto group_bounds = group->mapRectToScene(group->boundingRect());
     QVERIFY2(group_bounds.contains(bounds), qPrintable(QStringLiteral("Group %1 x %2 must contain child %3 x %4").arg(group->width()).arg(group->height()).arg(kept->width()).arg(kept->height())));
-    constexpr qreal group_padding = 6;
-    const auto padding = group_padding * group->property("ratio").toReal();
+    // A clickable bar group is an outlined pill padded by 9 px at the default chrome text.
+    constexpr qreal pill_padding = 9;
+    const auto padding = pill_padding * group->property("barScale").toReal();
     QCOMPARE(group->width(), kept->width() + (2 * padding));
     QCOMPARE(bounds.left() - group_bounds.left(), padding);
     QCOMPARE(group_bounds.right() - bounds.right(), padding);
@@ -5878,17 +5883,17 @@ return {api_version=2, client={keybindings={
       QVERIFY(group != nullptr);
       const bool marked = index % 2 != 0;
       const bool empty = index >= configurations.size() / 2;
-      constexpr qreal padding_pixels = 6;
+      // A group without a click stays plain text: no outline and no side padding.
+      constexpr qreal gap_pixels = 6;
       constexpr qreal mark_pixels = 14;
-      const auto ratio = group->property("ratio").toReal();
-      const auto padding = padding_pixels * ratio;
-      const auto mark_width = marked ? mark_pixels * ratio : 0;
+      const auto gap = gap_pixels * group->property("ratio").toReal();
+      const auto mark_width = marked ? mark_pixels * group->property("barScale").toReal() : 0;
       const auto fit_nodes = group->property("fitNodes").toList();
       QVERIFY(!fit_nodes.isEmpty());
       const auto descriptor = fit_nodes.front().toMap();
-      QCOMPARE(descriptor.value(QStringLiteral("width")).toReal(), (2 * padding) + (marked ? mark_width : -padding));
-      QCOMPARE(descriptor.value(QStringLiteral("childGap")).toReal(), padding);
-      QCOMPARE(descriptor.value(QStringLiteral("leadingGap")).toReal(), padding);
+      QCOMPARE(descriptor.value(QStringLiteral("width")).toReal(), mark_width);
+      QCOMPARE(descriptor.value(QStringLiteral("childGap")).toReal(), gap);
+      QCOMPARE(descriptor.value(QStringLiteral("leadingGap")).toReal(), marked ? gap : 0);
       if (empty) {
         QCOMPARE(group->width(), descriptor.value(QStringLiteral("width")).toReal());
         continue;
@@ -5900,9 +5905,9 @@ return {api_version=2, client={keybindings={
       const auto group_bounds = group->mapRectToScene(group->boundingRect());
       const auto first_bounds = first->mapRectToScene(first->boundingRect());
       const auto second_bounds = second->mapRectToScene(second->boundingRect());
-      QCOMPARE(first_bounds.left() - group_bounds.left(), padding + (marked ? mark_width + padding : 0));
-      QCOMPARE(second_bounds.left() - first_bounds.right(), padding);
-      QCOMPARE(group_bounds.right() - second_bounds.right(), padding);
+      QCOMPARE(first_bounds.left() - group_bounds.left(), marked ? mark_width + gap : 0);
+      QCOMPARE(second_bounds.left() - first_bounds.right(), gap);
+      QCOMPARE(group_bounds.right() - second_bounds.right(), qreal{0});
       const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_GROUP_SPACING_SCREENSHOT");
       if (marked && !screenshot.isEmpty()) {
         QVERIFY(window_->grabWindow().save(screenshot, "PNG"));

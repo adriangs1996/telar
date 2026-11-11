@@ -416,6 +416,10 @@ bool KeyBindings::eventFilter(QObject *watched, QEvent *event) {
   }
 
   if (event->type() == QEvent::ShortcutOverride && application_.dialog().isEmpty() && router_.wantsBinding(capture(*key, *recipient))) {
+    // A dead key (Option+N on macOS) would otherwise start a composition and never arrive as a key press.
+    if (auto *terminal = qobject_cast<TerminalItem *>(recipient); terminal != nullptr) {
+      terminal->bypassInputMethod();
+    }
     event->accept();
 
     return true;

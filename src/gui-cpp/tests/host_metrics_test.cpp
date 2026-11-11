@@ -126,11 +126,45 @@ void connectionReplacementAcceptsARevisionRestart() {
 
 }
 
+void alertsDebouncePeaksAndReleaseWithAMargin() {
+  HostMetrics metrics;
+  std::uint64_t revision = 0;
+  const auto cpu = [&](std::uint8_t percent, std::optional<std::uint8_t> battery = std::nullopt) {
+    require(metrics.update(hostSample(++revision, percent, 0, battery)), "Each sample must be accepted");
+    return metrics.severity(BarMetric::cpu);
+  };
+  require(cpu(MetricLevels::cpu_danger) == MetricSeverity::normal, "One CPU peak must not raise an alert");
+  require(cpu(MetricLevels::cpu_danger) == MetricSeverity::normal, "Two CPU peaks must not raise an alert");
+  require(cpu(MetricLevels::cpu_danger) == MetricSeverity::danger, "A peak held for three samples must raise the alert");
+  require(cpu(MetricLevels::cpu_danger - 1) == MetricSeverity::danger, "A value just under the danger threshold must keep the alert");
+  require(cpu(MetricLevels::cpu_danger - MetricAlerts::release_margin - 1) == MetricSeverity::warning, "Clearing the danger margin must fall to the level the value still holds");
+  require(cpu(MetricLevels::cpu_warning - MetricAlerts::release_margin - 1) == MetricSeverity::normal, "Clearing the warning margin must end the alert");
+  require(cpu(MetricLevels::cpu_danger) == MetricSeverity::normal && cpu(1) == MetricSeverity::normal && cpu(MetricLevels::cpu_danger) == MetricSeverity::normal, "An interrupted peak must start counting again");
+
+  static_cast<void>(cpu(0, MetricLevels::battery_danger));
+  require(metrics.severity(BarMetric::battery) == MetricSeverity::danger, "A low battery must alert at once");
+  static_cast<void>(cpu(0, MetricLevels::battery_danger + MetricAlerts::release_margin));
+  require(metrics.severity(BarMetric::battery) == MetricSeverity::danger, "A battery inside the margin must keep its alert");
+  static_cast<void>(cpu(0));
+  require(metrics.severity(BarMetric::battery) == MetricSeverity::normal, "A machine without a battery must have no battery alert");
+}
+
+void memoryAlertsUseTheShareOfTheTotal() {
+  auto sample = hostSample(1, 0, 150);
+  require(MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::normal, "Memory without a total must not alert");
+  sample.memory_total_decigib = 160;
+  require(MetricLevels::percent(BarMetric::memory, sample) == 94 && MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::warning, "15 of 16 GB must be a memory warning");
+  sample.memory_used_decigib = 155;
+  require(MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::danger, "15.5 of 16 GB must be a memory danger");
+}
+
 int main() {
   try {
     revisionsKeepTheLatestSampleAndHistory();
     historyKeepsOnlyTheLastSamplesInOrder();
     connectionReplacementAcceptsARevisionRestart();
+    alertsDebouncePeaksAndReleaseWithAMargin();
+    memoryAlertsUseTheShareOfTheTotal();
 
     return 0;
   } catch (const std::exception &error) {
