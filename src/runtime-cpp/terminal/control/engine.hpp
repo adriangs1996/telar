@@ -108,12 +108,14 @@ public:
 
   void ordinary(std::span<const std::uint8_t> input) {
     history_erased_ = false;
+    homed_ = false;
     responses_.release();
     state_.write(input);
   }
 
   [[gnu::noinline]] std::size_t ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
     history_erased_ = false;
+    homed_ = false;
     const auto remaining = input.subspan(offset);
     if (ascii_detail::eligible(remaining) && state_.canWriteAscii()) {
       return offset + ordinaryAscii(remaining);
@@ -166,8 +168,9 @@ public:
     if (awaiting_media_) {
       return false;
     }
-    // A retry already ran the sequence, and whatever it left of the flag stays.
+    // A retry already ran the sequence, and whatever it left of the flags stays.
     const bool history_erased = !prepared_ && std::exchange(history_erased_, false);
+    const bool homed = !prepared_ && std::exchange(homed_, false);
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == 4 || operation == 5) {
@@ -188,7 +191,7 @@ public:
       reply_.clear();
       switch (sequence.kind) {
       case Kind::escape: escape(sequence); break;
-      case Kind::csi: csi(sequence, history_erased); break;
+      case Kind::csi: csi(sequence, history_erased, homed); break;
       case Kind::dcs: dcs(sequence); break;
       case Kind::osc: osc(sequence); break;
       case Kind::apc: apc(sequence); break;
@@ -334,7 +337,7 @@ private:
     }
   }
 
-  void csi(Sequence sequence, bool history_erased) {
+  void csi(Sequence sequence, bool history_erased, bool homed) {
     const auto body = sequence.body();
     if (body == "5n") {
       operatingStatus();
@@ -361,11 +364,12 @@ private:
     case 'f':
       if (modifiers.empty()) {
         history_erased_ = history_erased;
+        homed_ = parameters.count <= 2 && std::all_of(parameters.values.begin(), parameters.values.begin() + parameters.count, [](std::uint16_t value) { return value <= 1; });
       }
       break;
     case 'J':
       if (modifiers.empty() && parameters.count <= 1) {
-        eraseDisplay(sequence, parameters.count == 0 ? 0 : parameters.values[0], history_erased);
+        eraseDisplay(sequence, parameters.count == 0 ? 0 : parameters.values[0], history_erased, homed);
         return;
       }
       break;
@@ -457,14 +461,29 @@ private:
   // `clear` erases the scrollback before the screen (ED 3, CUP, ED 2), and Ghostty moves a screen
   // whose last line is a prompt into the scrollback on ED 2 rather than erase it. The scrollback
   // is erased again after it, so nothing of the screen the program asked to erase stays.
-  void eraseDisplay(Sequence sequence, unsigned mode, bool history_erased) {
+  // busybox's `clear` moves home and erases below it instead (CUP, ED 0): on the primary screen
+  // that is ED 2, sent as such so a prompt's screen moves into the scrollback the same way. Only
+  // right after the CUP: a line editor erases below its prompt at the top row too.
+  void eraseDisplay(Sequence sequence, unsigned mode, bool history_erased, bool homed) {
     static constexpr std::array<std::uint8_t, 4> erase_history{0x1b, '[', '3', 'J'};
-    passthrough(sequence);
+    static constexpr std::array<std::uint8_t, 4> erase_screen{0x1b, '[', '2', 'J'};
+    if (mode == 0 && homed && homeOnPrimary()) {
+      responses_.release();
+      state_.write(erase_screen);
+      mode = 2;
+    } else {
+      passthrough(sequence);
+    }
     if (mode == 3) {
       history_erased_ = true;
     } else if (mode == 2 && history_erased) {
       state_.write(erase_history);
     }
+  }
+
+  bool homeOnPrimary() const {
+    const auto cursor = state_.cursor();
+    return cursor.column == 0 && cursor.row == 0 && state_.primaryScreen();
   }
 
   void privateModes(const Parameters &parameters) {
@@ -839,6 +858,8 @@ private:
   bool clipboard_before_reply_ = false;
   // The scrollback was just erased, with at most the cursor moved since.
   bool history_erased_ = false;
+  // The last sequence moved the cursor home (CUP).
+  bool homed_ = false;
   std::array<bool, desktop_modes.size()> saved_desktop_modes_{};
   std::size_t capability_offset_ = 0;
   bool paste_events_ = false;

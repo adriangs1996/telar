@@ -609,6 +609,45 @@ void sessionBlocks(SystemAllocator &memory) {
   check(shown().size() == 4 && shown()[3].nest == CommandBlockNest::none);
 }
 
+// `clear` at a prompt takes the commands off the screen, whichever way it erases it: ncurses'
+// erases the scrollback too, and its blocks go; busybox's (CUP, ED 0) keeps the scrollback,
+// where the screen moves with its blocks, so the commands after it never land on their rows.
+void clearedBlocks(SystemAllocator &memory) {
+  for (const std::string_view clear : {"\x1b[H\x1b[2J\x1b[3J", "\x1b[H\x1b[J"}) {
+    Terminal<SystemAllocator> terminal{memory, TerminalSize{40, 12, 8, 16}};
+    CommandBlocks<SystemAllocator> blocks{memory, terminal};
+    const auto now = std::chrono::steady_clock::now();
+    // The shell's marks reach the terminal too, which flags its prompt rows.
+    const auto mark = [&](char action, std::string_view sequence) {
+      terminal.feed(bytes(sequence));
+      blocks.mark(action, now);
+    };
+    const auto run = [&](std::string_view line, std::string_view output) {
+      mark('A', "\x1b]133;A\x07");
+      mark('B', "$ \x1b]133;B\x07");
+      terminal.feed(bytes(std::string{line} + "\r\n"));
+      mark('C', "\x1b]133;C\x07");
+      terminal.feed(bytes(output));
+      terminal.feed(bytes("\x1b]133;D;0\x07"));
+      blocks.finished(0, now);
+      blocks.follow();
+    };
+    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    const auto shown = [&] { return blocks.message(7, storage).blocks; };
+
+    run("ls", "a\r\nb\r\n");
+    run("pwd", "/\r\n");
+    run("clear", clear);
+    run("echo", "\r\n");
+    const auto kept = shown();
+    check(kept.back().command == "echo");
+    check(clear.ends_with("3J") ? kept.size() == 1 : kept.size() == 4);
+    for (std::size_t index = 1; index < kept.size(); ++index) {
+      check(kept[index].row >= kept[index - 1].row + kept[index - 1].rows);
+    }
+  }
+}
+
 // The repository a shell works in, read on the git worker.
 void gitContext() {
   if (!findProgram("git")) {
@@ -794,6 +833,7 @@ void testShellIntegration() {
   sshArguments(memory);
   paneState(memory);
   sessionBlocks(memory);
+  clearedBlocks(memory);
   sshSession(memory);
   gitContext();
   words();

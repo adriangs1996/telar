@@ -110,6 +110,12 @@ public:
     });
   }
 
+  bool primaryScreen() const {
+    GhosttyTerminalScreen screen{};
+    checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &screen));
+    return screen == GHOSTTY_TERMINAL_SCREEN_PRIMARY;
+  }
+
   Margins margins() const {
     return margin_cache_.get(epoch_, [&] {
       Margins result{};
