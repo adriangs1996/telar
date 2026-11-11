@@ -334,7 +334,7 @@ QString PromptIsland::program() const {
 
 QVariantMap PromptIsland::lastBlock() const {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
-  if (pane == nullptr || pane->blocks.empty() || pane->blocks.back().state == CommandBlockState::running) {
+  if (pane == nullptr || pane->blocks.empty() || pane->blocks.back().state == CommandBlockState::running || pane->blocks.back().state == CommandBlockState::session) {
     return {};
   }
   const auto &block = pane->blocks.back();
@@ -386,7 +386,8 @@ QString PromptIsland::directory() const {
   if (pane == nullptr) {
     return {};
   }
-  const auto cwd = std::string_view{pane->cwd};
+  // A remote shell works on its host: this one's directory, ssh's, would mislead.
+  const auto cwd = pane->shell.remote ? pane->shell.directory : std::string_view{pane->cwd};
   return QString::fromUtf8(cwd.data(), static_cast<qsizetype>(cwd.size()));
 }
 

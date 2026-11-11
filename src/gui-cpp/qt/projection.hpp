@@ -314,6 +314,7 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   const bool transparent_panel = configuration.background_opacity < 1;
   const auto panel_background = transparent_panel ? QColor{Qt::transparent} : toQColor(theme.chromeColor(PaletteRole::panel_bg));
   QVariantMap colors;
+  colors.insert(QStringLiteral("theme"), static_cast<int>(theme.name));
   colors.insert(QStringLiteral("background"), toQColor(theme.background));
   colors.insert(QStringLiteral("panelBackground"), panel_background);
   const auto surfaces = ChromeSurfaces::derive(theme, configuration.background_opacity, configuration.opacity);

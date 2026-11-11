@@ -69,7 +69,11 @@ int TerminalItem::indexAt(QPointF position) const noexcept {
   }
 
   const auto column = static_cast<int>(std::clamp(std::floor(position.x() / font_.cell.width()), 0.0, static_cast<double>(current->screen.columns() - 1)));
-  const auto row = static_cast<int>(std::clamp(std::floor(position.y() / font_.cell.height()), 0.0, static_cast<double>(current->screen.rows() - 1)));
+  // Rows drawn shifted up, or from beyond the screen, are the screen's own where it holds them;
+  // elsewhere the nearest of its rows.
+  const auto drawn = (position.y() + shift_) / font_.cell.height();
+  const auto screen_row = screenRowAt(drawn);
+  const auto row = screen_row ? static_cast<int>(*screen_row) : static_cast<int>(std::clamp(std::floor(drawn), 0.0, static_cast<double>(current->screen.rows() - 1)));
 
   return (row * current->screen.columns()) + column;
 }
@@ -270,6 +274,12 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
   }
 
   application_->pointerDispatcher().observeTerminalScroll(*this);
+  if (scrollWheel(*event)) {
+    event->accept();
+
+    return;
+  }
+
   const auto lines = wheel_.consume(scrollSample(*event, font_.cell.height()));
   const auto rows = lines * WheelAccumulator::rows_per_line;
   if (lines != 0 && !application_->handleCopyPointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {

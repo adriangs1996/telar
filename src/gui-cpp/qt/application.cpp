@@ -826,6 +826,7 @@ void Application::presentChange(Change change) {
     emit stateChanged();
     break;
   case Change::copy_mode:
+    emit copySearchChanged();
     emit stateChanged();
     if (const auto &copy = session().copyMode().state()) {
       emit terminalChanged(copy->pane_id);
@@ -1494,10 +1495,16 @@ void Application::showDialog(const QString &kind, const QString &text) {
   }
 
   // The focused pane's prompt line hosts the history and path searches while its shell waits
-  // for a command; anywhere else they open as a dialog.
+  // for a command; anywhere else they open as a dialog. The scrollback search lives in the
+  // line of the pane copy mode reads, whatever runs there.
   const auto *focused = session().focusedPane();
   const bool searching = kind == QLatin1StringView("history") || kind == QLatin1StringView("paths");
-  island_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
+  const auto &copy = session().copyMode().state();
+  if (kind == QLatin1StringView("copy-search") && copy) {
+    island_search_pane_ = copy->pane_id;
+  } else {
+    island_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
+  }
 
   dialog_ = kind;
   dialog_text_ = text;

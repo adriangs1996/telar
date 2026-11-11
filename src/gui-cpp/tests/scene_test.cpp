@@ -289,6 +289,20 @@ public:
     update();
   }
 
+  // Draws `rows` in place of the screen's, as a scrolled or folded view does.
+  void drawRows(std::vector<TerminalRow> rows) {
+    rows_ = std::move(rows);
+    frame_.rows = rows_;
+    update();
+  }
+
+  // Draws each row `offsets` below its place, as while a fold opens or closes.
+  void offsetRows(std::vector<float> offsets) {
+    offsets_ = std::move(offsets);
+    frame_.row_offsets = offsets_;
+    update();
+  }
+
   void hover(const LinkMatch *match) {
     frame_.hovered_link = match;
     update();
@@ -351,6 +365,8 @@ protected:
 
 private:
   TerminalPresentation frame_;
+  std::vector<TerminalRow> rows_;
+  std::vector<float> offsets_;
   std::optional<std::vector<BackgroundRectangle>> reference_backgrounds_;
   bool fresh_scene_ = false;
 };
@@ -439,6 +455,33 @@ public:
 
   void useFreshScene() {
     item_.useFreshScene();
+  }
+
+  // Draws the screen's rows from `first` on, then `kept` rows as if the runtime sent them
+  // apart from the screen.
+  void drawShiftedRows(std::size_t first, std::span<const std::vector<CellValue>> kept) {
+    kept_ = {kept.begin(), kept.end()};
+    std::vector<TerminalRow> rows;
+    for (auto row = first; row < screen_.rows(); ++row) {
+      rows.push_back({.cells = screen_.row(row), .revision = screen_.rowRevision(row), .source = row, .screen_row = static_cast<std::int32_t>(row)});
+    }
+    for (std::size_t index = 0; index < kept_.size(); ++index) {
+      rows.push_back({.cells = kept_[index], .revision = index + 1, .source = (std::uint64_t{1} << 63U) | index});
+    }
+    item_.drawRows(std::move(rows));
+  }
+
+  // The screen's rows from `first` on drawn a row lower, as under a fold closing.
+  void lowerRowsFrom(std::size_t first) {
+    std::vector<float> offsets(screen_.rows(), 0.0F);
+    for (auto row = first; row < offsets.size(); ++row) {
+      offsets[row] = static_cast<float>(font_.cell.height());
+    }
+    item_.offsetRows(std::move(offsets));
+  }
+
+  [[nodiscard]] const Screen<ApplicationAllocator> &screen() const noexcept {
+    return screen_;
   }
 
   void replacePane() {
@@ -650,6 +693,7 @@ private:
   ApplicationAllocator memory_;
   GraphicsBudget budget_;
   Screen<ApplicationAllocator> screen_;
+  std::vector<std::vector<CellValue>> kept_;
   GraphicsStore<ApplicationAllocator> graphics_;
   Configuration configuration_;
   QString preedit_;
@@ -673,6 +717,47 @@ private:
 
   Q_SLOT static void scrolledOpticalRowsMatchFreshScene() {
     checkScrolledRows(true);
+  }
+
+  // Rows drawn a row below their places, as under a fold closing, leave their first place
+  // empty: the same picture as a screen with an empty row there.
+  Q_SLOT static void offsetRowsMatchTheScreenTheyStandFor() {
+    constexpr std::uint32_t offset = 20;
+    constexpr std::size_t lowered = 2;
+    SceneFixture reference{CursorShape::block, false};
+    SceneFixture moved{CursorShape::block, false};
+    const auto cells = scrollCells(offset);
+    auto expected = cells;
+    for (std::size_t row = scroll_rows; row-- > lowered + 1;) {
+      std::copy_n(cells.begin() + static_cast<std::ptrdiff_t>((row - 1) * scroll_columns), scroll_columns, expected.begin() + static_cast<std::ptrdiff_t>(row * scroll_columns));
+    }
+    for (std::size_t column = 0; column < scroll_columns; ++column) {
+      expected[(lowered * scroll_columns) + column] = Cell{.text = byteView(" ")};
+    }
+    reference.setGrid(expected, scroll_columns, {}, {.total_rows = 100, .offset = offset});
+    moved.setGrid(cells, scroll_columns, {}, {.total_rows = 100, .offset = offset});
+    moved.lowerRowsFrom(lowered);
+    QVERIFY2(moved.capture() == reference.capture(), "rows drawn below their places must leave the rows above them as they were");
+  }
+
+  // A view a row further down than its screen draws the screen's rows moved up and the row
+  // after them from the rows kept apart: the same picture as a screen holding them all.
+  Q_SLOT static void drawnRowsMatchTheScreenTheyStandFor() {
+    constexpr std::uint32_t offset = 11;
+    SceneFixture reference{CursorShape::block, false};
+    SceneFixture drawn{CursorShape::block, false};
+    const auto expected = scrollCells(offset);
+    reference.setGrid(expected, scroll_columns, {}, {.total_rows = 100, .offset = offset});
+    const auto earlier = scrollCells(offset - 1);
+    drawn.setGrid(earlier, scroll_columns, {}, {.total_rows = 100, .offset = offset - 1});
+    const auto after = scrollCells(offset + scroll_rows - 1);
+    std::vector<CellValue> last;
+    for (std::size_t column = 0; column < scroll_columns; ++column) {
+      last.emplace_back(after[column]);
+    }
+    const std::array kept{last, last};
+    drawn.drawShiftedRows(1, kept);
+    QVERIFY2(drawn.capture() == reference.capture(), "rows drawn from their sources must look as the screen holding them does");
   }
 
   static void checkScrolledRows(bool optical) {

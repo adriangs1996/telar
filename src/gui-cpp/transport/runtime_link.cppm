@@ -134,13 +134,22 @@ namespace telar::gui {
 struct RuntimeProtocol {
   // Schema 88 only adds hold_tab (0x47); existing schema 87 message layouts are unchanged.
   static constexpr SchemaId schema87{'8', '7', '6', 'b', '4', '8', '0', 'd'};
+  // The schema before scrollback rows: no ReadPaneRows or SearchPaneRows, and its runtime
+  // sends no PaneRows or PaneScrollback. Its other layouts are the current schema's.
+  static constexpr SchemaId cqp00002{'c', 'q', 'p', '0', '0', '0', '0', '2'};
 
   [[nodiscard]] inline static bool supports(const SchemaId &schema) noexcept {
-    return schema == handshake::schema_id || schema == schema87;
+    return schema == handshake::schema_id || schema == cqp00002 || schema == schema87;
   }
 
   [[nodiscard]] inline static bool supports(const SchemaId &schema, ClientTag tag) noexcept {
-    return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab);
+    const bool current = tag == ClientTag::read_pane_rows || tag == ClientTag::search_pane_rows || tag == ClientTag::pane_command || tag == ClientTag::configure_shell_prompt;
+    return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!current || readsRows(schema));
+  }
+
+  // Whether the runtime reads rows of a scrollback by their stable number.
+  [[nodiscard]] inline static bool readsRows(const SchemaId &schema) noexcept {
+    return schema == handshake::schema_id;
   }
 
   [[nodiscard]] inline static std::optional<SchemaId> retry(std::span<const Byte> payload, const SchemaId &requested) {

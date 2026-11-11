@@ -415,15 +415,74 @@ namespace telar::runtime {
 class TextSearch {
 public:
   inline explicit TextSearch(const SearchPane &request, std::uint64_t revision)
-      : request_id(request.request_id),
-        pane_id(request.pane_id),
+      : TextSearch(request.request_id, request.pane_id, request.needle, {}, revision) {}
+
+  // A search of the rows from `first_row` to `last_row` only.
+  inline explicit TextSearch(const SearchPaneRows &request, std::uint64_t revision)
+      : TextSearch(request.request_id, request.pane_id, request.needle, {.first = request.first_row, .last = request.last_row}, revision) {}
+
+  inline bool advance(GhosttyTerminal terminal, std::uint64_t revision) {
+    if (revision != revision_) {
+      throw EncodingError{"Pane changed during search"};
+    }
+
+    if (needle_length_ == 0) {
+      return true;
+    }
+
+    if (!started_) {
+      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &next_row_));
+      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLS, &columns_));
+      next_row_ = std::min<std::size_t>(next_row_, static_cast<std::size_t>(rows_.last) + 1);
+      first_row_ = std::max<std::size_t>(rows_.first, next_row_ > maximum_rows ? next_row_ - maximum_rows : 0);
+      truncated_ = first_row_ > rows_.first;
+      first_row_ = std::min(first_row_, next_row_);
+      started_ = true;
+    }
+
+    if (Clock::now() >= deadline_) {
+      truncated_ = true;
+      return true;
+    }
+
+    for (std::size_t turn = 0; turn < rows_per_turn && next_row_ > first_row_; ++turn) {
+      if (!searchRow(terminal, static_cast<std::uint32_t>(--next_row_))) {
+        return true;
+      }
+    }
+
+    return next_row_ == first_row_;
+  }
+
+  inline PaneMatches result() {
+    std::reverse(matches_.begin(), matches_.begin() + count_);
+    return PaneMatches{.request_id = request_id,
+                       .pane_id = pane_id,
+                       .truncated = truncated_,
+                       .matches = std::span<const PaneMatch>{matches_}.first(count_)};
+  }
+
+  std::uint64_t request_id;
+  std::uint64_t pane_id;
+
+private:
+  // The rows a search may read, both ends included.
+  struct Rows {
+    std::uint32_t first = 0;
+    std::uint32_t last = std::numeric_limits<std::uint32_t>::max();
+  };
+
+  inline TextSearch(std::uint64_t request, std::uint64_t pane, std::string_view needle, Rows rows, std::uint64_t revision)
+      : request_id(request),
+        pane_id(pane),
+        rows_(rows),
         revision_(revision),
         deadline_(Clock::now() + deadline_budget) {
-    if (request.needle.size() > needle_.size()) {
+    if (needle.size() > needle_.size()) {
       throw EncodingError{"Search needle exceeds the wire limit"};
     }
-    validateUtf8(request.needle);
-    auto text = request.needle;
+    validateUtf8(needle);
+    auto text = needle;
     while (!text.empty()) {
       const auto first = static_cast<Byte>(text.front());
       const std::size_t length = first < 0x80 ? 1 : first < 0xe0 ? 2
@@ -456,49 +515,6 @@ public:
     }
   }
 
-  inline bool advance(GhosttyTerminal terminal, std::uint64_t revision) {
-    if (revision != revision_) {
-      throw EncodingError{"Pane changed during search"};
-    }
-
-    if (needle_length_ == 0) {
-      return true;
-    }
-
-    if (!started_) {
-      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &next_row_));
-      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLS, &columns_));
-      first_row_ = next_row_ > maximum_rows ? next_row_ - maximum_rows : 0;
-      truncated_ = first_row_ != 0;
-      started_ = true;
-    }
-
-    if (Clock::now() >= deadline_) {
-      truncated_ = true;
-      return true;
-    }
-
-    for (std::size_t turn = 0; turn < rows_per_turn && next_row_ > first_row_; ++turn) {
-      if (!searchRow(terminal, --next_row_)) {
-        return true;
-      }
-    }
-
-    return next_row_ == first_row_;
-  }
-
-  inline PaneMatches result() {
-    std::reverse(matches_.begin(), matches_.begin() + count_);
-    return PaneMatches{.request_id = request_id,
-                       .pane_id = pane_id,
-                       .truncated = truncated_,
-                       .matches = std::span<const PaneMatch>{matches_}.first(count_)};
-  }
-
-  std::uint64_t request_id;
-  std::uint64_t pane_id;
-
-private:
   inline std::uint32_t normalize(std::uint32_t codepoint) const noexcept {
     return fold_ascii_ && codepoint >= 'A' && codepoint <= 'Z' ? codepoint + ('a' - 'A') : codepoint;
   }
@@ -566,6 +582,7 @@ private:
   std::array<std::uint32_t, 128> needle_{};
   std::array<std::size_t, 128> prefix_{};
   std::array<PaneMatch, 256> matches_{};
+  Rows rows_;
   std::uint64_t revision_;
   Clock::time_point deadline_;
   std::size_t needle_length_ = 0;

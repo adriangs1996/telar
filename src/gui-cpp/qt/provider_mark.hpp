@@ -18,6 +18,7 @@ class ProviderMark : public QQuickItem {
   Q_PROPERTY(int provider READ provider WRITE setProvider NOTIFY providerChanged)
   Q_PROPERTY(bool telarMark READ telarMark WRITE setTelarMark NOTIFY telarMarkChanged)
   Q_PROPERTY(bool monochrome READ monochrome WRITE setMonochrome NOTIFY monochromeChanged)
+  Q_PROPERTY(int theme READ theme WRITE setTheme NOTIFY themeChanged)
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
   Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY ratioChanged)
 
@@ -35,6 +36,8 @@ public:
   void setTelarMark(bool enabled);
   [[nodiscard]] bool monochrome() const noexcept;
   void setMonochrome(bool monochrome);
+  [[nodiscard]] int theme() const noexcept;
+  void setTheme(int theme);
   [[nodiscard]] QColor color() const;
   void setColor(const QColor &color);
   [[nodiscard]] qreal ratio() const noexcept;
@@ -44,6 +47,7 @@ signals:
   void providerChanged();
   void telarMarkChanged();
   void monochromeChanged();
+  void themeChanged();
   void colorChanged();
   void ratioChanged();
 
@@ -57,6 +61,7 @@ private:
   AgentProvider provider_ = AgentProvider::unknown;
   bool telar_mark_ = false;
   bool monochrome_ = false;
+  int theme_ = -1;
   QColor color_;
   qreal ratio_ = 1;
   bool dirty_ = true;

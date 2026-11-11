@@ -320,7 +320,9 @@ Item {
                 // command beside the pane to reach it.
                 CommandSeparators {
                     view: terminal
-                    transform: Translate { y: -viewport.rise }
+                    // With the rows, which a view scrolled by pixels draws shifted up.
+                    transform: Translate { y: -viewport.rise - terminal.scrollShift }
+                    pinnedOffset: viewport.rise + terminal.scrollShift
                     colors: root.application.colors
                     grid: root.application.windowGeometry.typography.grid
                     ratio: root.ratio
@@ -343,6 +345,19 @@ Item {
                     terminal: terminal
                     ratio: root.ratio
                     focused: pane.record.focused
+                }
+
+                // Back to the live end, above the docked line.
+                JumpToEnd {
+                    view: terminal
+                    colors: root.application.colors
+                    grid: root.application.windowGeometry.typography.grid
+                    ratio: root.ratio
+                    moving: promptLine.moving
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: promptLine.dockedHeight + 10 * root.ratio
+                    z: 3
                 }
 
                 CommandRail {

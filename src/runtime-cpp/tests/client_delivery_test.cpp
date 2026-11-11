@@ -227,6 +227,51 @@ void shellState() {
   check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
 }
 
+// How the scrollback numbers its rows reaches each attachment once per change, ahead of its
+// cells; a viewport above the bottom moves up with the rows the scrollback dropped.
+void scrollbackOrigin() {
+  static_assert(DeliveryLane::scrollback < DeliveryLane::cells);
+  SystemAllocator memory;
+  RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/scrollback-delivery.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer peer{memory, model, clients, ClientRole::interactive};
+  auto &client = peer.session();
+  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
+  const auto now = std::chrono::steady_clock::now();
+  auto timeout = std::chrono::nanoseconds::max();
+  check(AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::scrollback, now, timeout));
+  const auto first = peer.receive<PaneScrollback>();
+  check(first.pane_id == pane.id && first.generation == pane.terminal.scrollbackGeneration() && first.trimmed == 0);
+  check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::scrollback, now, timeout));
+
+  const std::size_t limit = 1;
+  checkGhostty(ghostty_terminal_set(pane.terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit));
+  pane.terminal.followScrollback();
+  client.attachment(pane.id)->viewport = 50'000;
+  std::string lines;
+  for (std::size_t line = 0; line < 8; ++line) {
+    lines += "scrollback line\r\n";
+  }
+  for (std::size_t batch = 0; batch < 4000 && pane.terminal.scrollbackTrimmed() == 0; ++batch) {
+    pane.terminal.feed({reinterpret_cast<const Byte *>(lines.data()), lines.size()});
+    pane.terminal.followScrollback();
+  }
+  const auto trimmed = pane.terminal.scrollbackTrimmed();
+  check(trimmed > 0);
+  check(AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::scrollback, now, timeout));
+  const auto dropped = peer.receive<PaneScrollback>();
+  check(dropped.trimmed == trimmed && dropped.generation == first.generation);
+  check(client.attachment(pane.id)->viewport == 50'000 - trimmed);
+  panes.detachAll(model, clients, client.id);
+  panes.remove(model, clients, pane.id);
+}
+
 void attachmentRotation() {
   SystemAllocator memory;
   RuntimeModel model{memory};
@@ -276,6 +321,8 @@ void attachmentRotation() {
   for (auto &attachment : client.attachments) {
     auto &pane = panes.require(model.panes, attachment->pane_id);
     attachment->foreground_revision = pane.foreground_revision;
+    attachment->scrollback_generation = pane.terminal.scrollbackGeneration();
+    attachment->scrollback_trimmed = pane.terminal.scrollbackTrimmed();
     pane.terminal.refresh();
     const auto payload = attachment->frames.prepare(pane.terminal.screen);
     if (!payload.empty()) {
@@ -335,4 +382,5 @@ void testClientDelivery() {
   currentState();
   attachmentRotation();
   shellState();
+  scrollbackOrigin();
 }

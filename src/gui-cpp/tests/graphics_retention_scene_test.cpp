@@ -106,10 +106,11 @@ public:
   ImageNode &operator=(ImageNode &&) = delete;
 
   void synchronize(QQuickItem &owner, const GraphicsStore<ApplicationAllocator> &store, const Screen<ApplicationAllocator> &screen, QSizeF cell) {
-    images_.synchronize(owner, store, screen, cell, owner.window()->devicePixelRatio());
+    images_.synchronize(owner, store, ImageRows::of(screen, rows_), cell, owner.window()->devicePixelRatio());
   }
 
 private:
+  std::vector<std::span<const CellValue>> rows_;
   QSGTransformNode &below_background_;
   QSGTransformNode &below_text_;
   QSGTransformNode &above_text_;
@@ -379,6 +380,26 @@ bool closeColor(QColor actual, QColor expected) {
 
 class GraphicsRetentionSceneTest : public QObject {
   Q_OBJECT
+
+  // An image's row is drawn where the view draws it: from the view's top shown row, through the
+  // folds, and nowhere while a fold hides it.
+  Q_SLOT static void imageRowsFollowTheViewAndItsFolds() {
+    constexpr std::uint32_t fold_first = 10;
+    constexpr std::uint32_t fold_rows = 5;
+    constexpr std::uint64_t top = 4;
+    constexpr std::int64_t above = 6;
+    constexpr std::int64_t below = 20;
+    FoldMap<> folds;
+    const std::array spans{FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
+    folds.assign(spans);
+    const ImageRows plain{.top = top};
+    QCOMPARE(plain.drawn(below), std::optional<std::int64_t>{below - static_cast<std::int64_t>(top)});
+    const ImageRows folded{.top = top, .folds = &folds};
+    QCOMPARE(folded.drawn(above), std::optional<std::int64_t>{above - static_cast<std::int64_t>(top)});
+    QCOMPARE(folded.drawn(below), std::optional<std::int64_t>{below - fold_rows - static_cast<std::int64_t>(top)});
+    QVERIFY(!folded.drawn(fold_first + 1));
+    QCOMPARE(folded.drawn(-1), std::optional<std::int64_t>{-1 - static_cast<std::int64_t>(top)});
+  }
 
   Q_SLOT static void highestPlacementsAreSelectedBeforeAnyUpload() {
     Fixture fixture;

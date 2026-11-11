@@ -14,6 +14,7 @@ static_assert(true);
 #include <cmath>
 #include "telar_client/serializers/telar_messages.hpp"
 #include "../terminal/screen.hpp"
+#include "../terminal/fold_map.hpp"
 #include <array>
 #include <optional>
 #include "../core/memory.hpp"
@@ -30,6 +31,7 @@ static_assert(true);
 #include <QSGTransformNode>
 #include <QSizeF>
 #include <span>
+#include <vector>
 
 #pragma once
 
@@ -43,6 +45,40 @@ import telar.gui.graphics.placeholder;
 class QQuickWindow;
 
 namespace telar::gui::qt {
+
+// Where the rows images sit on are drawn. An image's row counts from the active screen's first,
+// `live_top` rows from the top of the scrollback; a view shows the rows its folds leave from shown
+// row `top`. `rows` are the rows drawn, for the images their placeholder cells show, and
+// `revision` changes whenever any of this does.
+struct ImageRows {
+  std::uint64_t live_top = 0;
+  std::uint64_t top = 0;
+  const FoldMap<> *folds = nullptr;
+  std::span<const std::span<const CellValue>> rows;
+  std::uint64_t revision = 0;
+
+  // A screen's own rows, as it shows them; `cells` keeps their spans.
+  [[nodiscard]] static ImageRows of(const Screen<ApplicationAllocator> &screen, std::vector<std::span<const CellValue>> &cells) {
+    cells.clear();
+    for (std::size_t row = 0; row < screen.rows(); ++row) {
+      cells.push_back(screen.row(row));
+    }
+    const auto &scroll = screen.scroll();
+    const auto rows = static_cast<std::uint64_t>(screen.rows());
+    return {.live_top = scroll.total_rows > rows ? scroll.total_rows - rows : 0, .top = scroll.offset, .rows = cells, .revision = screen.revision()};
+  }
+
+  // The drawn row of `row`, counted from the top of the scrollback; nothing when a fold hides it.
+  [[nodiscard]] std::optional<std::int64_t> drawn(std::int64_t row) const noexcept {
+    if (folds == nullptr || row < 0) {
+      return row - static_cast<std::int64_t>(top);
+    }
+    if (folds->hides(static_cast<std::uint64_t>(row))) {
+      return std::nullopt;
+    }
+    return static_cast<std::int64_t>(folds->display(static_cast<std::uint64_t>(row))) - static_cast<std::int64_t>(top);
+  }
+};
 
 struct ImageLayers {
   QSGTransformNode *below_background;
@@ -58,7 +94,7 @@ public:
   GraphicsScene &operator=(const GraphicsScene &) = delete;
   GraphicsScene(GraphicsScene &&) = delete;
   GraphicsScene &operator=(GraphicsScene &&) = delete;
-  void synchronize(QQuickItem &owner, const GraphicsStore<ApplicationAllocator> &store, const Screen<ApplicationAllocator> &screen, QSizeF cell, qreal scale);
+  void synchronize(QQuickItem &owner, const GraphicsStore<ApplicationAllocator> &store, const ImageRows &rows, QSizeF cell, qreal scale);
   void invalidate() noexcept;
   void clearNodes() noexcept;
 
@@ -74,10 +110,10 @@ private:
   [[nodiscard]] std::span<const ResolvedImage> resolvedImages() const noexcept;
   [[nodiscard]] const WindowImage *texture(const GraphicsStore<ApplicationAllocator> &store, ImageKey key);
   [[nodiscard]] QSGTransformNode &layer(std::int32_t z_index) const noexcept;
-  void drawPlacements(const GraphicsStore<ApplicationAllocator> &store, std::span<const GraphicsPlacement> placements, std::int64_t back);
+  void drawPlacements(const GraphicsStore<ApplicationAllocator> &store, std::span<const GraphicsPlacement> placements, const ImageRows &rows);
   void append(QSGNode &parent, ImageTextureHandle handle, const ImageGeometry &geometry);
   void drawPlaceholder(const GraphicsStore<ApplicationAllocator> &store, const PlaceholderRun &run, std::uint16_t row);
-  void placeholders(const GraphicsStore<ApplicationAllocator> &store, const Screen<ApplicationAllocator> &screen);
+  void placeholders(const GraphicsStore<ApplicationAllocator> &store, const ImageRows &rows);
   void placeholderRow(const GraphicsStore<ApplicationAllocator> &store, std::span<const CellValue> row, std::uint16_t row_index);
 
   ImageLayers layers_;
@@ -90,7 +126,7 @@ private:
   GraphicsLifetime graphics_lifetime_;
   std::uint64_t graphics_revision_ = 0;
   std::uint64_t placement_revision_ = 0;
-  std::uint64_t screen_revision_ = 0;
+  std::uint64_t rows_revision_ = 0;
   QSizeF cell_;
   Rect viewport_;
   qreal scale_ = 0;

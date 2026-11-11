@@ -156,23 +156,44 @@ void answerTerminal(int descriptor, std::string_view output) {
 
 struct Completions {
   std::vector<std::optional<int>> exit_codes;
+  std::string marks;
 
   void complete(CommandCompletion completion) {
     exit_codes.push_back(completion.exit_code);
   }
+
+  void mark(CommandMark mark) {
+    marks.push_back(mark.action);
+  }
 };
 
-// Runs a real shell through the integration, in an empty home, and reads its marks the way
-// the runtime does: only signed ones count.
-void signsCommands(SystemAllocator &memory, const ShellIntegration<SystemAllocator> &integration, const std::string &shell, std::string_view home) {
+// The prompt the user's configuration in the test's home draws.
+constexpr std::string_view user_prompt = "telar-user-prompt> ";
+
+// A home whose zsh, bash and fish configurations only set that prompt.
+void writeUserPrompt(const std::string &root) {
+  const auto prompt = std::string{user_prompt};
+  for (const auto name : {"/.zshrc", "/.bashrc", "/.bash_profile"}) {
+    std::ofstream{root + name} << "PS1='" << prompt << "'\n";
+  }
+  check(::mkdir((root + "/.config").c_str(), 0700) == 0 && ::mkdir((root + "/.config/fish").c_str(), 0700) == 0);
+  std::ofstream{root + "/.config/fish/config.fish"} << "function fish_prompt; printf '%s' '" << prompt << "'; end\n";
+}
+
+// Runs a real shell through the integration, in a home that only sets a prompt, and reads its
+// marks the way the runtime does: only signed ones count. With `bare`, telar's editor stands in
+// for the prompt, so the shell draws none of the user's.
+void signsCommands(SystemAllocator &memory, const ShellIntegration<SystemAllocator> &integration, const std::string &shell, std::string_view home, bool bare = false) {
   const std::array<std::string_view, 3> arguments{shell, "-l", "-i"};
   Command command{memory, Launch{.cwd = home, .arguments = arguments}};
   command.setEnvironment("HOME", home);
-  for (const auto name : {"ZDOTDIR", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1"}) {
+  for (const auto name : {"ZDOTDIR", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "XDG_CONFIG_HOME", "TELAR_PROMPT_MODE"}) {
     command.removeEnvironment(name);
   }
-  const auto launch = integration.apply(command);
+  const auto launch = integration.apply(command, bare);
   check(launch.has_value());
+  check(command.environment("TELAR_PROMPT_MODE") == (bare ? std::optional<std::string_view>{"telar"} : std::nullopt));
+  std::string drawn;
   PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
   CommandZones zones{"/", launch->token};
   Completions completions;
@@ -188,6 +209,7 @@ void signsCommands(SystemAllocator &memory, const ShellIntegration<SystemAllocat
       const auto count = ::read(process.descriptor(), output.data(), output.size());
       check(count > 0);
       answerTerminal(process.descriptor(), {output.data(), static_cast<std::size_t>(count)});
+      drawn.append(output.data(), static_cast<std::size_t>(count));
       zones.feed(bytes({output.data(), static_cast<std::size_t>(count)}), {}, completions);
     }
   };
@@ -202,6 +224,7 @@ void signsCommands(SystemAllocator &memory, const ShellIntegration<SystemAllocat
   type("sh -c 'exit 3'\r");
   pump([&] { return completions.exit_codes.size() == 2 && zones.editing(); });
   check(completions.exit_codes == std::vector<std::optional<int>>{1, 3});
+  check((drawn.find(user_prompt) == std::string::npos) == bare);
   type("exit\r");
 }
 
@@ -256,21 +279,25 @@ void sshArguments(SystemAllocator &memory) {
   check(remote.starts_with("exec /bin/sh -c 'p=") && remote.find_first_of("\\!\n") == std::string::npos && std::ranges::count(remote, '\'') == 2);
 
   // Whether ssh ran the remote command, and the nonce the pane's shell then signed.
-  const auto run = [&](std::vector<std::string_view> options, std::string_view configuration = "") {
+  std::string recorded;
+  const auto run = [&](std::vector<std::string_view> options, std::string_view configuration = "", std::string_view mode = "") {
     const auto helper = text(directory) + "/ssh/ssh.sh";
     std::vector<std::string_view> arguments{"/bin/sh", helper};
     arguments.insert(arguments.end(), options.begin(), options.end());
-    const std::array<std::pair<std::string_view, std::string_view>, 4> environment{{{"PATH", path}, {"TELAR_SHELL_TOKEN", token.text()}, {"TELAR_TEST_RECORD", record}, {"TELAR_TEST_CONFIG", configuration}}};
+    const std::array<std::pair<std::string_view, std::string_view>, 5> environment{{{"PATH", path}, {"TELAR_SHELL_TOKEN", token.text()}, {"TELAR_TEST_RECORD", record}, {"TELAR_TEST_CONFIG", configuration}, {"TELAR_PROMPT_MODE", mode}}};
     CommandZones zones{"/", token};
     ::unlink(record.c_str());
     runOnTerminal(memory, arguments, home.path(), environment, zones);
-    const auto recorded = readText(record);
+    recorded = readText(record);
     const bool nested = recorded.starts_with("-t\n") && recorded.find(remote) != std::string::npos;
     // The token never reaches ssh's arguments, which every user on the host can read.
     check(recorded.find(token.text()) == std::string::npos);
     return nested;
   };
-  check(run({"host"}));
+  check(run({"host"}) && !recorded.ends_with(" telar\n"));
+  // telar's prompt mode follows the session to the remote shell, after the nonce; nothing else does.
+  check(run({"host"}, "", "telar") && recorded.ends_with(" telar\n"));
+  check(run({"host"}, "", "telar; rm -rf ~") && !recorded.ends_with(" telar\n") && recorded.find("rm -rf") == std::string::npos);
   check(run({"-p", "2222", "-A", "user@host", "-o", "ForwardX11=no"}));
   check(run({"-luser", "--", "host"}));
   check(!run({"host", "uptime"}));
@@ -287,21 +314,24 @@ void sshArguments(SystemAllocator &memory) {
 // What a remote host runs, parsed by its login shell as sshd does: the bootstrap writes the
 // scripts under that host's own home and starts the login shell with them, which answers the
 // nonce and signs its marks with a token of its own.
-void remoteShell(SystemAllocator &memory, std::string_view directory, const std::string &shell) {
+// With `bare`, the pane's shell runs in telar's prompt mode, which `ssh` passes on after the nonce.
+void remoteShell(SystemAllocator &memory, std::string_view directory, const std::string &shell, bool bare = false) {
   TemporaryDirectory home{"/tmp/telar-remote-XXXXXX"};
+  writeUserPrompt(text(home.path()));
   const auto token = ShellToken::generate();
   const auto nonce = ShellToken::generate();
-  const auto remote = readText(text(directory) + "/ssh/remote") + " " + text(nonce.text());
+  const auto remote = readText(text(directory) + "/ssh/remote") + " " + text(nonce.text()) + (bare ? " telar" : "");
   const std::array<std::string_view, 3> arguments{shell, "-c", remote};
   Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
   command.setEnvironment("HOME", home.path());
   command.setEnvironment("SHELL", shell);
-  for (const auto name : {"ZDOTDIR", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "XDG_DATA_HOME", "TELAR_SHELL_TOKEN"}) {
+  for (const auto name : {"ZDOTDIR", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "TELAR_SHELL_TOKEN", "TELAR_PROMPT_MODE"}) {
     command.removeEnvironment(name);
   }
   PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
   CommandZones zones{"/", token};
   Completions completions;
+  std::string drawn;
   // The pane's shell signed the nonce before ssh connected.
   zones.feed(bytes("\x1b]6973;telar=" + text(token.text()) + ";nest=" + text(nonce.text()) + "\x07"), {}, completions);
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
@@ -316,6 +346,7 @@ void remoteShell(SystemAllocator &memory, std::string_view directory, const std:
       const auto count = ::read(process.descriptor(), output.data(), output.size());
       check(count > 0);
       answerTerminal(process.descriptor(), {output.data(), static_cast<std::size_t>(count)});
+      drawn.append(output.data(), static_cast<std::size_t>(count));
       zones.feed(bytes({output.data(), static_cast<std::size_t>(count)}), {}, completions);
     }
   };
@@ -326,34 +357,49 @@ void remoteShell(SystemAllocator &memory, std::string_view directory, const std:
 
   pump([&] { return zones.remote() && zones.editing(); });
   check(zones.remoteShell() == integrableShell(Arguments{shell}));
+  // The remote shell took over before it marked anything.
+  check(completions.marks.starts_with('N'));
+  // Where it works is its host's place; this host's directory stays as it was.
+  check(!zones.remoteHost().empty() && std::filesystem::equivalent(zones.remoteDirectory(), home.path()));
+  check(zones.directory() == "/");
   type("false\r");
   pump([&] { return completions.exit_codes.size() == 1 && zones.editing(); });
   check(completions.exit_codes.back() == 1);
   struct stat state{};
   const auto installed = text(home.path()) + "/.local/share/telar/shell-integration/" + text(directory.substr(directory.rfind('/') + 1));
   check(::stat(installed.c_str(), &state) == 0 && (state.st_mode & 0077) == 0);
+  check((drawn.find(user_prompt) == std::string::npos) == bare);
   type("exit\r");
+  // The pane's own shell is back: it says so before its D ends ssh.
+  completions.marks.clear();
+  zones.feed(bytes("\x1b]133;D;255;telar=" + text(token.text()) + "\x07"), {}, completions);
+  check(completions.marks == "UD" && !zones.remote() && zones.remoteDirectory().empty());
 }
 
 void shells(SystemAllocator &memory) {
   TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
+  writeUserPrompt(text(home.path()));
   const ShellIntegration<SystemAllocator> integration{memory, ShellIntegration<SystemAllocator>::install(memory, home.path())};
   if (const auto zsh = findProgram("zsh")) {
     signsCommands(memory, integration, *zsh, home.path());
+    signsCommands(memory, integration, *zsh, home.path(), true);
   } else {
     std::puts("shell integration: zsh not installed, skipped");
   }
   if (const auto bash = findProgram("bash")) {
     signsCommands(memory, integration, *bash, home.path());
+    signsCommands(memory, integration, *bash, home.path(), true);
   } else {
     std::puts("shell integration: bash not installed, skipped");
   }
   // macOS ships bash 3.2, which has no PS0: its commands are marked by the DEBUG trap.
   if (::access("/bin/bash", X_OK) == 0 && findProgram("bash") != "/bin/bash") {
     signsCommands(memory, integration, "/bin/bash", home.path());
+    signsCommands(memory, integration, "/bin/bash", home.path(), true);
   }
   if (const auto fish = findProgram("fish")) {
     signsCommands(memory, integration, *fish, home.path());
+    signsCommands(memory, integration, *fish, home.path(), true);
   } else {
     std::puts("shell integration: fish not installed, skipped");
   }
@@ -362,10 +408,12 @@ void shells(SystemAllocator &memory) {
   for (const auto name : {"zsh", "bash", "fish"}) {
     if (const auto shell = findProgram(name)) {
       remoteShell(memory, directory, *shell);
+      remoteShell(memory, directory, *shell, true);
     }
   }
   if (::access("/bin/bash", X_OK) == 0 && findProgram("bash") != "/bin/bash") {
     remoteShell(memory, directory, "/bin/bash");
+    remoteShell(memory, directory, "/bin/bash", true);
   }
 }
 
@@ -503,10 +551,15 @@ void sshSession(SystemAllocator &memory) {
   type("ssh " + text(host) + "\r");
   until([&] { return pane.shell_state.phase == ShellPhase::prompt && pane.shell_state.remote; });
   check(pane.shell_state.shell != IntegratedShell::none && !pane.shell_state.shell_foreground);
+  std::array<CommandBlock, PaneBlocks::capacity> storage;
+  const auto last = [&] { return pane.blocks->message(7, storage).blocks.back(); };
+  // ssh's block stays open while its session lasts.
+  check(last().state == CommandBlockState::session && last().nest == CommandBlockNest::opens);
   const auto remote = pane.shell_state.commands;
   type("false\r");
   until([&] { return pane.shell_state.commands == remote + 1 && pane.shell_state.phase == ShellPhase::prompt; });
-  check(pane.shell_state.status == 1 && pane.shell_state.remote && !pane.shell_state.host.empty());
+  check(pane.shell_state.status == 1 && pane.shell_state.remote && !pane.shell_state.host.empty() && !pane.shell_state.directory.empty());
+  check(last().state == CommandBlockState::failed && last().nest == CommandBlockNest::inside);
   // The remote line editor's echo timed the link.
   check(pane.shell_state.link_ms > 0);
   type("exit 7\r");
@@ -514,7 +567,46 @@ void sshSession(SystemAllocator &memory) {
   // The ssh command finishes with the status the remote shell exited with. fish reports its
   // `exit` as a command too.
   check(pane.shell_state.shell == IntegratedShell::zsh && pane.shell_state.commands >= remote + 2 && pane.shell_state.status == 7);
+  const auto blocks = pane.blocks->message(7, storage).blocks;
+  const auto opened = std::ranges::find(blocks, CommandBlockNest::opens, &CommandBlock::nest);
+  check(opened != blocks.end() && opened->state == CommandBlockState::failed && opened->status == 7);
   type("exit\r");
+}
+
+// An ssh whose remote shell takes over keeps its block open, the remote commands after it,
+// until the pane's shell is back and ends it with ssh's status.
+void sessionBlocks(SystemAllocator &memory) {
+  Terminal<SystemAllocator> terminal{memory, TerminalSize{40, 12, 8, 16}};
+  CommandBlocks<SystemAllocator> blocks{memory, terminal};
+  const auto now = std::chrono::steady_clock::now();
+  const auto run = [&](std::string_view line) {
+    blocks.mark('A', now);
+    terminal.feed(bytes("$ "));
+    blocks.mark('B', now);
+    terminal.feed(bytes(std::string{line} + "\r\n"));
+    blocks.mark('C', now);
+  };
+  std::array<CommandBlock, PaneBlocks::capacity> storage;
+  const auto shown = [&] { return blocks.message(7, storage).blocks; };
+
+  run("ssh box");
+  blocks.mark('N', now);
+  terminal.feed(bytes("welcome\r\n"));
+  // The remote shell's first prompt reports the status of nothing it ran.
+  blocks.finished(0, now);
+  check(shown().size() == 1 && shown()[0].state == CommandBlockState::session && shown()[0].nest == CommandBlockNest::opens);
+  run("ls");
+  blocks.finished(0, now);
+  run("sleep 9");
+  check(shown().size() == 3 && shown()[1].state == CommandBlockState::succeeded && shown()[1].nest == CommandBlockNest::inside);
+  check(shown()[0].state == CommandBlockState::session && shown()[2].state == CommandBlockState::running);
+  // The link drops mid-command: the remote command is cut, and ssh ends with its own status.
+  blocks.mark('U', now);
+  blocks.finished(255, now);
+  check(shown()[2].state == CommandBlockState::interrupted);
+  check(shown()[0].state == CommandBlockState::failed && shown()[0].status == 255);
+  run("pwd");
+  check(shown().size() == 4 && shown()[3].nest == CommandBlockNest::none);
 }
 
 // The repository a shell works in, read on the git worker.
@@ -701,6 +793,7 @@ void testShellIntegration() {
   shells(memory);
   sshArguments(memory);
   paneState(memory);
+  sessionBlocks(memory);
   sshSession(memory);
   gitContext();
   words();

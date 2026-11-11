@@ -457,6 +457,29 @@ private:
 export {
 namespace telar::runtime {
 
+// The longest a cell encodes to: its header, a changed style and its text.
+inline constexpr std::size_t maximum_cell_bytes = 31;
+
+// Writes `cells` as a frame's cell bytes: a header per cell, its style when it differs from
+// the cell before, then its text. `output` must hold `maximum_cell_bytes` per cell.
+inline void encodeScreenCells(std::span<const ScreenCell> cells, std::span<Byte> &output) {
+  const CellStyle *previous = nullptr;
+  for (const auto &cell : cells) {
+    constexpr Byte style_changed_bit = 0x80;
+    constexpr unsigned width_shift = 5;
+    const bool changed = previous == nullptr || !(cell.style == *previous);
+    u8::encode(static_cast<Byte>(cell.length | (static_cast<Byte>(cell.width) << width_shift) | (changed ? style_changed_bit : 0)), output);
+
+    if (changed) {
+      ValueCodec<CellStyle>::encode(cell.style, output);
+    }
+
+    std::copy_n(cell.text.data(), cell.length, output.data());
+    output = output.subspan(cell.length);
+    previous = &cell.style;
+  }
+}
+
 // Encodes a pane's frames. Its spans view its own cell bytes, so it stays where it is built; its
 // buffers come from an allocator, and its counters from the runtime, in region `a`.
 template <Allocator Memory>
@@ -672,22 +695,7 @@ private:
   inline void appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t &written) {
     auto output = std::span<Byte>{cell_bytes_}.subspan(written);
     const Byte *begin = output.data();
-    const CellStyle *previous = nullptr;
-
-    for (const auto &cell : cells) {
-      constexpr Byte style_changed_bit = 0x80;
-      constexpr unsigned width_shift = 5;
-      const bool changed = previous == nullptr || !(cell.style == *previous);
-      u8::encode(static_cast<Byte>(cell.length | (static_cast<Byte>(cell.width) << width_shift) | (changed ? style_changed_bit : 0)), output);
-
-      if (changed) {
-        ValueCodec<CellStyle>::encode(cell.style, output);
-      }
-
-      std::copy_n(cell.text.data(), cell.length, output.data());
-      output = output.subspan(cell.length);
-      previous = &cell.style;
-    }
+    encodeScreenCells(cells, output);
     written = cell_bytes_.size() - output.size();
 
     spans_.push_back(FrameSpan{
@@ -698,7 +706,6 @@ private:
   }
 
   static constexpr std::size_t maximum_spans = 4096;
-  static constexpr std::size_t maximum_cell_bytes = 31;
   static constexpr std::size_t maximum_metadata_bytes = 153098 + maximum_spans * 12 + 62;
 #if TELAR_DIAGNOSTICS
   inline void recordFrame(std::size_t bytes, bool snapshot) noexcept {
@@ -895,6 +902,9 @@ public:
     control_.configureSize(size);
     resumeControl();
     ++content_revision_;
+    // A reflow numbers the rows anew.
+    ++scrollback_generation_;
+    scrollback_origin_.reset();
     dirty_ = true;
     force_ = true;
   }
@@ -1005,6 +1015,50 @@ public:
     ghostty_terminal_scroll_viewport(terminal_.get(), viewport);
     dirty_ = true;
     force_ = true;
+  }
+
+  // How the scrollback numbers its rows, as `PaneScrollback` reports it: the rows dropped from
+  // its top since the terminal began, and a generation that changes when rows were renumbered
+  // some other way.
+  [[nodiscard]] inline std::uint64_t scrollbackGeneration() const noexcept {
+    return scrollback_generation_;
+  }
+
+  [[nodiscard]] inline std::uint64_t scrollbackTrimmed() const noexcept {
+    return scrollback_trimmed_;
+  }
+
+  // Reads where the row the terminal tracks went, after output: rows above it were dropped
+  // when it moved up; losing it, or seeing it move down, means the scrollback was renumbered
+  // (erased, say). The tracked row is a recent one, so the oldest rows can go without it.
+  // Only the primary screen keeps a scrollback. The rows dropped since the last call.
+  inline std::uint32_t followScrollback() {
+    if (!primaryScreen()) {
+      return 0;
+    }
+    if (!scrollback_origin_) {
+      trackScrollbackOrigin();
+      return 0;
+    }
+    const auto row = scrollbackOriginRow();
+    if (row && *row == scrollback_origin_row_) {
+      // Kept near the bottom, so the scrollback never drops it with its oldest rows.
+      std::size_t total = 0;
+      checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &total));
+      if (total > static_cast<std::size_t>(scrollback_origin_row_) + origin_distance) {
+        trackScrollbackOrigin();
+      }
+      return 0;
+    }
+    std::uint32_t dropped = 0;
+    if (row && *row < scrollback_origin_row_) {
+      dropped = scrollback_origin_row_ - *row;
+      scrollback_trimmed_ += dropped;
+    } else {
+      ++scrollback_generation_;
+    }
+    trackScrollbackOrigin();
+    return dropped;
   }
 
   inline std::span<const Byte> responses() const noexcept {
@@ -1293,6 +1347,42 @@ private:
     screen.mouse.pixels = mode(GHOSTTY_MODE_SGR_PIXELS_MOUSE);
   }
 
+  inline bool primaryScreen() const {
+    GhosttyTerminalScreen active{};
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active));
+    return active == GHOSTTY_TERMINAL_SCREEN_PRIMARY;
+  }
+
+  // Tracks the active screen's first row, the newest row the scrollback will take.
+  inline void trackScrollbackOrigin() {
+    scrollback_origin_.reset();
+    scrollback_origin_.emplace();
+    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, 0}}};
+    if (ghostty_terminal_grid_ref_track(terminal_.get(), point, scrollback_origin_->output()) != GHOSTTY_SUCCESS) {
+      scrollback_origin_.reset();
+      return;
+    }
+    const auto row = scrollbackOriginRow();
+    if (!row) {
+      scrollback_origin_.reset();
+      return;
+    }
+    scrollback_origin_row_ = *row;
+  }
+
+  // The tracked row, from the top of the scrollback; nothing once it was dropped.
+  inline std::optional<std::uint32_t> scrollbackOriginRow() const {
+    auto reference = ghosttySized<GhosttyGridRef>();
+    if (!scrollback_origin_ || ghostty_tracked_grid_ref_snapshot(scrollback_origin_->get(), &reference) != GHOSTTY_SUCCESS) {
+      return std::nullopt;
+    }
+    GhosttyPointCoordinate coordinate{};
+    if (ghostty_terminal_point_from_grid_ref(terminal_.get(), &reference, GHOSTTY_POINT_TAG_SCREEN, &coordinate) != GHOSTTY_SUCCESS) {
+      return std::nullopt;
+    }
+    return coordinate.y;
+  }
+
   inline void updateScroll() {
     GhosttyTerminalScrollbar scrollbar{};
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_SCROLLBAR, &scrollbar));
@@ -1319,6 +1409,94 @@ private:
   bool dirty_ = true;
   bool force_ = true;
   std::uint64_t content_revision_ = 1;
+  std::optional<GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>> scrollback_origin_;
+  // How far above the bottom the tracked row may get before a newer one replaces it.
+  static constexpr std::size_t origin_distance = 256;
+  std::uint32_t scrollback_origin_row_ = 0;
+  std::uint64_t scrollback_trimmed_ = 0;
+  std::uint64_t scrollback_generation_ = 1;
+};
+
+}
+}
+
+// Interface: terminal/scrollback_rows.cppm
+export {
+namespace telar::runtime {
+
+// Reads rows of a terminal's scrollback for `ReadPaneRows`, by their stable number, into
+// buffers it keeps between requests. A reply views them, and the terminal's screen, until the
+// next read or refresh.
+template <Allocator Memory>
+class ScrollbackRows {
+public:
+  inline explicit ScrollbackRows(tbc::view<Memory &, tbc::lt::a> memory)
+      : cells_(AllocatorRef<Byte, Memory>{memory}),
+        runs_(AllocatorRef<MetadataRun, Memory>{memory}) {}
+
+  // The rows from `request.from` the scrollback still has, at most a screen of them. The
+  // terminal is scrolled to them to read them, and left at its bottom again.
+  inline tbc::view<PaneRows, tbc::lt::a> read(tbc::view<Terminal<Memory> &, tbc::lt::a> terminal, const ReadPaneRows &request) {
+    terminal.followScrollback();
+    terminal.refresh();
+    const auto trimmed = terminal.scrollbackTrimmed();
+    const auto first = std::max(request.from, trimmed);
+    PaneRows reply{.request_id = request.request_id,
+                   .pane_id = request.pane_id,
+                   .generation = terminal.scrollbackGeneration(),
+                   .trimmed = trimmed,
+                   .from = first};
+    const auto &screen = terminal.screen;
+    const auto total = static_cast<std::uint64_t>(screen.scroll.total_rows);
+    const auto end = request.from + request.count;
+    if (first >= end || first - trimmed >= total || screen.rows == 0 || screen.cols == 0) {
+      return reply;
+    }
+
+    // One pass of the viewport: from its row, or from the last full view when the rows are
+    // nearer the bottom than a screen.
+    const auto row = static_cast<std::uint32_t>(first - trimmed);
+    const auto top = std::min<std::uint32_t>(row, static_cast<std::uint32_t>(total - std::min<std::uint64_t>(total, screen.rows)));
+    const auto skip = row - top;
+    constexpr std::size_t metadata_margin = 160 * 1024;
+    const auto budget = (max_payload_size - metadata_margin) / (static_cast<std::size_t>(screen.cols) * maximum_cell_bytes);
+    const auto count = static_cast<std::uint16_t>(std::min<std::uint64_t>({end - first, screen.rows - skip, total - row, budget, ReadPaneRows::maximum_rows}));
+    if (count == 0) {
+      return reply;
+    }
+
+    terminal.scrollTo(top);
+    terminal.refresh();
+    const auto cols = static_cast<std::size_t>(screen.cols);
+    cells_.resize(static_cast<std::size_t>(count) * cols * maximum_cell_bytes);
+    auto output = std::span<Byte>{cells_};
+    encodeScreenCells(std::span<const ScreenCell>{screen.cells}.subspan(static_cast<std::size_t>(skip) * cols, static_cast<std::size_t>(count) * cols), output);
+
+    // The links' runs of these rows, counted from their first cell.
+    const auto metadata = screen.metadata.view(screen.row_flags);
+    const auto first_cell = static_cast<std::uint64_t>(skip) * cols;
+    const auto end_cell = first_cell + static_cast<std::uint64_t>(count) * cols;
+    runs_.clear();
+    for (const auto &run : metadata.runs) {
+      if (run.start >= first_cell && run.start < end_cell) {
+        runs_.push_back(MetadataRun{.start = static_cast<std::uint32_t>(run.start - first_cell), .len = run.len, .link_index = run.link_index});
+      }
+    }
+    reply.cols = screen.cols;
+    reply.rows = count;
+    reply.text_metadata = TextMetadata{.status = metadata.status,
+                                       .row_flags = metadata.row_flags.subspan(skip, count),
+                                       .links = metadata.links,
+                                       .runs = runs_,
+                                       .uris = metadata.uris};
+    reply.cells = std::span<const Byte>{cells_}.first(cells_.size() - output.size());
+    terminal.scrollToBottom();
+    return reply;
+  }
+
+private:
+  tbc::view<Vector<Byte, Memory>, tbc::lt::a> cells_;
+  tbc::view<Vector<MetadataRun, Memory>, tbc::lt::a> runs_;
 };
 
 }

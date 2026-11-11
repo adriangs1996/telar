@@ -15,7 +15,9 @@ static_assert(true);
 #include <algorithm>
 #include <cstddef>
 #include <limits>
+#include <string>
 #include <string_view>
+#include <vector>
 #include <array>
 #include <span>
 #include <stdexcept>
@@ -91,23 +93,27 @@ void islandRunsCommands() {
 
   require(deliver(client, atPrompt()) == Change::terminal, "the shell's state must repaint its pane");
   require(client.promptSurface(1) == prompt::Surface::none, "classic mode keeps the terminal");
+  require(transport.count(ClientTag::configure_shell_prompt) == 1 && !transport.last<ConfigureShellPrompt>().bare, "a classic client keeps the prompt of the shells it opens");
   auto configuration = client.configuration();
   configuration.prompt.mode = PromptMode::telar;
   client.configure(configuration);
   require(client.promptSurface(1) == prompt::Surface::editor, "telar mode edits at the shell's prompt");
+  require(transport.count(ClientTag::configure_shell_prompt) == 2 && transport.last<ConfigureShellPrompt>().bare, "telar mode asks for bare prompts in the shells it opens next");
+  client.configure(configuration);
+  require(transport.count(ClientTag::configure_shell_prompt) == 2, "an unchanged mode is not sent again");
 
   auto before = transport.sent.size();
   typeKeys(client, "ls -la");
   require(transport.inputSince(before).empty(), "typing stays in the island");
   require(enter(client) == prompt::Outcome::run, "Enter runs a complete command");
-  require(transport.inputSince(before) == "\x1b[200~ls -la\x1b[201~\r", "the command reaches the shell as one paste and Enter");
+  require(transport.commandsSince(before) == std::vector<std::string>{"ls -la"} && transport.inputSince(before).empty(), "the command reaches the runtime whole, which types it at the prompt");
   require(client.island(1)->editor().text().empty() && client.island(1)->recent().back() == "ls -la", "the island clears and remembers it");
 
   before = transport.sent.size();
   typeKeys(client, "echo 'a");
   require(enter(client) == prompt::Outcome::edited && transport.inputSince(before).empty(), "an open quote continues on a new line");
   typeKeys(client, "b'");
-  require(enter(client) == prompt::Outcome::run && transport.inputSince(before) == "\x1b[200~echo 'a\nb'\x1b[201~\r", "a multi-line command runs as one paste");
+  require(enter(client) == prompt::Outcome::run && transport.commandsSince(before) == std::vector<std::string>{"echo 'a\nb'"}, "a multi-line command runs whole");
 
   before = transport.sent.size();
   client.paste(1, "git status\x1b[201~; rm -rf ~");
@@ -124,7 +130,7 @@ void islandRunsCommands() {
   enter(client);
   require(client.island(1)->queued() && transport.inputSince(before).empty(), "Enter arms the queued command");
   deliver(client, atPrompt(2, 0));
-  require(transport.inputSince(before) == "\x1b[200~make test\x1b[201~\r", "a success runs the queued command");
+  require(transport.commandsSince(before) == std::vector<std::string>{"make test"}, "a success runs the queued command");
 
   deliver(client, running(2));
   before = transport.sent.size();
@@ -348,7 +354,7 @@ void islandBindings() {
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'i', {}, "i"});
   const auto before = transport.sent.size();
   require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'j', {.control = true}}) == prompt::Outcome::run, "a bound key runs its action");
-  require(transport.inputSince(before) == "\x1b[200~echo hi\x1b[201~\r", "and submits like Enter");
+  require(transport.commandsSince(before) == std::vector<std::string>{"echo hi"}, "and submits like Enter");
 }
 
 }
@@ -425,6 +431,99 @@ void islandBlocks() {
   require(!client.selectedBlock(1), "Esc goes back to the prompt");
 }
 
+// On a selected block the view moves, folds, jumps and searches the block's output.
+void islandBlockMotions() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  FrameBody frame;
+  frame.pane_id = 1;
+  frame.frame_id = 1;
+  frame.scroll = {.total_rows = 100, .offset = 99};
+  deliverSingleCell(client, frame);
+  deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = 0});
+  auto configuration = client.configuration();
+  configuration.prompt.mode = PromptMode::telar;
+  configuration.prompt.keymap = PromptKeymap::vim;
+  client.configure(configuration);
+  deliver(client, atPrompt(3));
+  const std::array blocks{
+      CommandBlock{.row = 10, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls"},
+      CommandBlock{.row = 40, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
+      CommandBlock{.row = 70, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+  };
+  deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
+  const auto control = [&](char key) { client.promptKey(1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(key), {.control = true}}); };
+  const auto press = [&](char key) { client.promptKey(1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(key)}); };
+  const auto top = [&] { return client.findPane(1)->screen.scroll().offset; };
+
+  client.promptKey(1, prompt::KeyPress{prompt::Key::escape});
+  control('u');
+  require(client.selectedBlock(1) == std::size_t{2} && top() == 69, "Ctrl-U selects the last block above its prompt");
+  press('[');
+  press('f');
+  require(client.selectedBlock(1) == std::size_t{1} && top() == 39, "[f steps to the failed block");
+  control('o');
+  require(top() == 69, "Ctrl-O goes back to where the jump left");
+  control('i');
+  require(top() == 39, "Ctrl-I comes forward again");
+  press('j');
+  require(top() == 40, "j moves the view down a row");
+  press('k');
+  require(top() == 39, "k moves it up a row");
+  press('g');
+  press('g');
+  require(top() == 0 && client.selectedBlock(1) == std::size_t{1}, "gg goes to the top, keeping the block");
+  press('z');
+  press('t');
+  require(top() == 40, "zt puts the block's separator at the top");
+
+  press('z');
+  press('c');
+  require(client.folded(1, 1) && client.findPane(1)->folds.hides(41) && !client.findPane(1)->folds.hides(70), "zc folds the block's output");
+  press('z');
+  press('o');
+  require(!client.folded(1, 1), "zo unfolds it");
+  press('z');
+  press('M');
+  require(client.folded(1, 0) && client.folded(1, 1) && client.folded(1, 2), "zM folds every block that is not running");
+  press('z');
+  press('R');
+  require(!client.folded(1, 0) && !client.folded(1, 2), "zR unfolds them all");
+
+  press('/');
+  const auto &copy = client.copyMode().state();
+  require(copy && copy->cursor.y == 41 && client.takeSearchRequest() && client.copySearchBlock() == std::size_t{1}, "/ starts a search of the block's output");
+  client.searchCopy("error");
+  const auto scoped = transport.last<SearchPaneRows>();
+  require(scoped.first_row == 41 && scoped.last_row == 69, "the search reads only the block's output");
+  // Typed a letter at a time: the matches the runtime found, the cursor on the first after
+  // where the search began, n and N between them, and back to the start with nothing to find.
+  const std::array found{PaneMatch{.x = 2, .y = 50, .len = 5}, PaneMatch{.x = 0, .y = 60, .len = 5}};
+  deliver(client, PaneMatches{.request_id = scoped.request_id, .pane_id = 1, .matches = found});
+  require(client.copySearch().count == 2 && client.copySearch().index == 0 && client.copyMode().state()->cursor.y == 50, "the first match after where the search began is the current one");
+  client.stepCopyMatch(true);
+  require(client.copySearch().index == 1 && client.copyMode().state()->cursor.y == 60, "the next match is a step away");
+  client.searchCopy("");
+  require(client.copySearch().count == 0 && client.copyMode().state()->cursor.y == 41, "an empty query finds nothing and goes back where the search began");
+  client.toggleCopySearchScope();
+  client.searchCopy("error");
+  require(!client.copySearchBlock() && transport.last<SearchPane>().needle == "error", "Tab widens it to the whole scrollback");
+  client.leaveCopyMode();
+  require(!client.copySearchScopes(), "leaving copy mode forgets the search's command");
+
+  // A view that draws its own rows says where its top is; the keys move from there.
+  constexpr std::uint64_t shown = 20;
+  client.findPane(1)->shown_top = shown;
+  press('j');
+  require(top() == shown + 1, "j moves from the top the view shows, not the runtime's view");
+  client.findPane(1)->shown_top.reset();
+
+  press('G');
+  require(!client.selectedBlock(1) && top() == 99, "G goes back to the live end");
+}
+
 // Ctrl-R and the path search start from the line the island holds, and the path chosen
 // replaces the word it started from.
 void islandSearches() {
@@ -474,5 +573,6 @@ int main() {
   islandBindings();
   islandCompletes();
   islandBlocks();
+  islandBlockMotions();
   std::puts("gui-prompt-session: passed");
 }

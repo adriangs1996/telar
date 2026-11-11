@@ -1,9 +1,14 @@
 # telar's ssh, run by the integrated shell's `ssh` function with the pane's token in
-# TELAR_SHELL_TOKEN. An interactive session starts the remote login shell with telar's
+# TELAR_SHELL_TOKEN, and TELAR_PROMPT_MODE=telar when telar's editor stands in for the prompt,
+# which the remote shell then follows too. An interactive session starts the remote login shell with telar's
 # integration; anything else (a remote command, forwarding only, -O, -Q, -G, -V, a
 # RemoteCommand or RequestTTY no in ssh_config) runs ssh unchanged.
 _telar_token=${TELAR_SHELL_TOKEN-}
-unset TELAR_SHELL_TOKEN
+_telar_mode=
+if [ "${TELAR_PROMPT_MODE-}" = telar ]; then
+  _telar_mode=' telar'
+fi
+unset TELAR_SHELL_TOKEN TELAR_PROMPT_MODE
 
 # Whether the arguments open a session without a command. ssh reads options after the
 # destination too, so parsing goes on past it.
@@ -68,7 +73,7 @@ if [ "${#_telar_token}" -eq 32 ] && [ -t 0 ] && [ -t 1 ] && [ -r "$_telar_remote
     # Signed, so telar expects the remote shell to answer with this nonce, once.
     printf '\033]6973;telar=%s;nest=%s\007' "$_telar_token" "$_telar_nonce"
     unset _telar_token
-    exec ssh -t "$@" "$(cat "$_telar_remote") $_telar_nonce"
+    exec ssh -t "$@" "$(cat "$_telar_remote") $_telar_nonce$_telar_mode"
   fi
 fi
 unset _telar_token

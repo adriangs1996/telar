@@ -151,7 +151,8 @@ end
 return telar.config({
 	api_version = 2,
 
-	theme = require("cybervenom"),
+	-- theme = require("cybervenom"),
+	theme = "shade",
 
 	gui = {
 		window = {

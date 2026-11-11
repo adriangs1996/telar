@@ -331,10 +331,10 @@ static void testSnapshotChanges(SystemAllocator &memory) {
 
   constexpr std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-  const auto first = panes.launch(model, nullptr, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+  const auto first = panes.launch(model, nullptr, false, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
   expect(true);
   model.panes.erase(first);
-  const auto replacement = panes.launch(model, nullptr, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+  const auto replacement = panes.launch(model, nullptr, false, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
   check(replacement != first);
   expect(true);
   model.panes.erase(replacement);

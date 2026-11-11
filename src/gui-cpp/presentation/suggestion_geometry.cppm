@@ -497,6 +497,7 @@ inline Color themeRgb(ThemeRgb bytes) noexcept {
 
 inline Theme projectTheme(const ThemeValues &values) noexcept {
   Theme result;
+  result.name = values.base;
   result.foreground = themeRgb(values.terminal.foreground);
   result.background = themeRgb(values.terminal.background);
   std::ranges::transform(values.terminal.palette, result.palette.begin(), themeRgb);

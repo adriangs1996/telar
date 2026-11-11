@@ -118,6 +118,7 @@ static_assert(true);
 #include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
+#include <QJsonDocument>
 #include <QtTest/QSignalSpy>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
@@ -269,6 +270,7 @@ class PromptWindowTest : public QObject {
     QVERIFY(editor->empty());
 
     const auto before = runtime.count(ClientTag::pane_input);
+    const auto commands_before = runtime.count(ClientTag::pane_command);
     type(terminal, "git log --oneline -n 3 | grep fix");
     QCOMPARE(runtime.count(ClientTag::pane_input), before);
     QTRY_VERIFY_WITH_TIMEOUT(line->property("inputShown").toBool(), wait_ms);
@@ -294,14 +296,15 @@ class PromptWindowTest : public QObject {
 
     QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
     QCoreApplication::sendEvent(&terminal, &enter);
-    QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::pane_input) > before, wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::pane_command) > commands_before, wait_ms);
+    QCOMPARE(runtime.count(ClientTag::pane_input), before);
     // The command left at once; its output waits for the line to turn into its separator, and
     // the terminal settles back meanwhile.
     QVERIFY(line->property("flying").toBool() && terminal.outputHeld());
     QCOMPARE(line->property("liftRows").toInt(), 0);
     QTRY_VERIFY_WITH_TIMEOUT(!line->property("flying").toBool() && !terminal.outputHeld(), 1000);
-    const auto sent = runtime.inputText();
-    QVERIFY2(sent.ends_with("\x1b[200~git log --oneline -n 3 | grep fix\x1b[201~\r"), sent.c_str());
+    // The runtime receives the command whole and types it at the prompt itself.
+    QCOMPARE(textView(runtime.last<PaneCommand>().text), std::string_view{"git log --oneline -n 3 | grep fix"});
 
     runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 3});
     QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane_id), prompt::Surface::running, wait_ms);
@@ -490,6 +493,57 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     QVERIFY(application.dialog().isEmpty());
     const std::string written{application.promptIsland(pane_id)->editor().text().view()};
     QVERIFY2(written == "git src/main.cpp", written.c_str());
+
+    // A shell ssh reached works on its host: the line names it, with the link's round trip,
+    // and never shows this host's directory, only the one the remote shell reports.
+    const auto *editor = line->findChild<PromptIsland *>();
+    QVERIFY(editor != nullptr);
+    runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .remote = true, .host = "box", .link_ms = 38});
+    QTRY_VERIFY_WITH_TIMEOUT(editor->remote(), wait_ms);
+    QCOMPARE(editor->directory(), QString{});
+    QCOMPARE(line->property("hostLabel").toString(), QStringLiteral("box · 38 ms"));
+    runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .remote = true, .host = "box", .link_ms = 38, .directory = "/srv/app"});
+    QTRY_COMPARE_WITH_TIMEOUT(editor->directory(), QStringLiteral("/srv/app"), wait_ms);
+    QCOMPARE(line->property("contextText").toMap().value(QStringLiteral("host")).toString(), QStringLiteral("⇄ box · 38 ms"));
+
+    // The ssh that reached it stays open over the commands run there, which name the host,
+    // and an edge runs from it down to the live end.
+    QKeyEvent close{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+    QCoreApplication::sendEvent(&terminal, &close);
+    const std::array session{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::session, .command = "ssh box", .nest = CommandBlockNest::opens},
+                             CommandBlock{.row = 3, .rows = 1, .state = CommandBlockState::succeeded, .duration_ms = 40, .command = "ls", .nest = CommandBlockNest::inside}};
+    runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = session});
+    QTRY_COMPARE_WITH_TIMEOUT(terminal.separators().size(), 2, wait_ms);
+    const auto opened = terminal.separators()[0].toMap();
+    const auto ran = terminal.separators()[1].toMap();
+    QCOMPARE(opened.value(QStringLiteral("state")).toString(), QStringLiteral("session"));
+    QCOMPARE(opened.value(QStringLiteral("host")).toString(), QStringLiteral("box"));
+    QVERIFY(ran.value(QStringLiteral("remote")).toBool() && ran.value(QStringLiteral("host")).toString() == QStringLiteral("box"));
+    QCOMPARE(terminal.remoteRows().size(), 1);
+    QCOMPARE(terminal.remoteRows()[0].toMap().value(QStringLiteral("row")).toInt(), 0);
+    QCOMPARE(terminal.remoteRows()[0].toMap().value(QStringLiteral("rows")).toInt(), rows);
+    if (const auto picture = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_REMOTE_SCREENSHOT"); !picture.isEmpty()) {
+      const QVariantMap separator_properties{
+          {QStringLiteral("view"), QVariant::fromValue(static_cast<QObject *>(&terminal))},
+          {QStringLiteral("colors"), application.colors()},
+          {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
+      };
+      const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), separator_properties);
+      QVERIFY(separators);
+      separators->setParentItem(&terminal);
+      QTest::qWait(900);
+      QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+      QVERIFY(window.grabWindow().save(picture, "PNG"));
+    }
+
+    // The pane's own shell is back: ssh's block ends, and the edge stops at its last command.
+    runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
+    const std::array closed{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::failed, .status = 255, .duration_ms = 9000, .command = "ssh box", .nest = CommandBlockNest::opens}, session[1]};
+    runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = closed});
+    QTRY_COMPARE_WITH_TIMEOUT(terminal.separators()[0].toMap().value(QStringLiteral("state")).toString(), QStringLiteral("failed"), wait_ms);
+    QVERIFY(terminal.separators()[1].toMap().value(QStringLiteral("host")).toString().isEmpty());
+    QCOMPARE(terminal.remoteRows().size(), 1);
+    QVERIFY(terminal.remoteRows()[0].toMap().value(QStringLiteral("rows")).toInt() < rows);
   }
 
   // In a narrow pane the line turns compact: the mode's chip gives its columns to the context,
@@ -716,7 +770,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
       application.scroll(PaneScrollDelta{.pane_id = pane, .rows = 3});
       QTRY_VERIFY_WITH_TIMEOUT(!at_bottom(), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(line->property("docked").toBool() && terminal.rowsBelow() == 3, runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(line->property("docked").toBool() && terminal.rowsBelow() == 3, qPrintable(QStringLiteral("docked %1 below %2 offset %3 total %4 rows %5").arg(line->property("docked").toBool()).arg(terminal.rowsBelow()).arg(application.pane(pane)->screen.scroll().offset).arg(application.pane(pane)->screen.scroll().total_rows).arg(application.pane(pane)->screen.rows())), runtime_wait_ms);
       application.scroll(PaneScrollDelta{.pane_id = pane, .rows = -3});
       QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!line->property("docked").toBool(), runtime_wait_ms);
@@ -725,6 +779,62 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.promptRow() >= 0, qPrintable(where()), runtime_wait_ms);
       run("clear");
       QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.promptRow() >= 0, qPrintable(where()), runtime_wait_ms);
+
+      // Folded commands bring the live prompt into view whichever command is selected: the
+      // runtime's view settles at the bottom, the shell's prompt stays hidden and the line
+      // stands where it is, not docked.
+      run("seq 40");
+      run("seq 40");
+      run("seq 40");
+      QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
+      // The last command selected, as prefix+[ selects it with any keymap.
+      application.selectBlock(pane, application.pane(pane)->blocks.size() - 1);
+      QTRY_VERIFY_WITH_TIMEOUT(application.selectedBlock(pane).has_value(), runtime_wait_ms);
+      // gg goes to the scrollback's top and G back to the live end.
+      const auto top_where = [&] { return where() + QStringLiteral(", shown top %1").arg(application.pane(pane)->shown_top.value_or(9999)); };
+      type(terminal, "gg");
+      QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->screen.scroll().offset == 0 && application.pane(pane)->shown_top == std::optional<std::uint64_t>{0}, qPrintable(top_where()), runtime_wait_ms);
+      QKeyEvent end{QEvent::KeyPress, Qt::Key_G, Qt::ShiftModifier, QStringLiteral("G")};
+      QCoreApplication::sendEvent(&terminal, &end);
+      QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.rowsBelow() == 0 && !application.selectedBlock(pane), qPrintable(top_where()), runtime_wait_ms);
+      application.selectBlock(pane, application.pane(pane)->blocks.size() - 1);
+      QTRY_VERIFY_WITH_TIMEOUT(application.selectedBlock(pane).has_value(), runtime_wait_ms);
+      QKeyEvent up{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
+      // A fold in view moves: right after zc the output is shrinking under its separator,
+      // and when it settles the fold is done and nothing is offset; zo grows it back.
+      // The view settles on the command first, as a reader's would.
+      QTest::qWait(600);
+      type(terminal, "zc");
+      QVERIFY2(terminal.foldFrom() >= 0, "folding a command in view starts its motion");
+      QTRY_VERIFY_WITH_TIMEOUT(terminal.foldFrom() < 0 && terminal.foldOffset() == 0 && !application.pane(pane)->folds.empty(), runtime_wait_ms);
+      const auto folded_top = application.pane(pane)->shown_top;
+      type(terminal, "zo");
+      QVERIFY2(terminal.foldFrom() >= 0, "unfolding a command in view starts its motion");
+      QTRY_VERIFY_WITH_TIMEOUT(terminal.foldFrom() < 0 && application.pane(pane)->folds.empty(), runtime_wait_ms);
+      QVERIFY2(application.pane(pane)->shown_top == folded_top, "unfolding keeps the row at the top where it was");
+      type(terminal, "zM");
+      QTRY_VERIFY_WITH_TIMEOUT(!application.pane(pane)->folds.empty(), runtime_wait_ms);
+      QCoreApplication::sendEvent(&terminal, &up);
+      const auto folded_where = [&] { return where() + QStringLiteral(", rows below %1, docked %2").arg(terminal.rowsBelow()).arg(line->property("docked").toBool()); };
+      QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.rowsBelow() == 0 && terminal.promptRow() >= 0 && !line->property("docked").toBool(), qPrintable(folded_where()), runtime_wait_ms);
+      type(terminal, "zR");
+      QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->folds.empty(), runtime_wait_ms);
+      // / searches the command's output from the line under the pane, no dialog over it: the
+      // matches arrive as the query is typed, and Enter leaves them for n and N.
+      type(terminal, "/");
+      QTRY_VERIFY_WITH_TIMEOUT(application.dialog() == QStringLiteral("copy-search") && application.islandSearch() == QStringLiteral("copy-search") && line->property("searching").toBool(), runtime_wait_ms);
+      QQuickItem *query = nullptr;
+      QTRY_VERIFY_WITH_TIMEOUT((query = line->findChild<QQuickItem *>(QStringLiteral("scrollbackSearch"))) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
+      QTest::keyClick(&window, Qt::Key_3);
+      QTRY_VERIFY2_WITH_TIMEOUT(application.copySearchState().value(QStringLiteral("count")).toInt() > 0, qPrintable(QStringLiteral("search %1").arg(QString::fromUtf8(QJsonDocument::fromVariant(application.copySearchState()).toJson(QJsonDocument::Compact)))), runtime_wait_ms);
+      QTest::keyClick(&window, Qt::Key_Return);
+      QTRY_VERIFY_WITH_TIMEOUT(application.dialog().isEmpty() && application.copyModeActive() && application.copySearchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
+      type(terminal, "q");
+      QTRY_VERIFY_WITH_TIMEOUT(!application.copyModeActive(), runtime_wait_ms);
+      QKeyEvent back{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+      QCoreApplication::sendEvent(&terminal, &back);
+      QTRY_VERIFY_WITH_TIMEOUT(!application.selectedBlock(pane).has_value() && at_bottom(), runtime_wait_ms);
     }
 
     // The runtime serves the spec of a command the shell runs: Tab completes git's subcommand.

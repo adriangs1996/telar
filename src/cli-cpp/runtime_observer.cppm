@@ -176,6 +176,10 @@ inline constexpr std::array client_requests{
     NamedValue{.name = "read_runtime_clipboard", .value = static_cast<std::uint64_t>(ClientTag::read_runtime_clipboard)},
     NamedValue{.name = "complete_words", .value = static_cast<std::uint64_t>(ClientTag::complete_words)},
     NamedValue{.name = "request_command_spec", .value = static_cast<std::uint64_t>(ClientTag::request_command_spec)},
+    NamedValue{.name = "read_pane_rows", .value = static_cast<std::uint64_t>(ClientTag::read_pane_rows)},
+    NamedValue{.name = "search_pane_rows", .value = static_cast<std::uint64_t>(ClientTag::search_pane_rows)},
+    NamedValue{.name = "pane_command", .value = static_cast<std::uint64_t>(ClientTag::pane_command)},
+    NamedValue{.name = "configure_shell_prompt", .value = static_cast<std::uint64_t>(ClientTag::configure_shell_prompt)},
 };
 
 inline constexpr std::array server_messages{
@@ -239,6 +243,8 @@ inline constexpr std::array server_messages{
     NamedValue{.name = "completion_words", .value = static_cast<std::uint64_t>(ServerTag::completion_words)},
     NamedValue{.name = "pane_blocks", .value = static_cast<std::uint64_t>(ServerTag::pane_blocks)},
     NamedValue{.name = "command_spec", .value = static_cast<std::uint64_t>(ServerTag::command_spec)},
+    NamedValue{.name = "pane_rows", .value = static_cast<std::uint64_t>(ServerTag::pane_rows)},
+    NamedValue{.name = "pane_scrollback", .value = static_cast<std::uint64_t>(ServerTag::pane_scrollback)},
 };
 
 inline constexpr std::array agent_statuses{
@@ -255,6 +261,7 @@ inline constexpr std::array bounds{
     NamedValue{.name = "max_agent_snapshot_entries", .value = 64},
     NamedValue{.name = "max_pane_list_entries", .value = max_pane_list_entries},
     NamedValue{.name = "max_pane_text_rows", .value = 2000},
+    NamedValue{.name = "max_pane_rows_read", .value = ReadPaneRows::maximum_rows},
     NamedValue{.name = "max_pane_text_bytes", .value = 262144},
     NamedValue{.name = "max_pane_text_input_bytes", .value = 65536},
     NamedValue{.name = "max_history_results", .value = 1000},

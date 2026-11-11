@@ -570,7 +570,8 @@ private:
     Command command{memory_, Launch{.cwd = record.cwd, .arguments = arguments}};
     const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
     // Launching changes the model: the tab is found again, and the pane by its identity.
-    const auto identity = panes_.launch(model_, nullptr, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
+    // No client asked for it: its shell keeps its prompt, which telar's editor covers.
+    const auto identity = panes_.launch(model_, nullptr, false, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
     model_.workspaces.find(record.workspace)->tab(record.tab)->panes.push_back(identity);
     auto &pane = *model_.panes.find(identity);
     pane.launch.restore(record.arguments, record.argument_count);

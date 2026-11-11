@@ -740,6 +740,13 @@ export {
         return owner == nullptr ? nullptr : &owner->colors;
       }
 
+      // Whether a workspace's geometry owner draws telar's editor, so its new panes' shells print no prompt.
+      inline static bool ownerBarePrompt(const WorkspaceStore<Memory> &workspaces, const ClientStore<Memory> &clients, std::uint64_t workspace) noexcept {
+        const auto *found = workspaces.find(workspace);
+        const auto *owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
+        return owner != nullptr && owner->bare_prompt;
+      }
+
       inline void open(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const OpenPane &request) {
         std::optional<std::uint64_t> pane;
         bool created = false;
@@ -836,7 +843,7 @@ export {
       }
 
       // A tab launched without a client, in the colors of its workspace's geometry owner.
-      inline std::uint64_t launchBackground(RuntimeModel<Memory> &model, Panes &panes, const ConfigureTerminalColors *owner_colors, const LaunchTab &request) {
+      inline std::uint64_t launchBackground(RuntimeModel<Memory> &model, Panes &panes, const ConfigureTerminalColors *owner_colors, bool bare_prompt, const LaunchTab &request) {
         if (request.launch.cwd_source != 0) {
           throw RequestError{FailureCode::invalid_request, "A background tab requires an explicit working directory"};
         }
@@ -855,7 +862,7 @@ export {
             ownDirectory(launch, directory, workspace.path);
           }
 
-          const auto pane = panes.launch(model, owner_colors, launch, TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, request.size).id;
+          const auto pane = panes.launch(model, owner_colors, bare_prompt, launch, TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, request.size).id;
           require(model.workspaces, WorkspaceLocation{.id = request.workspace}).tabs.back().panes.push_back(pane);
           ++model.next_tab_id;
           ++model.workspace_revision;
@@ -869,7 +876,7 @@ export {
       }
 
       inline void launchTab(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const LaunchTab &request) {
-        const auto pane = launchBackground(model, panes, ownerColors(model.workspaces, clients, request.workspace), request);
+        const auto pane = launchBackground(model, panes, ownerColors(model.workspaces, clients, request.workspace), ownerBarePrompt(model.workspaces, clients, request.workspace), request);
         const auto &launched = Panes::require(model.panes, pane);
         notify(launched.location.workspace.id, client_id);
         sendOpened(requireClient(clients, client_id), request.request_id, launched, false);
@@ -1233,7 +1240,8 @@ export {
         try {
           const TabLocation location{.workspace = {.id = workspace_id},
                                      .tab_id = tab_id};
-          pane = panes.launch(model, nullptr, launch, location, size).id;
+          const auto *requester = clients.find(client_id);
+          pane = panes.launch(model, nullptr, requester != nullptr && requester->bare_prompt, launch, location, size).id;
           model.workspaces.find(workspace_id)->tabs.front().panes.push_back(*pane);
           if (replace_view) {
             panes.detachAll(model, clients, client_id);
@@ -1281,7 +1289,7 @@ export {
           ownDirectory(launch, directory, require(model.workspaces, location.workspace).path);
         }
 
-        const auto pane = panes.launch(model, &client.colors, launch, location, size).id;
+        const auto pane = panes.launch(model, &client.colors, client.bare_prompt, launch, location, size).id;
 
         try {
           panes.attach(model, requireClient(clients, client_id), pane, size);
@@ -1404,7 +1412,7 @@ export {
           LaunchDirectory directory;
           ownDirectory(launch, directory, require(model.worktrees, request.worktree).path);
           launch.cwd_source = 0;
-          pane = workspaces.launchBackground(model, panes, Workspaces::ownerColors(model.workspaces, clients, workspace), LaunchTab{request.request_id, workspace, request.label, request.size, launch});
+          pane = workspaces.launchBackground(model, panes, Workspaces::ownerColors(model.workspaces, clients, workspace), Workspaces::ownerBarePrompt(model.workspaces, clients, workspace), LaunchTab{request.request_id, workspace, request.label, request.size, launch});
         } catch (...) {
           if (created) {
             model.workspaces.erase(workspace);
@@ -2209,6 +2217,14 @@ export {
         panes_.input(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory> &pane, std::span<const Byte> bytes) { agents.observeInput(pane, bytes); });
       }
 
+      inline void handle(std::uint64_t identity, const PaneCommand &message) {
+        panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory> &pane, std::span<const Byte> bytes) { agents.observeInput(pane, bytes); });
+      }
+
+      inline void handle(std::uint64_t identity, const ConfigureShellPrompt &message) {
+        requireClient(clients_, identity).bare_prompt = message.bare;
+      }
+
       inline void handle(std::uint64_t identity, const PaneResize &message) {
         panes_.resize(model_, requireClient(clients_, identity), message);
       }
@@ -2238,6 +2254,14 @@ export {
 
       inline void handle(std::uint64_t identity, const SearchPane &message) {
         Panes::search(model_.panes, requireClient(clients_, identity), message);
+      }
+
+      inline void handle(std::uint64_t identity, const SearchPaneRows &message) {
+        Panes::search(model_.panes, requireClient(clients_, identity), message);
+      }
+
+      inline void handle(std::uint64_t identity, const ReadPaneRows &message) {
+        Panes::readRows(model_.panes, requireClient(clients_, identity), message);
       }
 
       inline void handle(std::uint64_t identity, const CopySelection &message) {

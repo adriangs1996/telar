@@ -192,6 +192,13 @@ class Application final : public QObject {
   Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
   Q_PROPERTY(QString dialog READ dialog NOTIFY dialogChanged)
   Q_PROPERTY(QString dialogText READ dialogText NOTIFY dialogChanged)
+  // The command whose output the scrollback search reads, empty while it reads the whole
+  // scrollback; and whether Tab can switch between the two.
+  Q_PROPERTY(QString copySearchScope READ copySearchScope NOTIFY dialogChanged)
+  Q_PROPERTY(bool copySearchScopes READ copySearchScopes NOTIFY dialogChanged)
+  // The scrollback search as it is typed: its query, whether an answer is awaited, how many
+  // matches and which one the cursor is on, and what it reads.
+  Q_PROPERTY(QVariantMap copySearchState READ copySearchState NOTIFY copySearchChanged)
   // The history or path search the focused pane's prompt line hosts in place of the dialog.
   Q_PROPERTY(QString islandSearch READ islandSearch NOTIFY dialogChanged)
   Q_PROPERTY(QString islandSearchPane READ islandSearchPane NOTIFY dialogChanged)
@@ -334,6 +341,14 @@ public:
 
   Q_INVOKABLE void execute(Action action, const QString &target = {});
   Q_INVOKABLE void submitDialog(const QVariantMap &input);
+  Q_INVOKABLE void toggleCopySearchScope();
+  // The scrollback searched for `text` as it is typed, from where the search began.
+  Q_INVOKABLE void searchScrollback(const QString &text);
+  Q_INVOKABLE void stepScrollbackMatch(bool forward);
+  Q_INVOKABLE void finishScrollbackSearch();
+  [[nodiscard]] QVariantMap copySearchState() const;
+  [[nodiscard]] QString copySearchScope() const;
+  [[nodiscard]] bool copySearchScopes() const;
   Q_INVOKABLE void useHistory(const QString &entry_id, bool alternate = false);
   Q_INVOKABLE void useHistoryRow(int row, bool alternate = false);
   Q_INVOKABLE void usePresentedHistory(const QString &revision, bool alternate = false);
@@ -515,6 +530,7 @@ signals:
   void runtimeLinkChanged();
   void sidebarGeometryChanged();
   void dialogChanged();
+  void copySearchChanged();
   void terminalChanged(qulonglong pane_id);
   void promptChanged(qulonglong pane_id);
   void pointerModifiersChanged();

@@ -601,8 +601,8 @@ void orderedResizeFailure() {
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
     const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-    auto &failed = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
-    auto &healthy = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
+    auto &failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
     failed.media->resize({80, 25, 9, 18});
     for (unsigned index = 0; index < MediaBatch::event_capacity / 2; ++index) {
       failed.media->output(bytes("x"));
@@ -641,8 +641,8 @@ void semanticFailureDuringResume() {
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
     const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-    auto &failed = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
-    auto &healthy = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
+    auto &failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
     for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
       failed.terminal.feed(bytes("\x1b[5n"));
     }

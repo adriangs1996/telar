@@ -159,7 +159,9 @@ public:
     restore_layout_ = enabled;
   }
 
-  inline void connected(std::uint64_t identity) {
+  // `reads_rows`: the runtime reads its scrollback's rows by stable number (schema cqp00003).
+  inline void connected(std::uint64_t identity, bool reads_rows = true) {
+    reads_rows_ = reads_rows;
     panes_.clear();
     tabs_.clear();
     active_tab_.reset();
@@ -180,6 +182,7 @@ public:
     transport_.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
     transport_.send(ConfigureGraphics{supportsSharedGraphics()});
     configureCadence();
+    configureShellPrompt();
   }
 
   [[nodiscard]] inline bool requestsPending() const noexcept {
@@ -264,6 +267,8 @@ public:
       pane->acknowledged_frame = 0;
       pane->screen.detach();
       pane->graphics.detach();
+      pane->rows.release();
+      pane->scrollback_generation = 0;
     }
 
     for (auto &tab : tabs_) {
@@ -345,6 +350,10 @@ public:
       return dispatch.template operator()<PaneGit>();
     case ServerTag::pane_blocks:
       return dispatch.template operator()<PaneBlocks>();
+    case ServerTag::pane_scrollback:
+      return dispatch.template operator()<PaneScrollback>();
+    case ServerTag::pane_rows:
+      return dispatch.template operator()<PaneRows>();
     case ServerTag::command_spec:
       return dispatch.template operator()<CommandSpec>();
     case ServerTag::completion_words:
@@ -760,12 +769,7 @@ public:
     if (source == PaneInputSource::keyboard || source == PaneInputSource::key_release) {
       static_cast<void>(copy_mode_.clearPointer());
       if (source != PaneInputSource::key_release) {
-        const auto bottom = copyGrid(pane->screen).maximumOffset();
-        if (pane->screen.scroll().offset != bottom) {
-          ++view_version_.viewport;
-          pane->screen.setViewport(bottom);
-          transport_.send(SetPaneViewport{.pane_id = pane_id, .offset = follow_output});
-        }
+        followLiveEnd(*pane);
       }
     }
 
@@ -773,13 +777,49 @@ public:
     while (!pending_bytes.empty()) {
       const auto count = std::min(pending_bytes.size(), input_chunk_size);
       transport_.send(PaneInput{.pane_id = pane_id, .bytes = pending_bytes.first(count)});
-      if constexpr (PaneInputObserver<Effects>) {
-        if (source != PaneInputSource::terminal_report && pending_bytes.size() == bytes.size()) {
-          effects_.notePaneInput({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = pane->attached, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()}, Clock::nowNanoseconds());
-        }
+      if (source != PaneInputSource::terminal_report && pending_bytes.size() == bytes.size()) {
+        notePaneInput(*pane);
       }
 
       pending_bytes = pending_bytes.subspan(count);
+    }
+  }
+
+  // Runs a command at the pane's prompt. A runtime that takes commands types it there itself and
+  // keeps this text for the command's history; an older one (schema cqp00002) gets it pasted,
+  // then Enter, and reads the command back from the screen.
+  inline void runCommand(std::uint64_t pane_id, std::string_view text) {
+    auto *pane = findPane(pane_id);
+    if (pane == nullptr || !pane->attached || pane->exited || text.empty()) {
+      return;
+    }
+
+    if (!reads_rows_) {
+      pasteBytes(pane_id, text);
+      input(pane_id, "\r");
+      return;
+    }
+
+    static_cast<void>(copy_mode_.clearPointer());
+    followLiveEnd(*pane);
+    transport_.send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
+    notePaneInput(*pane);
+  }
+
+  // Typing returns a scrolled pane to its live end, where the output follows.
+  inline void followLiveEnd(Pane<Memory> &pane) {
+    const auto bottom = copyGrid(pane.screen).maximumOffset();
+    if (pane.screen.scroll().offset != bottom) {
+      ++view_version_.viewport;
+      ++pane.viewport_requests;
+      pane.screen.setViewport(bottom);
+      transport_.send(SetPaneViewport{.pane_id = pane.id, .offset = follow_output});
+    }
+  }
+
+  inline void notePaneInput(const Pane<Memory> &pane) {
+    if constexpr (PaneInputObserver<Effects>) {
+      effects_.notePaneInput({.pane_id = pane.id, .frame_id = pane.screen.frameId(), .attached = pane.attached, .attachment_generation = pane.attachment_generation, .graphics_revision = pane.graphics.revision()}, Clock::nowNanoseconds());
     }
   }
 
@@ -792,6 +832,125 @@ public:
       return prompt::Surface::none;
     }
     return prompt::surface(pane->shell, pane->screen.modes().alternate_screen, configuration_.prompt.mode == PromptMode::telar);
+  }
+
+  // ---- scrollback rows beyond the screen ----------------------------------------------------
+
+  // Whether the runtime sends rows of a scrollback apart from its screen, for a view that
+  // scrolls by pixels or folds commands. Without them the view moves by whole rows.
+  [[nodiscard]] inline bool readsRows() const noexcept {
+    return reads_rows_ && ready_;
+  }
+
+  // Asks for the rows from stable row `first` to `last` the pane holds neither on its screen
+  // nor in its cache, a request at a time while requests are free.
+  inline void requestRows(std::uint64_t pane_id, std::uint64_t first, std::uint64_t last) {
+    auto *pane = findPane(pane_id);
+    if (pane == nullptr || !pane->attached || !readsRows() || pane->scrollback_generation == 0 || last < first) {
+      return;
+    }
+    const auto screen_first = pane->scrollback_trimmed + pane->screen.cellsOffset();
+    const auto screen_last = screen_first + pane->screen.rows();
+    auto from = first;
+    while (!pane->rows.full()) {
+      const auto missing = pane->rows.missing(from, last);
+      if (!missing) {
+        return;
+      }
+      // Rows on the screen come in its frames.
+      if (*missing >= screen_first && *missing < screen_last) {
+        from = screen_last;
+        continue;
+      }
+      const auto count = static_cast<std::uint16_t>(std::min<std::uint64_t>(RowCache<Memory>::request_rows, last - *missing + 1));
+      const auto request_id = nextRequest();
+      transport_.send(ReadPaneRows{.request_id = request_id, .pane_id = pane_id, .from = *missing, .count = count});
+      pane->rows.ask(request_id, *missing, count);
+      from = *missing + count;
+    }
+  }
+
+  // The rows the scrollback dropped from its top since the pane's view last asked: the view
+  // moves up by as many to keep showing the same rows.
+  [[nodiscard]] inline std::uint64_t takeDroppedRows(std::uint64_t pane_id) noexcept {
+    auto *pane = findPane(pane_id);
+    return pane == nullptr ? 0 : std::exchange(pane->scrollback_dropped, 0);
+  }
+
+  // ---- folded commands ------------------------------------------------------------------------
+
+  // The stable number of a block's first row, which names it while rows above it are dropped.
+  [[nodiscard]] inline static std::uint64_t blockKey(const Pane<Memory> &pane, std::size_t index) noexcept {
+    return pane.scrollback_trimmed + pane.blocks[index].row;
+  }
+
+  [[nodiscard]] inline bool folded(std::uint64_t pane_id, std::size_t index) const noexcept {
+    const auto *pane = findPane(pane_id);
+    return pane != nullptr && index < pane->blocks.size() && std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end();
+  }
+
+  // Folds the output of block `index`, or unfolds it. Only a runtime that sends rows apart from
+  // the screen can show what follows a fold.
+  inline void fold(std::uint64_t pane_id, std::size_t index, bool fold) {
+    auto *pane = findPane(pane_id);
+    if (pane == nullptr || index >= pane->blocks.size() || (fold && !readsRows())) {
+      return;
+    }
+    const auto key = blockKey(*pane, index);
+    const auto found = std::ranges::find(pane->folded, key);
+    if (fold == (found != pane->folded.end())) {
+      return;
+    }
+    if (fold) {
+      pane->folded.push_back(key);
+    } else {
+      pane->folded.erase(found);
+    }
+    refreshFolds(*pane);
+    changed_pane_ = pane_id;
+    fold_changed_ = true;
+  }
+
+  // Folds every block but a running one, or unfolds them all.
+  inline void foldAll(std::uint64_t pane_id, bool fold) {
+    auto *pane = findPane(pane_id);
+    if (pane == nullptr || (fold && !readsRows())) {
+      return;
+    }
+    pane->folded.clear();
+    for (std::size_t index = 0; fold && index < pane->blocks.size(); ++index) {
+      if (pane->blocks[index].state != CommandBlockState::running) {
+        pane->folded.push_back(blockKey(*pane, index));
+      }
+    }
+    refreshFolds(*pane);
+    changed_pane_ = pane_id;
+    fold_changed_ = true;
+  }
+
+  // Whether a fold opened or closed since the last call.
+  [[nodiscard]] inline bool takeFoldChange() noexcept {
+    return std::exchange(fold_changed_, false);
+  }
+
+  // The rows of block `index`'s output, from under its prompt to above the next prompt, or to
+  // the live prompt or the scrollback's end for the last; empty when it printed nothing.
+  [[nodiscard]] inline static std::pair<std::uint32_t, std::uint32_t> blockRows(const Pane<Memory> &pane, std::size_t index) noexcept {
+    const auto &block = pane.blocks[index];
+    const auto first = block.row + block.rows;
+    std::uint32_t end = pane.screen.scroll().total_rows;
+    if (index + 1 < pane.blocks.size()) {
+      end = pane.blocks[index + 1].row;
+    } else if (block.state != CommandBlockState::running) {
+      // The live prompt, read where the view shows it and remembered while it does not.
+      const auto prompt = livePromptRow(pane);
+      if (prompt && *prompt >= first) {
+        end = *prompt;
+      } else if (pane.live_prompt_row && *pane.live_prompt_row >= first) {
+        end = *pane.live_prompt_row;
+      }
+    }
+    return {first, std::max(first, end)};
   }
 
   // ---- command blocks, selected from the editor -------------------------------------------
@@ -1404,6 +1563,7 @@ public:
     }
 
     // The bottom as this replica knows it may be behind the runtime's: ask to follow instead.
+    ++pane->viewport_requests;
     transport_.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
     pane->screen.setViewport(requested);
     ++view_version_.viewport;
@@ -1516,6 +1676,11 @@ public:
     }
 
     applyCopyPlan(*plan, *pane);
+    // A search begins from where the cursor is now.
+    if (plan->effect.search) {
+      copy_search_origin_.reset();
+      copy_search_query_.clear();
+    }
 
     return plan->effect;
   }
@@ -1528,17 +1693,88 @@ public:
     }
 
     copy_search_request_ = 0;
+    copy_search_rows_.reset();
+    copy_search_origin_.reset();
+    copy_search_query_.clear();
   }
 
   inline void searchCopy(std::string_view needle) {
-    const auto *pane = copyPane();
+    auto *pane = copyPane();
     if (pane == nullptr || !copy_mode_.active()) {
       throw EncodingError{"No copy mode owns this search"};
     }
 
-    const SearchPane request{.request_id = nextRequest(), .pane_id = pane->id, .needle = needle};
-    transport_.send(request);
-    copy_search_request_ = request.request_id;
+    // A search typed a letter at a time starts where the first letter found the cursor.
+    if (!copy_search_origin_) {
+      copy_search_origin_ = copy_mode_.state()->cursor;
+    }
+    copy_search_query_.assign(needle);
+    if (needle.empty()) {
+      // Nothing to look for: no matches, and the cursor back where the search began.
+      copy_search_request_ = 0;
+      copy_search_truncated_ = false;
+      if (const auto plan = copy_mode_.search({}, copyGrid(pane->screen), copy_search_origin_)) {
+        applyCopyPlan(*plan, *pane);
+      }
+      changed_pane_ = pane->id;
+      return;
+    }
+    const auto request_id = nextRequest();
+    if (copy_search_rows_ && copy_search_scoped_ && readsRows()) {
+      transport_.send(SearchPaneRows{.request_id = request_id, .pane_id = pane->id, .needle = needle, .first_row = copy_search_rows_->first, .last_row = copy_search_rows_->last});
+    } else {
+      transport_.send(SearchPane{.request_id = request_id, .pane_id = pane->id, .needle = needle});
+    }
+    copy_search_request_ = request_id;
+  }
+
+  // The search typed so far ends: its matches stay for n and N, from wherever they took the
+  // cursor.
+  inline void finishCopySearch() noexcept {
+    copy_search_origin_.reset();
+  }
+
+  // What the copy-mode search looks for, whether an answer is awaited, and how its matches
+  // stand: how many, which the cursor is on, and whether there were more than it kept.
+  struct CopySearchState {
+    std::string_view query;
+    bool searching = false;
+    std::size_t count = 0;
+    std::size_t index = 0;
+    bool truncated = false;
+  };
+
+  [[nodiscard]] inline CopySearchState copySearch() const noexcept {
+    const auto &state = copy_mode_.state();
+    return {.query = copy_search_query_, .searching = copy_search_request_ != 0, .count = copy_mode_.matches().size(), .index = state ? std::size_t{state->match_index} : std::size_t{0}, .truncated = copy_search_truncated_};
+  }
+
+  // The next match or the one before, as n and N go.
+  inline void stepCopyMatch(bool forward) {
+    TerminalKey key{.code = KeyChord::Key::character, .codepoint = static_cast<std::uint32_t>(forward ? 'n' : 'N')};
+    static_cast<void>(copyKey(key));
+  }
+
+  // The command whose output the copy-mode search reads, while it reads only that output.
+  [[nodiscard]] inline std::optional<std::size_t> copySearchBlock() const noexcept {
+    return copy_search_rows_ && copy_search_scoped_ ? std::optional{copy_search_rows_->block} : std::nullopt;
+  }
+
+  // Whether a search can be confined to a command's output, as one began from a command can.
+  [[nodiscard]] inline bool copySearchScopes() const noexcept {
+    return copy_search_rows_.has_value() && readsRows();
+  }
+
+  // Between that command's output and the whole scrollback.
+  inline void toggleCopySearchScope() noexcept {
+    if (copySearchScopes()) {
+      copy_search_scoped_ = !copy_search_scoped_;
+    }
+  }
+
+  // Whether a key asked for the scrollback search since the last call.
+  [[nodiscard]] inline bool takeSearchRequest() noexcept {
+    return std::exchange(search_requested_, false);
   }
 
   inline void queryHistory(std::string_view query) {
@@ -1836,9 +2072,21 @@ public:
   }
 
   inline void configure(const Configuration &configuration) {
+    const bool prompt_changed = configuration_.prompt.mode != configuration.prompt.mode;
     configuration_ = configuration;
     sound_playback_.configure(configuration.sound);
     ++view_version_.configuration;
+    if (prompt_changed) {
+      configureShellPrompt();
+    }
+  }
+
+  // Tells the runtime whether telar's editor stands in for the shell's prompt: the shells of the
+  // panes it opens from now on print no prompt of their own. A cqp00002 runtime cannot hear it.
+  inline void configureShellPrompt() {
+    if (ready_ && reads_rows_) {
+      transport_.send(ConfigureShellPrompt{.bare = configuration_.prompt.mode == PromptMode::telar});
+    }
   }
 
   inline void setTheme(const Theme &theme) {
@@ -2782,6 +3030,7 @@ private:
       }
 
       pane.screen.setViewport(plan.viewport->offset);
+      ++pane.viewport_requests;
       transport_.send(*plan.viewport);
     }
   }
@@ -2811,10 +3060,11 @@ private:
       return Change::none;
     }
 
-    const auto plan = copy_mode_.search(message.matches, copyGrid(pane->screen));
+    const auto plan = copy_mode_.search(message.matches, copyGrid(pane->screen), copy_search_origin_);
     if (plan) {
       applyCopyPlan(*plan, *pane);
     }
+    copy_search_truncated_ = message.truncated;
 
     copy_search_request_ = 0;
     changed_pane_ = pane->id;
@@ -2844,12 +3094,47 @@ private:
       }
 
       pane->snapshot_requested = false;
+      if (const auto prompt = livePromptRow(*pane)) {
+        pane->live_prompt_row = prompt;
+      }
+      if (!pane->folded.empty()) {
+        refreshFolds(*pane);
+      }
       changed_pane_ = pane->id;
 
       return Change::terminal;
     }
 
     return Change::none;
+  }
+
+  // The rows the folded blocks hide, from their stable numbers; folds whose blocks are gone
+  // are forgotten.
+  inline void refreshFolds(Pane<Memory> &pane) {
+    if (pane.folded.empty()) {
+      if (!pane.folds.empty()) {
+        pane.folds.clear();
+        ++pane.fold_revision;
+      }
+      return;
+    }
+    std::vector<typename FoldMap<>::Span> spans;
+    std::vector<std::uint64_t> kept;
+    for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
+      if (std::ranges::find(pane.folded, blockKey(pane, index)) == pane.folded.end()) {
+        continue;
+      }
+      kept.push_back(blockKey(pane, index));
+      const auto [first, end] = blockRows(pane, index);
+      if (end > first) {
+        spans.push_back({.first = first, .count = end - first});
+      }
+    }
+    pane.folded = std::move(kept);
+    if (!std::ranges::equal(pane.folds.spans(), spans)) {
+      pane.folds.assign(spans);
+      ++pane.fold_revision;
+    }
   }
 
   template <typename Message, ClientCommandHandler Handler>
@@ -3574,6 +3859,8 @@ private:
     const auto previous = std::exchange(pane->shell, message);
     pane->shell_host.assign(message.host);
     pane->shell.host = pane->shell_host;
+    pane->shell_directory.assign(message.directory);
+    pane->shell.directory = pane->shell_directory;
     // The pane's header names the host and the link.
     chrome_changed_ |= previous.remote != message.remote || previous_host != pane->shell_host || previous.link_ms != message.link_ms;
     if (const auto found = islands_.find(pane->id); found != islands_.end()) {
@@ -3658,6 +3945,68 @@ private:
       if ((last.state == CommandBlockState::succeeded || last.state == CommandBlockState::failed) && last.status != 127) {
         learnCommand(pane->id, last.command, pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix);
       }
+    }
+    if (!pane->refold.empty()) {
+      for (const auto index : pane->refold) {
+        if (index < pane->blocks.size()) {
+          pane->folded.push_back(blockKey(*pane, index));
+        }
+      }
+      pane->refold.clear();
+    }
+    refreshFolds(*pane);
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
+  Change apply(const PaneScrollback &message) {
+    auto *pane = findPane(message.pane_id);
+    if (pane == nullptr) {
+      return Change::none;
+    }
+
+    if (pane->scrollback_generation == message.generation && message.trimmed > pane->scrollback_trimmed) {
+      // The blocks come again with their rows moved up; until then they are moved here, so
+      // their folds keep hiding the same rows.
+      const auto dropped = message.trimmed - pane->scrollback_trimmed;
+      pane->scrollback_dropped += dropped;
+      std::erase_if(pane->blocks, [dropped](const CommandBlock &block) { return block.row < dropped; });
+      for (auto &block : pane->blocks) {
+        block.row -= static_cast<std::uint32_t>(dropped);
+      }
+      if (pane->live_prompt_row) {
+        pane->live_prompt_row = *pane->live_prompt_row >= dropped ? std::optional{static_cast<std::uint32_t>(*pane->live_prompt_row - dropped)} : std::nullopt;
+      }
+    } else if (pane->scrollback_generation != 0 && pane->scrollback_generation != message.generation && !pane->folded.empty()) {
+      // Renumbered rows: the blocks come again with their new rows, and their folds follow them
+      // by order then.
+      pane->refold.clear();
+      for (std::size_t index = 0; index < pane->blocks.size(); ++index) {
+        if (std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end()) {
+          pane->refold.push_back(index);
+        }
+      }
+      pane->folded.clear();
+    }
+    if (pane->scrollback_generation != message.generation) {
+      pane->live_prompt_row.reset();
+    }
+    pane->scrollback_generation = message.generation;
+    pane->scrollback_trimmed = message.trimmed;
+    pane->rows.number(message.generation);
+    refreshFolds(*pane);
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
+  Change apply(const PaneRows &message) {
+    auto *pane = findPane(message.pane_id);
+    if (pane == nullptr) {
+      return Change::none;
+    }
+
+    if (!pane->rows.store(message, pane->screen.columns())) {
+      return Change::none;
     }
     changed_pane_ = pane->id;
     return Change::terminal;
@@ -3798,6 +4147,12 @@ private:
   }
 
   Change apply(const RequestFailed &message) {
+    for (auto &pane : panes_) {
+      if (pane->rows.settle(message.request_id)) {
+        return Change::none;
+      }
+    }
+
     const auto paths_revision = path_picker_.revision();
     if (path_picker_.fail(message)) {
       return paths_revision != path_picker_.revision() ? Change::paths : Change::none;
@@ -4439,15 +4794,23 @@ private:
     // blocks, and the row the live prompt started on when the selection began.
     std::optional<std::size_t> block;
     std::optional<std::uint32_t> live_prompt;
-    // The first half of `[[`, `]]` or `yc`.
+    // The first half of `[[`, `]]`, `[f`, `]f`, `gg`, `z.` or `yc`.
     char pending = 0;
+    // Where jumps left from, by stable row at the view's top, oldest first, and which of them
+    // Ctrl-O went back to: the list's end while it has not.
+    std::vector<std::uint64_t> jumps;
+    std::size_t jump = 0;
   };
 
-  // The keys of the command blocks, ahead of the editor: Ctrl-U and Ctrl-D, or [[ and ]], step
-  // through the blocks from the normal mode; on a selected block, v and V select its output,
-  // Y copies it and yc its command; Esc, q, i, a, I, A and any other key go back to the prompt.
+  // The keys of the command blocks, ahead of the editor. From the normal mode: Ctrl-U and
+  // Ctrl-D, or [[ and ]], step through the blocks, [f and ]f through the failed ones, Ctrl-O and
+  // Ctrl-I back and forth through the jumps. On a selected block: j and k move the view a row,
+  // gg to the top and G to the live end; zt, zz and zb put the block at the view's top, middle
+  // or bottom; za, zc and zo fold its output, zM and zR every block's; / searches its output;
+  // v and V select its output, Y copies it and yc its command; Esc, q, i, a, I, A and any other
+  // key go back to the prompt.
   inline std::optional<prompt::Outcome> blockKey(std::uint64_t pane_id, IslandEntry &entry, const prompt::KeyPress &key) {
-    const auto *pane = findPane(pane_id);
+    auto *pane = findPane(pane_id);
     if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar) {
       return std::nullopt;
     }
@@ -4461,60 +4824,151 @@ private:
     }
     const bool plain = key.key == prompt::Key::character && !key.modifiers.control && !key.modifiers.alt;
     const auto character = plain ? key.character : 0U;
+    const auto select = [&](std::optional<std::size_t> index) {
+      recordJump(*pane, entry);
+      selectBlock(pane_id, index);
+    };
     const auto step = [&](int direction) {
       if (count == 0) {
         return;
       }
       if (!selected) {
         if (direction < 0) {
-          selectBlock(pane_id, count - 1);
+          select(count - 1);
         }
         return;
       }
       if (direction < 0) {
-        selectBlock(pane_id, *entry.block == 0 ? 0 : *entry.block - 1);
+        select(*entry.block == 0 ? 0 : *entry.block - 1);
       } else {
-        selectBlock(pane_id, *entry.block + 1 < count ? std::optional<std::size_t>{*entry.block + 1} : std::nullopt);
+        select(*entry.block + 1 < count ? std::optional<std::size_t>{*entry.block + 1} : std::nullopt);
+      }
+    };
+    // The next failed block above or below the selected one, or from the live end.
+    const auto step_failed = [&](int direction) {
+      auto index = selected ? static_cast<std::ptrdiff_t>(*entry.block) : static_cast<std::ptrdiff_t>(count);
+      for (index += direction; index >= 0 && std::cmp_less(index, count); index += direction) {
+        if (pane->blocks[static_cast<std::size_t>(index)].state == CommandBlockState::failed) {
+          select(static_cast<std::size_t>(index));
+          return;
+        }
       }
     };
 
-    if (key.key == prompt::Key::character && key.modifiers.control && !key.modifiers.alt && (key.character == 'u' || key.character == 'd')) {
-      entry.pending = 0;
-      step(key.character == 'u' ? -1 : 1);
-      return prompt::Outcome::edited;
-    }
-    if (character == '[' || character == ']') {
-      if (entry.pending == static_cast<char>(character)) {
+    if (key.key == prompt::Key::character && key.modifiers.control && !key.modifiers.alt) {
+      switch (key.character) {
+      case 'u':
+      case 'd':
         entry.pending = 0;
-        step(character == '[' ? -1 : 1);
-      } else {
-        entry.pending = static_cast<char>(character);
+        step(key.character == 'u' ? -1 : 1);
+        return prompt::Outcome::edited;
+      case 'o':
+      case 'i':
+        entry.pending = 0;
+        jumpBack(*pane, entry, key.character == 'o');
+        return prompt::Outcome::edited;
+      default:
+        break;
+      }
+    }
+    const auto pending = std::exchange(entry.pending, 0);
+    if (pending == '[' || pending == ']') {
+      const int direction = pending == '[' ? -1 : 1;
+      if (character == static_cast<unsigned>(pending)) {
+        step(direction);
+      } else if (character == 'f') {
+        step_failed(direction);
       }
       return prompt::Outcome::edited;
     }
-    const auto pending = std::exchange(entry.pending, 0);
+    if (character == '[' || character == ']') {
+      entry.pending = static_cast<char>(character);
+      return prompt::Outcome::edited;
+    }
     if (!selected) {
       return std::nullopt;
     }
 
-    const auto &block = pane->blocks[*entry.block];
-    if (pending == 'y') {
+    const auto index = *entry.block;
+    const auto &block = pane->blocks[index];
+    const auto rows = static_cast<std::uint64_t>(pane->screen.rows());
+    const auto top = shownTop(*pane);
+    const auto separator = pane->folds.display(static_cast<std::uint64_t>(block.row) + block.rows - 1);
+    switch (pending) {
+    case 'y':
       if (character == 'c') {
         clipboard_.assign(block.command);
         clipboard_written_ = true;
       }
       return prompt::Outcome::edited;
+    case 'g':
+      if (character == 'g') {
+        recordJump(*pane, entry);
+        scrollToShownRow(*pane, 0);
+      }
+      return prompt::Outcome::edited;
+    case 'z':
+      switch (character) {
+      case 'a':
+        fold(pane_id, index, !folded(pane_id, index));
+        break;
+      case 'c':
+        fold(pane_id, index, true);
+        break;
+      case 'o':
+        fold(pane_id, index, false);
+        break;
+      case 'M':
+        foldAll(pane_id, true);
+        break;
+      case 'R':
+        foldAll(pane_id, false);
+        break;
+      case 't':
+        recordJump(*pane, entry);
+        scrollToShownRow(*pane, separator);
+        break;
+      case 'z':
+        recordJump(*pane, entry);
+        scrollToShownRow(*pane, separator > rows / 2 ? separator - (rows / 2) : 0);
+        break;
+      case 'b': {
+        recordJump(*pane, entry);
+        const auto end = pane->folds.display(blockRows(*pane, index).second);
+        scrollToShownRow(*pane, end > rows ? end - rows : 0);
+        break;
+      }
+      default:
+        break;
+      }
+      changed_pane_ = pane_id;
+      block_changed_ = true;
+      return prompt::Outcome::edited;
+    default:
+      break;
     }
     switch (character) {
+    case 'j':
+    case 'k':
+      scrollToShownRow(*pane, character == 'j' ? top + 1 : (top == 0 ? 0 : top - 1));
+      return prompt::Outcome::edited;
+    case 'G':
+      select(std::nullopt);
+      return prompt::Outcome::edited;
+    case 'g':
+    case 'z':
+    case 'y':
+      entry.pending = static_cast<char>(character);
+      return prompt::Outcome::edited;
+    case '/':
+      searchBlockOutput(*pane, index);
+      return prompt::Outcome::edited;
     case 'v':
     case 'V':
-      selectBlockOutput(*pane, *entry.block, character == 'V');
+      selectBlockOutput(*pane, index, character == 'V');
       return prompt::Outcome::edited;
     case 'Y':
-      copyBlockOutput(*pane, *entry.block);
-      return prompt::Outcome::edited;
-    case 'y':
-      entry.pending = 'y';
+      copyBlockOutput(*pane, index);
       return prompt::Outcome::edited;
     case 'q':
       selectBlock(pane_id, std::nullopt);
@@ -4529,6 +4983,80 @@ private:
       return prompt::Outcome::edited;
     }
     return std::nullopt;
+  }
+
+  // The shown row at the view's top: as its view says, or as the runtime's view puts it.
+  [[nodiscard]] inline static std::uint64_t shownTop(const Pane<Memory> &pane) noexcept {
+    return pane.shown_top.value_or(pane.folds.display(pane.screen.scroll().offset));
+  }
+
+  // Scrolls the pane so that shown row `display`, folds counted, is the view's top.
+  inline void scrollToShownRow(const Pane<Memory> &pane, std::uint64_t display) {
+    const auto row = pane.folds.row(display);
+    scrollToRow(pane.id, static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max())));
+    changed_pane_ = pane.id;
+    block_changed_ = true;
+  }
+
+  // Remembers the view's top before a jump, dropping the jumps Ctrl-O had gone back past.
+  inline void recordJump(const Pane<Memory> &pane, IslandEntry &entry) {
+    constexpr std::size_t maximum_jumps = 64;
+    const auto here = pane.scrollback_trimmed + pane.folds.row(shownTop(pane));
+    entry.jumps.resize(std::min(entry.jump, entry.jumps.size()));
+    if (entry.jumps.empty() || entry.jumps.back() != here) {
+      entry.jumps.push_back(here);
+    }
+    if (entry.jumps.size() > maximum_jumps) {
+      entry.jumps.erase(entry.jumps.begin());
+    }
+    entry.jump = entry.jumps.size();
+  }
+
+  // Back to where the last jump left from, or forward again; the view's top goes there.
+  inline void jumpBack(const Pane<Memory> &pane, IslandEntry &entry, bool back) {
+    if (back) {
+      if (entry.jump == 0 || entry.jumps.empty()) {
+        return;
+      }
+      if (entry.jump == entry.jumps.size()) {
+        // The first step back remembers where it left, for Ctrl-I to return to.
+        const auto here = pane.scrollback_trimmed + pane.folds.row(shownTop(pane));
+        if (entry.jumps.back() != here) {
+          entry.jumps.push_back(here);
+        }
+        entry.jump = entry.jumps.size() - 1;
+      }
+      --entry.jump;
+    } else {
+      if (entry.jump + 1 >= entry.jumps.size()) {
+        return;
+      }
+      ++entry.jump;
+    }
+    const auto stable = entry.jumps[entry.jump];
+    const auto row = stable > pane.scrollback_trimmed ? stable - pane.scrollback_trimmed : 0;
+    scrollToRow(pane.id, static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max())));
+    changed_pane_ = pane.id;
+    block_changed_ = true;
+  }
+
+  // Copy mode on a block's output, at its first row, with the scrollback search asked for and
+  // confined to that output.
+  inline void searchBlockOutput(Pane<Memory> &pane, std::size_t index) {
+    const auto [first, last] = blockOutput(pane, index);
+    const auto grid = copyGrid(pane.screen);
+    if (folded(pane.id, index)) {
+      fold(pane.id, index, false);
+    }
+    if (copy_mode_.enterAt(pane.id, grid, CopyPoint{.x = 0, .y = first}, std::nullopt, false)) {
+      copy_search_request_ = 0;
+      copy_search_rows_ = CopySearchRows{.block = index, .first = first, .last = last};
+      copy_search_origin_ = CopyPoint{.x = 0, .y = first};
+      copy_search_scoped_ = readsRows();
+      search_requested_ = true;
+      changed_pane_ = pane.id;
+      block_changed_ = true;
+    }
   }
 
   // The rows of a block's output: from under its command to above the next block's prompt, or
@@ -4669,14 +5197,15 @@ private:
     const auto text = island.delivery();
     switch (outcome) {
     case prompt::Outcome::run:
-      if (!text.empty()) {
-        HistoryText::validate(text, pane->screen.modes().bracketed_paste);
-        pasteBytes(pane_id, text);
-        // Every pane's suggestions know the command at once, without asking the history again.
-        std::erase(prompt_history_, text);
-        prompt_history_.insert(prompt_history_.begin(), std::string{text});
+      if (text.empty()) {
+        input(pane_id, "\r");
+        break;
       }
-      input(pane_id, "\r");
+      HistoryText::validate(text, pane->screen.modes().bracketed_paste);
+      runCommand(pane_id, text);
+      // Every pane's suggestions know the command at once, without asking the history again.
+      std::erase(prompt_history_, text);
+      prompt_history_.insert(prompt_history_.begin(), std::string{text});
       break;
     case prompt::Outcome::answer: {
       HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
@@ -4944,6 +5473,20 @@ private:
   CopyMode copy_mode_;
   EditorOpening editor_opening_;
   std::uint64_t copy_search_request_ = 0;
+  // The output a search begun from a command reads, and whether it reads only that.
+  struct CopySearchRows {
+    std::size_t block = 0;
+    std::uint32_t first = 0;
+    std::uint32_t last = 0;
+  };
+  std::optional<CopySearchRows> copy_search_rows_;
+  // Where the search being typed began, what it looks for, and whether its answer kept fewer
+  // matches than it found.
+  std::optional<CopyPoint> copy_search_origin_;
+  std::string copy_search_query_;
+  bool copy_search_truncated_ = false;
+  bool copy_search_scoped_ = false;
+  bool search_requested_ = false;
   HostMetrics metrics_;
   ProxyStatus proxy_{};
   tbc::view<Memory &, tbc::lt::a> memory_;
@@ -4998,6 +5541,8 @@ private:
   std::optional<PaneBottomReservation> attachment_reservation_;
   bool attachment_resize_pending_ = false;
   bool ready_ = false;
+  bool reads_rows_ = false;
+  bool fold_changed_ = false;
   bool presented_ = true;
   bool leave_pending_ = false;
   bool initial_open_pending_ = false;

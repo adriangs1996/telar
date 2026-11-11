@@ -226,6 +226,8 @@ enum class DeliveryLane : std::uint8_t {
   // Ahead of cells: a client deciding who gets a key must not see a frame before the state
   // of the shell that printed it.
   shell,
+  // Ahead of cells too: a frame's rows are numbered as the scrollback that precedes it says.
+  scrollback,
   cells,
   agents,
   metrics,
@@ -275,6 +277,8 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
     return DeliveryLane::progress;
   case ServerTag::pane_shell:
     return DeliveryLane::shell;
+  case ServerTag::pane_scrollback:
+    return DeliveryLane::scrollback;
   case ServerTag::pane_git:
     return DeliveryLane::git;
   case ServerTag::pane_blocks:
@@ -305,6 +309,7 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
   case ServerTag::pane_text:
   case ServerTag::request_completed:
   case ServerTag::pane_matches:
+  case ServerTag::pane_rows:
   case ServerTag::history_pruned:
   case ServerTag::history_output:
   case ServerTag::history_stats_result:

@@ -2,8 +2,10 @@
 # It marks prompts and commands with OSC 133 and signs every mark with the pane's
 # token, so telar trusts these marks and ignores the ones a program prints.
 (( ${+_telar_token} )) && builtin return 0
-builtin typeset -g _telar_token=${TELAR_SHELL_TOKEN-} _telar_ssh=${TELAR_SHELL_SSH-}
-builtin unset TELAR_SHELL_TOKEN TELAR_SHELL_SSH
+builtin typeset -g _telar_token=${TELAR_SHELL_TOKEN-} _telar_ssh=${TELAR_SHELL_SSH-} _telar_mode=
+# telar's editor stands in for the prompt: the shell prints only its marks.
+[[ ${TELAR_PROMPT_MODE-} == telar ]] && _telar_mode=telar
+builtin unset TELAR_SHELL_TOKEN TELAR_SHELL_SSH TELAR_PROMPT_MODE
 if [[ ${#_telar_token} -ne 32 || $_telar_token == *[^0-9a-f]* ]]; then
   builtin unset _telar_token
   builtin return 0
@@ -47,7 +49,12 @@ _telar_prompt() {
     names+=(${${(k)functions}:#(_*|*[^[:alnum:]._+:@-]*)})
     builtin print -rn -- $'\e]6973;telar='$_telar_token';names='${(j: :)names}$'\a'
   fi
-  [[ $PS1 == *$_telar_input_mark ]] || PS1=${PS1//$_telar_input_mark}$_telar_input_mark
+  if [[ -n $_telar_mode ]]; then
+    # Only the input mark, so no theme spends time drawing what telar's editor covers.
+    PS1=$_telar_input_mark RPROMPT=
+  else
+    [[ $PS1 == *$_telar_input_mark ]] || PS1=${PS1//$_telar_input_mark}$_telar_input_mark
+  fi
   if [[ ${precmd_functions[1]} != _telar_save_status || ${precmd_functions[-1]} != _telar_prompt ]]; then
     precmd_functions=(_telar_save_status ${precmd_functions:#_telar_(save_status|prompt)} _telar_prompt)
   fi
@@ -61,7 +68,7 @@ _telar_preexec() {
 # replaces this one, since .zshrc runs later.
 if [[ -n $_telar_ssh && -r $_telar_ssh ]]; then
   ssh() {
-    TELAR_SHELL_TOKEN=$_telar_token /bin/sh $_telar_ssh "$@"
+    TELAR_SHELL_TOKEN=$_telar_token TELAR_PROMPT_MODE=$_telar_mode /bin/sh $_telar_ssh "$@"
   }
 fi
 

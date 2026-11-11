@@ -211,6 +211,8 @@ private:
   inline bool prepare(Output &output, Attachment<Memory> &attachment, Pane<Memory> &pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
     const auto &effects = pane.terminal.effects;
     switch (lane) {
+    case DeliveryLane::scrollback:
+      return scrollback(output.connection, attachment, pane);
     case DeliveryLane::cells:
       return cells(output, attachment, pane, now, timeout);
     case DeliveryLane::cwd:
@@ -255,6 +257,26 @@ private:
     std::array<CommandBlock, PaneBlocks::capacity> storage;
     connection.send(pane.blocks->message(pane.id, storage));
     attachment.blocks_revision = pane.blocks->revision();
+    return true;
+  }
+
+  // How the scrollback numbers its rows, before a frame numbered so. A viewport held above the
+  // bottom keeps showing the same rows when the scrollback drops rows above them.
+  inline static bool scrollback(Connection<Memory> &connection, Attachment<Memory> &attachment, Pane<Memory> &pane) {
+    const auto generation = pane.terminal.scrollbackGeneration();
+    const auto trimmed = pane.terminal.scrollbackTrimmed();
+    if (attachment.scrollback_generation == generation && attachment.scrollback_trimmed == trimmed) {
+      return false;
+    }
+
+    if (attachment.viewport && attachment.scrollback_generation == generation && trimmed > attachment.scrollback_trimmed) {
+      const auto dropped = trimmed - attachment.scrollback_trimmed;
+      attachment.viewport = static_cast<std::uint32_t>(*attachment.viewport > dropped ? *attachment.viewport - dropped : 0);
+      attachment.frames.requestSnapshot();
+    }
+    connection.send(PaneScrollback{.pane_id = pane.id, .generation = generation, .trimmed = trimmed});
+    attachment.scrollback_generation = generation;
+    attachment.scrollback_trimmed = trimmed;
     return true;
   }
 
@@ -537,7 +559,7 @@ private:
     }
 
     AttachmentDelivery<Memory> attachments{model_, client};
-    for (const auto lane : {DeliveryLane::shell, DeliveryLane::cells}) {
+    for (const auto lane : {DeliveryLane::shell, DeliveryLane::scrollback, DeliveryLane::cells}) {
       if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
         return;
       }
@@ -790,6 +812,12 @@ bool dispatchRequest(ClientTag tag, Consumer &&consume) {
   case ClientTag::pane_input:
     consume.template operator()<PaneInput>();
     return true;
+  case ClientTag::pane_command:
+    consume.template operator()<PaneCommand>();
+    return true;
+  case ClientTag::configure_shell_prompt:
+    consume.template operator()<ConfigureShellPrompt>();
+    return true;
   case ClientTag::pane_resize:
     consume.template operator()<PaneResize>();
     return true;
@@ -867,6 +895,12 @@ bool dispatchRequest(ClientTag tag, Consumer &&consume) {
     return true;
   case ClientTag::set_pane_viewport:
     consume.template operator()<SetPaneViewport>();
+    return true;
+  case ClientTag::read_pane_rows:
+    consume.template operator()<ReadPaneRows>();
+    return true;
+  case ClientTag::search_pane_rows:
+    consume.template operator()<SearchPaneRows>();
     return true;
   case ClientTag::query_clients:
     consume.template operator()<QueryClients>();

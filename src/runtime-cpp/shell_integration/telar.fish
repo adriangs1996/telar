@@ -10,7 +10,12 @@ end
 
 set -g __telar_token "$TELAR_SHELL_TOKEN"
 set -g __telar_ssh "$TELAR_SHELL_SSH"
-set -e TELAR_SHELL_TOKEN TELAR_SHELL_SSH
+# telar's editor stands in for the prompt: the shell prints only its marks.
+set -g __telar_mode
+if test "$TELAR_PROMPT_MODE" = telar
+    set __telar_mode telar
+end
+set -e TELAR_SHELL_TOKEN TELAR_SHELL_SSH TELAR_PROMPT_MODE
 if not status is-interactive; or not string match -qr '^[0-9a-f]{32}$' -- $__telar_token
     set -e __telar_token
     return
@@ -19,7 +24,7 @@ end
 # `ssh` starts remote login shells with the integration too, unless the user defined one.
 if test -n "$__telar_ssh" -a -r "$__telar_ssh"; and not functions -q ssh
     function ssh --wraps ssh
-        TELAR_SHELL_TOKEN=$__telar_token /bin/sh $__telar_ssh $argv
+        TELAR_SHELL_TOKEN=$__telar_token TELAR_PROMPT_MODE="$__telar_mode" /bin/sh $__telar_ssh $argv
     end
 end
 
@@ -75,13 +80,24 @@ function __telar_prompt --on-event fish_prompt
         set -g __telar_names (count $names)
         printf '\e]6973;telar=%s;names=%s\a' $__telar_token (string join ' ' -- (__telar_names))
     end
-    # Wrap the prompt on the first one, once the user's configuration defined it.
+    # Wrap the prompt on the first one, once the user's configuration defined it. In telar's
+    # prompt mode, replace it and the right and mode prompts: telar's editor stands in for them.
     if not set -q __telar_wrapped; and functions -q fish_prompt
         set -g __telar_wrapped
-        functions -c fish_prompt __telar_user_prompt
-        function fish_prompt
-            __telar_user_prompt
-            printf '\e]133;B;telar=%s\a' $__telar_token
+        if test -n "$__telar_mode"
+            function fish_prompt
+                printf '\e]133;B;telar=%s\a' $__telar_token
+            end
+            function fish_right_prompt
+            end
+            function fish_mode_prompt
+            end
+        else
+            functions -c fish_prompt __telar_user_prompt
+            function fish_prompt
+                __telar_user_prompt
+                printf '\e]133;B;telar=%s\a' $__telar_token
+            end
         end
     end
 end

@@ -237,6 +237,7 @@ struct DefaultTheme {
 };
 
 struct Theme {
+  ThemeName name = ThemeName::cybervenom;
   Color background = DefaultTheme::background;
   Color foreground = DefaultTheme::foreground;
   Color surface = DefaultTheme::surface;
@@ -472,6 +473,20 @@ enum class NotificationDelivery : std::uint8_t {
   system,
 };
 
+// How panes scroll: by pixels, a wheel notch settling in `wheel_ms`, with `overscan` views of
+// rows asked for around the shown one while it moves; and whether the separator of the command
+// being read stays on the top row.
+struct ScrollConfiguration {
+  static constexpr std::uint16_t default_wheel_ms = 80;
+  static constexpr std::uint16_t maximum_wheel_ms = 400;
+  static constexpr float maximum_overscan = 4;
+
+  bool smooth = true;
+  std::uint16_t wheel_ms = default_wheel_ms;
+  float overscan = 1;
+  bool sticky_headers = true;
+};
+
 struct Configuration {
   static constexpr std::size_t maximum_editor_bytes = 4096;
   static constexpr std::size_t maximum_window_title_bytes = 128;
@@ -500,6 +515,7 @@ struct Configuration {
   Theme theme;
   ThemeSelection themes;
   CursorShape cursor = CursorShape::block;
+  ScrollConfiguration scroll;
   bool cursor_blink = true;
   std::chrono::milliseconds blink_interval = default_blink_interval;
   float background_opacity = 1;

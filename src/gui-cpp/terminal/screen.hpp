@@ -111,6 +111,7 @@ public:
     mouse_ = frame.mouse;
     modes_ = frame.input_modes;
     scroll_ = frame.scroll;
+    cells_offset_ = frame.scroll.offset;
     pointer_shape_ = frame.pointer_shape;
     ++revision_;
 
@@ -208,6 +209,36 @@ public:
     return scroll_;
   }
 
+  // A screen put together from rows a view draws, each with its flags; `runs` start at cells
+  // counted from the first row's first. It shows its rows from row 0 of a scrollback of as
+  // many, with no cursor.
+  void compose(std::uint16_t columns, std::span<const std::span<const CellValue>> rows, std::span<const Byte> flags, const TextMetadata &metadata) {
+    columns_ = columns;
+    rows_ = static_cast<std::uint16_t>(rows.size());
+    cells_.resize(static_cast<std::size_t>(columns_) * rows_);
+    for (std::size_t row = 0; row < rows.size(); ++row) {
+      const auto cells = rows[row].first(std::min<std::size_t>(columns_, rows[row].size()));
+      std::ranges::copy(cells, cells_.begin() + static_cast<std::ptrdiff_t>(row * columns_));
+      std::fill(cells_.begin() + static_cast<std::ptrdiff_t>((row * columns_) + cells.size()), cells_.begin() + static_cast<std::ptrdiff_t>((row + 1) * columns_), CellValue{});
+    }
+    row_revisions_.assign(rows_, ++revision_);
+    row_flags_.assign(flags.begin(), flags.end());
+    row_flags_.resize(rows_, 0);
+    metadata_status_ = metadata.status;
+    links_.assign(metadata.links.begin(), metadata.links.end());
+    link_runs_.assign(metadata.runs.begin(), metadata.runs.end());
+    uris_.assign(metadata.uris.begin(), metadata.uris.end());
+    cursor_ = {};
+    scroll_ = {.total_rows = rows_, .offset = 0};
+    cells_offset_ = 0;
+  }
+
+  // The row, from the top of the scrollback, the cells start on: the offset of the frame they
+  // came in, which `setViewport` leaves until the runtime sends the view it asked for.
+  [[nodiscard]] std::uint32_t cellsOffset() const noexcept {
+    return cells_offset_;
+  }
+
   void setViewport(std::uint32_t offset) noexcept {
     const auto maximum = scroll_.total_rows - std::min<std::uint32_t>(scroll_.total_rows, rows_);
     scroll_.offset = std::min(offset, maximum);
@@ -222,6 +253,7 @@ private:
   Mouse mouse_;
   InputModes modes_;
   Scroll scroll_;
+  std::uint32_t cells_offset_ = 0;
   PointerShape pointer_shape_{};
   MetadataStatus metadata_status_ = MetadataStatus::complete;
 

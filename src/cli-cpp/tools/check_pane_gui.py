@@ -22,7 +22,7 @@ def main():
         try:
             # An endpoint check establishes the runtime schema before the GUI attaches.
             endpoint = stack.invoke(['server', 'endpoint']).stdout.splitlines()
-            assert endpoint[-1] == b'cqp00002', endpoint
+            assert endpoint[-1] == b'cqp00003', endpoint
             log = (root / 'gui.log').open('wb')
             gui = subprocess.Popen([str(args.gui.resolve()), '--socket', str(stack.socket), '--no-config'], env=stack.env, stdout=log, stderr=log)
             deadline = time.monotonic() + 20
@@ -35,7 +35,7 @@ def main():
                     log.flush()
                     raise RuntimeError((root / 'gui.log').read_text())
                 time.sleep(.1)
-            rows.append({'check': 'GUI completed the cqp00002 handshake and registered', 'passed': True})
+            rows.append({'check': 'GUI completed the cqp00003 handshake and registered', 'passed': True})
             deadline = time.monotonic() + 10
             while True:
                 visible = json.loads(stack.invoke(['pane', 'list', '--json']).stdout)

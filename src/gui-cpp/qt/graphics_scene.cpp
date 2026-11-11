@@ -96,7 +96,7 @@ QSGTransformNode &GraphicsScene::layer(std::int32_t z_index) const noexcept {
   return z_index < 0 ? *layers_.below_text : *layers_.above_text;
 }
 
-void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<ApplicationAllocator> &store, const Screen<ApplicationAllocator> &screen, QSizeF cell, qreal scale) {
+void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<ApplicationAllocator> &store, const ImageRows &rows, QSizeF cell, qreal scale) {
   auto *images = WindowImages::findWindow(*owner.window());
   if (images == nullptr) {
     throw std::logic_error{"Window image resources must be installed before synchronization"};
@@ -116,7 +116,7 @@ void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<Applicati
   images_->observeCatalog(store);
   const auto lifetime = store.lifetime();
   const Rect viewport{.width = static_cast<float>(owner.width()), .height = static_cast<float>(owner.height())};
-  if (!invalidated_ && lifetime.cacheable() && graphics_lifetime_ == lifetime && graphics_revision_ == store.revision() && placement_revision_ == images_->placements().revision() && screen_revision_ == screen.revision() && cell_ == cell && scale_ == scale && viewport_ == viewport) {
+  if (!invalidated_ && lifetime.cacheable() && graphics_lifetime_ == lifetime && graphics_revision_ == store.revision() && placement_revision_ == images_->placements().revision() && rows_revision_ == rows.revision && cell_ == cell && scale_ == scale && viewport_ == viewport) {
     return;
   }
 
@@ -129,7 +129,6 @@ void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<Applicati
   const auto count = store.placements().size();
   std::copy(store.placements().begin(), store.placements().end(), placements.begin());
   std::sort(placements.begin(), placements.begin() + count, placementOrder);
-  const auto back = static_cast<std::int64_t>(screen.scroll().total_rows) - screen.rows() - screen.scroll().offset;
   cell_ = cell;
   scale_ = scale;
   viewport_ = viewport;
@@ -137,15 +136,15 @@ void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<Applicati
   const auto sorted = std::span{placements}.first(count);
   const auto below_text = std::ranges::lower_bound(sorted, below_background_limit, {}, &GraphicsPlacement::z_index);
   const auto above_text = std::ranges::lower_bound(sorted, 0, {}, &GraphicsPlacement::z_index);
-  drawPlacements(store, {sorted.begin(), below_text}, back);
-  drawPlacements(store, {below_text, above_text}, back);
-  placeholders(store, screen);
-  drawPlacements(store, {above_text, sorted.end()}, back);
+  drawPlacements(store, {sorted.begin(), below_text}, rows);
+  drawPlacements(store, {below_text, above_text}, rows);
+  placeholders(store, rows);
+  drawPlacements(store, {above_text, sorted.end()}, rows);
 
   invalidated_ = retry_requested_;
   graphics_revision_ = store.revision();
   placement_revision_ = images_->placements().revision();
-  screen_revision_ = screen.revision();
+  rows_revision_ = rows.revision;
 }
 
 void GraphicsScene::append(QSGNode &parent, ImageTextureHandle handle, const ImageGeometry &geometry) {
@@ -162,7 +161,7 @@ void GraphicsScene::append(QSGNode &parent, ImageTextureHandle handle, const Ima
   ++draw_count_;
 }
 
-void GraphicsScene::drawPlacements(const GraphicsStore<ApplicationAllocator> &store, std::span<const GraphicsPlacement> placements, std::int64_t back) {
+void GraphicsScene::drawPlacements(const GraphicsStore<ApplicationAllocator> &store, std::span<const GraphicsPlacement> placements, const ImageRows &rows) {
   for (const auto &placement : placements) {
     if (!images_->placements().contains(store.lifetime(), placement.virtual_id)) {
       continue;
@@ -179,7 +178,15 @@ void GraphicsScene::drawPlacements(const GraphicsStore<ApplicationAllocator> &st
     }
 
     auto geometry = ImageGeometry::resolve(placement, image->description(), {.x = static_cast<float>(cell_.width()), .y = static_cast<float>(cell_.height())}, static_cast<float>(scale_));
-    geometry.destination.y += static_cast<float>(static_cast<qreal>(back) * cell_.height());
+    // Its first row, from the active screen's, goes where the view draws that row, or nowhere
+    // when a fold hides it; the part of a row it starts into stays.
+    const auto height = static_cast<float>(cell_.height());
+    const auto row = static_cast<std::int64_t>(std::floor(geometry.destination.y / height));
+    const auto drawn = rows.drawn(static_cast<std::int64_t>(rows.live_top) + row);
+    if (!drawn) {
+      continue;
+    }
+    geometry.destination.y += static_cast<float>(*drawn - row) * height;
     if (geometry.source.empty() || geometry.destination.empty()) {
       continue;
     }
@@ -225,7 +232,7 @@ void GraphicsScene::drawPlaceholder(const GraphicsStore<ApplicationAllocator> &s
   }
 }
 
-void GraphicsScene::placeholders(const GraphicsStore<ApplicationAllocator> &store, const Screen<ApplicationAllocator> &screen) {
+void GraphicsScene::placeholders(const GraphicsStore<ApplicationAllocator> &store, const ImageRows &rows) {
   const auto has_placeholders = std::any_of(store.placements().begin(), store.placements().end(), [](const auto &placement) {
     return placement.location == PlacementLocation::placeholders;
   });
@@ -233,8 +240,8 @@ void GraphicsScene::placeholders(const GraphicsStore<ApplicationAllocator> &stor
     return;
   }
 
-  for (std::uint16_t row_index = 0; row_index < screen.rows(); ++row_index) {
-    placeholderRow(store, screen.row(row_index), row_index);
+  for (std::size_t row_index = 0; row_index < rows.rows.size(); ++row_index) {
+    placeholderRow(store, rows.rows[row_index], static_cast<std::uint16_t>(row_index));
   }
 }
 

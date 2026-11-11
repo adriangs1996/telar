@@ -73,7 +73,7 @@ def run(binary, provider, seed, login=False):
         (bindir/command).write_text('#!/bin/sh\nexit 0\n');(bindir/command).chmod(0o700)
         env['PATH']=str(bindir)+':/usr/bin:/bin'
         if login:env['FIXTURE_LOGIN']=login
-        env.update(FIXTURE_REMOTE_HOME=str(remote),FIXTURE_TELAR=str(binary),FIXTURE_SCHEMA='cqp00002' if b'cqp00002' in binary.read_bytes() else '886b480d')
+        env.update(FIXTURE_REMOTE_HOME=str(remote),FIXTURE_TELAR=str(binary),FIXTURE_SCHEMA='cqp00003' if b'cqp00003' in binary.read_bytes() else '886b480d')
         roots={'claude':home/'.claude','codex':home/'.codex','pi':home/'.pi/agent','opencode':Path(env['XDG_CONFIG_HOME'])/'opencode','cursor':home/'.cursor'}
         local=roots[provider];local.mkdir(parents=True,mode=0o700)
         filename={'claude':'settings.json','codex':'config.toml','pi':'settings.json','opencode':'opencode.jsonc','cursor':'hooks.json'}[provider]

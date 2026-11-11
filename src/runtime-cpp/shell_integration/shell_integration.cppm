@@ -97,7 +97,7 @@ inline constexpr std::string remoteScript() {
     script += heredoc_end;
     script += '\n';
   }
-  script += "_telar_start \"$1\"\n";
+  script += "_telar_start \"$1\" \"${2-}\"\n";
   return script;
 }
 
@@ -206,9 +206,10 @@ public:
 
   // Points an integrable shell at the scripts and returns the token its marks are signed
   // with. Leaves every other command untouched, and a shell too if the scripts are gone and
-  // cannot be written again.
-  inline std::optional<ShellLaunch> apply(Command<Memory> &command) const {
-    for (const auto name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
+  // cannot be written again. `bare_prompt`: telar's editor stands in for the shell's prompt, so
+  // the shell prints only its marks (TELAR_PROMPT_MODE=telar).
+  inline std::optional<ShellLaunch> apply(Command<Memory> &command, bool bare_prompt = false) const {
+    for (const auto name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
       command.removeEnvironment(name);
     }
 
@@ -221,6 +222,9 @@ public:
     command.setEnvironment("TELAR_SHELL_TOKEN", token.text());
     if (!ssh_.empty()) {
       command.setEnvironment("TELAR_SHELL_SSH", ssh_);
+    }
+    if (bare_prompt) {
+      command.setEnvironment("TELAR_PROMPT_MODE", "telar");
     }
     String<Memory> path{directory_, AllocatorRef<char, Memory>{memory_}};
     switch (*shell) {

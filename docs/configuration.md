@@ -378,6 +378,7 @@ gui = {
     thicken_strength = 255,
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
+  scroll = { smooth = true, wheel_ms = 80, overscan = 1, sticky_headers = true },
   chrome = { scale = 1 },
   sidebar = { width = "auto" },
   max_fps = 60, -- omit to present at the display's refresh rate
@@ -401,6 +402,10 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
+| `scroll.smooth` | `true` | Scroll a pane's scrollback by pixels: a trackpad moves the rows one to one, with the platform's momentum on macOS and a fling of the gesture's speed elsewhere; a wheel notch eases over three rows; jumps glide. `false` moves whole rows, three a notch. Programs that read the wheel (SGR mouse reporting) and alternate-screen scrolling always get whole notches. A runtime older than schema `cqp00003` scrolls by whole rows. |
+| `scroll.wheel_ms` | `80` | How long a wheel notch takes to settle, in milliseconds; integer `0..400`. |
+| `scroll.overscan` | `1` | Views of rows, above and below the shown one, the pane asks the runtime for while it moves; `0..4`, decimals allowed. Only a moving pane holds them, and it gives them back after it rests. |
+| `scroll.sticky_headers` | `true` | Keep the separator of the command being read on the pane's top row while its own separator is above the view. Needs `client.prompt.mode = "telar"`. |
 | `sidebar.width` | `"auto"` | `"auto"` fits the band to its content: the longest card and machine row, at most a third of the window and never below 220. It fits when the window first has its agents, on a reload and when the sidebar's edge is double-clicked, never while agents change, since every width change resizes each pane's terminal. A number is the width in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
@@ -1264,6 +1269,18 @@ copy mode and restores its entry viewport, then applies the wheel step. The
 action is available to client Lua bindings and callbacks, but plugin worker
 effects reject it.
 
+Scrolled away from the live end, a pane shows how many rows are below it, the
+rows of output that arrived meanwhile and a dot per command that finished; a
+click glides back and follows the output again. Output that arrives while the
+pane is scrolled up does not move it, and the rows it shows stay in place when
+the scrollback drops its oldest rows. With `client.prompt.mode = "telar"`, the
+right edge maps the whole scrollback: a segment per command, as tall as its
+output and in the colour of how it ended, with the view drawn over them. A
+click on a segment selects its command, a click elsewhere glides there, and
+the view drags. The commands' outputs fold: the chevron on a separator, or the
+keys below, hide them behind their separator, which then says how many rows it
+hides; folding keeps the row at the top where it was.
+
 `telar.action.copy_mode()` enters the focused pane's scrollback. Its default
 binding is `prefix`, then `[`. In copy mode, the mouse wheel scrolls three rows
 per notch while it is over the target pane and other mouse actions are ignored.
@@ -1301,6 +1318,14 @@ output. Scrolled away from the prompt, the editor stays at the bottom of the
 pane. While a command runs, text typed for the next command appears on a line
 under its output, and a password prompt shows its dots there too.
 
+The window tells the runtime its prompt mode, so the integrated zsh, bash and
+fish shells of the panes it opens print no prompt of their own in `telar` mode,
+and neither do the shells `ssh` reaches from them: no theme or prompt command
+runs for rows the editor covers. Panes already open keep the mode they started
+with, as do panes the runtime restores from a saved session. A command run from
+the editor reaches the runtime whole, which types it at the shell's prompt and
+records that text in the history.
+
 While the focused pane's shell waits for a command, the history search and the
 path picker open under the command instead of in a dialog. The command becomes
 the query: the history search starts from the whole command, and the path picker
@@ -1311,6 +1336,17 @@ command once, at its newest run that passes the filters.
 
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
+`/` and `?` search the scrollback forward and backward from the pane's own line,
+which turns into the query at the pane's bottom instead of a dialog over the
+output. Matches arrive as the query is typed, every one lit and the current one
+more, with a tick each on the rail; Up and Down move between them, Enter keeps
+them for `n` and `N`, and Escape goes back to where the search began. A match
+takes the cursor to its first cell without selecting it, and comes to the
+middle of the pane unless it is already well inside it, clear of the docked
+line and the pinned separator; `y` copies the match under the cursor, and a
+selection begun with `v` stretches to the next match. Begun from
+a selected command, the search reads only its output, and Tab switches to the
+whole scrollback.
 Press `v` or Space for a character selection, `V` for a line selection, then
 `y` or Enter to copy to the clipboard. Escape first clears an active selection;
 a second Escape, or `q`, leaves copy mode and restores the entry viewport.

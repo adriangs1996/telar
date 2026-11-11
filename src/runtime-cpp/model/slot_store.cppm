@@ -51,6 +51,7 @@ inline ClientRole classifyRequest(ClientTag tag) noexcept {
   case ClientTag::query_clients:
   case ClientTag::query_agents:
   case ClientTag::search_pane:
+  case ClientTag::search_pane_rows:
   case ClientTag::read_pane:
   case ClientTag::send_pane_text:
   case ClientTag::report_agent_session:

@@ -98,6 +98,39 @@ void viewportAndPruning() {
   require(requiredValue(mode.state()).cursor.y == total_rows - GridFixture::rows - 2 && requiredValue(mode.state()).anchor == requiredValue(mode.state()).cursor, "pruned history must move both selection endpoints");
 }
 
+// A match is shown clear of the view's edges, which a pinned separator and a docked line
+// cover; a selection under way stretches to it, and none begins without one.
+void searchRevealsMatchesWithMargin() {
+  constexpr std::uint32_t total = 100;
+  constexpr std::uint32_t match_row = 10;
+  const GridFixture fixture;
+  auto grid = fixture.grid();
+  grid.scroll = {.total_rows = total, .offset = total - GridFixture::rows};
+  CopyMode mode;
+  require(mode.enter(1, grid, {.visible = true}), "margin fixture must enter copy mode");
+  const auto search = mode.key({.codepoint = '?'}, grid);
+  require(search && mode.commit(requiredValue(search)), "backward search must request input");
+  const std::array matches{telar::PaneMatch{.x = 1, .y = match_row, .len = 2}};
+  const auto found = mode.search(matches, grid);
+  require(found && mode.commit(requiredValue(found)), "a match far above the view must apply");
+  const auto &state = requiredValue(mode.state());
+  require(state.cursor == CopyPoint{.x = 1, .y = match_row} && !state.anchor, "a match takes the cursor to its start without selecting");
+  require(state.viewport_offset == match_row - (GridFixture::rows / 2), "a match out of view comes to the view's middle");
+  const auto select = mode.key({.codepoint = 'v'}, grid);
+  require(select && mode.commit(requiredValue(select)), "a selection must start at the match");
+  const std::array later{telar::PaneMatch{.x = 0, .y = match_row - 2, .len = 2}};
+  const auto stretched = mode.search(later, grid);
+  require(stretched && mode.commit(requiredValue(stretched)) && requiredValue(mode.state()).anchor == CopyPoint{.x = 1, .y = match_row}, "a search stretches a selection under way to its match");
+
+  // Without a selection, y copies the match the cursor stands on.
+  CopyMode plain;
+  require(plain.enter(1, grid, {.visible = true}) && plain.commit(requiredValue(plain.key({.codepoint = '?'}, grid))), "a second search must begin");
+  require(plain.commit(requiredValue(plain.search(matches, grid))), "its match must apply");
+  const auto copy = plain.key({.codepoint = 'y'}, grid);
+  const auto &copied = requiredValue(requiredValue(copy).selection);
+  require(copied.start_x == 1 && copied.end_x == 2 && copied.start_y == match_row && copied.end_y == match_row && !copied.linewise, "y copies the current match");
+}
+
 void searchAndTransactionalPlans() {
   const GridFixture fixture;
   const auto grid = fixture.grid();
@@ -108,11 +141,11 @@ void searchAndTransactionalPlans() {
   const std::array matches{telar::PaneMatch{.x = 2, .y = 0, .len = 3}, telar::PaneMatch{.x = 0, .y = 1, .len = 3}};
   const auto found = mode.search(matches, grid);
   require(found && mode.matches().empty(), "planning search results must preserve existing match ownership");
-  require(mode.commit(requiredValue(found)) && mode.matches().size() == matches.size() && requiredValue(mode.state()).cursor == CopyPoint{.x = 4, .y = 0}, "committing matches must select the first result strictly after the cursor");
+  require(mode.commit(requiredValue(found)) && mode.matches().size() == matches.size() && requiredValue(mode.state()).cursor == CopyPoint{.x = 2, .y = 0} && !requiredValue(mode.state()).anchor, "committing matches must move to the first result strictly after the cursor, at its start, without selecting");
   const auto next = mode.key({.codepoint = 'n'}, grid);
-  require(next && mode.commit(requiredValue(next)) && requiredValue(mode.state()).cursor == CopyPoint{.x = 2, .y = 1}, "search navigation must advance to the next match");
+  require(next && mode.commit(requiredValue(next)) && requiredValue(mode.state()).cursor == CopyPoint{.x = 0, .y = 1}, "search navigation must advance to the next match");
   const auto wrapped = mode.key({.codepoint = 'n'}, grid);
-  require(wrapped && mode.commit(requiredValue(wrapped)) && requiredValue(mode.state()).cursor == CopyPoint{.x = 4, .y = 0}, "search navigation must wrap around");
+  require(wrapped && mode.commit(requiredValue(wrapped)) && requiredValue(mode.state()).cursor == CopyPoint{.x = 2, .y = 0}, "search navigation must wrap around");
   const auto stale = mode.key({.codepoint = 'v'}, grid);
   mode.onFrame(0, grid);
   require(stale && mode.current(requiredValue(stale)), "an unchanged frame must preserve a current copy plan");
@@ -192,6 +225,7 @@ int main() {
     motionAndSelection();
     viewportAndPruning();
     searchAndTransactionalPlans();
+    searchRevealsMatchesWithMargin();
     pointerAndProjection();
     clickTiming();
     pointerOwnership();

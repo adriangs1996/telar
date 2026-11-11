@@ -132,7 +132,7 @@ static void testEmptyDefaultTab(SystemAllocator &memory) {
   const TabLocation empty{WorkspaceLocation{.id = identity}, stored.tabs.front().id};
   const Launch launch{.cwd = "/", .arguments = arguments};
   Command command{memory, launch};
-  auto &existing = panes.launch(model, nullptr, command, TabLocation{empty.workspace, stored.tabs.back().id}, size);
+  auto &existing = panes.launch(model, nullptr, false, command, TabLocation{empty.workspace, stored.tabs.back().id}, size);
   stored.tabs.back().panes.push_back(existing.id);
 
   expectFailure([&] { workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size}); }, FailureCode::pane_not_found, "workspace has no running pane");
@@ -197,7 +197,7 @@ static void testPaneReuseAndBackgroundColors(SystemAllocator &memory) {
   check(!reused.created && reused.pane_id == pane.id);
   check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen.revision == revision);
 
-  const auto &background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
+  const auto &background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
   GhosttyColorRgb foreground;
   checkGhostty(ghostty_terminal_get(background.terminal.handle(), GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND, &foreground));
   check(foreground.r == 17 && foreground.g == 34 && foreground.b == 51);
@@ -218,7 +218,7 @@ static void testExhaustedTabIdentities(SystemAllocator &memory) {
 
   expectFailure([&] { workspaces.createWorkspace(model, panes, clients, owner.session().id, CreateWorkspace{.request_id = 2, .size = size, .launch = launch}); }, FailureCode::resource_limit, "could not create workspace");
   expectFailure([&] { workspaces.createTab(model, panes, clients, owner.session().id, CreateTab{.request_id = 3, .workspace = opened.location.workspace, .size = size, .launch = launch}); }, FailureCode::spawn_failed, "could not start the command");
-  expectFailure([&] { workspaces.launchBackground(model, panes, nullptr, LaunchTab{.request_id = 4, .workspace = opened.location.workspace.id, .size = size, .launch = launch}); }, FailureCode::spawn_failed, "could not start the command");
+  expectFailure([&] { workspaces.launchBackground(model, panes, nullptr, false, LaunchTab{.request_id = 4, .workspace = opened.location.workspace.id, .size = size, .launch = launch}); }, FailureCode::spawn_failed, "could not start the command");
   check(model.workspaces.size() == 1 && model.panes.size() == 1);
   check(model.workspaces.find(opened.location.workspace.id)->tabs.size() == 1);
 }

@@ -202,6 +202,8 @@ struct CopyState {
     viewport_offset = scroll.offset;
   }
 
+  // To match `index`, the cursor on its first cell as vim's search puts it, a selection under
+  // way stretched there and none begun; the view centred on it unless it is well inside.
   inline void gotoMatch(std::uint16_t index, std::span<const PaneMatch> matches, const CopyGrid &grid) noexcept {
     if (index >= matches.size() || matches[index].len == 0) {
       return;
@@ -209,13 +211,26 @@ struct CopyState {
 
     const auto &match = matches[index];
     match_index = index;
-    anchor = CopyPoint{.x = match.x, .y = match.y};
-    linewise = false;
-    cursor = {.x = static_cast<std::uint16_t>(static_cast<std::uint32_t>(match.x) + match.len - 1), .y = std::min(match.y, grid.lastRow())};
-    reveal(grid);
+    cursor = {.x = match.x, .y = std::min(match.y, grid.lastRow())};
+    revealWithMargin(grid);
   }
 
-  inline void applyMatches(std::span<const PaneMatch> matches, const CopyGrid &grid) noexcept {
+  // Shows the cursor clear of the view's edges, where a pinned separator and a docked line
+  // cover rows: a row outside the middle of the view, a fifth of it from each edge and at least
+  // two rows, comes to the view's middle.
+  inline void revealWithMargin(const CopyGrid &grid) noexcept {
+    const auto rows = static_cast<std::uint32_t>(grid.rows);
+    const auto margin = std::min<std::uint32_t>(std::max<std::uint32_t>(2, rows / 5), rows / 2);
+    const auto top = static_cast<std::uint64_t>(viewport_offset) + margin;
+    const auto bottom = static_cast<std::uint64_t>(viewport_offset) + rows - margin;
+    if (cursor.y < top || cursor.y >= bottom) {
+      viewport_offset = cursor.y - std::min<std::uint32_t>(cursor.y, rows / 2);
+    }
+    viewport_offset = std::min(viewport_offset, grid.maximumOffset());
+  }
+
+  // To the first match past the cursor that way, or, `inclusive`, from the cursor's own cell.
+  inline void applyMatches(std::span<const PaneMatch> matches, const CopyGrid &grid, bool inclusive = false) noexcept {
     if (matches.empty()) {
       return;
     }
@@ -223,14 +238,16 @@ struct CopyState {
     std::size_t selected = search_direction == CopyDirection::forward ? 0 : matches.size() - 1;
     if (search_direction == CopyDirection::forward) {
       for (std::size_t index = 0; index < matches.size(); ++index) {
-        if (cursor < CopyPoint{.x = matches[index].x, .y = matches[index].y}) {
+        const CopyPoint start{.x = matches[index].x, .y = matches[index].y};
+        if (cursor < start || (inclusive && cursor == start)) {
           selected = index;
           break;
         }
       }
     } else {
       for (std::size_t index = matches.size(); index-- > 0;) {
-        if (CopyPoint{.x = matches[index].x, .y = matches[index].y} < cursor) {
+        const CopyPoint start{.x = matches[index].x, .y = matches[index].y};
+        if (start < cursor || (inclusive && start == cursor)) {
           selected = index;
           break;
         }
@@ -767,6 +784,12 @@ public:
       plan.effect = effect;
       if (effect.copy) {
         plan.selection = next.selectionRequest();
+        // Without a selection, the match the cursor stands on is what y copies.
+        const auto found = matches();
+        if (!plan.selection && next.match_index < found.size() && next.cursor == CopyPoint{.x = found[next.match_index].x, .y = found[next.match_index].y}) {
+          const auto &match = found[next.match_index];
+          plan.selection = CopySelection{.pane_id = next.pane_id, .start_x = match.x, .start_y = match.y, .end_x = static_cast<std::uint16_t>(static_cast<std::uint32_t>(match.x) + match.len - 1), .end_y = match.y, .linewise = false};
+        }
       }
 
       return plan;
@@ -819,8 +842,10 @@ public:
     return true;
   }
 
-  // The plan's replacement matches view the results, region `a`, until it is applied.
-  [[nodiscard]] inline tbc::view<std::optional<CopyPlan>, tbc::lt::a> search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid &grid) const {
+  // The plan's replacement matches view the results, region `a`, until it is applied. From
+  // `origin`, a search typed a letter at a time starts where it began, and comes back there
+  // when nothing matches.
+  [[nodiscard]] inline tbc::view<std::optional<CopyPlan>, tbc::lt::a> search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid &grid, std::optional<CopyPoint> origin = std::nullopt) const {
     if (!state_ || state_->pointer) {
       return {};
     }
@@ -834,7 +859,11 @@ public:
     }
 
     auto next = *state_;
-    next.applyMatches(results, grid);
+    if (origin) {
+      next.cursor = *origin;
+      next.reveal(grid);
+    }
+    next.applyMatches(results, grid, origin.has_value());
     auto result = plan(next, grid);
     result.replacement_matches = results;
 

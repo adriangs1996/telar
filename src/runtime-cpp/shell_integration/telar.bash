@@ -21,7 +21,12 @@ builtin unset _telar_file
 # the DEBUG trap before it, unless the user's configuration set its own.
 _telar_token=${TELAR_SHELL_TOKEN-}
 _telar_ssh=${TELAR_SHELL_SSH-}
-builtin unset TELAR_SHELL_TOKEN TELAR_SHELL_SSH
+# telar's editor stands in for the prompt: the shell prints only its marks.
+_telar_mode=
+if [ "${TELAR_PROMPT_MODE-}" = telar ]; then
+  _telar_mode=telar
+fi
+builtin unset TELAR_SHELL_TOKEN TELAR_SHELL_SSH TELAR_PROMPT_MODE
 _telar_ps0=
 if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )); then
   _telar_ps0=1
@@ -82,10 +87,15 @@ if [ "${#_telar_token}" -eq 32 ] && [[ $_telar_token != *[!0-9a-f]* ]] && { [ -n
 
   # Runs last, so the marks survive prompt commands that rebuild PS1 or PS0.
   _telar_end() {
-    case $PS1 in
-      *"$_telar_input_mark") ;;
-      *) PS1=${PS1//"$_telar_input_mark"/}$_telar_input_mark ;;
-    esac
+    if [ -n "$_telar_mode" ]; then
+      # Only the input mark, so no prompt command substitution runs for what telar's editor covers.
+      PS1=$_telar_input_mark
+    else
+      case $PS1 in
+        *"$_telar_input_mark") ;;
+        *) PS1=${PS1//"$_telar_input_mark"/}$_telar_input_mark ;;
+      esac
+    fi
     if [ -n "$_telar_ps0" ]; then
       case ${PS0-} in
         *"$_telar_command_mark") ;;
@@ -112,7 +122,7 @@ if [ "${#_telar_token}" -eq 32 ] && [[ $_telar_token != *[!0-9a-f]* ]] && { [ -n
   # configuration defined its own.
   if [ -n "$_telar_ssh" ] && [ -r "$_telar_ssh" ] && ! builtin declare -F ssh >/dev/null; then
     ssh() {
-      TELAR_SHELL_TOKEN=$_telar_token /bin/sh "$_telar_ssh" "$@"
+      TELAR_SHELL_TOKEN=$_telar_token TELAR_PROMPT_MODE=$_telar_mode /bin/sh "$_telar_ssh" "$@"
     }
   fi
 

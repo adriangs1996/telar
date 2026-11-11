@@ -609,6 +609,14 @@ private:
     QImage transparent{application_artwork.size(), application_artwork.format()};
     transparent.fill(Qt::transparent);
     QVERIFY(application_artwork != transparent);
+    const auto default_mark = ProviderArtwork::telar(mark_side, false);
+    QVERIFY(!default_mark.isNull());
+    QCOMPARE(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::cybervenom)), default_mark);
+    QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
+    const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
+    QVERIFY(!catppuccin_mark.isNull());
+    QVERIFY(catppuccin_mark != default_mark);
+    QCOMPARE(ProviderArtwork::telar(mark_side, true, static_cast<int>(ThemeName::catppuccin)), ProviderArtwork::telar(mark_side, true));
   }
 
   Q_SLOT static void ancestorMotionKeepsProviderInkOnPhysicalPixels() {

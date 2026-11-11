@@ -521,18 +521,19 @@ public:
   }
 
   // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
-  inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, const Launch &launch, TabLocation location, TerminalSize size) {
+  // `bare_prompt`: the client it is for draws telar's editor, so its shell prints no prompt.
+  inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, bool bare_prompt, const Launch &launch, TabLocation location, TerminalSize size) {
     const auto identity = allocateIdentity(model);
     if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
       throw RequestError{FailureCode::invalid_request, "custom pane environment is not supported"};
     }
 
     Command command{memory_, launch};
-    return launchPrepared(model, owner_colors, command, location, size, identity);
+    return launchPrepared(model, owner_colors, bare_prompt, command, location, size, identity);
   }
 
-  inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, Command<Memory> &command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
-    return launchPrepared(model, owner_colors, command, location, size, allocateIdentity(model, restored_identity));
+  inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, bool bare_prompt, Command<Memory> &command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
+    return launchPrepared(model, owner_colors, bare_prompt, command, location, size, allocateIdentity(model, restored_identity));
   }
 
   inline tbc::view<Attachment<Memory> &, tbc::lt::a> attach(RuntimeModel<Memory> &model, tbc::view<ClientSession<Memory> &, tbc::lt::a> client, std::uint64_t pane_id, TerminalSize size) {
@@ -688,6 +689,34 @@ public:
     ClipboardService<Memory>::configure(clients, require(model.panes, request.pane_id));
   }
 
+  static constexpr std::array<Byte, 6> paste_start{0x1b, '[', '2', '0', '0', '~'};
+  static constexpr std::array<Byte, 6> paste_end{0x1b, '[', '2', '0', '1', '~'};
+
+  inline static std::size_t typedSize(bool paste, std::span<const Byte> text, std::span<const Byte> enter) noexcept {
+    return text.size() + (paste ? paste_start.size() + paste_end.size() : 0) + enter.size();
+  }
+
+  // Types a line at a pane: the prefix and the text, as one paste when `paste`, then `enter`.
+  template <typename Observer>
+  inline static void type(Pane<Memory> &pane, bool paste, std::span<const Byte> prefix, std::span<const Byte> text, std::span<const Byte> enter, const Observer &observe) {
+    const auto forward = [&](std::span<const Byte> bytes) {
+      pane.enqueueInput(bytes);
+      observe(pane, bytes);
+    };
+    if (paste) {
+      forward(paste_start);
+    }
+
+    forward(prefix);
+    forward(text);
+    if (paste) {
+      forward(paste_end);
+    }
+    if (!enter.empty()) {
+      forward(enter);
+    }
+  }
+
   inline bool admitInput(Pane<Memory> &pane, std::size_t bytes) {
     if (bytes <= Pane<Memory>::input_limit - pane.input.size()) {
       return true;
@@ -794,6 +823,33 @@ public:
     client.clipboard.replace(pane.id, reader.bytes());
   }
 
+  // A command a client runs at the prompt of a pane it shows. Its text is recorded for the
+  // command's history, then typed as a prompt sent with sendText is.
+  template <typename Observer = IgnorePaneInput>
+  inline void command(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, const PaneCommand &request, const Observer &observe = {}) {
+    if (const auto *client = clients.find(client_id); client == nullptr || client->attachment(request.pane_id) == nullptr) {
+      return;
+    }
+
+    auto &pane = require(model.panes, request.pane_id);
+    if (pane.output_closed) {
+      return;
+    }
+
+    const bool paste = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
+    std::array<Byte, 128> encoded_enter;
+    const auto enter = pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter);
+    if (admitInput(pane, typedSize(paste, request.text, enter))) {
+      pane.submitCommand(request.text);
+      type(pane, paste, {}, request.text, enter, observe);
+      pane.last_input = std::chrono::steady_clock::now();
+      flushInput(pane);
+    }
+
+    recordInputOrigin(model, clients, client_id, request.pane_id);
+    ClipboardService<Memory>::configure(clients, require(model.panes, request.pane_id));
+  }
+
   template <typename Observer = IgnorePaneInput>
   inline void sendText(PaneStore<Memory> &panes, ClientSession<Memory> &client, const SendPaneText &request, std::string_view prefix = {}, const Observer &observe = {}) {
     auto &pane = requireGeneration(panes, request.pane_id, request.pane_generation);
@@ -803,11 +859,9 @@ public:
 
     const auto text = std::span<const Byte>{reinterpret_cast<const Byte *>(request.text.data()), request.text.size()};
     const bool paste = request.mode == PaneTextMode::prompt && pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
-    constexpr std::array<Byte, 6> paste_start{0x1b, '[', '2', '0', '0', '~'};
-    constexpr std::array<Byte, 6> paste_end{0x1b, '[', '2', '0', '1', '~'};
     std::array<Byte, 128> encoded_enter;
     const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter);
-    const auto required = prefix.size() + text.size() + (paste ? paste_start.size() + paste_end.size() : 0) + (request.mode != PaneTextMode::raw ? enter.size() : 0);
+    const auto required = prefix.size() + typedSize(paste, text, enter);
     if (!admitInput(pane, required)) {
       std::array<char, 160> message;
       const auto length = std::snprintf(message.data(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane<Memory>::input_limit);
@@ -817,23 +871,7 @@ public:
       return;
     }
 
-    const auto forward = [&](std::span<const Byte> bytes) {
-      pane.enqueueInput(bytes);
-      observe(pane, bytes);
-    };
-    if (paste) {
-      forward(paste_start);
-    }
-
-    forward({reinterpret_cast<const Byte *>(prefix.data()), prefix.size()});
-    forward(text);
-    if (paste) {
-      forward(paste_end);
-    }
-    if (request.mode != PaneTextMode::raw) {
-      forward(enter);
-    }
-
+    type(pane, paste, {reinterpret_cast<const Byte *>(prefix.data()), prefix.size()}, text, enter, observe);
     if (request.mode != PaneTextMode::raw || request.text.find('\r') != std::string_view::npos) {
       pane.observer->noteInjectedSubmission();
     }
@@ -879,7 +917,10 @@ public:
     }
   }
 
-  inline static void search(PaneStore<Memory> &panes, ClientSession<Memory> &client, const SearchPane &request) {
+  // A search of the whole scrollback, or of some rows of it.
+  template <typename Request>
+    requires std::same_as<Request, SearchPane> || std::same_as<Request, SearchPaneRows>
+  inline static void search(PaneStore<Memory> &panes, ClientSession<Memory> &client, const Request &request) {
     auto &pane = require(panes, request.pane_id);
     if (client.interactive && client.attachment(pane.id) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
@@ -891,6 +932,16 @@ public:
                                            .message = "Pane search superseded"});
     }
     client.search.emplace(request, pane.terminal.contentRevision());
+  }
+
+  // Rows of an attached pane's scrollback, which its client draws while it scrolls.
+  inline static void readRows(PaneStore<Memory> &panes, ClientSession<Memory> &client, const ReadPaneRows &request) {
+    auto &pane = require(panes, request.pane_id);
+    if (client.attachment(pane.id) == nullptr) {
+      throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
+    }
+
+    client.connection.send(pane.scrollback_rows.read(pane.terminal, request));
   }
 
   inline static bool advanceSearch(PaneStore<Memory> &panes, ClientSession<Memory> &client) {
@@ -993,7 +1044,7 @@ private:
     return {identity, model.next_pane_generation++};
   }
 
-  inline tbc::view<Pane<Memory> &, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, Command<Memory> &command, TabLocation location, TerminalSize size, Identity identity) {
+  inline tbc::view<Pane<Memory> &, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, bool bare_prompt, Command<Memory> &command, TabLocation location, TerminalSize size, Identity identity) {
     const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
       std::array<char, 32> text{};
       const auto converted = std::to_chars(text.data(), text.data() + text.size(), value);
@@ -1008,7 +1059,7 @@ private:
       command.setEnvironment("TELAR_BIN_PATH", model.cli_executable);
     }
     proxy_.apply(command);
-    const auto shell = shell_integration_.apply(command);
+    const auto shell = shell_integration_.apply(command, bare_prompt);
     auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
     TELAR_DIAGNOSTIC(pane->counters = &model.metrics.panes);
     pane->generation = identity.generation;

@@ -595,6 +595,30 @@ Boolean. Whether the cursor blinks. Default `true`.
 Integer. How long each blink phase lasts. Default `600`, from `100` to
 `5000`.
 
+## Scroll
+
+### `gui.scroll.smooth`
+
+Boolean. Scroll a pane's scrollback by pixels: a trackpad moves the rows one to
+one, a wheel notch eases over three rows and jumps glide. `false` moves whole
+rows, three a notch. Programs that read the wheel still get whole notches.
+Default `true`.
+
+### `gui.scroll.wheel_ms`
+
+Integer. How long a wheel notch takes to settle. Default `80`, from `0` to
+`400`.
+
+### `gui.scroll.overscan`
+
+Number. Views of rows, above and below the shown one, a moving pane asks the
+runtime for. Default `1`, from `0` to `4`.
+
+### `gui.scroll.sticky_headers`
+
+Boolean. Keep the separator of the command being read on the pane's top row.
+Default `true`.
+
 ## Sidebar
 
 ### `client.sidebar.visible`
@@ -740,16 +764,24 @@ What the island does:
   shows a lock and a dot per key; the keys go to the program and nowhere else.
 - **Commands in the scrollback.** Each command's prompt turns into a separator:
   how it ended, its first line and how long it ran. On Enter the command flies
-  to its separator. A dot per command at the pane's right edge, in the colour
-  of how it ended, selects the command when clicked, as a click on its
-  separator does.
+  to its separator. While its output is read, its separator stays on the top
+  row. The pane's right edge maps the scrollback, a segment per command in the
+  colour of how it ended: a click on one selects its command, as a click on
+  its separator does, and the view drags. The chevron on a separator folds the
+  command's output.
 - **Selecting a command.** From vim's normal mode, Ctrl-U and Ctrl-D (or `[[`
   and `]]`) step through the commands, showing each from the top of the pane
   with its separator and its dot lit; with the emacs keymap, the copy mode
-  binding (prefix `[`) selects the last one. On a selected command, `v` starts
-  copy mode on its output and `V` selects all of it; `Y` copies its output and
-  `yc` its command. Esc, `q`, `i`, `a`, `I`, `A` or any other key go back to
-  the prompt. Copy mode keeps the island in place of the shell's prompt.
+  binding (prefix `[`) selects the last one. `[f` and `]f` step through the
+  failed ones, and Ctrl-O and Ctrl-I go back and forth through these jumps. On
+  a selected command, `j` and `k` scroll a row, `gg` goes to the top and `G`
+  back to the live end; `zt`, `zz` and `zb` put the command at the top, middle
+  or bottom of the pane; `za`, `zc` and `zo` fold its output, `zM` and `zR`
+  every command's. `/` searches its output only, and Tab in the search
+  switches to the whole scrollback. `v` starts copy mode on its output and `V`
+  selects all of it; `Y` copies its output and `yc` its command. Esc, `q`,
+  `i`, `a`, `I`, `A` or any other key go back to the prompt. Copy mode keeps
+  the island in place of the shell's prompt.
 - **Full-screen and raw programs** (vim, fzf, agents' interfaces) get the
   keyboard exactly as in classic mode, and the island disappears.
 - **Context.** The pane header shows the directory and, in a git repository,
@@ -759,10 +791,14 @@ What the island does:
   a moment.
 - **SSH.** A shell that `ssh` reached with
   [`runtime.ssh_integration`](#runtimessh_integration) gets the island too, with
-  its history suggestions and the specs' own choices, and a violet edge. The
-  pane header names the host and the link's round trip, timed from what you
-  type reaching the remote line editor to its echo. Files, commands, branches
-  and the pane header's git summary belong to the remote host, so telar offers
+  its history suggestions and the specs' own choices. The island shows the
+  host as a violet chip with the link's round trip, timed from what you type
+  reaching the remote line editor to its echo, and the directory the remote
+  shell reports, never the local one. The `ssh` command's separator stays open
+  while the session lasts, naming the host and counting its time, and ends
+  with ssh's exit status. The commands run there name the host too, and a
+  violet edge marks the rows the session covers. Files, commands, branches and
+  the pane header's git summary belong to the remote host, so telar offers
   none of them there.
 
 ### Completion specs
@@ -804,7 +840,9 @@ same name, if any, is offered instead. To share one with everybody, add it to
 
 ### `client.prompt.mode`
 
-String. `"classic"` (the default) or `"telar"`.
+String. `"classic"` (the default) or `"telar"`. In `"telar"`, the shells of the
+panes the window opens from then on, and the shells `ssh` reaches from them,
+print no prompt of their own: telar's editor stands in for it.
 
 ### `client.prompt.keymap`
 

@@ -1348,7 +1348,8 @@ private:
     QTest::keyClick(window_, Qt::Key_Slash);
     QCOMPARE(client_->dialog(), QStringLiteral("copy-search"));
     client_->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
-    QTRY_VERIFY_WITH_TIMEOUT(client_->copyState() && client_->copyState()->anchor.has_value(), runtime_wait_ms);
+    // The match found holds the cursor, nothing selected; y copies the match.
+    QTRY_VERIFY_WITH_TIMEOUT(client_->copyState() && !client_->copyState()->anchor.has_value() && client_->copySearchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
     QTest::keyClick(window_, Qt::Key_Y);
     QVERIFY(!client_->copyModeActive());
     QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("COPY_MODE_WORD_1"), runtime_wait_ms);
@@ -6740,7 +6741,7 @@ return {api_version=2, client={keybindings={
       const auto previous_frame = pane->screen.frameId();
       const auto acknowledged = pane->acknowledged_frame;
       client_->input(pane->id, QByteArrayLiteral("printf 'WINDOW_FRAME_OWNER\\n'\r"));
-      QTRY_VERIFY_WITH_TIMEOUT(pane->screen.frameId() > previous_frame, runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(pane->screen.frameId() > previous_frame, qPrintable(QStringLiteral("offset %1 total %2 rows %3 acked %4 frame %5").arg(pane->screen.scroll().offset).arg(pane->screen.scroll().total_rows).arg(pane->screen.rows()).arg(pane->acknowledged_frame).arg(pane->screen.frameId())), runtime_wait_ms);
       const auto pending_frame = pane->screen.frameId();
       QVERIFY(pending_frame > acknowledged);
       window_->beforeSynchronizing();

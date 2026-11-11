@@ -822,7 +822,7 @@ void revokedCapabilitiesAndReuse(SystemAllocator &memory) {
         const auto location = pane->location;
         panes.remove(model, clients, identity);
         Command command{memory, launch};
-        pane = &panes.launch(model, nullptr, command, location, size, identity);
+        pane = &panes.launch(model, nullptr, false, command, location, size, identity);
         check(pane->id == old.ticket.pane_id && pane->generation != old.ticket.pane_generation);
         panes.attach(model, client.session(), pane->id, size);
         bool rejected = false;
@@ -892,8 +892,8 @@ void deferredAllocationFailure() {
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
     const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-    auto &failed = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
-    auto &healthy = panes.launch(model, nullptr, launch, location, {80, 24, 9, 18});
+    auto &failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
     const auto failed_id = failed.id;
     const auto healthy_id = healthy.id;
     std::string input;

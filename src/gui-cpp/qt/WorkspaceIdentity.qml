@@ -37,6 +37,7 @@ Item {
         width: root.markSide
         height: root.markSide
         telarMark: true
+        theme: root.colors.theme ?? -1
         color: root.colors.chromeText
         ratio: root.ratio
     }

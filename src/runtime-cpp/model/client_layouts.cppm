@@ -123,6 +123,10 @@ struct Attachment {
   std::uint64_t shell_revision = 0;
   std::uint64_t git_revision = 0;
   std::uint64_t blocks_revision = 0;
+  // How the pane's scrollback numbered its rows when this client last heard; generation 0
+  // before it heard at all.
+  std::uint64_t scrollback_generation = 0;
+  std::uint64_t scrollback_trimmed = 0;
   FramePacer pacer;
 };
 
@@ -220,6 +224,8 @@ public:
   std::array<ForegroundStamp, 256> foregrounds;
   std::optional<TextSearch> search;
   ConfigureTerminalColors colors{};
+  // The client draws telar's editor in place of the shell's prompt: shells it starts print none.
+  bool bare_prompt = false;
   HeldTabs held_tabs;
 };
 
@@ -253,6 +259,7 @@ public:
         media(std::allocate_shared<PaneMedia<Memory>>(AllocatorRef<PaneMedia<Memory>, Memory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
+        scrollback_rows(memory),
         cwd(command.cwd(), AllocatorRef<char, Memory>{memory}) {
     randomBytes(history_session.data(), history_session.size());
     input.reserve(input_limit);
@@ -282,6 +289,7 @@ public:
     const auto observed = [&](bool result) {
       if (batch_bytes != 0) {
         observeShell();
+        terminal.followScrollback();
         if (blocks) {
           blocks->follow();
         }
@@ -359,6 +367,7 @@ public:
     next.phase = shell_zones->editing() ? ShellPhase::prompt : shell_zones->running() ? ShellPhase::running : ShellPhase::unknown;
     next.remote = shell_zones->remote();
     next.host = shell_zones->remoteHost();
+    next.directory = shell_zones->remoteDirectory();
     if (!next.remote) {
       next.link_ms = 0;
       link_average_ms = 0;
@@ -463,6 +472,12 @@ public:
     needs_foreground_observation = true;
   }
 
+  // The text of the command a client runs at the prompt, recorded before the bytes that type it,
+  // so the command's history keeps it instead of reading it back from the screen.
+  inline void submitCommand(std::span<const Byte> text) {
+    observer->bytes(ObservationKind::command, text, shellForeground());
+  }
+
   inline void resize(TerminalSize size) {
     if (terminal.hasSize(size)) {
       return;
@@ -519,6 +534,8 @@ public:
   // Reports its graphics queries to media.
   tbc::view<Terminal<Memory>, tbc::lt::self> terminal;
   ByteQueue<Memory> input;
+  // Reads rows of `terminal`'s scrollback for clients that ask for them.
+  ScrollbackRows<Memory> scrollback_rows;
   String<Memory> cwd;
   std::optional<PtyProcess> process;
   std::uint32_t observers = 0;

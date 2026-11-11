@@ -56,9 +56,10 @@ namespace telar {
         'C',
     };
 
-    // Adds PaneShell, PaneGit, PaneBlocks, word completion and command specs. Peers without
-    // them reject the messages.
-    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '2'};
+    // cqp00002 added PaneShell, PaneGit, PaneBlocks, word completion and command specs;
+    // cqp00003 adds ReadPaneRows, PaneRows, PaneScrollback, SearchPaneRows, PaneCommand and
+    // ConfigureShellPrompt. Peers without them reject the messages.
+    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '3'};
 
   } // namespace handshake
 

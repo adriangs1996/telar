@@ -81,6 +81,10 @@ namespace telar {
     read_runtime_clipboard = 0x4b,
     complete_words = 0x4c,
     request_command_spec = 0x4d,
+    read_pane_rows = 0x4e,
+    search_pane_rows = 0x4f,
+    pane_command = 0x50,
+    configure_shell_prompt = 0x51,
   };
 
   enum class ServerTag : Byte {
@@ -144,6 +148,8 @@ namespace telar {
     completion_words = 0xbe,
     pane_blocks = 0xbf,
     command_spec = 0xc0,
+    pane_rows = 0xc1,
+    pane_scrollback = 0xc2,
   };
 
   struct RequestRuntimeState {
@@ -1238,6 +1244,16 @@ namespace telar {
     succeeded = 1,
     failed = 2,
     interrupted = 3,
+    // An ssh whose remote shell has taken over the pane: it ends when that shell does.
+    session = 4,
+  };
+
+  // Where a command ran: in the pane's own shell, as the ssh that opened a remote shell, or
+  // in that remote shell.
+  enum class CommandBlockNest : Byte {
+    none = 0,
+    opens = 1,
+    inside = 2,
   };
 
   // One command an integrated shell ran: the rows its prompt and command line take, from the
@@ -1251,6 +1267,7 @@ namespace telar {
     std::int32_t status = 0;
     std::uint32_t duration_ms = 0;
     std::string_view command{};
+    CommandBlockNest nest{};
   };
 
   template <>
@@ -1258,10 +1275,11 @@ namespace telar {
       : Serializer<Field<&CommandBlock::row, u32, "row">,
                    Field<&CommandBlock::rows, u16, "rows">,
                    Field<&CommandBlock::lines, u16, "lines">,
-                   Field<&CommandBlock::state, EnumByte<CommandBlockState, 3>, "state">,
+                   Field<&CommandBlock::state, EnumByte<CommandBlockState, 4>, "state">,
                    Field<&CommandBlock::status, i32, "status">,
                    Field<&CommandBlock::duration_ms, u32, "duration_ms">,
-                   Field<&CommandBlock::command, DisplayText16<256>, "command">> {
+                   Field<&CommandBlock::command, DisplayText16<256>, "command">,
+                   Field<&CommandBlock::nest, EnumByte<CommandBlockNest, 2>, "nest">> {
     static void validate(const CommandBlock &value) {
       if (value.rows == 0) {
         throw EncodingError{"Command block without rows"};

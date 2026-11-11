@@ -164,7 +164,7 @@ void Application::connectMachine(Machines::Slot slot) {
       ++source->runtime_generation;
       source->phase = MachinePhase::connected;
       source->needs_setup = false;
-      source->session.connected(source->identity);
+      source->session.connected(source->identity, RuntimeProtocol::readsRows(source->connection.schema()));
       summarizeMachine(source->key);
       if (key.machine.slot == machines_.active()) {
         emit stateChanged();

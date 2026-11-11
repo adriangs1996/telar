@@ -116,17 +116,19 @@ CellRectangle visibleCells(const TerminalPresentation &frame) {
     return {};
   }
 
-  return {.width = std::min(fitted->cols, frame.screen.columns()), .height = std::min(fitted->rows, frame.screen.rows())};
+  // A view scrolled by pixels draws one row past the screen's last, partly shown.
+  const auto drawn = frame.rows.empty() ? fitted->rows : fitted->rows + 1;
+  return {.width = std::min(fitted->cols, frame.screen.columns()), .height = static_cast<std::uint16_t>(std::min<std::size_t>(drawn, frame.rowCount()))};
 }
 
 std::optional<std::size_t> cursorColumn(const TerminalPresentation &frame, std::size_t row, std::size_t columns) {
   const auto &cursor = frame.cursor_override ? *frame.cursor_override : frame.screen.cursor();
-  if (!frame.pane_focused || !cursor.visible || cursor.y != row || cursor.x >= columns) {
+  if (!frame.pane_focused || !cursor.visible || frame.screenRow(row) != std::optional<std::size_t>{cursor.y} || cursor.x >= columns) {
     return std::nullopt;
   }
 
   auto column = static_cast<std::size_t>(cursor.x);
-  if (column != 0 && frame.screen.row(row)[column].width == CellWidth::continuation) {
+  if (column != 0 && frame.row(row)[column].width == CellWidth::continuation) {
     --column;
   }
 
@@ -134,10 +136,10 @@ std::optional<std::size_t> cursorColumn(const TerminalPresentation &frame, std::
 }
 
 CellRun cellRun(const TerminalPresentation &frame, std::size_t row_index, std::size_t column) {
-  const auto row = frame.screen.row(row_index);
+  const auto row = frame.row(row_index);
   const auto &cell = row[column];
   const auto &theme = frame.configuration.theme;
-  const auto selected = frame.selection.contains((row_index * frame.screen.columns()) + column);
+  const auto selected = frame.selected({.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(row_index)});
   const auto symbol = CellGlyphs::parse(cell.utf8());
   CellRun run{
       .style = cell.style,
@@ -164,15 +166,15 @@ CellRun cellRun(const TerminalPresentation &frame, std::size_t row_index, std::s
 
 CellRun textRun(const TerminalPresentation &frame, std::size_t row_index, std::size_t column, std::size_t columns) {
   auto run = cellRun(frame, row_index, column);
-  const auto row = frame.screen.row(row_index).first(columns);
+  const auto row = frame.row(row_index).first(columns);
   const auto &cell = row[column];
-  const auto selected = frame.selection.contains((row_index * frame.screen.columns()) + column);
+  const auto selected = frame.selected({.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(row_index)});
   run.text = run.symbol ? QString{} : toQString(cell.utf8());
   constexpr Byte ascii_limit = 128;
   if (frame.font.fixed_pitch && cell.width == CellWidth::single && cell.length == 1 && cell.text[0] < ascii_limit) {
     while (column + run.consumed_cells < row.size()) {
       const auto &next = row[column + run.consumed_cells];
-      const auto next_selected = frame.selection.contains((row_index * frame.screen.columns()) + column + run.consumed_cells);
+      const auto next_selected = frame.selected({.x = static_cast<std::uint16_t>(column + run.consumed_cells), .y = static_cast<std::uint32_t>(row_index)});
       if (next.width != CellWidth::single || next.length != 1 || next.text[0] >= ascii_limit || next.style != cell.style || next_selected != selected || joinsLatinLigature(row[column + run.consumed_cells - 1].text[0], next.text[0])) {
         break;
       }
@@ -234,6 +236,7 @@ TerminalScene::TerminalScene(QQuickWindow &window)
       background_(appendSceneNode<QSGSimpleRectNode>(*this)),
       below_background_(appendSceneNode<QSGTransformNode>(*this)),
       cell_backgrounds_(appendSceneNode<QSGTransformNode>(*this)),
+      matches_(appendSceneNode<QSGTransformNode>(*this)),
       below_text_(appendSceneNode<QSGTransformNode>(*this)),
       rows_(appendSceneNode<QSGTransformNode>(*this)),
       above_text_(appendSceneNode<QSGTransformNode>(*this)),
@@ -295,10 +298,11 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_
   text_.begin(row_bounds, frame.scale, frame.bounds, std::move(previous));
   const auto cursor_column = cursorColumn(frame, row_index, columns_);
 
-  const auto cells = frame.screen.row(row_index).first(columns_);
-  const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = frame.selection, .first_cell = row_index * frame.screen.columns()});
+  const auto cells = frame.row(row_index).first(std::min<std::size_t>(columns_, frame.row(row_index).size()));
+  const auto screen_row = frame.screenRow(row_index);
+  const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = screen_row ? frame.selection : CellSelection{}, .first_cell = screen_row.value_or(0) * frame.screen.columns()});
   auto decorations = std::make_unique<QSGNode>();
-  for (std::size_t column = 0; column < columns_; ++column) {
+  for (std::size_t column = 0; column < cells.size(); ++column) {
     const auto run = cellRun(frame, row_index, column);
     std::unique_ptr<QSGNode> inline_ink;
     if (grouped_text && run.visible && (run.symbol || underlineStyle(run.style) != UnderlineStyle::none || hasAttribute(run.style, CellAttribute::strikethrough))) {
@@ -318,8 +322,8 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_
   }
 
   if (!grouped_text) {
-    for (std::size_t column = 0; column < columns_;) {
-      const auto run = textRun(frame, row_index, column, columns_);
+    for (std::size_t column = 0; column < cells.size();) {
+      const auto run = textRun(frame, row_index, column, cells.size());
       if (run.visible && !run.symbol) {
         const QPointF origin{static_cast<qreal>(column) * frame.font.cell.width(), static_cast<qreal>(row_index) * frame.font.cell.height()};
         text_.add(run.text, frame.font.faces[faceIndex(run.style)], textFormat(run.foreground), {.origin = origin, .baseline = frame.font.baseline, .style = glyphStyle(run.style)});
@@ -331,9 +335,10 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_
 
   row.text_content = text_.append(*row.text, cells);
   adoptSceneNode(*row.text, std::move(decorations));
-  row.revision = frame.screen.rowRevision(row_index);
+  row.revision = frame.rowRevision(row_index);
+  row.source = frame.rowSource(row_index);
   row.appearance = frame.appearance;
-  row.selection = frame.selection.within(row_index * frame.screen.columns(), frame.screen.columns());
+  row.selection = screen_row ? frame.selection.within(*screen_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
   row.cursor = cursor_column;
 }
 
@@ -342,6 +347,15 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
   // Live panes provide their background; standalone scenes retain their own fill.
   background_.setColor(frame.background_provided || frame.configuration.background_opacity < 1 ? QColor{Qt::transparent} : toQColor(frame.configuration.theme.background));
   synchronizeGrid(visibleCells(frame));
+  // The rows, the images and what is drawn over them move up by the shift.
+  if (shift_ != frame.shift) {
+    QMatrix4x4 rows;
+    rows.translate(0, static_cast<float>(-frame.shift));
+    for (auto *layer : {&cell_backgrounds_, &matches_, &rows_, &overlay_, &below_background_, &below_text_, &above_text_}) {
+      layer->setMatrix(rows);
+    }
+    shift_ = frame.shift;
+  }
 
   const auto glyphs_changed = appearance_ != frame.appearance || scale_ != frame.scale;
   if (glyphs_changed) {
@@ -366,24 +380,41 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
       }
       continue;
     }
-    if (const auto revealed = frame.revealed(position); revealed != row.revealed) {
+    const auto revealed = frame.revealed(position);
+    const auto offset = frame.offset(position);
+    if (revealed != row.revealed || offset != row.offset) {
       row.revealed = revealed;
+      row.offset = offset;
       const auto settled = 1.0F - (1.0F - revealed) * (1.0F - revealed) * (1.0F - revealed);
       QMatrix4x4 lift;
-      lift.translate(0, static_cast<float>(frame.font.cell.height()) * 0.25F * (1.0F - settled));
+      lift.translate(0, (static_cast<float>(frame.font.cell.height()) * 0.25F * (1.0F - settled)) + offset);
       row.text->setMatrix(lift);
       row.background->setMatrix(lift);
       row.text_opacity->setOpacity(revealed);
       row.background_opacity->setOpacity(revealed);
     }
     const bool shown = std::exchange(row.hidden, false);
-    const auto selection = frame.selection.within(static_cast<std::size_t>(index) * frame.screen.columns(), frame.screen.columns());
-    if (shown || glyphs_changed || bounds_ != frame.bounds || row.revision != frame.screen.rowRevision(static_cast<std::size_t>(index)) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, static_cast<std::size_t>(index), columns_)) {
+    const auto screen_row = frame.screenRow(position);
+    const auto selection = screen_row ? frame.selection.within(*screen_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
+    if (shown || glyphs_changed || bounds_ != frame.bounds || row.revision != frame.rowRevision(position) || row.source != frame.rowSource(position) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, position, columns_)) {
       paintRow(frame, static_cast<std::size_t>(index));
     }
   }
 
-  images_.synchronize(frame.owner != nullptr ? *frame.owner : *window.contentItem(), frame.graphics, frame.screen, frame.font.cell, frame.scale);
+  auto image_rows = ImageRows::of(frame.screen, drawn_cells_);
+  if (!frame.rows.empty()) {
+    // A view's own rows: from its top shown row, through its folds.
+    drawn_cells_.clear();
+    for (std::size_t index = 0; index < frame.rowCount(); ++index) {
+      drawn_cells_.push_back(frame.row(index));
+    }
+    image_rows.top = frame.top_row;
+    image_rows.folds = frame.folds;
+    image_rows.rows = drawn_cells_;
+    image_rows.revision = frame.view_revision;
+  }
+  images_.synchronize(frame.owner != nullptr ? *frame.owner : *window.contentItem(), frame.graphics, image_rows, frame.font.cell, frame.scale);
+  paintMatches(frame);
   clearSceneChildren(overlay_);
   paintCursor(frame);
   paintPreedit(frame);
@@ -393,18 +424,47 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
   bounds_ = frame.bounds;
 }
 
+// Every match lit, the current one more, only when they or where they are drawn changed.
+void TerminalScene::paintMatches(const TerminalPresentation &frame) {
+  const bool same_offsets = std::ranges::equal(lit_offsets_, frame.row_offsets);
+  if (std::ranges::equal(lit_matches_, frame.matches) && same_offsets && lit_bounds_ == frame.bounds) {
+    return;
+  }
+  lit_matches_.assign(frame.matches.begin(), frame.matches.end());
+  lit_offsets_.assign(frame.row_offsets.begin(), frame.row_offsets.end());
+  lit_bounds_ = frame.bounds;
+  clearSceneChildren(matches_);
+  constexpr float match_alpha = 0.32F;
+  constexpr float current_alpha = 0.8F;
+  const auto &theme = frame.configuration.theme;
+  for (const auto &match : frame.matches) {
+    if (match.row >= row_nodes_.size() || frame.hidden(match.row)) {
+      continue;
+    }
+    auto color = theme.warning;
+    color.a *= match.current ? current_alpha : match_alpha;
+    const QRectF bounds{static_cast<qreal>(match.column) * frame.font.cell.width(), (static_cast<qreal>(match.row) * frame.font.cell.height()) + frame.offset(match.row), static_cast<qreal>(match.length) * frame.font.cell.width(), frame.font.cell.height()};
+    appendSceneNode<QSGSimpleRectNode>(matches_, bounds, toQColor(color));
+  }
+}
+
 void TerminalScene::paintHoveredLink(const TerminalPresentation &frame) {
   if (frame.hovered_link == nullptr) {
     return;
   }
 
-  const auto &screen = frame.screen;
+  const auto &screen = frame.link_screen != nullptr ? *frame.link_screen : frame.screen;
   const LinkGrid grid{.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
   LinkRegions regions{*frame.hovered_link, grid, screen.linkRuns(), {.columns = columns_, .rows = static_cast<std::uint16_t>(row_nodes_.size())}};
   constexpr qreal underline_inset_pixels = 2;
   constexpr qreal underline_thickness_pixels = 1;
   while (const auto area = regions.next()) {
-    const QRectF bounds{area->x * frame.font.cell.width(), ((area->y + 1) * frame.font.cell.height()) - (underline_inset_pixels / frame.scale), area->width * frame.font.cell.width(), underline_thickness_pixels / frame.scale};
+    // On the drawn rows' own screen a row is where it is drawn.
+    const auto drawn = frame.link_screen != nullptr ? std::optional<std::size_t>{area->y} : frame.drawnRow(area->y);
+    if (!drawn) {
+      continue;
+    }
+    const QRectF bounds{area->x * frame.font.cell.width(), ((static_cast<qreal>(*drawn) + 1) * frame.font.cell.height()) + frame.offset(*drawn) - (underline_inset_pixels / frame.scale), area->width * frame.font.cell.width(), underline_thickness_pixels / frame.scale};
     appendSceneNode<QSGSimpleRectNode>(overlay_, bounds, toQColor(frame.configuration.theme.accent));
   }
 }
@@ -415,11 +475,12 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
     return;
   }
 
-  if (std::cmp_greater_equal(cursor.y, row_nodes_.size()) || cursor.x >= columns_ || frame.hidden(cursor.y)) {
+  const auto drawn = frame.drawnRow(cursor.y);
+  if (!drawn || std::cmp_greater_equal(*drawn, row_nodes_.size()) || cursor.x >= columns_ || frame.hidden(*drawn)) {
     return;
   }
 
-  const auto row = frame.screen.row(cursor.y);
+  const auto row = frame.row(*drawn);
   if (cursor.x >= row.size()) {
     return;
   }
@@ -438,7 +499,7 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
   }
 
   const auto &theme = frame.configuration.theme;
-  QRectF bounds{static_cast<qreal>(column) * frame.font.cell.width(), cursor.y * frame.font.cell.height(), cell_columns * frame.font.cell.width(), frame.font.cell.height()};
+  QRectF bounds{static_cast<qreal>(column) * frame.font.cell.width(), (static_cast<qreal>(*drawn) * frame.font.cell.height()) + frame.offset(*drawn), cell_columns * frame.font.cell.width(), frame.font.cell.height()};
   const auto color = toQColor(theme.cursor);
   constexpr qreal cursor_thickness = 2;
   if (shape == CursorShape::hollow) {
@@ -477,12 +538,13 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
 }
 
 void TerminalScene::paintPreedit(const TerminalPresentation &frame) {
-  if (frame.preedit.isEmpty() || frame.screen.cursor().x >= columns_ || std::cmp_greater_equal(frame.screen.cursor().y, row_nodes_.size())) {
+  const auto drawn = frame.drawnRow(frame.screen.cursor().y);
+  if (frame.preedit.isEmpty() || frame.screen.cursor().x >= columns_ || !drawn || std::cmp_greater_equal(*drawn, row_nodes_.size())) {
     return;
   }
 
   const auto &cursor = frame.screen.cursor();
-  const QRectF bounds{cursor.x * frame.font.cell.width(), cursor.y * frame.font.cell.height(), static_cast<qreal>(frame.preedit.size()) * frame.font.cell.width(), frame.font.cell.height()};
+  const QRectF bounds{cursor.x * frame.font.cell.width(), static_cast<qreal>(*drawn) * frame.font.cell.height(), static_cast<qreal>(frame.preedit.size()) * frame.font.cell.width(), frame.font.cell.height()};
   overlay_text_.begin(bounds, frame.scale, frame.bounds);
   QTextCharFormat format;
   format.setForeground(toQColor(frame.configuration.theme.foreground));

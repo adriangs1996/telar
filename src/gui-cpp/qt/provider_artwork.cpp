@@ -30,6 +30,7 @@ static_assert(true);
 
 
 
+import telar.gui.core.metrics;
 import telar.gui.graphics.pauses;
 import telar.gui.presentation.application_mark;
 
@@ -54,6 +55,35 @@ const QByteArray &providerSheet() {
   }();
 
   return pixels;
+}
+
+// The default mark wears Cybervenom, Telar's default theme; every other preset has its own.
+QString telarSource(bool monochrome, int theme) {
+  if (monochrome) {
+    return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");
+  }
+
+  struct ThemedMark {
+    ThemeName theme;
+    QStringView source;
+  };
+
+  static constexpr std::array marks{
+      ThemedMark{.theme = ThemeName::shade, .source = u":/telar/fonts/telar-mark-shade.svg"},
+      ThemedMark{.theme = ThemeName::vesper, .source = u":/telar/fonts/telar-mark-vesper.svg"},
+      ThemedMark{.theme = ThemeName::catppuccin, .source = u":/telar/fonts/telar-mark-catppuccin.svg"},
+      ThemedMark{.theme = ThemeName::tokyo_night, .source = u":/telar/fonts/telar-mark-tokyo-night.svg"},
+      ThemedMark{.theme = ThemeName::pierre_dark, .source = u":/telar/fonts/telar-mark-pierre-dark.svg"},
+      ThemedMark{.theme = ThemeName::pierre_dark_soft, .source = u":/telar/fonts/telar-mark-pierre-dark-soft.svg"},
+      ThemedMark{.theme = ThemeName::kanagawa, .source = u":/telar/fonts/telar-mark-kanagawa.svg"},
+      ThemedMark{.theme = ThemeName::kanagawa_dragon, .source = u":/telar/fonts/telar-mark-kanagawa-dragon.svg"},
+      ThemedMark{.theme = ThemeName::terminal, .source = u":/telar/fonts/telar-mark-terminal.svg"},
+  };
+  const auto *const found = std::ranges::find_if(marks, [theme](const ThemedMark &mark) {
+    return static_cast<int>(mark.theme) == theme;
+  });
+
+  return found == marks.end() ? QStringLiteral(":/telar/fonts/telar-mark.svg") : found->source.toString();
 }
 
 }
@@ -86,12 +116,12 @@ QImage ProviderArtwork::image(AgentProvider provider, int side) {
   return output;
 }
 
-QImage ProviderArtwork::telar(int side, bool monochrome) {
+QImage ProviderArtwork::telar(int side, bool monochrome, int theme) {
   if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
     return {};
   }
 
-  QSvgRenderer renderer{monochrome ? QStringLiteral(":/telar/fonts/telar-mark-mono.svg") : QStringLiteral(":/telar/fonts/telar-mark.svg")};
+  QSvgRenderer renderer{telarSource(monochrome, theme)};
   if (!renderer.isValid()) {
     return {};
   }

@@ -601,6 +601,15 @@ private:
       configuration.blink_interval = std::chrono::milliseconds{cursor.field("blink_interval_ms").boundedInteger(configuration.blink_interval.count(), Configuration::minimum_blink_interval.count(), Configuration::maximum_blink_interval.count())};
     }
 
+    const auto scroll = gui.field("scroll");
+    if (scroll.present()) {
+      auto &settings = configuration.scroll;
+      settings.smooth = scroll.field("smooth").boolean(settings.smooth);
+      settings.wheel_ms = static_cast<std::uint16_t>(scroll.field("wheel_ms").boundedInteger(settings.wheel_ms, 0, ScrollConfiguration::maximum_wheel_ms));
+      settings.overscan = static_cast<float>(scroll.field("overscan").boundedNumber(settings.overscan, 0, ScrollConfiguration::maximum_overscan));
+      settings.sticky_headers = scroll.field("sticky_headers").boolean(settings.sticky_headers);
+    }
+
     window(gui.field("window"), configuration);
     const auto opacity = gui.field("opacity");
     if (opacity.present()) {

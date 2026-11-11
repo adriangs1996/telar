@@ -1,5 +1,5 @@
 # telar's shell integration on a host `ssh` reached, run by /bin/sh with the nonce telar
-# expects as $1. telar appends the calls: _telar_prepare with the scripts' digest, one
+# expects as $1, and `telar` as $2 when telar's editor stands in for the shell's prompt. telar appends the calls: _telar_prepare with the scripts' digest, one
 # _telar_put per script, and _telar_start. A step that fails leaves the user's login shell
 # starting as usual, without the integration.
 
@@ -31,6 +31,7 @@ _telar_put() {
 # Answers telar with the nonce and a token of this host's own, then starts the login shell
 # with the scripts, as the local runtime does.
 _telar_start() {
+  _telar_prompt=${2-}
   _telar_token=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
   if [ -z "$_telar_ready" ] || [ "${#1}" -ne 32 ] || [ "${#_telar_token}" -ne 32 ]; then
     exec "$_telar_shell" -l
@@ -62,5 +63,8 @@ _telar_start() {
   printf '\033]6973;nest=%s;token=%s;shell=%s\007' "$1" "$_telar_token" "$_telar_name"
   shift
   export TELAR_SHELL_TOKEN="$_telar_token"
+  if [ "$_telar_prompt" = telar ]; then
+    export TELAR_PROMPT_MODE=telar
+  fi
   exec "$_telar_shell" "$@"
 }

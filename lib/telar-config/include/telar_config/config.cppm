@@ -2948,9 +2948,10 @@ public:
       return;
     }
 
-    gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps", "opacity"});
+    gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps", "opacity", "scroll"});
     font(gui.field("font"));
     cursor(gui.field("cursor"));
+    scroll(gui.field("scroll"));
     window(gui.field("window"));
     chrome(gui.field("chrome"));
     sidebar(gui.field("sidebar"));
@@ -2983,6 +2984,18 @@ private:
     optionalChoice(table.field("style"), {"block", "bar", "underline", "hollow"});
     table.field("blink").boolean(false);
     optionalWholeNumber(table.field("blink_interval_ms"), 100, 5000);
+  }
+
+  inline static void scroll(const lua::Value &table) {
+    if (!table.present()) {
+      return;
+    }
+
+    table.onlyFields({"smooth", "wheel_ms", "overscan", "sticky_headers"});
+    table.field("smooth").boolean(true);
+    optionalWholeNumber(table.field("wheel_ms"), 0, 400);
+    table.field("overscan").boundedNumber(1, 0, 4);
+    table.field("sticky_headers").boolean(true);
   }
 
   inline static void window(const lua::Value &table) {

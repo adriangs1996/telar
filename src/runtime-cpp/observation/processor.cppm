@@ -53,6 +53,8 @@ namespace telar::runtime {
 
 enum class ObservationKind {
   input,
+  // The text of a command a client runs, ahead of the input that types it.
+  command,
   output,
   resize,
   shell_exit,
@@ -232,6 +234,9 @@ public:
           TELAR_DIAGNOSTIC(diagnostics::accumulate(result.metrics.candidate_input_bytes, candidate_bytes));
           break;
         }
+        case ObservationKind::command:
+          tracker_.submitCommand(batch.bytesOf(event));
+          break;
         case ObservationKind::shell_exit:
           tracker_.complete({event.time, event.exit_code}, commands);
           break;

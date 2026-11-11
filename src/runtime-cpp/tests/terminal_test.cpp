@@ -103,9 +103,75 @@ static void testClearAtPrompt() {
   check(terminal.screen.scroll.total_rows > terminal.screen.rows);
 }
 
+// The text a `PaneRows` reply holds on its row `index`, trailing spaces trimmed.
+static std::string replyRow(const PaneRows &reply, std::size_t index) {
+  std::string text;
+  auto reader = reply.reader();
+  std::size_t cell = 0;
+  while (const auto next = reader.next()) {
+    if (cell / reply.cols == index) {
+      text.append(reinterpret_cast<const char *>(next->text.data()), next->text.size());
+    }
+    ++cell;
+  }
+  while (!text.empty() && text.back() == ' ') {
+    text.pop_back();
+  }
+  return text;
+}
+
+// Rows keep their stable number, the rows dropped above them plus their row, while the
+// scrollback drops its oldest; a resize renumbers them under a new generation.
+static void testScrollbackOrigin() {
+  SystemAllocator memory;
+  Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
+  const std::size_t limit = 1;
+  checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit));
+  const auto generation = terminal.scrollbackGeneration();
+  check(terminal.followScrollback() == 0 && terminal.scrollbackTrimmed() == 0);
+
+  std::size_t printed = 0;
+  std::uint64_t dropped = 0;
+  for (std::size_t batch = 0; batch < 4000 && terminal.scrollbackTrimmed() < 600; ++batch) {
+    std::string lines;
+    for (std::size_t line = 0; line < 8; ++line) {
+      lines += "line " + std::to_string(printed++) + "\r\n";
+    }
+    terminal.feed(bytes(lines));
+    dropped += terminal.followScrollback();
+  }
+  check(terminal.scrollbackTrimmed() > 0 && dropped == terminal.scrollbackTrimmed() && terminal.scrollbackGeneration() == generation);
+
+  // Stable row N holds the line printed N-th.
+  ScrollbackRows<SystemAllocator> rows{memory};
+  const auto trimmed = terminal.scrollbackTrimmed();
+  const auto stable = trimmed + 3;
+  const auto reply = rows.read(terminal, ReadPaneRows{.request_id = 1, .pane_id = 1, .from = stable, .count = 2});
+  check(reply.from == stable && reply.rows == 2 && reply.cols == 40 && reply.trimmed == trimmed);
+  check(replyRow(reply, 0) == "line " + std::to_string(stable) && replyRow(reply, 1) == "line " + std::to_string(stable + 1));
+  Codec::validate(reply);
+
+  // Rows already dropped are skipped; rows past the end are none.
+  const auto clipped = rows.read(terminal, ReadPaneRows{.request_id = 2, .pane_id = 1, .from = trimmed - 1, .count = 3});
+  check(clipped.from == trimmed && clipped.rows == 2 && replyRow(clipped, 0) == "line " + std::to_string(trimmed));
+  const auto beyond = rows.read(terminal, ReadPaneRows{.request_id = 3, .pane_id = 1, .from = trimmed + 1'000'000, .count = 4});
+  check(beyond.rows == 0 && !beyond.text_metadata && beyond.cells.empty());
+  Codec::validate(beyond);
+
+  // Rows on the live screen, nearer the bottom than a screen, come from the last full view.
+  terminal.refresh();
+  const auto last = trimmed + terminal.screen.scroll.total_rows - 2;
+  const auto tail = rows.read(terminal, ReadPaneRows{.request_id = 4, .pane_id = 1, .from = last, .count = 5});
+  check(tail.from == last && tail.rows == 2 && replyRow(tail, 0) == "line " + std::to_string(printed - 1));
+
+  terminal.resize(TerminalSize{30, 5, 0, 0});
+  check(terminal.scrollbackGeneration() == generation + 1 && terminal.followScrollback() == 0);
+}
+
 void testTerminal() {
   testTerminalStorage();
   testClearAtPrompt();
+  testScrollbackOrigin();
   {
     SystemAllocator memory;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};

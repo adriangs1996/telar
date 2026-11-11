@@ -125,6 +125,14 @@ sizes:
   `e7c26f2fe3836ac663dd4e74a6eebe5c231545a34c2f9f43fe6b1b4fb8a19ab3`), the
   weaver in one color without a container.
 
+`telar-mark-<theme>.svg` repaint `telar-mark.svg` with each built-in theme's
+colors, so the top bar mark follows the active theme: the tile takes the
+theme's background, the spider its text tones and the thread, feet and cursor
+its accent. Cybervenom, and any theme without its own file, uses
+`telar-mark.svg`. One per theme: `shade`, `vesper`, `catppuccin`,
+`tokyo-night`, `pierre-dark`, `pierre-dark-soft`, `kanagawa`,
+`kanagawa-dragon` and `terminal`.
+
 `telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
 `b962458d3f1e80a99a42b81548267d4d79590d2b79a9bda2e69db0878cca7514`, and
 `telar-mark-64.rgba` its raw straight-alpha RGBA, SHA-256

@@ -7,6 +7,7 @@ static_assert(true);
 #include "application.hpp"
 #include "../application/dependencies.hpp"
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include "key_adapter.hpp"
@@ -114,6 +115,90 @@ LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexc
   return {.native = modifiers.testFlag(NativeKeyAdapter::link_modifier), .shift = modifiers.testFlag(Qt::ShiftModifier), .alt = modifiers.testFlag(Qt::AltModifier)};
 }
 
+std::uint64_t TerminalItem::drawnScreenKey() const noexcept {
+  const auto *current = pane();
+  if (current == nullptr) {
+    return 0;
+  }
+  constexpr std::uint64_t prime = 0x100000001b3;
+  auto key = current->screen.revision();
+  for (const auto value : {top_row_, current->fold_revision, current->scrollback_trimmed, static_cast<std::uint64_t>(view_rows_.size()), static_cast<std::uint64_t>(fold_motion_ ? fold_shown_ + 1 : 0)}) {
+    key = (key ^ value) * prime;
+  }
+  for (const auto &view : view_rows_) {
+    if (view.exists && view.screen_row < 0) {
+      const auto kept = current->rows.find(current->scrollback_trimmed + view.row);
+      key = (key ^ (kept ? kept->revision : view.row)) * prime;
+    }
+  }
+  return key;
+}
+
+const Screen<ApplicationAllocator> *TerminalItem::drawnScreen() const {
+  const auto *current = pane();
+  if (current == nullptr || application_ == nullptr || !mapsRows() || view_rows_.empty()) {
+    return nullptr;
+  }
+  const auto key = drawnScreenKey();
+  if (drawn_screen_ && drawn_screen_key_ == key) {
+    return &*drawn_screen_;
+  }
+  if (!drawn_screen_) {
+    drawn_screen_.emplace(application_->memory_);
+  }
+
+  const auto &screen = current->screen;
+  drawn_spans_.clear();
+  drawn_flags_.clear();
+  drawn_links_.clear();
+  drawn_runs_.clear();
+  drawn_uris_.clear();
+  for (std::size_t index = 0; index < view_rows_.size(); ++index) {
+    appendDrawnRow(index);
+  }
+  std::ranges::sort(drawn_runs_, {}, &MetadataRun::start);
+  drawn_screen_->compose(screen.columns(), drawn_spans_, drawn_flags_, TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_, .links = drawn_links_, .runs = drawn_runs_, .uris = drawn_uris_});
+  drawn_screen_key_ = key;
+  return &*drawn_screen_;
+}
+
+// Drawn row `index`, with its links, onto the drawn screen being put together.
+void TerminalItem::appendDrawnRow(std::size_t index) const {
+  const auto *current = pane();
+  const auto &screen = current->screen;
+  const auto columns = static_cast<std::uint32_t>(screen.columns());
+  // A link on this row, from `column` on, with its target.
+  const auto link = [&](std::uint32_t column, std::uint32_t length, std::string_view uri) {
+    const auto offset = drawn_uris_.size();
+    drawn_uris_.insert(drawn_uris_.end(), uri.begin(), uri.end());
+    drawn_links_.push_back({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
+    drawn_runs_.push_back({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_links_.size() - 1)});
+  };
+  const auto &view = view_rows_[index];
+  if (view.exists && view.screen_row >= 0) {
+    const auto row = static_cast<std::uint32_t>(view.screen_row);
+    drawn_spans_.push_back(screen.row(row));
+    drawn_flags_.push_back(screen.rowFlags(row));
+    for (const auto &run : screen.linkRuns()) {
+      if (run.start >= row * columns && run.start < (row + 1) * columns) {
+        link(run.start - (row * columns), run.len, screen.linkAt(run.start));
+      }
+    }
+    return;
+  }
+  const auto stable = current->scrollback_trimmed + view.row;
+  if (const auto kept = view.exists ? current->rows.find(stable) : std::nullopt) {
+    drawn_spans_.push_back(kept->cells);
+    drawn_flags_.push_back(kept->flags);
+    current->rows.links(stable, [&](const auto &kept_link) {
+      link(kept_link.column, kept_link.length, kept_link.uri);
+    });
+    return;
+  }
+  drawn_spans_.emplace_back();
+  drawn_flags_.push_back(0);
+}
+
 std::optional<CellPosition> TerminalItem::visibleCellAt(QPointF position) const noexcept {
   const auto *current = pane();
   if (current == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0 || !std::isfinite(position.x()) || !std::isfinite(position.y()) || !boundingRect().contains(position)) {
@@ -121,14 +206,22 @@ std::optional<CellPosition> TerminalItem::visibleCellAt(QPointF position) const 
   }
 
   const auto column = std::floor(position.x() / font_.cell.width());
-  const auto row = std::floor(position.y() / font_.cell.height());
   const auto columns = std::min(static_cast<qreal>(current->screen.columns()), std::floor(width() / font_.cell.width()));
-  const auto rows = std::min(static_cast<qreal>(current->screen.rows()), std::floor(height() / font_.cell.height()));
-  if (column < 0 || row < 0 || column >= columns || row >= rows) {
+  // A view that draws its own rows answers with the row drawn there, wherever it came from.
+  if (!view_rows_.empty()) {
+    const auto drawn = std::floor((position.y() + shift_) / font_.cell.height());
+    if (column < 0 || column >= columns || drawn < 0 || drawn >= static_cast<qreal>(view_rows_.size()) || !view_rows_[static_cast<std::size_t>(drawn)].exists) {
+      return {};
+    }
+    return CellPosition{.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(drawn)};
+  }
+  // The screen row drawn under the pointer; rows drawn from beyond the screen carry no links.
+  const auto row = screenRowAt((position.y() + shift_) / font_.cell.height());
+  if (column < 0 || column >= columns || !row) {
     return {};
   }
 
-  return CellPosition{.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(row)};
+  return CellPosition{.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(*row)};
 }
 
 TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, LinkModifiers modifiers) const {
@@ -138,8 +231,11 @@ TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, LinkModif
     return {};
   }
 
-  const CellPosition cell{.x = local->x, .y = current->screen.scroll().offset + local->y};
-  const auto found = CellLinks::resolve(current->screen, cell);
+  // A view that draws its own rows reads links from them, counted from its top.
+  const auto *drawn = view_rows_.empty() ? nullptr : drawnScreen();
+  const auto &grid = drawn != nullptr ? *drawn : current->screen;
+  const CellPosition cell{.x = local->x, .y = grid.scroll().offset + local->y};
+  const auto found = CellLinks::resolve(grid, cell);
   if (!found) {
     return {};
   }
@@ -151,7 +247,7 @@ TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, LinkModif
 
   const auto first = cell.y == found->start.y ? found->start.x : 0;
   const auto columns = std::floor(width() / font_.cell.width());
-  const auto last = std::min(static_cast<qreal>(cell.y == found->end.y ? found->end.x : current->screen.columns()), columns);
+  const auto last = std::min(static_cast<qreal>(cell.y == found->end.y ? found->end.x : grid.columns()), columns);
   if (first >= last) {
     return {};
   }
@@ -164,8 +260,8 @@ TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, LinkModif
           .generation = current->attachment_generation,
           .location = current->location,
           .content = surface.content,
-          .scroll_offset = current->screen.scroll().offset,
-          .area = {.x = surface.content.x + (static_cast<float>(first) * surface.cell.x), .y = surface.content.y + (static_cast<float>(local->y) * surface.cell.y), .width = static_cast<float>(last - first) * surface.cell.x, .height = surface.cell.y},
+          .scroll_offset = drawn != nullptr ? static_cast<std::uint32_t>(top_row_) : current->screen.scroll().offset,
+          .area = {.x = surface.content.x + (static_cast<float>(first) * surface.cell.x), .y = surface.content.y + (static_cast<float>(local->y) * surface.cell.y) - static_cast<float>(drawn != nullptr ? shift_ : 0), .width = static_cast<float>(last - first) * surface.cell.x, .height = surface.cell.y},
           .match = *found,
       },
   };
@@ -201,7 +297,7 @@ void TerminalItem::refreshLinkHover() {
       .cell = *cell,
       .version = application_->viewVersion(),
       .surface = surface,
-      .screen_revision = current->screen.revision(),
+      .screen_revision = view_rows_.empty() ? current->screen.revision() : drawnScreenKey() ^ std::bit_cast<std::uint64_t>(static_cast<double>(shift_)),
       .modifiers = application_->pointerModifiers(),
       .presentation_revision = link_presentation_revision_,
       .frame_presented = presented_frame_id_ == current->screen.frameId(),

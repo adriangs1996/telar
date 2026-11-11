@@ -94,6 +94,18 @@ public:
     return input;
   }
 
+  // The commands run at a pane's prompt since a message, as the runtime receives them.
+  std::vector<std::string> commandsSince(std::size_t first_message) const {
+    std::vector<std::string> commands;
+    for (const auto &bytes : std::span{sent}.subspan(first_message)) {
+      if (bytes.front() == static_cast<Byte>(ClientTag::pane_command)) {
+        commands.emplace_back(textView(Codec::decode<PaneCommand>(bytes).text));
+      }
+    }
+
+    return commands;
+  }
+
   std::vector<std::vector<Byte>> sent;
   std::vector<std::uint64_t> detaching;
   bool reject_history = false;

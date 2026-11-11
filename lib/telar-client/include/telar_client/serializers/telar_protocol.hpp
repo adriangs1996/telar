@@ -375,6 +375,33 @@ namespace telar {
                                            Field<&PaneInput::bytes, TailBytes<65536, 1>, "bytes">> {
   };
 
+  // A command telar's editor runs at the shell's prompt. The runtime types it there, as one
+  // paste when the shell asked for bracketed paste and then Enter, and its history keeps this
+  // text instead of reading the command back from the screen.
+  struct PaneCommand {
+    std::uint64_t pane_id{};
+    std::span<const Byte> text{};
+  };
+
+  template <>
+  struct MessageSchema<PaneCommand> : Schema<Direction::client,
+                                             ClientTag::pane_command,
+                                             Field<&PaneCommand::pane_id, NonzeroU64, "pane_id">,
+                                             Field<&PaneCommand::text, TailBytes<65536, 1>, "text">> {
+  };
+
+  // Whether this client draws telar's editor in place of the shell's prompt. The shells of the
+  // panes it opens from now on print no prompt of their own, only the marks telar reads.
+  struct ConfigureShellPrompt {
+    bool bare{};
+  };
+
+  template <>
+  struct MessageSchema<ConfigureShellPrompt> : Schema<Direction::client,
+                                                      ClientTag::configure_shell_prompt,
+                                                      Field<&ConfigureShellPrompt::bare, BoolByte, "bare">> {
+  };
+
   struct PaneResize {
     std::uint64_t pane_id{};
     TerminalSize size{};
@@ -867,6 +894,53 @@ namespace telar {
                Field<&SearchPane::request_id, NonzeroU64, "request_id">,
                Field<&SearchPane::pane_id, NonzeroU64, "pane_id">,
                Field<&SearchPane::needle, Text16<128, false>, "needle">> {};
+
+  // A search of the rows from `first_row` to `last_row`, counted from the scrollback's current
+  // top as `PaneMatch::y` is: one command's output, say. Answered by `PaneMatches`.
+  struct SearchPaneRows {
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    std::string_view needle{};
+    std::uint32_t first_row{};
+    std::uint32_t last_row{};
+
+    void validate() const {
+      if (last_row < first_row) {
+        throw EncodingError{"Search rows end before they begin"};
+      }
+    }
+  };
+
+  template <>
+  struct MessageSchema<SearchPaneRows>
+      : Schema<Direction::client,
+               ClientTag::search_pane_rows,
+               Field<&SearchPaneRows::request_id, NonzeroU64, "request_id">,
+               Field<&SearchPaneRows::pane_id, NonzeroU64, "pane_id">,
+               Field<&SearchPaneRows::needle, Text16<128, false>, "needle">,
+               Field<&SearchPaneRows::first_row, u32, "first_row">,
+               Field<&SearchPaneRows::last_row, u32, "last_row">> {};
+
+  // Rows of a pane's scrollback, by their stable number: the rows the scrollback dropped from
+  // its top since the pane began (`PaneScrollback::trimmed`) plus the row counted from its
+  // current top. Answered by `PaneRows`, with at most `count` rows.
+  struct ReadPaneRows {
+    static constexpr std::uint16_t maximum_rows = 512;
+
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    std::uint64_t from{};
+    std::uint16_t count{};
+  };
+
+  template <>
+  struct MessageSchema<ReadPaneRows>
+      : Schema<Direction::client,
+               ClientTag::read_pane_rows,
+               Field<&ReadPaneRows::request_id, NonzeroU64, "request_id">,
+               Field<&ReadPaneRows::pane_id, NonzeroU64, "pane_id">,
+               Field<&ReadPaneRows::from, u64, "from">,
+               Field<&ReadPaneRows::count, BoundedInteger<u16, 1, ReadPaneRows::maximum_rows>, "count">> {};
 
   struct ImportHistory {
     std::uint64_t request_id{};
@@ -2195,6 +2269,9 @@ namespace telar {
     // The round trip to that host, from input reaching its line editor to the echo, in
     // milliseconds; 0 until timed.
     std::uint32_t link_ms = 0;
+    // Where the shell works on that host, as it reports it; empty until it does, and when the
+    // shell runs on this one.
+    std::string_view directory{};
 
     bool operator==(const PaneShell &) const = default;
 
@@ -2224,7 +2301,8 @@ namespace telar {
                Field<&PaneShell::status, i32, "status">,
                Field<&PaneShell::remote, BoolByte, "remote">,
                Field<&PaneShell::host, DisplayText16<255>, "host">,
-               Field<&PaneShell::link_ms, u32, "link_ms">> {};
+               Field<&PaneShell::link_ms, u32, "link_ms">,
+               Field<&PaneShell::directory, DisplayText16<4096>, "directory">> {};
 
   // What a command spec leaves to the runtime: values that live where the shell runs.
   enum class CompletionProvider : Byte {
@@ -2348,6 +2426,76 @@ namespace telar {
                Field<&PaneBlocks::pane_id, NonzeroU64, "pane_id">,
                SpanCountField<&PaneBlocks::blocks, u16, ValueCodec<CommandBlock>, PaneBlocks::capacity, "block_count", 0>,
                SpanItemsField<&PaneBlocks::blocks, ValueCodec<CommandBlock>, "blocks">> {};
+
+  // How a pane's scrollback numbers its rows: `trimmed` rows dropped from its top since the
+  // pane began, and a `generation` that changes when rows were renumbered some other way (a
+  // reflow, an erased scrollback). A row's stable number is `trimmed` plus its current row; it
+  // names the same row for as long as the generation holds. Sent when either changes.
+  struct PaneScrollback {
+    std::uint64_t pane_id{};
+    std::uint64_t generation{};
+    std::uint64_t trimmed{};
+  };
+
+  template <>
+  struct MessageSchema<PaneScrollback>
+      : Schema<Direction::server,
+               ServerTag::pane_scrollback,
+               Field<&PaneScrollback::pane_id, NonzeroU64, "pane_id">,
+               Field<&PaneScrollback::generation, u64, "generation">,
+               Field<&PaneScrollback::trimmed, u64, "trimmed">> {};
+
+  // The rows a `ReadPaneRows` asked for, from stable row `from`: `rows` rows of `cols` cells,
+  // encoded as a frame's, with their flags and links. No rows when none of them are retained.
+  struct PaneRows {
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    std::uint64_t generation{};
+    std::uint64_t trimmed{};
+    std::uint64_t from{};
+    std::uint16_t cols{};
+    std::uint16_t rows{};
+    std::optional<TextMetadata> text_metadata{};
+    std::span<const Byte> cells{};
+
+    [[nodiscard]] CellReader reader() const {
+      return CellReader{cells, static_cast<std::uint32_t>(cols) * rows};
+    }
+
+    void validate() const {
+      const auto count = static_cast<std::uint32_t>(cols) * rows;
+      if (rows > ReadPaneRows::maximum_rows || count > 130359 || (rows != 0 && cols == 0)) {
+        throw EncodingError{"Invalid pane rows header"};
+      }
+      if (rows == 0) {
+        if (text_metadata || !cells.empty()) {
+          throw EncodingError{"Empty pane rows carry cells"};
+        }
+        return;
+      }
+      if (!text_metadata) {
+        throw EncodingError{"Pane rows without metadata"};
+      }
+      text_metadata->validate(cols, rows);
+      auto cells_reader = reader();
+      while (cells_reader.next()) {
+      }
+    }
+  };
+
+  template <>
+  struct MessageSchema<PaneRows>
+      : Schema<Direction::server,
+               ServerTag::pane_rows,
+               Field<&PaneRows::request_id, NonzeroU64, "request_id">,
+               Field<&PaneRows::pane_id, NonzeroU64, "pane_id">,
+               Field<&PaneRows::generation, u64, "generation">,
+               Field<&PaneRows::trimmed, u64, "trimmed">,
+               Field<&PaneRows::from, u64, "from">,
+               Field<&PaneRows::cols, u16, "cols">,
+               Field<&PaneRows::rows, u16, "rows">,
+               Field<&PaneRows::text_metadata, FrameMetadataCodec, "text_metadata">,
+               Field<&PaneRows::cells, SizedBytes<u32, max_payload_size>, "cells">> {};
 
   // The git repository an integrated shell's working directory is in, read by the runtime after
   // each command. Counts the native reader could not establish are flagged unknown.

@@ -163,6 +163,14 @@ public:
           cursor.member("blink_interval_ms", configuration.blink_interval.count());
         });
       });
+      object.member("scroll", [&](JsonWriter &value) {
+        value.object([&](JsonWriter &scroll) {
+          scroll.member("smooth", configuration.scroll.smooth);
+          scroll.member("wheel_ms", configuration.scroll.wheel_ms);
+          scroll.member("overscan", configuration.scroll.overscan);
+          scroll.member("sticky_headers", configuration.scroll.sticky_headers);
+        });
+      });
       object.member("window", [&](JsonWriter &value) {
         writeWindow(value, configuration, default_titlebar);
       });

@@ -30,6 +30,7 @@ import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+export import telar.gui.terminal.fold_map;
 
 // Interface: application/agent_status_change.cppm
 export {
@@ -554,6 +555,7 @@ struct Pane {
   inline explicit Pane(Memory &memory, std::uint64_t identity, GraphicsBudget &budget)
       : id(identity),
         screen(memory),
+        rows(memory),
         graphics(memory, budget),
         title(AllocatorRef<char, Memory>{memory}),
         cwd(AllocatorRef<char, Memory>{memory}),
@@ -564,6 +566,17 @@ struct Pane {
   std::uint64_t attachment_generation = 0;
   TabLocation location;
   Screen<Memory> screen;
+  // Rows of the scrollback beyond the screen, for scrolled and folded views, numbered as the
+  // runtime's last `PaneScrollback` said: `scrollback_trimmed` rows dropped from the top under
+  // `scrollback_generation`, 0 before it said. `scrollback_dropped` counts the rows dropped
+  // since the view last took them.
+  RowCache<Memory> rows;
+  std::uint64_t scrollback_generation = 0;
+  std::uint64_t scrollback_trimmed = 0;
+  std::uint64_t scrollback_dropped = 0;
+  // Counts the views the client asked the runtime for, so a view can tell a move it asked for
+  // from a frame that still shows an older view.
+  std::uint64_t viewport_requests = 0;
   GraphicsStore<Memory> graphics;
   String<Memory> title;
   String<Memory> cwd;
@@ -581,11 +594,26 @@ struct Pane {
   // The repository the integrated shell works in; `branch` owns the text the message viewed.
   PaneGit git{};
   std::string git_branch;
-  // The host a remote shell runs on, which `shell.host` views.
+  // The host a remote shell runs on and where it works there, which `shell.host` and
+  // `shell.directory` view.
   std::string shell_host;
+  std::string shell_directory;
   // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines.
   std::vector<CommandBlock> blocks;
   std::string blocks_text;
+  // The commands folded, by the stable number of their first row, and the rows their output
+  // hides from the view.
+  std::vector<std::uint64_t> folded;
+  FoldMap<> folds;
+  // Changes whenever the rows the folds hide do.
+  std::uint64_t fold_revision = 0;
+  // The shown row at the top of the pane's view, folds counted, while the view draws its own
+  // rows; the runtime's view need not start there.
+  std::optional<std::uint64_t> shown_top;
+  // The row the live prompt starts on, as the view last showed it.
+  std::optional<std::uint32_t> live_prompt_row;
+  // The folded blocks by index while renumbered rows wait for the blocks numbered anew.
+  std::vector<std::size_t> refold;
 };
 
 // A pane the runtime listed for a tab. It stands in for the pane while the tab is not loaded.

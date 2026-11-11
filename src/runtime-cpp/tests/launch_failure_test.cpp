@@ -139,7 +139,7 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
     history.accepting = accepting;
     bool failed = false;
     try {
-      panes.launch(model, nullptr, launch, location, size);
+      panes.launch(model, nullptr, false, launch, location, size);
     } catch (const SystemError &error) {
       failed = error.code() == ENOMEM;
     }
@@ -153,13 +153,13 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   check(history.submissions == 2 && model.next_pane_generation == 3);
   history.accepting = true;
   poller.fail = false;
-  auto &pane = panes.launch(model, nullptr, launch, location, size);
+  auto &pane = panes.launch(model, nullptr, false, launch, location, size);
   check(model.panes.size() == 1 && pane.generation == 3 && history.submissions == 2);
   const auto retained_process = pane.process->processId();
   Command command{memory, launch};
   bool registration_failed = false;
   try {
-    panes.launch(model, nullptr, command, location, size, pane.id);
+    panes.launch(model, nullptr, false, command, location, size, pane.id);
   } catch (const std::bad_alloc &) {
     registration_failed = true;
   }
@@ -170,7 +170,7 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   constexpr std::array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};
   bool missing_rejected = false;
   try {
-    panes.launch(model, nullptr, Launch{.cwd = "/", .arguments = missing}, location, size);
+    panes.launch(model, nullptr, false, Launch{.cwd = "/", .arguments = missing}, location, size);
   } catch (const std::exception &) {
     missing_rejected = true;
   }

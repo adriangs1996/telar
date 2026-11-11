@@ -380,6 +380,33 @@ static void testRetiredCapture(SystemAllocator &memory) {
   check(!model.retired_observers && model.retired_observer_count == 0);
 }
 
+// A command a client ran keeps the text it sent. Read back from the screen at the first line
+// the shell echoes, a multi-line command would keep only its first line.
+static void testSubmittedCommand(SystemAllocator &memory) {
+  RuntimeModel model{memory};
+  UnusedAgents agents;
+  NoObservationFailures limits;
+  ProcessInspector inspector;
+  ProcessProbe probe{inspector};
+  CaptureHistory history;
+  PaneObservationService<SystemAllocator, decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
+  auto observer = std::allocate_shared<PaneObserver<SystemAllocator>>(AllocatorRef<PaneObserver<SystemAllocator>, SystemAllocator>{memory}, memory, TerminalSize{20, 4, 8, 16});
+  observer->configureHistory({.id = {1}, .pane = 1, .workspace_path = "/tmp", .shell = "/bin/zsh"});
+  feedObserver(*observer, "$ ");
+  constexpr std::string_view command{"echo 'a\nb'"};
+  constexpr std::string_view typed{"\x1b[200~echo 'a\nb'\x1b[201~\r"};
+  observer->bytes(ObservationKind::command, {reinterpret_cast<const Byte *>(command.data()), command.size()}, true);
+  observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte *>(typed.data()), typed.size()}, true);
+  feedObserver(*observer, "echo 'a\r\nb'\r\na\r\nb");
+  observer->retired_next = std::move(model.retired_observers);
+  model.retired_observers = observer;
+  ++model.retired_observer_count;
+  service.refresh(model, agents);
+  observer->finishSession();
+  service.finish(model);
+  check(history.commands.size() == 1 && history.commands[0] == command);
+}
+
 #if TELAR_DIAGNOSTICS
 static void testCommandMetrics(SystemAllocator &memory) {
   PaneObserver observer{memory, TerminalSize{80, 24, 8, 16}};
@@ -407,6 +434,7 @@ void testObservation() {
   testManifests();
   testCompletionWakeups();
   testRetiredCapture(memory);
+  testSubmittedCommand(memory);
   testPendingInputPreservesForegroundObservation(memory);
   testEmptyObservationRequiresExplicitRecheck(memory);
   testDirectoryChangesFollowQueuedCommands(memory);

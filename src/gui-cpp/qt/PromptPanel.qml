@@ -37,7 +37,7 @@ Item {
         ChromeText {
             width: parent.width
             height: Math.ceil((root.typography.title ?? 0) * root.titleLeading)
-            text: root.searchMode ? "Search scrollback" : root.dialog === "rename-tab" ? "Rename tab" : "Rename workspace"
+            text: root.searchMode ? (root.controller.copySearchScope.length > 0 ? "Search output of " + root.controller.copySearchScope : "Search scrollback") : root.dialog === "rename-tab" ? "Rename tab" : "Rename workspace"
             color: root.colors.text
             pixelSize: root.typography.title ?? 1
             emphasized: true
@@ -54,6 +54,12 @@ Item {
             placeholderText: root.searchMode ? "Search scrollback" : "Name"
             onSubmitted: root.submit()
             onCancelled: root.controller.execute(GuiController.Action.cancel)
+            // A search begun from a command reads its output or the whole scrollback.
+            onTabbed: {
+                if (root.searchMode && root.controller.copySearchScopes) {
+                    root.controller.toggleCopySearchScope();
+                }
+            }
         }
 
         PromptActions {
@@ -61,7 +67,7 @@ Item {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            hint: "Enter to confirm  ·  Esc to cancel"
+            hint: root.searchMode && root.controller.copySearchScopes ? (root.controller.copySearchScope.length > 0 ? "Tab whole scrollback" : "Tab this command") + "  ·  Enter to confirm  ·  Esc to cancel" : "Enter to confirm  ·  Esc to cancel"
             submitText: root.searchMode ? "Search" : "Rename"
             submittable: root.submittable
             onSubmitted: root.submit()

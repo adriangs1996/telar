@@ -31,7 +31,9 @@ Item {
     // While a program runs, typing writes the next command on a line of its own.
     readonly property bool queueing: root.running && root.focused && (!editor.empty || editor.queued)
     // The history or the paths, searched from the editor's row, the rows they find under it.
-    readonly property string search: root.editing && root.focused && root.application.islandSearchPane === root.paneId ? root.application.islandSearch : ""
+    // The scrollback search lives in the line of the pane copy mode reads, whatever runs there.
+    readonly property bool scrollbackSearch: root.application.islandSearchPane === root.paneId && root.application.islandSearch === "copy-search"
+    readonly property string search: (root.editing && root.focused || root.scrollbackSearch) && root.application.islandSearchPane === root.paneId ? root.application.islandSearch : ""
     readonly property bool searching: root.search.length > 0
     // The rows a search shows at most, newest or best nearest the query.
     readonly property int searchRows: 8
@@ -56,6 +58,9 @@ Item {
         if (!terminal) {
             return -1;
         }
+        if (root.scrollbackSearch) {
+            return -1;
+        }
         if (root.editing) {
             const row = terminal.promptRow;
             if (row < 0) {
@@ -68,8 +73,10 @@ Item {
         }
         return -1;
     }
-    readonly property bool shown: !root.flying && (root.editing || root.queueing || root.secret)
+    readonly property bool shown: !root.flying && (root.editing || root.queueing || root.secret || root.scrollbackSearch)
     readonly property bool docked: root.shown && root.anchor < 0
+    // How much of the pane's bottom the docked line covers, for what floats above it.
+    readonly property real dockedHeight: root.docked ? body.height + root.inset * 2 : 0
     readonly property bool contextShown: root.editing && !root.searching && !root.flying
     readonly property bool inputShown: (root.editing && !root.searching && !root.flying) || root.queueing
     readonly property real editorY: root.inset + (root.editing ? root.line : 0)
@@ -92,7 +99,7 @@ Item {
     }
     readonly property int searchCount: root.search === "history" ? (root.application.historyState.count ?? 0) : root.search === "paths" ? (root.application.pathPickerState.count ?? 0) : 0
     readonly property int listRows: Math.max(1, Math.min(root.searchRows, root.searchCount, root.screenRows - 2))
-    readonly property int rowCount: root.searching ? 2 + root.listRows : root.editing ? 1 + editor.visibleRows + root.menuRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
+    readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
     // The rows the line needs past the screen's last: the terminal rises by them, so the
     // line never covers output, and never so far that the line's first row leaves the view.
     readonly property int liftRows: root.shown && !root.docked ? Math.max(0, Math.min(root.anchor, root.anchor + root.rowCount - root.screenRows)) : 0
@@ -216,14 +223,14 @@ Item {
     // When the whole context does not fit beside the chip the line turns compact: the chip
     // leaves its columns to the context and the pill wears the mode's colour instead.
     readonly property bool modeShown: statusRow.vim || statusRow.copying || statusRow.selecting
-    readonly property real contextRoom: root.width - root.cell * 3 - root.pillX - (below.visible ? below.implicitWidth + root.cell : 0)
+    readonly property real contextRoom: root.width - root.cell * 3 - root.pillX
     readonly property int wideColumns: root.cell > 0 ? Math.floor(Math.max(0, root.contextRoom - (root.modeShown ? modeChip.width + root.cell : 0)) / root.cell) : 0
-    readonly property bool compact: root.modeShown && root.contextSpan(root.fitContext(Infinity, root.host, root.directory, root.branch)) > root.wideColumns
+    readonly property bool compact: root.modeShown && root.contextSpan(root.fitContext(Infinity, root.hostLabel, root.directory, root.branch)) > root.wideColumns
     readonly property int contextColumns: root.compact ? Math.floor(Math.max(0, root.contextRoom) / root.cell) : root.wideColumns
-    readonly property var contextText: root.fitContext(root.contextColumns, root.host, root.directory, root.branch)
+    readonly property var contextText: root.fitContext(root.contextColumns, root.hostLabel, root.directory, root.branch)
     function contextSpan(text) {
         const segments = [text.host, text.directory, text.branch].filter(segment => segment.length > 0);
-        return segments.reduce((columns, segment) => columns + segment.length, 0) + 2 * Math.max(0, segments.length - 1);
+        return segments.reduce((columns, segment) => columns + segment.length, 0) + 2 * Math.max(0, segments.length - 1) + (text.host.length > 0 ? root.chipColumns : 0);
     }
     function elide(text, columns, keepEnd) {
         if (text.length <= columns) {
@@ -234,9 +241,13 @@ Item {
         }
         return keepEnd ? "…" + text.slice(text.length - columns + 1) : text.slice(0, columns - 1) + "…";
     }
+    // The host's chip pads its text by half a column each side.
+    readonly property int chipColumns: 1
     function fitContext(columns, host, directory, branch) {
         const gap = 2;
         const hostText = host.length > 0 ? "⇄ " + host : "";
+        // The chip's padding, beside the host's own columns.
+        const hostColumns = hostText.length > 0 ? hostText.length + root.chipColumns + gap : 0;
         const branchText = branch.length > 0 ? "⎇ " + branch : "";
         const parts = directory.split("/").filter(part => part.length > 0);
         // A long path is shortened even when it fits, as it always was.
@@ -248,11 +259,11 @@ Item {
             shapes.push("…/" + parts[parts.length - 1]);
         }
         const last = shapes[shapes.length - 1];
-        let room = columns - (hostText.length > 0 ? hostText.length + gap : 0) - (branchText.length > 0 ? branchText.length + gap : 0);
+        let room = columns - hostColumns - (branchText.length > 0 ? branchText.length + gap : 0);
         const fittedDirectory = shapes.find(shape => shape.length <= room) ?? root.elide(last, Math.max(room, Math.min(last.length, 8)), true);
-        room = columns - fittedDirectory.length - (hostText.length > 0 ? hostText.length + gap : 0) - gap;
+        room = columns - fittedDirectory.length - hostColumns - gap;
         const fittedBranch = root.elide(branchText, room, false);
-        room = columns - fittedDirectory.length - (fittedBranch.length > 0 ? fittedBranch.length + gap : 0) - gap;
+        room = columns - fittedDirectory.length - (fittedBranch.length > 0 ? fittedBranch.length + gap : 0) - gap - root.chipColumns;
         return {host: root.elide(hostText, room, false), directory: fittedDirectory, branch: fittedBranch};
     }
     property string knownDirectory: ""
@@ -261,6 +272,8 @@ Item {
     readonly property string directory: editor.directory
     readonly property string branch: editor.branch
     readonly property string host: editor.remote ? (editor.host.length > 0 ? editor.host : "remote") : ""
+    // The host, and the link's round trip once timed.
+    readonly property string hostLabel: root.host.length > 0 && editor.link > 0 ? root.host + " · " + editor.link + " ms" : root.host
     onDirectoryChanged: {
         if (root.knownDirectory.length > 0 && root.directory !== root.knownDirectory) {
             directorySegment.announce();
@@ -438,16 +451,35 @@ Item {
                 height: root.line
                 spacing: root.cell * 2
 
-                Segment {
-                    id: hostSegment
+                // Another host: a chip in the remote colour, as plain to see as the mode's.
+                Item {
                     visible: root.contextText.host.length > 0
+                    width: hostSegment.implicitWidth + root.cell * root.chipColumns
                     height: root.line
-                    text: root.contextText.host
-                    color: Qt.tint(root.colors.mauve, Qt.alpha(root.colors.accent, hostSegment.tint))
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: root.line * 0.8
+                        radius: 4 * root.ratio
+                        color: Qt.alpha(root.colors.mauve, 0.18)
+                        border.width: Math.max(1, root.ratio)
+                        border.color: Qt.alpha(root.colors.mauve, 0.45)
+                    }
+
+                    Segment {
+                        id: hostSegment
+                        x: root.cell * root.chipColumns / 2
+                        height: root.line
+                        text: root.contextText.host
+                        color: Qt.tint(root.colors.mauve, Qt.alpha(root.colors.accent, hostSegment.tint))
+                        bold: true
+                    }
                 }
 
                 Segment {
                     id: directorySegment
+                    visible: root.contextText.directory.length > 0
                     height: root.line
                     text: root.contextText.directory
                 }
@@ -476,15 +508,6 @@ Item {
                 x: parent.width - implicitWidth - root.cell * 2
                 height: root.line
                 spacing: root.cell
-
-                CellText {
-                    id: below
-                    visible: root.docked && root.terminal && root.terminal.rowsBelow > 0
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.terminal ? "↓ " + root.terminal.rowsBelow + (root.terminal.rowsBelow === 1 ? " line below" : " lines below") : ""
-                    grid: root.grid
-                    color: root.colors.overlay1
-                }
 
                 // Each mode in its own colour, the label in the background's, as a status line.
                 Rectangle {
@@ -525,7 +548,7 @@ Item {
 
             Rectangle {
                 id: pill
-                readonly property color tone: !root.focused ? root.colors.overlay1 : root.queueing ? root.colors.overlay1 : editor.failed ? root.colors.red : root.compact ? modeChip.tint : root.colors.accent
+                readonly property color tone: !root.focused ? root.colors.overlay1 : root.queueing ? root.colors.overlay1 : editor.failed ? root.colors.red : root.compact ? modeChip.tint : editor.remote ? root.colors.mauve : root.colors.accent
                 x: root.pillX
                 y: (root.line - height) / 2
                 width: root.pillWidth
@@ -859,13 +882,13 @@ Item {
             shown: root.searching
             y: root.inset
             width: parent.width
-            height: (2 + root.listRows) * root.line
+            height: (2 + (root.scrollbackSearch ? 0 : root.listRows)) * root.line
 
             Loader {
                 id: search
                 width: parent.width
                 active: root.searching
-                sourceComponent: searchView
+                sourceComponent: root.scrollbackSearch ? scrollbackView : searchView
                 onActiveChanged: {
                     if (!search.active) {
                         Qt.callLater(root.abandonSearch);
@@ -934,6 +957,149 @@ Item {
             }
         }
         return runs;
+    }
+
+    // The scrollback searched as it is typed: what it reads and how many it found on the
+    // context's row, the query on the editor's. Every match is lit in the pane, the one the
+    // cursor is on more.
+    Component {
+        id: scrollbackView
+
+        Item {
+            id: scrollback
+            readonly property var current: root.application.copySearchState
+            readonly property bool focused: query.activeFocus
+            readonly property bool inspecting: false
+            height: 2 * root.line
+
+            Component.onCompleted: query.forceActiveFocus()
+
+            // Each letter asks again, a moment after the last.
+            Timer {
+                id: typing
+                interval: 90
+                onTriggered: root.application.searchScrollback(query.text)
+            }
+
+            CellText {
+                x: root.pillX
+                width: Math.max(0, count.x - x - root.cell * 2)
+                height: root.line
+                clip: true
+                text: scrollback.current.scope.length > 0 ? "in " + scrollback.current.scope : "whole scrollback"
+                grid: root.grid
+                color: root.colors.subtext0
+            }
+
+            CellText {
+                id: count
+                readonly property bool none: scrollback.current.query.length > 0 && !scrollback.current.searching && scrollback.current.count === 0
+                x: parent.width - implicitWidth - root.cell * 2
+                height: root.line
+                text: scrollback.current.query.length === 0 ? "" : scrollback.current.searching ? "searching…" : count.none ? "no matches" : (scrollback.current.index + 1) + "/" + scrollback.current.count + (scrollback.current.truncated ? "+" : "")
+                grid: root.grid
+                color: count.none ? root.colors.red : root.colors.overlay1
+            }
+
+            Rectangle {
+                id: slash
+                x: root.pillX
+                y: root.line + (root.line - height) / 2
+                width: slashLabel.implicitWidth + root.cell
+                height: root.line * 0.8
+                radius: 4 * root.ratio
+                color: root.colors.accent
+
+                CellText {
+                    id: slashLabel
+                    anchors.centerIn: parent
+                    text: "/"
+                    grid: root.grid
+                    color: root.colors.background
+                    bold: true
+                }
+            }
+
+            FormTextField {
+                id: query
+                objectName: "scrollbackSearch"
+                x: slash.x + slash.width + root.cell
+                y: root.line
+                width: Math.max(0, (keys.visible ? keys.x : parent.width) - x - root.cell)
+                height: root.line
+                colors: root.colors
+                typography: root.application.windowGeometry.typography
+                ratio: root.ratio
+                formControl: false
+                drawsCaret: false
+                maximumBytes: 128
+                placeholderText: "Search"
+                Accessible.name: "Search the scrollback"
+                onTextEdited: typing.restart()
+                onActiveFocusChanged: {
+                    if (!query.activeFocus) {
+                        Qt.callLater(root.keepSearch);
+                    }
+                }
+                Keys.onUpPressed: root.application.stepScrollbackMatch(false)
+                Keys.onDownPressed: root.application.stepScrollbackMatch(true)
+                Keys.onReturnPressed: {
+                    typing.stop();
+                    root.application.searchScrollback(query.text);
+                    root.application.finishScrollbackSearch();
+                }
+                Keys.onEnterPressed: {
+                    typing.stop();
+                    root.application.searchScrollback(query.text);
+                    root.application.finishScrollbackSearch();
+                }
+                Keys.onTabPressed: {
+                    if (scrollback.current.scopes) {
+                        typing.stop();
+                        root.application.toggleCopySearchScope();
+                    }
+                }
+                Keys.onEscapePressed: {
+                    if (query.cancelComposition()) {
+                        return;
+                    }
+                    // Nothing found: the cursor goes back where the search began.
+                    typing.stop();
+                    root.application.searchScrollback("");
+                    root.application.execute(GuiController.Action.cancel);
+                }
+            }
+
+            Rectangle {
+                readonly property rect at: query.regions.caret ?? Qt.rect(0, 0, 0, 0)
+                visible: query.activeFocus && (query.regions.available ?? false)
+                x: query.x + at.x
+                y: query.y + at.y + at.height * 0.12
+                width: Math.max(1, 2 * root.ratio)
+                height: at.height * 0.76
+                radius: width / 2
+                color: root.colors.accent
+            }
+
+            Row {
+                id: keys
+                readonly property var hints: (scrollback.current.scopes ? [{key: "⇥", action: scrollback.current.scope.length > 0 ? "everywhere" : "this command"}] : []).concat([{key: "↑↓", action: "match"}, {key: "⏎", action: "done"}, {key: "esc", action: "close"}])
+                visible: parent.width - implicitWidth - slash.width > 32 * root.cell
+                x: parent.width - implicitWidth - root.cell * 2
+                y: root.line
+                height: root.line
+                spacing: root.cell
+
+                Repeater {
+                    model: keys.hints
+                    delegate: Hint {
+                        required property var modelData
+                        key: modelData.key
+                        action: modelData.action
+                    }
+                }
+            }
+        }
     }
 
     Component {

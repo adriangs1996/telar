@@ -233,7 +233,8 @@ concept CommandCompletionSink = requires(Sink &sink, CommandCompletion completio
 };
 
 // A signed mark (A, B, C or D) and the offset just past it in the bytes fed, for a sink that
-// places it on the terminal those bytes reach.
+// places it on the terminal those bytes reach. Two more say where the marks come from: N when
+// the shell `ssh` reached takes over, U when the pane's own shell is back.
 struct CommandMark {
   char action = 0;
   std::size_t end = 0;
@@ -353,6 +354,12 @@ public:
     return remote_ ? host_.view() : std::string_view{};
   }
 
+  // Where that shell works, as it reports it; empty until it does. `directory()` stays this
+  // host's.
+  inline std::string_view remoteDirectory() const noexcept {
+    return remote_ ? remote_directory_.view() : std::string_view{};
+  }
+
 #if TELAR_DIAGNOSTICS
   inline diagnostics::CommandCaptureCounters takeMetrics() noexcept {
     return std::exchange(metrics_, {});
@@ -398,8 +405,15 @@ private:
       semantic(body, time, sink, end);
     } else if (code == "7") {
       directoryReport(body);
-    } else if (code == private_code) {
-      privateReport(body);
+    } else if (code == private_code && privateReport(body)) {
+      note(sink, 'N', end);
+    }
+  }
+
+  template <typename Sink>
+  inline static void note(Sink &sink, char action, std::size_t end) {
+    if constexpr (requires { sink.mark(CommandMark{}); }) {
+      sink.mark(CommandMark{.action = action, .end = end});
     }
   }
 
@@ -409,9 +423,10 @@ private:
   // remote host before it connects (telar=<token>;nest=<nonce>). The remote shell answers
   // with the nonce and the token its own marks carry (nest=<nonce>;token=<token>;shell=<name>):
   // the nonce stands in for a signature, once, so the pane's token never leaves the host.
-  inline void privateReport(std::string_view body) {
+  // True when the remote shell took over.
+  inline bool privateReport(std::string_view body) {
     if (!token_) {
-      return;
+      return false;
     }
     const auto signature = option(body, "telar=");
     if (signature.empty()) {
@@ -420,23 +435,27 @@ private:
         nest_.reset();
         remote_ = token;
         remote_shell_ = shellNamed(option(body, "shell="));
+        // Unknown until the remote shell reports them.
+        host_.assign(std::string_view{});
+        remote_directory_.assign(std::string_view{});
         // The pane's shell still runs ssh: its command finishes when the session ends.
         nested_running_ = std::exchange(running_, false);
+        return true;
       }
-      return;
+      return false;
     }
     if (!token_->signs(signature)) {
-      return;
+      return false;
     }
     if (body.find(";names=") != std::string_view::npos) {
       // The last option, so its names may be anything but the sequence's terminators.
       const auto names = body.substr(body.find(";names=") + 7);
       names_ = std::make_shared<const std::string>(names);
-      return;
+      return false;
     }
     if (const auto nonce = option(body, "nest="); !nonce.empty()) {
       nest_ = ShellToken::parse(nonce);
-      return;
+      return false;
     }
     std::array<char, path_capacity> decoded;
     if (const auto path = option(body, "path="); !path.empty()) {
@@ -444,6 +463,7 @@ private:
         path_.assign({decoded.data(), *count});
       }
     }
+    return false;
   }
 
   inline static IntegratedShell shellNamed(std::string_view name) noexcept {
@@ -505,6 +525,7 @@ private:
           remote_.reset();
           running_ = nested_running_;
           zone_ = Zone::output;
+          note(sink, 'U', end);
         }
         if (action == "A" || action == "D") {
           nest_.reset();
@@ -514,10 +535,8 @@ private:
       }
     }
 
-    if constexpr (requires { sink.mark(CommandMark{}); }) {
-      if (action.size() == 1 && (action == "A" || action == "B" || action == "C" || action == "D")) {
-        sink.mark(CommandMark{.action = action.front(), .end = end});
-      }
+    if (action.size() == 1 && (action == "A" || action == "B" || action == "C" || action == "D")) {
+      note(sink, action.front(), end);
     }
     if (action == "A" || action == "P") {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.prompt_markers));
@@ -590,14 +609,22 @@ private:
       if (slash == std::string_view::npos) {
         return;
       }
+      std::array<char, directory_capacity> decoded;
+      const auto count = percentDecode(remainder.substr(slash), decoded);
+      if (!remote_) {
+        if (count) {
+          directory_.assign({decoded.data(), *count});
+        }
+        return;
+      }
+      // A remote shell's report names a place on its host, which clients show as text.
+      const auto printable = [](char byte) { return static_cast<unsigned char>(byte) >= 0x20 && byte != 0x7f; };
       const auto host = remainder.substr(0, slash);
-      if (host.size() <= host_capacity && std::ranges::all_of(host, [](char byte) { return static_cast<unsigned char>(byte) > 0x20 && byte != 0x7f; })) {
+      if (host.size() <= host_capacity && std::ranges::all_of(host, [&](char byte) { return byte != ' ' && printable(byte); })) {
         host_.assign(host);
       }
-
-      std::array<char, directory_capacity> decoded;
-      if (const auto count = percentDecode(remainder.substr(slash), decoded)) {
-        directory_.assign({decoded.data(), *count});
+      if (count && std::ranges::all_of(std::string_view{decoded.data(), *count}, printable)) {
+        remote_directory_.assign({decoded.data(), *count});
       }
       return;
     }
@@ -622,6 +649,7 @@ private:
   FixedText<directory_capacity> directory_;
   FixedText<path_capacity> path_;
   FixedText<host_capacity> host_;
+  FixedText<directory_capacity> remote_directory_;
   std::shared_ptr<const std::string> names_;
 };
 
@@ -972,6 +1000,10 @@ public:
       if (running_) {
         finish(CommandBlockState::interrupted, 0, now);
       }
+      // The pane's shell is back without saying how ssh ended.
+      if (closing_) {
+        closeSession(CommandBlockState::interrupted, 0, now);
+      }
       prompt_ = selection_.primary() ? track() : std::nullopt;
       break;
     case 'B':
@@ -985,15 +1017,39 @@ public:
         finish(CommandBlockState::succeeded, 0, now);
       }
       break;
+    case 'N':
+      // The running command, ssh, now hosts the remote shell, whose commands follow it.
+      if (running_ && count_ != 0) {
+        entry(count_ - 1).state = CommandBlockState::session;
+        entry(count_ - 1).nest = CommandBlockNest::opens;
+        ++revision_;
+      }
+      running_ = false;
+      prompt_.reset();
+      nested_ = true;
+      break;
+    case 'U':
+      // The remote shell is gone, maybe in the middle of a command; ssh's own D follows.
+      if (running_) {
+        finish(CommandBlockState::interrupted, 0, now);
+      }
+      prompt_.reset();
+      nested_ = false;
+      closing_ = true;
+      break;
     default:
       break;
     }
   }
 
-  // The status a D mark reported, for the block it ends.
+  // The status a D mark reported, for the block it ends: ssh's own, after its session.
   inline void finished(std::optional<int> status, std::chrono::steady_clock::time_point now) {
-    if (running_) {
-      finish(status.value_or(0) == 0 ? CommandBlockState::succeeded : CommandBlockState::failed, status.value_or(0), now);
+    const auto code = status.value_or(0);
+    const auto state = code == 0 ? CommandBlockState::succeeded : CommandBlockState::failed;
+    if (closing_) {
+      closeSession(state, code, now);
+    } else if (running_) {
+      finish(state, code, now);
     }
   }
 
@@ -1041,7 +1097,8 @@ public:
                                     .state = current.state,
                                     .status = current.status,
                                     .duration_ms = current.duration_ms,
-                                    .command = current.command.view()};
+                                    .command = current.command.view(),
+                                    .nest = current.nest};
     }
     return PaneBlocks{.pane_id = pane_id, .blocks = std::span<const CommandBlock>{storage}.first(count_)};
   }
@@ -1091,6 +1148,7 @@ private:
     std::uint16_t rows = 1;
     std::uint16_t lines = 0;
     CommandBlockState state = CommandBlockState::running;
+    CommandBlockNest nest = CommandBlockNest::none;
     std::int32_t status = 0;
     std::uint32_t duration_ms = 0;
     std::chrono::steady_clock::time_point started{};
@@ -1161,6 +1219,7 @@ private:
     added.rows = static_cast<std::uint16_t>(std::min<std::uint32_t>(*last - *first, std::numeric_limits<std::uint16_t>::max()));
     added.lines = static_cast<std::uint16_t>(std::min<std::size_t>(static_cast<std::size_t>(std::ranges::count(text, '\n')), std::numeric_limits<std::uint16_t>::max()));
     added.state = CommandBlockState::running;
+    added.nest = nested_ ? CommandBlockNest::inside : CommandBlockNest::none;
     added.status = 0;
     added.duration_ms = 0;
     added.started = now;
@@ -1175,14 +1234,27 @@ private:
 
   inline void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
     running_ = false;
-    if (count_ == 0) {
-      return;
+    if (count_ != 0) {
+      end(entry(count_ - 1), state, status, now);
     }
-    auto &last = entry(count_ - 1);
-    last.state = state;
-    last.status = status;
-    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last.started).count();
-    last.duration_ms = static_cast<std::uint32_t>(std::clamp<std::int64_t>(elapsed, 0, std::numeric_limits<std::uint32_t>::max()));
+  }
+
+  // Ends the block whose ssh hosted the session that just closed; at most one is open.
+  inline void closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
+    closing_ = false;
+    for (auto index = count_; index > 0; --index) {
+      if (auto &current = entry(index - 1); current.state == CommandBlockState::session) {
+        end(current, state, status, now);
+        return;
+      }
+    }
+  }
+
+  inline void end(Entry &block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
+    block.state = state;
+    block.status = status;
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - block.started).count();
+    block.duration_ms = static_cast<std::uint32_t>(std::clamp<std::int64_t>(elapsed, 0, std::numeric_limits<std::uint32_t>::max()));
     ++revision_;
   }
 
@@ -1195,6 +1267,9 @@ private:
   std::size_t count_ = 0;
   std::uint64_t revision_ = 0;
   bool running_ = false;
+  // Commands run in the shell ssh reached; that shell just left, and ssh's D ends its block.
+  bool nested_ = false;
+  bool closing_ = false;
 };
 
 }
@@ -1212,10 +1287,17 @@ public:
         selection_(terminal),
         zones_(directory, shell_token),
         output_(memory, capture_output),
-        command_(AllocatorRef<Byte, Memory>{memory}) {}
+        command_(AllocatorRef<Byte, Memory>{memory}),
+        submitted_(AllocatorRef<Byte, Memory>{memory}) {}
 
   inline void enableOutputCapture() {
     output_.enable();
+  }
+
+  // The text of the command a client is about to type at the prompt. The submission that
+  // follows records it as the command instead of reading the command back from the screen.
+  inline void submitCommand(std::span<const Byte> text) {
+    submitted_.assign(text.begin(), text.end());
   }
 
   template <CapturedCommandSink Sink>
@@ -1223,7 +1305,11 @@ public:
     TELAR_TRACE("history.captureInput");
     const bool shell_foreground = observation.shell_foreground.value_or(zones_.editing());
     zones_.input(observation.bytes);
-    if (!shell_foreground || observation.bytes.empty() || !selection_.primary()) {
+    if (observation.bytes.empty()) {
+      return 0;
+    }
+    if (!shell_foreground || !selection_.primary()) {
+      submitted_.clear();
       return 0;
     }
 
@@ -1249,6 +1335,7 @@ public:
 
     const auto event = input_.feed(observation.bytes);
     if (event.cancelled) {
+      submitted_.clear();
       reset();
       return observation.bytes.size();
     }
@@ -1276,7 +1363,7 @@ public:
       terminal_.feed(part);
       terminal_.discardResponses();
       if (committed) {
-        const auto captured = selection_.capture(command_);
+        const auto captured = submitted_.empty() ? selection_.capture(command_) : std::optional{takeSubmitted()};
         if (captured) {
           TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.captures));
           truncated_ = *captured;
@@ -1322,6 +1409,7 @@ public:
 
   inline void resetObservation() {
     TELAR_DIAGNOSTIC(metrics_.merge(zones_.takeMetrics()));
+    submitted_.clear();
     reset();
     zones_ = CommandZones{zones_.directory(), zones_.token()};
   }
@@ -1371,6 +1459,13 @@ private:
     }
   };
 
+  // The submitted text becomes the command, whole: the protocol bounds it to the capture's size.
+  inline bool takeSubmitted() {
+    command_.swap(submitted_);
+    submitted_.clear();
+    return false;
+  }
+
   template <CapturedCommandSink Sink>
   inline void afterOutput(const CommandByteObservation &observation, Sink &sink) {
     last_output_ns_ = observation.time.nanoseconds;
@@ -1408,6 +1503,8 @@ private:
   CommandZones zones_;
   CommandOutputTail<Memory> output_;
   Vector<Byte, Memory> command_;
+  // Survives a previous command's completion, which the input typing this one triggers.
+  Vector<Byte, Memory> submitted_;
   CommandInputScanner input_;
   FixedText<4096> command_directory_;
   ObservationTime started_;
