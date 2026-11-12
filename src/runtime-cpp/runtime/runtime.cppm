@@ -1681,6 +1681,7 @@ export {
           for (const auto &event : poller_.wait(timeout, ready)) {
             if (event.kind == EventKind::signal) {
               if (event.descriptor == SIGCHLD) {
+                children_exited_ = true;
                 continue;
               }
 
@@ -2534,6 +2535,14 @@ export {
         runtime_clipboard_.expire(clients_, now);
         media_.collect(model_, clients_, panes_);
         std::chrono::nanoseconds timeout = std::chrono::milliseconds{100};
+        // Panes are polled for what changes without a sound on a beat, not on every wake: output
+        // from any pane wakes the loop, and asking each of them would cost syscalls per pane.
+        const bool poll_panes = now >= next_pane_poll_;
+        if (poll_panes) {
+          next_pane_poll_ = now + pane_poll_interval;
+        }
+        timeout = std::min(timeout, std::chrono::duration_cast<std::chrono::nanoseconds>(next_pane_poll_ - now));
+        const bool reap = std::exchange(children_exited_, false) || poll_panes;
         for (auto *pane : model_.panes.items()) {
           if (pane != nullptr) {
             try {
@@ -2548,13 +2557,16 @@ export {
               poller_.remove(pane->process->descriptor());
             }
           }
-          if (pane != nullptr && !pane->exit_status) {
+          // SIGCHLD says a child exited; a closed output usually means it did. The beat catches a
+          // child whose signal went to no one, such as one reaped while a test drives the loop.
+          if (pane != nullptr && !pane->exit_status && (reap || pane->output_closed)) {
             pane->exit_status = pane->process->reap();
             model_.pane_revision += pane->exit_status.has_value();
           }
 
-          // A program can change the terminal without printing, as `read -s` does.
-          if (pane != nullptr && !pane->exit_status && pane->shell_state.phase != ShellPhase::prompt) {
+          // A program can change the terminal without printing, as `read -s` does; one that
+          // prints is observed as it reads.
+          if (pane != nullptr && poll_panes && !pane->exit_status && pane->shell_state.phase != ShellPhase::prompt) {
             pane->observeShell();
           }
 
@@ -2765,6 +2777,10 @@ export {
       AgentFileService<Memory, Agents> agent_files_;
       DescriptionService<Memory, Agents, Background> descriptions_;
       [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
+      static constexpr auto pane_poll_interval = std::chrono::milliseconds{100};
+      Clock::time_point next_pane_poll_{};
+      // Set when SIGCHLD arrives; true at first so a child that exited before the loop is reaped.
+      bool children_exited_ = true;
     };
 
     template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
