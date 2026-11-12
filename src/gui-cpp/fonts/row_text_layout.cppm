@@ -802,7 +802,7 @@ private:
 
   // What TextLayout makes of a text the primary face covers: one span of its glyphs, starting
   // at the cell, with no columns of a fitted face.
-  inline void appendCluster(const ShapedGlyph &glyph, std::size_t column, RowTextRequest request) {
+  inline void appendCluster(ShapedGlyph glyph, std::size_t column, RowTextRequest request) {
     cells_[column] = {.first_span = spans_.size(), .span_count = 1};
     spans_.push_back({.first = glyphs_.size(), .count = 1, .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 0});
     glyphs_.push_back(glyph);

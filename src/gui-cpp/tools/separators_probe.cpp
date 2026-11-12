@@ -147,15 +147,16 @@ int run(QGuiApplication &application) {
 
   // Two screens of the same finished commands, the second a row lower: each refresh moves
   // every separator.
-  std::array<std::vector<std::string>, 2> commands;
+  // Every command is named before any block views its name.
+  std::vector<std::string> commands;
+  commands.reserve(options.blocks);
+  for (unsigned index = 0; index < options.blocks; ++index) {
+    commands.push_back("make target-" + std::to_string(index));
+  }
   std::array<std::vector<CommandBlock>, 2> screens;
   for (unsigned shift = 0; shift < 2; ++shift) {
-    commands[shift].reserve(options.blocks);
     for (unsigned index = 0; index < options.blocks; ++index) {
-      commands[shift].push_back("make target-" + std::to_string(index));
-    }
-    for (unsigned index = 0; index < options.blocks; ++index) {
-      screens[shift].push_back(CommandBlock{.row = (index * 2) + shift, .rows = 1, .lines = 0, .state = index % 3 == 0 ? CommandBlockState::failed : CommandBlockState::succeeded, .status = index % 3 == 0 ? 2 : 0, .duration_ms = 100 + index, .command = commands[shift][index]});
+      screens[shift].push_back(CommandBlock{.row = (index * 2) + shift, .rows = 1, .lines = 0, .state = index % 3 == 0 ? CommandBlockState::failed : CommandBlockState::succeeded, .status = index % 3 == 0 ? 2 : 0, .duration_ms = 100 + index, .command = commands[index]});
     }
   }
   const auto first_row = [&] {
