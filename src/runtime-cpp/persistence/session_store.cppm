@@ -918,7 +918,8 @@ private:
   };
 
   std::array<std::uint64_t, 3> revisions_{};
-  std::array<PaneStamp, 256> stamps_{};
+  // One stamp per pane slot, so `changed` indexes it with every slot the store can hold.
+  std::array<PaneStamp, PaneStore<Memory>::capacity> stamps_{};
 };
 
 }

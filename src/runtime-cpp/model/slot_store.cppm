@@ -260,6 +260,8 @@ class SlotStore {
   static_assert(Capacity > 0 && Capacity <= UINT16_MAX);
 
 public:
+  static constexpr std::size_t capacity = Capacity;
+
   inline explicit SlotStore(Memory &memory) noexcept
       : memory_(memory) {}
 
