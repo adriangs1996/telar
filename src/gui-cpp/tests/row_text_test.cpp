@@ -10,7 +10,9 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <tuple>
 #include <utility>
+#include <vector>
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <string_view>
@@ -108,6 +110,46 @@ void fontAndGridChangesRetireCachedPositions(FontFixture<SystemAllocator> &fonts
   }
 }
 
+// A short cell outside ASCII lays out the same whether the row shapes it or recalls what it kept
+// of it: one glyph of the primary face, a combining pair, a ligature's letter, a face's fallback.
+void keptClustersLayOutAsShaped(FontFixture<SystemAllocator> &fonts) {
+  SystemAllocator memory;
+  RowTextLayout layout{memory};
+  constexpr std::array<std::string_view, 9> texts{"á", "ñ", "ß", "λ", "ж", "e\u0301", "→", "漢", "\U0001F600"};
+  std::array<CellValue, texts.size() * 2> cells;
+  for (std::size_t column = 0; column < cells.size(); ++column) {
+    const auto text = texts[column % texts.size()];
+    std::ranges::copy(text, cells[column].text.begin());
+    cells[column].length = static_cast<telar::Byte>(text.size());
+  }
+  const RowTextRequest request{.pixel_height = pixel_height, .cell_width = cell_width};
+  const auto snapshot = [&] {
+    std::vector<std::tuple<std::size_t, std::size_t, int, std::int32_t, std::uint32_t>> spans;
+    for (const auto &span : layout.spans()) {
+      spans.emplace_back(span.first, span.count, static_cast<int>(span.role), span.offset, span.columns);
+    }
+    return std::pair{std::vector<ShapedGlyph>{layout.glyphs().begin(), layout.glyphs().end()}, spans};
+  };
+  layout.shape(fonts, cells, request);
+  const auto shaped = snapshot();
+  require(!shaped.first.empty(), "the row shapes its cells");
+  layout.shape(fonts, cells, request);
+  require(snapshot() == shaped, "a row recalled from what it kept lays out as it was shaped");
+  layout.resetFont();
+  layout.shape(fonts, cells, request);
+  require(snapshot() == shaped, "a row shaped again after a font change lays out the same");
+
+  // What a row kept belongs to the pixel height it was shaped at.
+  for (const std::uint16_t height : {std::uint16_t{39}, pixel_height, std::uint16_t{39}}) {
+    const RowTextRequest sized{.pixel_height = height, .cell_width = cell_width};
+    layout.shape(fonts, cells, sized);
+    const auto kept = snapshot();
+    RowTextLayout fresh{memory};
+    fresh.shape(fonts, cells, sized);
+    require(kept.first == std::vector<ShapedGlyph>{fresh.glyphs().begin(), fresh.glyphs().end()}, "a kept cell follows the row's pixel height");
+  }
+}
+
 void failedStorageCanBeRetried(FontFixture<SystemAllocator> &fonts) {
   SystemAllocator upstream;
   AllocationGate memory{upstream};
@@ -144,6 +186,7 @@ int main(int argc, char **argv) {
     storageIsReusedAcrossCursorAndSelectionChanges(fonts);
     fontAndGridChangesRetireCachedPositions(fonts, alternate);
     failedStorageCanBeRetried(fonts);
+    keptClustersLayOutAsShaped(fonts);
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

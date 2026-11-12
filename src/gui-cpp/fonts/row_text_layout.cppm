@@ -606,6 +606,7 @@ public:
 
   inline void resetFont() noexcept {
     ascii_ = {};
+    clusters_ = {};
     cached_face_ = nullptr;
   }
 
@@ -635,6 +636,7 @@ public:
     auto &primary = fonts.face(FontRole::primary);
     if (cached_face_ != &primary || cached_height_ != request.pixel_height) {
       ascii_ = {};
+      clusters_ = {};
       // Only the face's identity is kept, never dereferenced.
       cached_face_ = tbc::raw(&primary);
       cached_height_ = request.pixel_height;
@@ -745,6 +747,26 @@ private:
       }
     }
 
+    // A short cell outside ASCII that the primary face covers shapes as one span of it, which
+    // a cell repeats on every row painted again: kept as that span's single glyph.
+    static_assert(!fittedFont(FontRole::primary));
+    const auto key = clusterKey(text);
+    auto *entry = key != 0 ? &clusters_[clusterSlot(key)] : nullptr;
+    if (entry != nullptr && entry->key != key) {
+      *entry = {.key = key};
+      if (FontCoverage::covers(face, text)) {
+        const auto shaped = face.shape(text, request.pixel_height);
+        entry->single = shaped.size() == 1;
+        entry->glyph = entry->single ? shaped.glyph(0) : ShapedGlyph{};
+      }
+    }
+    // A text kept as not one glyph of the primary face takes the general route without asking
+    // the face again.
+    if (entry != nullptr && entry->single) {
+      appendCluster(entry->glyph, column, request);
+      return;
+    }
+
     cell_.shape(fonts, text, {.pixel_height = request.pixel_height, .preferred = FontRole::primary});
     const auto first_glyph = glyphs_.size();
     glyphs_.insert(glyphs_.end(), cell_.glyphs().begin(), cell_.glyphs().end());
@@ -761,12 +783,45 @@ private:
     }
   }
 
+  // The bytes of a cell of two to four, with its length in the top byte: never zero.
+  [[nodiscard]] inline static std::uint64_t clusterKey(std::string_view text) noexcept {
+    if (text.size() < 2 || text.size() > 4) {
+      return 0;
+    }
+    std::uint64_t key = static_cast<std::uint64_t>(text.size()) << 56;
+    for (std::size_t index = 0; index < text.size(); ++index) {
+      key |= static_cast<std::uint64_t>(static_cast<unsigned char>(text[index])) << (8 * index);
+    }
+    return key;
+  }
+
+  [[nodiscard]] inline static std::size_t clusterSlot(std::uint64_t key) noexcept {
+    return static_cast<std::size_t>((key * 0x9e3779b97f4a7c15ULL) >> (64 - cluster_bits));
+  }
+
+  // What TextLayout makes of a text the primary face covers: one span of its glyphs, starting
+  // at the cell, with no columns of a fitted face.
+  inline void appendCluster(const ShapedGlyph &glyph, std::size_t column, RowTextRequest request) {
+    cells_[column] = {.first_span = spans_.size(), .span_count = 1};
+    spans_.push_back({.first = glyphs_.size(), .count = 1, .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 0});
+    glyphs_.push_back(glyph);
+  }
+
+  struct Cluster {
+    std::uint64_t key = 0;
+    ShapedGlyph glyph{};
+    // Whether the primary face covers the text as one glyph; otherwise glyph is unused.
+    bool single = false;
+  };
+  static constexpr unsigned cluster_bits = 8;
+
   TextRuns<Memory> runs_;
   TextLayout<Memory> cell_;
   Vector<ShapedGlyph, Memory> glyphs_;
   Vector<TextSpan, Memory> spans_;
   Vector<CellTextRange, Memory> cells_;
   std::array<std::optional<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
+  std::array<Cluster, std::size_t{1} << cluster_bits> clusters_{};
   const Face *cached_face_ = nullptr;
   std::uint16_t cached_height_ = 0;
 };
