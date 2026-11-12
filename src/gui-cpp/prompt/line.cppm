@@ -1,7 +1,6 @@
 module;
 #include <cstddef>
 #include <cstdint>
-#include <ranges>
 
 export module telar.gui.prompt.line;
 

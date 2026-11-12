@@ -222,7 +222,13 @@
     "src/runtime-cpp/shell_integration/git_context.cppm": "telar.runtime.shell_integration.git_context",
     "src/runtime-cpp/shell_integration/words.cppm": "telar.runtime.shell_integration.words",
     "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.cppm": "telar.vocabulary",
-    "lib/telar-machines/include/telar_machines/machines.cppm": "telar.machines"
+    "lib/telar-machines/include/telar_machines/machines.cppm": "telar.machines",
+    "lib/telar-render/include/telar_render/document.cppm": "telar.render.document",
+    "lib/telar-render/include/telar_render/terminal.cppm": "telar.render.terminal",
+    "lib/telar-render/include/telar_render/markdown.cppm": "telar.render.markdown",
+    "src/gui-cpp/input/scroll_motion.cppm": "telar.gui.input.scroll_motion",
+    "src/cli-cpp/render.cppm": "telar.cli.render",
+    "src/gui-cpp/terminal/fold_map.cppm": "telar.gui.terminal.fold_map"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
@@ -502,7 +508,13 @@
     "src/gui-cpp/graphics/placeholder_diacritics.hpp": "Qt adapters include it; module units import its owner module",
     "src/gui-cpp/qt/prompt_editor_item.hpp": "Qt moc/QML integration",
     "src/gui-cpp/qt/prompt_keys.hpp": "Qt moc/QML integration",
-    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.hpp": "Included by the protocol's textual headers; module units import telar.vocabulary"
+    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.hpp": "Included by the protocol's textual headers; module units import telar.vocabulary",
+    "src/runtime-cpp/terminal/tracked_row.hpp": "Included by other textual headers; module units import its owner module",
+    "src/gui-cpp/terminal/row_cache.hpp": "Textual part of telar.gui.terminal.screen, included only by its global fragment",
+    "lib/telar-render/include/telar_render/sequence.hpp": "Included by other textual headers and by the global fragments of telar-render and the runtime",
+    "src/gui-cpp/input/scroll_motion.hpp": "Qt adapters include it; module units import its owner module",
+    "src/gui-cpp/qt/document_view.hpp": "Qt moc/QML integration",
+    "src/gui-cpp/terminal/fold_map.hpp": "Qt adapters include it; module units import its owner module"
   },
   "implementations": {
     "lib/telar-platform/src/pty_process.cpp": "telar.platform",
