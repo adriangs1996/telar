@@ -52,7 +52,6 @@ export module telar.tls;
 
 import std;
 
-export import telar.config;
 
 
 export import telar.base.memory;

@@ -11,6 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
 include(cmake/dependencies.cmake)
+add_subdirectory(../../lib/telar-config "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
 add_subdirectory(../../lib/telar-tls "${CMAKE_CURRENT_BINARY_DIR}/telar-tls")
 
 add_library(ghostty-vt UNKNOWN IMPORTED)
@@ -132,7 +133,7 @@ target_include_directories(runtime-core SYSTEM PUBLIC "${TELAR_NATIVE_INCLUDE_DI
 if(NOT TARGET telar-render)
   add_subdirectory(../../lib/telar-render "${CMAKE_CURRENT_BINARY_DIR}/telar-render")
 endif()
-target_link_libraries(runtime-core PUBLIC telar::tls telar-clipboard telar::render)
+target_link_libraries(runtime-core PUBLIC telar::config telar::tls telar-clipboard telar::render)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 add_subdirectory(../../lib/telar-git "${CMAKE_CURRENT_BINARY_DIR}/telar-git")

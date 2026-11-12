@@ -126,7 +126,7 @@ def main():
             llvm = (CACHE / 'bin/clang').resolve().parents[1]
             options += ['-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'),
                         '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
-        needs_vt = args.project in ('runtime', 'cli', 'gui', 'config', 'tls')
+        needs_vt = args.project in ('runtime', 'cli', 'gui', 'config')
         if needs_vt and not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
             options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))
         if args.headless:
