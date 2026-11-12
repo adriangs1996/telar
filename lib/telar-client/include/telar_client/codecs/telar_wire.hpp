@@ -26,6 +26,7 @@
 
 #include "telar_client/codecs/telar_annotations.hpp"
 #include "telar_base/text/utf8.hpp"
+#include "telar_vocabulary/vocabulary.hpp"
 
 namespace telar {
 
@@ -42,7 +43,6 @@ namespace telar {
   template <std::size_t N>
   FixedString(const char (&text)[N]) -> FixedString<N>;
 
-  using Byte = std::uint8_t;
 
   static_assert(std::same_as<Byte, unsigned char>);
 

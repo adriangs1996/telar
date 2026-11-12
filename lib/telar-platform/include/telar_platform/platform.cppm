@@ -94,7 +94,7 @@ import std;
 export import telar.base.memory;
 
 
-import telar.client.protocol;
+import telar.vocabulary;
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.platform.primitives;

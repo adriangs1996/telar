@@ -363,27 +363,6 @@ using telar::debug::valueText;
 }
 
 // Interface: telar_client/request_error.cppm
-export {
-namespace telar::runtime {
-
-class RequestError final : public std::exception {
-public:
-  inline explicit RequestError(FailureCode code, const char *message) noexcept
-      : code_(code),
-        message_(message) {}
-
-  inline FailureCode code() const noexcept {
-    return code_;
-  }
-
-  inline const char *what() const noexcept override {
-    return message_;
-  }
-
-private:
-  FailureCode code_;
-  const char *message_;
-};
-
-}
+export namespace telar::runtime {
+using telar::runtime::RequestError;
 }

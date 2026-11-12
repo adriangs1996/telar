@@ -207,14 +207,6 @@ namespace telar {
     static constexpr const char *name = "SystemMetrics";
   };
 
-  // | `TerminalSize` | `cols:u16, rows:u16, cell_width_px:u16, cell_height_px:u16` |
-  struct TerminalSize {
-    std::uint16_t cols;
-    std::uint16_t rows;
-    std::uint16_t cell_width_px;
-    std::uint16_t cell_height_px;
-  };
-
   template <>
   struct MessageSchema<TerminalSize>
       : Serializer<Field<&TerminalSize::cols, u16, "cols">,
@@ -222,11 +214,6 @@ namespace telar {
                    Field<&TerminalSize::cell_width_px, u16, "cell_width_px">,
                    Field<&TerminalSize::cell_height_px, u16, "cell_height_px">> {
     static constexpr const char *name = "TerminalSize";
-  };
-
-  enum class EnvironmentMode : Byte {
-    inherit_runtime = 0,
-    replace = 1,
   };
 
   enum class HistoryScope : Byte {
@@ -471,19 +458,6 @@ namespace telar {
     std::array<Byte, 16> session_id{};
     std::uint64_t pane_id = 0;
     std::uint64_t pane_generation = 0;
-  };
-
-  struct EnvironmentEntry {
-    std::string_view name{};
-    std::string_view value{};
-  };
-
-  struct Launch {
-    std::string_view cwd{};
-    std::uint64_t cwd_source = 0;
-    std::span<const std::string_view> arguments{};
-    EnvironmentMode environment_mode = EnvironmentMode::inherit_runtime;
-    std::span<const EnvironmentEntry> environment{};
   };
 
   struct PaneForeground {

@@ -220,7 +220,8 @@
     "lib/telar-git/include/telar_git/history.cppm": "telar.git:history",
     "lib/telar-git/include/telar_git/worktree.cppm": "telar.git:worktree",
     "src/runtime-cpp/shell_integration/git_context.cppm": "telar.runtime.shell_integration.git_context",
-    "src/runtime-cpp/shell_integration/words.cppm": "telar.runtime.shell_integration.words"
+    "src/runtime-cpp/shell_integration/words.cppm": "telar.runtime.shell_integration.words",
+    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.cppm": "telar.vocabulary"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
@@ -499,7 +500,8 @@
     "src/gui-cpp/platform/linux/background_effect.h": "C ABI",
     "src/gui-cpp/graphics/placeholder_diacritics.hpp": "Qt adapters include it; module units import its owner module",
     "src/gui-cpp/qt/prompt_editor_item.hpp": "Qt moc/QML integration",
-    "src/gui-cpp/qt/prompt_keys.hpp": "Qt moc/QML integration"
+    "src/gui-cpp/qt/prompt_keys.hpp": "Qt moc/QML integration",
+    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.hpp": "Included by the protocol's textual headers; module units import telar.vocabulary"
   },
   "implementations": {
     "lib/telar-platform/src/pty_process.cpp": "telar.platform",
@@ -2702,6 +2704,9 @@
       "src/runtime-cpp/terminal/ghostty_handle.hpp",
       "src/runtime-cpp/terminal/graphics_cursor.hpp",
       "src/runtime-cpp/terminal/pty_response_queue.hpp"
+    ],
+    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.cppm": [
+      "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.hpp"
     ]
   }
 }

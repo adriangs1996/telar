@@ -33,25 +33,6 @@ namespace telar {
     signaled = 1,
   };
 
-  enum class FailureCode : std::uint16_t {
-    pane_not_found = 1,
-    invalid_request = 2,
-    spawn_failed = 3,
-    permission_denied = 4,
-    resource_limit = 5,
-    internal = 6,
-    workspace_not_found = 7,
-    tab_not_found = 8,
-    agent_blocked = 9,
-    pane_exited = 10,
-    worktree_not_found = 11,
-    pane_focused = 12,
-    prompt_rate_limited = 13,
-    agent_not_working = 14,
-    interrupt_unsupported = 15,
-    foreign_process = 16,
-  };
-
   enum class AgentPlanOp : Byte {
     none = 0,
     add = 1,
