@@ -157,6 +157,8 @@ void testResponseMetadata() {
 
   Http2HeaderMetadata metadata;
   metadata.observe(":status", "+2__00");
+  check(metadata.status() == 0);
+  metadata.observe(":status", "200");
   metadata.observe("Content-Type", " Text/Event-Stream ; charset=utf8");
   metadata.observe("content-encoding", "identity, IDENTITY");
   check(metadata.status() == 200 && metadata.eventStream());

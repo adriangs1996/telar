@@ -36,15 +36,16 @@ public:
 
 static void checkHeadAnalysis() {
   using Kind = Http1Framing::Kind;
-  const std::array invalid_lengths = {"", "1,", ",1", "1,2", "-1", "_1", "1_", "0x10", "18446744073709551616", "1 0"};
+  // A sign or digit separator would frame the body differently from a peer that follows RFC 9112.
+  const std::array invalid_lengths = {"", "1,", ",1", "1,2", "-1", "_1", "1_", "0x10", "18446744073709551616", "1 0", "-0", "+0", "+10", "1_0", "1__0", "-0_0"};
   for (const auto length : invalid_lengths) {
     check(!Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: " + std::string{length} + "\r\n\r\n", false));
   }
-  for (const auto length : {"0", "-0", "-0_0", "+0", "00"}) {
+  for (const auto length : {"0", "00"}) {
     const auto head = Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: " + std::string{length} + "\r\n\r\n", false);
     check(head && head->framing.kind == Kind::content_length && head->framing.length == 0);
   }
-  const auto repeated = Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: 1__0, +10\r\ncontent-LENGTH: 010\r\nConnection: keep-alive, CLOSE\r\n\r\n", false);
+  const auto repeated = Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: 10, 10\r\ncontent-LENGTH: 010\r\nConnection: keep-alive, CLOSE\r\n\r\n", false);
   check(repeated && repeated->framing.length == 10 && repeated->closes);
   check(!Http1Head::analyze("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n", false));
   check(!Http1Head::analyze("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: gzip\r\n\r\n", false));
@@ -81,7 +82,7 @@ static void driveMessage(Http1MessageRelay &relay, TestByteStream &source, TestB
 
 static void checkMessageFragments() {
   const std::string head = "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n";
-  const std::string body = "3;ignored=true\r\none\r\n+2\r\ntw!!0\r\nX-Value: trailer\r\n\r\n";
+  const std::string body = "3;ignored=true\r\none\r\n2\r\ntw!!0\r\nX-Value: trailer\r\n\r\n";
   for (const auto fragment : {1, 2, 3, 7, 64, 16384}) {
     TestByteStream source;
     source.input = head + body + "next-message";
@@ -120,6 +121,8 @@ static void checkMessageFailures() {
   };
   for (const auto &fixture : {
            Fixture{head + "wrong\r\n", head.size() + 7},
+           Fixture{head + "+2\r\nab\r\n", head.size() + 4},
+           Fixture{head + "1_0\r\n", head.size() + 5},
            Fixture{head + "3 ;extra\r\nabc\r\n", head.size() + 10},
            Fixture{head + "123", head.size() + 3},
            Fixture{head + std::string(1025, 'a'), head.size() + 1024, 1},

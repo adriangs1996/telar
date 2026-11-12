@@ -233,11 +233,11 @@ void testHttp2CaptureLifecycle() {
     const auto response = Http2Direction::response;
     capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "103"});
     capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = "content-encoding", .value = "gzip"});
-    capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "+5_0_0"});
+    capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "500"});
     capture.observe(response, {.kind = Http2Event::Kind::response_ended, .stream = 1, .status = 500});
     auto failed = producer.tryReceive();
     check(failed && (*failed)->status_code == 500 && (*failed)->outcome == CaptureOutcome::failed);
-    check(text((*failed)->head.bytes()) == "content-encoding: gzip\r\n:status: +5_0_0\r\n" && (*failed)->encoding() == "gzip");
+    check(text((*failed)->head.bytes()) == "content-encoding: gzip\r\n:status: 500\r\n" && (*failed)->encoding() == "gzip");
 
     for (std::uint32_t stream = 2; stream <= 130; ++stream) {
       capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = stream, .name = ":status", .value = "200"});

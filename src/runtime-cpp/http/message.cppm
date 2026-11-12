@@ -665,10 +665,9 @@ private:
       if (asciiEqualIgnoreCase(field.name(), "content-length")) {
         TextFields values{field.value(), ","};
         while (const auto value = values.next()) {
-          const auto decimal = trimText(*value, " \t");
-          if (decimal.empty() || !std::ranges::all_of(decimal, [](unsigned char byte) { return byte >= '0' && byte <= '9'; })) { throw std::invalid_argument{"Invalid HTTP length"}; }
-          const auto parsed = parseHttpNumber<10>(decimal);
-          if (!parsed || (length && *length != *parsed)) { throw std::invalid_argument{"Conflicting HTTP lengths"}; }
+          const auto parsed = parseHttpNumber<10>(trimText(*value, " \t"));
+          if (!parsed) { throw std::invalid_argument{"Invalid HTTP length"}; }
+          if (length && *length != *parsed) { throw std::invalid_argument{"Conflicting HTTP lengths"}; }
           length = parsed;
         }
       }
