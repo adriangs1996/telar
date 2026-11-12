@@ -261,6 +261,7 @@ public:
     suggestion_.invalidate();
     pending_count_ = 0;
     editor_opening_.reset();
+    failPromptRequests();
     for (auto &pane : panes_) {
       pane->attached = false;
       pane->attaching = false;
@@ -4315,6 +4316,10 @@ private:
       return history_.fail(message.request_id, message.message) ? Change::history : Change::none;
     }
 
+    if (const auto change = failPromptRequest(message.request_id)) {
+      return *change;
+    }
+
     if (editor_opening_.complete(message.request_id)) {
       return reportLinkFailure(message.message);
     }
@@ -5605,6 +5610,57 @@ private:
     listed.reserve(words.size());
     for (const auto &word : words) {
       listed.emplace_back(word.text);
+    }
+  }
+
+  // A prompt request the runtime failed, or that a lost connection will never answer, settles
+  // as one that found nothing: its word stops waiting, its spec is unavailable and its menu
+  // stops expecting it. None of them is an error the user should read.
+  inline std::optional<Change> failPromptRequest(std::uint64_t request_id) {
+    if (const auto checked = command_requests_.find(request_id); checked != command_requests_.end()) {
+      return settleCommand(checked, CommandPresence::unknown);
+    }
+    if (const auto request = spec_requests_.find(request_id); request != spec_requests_.end()) {
+      const auto [pane_id, command] = std::move(request->second);
+      spec_requests_.erase(request);
+      if (const auto checks = command_checks_.find(pane_id); checks != command_checks_.end()) {
+        if (const auto known = checks->second.specs.find(command); known != checks->second.specs.end() && known->second == SpecState::pending) {
+          known->second = SpecState::unavailable;
+        }
+      }
+      spec_completions_.erase(pane_id);
+      return Change::none;
+    }
+    if (const auto pending = path_completions_.find(request_id); pending != path_completions_.end()) {
+      const auto pane_id = pending->second.pane_id;
+      path_completions_.erase(pending);
+      const auto line = lines_.find(pane_id);
+      if (line == lines_.end() || !line->second.line.receive(request_id, {}, true)) {
+        return Change::none;
+      }
+      changed_pane_ = pane_id;
+      return Change::terminal;
+    }
+    return std::nullopt;
+  }
+
+  inline void failPromptRequests() noexcept {
+    try {
+      while (!command_requests_.empty()) {
+        static_cast<void>(failPromptRequest(command_requests_.begin()->first));
+      }
+      while (!spec_requests_.empty()) {
+        static_cast<void>(failPromptRequest(spec_requests_.begin()->first));
+      }
+      while (!path_completions_.empty()) {
+        static_cast<void>(failPromptRequest(path_completions_.begin()->first));
+      }
+    } catch (const std::exception &) {
+      // A menu that could not settle keeps its choices; no answer is waited for any more.
+      command_requests_.clear();
+      spec_requests_.clear();
+      spec_completions_.clear();
+      path_completions_.clear();
     }
   }
 

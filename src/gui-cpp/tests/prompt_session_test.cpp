@@ -234,6 +234,45 @@ void tab(Client &client) {
   client.promptKey(1, prompt::KeyPress{prompt::Key::tab});
 }
 
+// A prompt request the runtime fails, or a lost connection never answers, settles quietly
+// instead of waiting forever.
+void promptRequestsSettleOnFailure() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  FrameBody frame;
+  frame.pane_id = 1;
+  frame.frame_id = 1;
+  frame.scroll.total_rows = 1;
+  deliverSingleCell(client, frame);
+  auto configuration = client.configuration();
+  configuration.prompt.mode = PromptMode::telar;
+  client.configure(configuration);
+  deliver(client, atPrompt());
+
+  require(client.commandPresence(1, "g") == CommandPresence::pending, "the first letter asks the runtime");
+  const auto checked = transport.last<CompleteWords>();
+  require(deliver(client, RequestFailed{.request_id = checked.request_id, .code = FailureCode::pane_not_found, .message = "Check failed"}) == Change::terminal && client.error().empty(), "a failed command check repaints its pane without an error");
+  require(client.commandPresence(1, "g") == CommandPresence::unknown, "the word stops waiting");
+
+  typeKeys(client, "cat sr");
+  tab(client);
+  const auto spec = transport.last<RequestCommandSpec>();
+  require(deliver(client, RequestFailed{.request_id = spec.request_id, .code = FailureCode::pane_not_found, .message = "Spec failed"}) == Change::none && client.error().empty(), "a failed spec is no error");
+  tab(client);
+  const auto find = transport.last<FindPaths>();
+  require(find.request_id > spec.request_id && client.promptLine(1)->pending(find.request_id), "Tab completes without the spec it could not get");
+  require(deliver(client, RequestFailed{.request_id = find.request_id, .code = FailureCode::pane_not_found, .message = "Paths failed"}) == Change::terminal && client.error().empty(), "a failed path search repaints the line without an error");
+  require(!client.promptLine(1)->pending(find.request_id), "the menu stops waiting for it");
+
+  tab(client);
+  const auto lost = transport.last<FindPaths>();
+  require(lost.request_id > find.request_id && client.promptLine(1)->pending(lost.request_id), "Tab asks again");
+  client.disconnected();
+  require(!client.promptLine(1)->pending(lost.request_id), "a lost connection answers no request");
+}
+
 void lineCompletes() {
   SystemAllocator memory;
   Transport transport;
@@ -648,6 +687,7 @@ int main() {
   lineSearches();
   lineBindings();
   lineCompletes();
+  promptRequestsSettleOnFailure();
   lineBlocks();
   lineBlockMotions();
   std::puts("gui-prompt-session: passed");
