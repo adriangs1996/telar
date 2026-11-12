@@ -3578,10 +3578,9 @@ private:
 
     synchronizeAttachments();
     retainLayout();
-    std::erase_if(panes_, [&](const auto &pane) {
-      return sameTab(pane->location, message.location) && !tab.layout.contains(pane->id);
+    removePanes([&](const Pane<Memory> &pane) {
+      return sameTab(pane.location, message.location) && !tab.layout.contains(pane.id);
     });
-    forgetClosedGraphics();
 
     return Change::model;
   }
@@ -3748,24 +3747,50 @@ private:
         prepareDetach(pane->id);
         transport_.send(DetachPane{pane->id});
       }
-
-      cancelPaneRequests(pane->id);
-      if (copy_mode_.state() && copy_mode_.state()->pane_id == pane->id) {
-        copy_mode_.reset();
-        copy_search_request_ = 0;
-      }
     }
 
     std::erase_if(tabs_, [&](const auto &tab) {
       return sameTab(tab->location, location);
     });
-    std::erase_if(panes_, [&](const auto &pane) {
-      return sameTab(pane->location, location);
+    removePanes([&](const Pane<Memory> &pane) {
+      return sameTab(pane.location, location);
     });
-    forgetClosedGraphics();
     if (active_tab_ && sameTab(*active_tab_, location)) {
       active_tab_.reset();
     }
+  }
+
+  // The one way a pane leaves the model, whichever message removes it: nothing it started keeps
+  // waiting and nothing kept by its id outlives it.
+  template <typename Removed>
+  void removePanes(Removed removed) {
+    for (const auto &pane : panes_) {
+      if (removed(*pane)) {
+        forgetPane(pane->id);
+      }
+    }
+    std::erase_if(panes_, [&](const auto &pane) {
+      return removed(*pane);
+    });
+    forgetClosedGraphics();
+  }
+
+  void forgetPane(std::uint64_t pane_id) noexcept {
+    cancelPaneRequests(pane_id);
+    if (copy_mode_.state() && copy_mode_.state()->pane_id == pane_id) {
+      copy_mode_.reset();
+      copy_search_request_ = 0;
+    }
+    if (path_seed_.pane_id == pane_id) {
+      path_seed_ = {};
+    }
+    const auto owned = [pane_id](const auto &entry) { return entry.second.pane_id == pane_id; };
+    std::erase_if(command_requests_, owned);
+    std::erase_if(spec_requests_, owned);
+    std::erase_if(path_completions_, owned);
+    command_checks_.erase(pane_id);
+    spec_completions_.erase(pane_id);
+    lines_.erase(pane_id);
   }
 
   void cancelPaneRequests(std::uint64_t pane_id) noexcept {
@@ -3851,10 +3876,9 @@ private:
 
     synchronizeAttachments();
     retainLayout();
-    std::erase_if(panes_, [&](const auto &pane) {
-      return pane->id == message.pane_id;
+    removePanes([&](const Pane<Memory> &pane) {
+      return pane.id == message.pane_id;
     });
-    forgetClosedGraphics();
 
     return Change::model;
   }

@@ -273,6 +273,33 @@ void promptRequestsSettleOnFailure() {
   require(!client.promptLine(1)->pending(lost.request_id), "a lost connection answers no request");
 }
 
+// A pane that leaves the model takes its prompt and the requests it made with it.
+void paneRemovalForgetsPrompt() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  FrameBody frame;
+  frame.pane_id = 1;
+  frame.frame_id = 1;
+  frame.scroll.total_rows = 1;
+  deliverSingleCell(client, frame);
+  auto configuration = client.configuration();
+  configuration.prompt.mode = PromptMode::telar;
+  client.configure(configuration);
+  deliver(client, atPrompt());
+
+  require(client.commandPresence(1, "g") == CommandPresence::pending, "the first letter asks the runtime");
+  const auto checked = transport.last<CompleteWords>();
+  typeKeys(client, "ls");
+  require(client.promptLine(1) != nullptr, "the pane has a line");
+
+  deliver(client, PaneExited{.pane_id = 1, .kind = ExitKind::exited});
+  require(client.promptLine(1) == nullptr, "the line goes with its pane");
+  const std::array words{CompletionWord{.text = "git"}};
+  require(deliver(client, CompletionWords{.request_id = checked.request_id, .words = words}) == Change::none, "an answer for a pane that left finds nothing waiting");
+}
+
 void lineCompletes() {
   SystemAllocator memory;
   Transport transport;
@@ -688,6 +715,7 @@ int main() {
   lineBindings();
   lineCompletes();
   promptRequestsSettleOnFailure();
+  paneRemovalForgetsPrompt();
   lineBlocks();
   lineBlockMotions();
   std::puts("gui-prompt-session: passed");
