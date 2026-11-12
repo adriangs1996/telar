@@ -273,6 +273,30 @@ void promptRequestsSettleOnFailure() {
   require(!client.promptLine(1)->pending(lost.request_id), "a lost connection answers no request");
 }
 
+// Commands run after the history loaded replace its oldest entries instead of growing it.
+void promptHistoryStaysBounded() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  FrameBody frame;
+  frame.pane_id = 1;
+  frame.frame_id = 1;
+  frame.scroll.total_rows = 1;
+  deliverSingleCell(client, frame);
+  auto configuration = client.configuration();
+  configuration.prompt.mode = PromptMode::telar;
+  client.configure(configuration);
+  deliver(client, atPrompt());
+
+  for (std::size_t index = 0; index <= 1000; ++index) {
+    typeKeys(client, "c" + std::to_string(index));
+    require(enter(client) == prompt::Outcome::run, "Enter runs the command");
+  }
+  const auto history = client.promptHistory();
+  require(history.size() == 1000 && history.front() == "c1000" && history.back() == "c1", "the newest thousand commands are kept, newest first");
+}
+
 // A pane that leaves the model takes its prompt and the requests it made with it.
 void paneRemovalForgetsPrompt() {
   SystemAllocator memory;
@@ -716,6 +740,7 @@ int main() {
   lineCompletes();
   promptRequestsSettleOnFailure();
   paneRemovalForgetsPrompt();
+  promptHistoryStaysBounded();
   lineBlocks();
   lineBlockMotions();
   std::puts("gui-prompt-session: passed");

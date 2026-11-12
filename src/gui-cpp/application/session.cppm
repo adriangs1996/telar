@@ -5307,7 +5307,7 @@ private:
     if (!ready_ || !configuration_.prompt.ghost || prompt_history_request_ != 0) {
       return;
     }
-    const QueryHistory query{.request_id = nextRequest(), .author = HistoryAuthorFilter::human, .distinct = true, .limit = 1000};
+    const QueryHistory query{.request_id = nextRequest(), .author = HistoryAuthorFilter::human, .distinct = true, .limit = prompt_history_limit};
     try {
       transport_.send(query);
       prompt_history_request_ = query.request_id;
@@ -5384,6 +5384,9 @@ private:
       // Every pane's suggestions know the command at once, without asking the history again.
       std::erase(prompt_history_, text);
       prompt_history_.insert(prompt_history_.begin(), std::string{text});
+      if (prompt_history_.size() > prompt_history_limit) {
+        prompt_history_.pop_back();
+      }
       break;
     case prompt::Outcome::answer: {
       HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
@@ -5709,6 +5712,9 @@ private:
   }
 
   prompt::Specs prompt_specs_;
+  // The suggestions read the whole history on every refresh: commands run since it loaded
+  // replace the oldest instead of growing it for as long as the client lives.
+  static constexpr std::uint16_t prompt_history_limit = 1000;
   std::vector<std::string> prompt_history_;
   std::uint64_t prompt_history_request_ = 0;
   std::unordered_map<std::uint64_t, PathCompletion> path_completions_;
