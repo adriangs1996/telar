@@ -3,8 +3,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_lua LANGUAGES C CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
-if(NOT TARGET telar-client)
-  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../telar-client" "${CMAKE_BINARY_DIR}/telar-client")
+if(NOT TARGET telar-base)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../telar-base" "${CMAKE_BINARY_DIR}/telar-base")
 endif()
 
 set(TELAR_LUA_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../vendor/lua-5.5.1/src")
@@ -27,6 +27,6 @@ add_library(telar-lua STATIC)
 add_library(telar::lua ALIAS telar-lua)
 telar_modules(telar-lua)
 target_include_directories(telar-lua PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(telar-lua PUBLIC telar-lua-vm telar::base telar::client)
+target_link_libraries(telar-lua PUBLIC telar-lua-vm telar::base)
 
 telar_editor_flags(telar-lua)

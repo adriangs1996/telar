@@ -63,7 +63,6 @@ export import telar.platform;
 
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: telar_tls/handle.cppm

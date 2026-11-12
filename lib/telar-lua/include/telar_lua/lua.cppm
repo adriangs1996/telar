@@ -26,7 +26,6 @@ import std;
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 
 // Interface: telar_lua/api.cppm
 export {

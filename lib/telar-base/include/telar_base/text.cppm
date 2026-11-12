@@ -44,6 +44,8 @@ import telar.base.memory;
 export namespace telar {
 using telar::Utf8Validation;
 using telar::inspectUtf8;
+using telar::EncodingError;
+using telar::validateUtf8;
 }
 export namespace telar::runtime {
 using telar::runtime::utf8Prefix;

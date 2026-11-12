@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <exception>
 #include <string_view>
 
 namespace telar {
@@ -45,6 +46,32 @@ namespace telar {
     }
 
     return Utf8Validation::valid;
+  }
+
+  // Bytes that break a format's rules: the wire protocol, a configuration or a record on disk.
+  struct EncodingError final : std::exception {
+    EncodingError(const char *message)
+        : message{message} {}
+
+    const char *what() const noexcept override {
+      return message;
+    }
+
+  private:
+    const char *message;
+  };
+
+  inline void validateUtf8(std::string_view value) {
+    switch (inspectUtf8(value)) {
+    case Utf8Validation::valid:
+      return;
+    case Utf8Validation::invalid_leading:
+      throw EncodingError{"Invalid UTF-8"};
+    case Utf8Validation::invalid_continuation:
+      throw EncodingError{"Invalid UTF-8 continuation"};
+    case Utf8Validation::invalid_scalar:
+      throw EncodingError{"Invalid UTF-8 scalar"};
+    }
   }
 
 }

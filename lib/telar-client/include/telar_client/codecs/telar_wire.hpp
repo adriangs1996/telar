@@ -25,6 +25,7 @@
 #define MEGA_BYTES(x) KILO_BYTES(x) * 1024
 
 #include "telar_client/codecs/telar_annotations.hpp"
+#include "telar_base/text/utf8.hpp"
 
 namespace telar {
 
@@ -40,18 +41,6 @@ namespace telar {
 
   template <std::size_t N>
   FixedString(const char (&text)[N]) -> FixedString<N>;
-
-  struct EncodingError final : std::exception {
-    EncodingError(const char *message)
-        : message{message} {}
-
-    const char *what() const noexcept override {
-      return message;
-    }
-
-  private:
-    const char *message;
-  };
 
   using Byte = std::uint8_t;
 

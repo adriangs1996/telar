@@ -108,19 +108,6 @@ namespace telar {
     opaque
   };
 
-  inline void validateUtf8(std::string_view value) {
-    switch (inspectUtf8(value)) {
-    case Utf8Validation::valid:
-      return;
-    case Utf8Validation::invalid_leading:
-      throw EncodingError{"Invalid UTF-8"};
-    case Utf8Validation::invalid_continuation:
-      throw EncodingError{"Invalid UTF-8 continuation"};
-    case Utf8Validation::invalid_scalar:
-      throw EncodingError{"Invalid UTF-8 scalar"};
-    }
-  }
-
   template <typename LengthCodec,
             std::size_t Maximum,
             bool EmptyAllowed = true,
