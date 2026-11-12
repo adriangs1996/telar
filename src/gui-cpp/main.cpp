@@ -10,7 +10,6 @@ static_assert(true);
 #include "qt/bundled_fonts.hpp"
 #include "qt/local_runtime_endpoint.hpp"
 #include <QCommandLineParser>
-#include <QDir>
 #include <QFileInfo>
 #include <QFont>
 #include <QGuiApplication>
@@ -73,6 +72,18 @@ void configureParser(QCommandLineParser &parser) {
   parser.setOptionsAfterPositionalArgumentsMode(QCommandLineParser::ParseAsPositionalArguments);
 }
 
+// A file in Telar's configuration directory, found as the runtime and the CLI find it: an empty
+// XDG_CONFIG_HOME counts as unset, and without HOME there is no such file.
+QString telarConfigFile(const QString &name) {
+  if (const auto base = qEnvironmentVariable("XDG_CONFIG_HOME"); !base.isEmpty()) {
+    return base + QStringLiteral("/telar/") + name;
+  }
+
+  const auto home = qEnvironmentVariable("HOME");
+
+  return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/") + name;
+}
+
 QString configurationPath(const QCommandLineParser &parser) {
   if (parser.isSet(QStringLiteral("no-config"))) {
     return {};
@@ -87,32 +98,17 @@ QString configurationPath(const QCommandLineParser &parser) {
     return path;
   }
 
-  const QDir directory{qEnvironmentVariable("XDG_CONFIG_HOME", QDir::homePath() + QStringLiteral("/.config"))};
-  path = directory.filePath(QStringLiteral("telar/config.lua"));
+  path = telarConfigFile(QStringLiteral("config.lua"));
 
-  return QFileInfo::exists(path) ? path : QString{};
+  return !path.isEmpty() && QFileInfo::exists(path) ? path : QString{};
 }
 
 QString machineProfilesPath() {
-  const auto base = qEnvironmentVariable("XDG_CONFIG_HOME");
-  if (!base.isEmpty()) {
-    return base + QStringLiteral("/telar/machines.json");
-  }
-
-  const auto home = qEnvironmentVariable("HOME");
-
-  return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/machines.json");
+  return telarConfigFile(QStringLiteral("machines.json"));
 }
 
 QString trustStorePath() {
-  const auto base = qEnvironmentVariable("XDG_CONFIG_HOME");
-  if (!base.isEmpty()) {
-    return base + QStringLiteral("/telar/trust.json");
-  }
-
-  const auto home = qEnvironmentVariable("HOME");
-
-  return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/trust.json");
+  return telarConfigFile(QStringLiteral("trust.json"));
 }
 
 QString runtimeEndpoint(const QCommandLineParser &parser, telar::gui::ApplicationAllocator &memory) {
