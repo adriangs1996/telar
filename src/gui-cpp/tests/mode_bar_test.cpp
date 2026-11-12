@@ -67,6 +67,7 @@ import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.history_meta_geometry;
 
 namespace {
 
@@ -82,6 +83,7 @@ constexpr int cell_test_window_height = 32;
 constexpr int cell_width = 9;
 constexpr int cell_height = 20;
 constexpr int font_pixels = 15;
+constexpr int small_pixels = 12;
 constexpr int baseline = 15;
 
 QVariantMap testGrid() {
@@ -132,13 +134,25 @@ private:
     }
   }
 
+  Q_SLOT static void prefixLabelsLeadWithCancelThenTheBoundActions() {
+    ModeHints hints;
+    hints.append({.key = {.key = KeyChord::Key::character, .character = 's'}, .label = "split right"});
+    const auto labels = ModeBarLabels::resolve(StatusMode::prefix, hints);
+    QCOMPARE(labels.title(), std::string_view{"PREFIX"});
+    QCOMPARE(labels.hints().size(), std::size_t{2});
+    QCOMPARE(labels.hints().front().key.view(), ModeBarLabels::cancel_key);
+    QCOMPARE(labels.hints().back().key.view(), std::string_view{"s"});
+    QCOMPARE(labels.hints().back().word.view(), std::string_view{"split right"});
+    QVERIFY(ModeBarLabels::resolve(StatusMode::normal, hints).title().empty());
+  }
+
   Q_SLOT static void standaloneModeBarDropsWholeHintsAndKeepsTheTitle() {
     QQuickWindow window;
     QQmlEngine engine;
     const QVariantMap properties{
         {QStringLiteral("width"), wide_width},
         {QStringLiteral("height"), row_height},
-        {QStringLiteral("grid"), testGrid()},
+        {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), small_pixels}}},
         {QStringLiteral("colors"), themeColors(Configuration{})},
         {QStringLiteral("mode"), statusModeRecord(StatusMode::copy)},
     };
@@ -148,13 +162,16 @@ private:
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
-    QTRY_COMPARE_WITH_TIMEOUT(bar->property("labels").toList().size(), qsizetype{2}, wait_ms);
-    QCOMPARE(bar->property("labels").toList().back().toMap().value(QStringLiteral("text")).toString(), QString::fromUtf8(ModeBarLayout::copy_help));
-    bar->setWidth(narrow_width);
-    bar->polish();
-    QCoreApplication::processEvents();
-    QTRY_COMPARE_WITH_TIMEOUT(bar->property("labels").toList().size(), qsizetype{1}, wait_ms);
-    QCOMPARE(bar->property("labels").toList().front().toMap().value(QStringLiteral("text")).toString(), QStringLiteral(" COPY "));
+    QCOMPARE(bar->property("title").toString(), QStringLiteral("COPY"));
+    const auto count = [&bar] {
+      return bar->property("layout").toMap().value(QStringLiteral("hintCount")).toULongLong();
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(count(), qulonglong{ModeBarLabels::copy_hints.size()}, wait_ms);
+    const auto title = bar->property("layout").toMap().value(QStringLiteral("title")).toRectF();
+    QVERIFY(title.width() > 0);
+    bar->setWidth(title.width() + 1);
+    QTRY_COMPARE_WITH_TIMEOUT(count(), qulonglong{0}, wait_ms);
+    QCOMPARE(bar->property("layout").toMap().value(QStringLiteral("title")).toRectF().width(), title.width());
   }
 
   Q_SLOT static void cellTextRetainsItsWidthAndUsesWholeCellClipping() {

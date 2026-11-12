@@ -846,113 +846,74 @@ private:
 }
 }
 
-// Interface: presentation/mode_bar_layout.cppm
+// Interface: presentation/mode_bar_labels.cppm
 export {
 namespace telar::gui {
 
-struct ModeBarLabel {
-  static constexpr std::size_t text_capacity = 128;
-  BoundedText<text_capacity> text;
-  Rect bounds;
-  PaletteRole ink = PaletteRole::subtext0;
-  bool bold = false;
+struct ModeBarHint {
+  static constexpr std::size_t word_capacity = 32;
+  ModeKeyLabel::Text key;
+  BoundedText<word_capacity> word;
 };
 
-struct ModeBarRequest {
-  StatusMode mode = StatusMode::normal;
-  ModeHints hints{};
-  Rect bounds;
-  float ratio = 1;
-  float cell_width = 1;
-};
-
-class ModeBarLayout {
+// What the bar shows while a mode holds the keyboard: the mode's name and the keys it answers.
+class ModeBarLabels {
 public:
-  static constexpr float chip_height = 18;
-  static constexpr float chip_radius = 4;
-  static constexpr float chip_gap = 8;
-  static constexpr float hint_gap = 12;
-  static constexpr float key_gap = 4;
-  static constexpr std::size_t maximum_labels = 2 + (2 * ModeHints::capacity);
-  static constexpr std::string_view copy_help = " h/j/k/l move  v select  V lines  / search  y copy  o open  q exit ";
-  static constexpr std::string_view cancel_help = "Esc cancel";
+  static constexpr auto copy_hints = std::to_array<std::pair<std::string_view, std::string_view>>({
+      {"h j k l", "move"},
+      {"v", "select"},
+      {"V", "lines"},
+      {"/", "search"},
+      {"y", "copy"},
+      {"o", "open"},
+      {"q", "exit"},
+  });
+  static constexpr std::string_view cancel_key = "Esc";
+  static constexpr std::string_view cancel_word = "cancel";
+  static constexpr std::size_t capacity = std::max(copy_hints.size(), 1 + ModeHints::capacity);
 
-  [[nodiscard]] inline static ModeBarLayout measure(const ModeBarRequest &request) {
-    if (!std::isfinite(request.ratio) || request.ratio <= 0 || !std::isfinite(request.cell_width) || request.cell_width <= 0) {
-      throw std::invalid_argument{"InvalidModeBarMetrics"};
-    }
-
-    ModeBarLayout result;
-    if (request.mode == StatusMode::normal || request.bounds.empty()) {
+  [[nodiscard]] inline static ModeBarLabels resolve(StatusMode mode, const ModeHints &hints) {
+    ModeBarLabels result;
+    switch (mode) {
+    case StatusMode::normal:
       return result;
-    }
-
-    const auto title = request.mode == StatusMode::copy ? std::string_view{" COPY "} : std::string_view{" PREFIX "};
-    const auto height = std::min(request.bounds.height, chip_height * request.ratio);
-    const auto title_width = std::min(width(title, request.cell_width), request.bounds.width);
-    result.chip_ = {.x = request.bounds.x, .y = request.bounds.y + std::floor((request.bounds.height - height) / 2), .width = title_width, .height = height};
-    result.append(title, {.x = request.bounds.x, .y = request.bounds.y, .width = title_width, .height = request.bounds.height}, PaletteRole::surface_dim, true);
-    auto x = request.bounds.x + title_width + (chip_gap * request.ratio);
-    if (request.mode == StatusMode::copy) {
-      static_cast<void>(result.hint(copy_help, x, request));
-
-      return result;
-    }
-
-    static_cast<void>(result.hint(cancel_help, x, request));
-    x += hint_gap * request.ratio;
-    for (const auto &item : request.hints.items()) {
-      const auto key = ModeKeyLabel::format(item.key);
-      if (!result.hint(key.view(), x, request, true)) {
-        break;
+    case StatusMode::copy:
+      result.title_ = "COPY";
+      for (const auto &[key, word] : copy_hints) {
+        result.append(key, word);
       }
 
-      x += key_gap * request.ratio;
-      if (!result.hint(item.label, x, request)) {
-        break;
+      return result;
+    case StatusMode::prefix:
+      result.title_ = "PREFIX";
+      result.append(cancel_key, cancel_word);
+      for (const auto &item : hints.items()) {
+        result.append(ModeKeyLabel::format(item.key).view(), item.label);
       }
 
-      x += hint_gap * request.ratio;
+      return result;
     }
 
     return result;
   }
 
-  [[nodiscard]] inline Rect chip() const noexcept {
-    return chip_;
+  [[nodiscard]] inline std::string_view title() const noexcept {
+    return title_;
   }
 
-  [[nodiscard]] inline std::span<const ModeBarLabel> labels() const noexcept {
-    return std::span{labels_}.first(count_);
+  [[nodiscard]] inline std::span<const ModeBarHint> hints() const noexcept {
+    return std::span{hints_}.first(count_);
   }
 
 private:
-  [[nodiscard]] inline static float width(std::string_view text, float cell_width) {
-    return static_cast<float>(cellTextColumns(text)) * cell_width;
+  inline void append(std::string_view key, std::string_view word) {
+    auto &hint = hints_[count_++];
+    hint.key.append(key);
+    hint.word.append(word);
   }
 
-  inline bool hint(std::string_view text, float &x, const ModeBarRequest &request, bool key = false) {
-    const auto advance = width(text, request.cell_width);
-    if (x + advance > request.bounds.right()) {
-      return false;
-    }
-
-    append(text, {.x = x, .y = request.bounds.y, .width = advance, .height = request.bounds.height}, key ? PaletteRole::accent : PaletteRole::subtext0, key);
-    x += advance;
-
-    return true;
-  }
-
-  inline void append(std::string_view text, Rect bounds, PaletteRole ink, bool bold) {
-    auto &label = labels_[count_++];
-    label.text.append(text);
-    label.bounds = bounds;
-    label.ink = ink;
-    label.bold = bold;
-  }
-
-  Rect chip_;
-  std::array<ModeBarLabel, maximum_labels> labels_{};
+  std::string_view title_;
+  std::array<ModeBarHint, capacity> hints_{};
   std::size_t count_ = 0;
 };
 

@@ -318,9 +318,7 @@ return {api_version = 2, client = {
 )";
 
 QString modeTitle(const NativeModeLayout &mode) {
-  const auto labels = mode.labels();
-
-  return labels.empty() ? QString{} : labels.front().toMap().value(QStringLiteral("text")).toString();
+  return mode.title();
 }
 
 void writeTestFile(const QString &path, const char *source) {
@@ -1448,7 +1446,7 @@ private:
     QVERIFY(client_->copyModeActive());
     const auto *mode_bar = window_->findChild<NativeModeLayout *>();
     QVERIFY(mode_bar != nullptr);
-    QTRY_COMPARE_WITH_TIMEOUT(modeTitle(*mode_bar), QStringLiteral(" COPY "), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(modeTitle(*mode_bar), QStringLiteral("COPY"), runtime_wait_ms);
     QTest::keyClick(window_, Qt::Key_Slash);
     QCOMPARE(client_->dialog(), QStringLiteral("copy-search"));
     client_->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
@@ -1975,7 +1973,7 @@ private:
     QVERIFY(client_->prefixPending());
     const auto *mode_bar = window_->findChild<NativeModeLayout *>();
     QVERIFY(mode_bar != nullptr);
-    QTRY_COMPARE_WITH_TIMEOUT(modeTitle(*mode_bar), QStringLiteral(" PREFIX "), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(modeTitle(*mode_bar), QStringLiteral("PREFIX"), runtime_wait_ms);
     writeTestFile(directory.filePath(QStringLiteral("unused.lua")), "return {}");
     constexpr int prefix_wait_ms = 1100;
     QTest::qWait(prefix_wait_ms);

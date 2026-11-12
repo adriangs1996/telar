@@ -41,7 +41,7 @@ export namespace telar::runtime::cli {
     const char *action = nullptr;
     config::BindingContext context;
 
-    inline static PluginWorkerOptions parse(std::span<char *> arguments) {
+    static PluginWorkerOptions parse(std::span<char *> arguments) {
       constexpr std::size_t argument_count = 7;
       if (arguments.size() != argument_count) {
         throw std::invalid_argument{"Expected plugin-worker ENTRY ACTION SIDEBAR TAB_COUNT ACTIVE_TAB_INDEX PANE_COUNT FOCUSED_PANE_ID"};
@@ -58,19 +58,24 @@ export namespace telar::runtime::cli {
       }
 
       for (const char byte : action) {
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_' || byte == '-' || byte == '.')) {
+        if ((byte < 'a' || byte > 'z') && (byte < 'A' || byte > 'Z') && (byte < '0' || byte > '9') && byte != '_' && byte != '-' && byte != '.') {
           throw std::invalid_argument{"Invalid plugin action name"};
         }
       }
 
-      const config::BindingContext context{
+      const config::BindingContext context = {
           .sidebar_visible = sidebar == "1",
           .tab_count = number<std::uint16_t>(arguments[3]),
           .active_tab_index = number<std::uint16_t>(arguments[4]),
           .pane_count = number<std::uint16_t>(arguments[5]),
           .focused_pane_id = number<std::uint64_t>(arguments[6]),
       };
-      return {.entry = arguments[0], .action = arguments[1], .context = context};
+
+      return {
+          .entry = arguments[0],
+          .action = arguments[1],
+          .context = context,
+      };
     }
 
   private:
@@ -135,7 +140,7 @@ export namespace telar::runtime::cli {
     constexpr std::size_t maximum_source_bytes = std::size_t{1024} * 1024;
     const auto source = readFile(memory, options.entry, maximum_source_bytes);
     const auto directory = std::filesystem::canonical(std::filesystem::absolute(options.entry).parent_path()).string();
-    lua::Vm vm{memory};
+    lua::Vm vm = {memory};
     vm.resetBudget();
     vm.execute(config::bootstrap, "@telar/bootstrap.lua", 0);
     lua_getglobal(vm.state(), "telar");

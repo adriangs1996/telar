@@ -5,7 +5,7 @@ static_assert(true);
 
 
 #include "native_mode_layout.hpp"
-#include "cell_text_grid.hpp"
+#include "history_hint_projection.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -35,6 +35,7 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <exception>
+#include <limits>
 #include "tbc/view.hpp"
 
 
@@ -42,12 +43,15 @@ static_assert(true);
 import telar.gui.core.metrics;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.history_meta_geometry;
 
 namespace telar::gui::qt {
 namespace {
 
-QRectF logical(Rect bounds, qreal scale) {
-  return {bounds.x / scale, bounds.y / scale, bounds.width / scale, bounds.height / scale};
+static_assert(ModeBarLabels::capacity <= ModeBarMeasurements::capacity);
+
+QString text(std::string_view value) {
+  return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
 }
 
 // The hint views the label it writes into the storage, region `a`.
@@ -62,47 +66,52 @@ tbc::view<ModeHint, tbc::lt::a> readHint(const QVariantMap &value, tbc::view<QBy
   return {.key = {.key = static_cast<KeyChord::Key>(kind), .character = value.value(QStringLiteral("character")).toUInt(), .modifiers = value.value(QStringLiteral("modifiers")).toUInt()}, .label = {storage.constData(), static_cast<std::size_t>(storage.size())}};
 }
 
+float advance(const QVariant &value, qreal density) {
+  const auto measured = value.toDouble();
+
+  return std::isfinite(measured) && measured > 0 ? static_cast<float>(measured * density) : 0;
+}
+
 }
 
 NativeModeLayout::NativeModeLayout(QQuickItem *parent)
-    : QQuickItem(parent) {}
+    : QQuickItem(parent) {
+  refreshLayout();
+}
 
 QVariantMap NativeModeLayout::mode() const {
   return mode_;
-}
-
-QVariantMap NativeModeLayout::grid() const {
-  return grid_;
 }
 
 qreal NativeModeLayout::ratio() const noexcept {
   return ratio_;
 }
 
-QVariantList NativeModeLayout::labels() const {
-  return labels_;
+qreal NativeModeLayout::pixelSize() const noexcept {
+  return pixel_size_;
 }
 
-QRectF NativeModeLayout::chip() const noexcept {
-  return chip_;
+QVariantMap NativeModeLayout::measurements() const {
+  return measurements_;
 }
 
-qreal NativeModeLayout::chipRadius() const noexcept {
-  return ModeBarLayout::chip_radius * ratio_;
+QString NativeModeLayout::title() const {
+  return title_;
+}
+
+QVariantList NativeModeLayout::hints() const {
+  return hints_;
+}
+
+QVariantMap NativeModeLayout::layout() const {
+  return layout_;
 }
 
 void NativeModeLayout::setMode(const QVariantMap &mode) {
   if (mode_ != mode) {
     mode_ = mode;
+    prepareLabels();
     emit modeChanged();
-    polish();
-  }
-}
-
-void NativeModeLayout::setGrid(const QVariantMap &grid) {
-  if (grid_ != grid) {
-    grid_ = grid;
-    emit gridChanged();
     polish();
   }
 }
@@ -115,44 +124,83 @@ void NativeModeLayout::setRatio(qreal ratio) {
   }
 }
 
-void NativeModeLayout::refreshLayout() {
-  QVariantList labels;
-  QRectF chip;
+void NativeModeLayout::setPixelSize(qreal pixelSize) {
+  if (std::isfinite(pixelSize) && pixelSize >= 0 && pixel_size_ != pixelSize) {
+    pixel_size_ = pixelSize;
+    emit pixelSizeChanged();
+    polish();
+  }
+}
+
+void NativeModeLayout::setMeasurements(const QVariantMap &measurements) {
+  if (measurements_ != measurements) {
+    measurements_ = measurements;
+    emit measurementsChanged();
+    polish();
+  }
+}
+
+void NativeModeLayout::prepareLabels() {
+  QString title;
+  QVariantList hints;
   try {
-    const auto scale = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
-    const auto grid = CellTextGrid::resolve(grid_, scale);
     const auto kind = mode_.value(QStringLiteral("kind")).toInt();
     if (kind < static_cast<int>(StatusMode::normal) || kind > static_cast<int>(StatusMode::copy)) {
       throw std::invalid_argument{"InvalidStatusMode"};
     }
 
-    ModeBarRequest request{.mode = static_cast<StatusMode>(kind), .bounds = {.width = static_cast<float>(width() * scale), .height = static_cast<float>(height() * scale)}, .ratio = static_cast<float>(ratio_ * scale), .cell_width = static_cast<float>(grid.metrics.width)};
-    const auto hints = mode_.value(QStringLiteral("hints")).toList();
-    std::array<QByteArray, ModeHints::capacity> text_storage;
-    const auto count = std::min(hints.size(), static_cast<qsizetype>(text_storage.size()));
+    const auto records = mode_.value(QStringLiteral("hints")).toList();
+    std::array<QByteArray, ModeHints::capacity> storage;
+    ModeHints bound;
+    const auto count = std::min(records.size(), static_cast<qsizetype>(storage.size()));
     for (qsizetype index = 0; index < count; ++index) {
-      request.hints.append(readHint(hints[index].toMap(), text_storage[static_cast<std::size_t>(index)]));
+      bound.append(readHint(records[index].toMap(), storage[static_cast<std::size_t>(index)]));
     }
 
-    const auto layout = ModeBarLayout::measure(request);
-    chip = logical(layout.chip(), scale);
-    for (const auto &label : layout.labels()) {
-      const auto text = label.text.view();
-      labels.append(QVariantMap{
-          {QStringLiteral("text"), QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()))},
-          {QStringLiteral("bounds"), logical(label.bounds, scale)},
-          {QStringLiteral("bold"), label.bold},
-          {QStringLiteral("ink"), QString::fromLatin1(palette_names[static_cast<std::size_t>(label.ink)])},
-      });
+    const auto labels = ModeBarLabels::resolve(static_cast<StatusMode>(kind), bound);
+    title = text(labels.title());
+    for (const auto &hint : labels.hints()) {
+      hints.append(QVariantMap{{QStringLiteral("key"), text(hint.key.view())}, {QStringLiteral("word"), text(hint.word.view())}});
     }
   } catch (const std::exception &) {
-    labels.clear();
-    chip = {};
+    title.clear();
+    hints.clear();
   }
 
-  if (chip_ != chip || labels_ != labels) {
-    chip_ = chip;
-    labels_ = labels;
+  if (title_ != title || hints_ != hints) {
+    title_ = title;
+    hints_ = hints;
+    emit labelsChanged();
+  }
+}
+
+void NativeModeLayout::refreshLayout() {
+  const auto density = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
+  ChromeMetrics chrome;
+  chrome.ratio = static_cast<float>(ratio_ * density);
+  chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(pixel_size_ * density), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()}));
+  const auto measured_hints = measurements_.value(QStringLiteral("hints")).toList();
+  ModeBarMeasurements measured;
+  measured.title = advance(measurements_.value(QStringLiteral("title")), density);
+  measured.count = std::min({static_cast<std::size_t>(hints_.size()), static_cast<std::size_t>(measured_hints.size()), ModeBarMeasurements::capacity});
+  for (std::size_t index = 0; index < measured.count; ++index) {
+    const auto hint = measured_hints[static_cast<qsizetype>(index)].toMap();
+    measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key")), density), .word = advance(hint.value(QStringLiteral("word")), density)};
+  }
+
+  const auto geometry = title_.isEmpty() ? ModeBarGeometry{} : ModeBarGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, measured);
+  QVariantList hints;
+  for (std::size_t index = 0; index < geometry.count; ++index) {
+    hints.append(historyHintRecord(geometry.hints[index], density));
+  }
+
+  auto layout = historyHintStyle(ratio_);
+  const auto title = geometry.title;
+  layout.insert(QStringLiteral("title"), QRectF{title.x / density, title.y / density, title.width / density, title.height / density});
+  layout.insert(QStringLiteral("hints"), hints);
+  layout.insert(QStringLiteral("hintCount"), static_cast<qulonglong>(geometry.count));
+  if (layout_ != layout) {
+    layout_ = layout;
     emit layoutChanged();
   }
 }

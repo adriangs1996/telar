@@ -205,8 +205,8 @@ NativeRoundedRectangle {
         ModeBar {
             anchors.fill: parent
             mode: root.mode
-            grid: root.typography.grid ?? ({})
             colors: root.colors
+            typography: root.typography
             ratio: root.ratio
             visible: root.mode.kind !== 0
         }

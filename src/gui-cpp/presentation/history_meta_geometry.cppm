@@ -471,7 +471,7 @@ struct HistoryHintGeometry {
     result.bounds = bounds;
     const auto x = bounds.x + chrome.px(padding);
     const auto key_width = std::min(keyWidth(chrome, measured.key), std::max(0.0F, bounds.right() - x));
-    const auto height = std::min(bounds.height, std::max(chrome.px(minimum_key_height), ChromeMetrics::lineHeight(chrome.small) + chrome.px(key_vertical_padding)));
+    const auto height = keyHeight(chrome, bounds.height);
     result.keycap = {.x = x, .y = bounds.y + ((bounds.height - height) / 2), .width = key_width, .height = height};
     const auto text_width = std::min(measured.key, key_width);
     result.key_text = {.x = x + ((key_width - text_width) / 2), .y = result.keycap.y, .width = text_width, .height = height};
@@ -479,6 +479,11 @@ struct HistoryHintGeometry {
     result.word = {.x = word_x, .y = bounds.y, .width = std::max(0.0F, bounds.right() - word_x), .height = bounds.height};
 
     return result;
+  }
+
+  // The keycap's height, which fits the small text and never exceeds `available`.
+  [[nodiscard]] inline static float keyHeight(ChromeMetrics chrome, float available) noexcept {
+    return std::min(available, std::max(chrome.px(minimum_key_height), ChromeMetrics::lineHeight(chrome.small) + chrome.px(key_vertical_padding)));
   }
 
 private:
@@ -550,6 +555,54 @@ struct HistoryFooterGeometry {
     if (!measured.empty && x + chrome.px(range_gap) + measured.range <= limit) {
       result.range = {.x = limit - measured.range, .y = area.y, .width = measured.range, .height = area.height};
       result.range_visible = true;
+    }
+
+    return result;
+  }
+};
+
+}
+}
+
+// Interface: presentation/mode_bar_geometry.cppm
+export {
+namespace telar::gui {
+
+struct ModeBarMeasurements {
+  static constexpr std::size_t capacity = 16;
+  float title = 0;
+  std::array<HistoryHintMeasurements, capacity> hints{};
+  std::size_t count = 0;
+};
+
+// The mode's badge, then its key hints in the history footer's style, as many whole ones as fit.
+struct ModeBarGeometry {
+  static constexpr float title_gap = 6;
+  static constexpr float hint_gap = 2;
+
+  Rect title;
+  std::array<HistoryHintGeometry, ModeBarMeasurements::capacity> hints{};
+  std::size_t count = 0;
+
+  [[nodiscard]] inline static ModeBarGeometry derive(Rect area, ChromeMetrics chrome, const ModeBarMeasurements &measured) noexcept {
+    ModeBarGeometry result;
+    if (area.empty()) {
+      return result;
+    }
+
+    const auto height = HistoryHintGeometry::keyHeight(chrome, area.height);
+    result.title = {.x = area.x, .y = area.y + std::floor((area.height - height) / 2), .width = std::min(measured.title, area.width), .height = height};
+    auto x = result.title.right() + chrome.px(title_gap);
+    const auto available = std::min(measured.count, measured.hints.size());
+    for (std::size_t index = 0; index < available; ++index) {
+      const auto width = HistoryHintGeometry::width(chrome, measured.hints[index]);
+      if (x + width > area.right()) {
+        break;
+      }
+
+      result.hints[index] = HistoryHintGeometry::derive({.x = x, .y = area.y, .width = width, .height = area.height}, chrome, measured.hints[index]);
+      ++result.count;
+      x += width + chrome.px(hint_gap);
     }
 
     return result;
