@@ -41,7 +41,6 @@ RuntimeConnection::RuntimeConnection(const char *path, bool negotiate)
       throw SystemError{"Runtime socket belongs to another user", EACCES};
     }
 
-    setCloseOnExec(client_.descriptor());
     if (negotiate) {
       client_.handshake();
     }

@@ -17,6 +17,7 @@ module;
 #include <new>
 
 #include <cerrno>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
@@ -1596,8 +1597,31 @@ namespace telar {
     const char *message;
   };
 
+  // Owns its socket: closed when the client goes, moved but never copied, and never inherited
+  // by a program the process runs.
   class Client final {
   public:
+    Client() = default;
+    Client(const Client &) = delete;
+    Client &operator=(const Client &) = delete;
+
+    inline Client(Client &&other) noexcept
+        : _address(other._address),
+          _fd(std::exchange(other._fd, -1)) {}
+
+    inline Client &operator=(Client &&other) noexcept {
+      if (this != &other) {
+        deinit();
+        _address = other._address;
+        _fd = std::exchange(other._fd, -1);
+      }
+      return *this;
+    }
+
+    inline ~Client() {
+      deinit();
+    }
+
     inline static Client init(const char *socket_path) _throw(SocketError) {
       Client client{};
       client._address.sun_family = AF_UNIX;
@@ -1609,7 +1633,16 @@ namespace telar {
 
       std::memcpy(client._address.sun_path, socket_path, path_length + 1);
 
+#ifdef SOCK_CLOEXEC
+      client._fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
+      // Without SOCK_CLOEXEC a fork between these two calls can still inherit it.
       client._fd = socket(AF_UNIX, SOCK_STREAM, 0);
+      if (client._fd >= 0 && fcntl(client._fd, F_SETFD, FD_CLOEXEC) < 0) {
+        client.deinit();
+        throw SocketError{"Error configuring socket"};
+      }
+#endif
       if (client._fd < 0) {
         throw SocketError{"Error opening socket"};
       }
