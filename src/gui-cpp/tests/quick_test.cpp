@@ -670,6 +670,110 @@ private:
     QCOMPARE(client_->error(), QString{});
   }
 
+  // A program in a pane hands the window a document: it covers the pane while the program
+  // runs, scrolls by key, and goes away when the program quits.
+  Q_SLOT void nativeDocumentCoversThePane() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    auto *terminal = terminalIn(window_->contentItem());
+    QVERIFY(terminal != nullptr);
+    terminal->forceActiveFocus();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QFile source{directory.filePath(QStringLiteral("document.md"))};
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    QByteArray markdown = "# Native document\n\nSome **strong** text, `code` and a [link](https://example.com).\n\n"
+                          "> [!NOTE]\n> A callout.\n\n| Name | Value |\n| :--- | ----: |\n| one | 1 |\n\n```sh\necho code\n```\n\n";
+    for (int index = 0; index < 60; ++index) {
+      markdown += "- item " + QByteArray::number(index) + "\n";
+    }
+    source.write(markdown);
+    source.close();
+    const auto pane_id = firstPane()->id;
+    const auto command = QStringLiteral("'%1' render markdown --format native --pager '%2'\r").arg(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), source.fileName());
+    QVERIFY(client_->input(pane_id, command.toUtf8()));
+    QTRY_VERIFY_WITH_TIMEOUT(firstPane()->document_shown, runtime_wait_ms);
+    const auto named = [](this const auto &self, QQuickItem *item, QStringView name) -> QQuickItem * {
+      if (item->objectName() == name) {
+        return item;
+      }
+      for (auto *child : item->childItems()) {
+        if (auto *found = self(child, name)) {
+          return found;
+        }
+      }
+      return nullptr;
+    };
+    auto *view = named(window_->contentItem(), u"documentView");
+    auto *list = named(window_->contentItem(), u"documentList");
+    QVERIFY(view != nullptr && list != nullptr);
+    QTRY_VERIFY(view->isVisible() && list->property("count").toInt() == static_cast<int>(firstPane()->document.blocks.size()));
+
+    const auto top = list->property("contentY").toReal();
+    QKeyEvent down{QEvent::KeyPress, Qt::Key_J, Qt::NoModifier, QStringLiteral("j")};
+    QCoreApplication::sendEvent(terminal, &down);
+    QTRY_VERIFY(list->property("contentY").toReal() > top);
+
+    QKeyEvent quit{QEvent::KeyPress, Qt::Key_Q, Qt::NoModifier, QStringLiteral("q")};
+    QCoreApplication::sendEvent(terminal, &quit);
+    QTRY_VERIFY_WITH_TIMEOUT(!firstPane()->document_shown, runtime_wait_ms);
+    QTRY_VERIFY(!view->isVisible());
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  // A program prints a document's text between the sequences that begin and end it: the window
+  // draws the document in place of those rows, in the rows it takes, and the shell goes on below.
+  Q_SLOT void inlineDocumentTakesThePlaceOfItsRows() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    auto *terminal = terminalIn(window_->contentItem());
+    QVERIFY(terminal != nullptr);
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QFile source{directory.filePath(QStringLiteral("inline.md"))};
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    source.write("# Inline document\n\nSome **strong** text and `code`.\n\n- one\n- two\n\n| Name | Value |\n| :--- | ----: |\n| one | 1 |\n");
+    source.close();
+    const auto pane_id = firstPane()->id;
+    const auto command = QStringLiteral("clear; '%1' render markdown --format native '%2'; printf 'AFTER_INLINE\\n'\r").arg(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), source.fileName());
+    QVERIFY(client_->input(pane_id, command.toUtf8()));
+    const auto placed = [&] {
+      const auto documents = terminal->property("documents").toList();
+      return documents.size() == 1 && documents.front().toMap().value(QStringLiteral("placed")).toBool();
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(placed(), runtime_wait_ms);
+    const auto &document = firstPane()->inline_documents.front();
+    QVERIFY(document.shown && document.view_rows > 0 && document.rows > 0);
+    QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("AFTER_INLINE")), runtime_wait_ms);
+
+    // A document taller than the pane, printed at its end, leaves the view at the end: the rows
+    // after it show, and nothing waits below.
+    QFile tall{directory.filePath(QStringLiteral("tall.md"))};
+    QVERIFY(tall.open(QIODevice::WriteOnly));
+    for (int section = 0; section < 12; ++section) {
+      tall.write("## Section " + QByteArray::number(section) + "\n\nA paragraph long enough to wrap in a narrow pane, with **strong** text.\n\n- one\n- two\n\n");
+    }
+    tall.close();
+    const auto tall_command = QStringLiteral("'%1' render markdown --format native '%2'; printf 'AFTER_TALL\\n'\r").arg(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), tall.fileName());
+    QVERIFY(client_->input(pane_id, tall_command.toUtf8()));
+    QTRY_VERIFY_WITH_TIMEOUT(firstPane()->inline_documents.size() == 2 && firstPane()->inline_documents.back().view_rows > static_cast<std::uint32_t>(firstPane()->screen.rows()), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("AFTER_TALL")), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(terminal->property("rowsBelow").toInt(), 0, runtime_wait_ms);
+    const auto cursor_row = terminal->property("cursorRow").toInt();
+    QVERIFY2(cursor_row >= 0 && cursor_row < static_cast<int>(firstPane()->screen.rows()), qPrintable(QString::number(cursor_row)));
+    // Read from the top, the way back to the end is the jump the view offers.
+    QVERIFY(QMetaObject::invokeMethod(terminal, "scrollToFraction", Q_ARG(qreal, 0.0), Q_ARG(bool, false)));
+    QTRY_VERIFY_WITH_TIMEOUT(terminal->property("rowsBelow").toInt() > 0, runtime_wait_ms);
+    QVERIFY(QMetaObject::invokeMethod(terminal, "scrollToEnd"));
+    QTRY_COMPARE_WITH_TIMEOUT(terminal->property("rowsBelow").toInt(), 0, runtime_wait_ms);
+
+    // Once the text they stand for is erased, scrollback and screen, the documents go and the rows
+    // show what they hold.
+    QVERIFY(client_->input(pane_id, QByteArrayLiteral("printf '\\033[3J\\033[2J\\033[HSCREEN_CLEARED\\n'\r")));
+    QTRY_VERIFY_WITH_TIMEOUT(firstPane()->inline_documents.empty() && terminal->property("documents").toList().isEmpty(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("SCREEN_CLEARED")), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(terminal->property("cursorRow").toInt(), static_cast<int>(firstPane()->screen.cursor().y), runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void keyRestoresCursorBlinkPhase() {
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
     auto *terminal = terminalIn(window_->contentItem());

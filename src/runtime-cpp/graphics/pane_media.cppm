@@ -1,6 +1,7 @@
 module;
 #include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
+#include "telar_render/sequence.hpp"
 #include <unistd.h>
 #include <cerrno>
 #include <limits.h>
@@ -434,7 +435,12 @@ public:
     return true;
   }
 
+  // Documents stream past the media terminal, which ignores them, instead of being buffered
+  // whole: the interactive terminal keeps them.
   inline bool streamable(control::Sequence sequence) const noexcept {
+    if (sequence.kind == control::Kind::osc && sequence.body().starts_with(::telar::render::sequence_begin.substr(0, ::telar::render::sequence_begin.find(';') + 1))) {
+      return true;
+    }
     return sequence.kind != control::Kind::apc && control::streamable(sequence);
   }
 

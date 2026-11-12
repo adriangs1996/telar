@@ -168,7 +168,7 @@ terminal and of syntax-highlighted code.
 ### `theme`
 
 A preset name, or a table built with `telar.theme`. The default is
-`cybervenom`.
+`shade`.
 
 ```lua
 theme = "kanagawa"
@@ -178,8 +178,8 @@ The presets are:
 
 | Preset | Notes |
 | --- | --- |
-| `cybervenom` | The default: a `#211b2f` background with `#aa87f5` accents. |
-| `shade` | Neutral grays with green accents. `osaka-jade` is an alias. |
+| `shade` | The default: Nord on a `#191c22` polar night, with `#88c0d0` accents. |
+| `cybervenom` | A `#211b2f` background with `#aa87f5` accents. |
 | `vesper` | |
 | `catppuccin` | Catppuccin Mocha. `catppuccin-mocha` and `mocha` are aliases. |
 | `tokyo-night` | `tokyonight` is an alias. |
@@ -247,6 +247,10 @@ table with `fg`, `italic` and `bold`. The roles are:
 `builtin_constant`, `builtin`, `func`, `type`, `parameter`, `property`,
 `namespace`, `operator`, `punctuation`.
 
+The prompt editor highlights shell commands with these roles: commands use `func`,
+keywords `keyword`, strings `string`, options and variables `parameter`, operators
+`operator` and comments `comment`.
+
 ### `client.appearance`
 
 Separate themes for the system's light and dark appearance. Telar switches
@@ -302,13 +306,24 @@ Number. Extra logical pixels added to each cell's width. Default `0`, from
 
 ### `gui.font.thicken`
 
-Boolean. Thicker glyph strokes through macOS font smoothing. Default `false`.
-(macOS only)
+Boolean. Thicker glyph strokes. Default `true`. With `hinting = "native"`
+on macOS this is the platform's font smoothing; otherwise the outlines are
+dilated by up to half a pixel.
 
 ### `gui.font.thicken_strength`
 
 Integer. How strong `thicken` is, from `0` (lightest) to `255` (the
-default). Has an effect only with `thicken = true`. (macOS only)
+default). Has an effect only with `thicken = true`.
+
+### `gui.font.hinting`
+
+String. How the terminal font fits the pixel grid. Default `"full"`, which
+aligns both vertical stems and horizontal features such as the baseline,
+x-height and bars; `"light"` aligns only the horizontal ones and `"native"`
+keeps the platform's own rendering. `"light"` and `"full"` sharpen edges, most
+visibly at a display scale of 1, and use FreeType on every platform, so on
+macOS `thicken` then dilates outlines instead of using font smoothing. Symbol
+and fallback faces keep their native rendering.
 
 ## Keybindings
 
@@ -714,19 +729,21 @@ substrings are not recorded. Same limits as `command_filters`.
 `client.prompt` chooses who edits commands. In `"classic"` mode the shell's own
 prompt and line editor work as in any terminal. In `"telar"` mode, a pane whose
 shell telar [integrated](#runtimeshell_integration) gets telar's editor while
-the shell waits for a command: an island over the bottom of the pane, drawn in
-the terminal's font, that hides the shell's prompt row and sends the finished
-command to the shell as one paste followed by Enter.
+the shell waits for a command: a line in the scrollback, drawn in the
+terminal's font over the shell's prompt rows and laid out as the separator the
+command becomes when it runs. It sends the finished command to the shell as one
+paste followed by Enter. When the prompt's rows are out of view, the line docks
+at the bottom of the pane.
 
 ```lua
 client = {
-  prompt = { mode = "telar", keymap = "vim", skin = "halo" },
+  prompt = { mode = "telar", keymap = "vim" },
 }
 ```
 
-What the island does:
+What the line does:
 
-- **Editing.** The command wraps at the island's width and grows to `max_lines`
+- **Editing.** The command wraps at the pane's width and grows to `max_lines`
   rows before it scrolls, so nothing is cut. Enter runs a complete command and
   continues an incomplete one on a new line (an open quote, a trailing `|` or
   `\`, `do` without `done`, a fish block without `end`), as the shell would.
@@ -745,26 +762,28 @@ What the island does:
   commands on the PATH the shell reported, git branches, remotes and stashes,
   hosts from `~/.ssh/config`, Makefile targets, justfile recipes, package.json
   scripts, compose services and your processes. More than
-  one choice opens a menu above the command: Tab and the arrows move through it,
+  one choice opens a menu under the command: Tab and the arrows move through it,
   Enter takes a choice, Escape closes it.
 - **Suggestions.** The rest of a recent command that starts like the line
   appears dimmed after the caret, from what you typed in any pane and the
   [history](/docs/history). Right or Ctrl-E takes it, Alt-F its next word.
-- **While a command runs**, the island becomes a pill with the command, the
-  last line it printed, how long it has run, and the program's progress when it
-  reports one (OSC 9;4). When it finishes, the island flashes green after a
-  success and shakes after a failure, and shows the outcome for a moment: the
-  exit status, the command and its duration, with **view error** after a
-  failure. What you type queues the next command; Enter arms it to run when the current one
-  succeeds, and a failure leaves it as a draft. The terminal's signal and
+- **While a command runs**, its separator shows it: the ring turns, a light
+  runs along the rule and, once it has run for a moment, its time and the key
+  that interrupts it appear. A command that ends within that moment never takes
+  the line away: the line waits under its output, where the next prompt will
+  stand. When a command ends, its separator flashes in the colour of how it
+  ended, and a failure shakes it; back at the prompt, a failed command's
+  separator offers **view error**, which selects it. What you type while it
+  runs queues the next command on a line under the output; Enter arms it to
+  run when the current one succeeds, and a failure leaves it as a draft. The terminal's signal and
   end-of-file keys (Ctrl-C, Ctrl-\, Ctrl-Z, Ctrl-D, as `stty` sets them)
   still reach the program, and so does typing when the program seems to ask a
   question. Alt-Enter sends the line to the program instead.
-- **Passwords.** When a program reads with echo off, as `sudo` does, the island
-  shows a lock and a dot per key; the keys go to the program and nowhere else.
+- **Passwords.** When a program reads with echo off, as `sudo` does, a line
+  under its question shows a lock, the program that asks and a dot per key; the
+  keys go to the program and nowhere else.
 - **Commands in the scrollback.** Each command's prompt turns into a separator:
-  how it ended, its first line and how long it ran. On Enter the command flies
-  to its separator. While its output is read, its separator stays on the top
+  how it ended, its first line and how long it ran. While its output is read, its separator stays on the top
   row. The pane's right edge maps the scrollback, a segment per command in the
   colour of how it ended: a click on one selects its command, as a click on
   its separator does, and the view drags. The chevron on a separator folds the
@@ -781,18 +800,18 @@ What the island does:
   switches to the whole scrollback. `v` starts copy mode on its output and `V`
   selects all of it; `Y` copies its output and `yc` its command. Esc, `q`,
   `i`, `a`, `I`, `A` or any other key go back to the prompt. Copy mode keeps
-  the island in place of the shell's prompt.
+  the line in place of the shell's prompt.
 - **Full-screen and raw programs** (vim, fzf, agents' interfaces) get the
-  keyboard exactly as in classic mode, and the island disappears.
+  keyboard exactly as in classic mode, and the line disappears.
 - **Context.** The pane header shows the directory and, in a git repository,
   the branch, the number of changed files and how far the branch is ahead of
   or behind its upstream. The runtime reads the repository itself, without
-  running git. A change of directory or branch is announced over the island for
-  a moment.
+  running git. The row above the command shows the directory and branch too,
+  and announces a change of either in the accent colour for a moment.
 - **SSH.** A shell that `ssh` reached with
-  [`runtime.ssh_integration`](#runtimessh_integration) gets the island too, with
-  its history suggestions and the specs' own choices. The island shows the
-  host as a violet chip with the link's round trip, timed from what you type
+  [`runtime.ssh_integration`](#runtimessh_integration) gets the line too, with
+  its history suggestions and the specs' own choices. The line shows the host
+  as a violet chip with the link's round trip, timed from what you type
   reaching the remote line editor to its echo, and the directory the remote
   shell reports, never the local one. The `ssh` command's separator stays open
   while the session lasts, naming the host and counting its time, and ends
@@ -850,24 +869,25 @@ String. `"emacs"` (the default), readline's bindings, or `"vim"`: normal,
 insert and visual modes with counts, operators (`d`, `c`, `y`, `>`, `<`, `~`),
 motions (`w`, `b`, `e`, `f`, `t`, `%`, `gg`, `G` and the rest), text objects
 (`iw`, `a"`, `i(` and the rest), named registers, the system clipboard in `"+`,
-undo, redo and `.`. The mark turns to `❮` in normal mode, and a label at the end
-of the editor names the mode as Neovim does: `INSERT`, `NORMAL`, `VISUAL` or
-`V-LINE`. Beside it the island shows the keys that act on what is on screen:
+undo, redo and `.`. The mark turns to `❮` in normal mode, and a chip at the end
+of the row above the command names the mode as Neovim does: `INSERT`, `NORMAL`,
+`VISUAL` or `V-LINE`. At the end of the command the line shows the keys that act
+on what is on screen:
 `→` and `⌥→` to take a suggestion or its next word, and `⇥`, `⏎` and `esc` while
 the completion menu is open.
 
 ### `client.prompt.skin`
 
-String. `"halo"` (the default), an opaque surface with an accent border;
-`"ink"`, inverted colours; or `"glass"`, which blurs the output behind the
-island and is the only one that costs an extra GPU pass.
+Accepted for older configurations and ignored: the line has no surface of its
+own to style.
 
 ### `client.prompt.motion`
 
-String. `"spring"` (the default), `"ease"` or `"none"`: how the island changes
-size. `"none"` also stills its other movement: the light that runs around the
-`"halo"` border while a command runs, the glow under the island, the command
-rising when it runs, and the flash or shake when it ends.
+String. `"spring"` (the default), `"ease"` or `"none"`. `"spring"` and
+`"ease"` animate the line and the separators alike; `"none"` stills them: the
+line's parts fading in and out, typed characters rising and completions
+sweeping in, the running separator's ring, light and rolling clock, and the
+flash or shake when a command ends.
 
 ### `client.prompt.ghost`
 
@@ -875,12 +895,12 @@ Boolean. Show suggestions from the history. Default `true`.
 
 ### `client.prompt.max_lines`
 
-Integer. Rows the island grows to before it scrolls, from `1` to `64`.
+Integer. Rows the command grows to before it scrolls, from `1` to `64`.
 Default `12`.
 
 ### `client.prompt.bindings`
 
-A list of keys for the island's editor, on top of the keymap. Each binding is a
+A list of keys for the line's editor, on top of the keymap. Each binding is a
 table with `keys`, one chord in the [key syntax](#key-syntax); `action`; and,
 with the vim keymap, `mode`: `"insert"` (the default) or `"normal"`. A binding
 replaces whatever the keymap does with that chord in that mode.

@@ -109,17 +109,17 @@ Official sources and usage terms:
 Telar's own brand is a weaver: a spider whose body is a terminal with a
 `>_` face and whose feet end in cursors, hanging from the thread it spins.
 Telar pulls the threads of many sessions, panes and machines, as the spider
-does with its web. The colors are Cybervenom's, Telar's default theme: the
-`#1a1627`..`#312b3e` surfaces, `#aba8b6`..`#e5e3ee` for the spider and the
-`#aa87f5` accent for what is live. The three sources are drawn for different
+does with its web. The colors are Shade's, Telar's default theme: the
+`#14171d`..`#2e3440` surfaces, `#b4bccb`..`#eceff4` for the spider and the
+`#88c0d0` accent for what is live. The three sources are drawn for different
 sizes:
 
 - `telar-icon.svg` (SHA-256
-  `07940315b2ffc3672ba2745ff2d93fd6234c7edbdbb3559eaf0f809a797126b5`), the
-  weaver in her web with three caught terminals, the live one in violet, for
+  `06cd5b95ad690fafcff9e0b4e300381b944311be3fee2c76ae094372bcad16f9`), the
+  weaver in her web with three caught terminals, the live one in frost cyan, for
   128 px and up.
 - `telar-mark.svg` (SHA-256
-  `0d7c5158152fd5242707a7a6d963ba0b77a9da8afe8eea796277a67cd838bcf2`), the
+  `828181318fd8fbef3dd6982a5106864e607355c69560a2f306e6abbb10114664`), the
   weaver alone with heavier legs and outline, for 64 px and down.
 - `telar-mark-mono.svg` (SHA-256
   `e7c26f2fe3836ac663dd4e74a6eebe5c231545a34c2f9f43fe6b1b4fb8a19ab3`), the
@@ -128,15 +128,15 @@ sizes:
 `telar-mark-<theme>.svg` repaint `telar-mark.svg` with each built-in theme's
 colors, so the top bar mark follows the active theme: the tile takes the
 theme's background, the spider its text tones and the thread, feet and cursor
-its accent. Cybervenom, and any theme without its own file, uses
-`telar-mark.svg`. One per theme: `shade`, `vesper`, `catppuccin`,
+its accent. Any theme without its own file uses `telar-mark.svg`, in Shade's
+colors. One per theme: `shade`, `cybervenom`, `vesper`, `catppuccin`,
 `tokyo-night`, `pierre-dark`, `pierre-dark-soft`, `kanagawa`,
 `kanagawa-dragon` and `terminal`.
 
 `telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
-`b962458d3f1e80a99a42b81548267d4d79590d2b79a9bda2e69db0878cca7514`, and
+`97993c9dd5df544d6356ba483e8fad68df8ef21142c34d69b85be1178d357d91`, and
 `telar-mark-64.rgba` its raw straight-alpha RGBA, SHA-256
-`be1a5a76d396faec7de27dbb6a4e2f12808f84f8d5abdd16ba91b6126c780e90`. The top
+`8bf068f5991f3330ba1a265b71e53b2d8e4764bc6777085023b7b43bd7ab0035`. The top
 bar box-filters it into the icon atlas at cell size, sixteen
 premultiplied-alpha bilinear taps per pixel, and keeps its alpha so the host
 composes it over whatever it paints behind the bar.

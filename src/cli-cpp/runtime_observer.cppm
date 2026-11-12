@@ -245,6 +245,7 @@ inline constexpr std::array server_messages{
     NamedValue{.name = "command_spec", .value = static_cast<std::uint64_t>(ServerTag::command_spec)},
     NamedValue{.name = "pane_rows", .value = static_cast<std::uint64_t>(ServerTag::pane_rows)},
     NamedValue{.name = "pane_scrollback", .value = static_cast<std::uint64_t>(ServerTag::pane_scrollback)},
+    NamedValue{.name = "pane_document", .value = static_cast<std::uint64_t>(ServerTag::pane_document)},
 };
 
 inline constexpr std::array agent_statuses{

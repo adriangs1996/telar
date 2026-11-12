@@ -34,7 +34,7 @@ void main() {
         return;
     }
 
-    float radius = outline.x < 0.0 && pixel.y > extent.y * 0.5 ? 0.0 : abs(outline.x);
+    float radius = outline.x;
     float distance = roundedDistance(pixel, extent, radius);
     float outer = 1.0 - clamp(distance + 0.5, 0.0, 1.0);
     float inner = 1.0 - clamp(distance + outline.y + 0.5, 0.0, 1.0);

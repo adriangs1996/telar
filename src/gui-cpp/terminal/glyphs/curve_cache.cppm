@@ -550,9 +550,27 @@ public:
     rising_diagonal,
     falling_diagonal,
     diagonal_cross,
+    // Powerline separators U+E0B0..U+E0BF, in code point order. They span the whole cell
+    // so they meet the cell background at any line height.
+    powerline_right_triangle,
+    powerline_right_angle,
+    powerline_left_triangle,
+    powerline_left_angle,
+    powerline_right_half_circle,
+    powerline_right_arc,
+    powerline_left_half_circle,
+    powerline_left_arc,
+    powerline_lower_left_triangle,
+    powerline_backslash,
+    powerline_lower_right_triangle,
+    powerline_forwardslash,
+    powerline_upper_left_triangle,
+    powerline_forwardslash_redundant,
+    powerline_upper_right_triangle,
+    powerline_backslash_redundant,
   };
 
-  static constexpr std::size_t shape_count = 7;
+  static constexpr std::size_t shape_count = 23;
 
   BoxCurve(Shape shape, Rect cell, float thickness);
   [[nodiscard]] static std::optional<Shape> shape(std::uint32_t codepoint) noexcept;
@@ -569,14 +587,19 @@ private:
     std::size_t bottom = 0;
   };
 
+  void powerline(Shape shape) noexcept;
+  void halfEllipse(bool bulges_right) noexcept;
   [[nodiscard]] PixelBounds rasterBounds(const AlphaRaster &raster, Point scale) const noexcept;
   [[nodiscard]] float distanceSquared(Point point) const noexcept;
+  [[nodiscard]] bool contains(Point point) const noexcept;
   [[nodiscard]] static float segmentDistance(Point point, const std::array<Point, 2> &segment) noexcept;
 
   BoxMetrics metrics_;
   std::array<Point, point_capacity> points_{};
   std::size_t count_ = 0;
   bool cross_ = false;
+  // Filled shapes close the polygon and cover its interior; the others stroke a polyline.
+  bool filled_ = false;
 };
 
 }

@@ -38,6 +38,8 @@ static_assert(true);
 #include "../terminal/screen.hpp"
 #include <QColor>
 #include <QCommandLineParser>
+#include <QFile>
+#include <QStringList>
 #include <QGuiApplication>
 #include <QImage>
 #include <QJsonDocument>
@@ -75,6 +77,7 @@ import telar.gui.core.metrics;
 import telar.gui.fonts.face;
 import telar.gui.graphics.texture_cache;
 import telar.gui.terminal.copy_mode;
+import telar.gui.core.unicode_scalar;
 
 namespace {
 
@@ -84,6 +87,7 @@ using namespace telar::gui::qt;
 
 constexpr unsigned terminal_columns = 256;
 constexpr unsigned terminal_rows = 52;
+constexpr std::size_t utf8_slot = 4;
 constexpr unsigned default_iterations = 12;
 constexpr unsigned default_warmup = 3;
 constexpr int timeout_ms = 60'000;
@@ -93,6 +97,15 @@ constexpr float terminal_letter_spacing = -0.5F;
 constexpr std::uint8_t terminal_thicken_strength = 250;
 
 struct Options {
+  float font_size = terminal_font_size;
+  float line_height = terminal_line_height;
+  float letter_spacing = terminal_letter_spacing;
+  unsigned strength = terminal_thicken_strength;
+  FontHinting hinting = FontHinting::native;
+  QColor foreground;
+  QColor background = Qt::black;
+  // Lines rendered once with `foreground` on `background` instead of the timed workload.
+  QStringList text;
   unsigned iterations = default_iterations;
   unsigned warmup = default_warmup;
   qreal scale = 1;
@@ -118,6 +131,14 @@ Options parseOptions(const QGuiApplication &application) {
   parser.addOption({"floating-window", "Use a tool window for window managers that tile normal windows"});
   parser.addOption({"snapshot-workload", "Snapshot changes: full, sparse, retained", "workload", "full"});
   parser.addOption({"colored-backgrounds", "Draw changing row backgrounds with default-color gaps"});
+  parser.addOption({"font-size", "Font size in points", "size", QString::number(terminal_font_size)});
+  parser.addOption({"line-height", "Line height factor", "factor", QString::number(terminal_line_height)});
+  parser.addOption({"letter-spacing", "Letter spacing in points", "points", QString::number(terminal_letter_spacing)});
+  parser.addOption({"strength", "Thicken strength, 0 to 255", "value", QString::number(terminal_thicken_strength)});
+  parser.addOption({"text", "Render the lines of this file once", "path"});
+  parser.addOption({"hinting", "Grid fitting: native, light or full", "mode", font_hinting_names.at(std::to_underlying(FontConfiguration{}.hinting))});
+  parser.addOption({"foreground", "Text color for --text", "#rrggbb", "#c4c4c0"});
+  parser.addOption({"background", "Background color", "#rrggbb", "#000000"});
   parser.process(application);
   bool iterations_valid = false;
   bool warmup_valid = false;
@@ -139,6 +160,38 @@ Options parseOptions(const QGuiApplication &application) {
     throw std::invalid_argument{"Invalid terminal scene probe counts or scale"};
   }
 
+  bool size_valid = false;
+  bool height_valid = false;
+  bool spacing_valid = false;
+  bool strength_valid = false;
+  options.font_size = parser.value("font-size").toFloat(&size_valid);
+  options.line_height = parser.value("line-height").toFloat(&height_valid);
+  options.letter_spacing = parser.value("letter-spacing").toFloat(&spacing_valid);
+  options.strength = parser.value("strength").toUInt(&strength_valid);
+  options.foreground = QColor::fromString(parser.value("foreground"));
+  options.background = QColor::fromString(parser.value("background"));
+  if (!size_valid || !height_valid || !spacing_valid || !strength_valid || options.strength > std::numeric_limits<std::uint8_t>::max() || !options.foreground.isValid() || !options.background.isValid()) {
+    throw std::invalid_argument{"Invalid terminal scene probe font or colors"};
+  }
+
+  const auto hinting = parser.value("hinting").toStdString();
+  const auto *const found = std::ranges::find(font_hinting_names, hinting);
+  if (found == font_hinting_names.end()) {
+    throw std::invalid_argument{"Invalid --hinting"};
+  }
+
+  options.hinting = static_cast<FontHinting>(found - font_hinting_names.begin());
+  if (parser.isSet("text")) {
+    QFile file{parser.value("text")};
+    if (!file.open(QIODevice::ReadOnly)) {
+      throw std::invalid_argument{"Unreadable --text file"};
+    }
+
+    options.text = QString::fromUtf8(file.readAll()).split(u'\n', Qt::SkipEmptyParts);
+    options.iterations = 1;
+    options.warmup = 0;
+  }
+
   if (options.snapshot_workload != "full" && options.snapshot_workload != "sparse" && options.snapshot_workload != "retained") {
     throw std::invalid_argument{"Invalid snapshot workload"};
   }
@@ -151,24 +204,28 @@ public:
   TerminalProbe(QQuickWindow &window, Options options)
       : QQuickItem(window.contentItem()),
         options_(std::move(options)),
+        columns_(options_.text.isEmpty() ? terminal_columns : static_cast<unsigned>(std::ranges::max(options_.text, {}, &QString::size).size())),
+        rows_(options_.text.isEmpty() ? terminal_rows : static_cast<unsigned>(options_.text.size())),
         screen_(memory_),
         graphics_(memory_, graphics_budget_) {
     setFlag(ItemHasContents);
     WindowImages::forWindow(window);
     configuration_.font.family.assign(options_.family.toStdString());
-    configuration_.font.size = terminal_font_size;
-    configuration_.font.line_height = terminal_line_height;
-    configuration_.font.letter_spacing = terminal_letter_spacing;
+    configuration_.font.size = options_.font_size;
+    configuration_.font.line_height = options_.line_height;
+    configuration_.font.letter_spacing = options_.letter_spacing;
     configuration_.font.thicken = options_.thicken;
-    configuration_.font.thicken_strength = terminal_thicken_strength;
+    configuration_.font.thicken_strength = static_cast<std::uint8_t>(options_.strength);
+    configuration_.font.hinting = options_.hinting;
     auto asset = std::make_shared<const FontAsset>(loadFontData(configuration_.font));
     collection_ = std::make_shared<const FontCollection>(FontCollection{.primary = std::move(asset)});
     fonts_ = ResidentFonts::shared(collection_);
     resolved_ = FontResolver::resolve(fonts_->face(fonts::FontRole::primary), configuration_.font, options_.scale);
-    setSize({terminal_columns * resolved_.font.cell.width(), terminal_rows * resolved_.font.cell.height()});
-    configuration_.theme.background = Color{.a = 1};
-    characters_.resize(static_cast<std::size_t>(terminal_columns) * terminal_rows);
-    cells_.resize(characters_.size());
+    setSize({columns_ * resolved_.font.cell.width(), rows_ * resolved_.font.cell.height()});
+    configuration_.theme.background = Color{.r = static_cast<float>(options_.background.redF()), .g = static_cast<float>(options_.background.greenF()), .b = static_cast<float>(options_.background.blueF()), .a = 1};
+    row_flags_.resize(rows_);
+    characters_.resize(static_cast<std::size_t>(columns_) * rows_ * utf8_slot);
+    cells_.resize(static_cast<std::size_t>(columns_) * rows_);
   }
 
   [[nodiscard]] bool completed() const noexcept {
@@ -212,7 +269,7 @@ protected:
         return root.release();
       }
 
-      const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"colored_backgrounds", options_.colored_backgrounds}, {"columns", static_cast<int>(terminal_columns)}, {"rows", static_cast<int>(terminal_rows)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
+      const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"colored_backgrounds", options_.colored_backgrounds}, {"columns", static_cast<int>(columns_)}, {"rows", static_cast<int>(rows_)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
       std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
     } catch (...) {
       failure_ = std::current_exception();
@@ -224,7 +281,28 @@ protected:
   }
 
 private:
+  void prepareText() {
+    const CellColor foreground{.kind = CellColor::Kind::rgb, .channels = {static_cast<Byte>(options_.foreground.red()), static_cast<Byte>(options_.foreground.green()), static_cast<Byte>(options_.foreground.blue())}};
+    for (unsigned row = 0; row < rows_; ++row) {
+      // One code point per cell; each cell owns a four-byte UTF-8 slot.
+      const auto line = options_.text[static_cast<qsizetype>(row)].toUcs4();
+      for (unsigned column = 0; column < columns_; ++column) {
+        const auto offset = (row * columns_) + column;
+        const auto bytes = Utf8Scalar::encode(column < static_cast<unsigned>(line.size()) ? line[column] : U' ');
+        const auto slot = std::span{characters_}.subspan(offset * utf8_slot, utf8_slot);
+        std::ranges::transform(bytes.view(), slot.begin(), [](char byte) { return static_cast<Byte>(byte); });
+        cells_[offset] = {.width = CellWidth::single, .style = {.foreground = foreground}, .text = slot.first(bytes.view().size())};
+      }
+    }
+  }
+
   void prepareFrame(unsigned frame) {
+    if (!options_.text.isEmpty()) {
+      prepareText();
+      apply();
+      return;
+    }
+
     constexpr unsigned printable_first = 33;
     constexpr unsigned printable_count = 94;
     constexpr unsigned row_stride = 37;
@@ -249,6 +327,10 @@ private:
       }
     }
 
+    apply();
+  }
+
+  void apply() {
     encoded_.resize(CellRunCodec::encodedSize(cells_));
     const auto encoded = CellRunCodec::encode(cells_, encoded_);
     const FrameSpan span{.start = 0, .count = static_cast<std::uint32_t>(cells_.size()), .cells = encoded};
@@ -256,9 +338,9 @@ private:
     PaneFrame snapshot;
     snapshot.pane_id = 1;
     snapshot.frame_id = ++frame_id_;
-    snapshot.cols = terminal_columns;
-    snapshot.rows = terminal_rows;
-    snapshot.scroll.total_rows = terminal_rows;
+    snapshot.cols = columns_;
+    snapshot.rows = rows_;
+    snapshot.scroll.total_rows = rows_;
     snapshot.text_metadata = TextMetadata{.row_flags = row_flags_};
     snapshot.spans = spans;
     const auto started = std::chrono::steady_clock::now();
@@ -275,6 +357,8 @@ private:
   }
 
   Options options_;
+  unsigned columns_;
+  unsigned rows_;
   ApplicationAllocator memory_;
   Configuration configuration_;
   Screen<ApplicationAllocator> screen_;
@@ -287,7 +371,7 @@ private:
   // The cells view the characters stored beside them.
   tbc::view<std::vector<Cell>, tbc::lt::self> cells_;
   std::vector<Byte> encoded_;
-  std::array<Byte, terminal_rows> row_flags_{};
+  std::vector<Byte> row_flags_;
   QString preedit_;
   CellSelection selection_;
   std::uint64_t frame_id_ = 0;
@@ -310,7 +394,7 @@ int main(int argc, char **argv) {
     static_cast<void>(bundledFonts());
     QQuickWindow window;
     window.setFlag(Qt::Tool, options.floating_window);
-    window.setColor(Qt::black);
+    window.setColor(options.background);
     TerminalProbe probe{window, options};
     window.resize(static_cast<int>(probe.width()), static_cast<int>(probe.height()));
     bool captured = false;

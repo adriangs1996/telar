@@ -72,10 +72,6 @@ public:
     return total_bytes_;
   }
 
-  [[nodiscard]] bool cleanupPending() const noexcept {
-    return std::ranges::any_of(slots_, [](const auto &slot) { return slot && slot->retired; });
-  }
-
   [[nodiscard]] std::uint64_t ingressVersion() const noexcept {
     return ingress_version_;
   }

@@ -335,21 +335,6 @@ public:
     }
   }
 
-  inline void moveWordRight(bool extend) noexcept {
-    auto position = head_;
-    while (position < length_ && isSpace(bytes_[position])) {
-      ++position;
-    }
-    while (position < length_ && !isSpace(bytes_[position])) {
-      ++position;
-    }
-
-    head_ = position;
-    if (!extend) {
-      anchor_ = head_;
-    }
-  }
-
   [[nodiscard]] inline EditorView view(std::uint16_t width) {
     if (width == 0) {
       return {};

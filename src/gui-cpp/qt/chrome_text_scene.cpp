@@ -526,7 +526,7 @@ QSGNode *paintChromeText(QSGNode *previous, QQuickWindow &window, const ChromeTe
 }
 
 QSGNode *paintTerminalText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization) {
-  if (rasterization.optical) {
+  if (rasterization.configured()) {
     return paintText<true>(previous, window, paint, collection, rasterization);
   }
 

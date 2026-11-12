@@ -22,7 +22,7 @@ On macOS, `just install-gui` builds and installs the app ([details](#macos)):
 
 ```sh
 just install-gui
-open "$HOME/Applications/Telar C++ Preview.app"
+open "$HOME/Applications/Telar.app"
 ```
 
 On Linux, build the release archives ([how](#to-reproduce-a-release-build))
@@ -51,10 +51,11 @@ just install-gui    # bundle into ~/Applications, telar into ~/.local/bin
 ```
 
 `just install-gui` builds the runtime and the GUI in Release, stages them with
-`src/gui-cpp/tools/package_macos.py`, replaces
-`~/Applications/Telar C++ Preview.app` and links `~/.local/bin/telar` to the
-bundled CLI; both directories are recipe parameters. The release bundle,
-`Telar.app`, comes from `packaging/release/macos.sh`. A running runtime keeps
+`src/gui-cpp/tools/package_macos.py --release`, replaces
+`~/Applications/Telar.app` and links `~/.local/bin/telar` to the bundled CLI;
+both directories are recipe parameters. Published releases come from
+`packaging/release/macos.sh`, which also builds a distributable runtime and
+checks its linkage. A running runtime keeps
 its old executable until it is restarted, and hooks installed with
 `telar integration install` keep the path they were installed with.
 

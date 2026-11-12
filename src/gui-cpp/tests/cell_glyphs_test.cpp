@@ -30,7 +30,7 @@ void require(bool condition, const char *message) {
 }
 
 void parsing() {
-  for (const auto first : {Symbol::first_box, Symbol::first_block, Symbol::first_braille}) {
+  for (const auto first : {Symbol::first_box, Symbol::first_block, Symbol::first_braille, Symbol::first_powerline, Symbol::last_powerline}) {
     const auto bytes = Utf8Scalar::encode(first);
     const auto glyph = Symbol::parse(bytes.view());
     require(glyph && glyph->codepoint == first, "bare procedural codepoints must retain their identity");
@@ -39,6 +39,9 @@ void parsing() {
   for (const auto *text : {"x", "", "\xe2\xa0\x80\xcc\x81", "\xe2\xa0", "\xe2\xa0x", "\xe2\x16\x80"}) {
     require(!Symbol::parse(text), "incomplete, invalid and combining sequences must remain in the text path");
   }
+
+  require(Symbol::parse("\xee\x82\xb4")->kind == SymbolKind::powerline, "Powerline separators must leave the font path");
+  require(!Symbol::parse("\xee\x82\xaf") && !Symbol::parse("\xee\x83\x80"), "neighbouring private-use icons must stay in the font path");
 }
 
 template <typename Paint>
@@ -171,6 +174,37 @@ void curveRaster() {
   }
 }
 
+// Powerline half circles and triangles must reach the top and bottom of a tall cell, where
+// font glyphs stop at the em box and leave the line-height padding uncovered.
+void powerlineSpansTallCells() {
+  constexpr std::uint16_t width = 14;
+  constexpr std::uint16_t height = 42;
+  using Raster = std::array<std::uint8_t, std::size_t{width} * height>;
+  const auto raster = [](std::uint32_t codepoint) {
+    Raster pixels{};
+    BoxCurve{*BoxCurve::shape(codepoint), {.width = width, .height = height}, 1}.rasterize({.pixels = pixels, .stride = width, .width = width, .height = height});
+    return pixels;
+  };
+  const auto alpha = [](const Raster &pixels, std::size_t column, std::size_t row) {
+    return pixels[(row * width) + column];
+  };
+  constexpr std::uint8_t opaque = 255;
+  const auto right = raster(0xe0b4);
+  const auto left = raster(0xe0b6);
+  for (std::size_t row = 0; row < height; ++row) {
+    require(alpha(right, 0, row) > 0 && alpha(left, width - 1, row) > 0, "half circles must cover their flat edge along the whole cell height");
+    for (std::size_t column = 0; column < width; ++column) {
+      require(alpha(right, column, row) == alpha(left, width - 1 - column, row), "left and right half circles must mirror each other");
+    }
+  }
+
+  require(alpha(right, 0, 2) == opaque && alpha(right, 0, height - 3) == opaque && alpha(right, width - 2, height / 2) == opaque && alpha(right, width - 1, height / 2) > opaque / 2, "the half circle must be solid from its flat edge to the far edge");
+  const auto triangle = raster(0xe0b0);
+  require(alpha(triangle, 0, 2) == opaque && alpha(triangle, 0, height - 3) == opaque && alpha(triangle, width - 1, height / 2) > 0, "the triangle must span the cell from edge to tip");
+  const auto arc = raster(0xe0b5);
+  require(alpha(arc, width / 2, height / 2) == 0 && alpha(arc, width - 1, height / 2) > 0, "outlined separators must stroke without filling");
+}
+
 void invalidRasters() {
   constexpr std::uint8_t guard = 0xa5;
   constexpr std::size_t storage_capacity = 16;
@@ -260,6 +294,7 @@ int main() {
     boxGeometry();
     physicalBoxStroke();
     curveRaster();
+    powerlineSpansTallCells();
     invalidRasters();
     emptyCurvesClearActivePixels();
     curveCacheKeepsReferences();

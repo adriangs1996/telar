@@ -73,7 +73,7 @@ static_assert(true);
 #include "../qt/machine_client.hpp"
 #include "../qt/machine_client_key.hpp"
 #include "../qt/terminal_item.hpp"
-#include "../qt/prompt_island.hpp"
+#include "../qt/prompt_editor_item.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -261,7 +261,7 @@ class PromptWindowTest : public QObject {
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
 
     // A paste shows on the line at once, without a key after it.
-    const auto *editor = line->findChild<PromptIsland *>();
+    const auto *editor = line->findChild<PromptEditorItem *>();
     QVERIFY(editor != nullptr && editor->empty());
     application.paste(pane_id, QStringLiteral("echo pasted"));
     QVERIFY2(!editor->empty(), "the paste shows without another key");
@@ -298,16 +298,13 @@ class PromptWindowTest : public QObject {
     QCoreApplication::sendEvent(&terminal, &enter);
     QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::pane_command) > commands_before, wait_ms);
     QCOMPARE(runtime.count(ClientTag::pane_input), before);
-    // The command left at once; its output waits for the line to turn into its separator, and
-    // the terminal settles back meanwhile.
-    QVERIFY(line->property("flying").toBool() && terminal.outputHeld());
-    QCOMPARE(line->property("liftRows").toInt(), 0);
-    QTRY_VERIFY_WITH_TIMEOUT(!line->property("flying").toBool() && !terminal.outputHeld(), 1000);
     // The runtime receives the command whole and types it at the prompt itself.
     QCOMPARE(textView(runtime.last<PaneCommand>().text), std::string_view{"git log --oneline -n 3 | grep fix"});
 
     runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 3});
     QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane_id), prompt::Surface::running, wait_ms);
+    // Running, the line leaves and the terminal settles back under it.
+    QCOMPARE(line->property("liftRows").toInt(), 0);
     type(terminal, "make test");
     // The cursor sits after text, as a program asking a question leaves it: the keys go to the
     // program, and the separators show the key that interrupts it.
@@ -358,13 +355,13 @@ class PromptWindowTest : public QObject {
     constexpr std::string_view git_spec = R"(git = [ command ] ;
 command = "switch" : "Switch branches" | "status" : "Show the working tree status" | "stash" : "Stash the changes" ;)";
     runtime.send(CommandSpec{.request_id = spec.request_id, .command = "git", .state = CommandSpecState::available, .digest = 3, .source = git_spec});
-    QTRY_VERIFY_WITH_TIMEOUT(application.promptIsland(pane_id)->menu().has_value(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(application.promptLine(pane_id)->menu().has_value(), wait_ms);
     // The menu's heading says where its choices come from.
-    QCOMPARE(application.promptIsland(pane_id)->menu()->label, std::string{"git"});
+    QCOMPARE(application.promptLine(pane_id)->menu()->label, std::string{"git"});
     // A choice taken sweeps in, glowing in the accent colour as it settles.
     QKeyEvent take{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
     QCoreApplication::sendEvent(&terminal, &take);
-    QVERIFY(!application.promptIsland(pane_id)->menu().has_value());
+    QVERIFY(!application.promptLine(pane_id)->menu().has_value());
     QVERIFY(!editor->glows().isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(editor->glows().isEmpty(), wait_ms);
 
@@ -372,6 +369,16 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     const std::array ran{blocks[0], CommandBlock{.row = 2, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 20, .command = "gti status"}};
     runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = ran});
     QTRY_COMPARE_WITH_TIMEOUT(application.commandPresence(pane_id, "gti"), CommandPresence::found, wait_ms);
+
+    // Back at the prompt before the frame that draws it, the last prompt on screen is the
+    // command's own: its output is not prompt, and the line waits under the cursor.
+    const std::array pending{ran[0], ran[1], CommandBlock{.row = rows - 1, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 5, .command = "ls"}};
+    runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = pending});
+    QTRY_COMPARE_WITH_TIMEOUT(terminal.promptRow(), -1, wait_ms);
+    QCOMPARE(line->property("anchor").toInt(), terminal.cursorRow() + 1);
+    QVERIFY(!line->property("docked").toBool());
+    runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = ran});
+    QTRY_COMPARE_WITH_TIMEOUT(terminal.promptRow(), rows - 1, wait_ms);
     QTest::qWait(900);
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto menu = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_MENU_SCREENSHOT");
@@ -437,7 +444,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     const auto queries = runtime.count(ClientTag::query_history);
     QKeyEvent search{QEvent::KeyPress, Qt::Key_R, NativeKeyAdapter::control_modifier};
     QCoreApplication::sendEvent(&terminal, &search);
-    QCOMPARE(application.islandSearch(), QStringLiteral("history"));
+    QCOMPARE(application.lineSearch(), QStringLiteral("history"));
     // The line also loads its suggestions from the history; the search's query is the line.
     QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::query_history) > queries && runtime.last<QueryHistory>().query == "git s", wait_ms);
     const auto query = runtime.last<QueryHistory>();
@@ -469,11 +476,11 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
     QCoreApplication::sendEvent(field, &escape);
     QVERIFY(application.dialog().isEmpty());
-    QVERIFY(application.promptIsland(pane_id)->editor().text().view() == "git s");
+    QVERIFY(application.promptLine(pane_id)->editor().text().view() == "git s");
 
     // The path search starts from the word before the caret and writes the path over it.
     application.execute(Application::Action::path_picker);
-    QCOMPARE(application.islandSearch(), QStringLiteral("paths"));
+    QCOMPARE(application.lineSearch(), QStringLiteral("paths"));
     QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::find_paths) != 0, wait_ms);
     const auto find = runtime.last<FindPaths>();
     QCOMPARE(find.query, std::string_view{"s"});
@@ -491,12 +498,12 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
     QCoreApplication::sendEvent(field, &enter);
     QVERIFY(application.dialog().isEmpty());
-    const std::string written{application.promptIsland(pane_id)->editor().text().view()};
+    const std::string written{application.promptLine(pane_id)->editor().text().view()};
     QVERIFY2(written == "git src/main.cpp", written.c_str());
 
     // A shell ssh reached works on its host: the line names it, with the link's round trip,
     // and never shows this host's directory, only the one the remote shell reports.
-    const auto *editor = line->findChild<PromptIsland *>();
+    const auto *editor = line->findChild<PromptEditorItem *>();
     QVERIFY(editor != nullptr);
     runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .remote = true, .host = "box", .link_ms = 38});
     QTRY_VERIFY_WITH_TIMEOUT(editor->remote(), wait_ms);
@@ -707,7 +714,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // A command sent before is suggested as its start is typed, for a key to take it.
     {
       type(terminal, "tou");
-      const auto *editor = line->findChild<PromptIsland *>();
+      const auto *editor = line->findChild<PromptEditorItem *>();
       QTRY_VERIFY_WITH_TIMEOUT(editor != nullptr && editor->suggesting(), runtime_wait_ms);
       QCOMPARE(editor->mode(), QStringLiteral("emacs"));
       QKeyEvent erase{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
@@ -748,7 +755,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->blocks.size() == before_vim + 1, qPrintable(QStringLiteral("blocks %1, before %2").arg(application.pane(pane)->blocks.size()).arg(before_vim)), runtime_wait_ms);
       const auto inputs = application.pane(pane)->shell.commands;
       type(terminal, "echo after-vim");
-      QVERIFY2(application.promptIsland(pane)->editor().text().view() == "echo after-vim", "the line takes the keys again");
+      QVERIFY2(application.promptLine(pane)->editor().text().view() == "echo after-vim", "the line takes the keys again");
       QCoreApplication::sendEvent(&terminal, &enter);
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == inputs + 1 && application.pane(pane)->blocks.size() == before_vim + 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminal.promptRow() >= 0, runtime_wait_ms);
@@ -822,7 +829,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       // / searches the command's output from the line under the pane, no dialog over it: the
       // matches arrive as the query is typed, and Enter leaves them for n and N.
       type(terminal, "/");
-      QTRY_VERIFY_WITH_TIMEOUT(application.dialog() == QStringLiteral("copy-search") && application.islandSearch() == QStringLiteral("copy-search") && line->property("searching").toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.dialog() == QStringLiteral("copy-search") && application.lineSearch() == QStringLiteral("copy-search") && line->property("searching").toBool(), runtime_wait_ms);
       QQuickItem *query = nullptr;
       QTRY_VERIFY_WITH_TIMEOUT((query = line->findChild<QQuickItem *>(QStringLiteral("scrollbackSearch"))) != nullptr, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
@@ -844,7 +851,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       type(terminal, "git sw");
       QKeyEvent complete{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, QStringLiteral("\t")};
       QCoreApplication::sendEvent(&terminal, &complete);
-      QTRY_COMPARE_WITH_TIMEOUT(application.promptIsland(pane)->editor().text().view(), std::string_view{"git switch "}, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.promptLine(pane)->editor().text().view(), std::string_view{"git switch "}, runtime_wait_ms);
       // An alias the shell defines completes as the command it stands for.
       QCoreApplication::sendEvent(&terminal, &erase);
       const auto ran = application.pane(pane)->shell.commands;
@@ -853,7 +860,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == ran + 1 && application.promptSurface(pane) == prompt::Surface::editor, runtime_wait_ms);
       type(terminal, "gsw --det");
       QCoreApplication::sendEvent(&terminal, &complete);
-      QTRY_COMPARE_WITH_TIMEOUT(application.promptIsland(pane)->editor().text().view(), std::string_view{"gsw --detach "}, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.promptLine(pane)->editor().text().view(), std::string_view{"gsw --detach "}, runtime_wait_ms);
     }
 
     // A quick command: it flies to its separator while its output waits, then the output

@@ -241,6 +241,8 @@ enum class DeliveryLane : std::uint8_t {
   blocks,
   exit,
   graphics,
+  // Behind everything else a pane shows: a document is large and drawn once.
+  document,
   observation,
   count,
 };
@@ -279,6 +281,8 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
     return DeliveryLane::shell;
   case ServerTag::pane_scrollback:
     return DeliveryLane::scrollback;
+  case ServerTag::pane_document:
+    return DeliveryLane::document;
   case ServerTag::pane_git:
     return DeliveryLane::git;
   case ServerTag::pane_blocks:

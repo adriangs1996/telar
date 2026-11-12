@@ -21,7 +21,6 @@ Item {
     readonly property bool confirmCreate: state.confirmCreate ?? false
     readonly property bool submittable: name.text.trim().length > 0 || directory.text.trim().length > 0
     property alias field: name
-    property alias directoryField: directory
 
     readonly property real sectionGap: 16 * ratio
     readonly property real labelGap: 6 * ratio

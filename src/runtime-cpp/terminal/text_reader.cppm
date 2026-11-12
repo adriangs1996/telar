@@ -11,6 +11,8 @@ module;
 #include <zlib.h>
 
 #include "cell_layout.hpp"
+#include "terminal/tracked_row.hpp"
+#include "telar_render/sequence.hpp"
 
 #include <cstring>
 
@@ -313,7 +315,68 @@ template <Allocator Memory>
 class TerminalEffects {
 public:
   inline explicit TerminalEffects(Memory &memory)
-      : clipboard(AllocatorRef<Byte, Memory>{memory}) {}
+      : clipboard(AllocatorRef<Byte, Memory>{memory}),
+        document(AllocatorRef<Byte, Memory>{memory}),
+        inline_documents(AllocatorRef<InlineDocument, Memory>{memory}) {}
+
+  // A document that stands for rows of the scrollback, kept while the scrollback keeps them.
+  struct InlineDocument {
+    std::uint64_t id = 0;
+    Vector<Byte, Memory> bytes;
+    TrackedRow first;
+    TrackedRow end;
+    bool end_inclusive = false;
+    // Where its rows were last seen, from the top of the scrollback; none before.
+    std::uint32_t row = 0;
+    std::uint32_t rows = 0;
+    // What each of its rows held when the terminal first drew it, 0 before: a document stands
+    // for that text, and goes once a row of it changes. A reflow learns them again.
+    Vector<std::uint64_t, Memory> contents;
+  };
+
+  // Keeps the document of a zone a program closed. Past the pane's limits the oldest documents
+  // go, and their rows show their text again.
+  inline void keepInline(Vector<Byte, Memory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive) {
+    while (!inline_documents.empty() && (inline_documents.size() >= ::telar::render::max_pane_documents || inline_bytes + bytes.size() > ::telar::render::max_pane_document_bytes)) {
+      inline_bytes -= inline_documents.front().bytes.size();
+      inline_documents.erase(inline_documents.begin());
+    }
+    inline_bytes += bytes.size();
+    inline_documents.push_back(InlineDocument{.id = next_document_id++, .bytes = std::move(bytes), .first = std::move(first), .end = std::move(end), .end_inclusive = end_inclusive, .row = 0, .rows = 0, .contents = Vector<std::uint64_t, Memory>{inline_documents.get_allocator()}});
+    ++inline_revision;
+  }
+
+  // Follows the documents' rows through output and reflow, and lets go of those whose rows the
+  // scrollback dropped. Only the primary screen holds them.
+  inline void placeInline(GhosttyTerminal terminal) noexcept {
+    for (auto document = inline_documents.begin(); document != inline_documents.end();) {
+      const auto first = document->first.row(terminal);
+      const auto end = document->end.row(terminal);
+      const auto last = end ? *end + (document->end_inclusive ? 1 : 0) : 0;
+      if (!first || !end || last <= *first) {
+        inline_bytes -= document->bytes.size();
+        document = inline_documents.erase(document);
+        ++inline_revision;
+        continue;
+      }
+      if (document->row != *first || document->rows != last - *first) {
+        document->row = *first;
+        document->rows = last - *first;
+        document->contents.assign(document->rows, 0);
+        ++inline_revision;
+      }
+      ++document;
+    }
+  }
+
+  // Drops the document when its program has left the alternate screen.
+  inline void closeDocument() noexcept {
+    if (!document.empty()) {
+      document.clear();
+      document.shrink_to_fit();
+      ++document_revision;
+    }
+  }
 
   inline void refresh(GhosttyTerminal terminal) {
     if (title_pending) {
@@ -350,6 +413,15 @@ public:
   }
 
   Vector<Byte, Memory> clipboard;
+  // The encoded document the pane's program shows over the pane, empty when none.
+  Vector<Byte, Memory> document;
+  std::uint64_t document_revision = 0;
+  // The documents that stand for rows of the scrollback, oldest first; the revision changes
+  // whenever one comes, goes or moves.
+  Vector<InlineDocument, Memory> inline_documents;
+  std::uint64_t inline_revision = 0;
+  std::uint64_t next_document_id = 1;
+  std::size_t inline_bytes = 0;
   std::uint64_t title_revision = 1;
   std::uint64_t cwd_revision = 0;
   std::uint64_t clipboard_revision = 0;
@@ -820,6 +892,11 @@ public:
     return destination.first(length);
   }
 
+  // The documents' tracked rows belong to the terminal, which goes before the effects do.
+  inline ~Terminal() {
+    effects.inline_documents.clear();
+  }
+
   inline void feed(std::span<const Byte> bytes) {
     TELAR_TRACE("terminal.feed");
     ++content_revision_;
@@ -891,6 +968,10 @@ public:
     if (hasSize(size)) {
       return;
     }
+    // A reflow moves the documents' text to other rows; what they hold is learnt anew.
+    for (auto &document : effects.inline_documents) {
+      document.contents.assign(document.contents.size(), 0);
+    }
 
     screen.reserve(size.cols, size.rows);
     checkGhostty(ghostty_terminal_resize(terminal_.get(), size.cols, size.rows, size.cell_width_px, size.cell_height_px));
@@ -904,7 +985,7 @@ public:
     ++content_revision_;
     // A reflow numbers the rows anew.
     ++scrollback_generation_;
-    scrollback_origin_.reset();
+    scrollback_origin_ = {};
     dirty_ = true;
     force_ = true;
   }
@@ -996,6 +1077,7 @@ public:
     updateCursor();
     updateModes();
     updateScroll();
+    checkInline();
     checkGhostty(ghostty_render_state_clean(render_state_.get()));
     dirty_ = false;
     force_ = false;
@@ -1115,6 +1197,12 @@ private:
   inline std::size_t feedControl(std::span<const Byte> bytes) {
     const auto atomic = media_ != nullptr && control_.ground() && !control_.blocked() ? atomicMediaPrefix(bytes) : 0;
     const auto consumed = atomic != 0 ? control_.feedAtomicMedia(bytes.first(atomic)) : control_.feed(bytes);
+    if (control_.takeDocument(effects.document)) {
+      ++effects.document_revision;
+    }
+    while (auto zone = control_.takeZone()) {
+      effects.keepInline(std::move(zone->bytes), std::move(zone->first), std::move(zone->end), zone->end_inclusive);
+    }
     if (media_ != nullptr && consumed != 0) {
       media_->output(bytes.first(consumed));
       if (media_->failed()) {
@@ -1289,6 +1377,10 @@ private:
     GhosttyTerminalScreen active_screen{};
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active_screen));
     screen.input_modes.alternate_screen = active_screen == GHOSTTY_TERMINAL_SCREEN_ALTERNATE;
+    if (!screen.input_modes.alternate_screen) {
+      effects.closeDocument();
+      effects.placeInline(terminal_.get());
+    }
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_KEYBOARD_FLAGS, &screen.input_modes.kitty_keyboard_flags));
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2, &screen.input_modes.modify_other_keys_2));
@@ -1353,18 +1445,48 @@ private:
     return active == GHOSTTY_TERMINAL_SCREEN_PRIMARY;
   }
 
-  // Tracks the active screen's first row, the newest row the scrollback will take.
-  inline void trackScrollbackOrigin() {
-    scrollback_origin_.reset();
-    scrollback_origin_.emplace();
-    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, 0}}};
-    if (ghostty_terminal_grid_ref_track(terminal_.get(), point, scrollback_origin_->output()) != GHOSTTY_SUCCESS) {
-      scrollback_origin_.reset();
+  // Lets go of a document once a row of the text it stands for changes, overwritten or erased,
+  // so it never covers text it no longer stands for. Only rows on the screen can change, so only
+  // those drawn anew this refresh are read again.
+  inline void checkInline() {
+    if (effects.inline_documents.empty() || !primaryScreen()) {
       return;
     }
+    const auto top = static_cast<std::uint64_t>(screen.scroll.offset);
+    const auto rows = static_cast<std::uint64_t>(screen.rows);
+    const auto cols = static_cast<std::size_t>(screen.cols);
+    auto &documents = effects.inline_documents;
+    for (auto document = documents.begin(); document != documents.end();) {
+      bool changed = false;
+      const auto first = std::max<std::uint64_t>(document->row, top);
+      const auto end = std::min<std::uint64_t>(static_cast<std::uint64_t>(document->row) + document->rows, top + rows);
+      for (auto row = first; row < end && !changed; ++row) {
+        const auto screen_row = static_cast<std::size_t>(row - top);
+        auto &known = document->contents[static_cast<std::size_t>(row - document->row)];
+        if (known != 0 && screen.row_revisions[screen_row] != screen.revision) {
+          continue;
+        }
+        const auto cells = std::span<const ScreenCell>{screen.cells}.subspan(screen_row * cols, cols);
+        const auto content = std::hash<std::string_view>{}(std::string_view{reinterpret_cast<const char *>(cells.data()), cells.size_bytes()}) | 1;
+        changed = known != 0 && known != content;
+        known = content;
+      }
+      if (changed) {
+        effects.inline_bytes -= document->bytes.size();
+        document = documents.erase(document);
+        ++effects.inline_revision;
+        continue;
+      }
+      ++document;
+    }
+  }
+
+  // Tracks the active screen's first row, the newest row the scrollback will take.
+  inline void trackScrollbackOrigin() {
+    scrollback_origin_ = TrackedRow::active(terminal_.get(), 0);
     const auto row = scrollbackOriginRow();
     if (!row) {
-      scrollback_origin_.reset();
+      scrollback_origin_ = {};
       return;
     }
     scrollback_origin_row_ = *row;
@@ -1372,15 +1494,7 @@ private:
 
   // The tracked row, from the top of the scrollback; nothing once it was dropped.
   inline std::optional<std::uint32_t> scrollbackOriginRow() const {
-    auto reference = ghosttySized<GhosttyGridRef>();
-    if (!scrollback_origin_ || ghostty_tracked_grid_ref_snapshot(scrollback_origin_->get(), &reference) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
-    }
-    GhosttyPointCoordinate coordinate{};
-    if (ghostty_terminal_point_from_grid_ref(terminal_.get(), &reference, GHOSTTY_POINT_TAG_SCREEN, &coordinate) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
-    }
-    return coordinate.y;
+    return scrollback_origin_.row(terminal_.get());
   }
 
   inline void updateScroll() {
@@ -1409,7 +1523,7 @@ private:
   bool dirty_ = true;
   bool force_ = true;
   std::uint64_t content_revision_ = 1;
-  std::optional<GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>> scrollback_origin_;
+  TrackedRow scrollback_origin_;
   // How far above the bottom the tracked row may get before a newer one replaces it.
   static constexpr std::size_t origin_distance = 256;
   std::uint32_t scrollback_origin_row_ = 0;

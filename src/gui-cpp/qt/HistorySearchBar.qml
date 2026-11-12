@@ -21,7 +21,6 @@ Item {
     readonly property real trailingInset: 14 * ratio
     readonly property real closeWidth: Math.min(38 * ratio, width / 4)
     readonly property real closeHeight: Math.min(22 * ratio, height)
-    readonly property real fieldPadding: Math.min(12 * ratio, fieldArea.width / 4)
     readonly property real closeRingAlpha: 0.6
     readonly property real closeHoverRadius: 7 * ratio
 

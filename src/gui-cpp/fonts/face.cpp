@@ -325,7 +325,8 @@ ShapedRunView Face::shape(std::string_view text, std::uint16_t pixel_height) {
 
 GlyphBitmapView Face::rasterize(GlyphRasterRequest request) {
   selectSize(request.pixel_height);
-  if (FT_Load_Glyph(face_.get(), request.index, FT_LOAD_DEFAULT) != 0) {
+  constexpr std::array<FT_Int32, 3> load_flags{FT_LOAD_DEFAULT, FT_LOAD_TARGET_LIGHT, FT_LOAD_FORCE_AUTOHINT};
+  if (FT_Load_Glyph(face_.get(), request.index, load_flags.at(static_cast<std::size_t>(request.hinting))) != 0) {
     throw std::runtime_error{"GlyphLoadFailed"};
   }
 

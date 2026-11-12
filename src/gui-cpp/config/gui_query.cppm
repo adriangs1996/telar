@@ -206,6 +206,7 @@ private:
       object.member("letter_spacing", font.letter_spacing);
       object.member("thicken", font.thicken);
       object.member("thicken_strength", font.thicken_strength);
+      object.member("hinting", std::string_view{font_hinting_names.at(std::to_underlying(font.hinting))});
     });
   }
 

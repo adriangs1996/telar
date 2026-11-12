@@ -1,5 +1,6 @@
 module;
 #include "tbc/view.hpp"
+#include "telar_render/sequence.hpp"
 #include <new>
 #include <ghostty/vt.h>
 #include <sys/stat.h>
@@ -101,6 +102,54 @@ private:
 export {
 namespace telar::runtime {
 
+// The inline documents a client has, or is being sent, oldest first, with the rows it last
+// heard each one stands for.
+struct SentDocuments {
+  struct Item {
+    std::uint64_t id = 0;
+    std::uint32_t offset = 0;
+    std::uint64_t generation = 0;
+    std::uint64_t first_row = 0;
+    std::uint32_t rows = 0;
+  };
+
+  [[nodiscard]] Item *find(std::uint64_t id) noexcept {
+    const auto kept = std::span{items}.first(count);
+    const auto found = std::ranges::find(kept, id, &Item::id);
+    return found == kept.end() ? nullptr : &*found;
+  }
+
+  Item *add(std::uint64_t id) noexcept {
+    if (count == items.size()) {
+      return nullptr;
+    }
+    items[count] = Item{.id = id};
+    return &items[count++];
+  }
+
+  void erase(std::size_t index) noexcept {
+    std::move(items.begin() + static_cast<std::ptrdiff_t>(index) + 1, items.begin() + static_cast<std::ptrdiff_t>(count), items.begin() + static_cast<std::ptrdiff_t>(index));
+    --count;
+  }
+
+  [[nodiscard]] bool settled(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) const noexcept {
+    return revision == at_revision && generation == at_generation && trimmed == at_trimmed;
+  }
+
+  void settle(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) noexcept {
+    revision = at_revision;
+    generation = at_generation;
+    trimmed = at_trimmed;
+  }
+
+  std::array<Item, ::telar::render::max_pane_documents> items{};
+  std::size_t count = 0;
+  // The terminal's inline documents and scrollback numbering the client is up to date with.
+  std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
+  std::uint64_t generation = 0;
+  std::uint64_t trimmed = 0;
+};
+
 template <Allocator Memory>
 struct Attachment {
   inline explicit Attachment(Memory &memory, GraphicsCreditBudget &budget, std::uint64_t pane, std::shared_ptr<PaneMedia<Memory>> media)
@@ -123,6 +172,11 @@ struct Attachment {
   std::uint64_t shell_revision = 0;
   std::uint64_t git_revision = 0;
   std::uint64_t blocks_revision = 0;
+  SentDocuments inline_documents;
+  // The pane document revision this client has, whole once document_offset reaches its size.
+  std::uint64_t document_revision = 0;
+  std::uint32_t document_offset = 0;
+  bool document_whole = true;
   // How the pane's scrollback numbered its rows when this client last heard; generation 0
   // before it heard at all.
   std::uint64_t scrollback_generation = 0;
@@ -921,13 +975,6 @@ template <Allocator Memory>
 using ClientStore = SlotStore<ClientSession<Memory>, client_capacity, Memory>;
 template <Allocator Memory>
 using WorkspaceStore = SlotStore<Workspace<Memory>, 64, Memory>;
-
-// The bit a stored client's slot sets in what a pane is observed by.
-template <Allocator Memory>
-inline std::uint32_t clientBit(const ClientStore<Memory> &clients, std::uint64_t identity) noexcept {
-  const auto slot = clients.slotOf(identity);
-  return slot ? std::uint32_t{1} << *slot : 0;
-}
 
 // Whether a live client holds a tab.
 template <Allocator Memory>

@@ -304,6 +304,7 @@ inline QVariantMap fontSettings(const FontConfiguration &font) {
   settings.insert(QStringLiteral("letter_spacing"), font.letter_spacing);
   settings.insert(QStringLiteral("thicken"), font.thicken);
   settings.insert(QStringLiteral("thicken_strength"), font.thicken_strength);
+  settings.insert(QStringLiteral("hinting"), QString::fromLatin1(font_hinting_names.at(std::to_underlying(font.hinting))));
 
   return settings;
 }
@@ -339,6 +340,9 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   for (std::size_t index = 0; index < palette_names.size(); ++index) {
     const auto name = QString::fromLatin1(palette_names[index]);
     colors.insert(name, toQColor(theme.chromeColor(static_cast<PaletteRole>(index))));
+  }
+  for (std::size_t index = 0; index < syntax_names.size(); ++index) {
+    colors.insert(QStringLiteral("syntax_") + QString::fromLatin1(syntax_names[index]), toQColor(theme.resolve(theme.syntax[index], theme.foreground)));
   }
 
   return colors;

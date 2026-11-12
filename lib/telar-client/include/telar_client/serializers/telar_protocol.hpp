@@ -2445,6 +2445,54 @@ namespace telar {
                Field<&PaneScrollback::generation, u64, "generation">,
                Field<&PaneScrollback::trimmed, u64, "trimmed">> {};
 
+  // A part of a document a pane's program shows natively (`telar render`), encoded as
+  // telar.render.document encodes it. Document 0 covers the pane while its program is on the
+  // alternate screen; any other stands for `rows` rows of the scrollback from stable row
+  // `first_row`, numbered as `generation` numbers them (see `PaneScrollback`).
+  //
+  // `revision` names one version of a document: a client keeps the bytes of the latest, sent
+  // in order from `offset` 0, and has it whole once `offset + bytes` reaches `size`. A part
+  // with no bytes at `offset == size` only moves a whole document's rows. Size 0 withdraws it.
+  struct PaneDocument {
+    // Limit render.max_document_bytes, as telar.render.document sets it.
+    static constexpr std::uint32_t max_size = std::uint32_t{6000} * 1024;
+    // Small enough that a part never holds a pane's frames back for long.
+    static constexpr std::uint32_t chunk_bytes = std::uint32_t{64} << 10;
+
+    std::uint64_t pane_id{};
+    std::uint64_t id{};
+    std::uint64_t revision{};
+    std::uint64_t generation{};
+    std::uint64_t first_row{};
+    std::uint32_t rows{};
+    std::uint32_t size{};
+    std::uint32_t offset{};
+    std::span<const Byte> bytes{};
+
+    void validate() const {
+      if (size > max_size || offset > size || bytes.size() > size - offset || (size != 0 && bytes.empty() && (offset != size || id == 0))) {
+        throw EncodingError{"Invalid document part"};
+      }
+      if ((id == 0 && (generation != 0 || first_row != 0 || rows != 0)) || (id != 0 && size != 0 && rows == 0)) {
+        throw EncodingError{"Invalid document rows"};
+      }
+    }
+  };
+
+  template <>
+  struct MessageSchema<PaneDocument>
+      : Schema<Direction::server,
+               ServerTag::pane_document,
+               Field<&PaneDocument::pane_id, NonzeroU64, "pane_id">,
+               Field<&PaneDocument::id, u64, "id">,
+               Field<&PaneDocument::revision, u64, "revision">,
+               Field<&PaneDocument::generation, u64, "generation">,
+               Field<&PaneDocument::first_row, u64, "first_row">,
+               Field<&PaneDocument::rows, u32, "rows">,
+               Field<&PaneDocument::size, u32, "size">,
+               Field<&PaneDocument::offset, u32, "offset">,
+               Field<&PaneDocument::bytes, SizedBytes<u32, PaneDocument::chunk_bytes, 0>, "bytes">> {};
+
   // The rows a `ReadPaneRows` asked for, from stable row `from`: `rows` rows of `cols` cells,
   // encoded as a frame's, with their flags and links. No rows when none of them are retained.
   struct PaneRows {

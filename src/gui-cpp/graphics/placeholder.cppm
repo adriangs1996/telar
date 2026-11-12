@@ -378,7 +378,6 @@ struct RoundedRectangleStyle {
   float border_width = 0;
   Color backdrop{.a = 0};
   bool replace_background = false;
-  bool square_bottom = false;
 
   bool operator==(const RoundedRectangleStyle &) const = default;
 };
@@ -400,7 +399,7 @@ struct RoundedRectangle {
 
     constexpr float pixel_center = 0.5F;
     const Point half_size{.x = size.x * pixel_center, .y = size.y * pixel_center};
-    const auto radius = style.square_bottom && local.y > half_size.y ? 0 : style.radius;
+    const auto radius = style.radius;
     const auto horizontal = std::abs(local.x - half_size.x) - half_size.x + radius;
     const auto vertical = std::abs(local.y - half_size.y) - half_size.y + radius;
     const auto outside_horizontal = std::max(horizontal, 0.0F);

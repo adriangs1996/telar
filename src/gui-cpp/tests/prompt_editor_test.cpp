@@ -280,8 +280,7 @@ void layoutAndStyles() {
   require(styles[16] == Style::option && styles[19] == Style::string && styles[24] == Style::variable, "options, strings and variables inside them");
   require(styles[command.find('|')] == Style::operator_ && styles[command.find("tee")] == Style::command, "a pipe starts a command");
   require(styles[command.find('#')] == Style::comment, "comments");
-  const auto pending = styled("gi");
-  require(pending[0] == Style::pending, "the command being typed is pending");
+  require(styled("gi")[0] == Style::command && styled("sudo gi")[5] == Style::command, "the command being typed is a command already, as the shell colours it");
   const auto variable = styled("echo ${HOME}/x $PATH");
   require(variable[5] == Style::variable && variable[10] == Style::variable && variable[15] == Style::variable, "variables");
   require(styled("FOO=1 make all")[6] == Style::command, "an assignment prefix leaves the command after it");

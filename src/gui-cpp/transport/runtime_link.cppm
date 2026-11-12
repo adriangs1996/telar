@@ -137,9 +137,12 @@ struct RuntimeProtocol {
   // The schema before scrollback rows: no ReadPaneRows or SearchPaneRows, and its runtime
   // sends no PaneRows or PaneScrollback. Its other layouts are the current schema's.
   static constexpr SchemaId cqp00002{'c', 'q', 'p', '0', '0', '0', '0', '2'};
+  // The schema before documents: its runtime sends no PaneDocument. Its other layouts are the
+  // current schema's.
+  static constexpr SchemaId cqp00003{'c', 'q', 'p', '0', '0', '0', '0', '3'};
 
   [[nodiscard]] inline static bool supports(const SchemaId &schema) noexcept {
-    return schema == handshake::schema_id || schema == cqp00002 || schema == schema87;
+    return schema == handshake::schema_id || schema == cqp00003 || schema == cqp00002 || schema == schema87;
   }
 
   [[nodiscard]] inline static bool supports(const SchemaId &schema, ClientTag tag) noexcept {
@@ -149,7 +152,7 @@ struct RuntimeProtocol {
 
   // Whether the runtime reads rows of a scrollback by their stable number.
   [[nodiscard]] inline static bool readsRows(const SchemaId &schema) noexcept {
-    return schema == handshake::schema_id;
+    return schema == handshake::schema_id || schema == cqp00003;
   }
 
   [[nodiscard]] inline static std::optional<SchemaId> retry(std::span<const Byte> payload, const SchemaId &requested) {

@@ -20,6 +20,7 @@ module;
 #include <unistd.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
+#include <sys/attr.h>
 #endif
 
 module telar.gui.platform.profile_file;
@@ -110,7 +111,44 @@ std::filesystem::path executable() {
 #endif
 }
 
-// The telar installed beside this executable, or in the application bundle that holds it;
+// Whether the directory entry carries exactly the candidate's name. APFS and HFS+ match names
+// case-insensitively by default, so `telar` would find a bundle's `Telar` launcher and the GUI
+// would keep starting itself to ask for the endpoint.
+bool exactlyNamed(const std::filesystem::path &candidate) {
+#if defined(__APPLE__)
+  attrlist request{};
+  request.bitmapcount = ATTR_BIT_MAP_COUNT;
+  request.commonattr = ATTR_CMN_NAME;
+  alignas(attrreference_t) std::array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) +
+                                                NAME_MAX * 3 + 1>
+      answer{};
+
+  if (::getattrlist(candidate.c_str(), &request, answer.data(), answer.size(), FSOPT_NOFOLLOW) !=
+      0) {
+    return false;
+  }
+
+  constexpr auto reference_at = sizeof(std::uint32_t);
+  attrreference_t reference{};
+  std::memcpy(&reference, answer.data() + reference_at, sizeof(reference));
+  const auto offset = static_cast<std::size_t>(reference.attr_dataoffset);
+  const auto length = static_cast<std::size_t>(reference.attr_length);
+
+  if (reference.attr_dataoffset < 0 || length == 0 ||
+      offset > answer.size() - reference_at || length > answer.size() - reference_at - offset) {
+    return false;
+  }
+
+  // The length counts the terminating NUL.
+  const std::string_view name(answer.data() + reference_at + offset, length - 1);
+  return name == candidate.filename().native();
+#else
+  (void)candidate;
+  return true;
+#endif
+}
+
+// The telar in the application bundle that holds this executable, or installed beside it;
 // otherwise the one the login shell finds on PATH, as a terminal would.
 std::string telarProgram() {
   const auto directory = executable().parent_path();
@@ -120,11 +158,11 @@ std::string telarProgram() {
   }
 
   for (const auto &candidate :
-       {directory / "telar", directory / ".." / "Resources" / "bin" / "telar"}) {
+       {directory / ".." / "Resources" / "bin" / "telar", directory / "telar"}) {
     struct stat info{};
 
     if (::stat(candidate.c_str(), &info) == 0 && S_ISREG(info.st_mode) &&
-        ::access(candidate.c_str(), X_OK) == 0) {
+        ::access(candidate.c_str(), X_OK) == 0 && exactlyNamed(candidate)) {
       return candidate.lexically_normal().string();
     }
   }

@@ -177,12 +177,11 @@ void TerminalItem::synchronizeScroll() {
   }
 
   motion_.tune({.wheel_ms = static_cast<double>(application_->configuration().scroll.wheel_ms)});
-  // At the end, the view follows the output; a fold that moves the end does not drag it along.
-  const auto revision = fold_revision_;
+  // At the end, the view follows the output; a fold that moves the end does not drag it along,
+  // while a document that comes or grows at the end is output like any other.
   bool following = !motion_.moving() && motion_.position() >= motion_.limit() - (cell / 2);
   followDroppedRows(following);
-  anchorFolds();
-  following = following && revision == fold_revision_;
+  following = !anchorFolds() && following;
   motion_.setLimit(scrollLimit());
   followRuntimeView(following);
 
@@ -219,15 +218,17 @@ void TerminalItem::followDroppedRows(bool following) {
 
 // A fold opened or closed: the row at the top stays there, or, folded away, its command's
 // separator takes the top.
-void TerminalItem::anchorFolds() {
+bool TerminalItem::anchorFolds() {
   const auto *current = pane();
   if (current->fold_revision == fold_revision_) {
-    return;
+    return false;
   }
   fold_revision_ = current->fold_revision;
   // One fold opened or closed, its first row the same before and after, moves what is below
   // its separator; several at once, or one that only grew, simply show their rows.
-  const auto spans = current->folds.spans();
+  // Only folds move; documents drawn in place of their rows simply show them.
+  std::vector<FoldMap<>::Span> spans;
+  std::ranges::copy_if(current->folds.spans(), std::back_inserter(spans), [](const FoldMap<>::Span &span) { return span.shown == 0; });
   std::optional<FoldMap<>::Span> changed;
   bool closed = false;
   std::size_t changes = 0;
@@ -251,7 +252,7 @@ void TerminalItem::anchorFolds() {
   // The row at the top as the view last drew it under the old folds; the rows laid out since
   // may already count the new ones.
   if (!top_anchor_) {
-    return;
+    return changes != 0;
   }
   const auto cell = rowHeight();
   const auto &folds = current->folds;
@@ -274,6 +275,7 @@ void TerminalItem::anchorFolds() {
     fold_motion_.reset();
     placeFoldMotion();
   }
+  return changes != 0;
 }
 
 const FoldMap<> &TerminalItem::viewFolds() const noexcept {
@@ -614,6 +616,14 @@ void TerminalItem::scrollToEnd() {
     return;
   }
   application_->scrollPaneToRow(pane_id_, std::numeric_limits<std::uint32_t>::max());
+  // The runtime may be at its end already, under a view that is not: the view goes there itself.
+  const auto cell = rowHeight();
+  if (mapsRows() && cell > 0) {
+    motion_.setLimit(scrollLimit());
+    motion_.glideToEnd(scrollTime(), static_cast<double>(current->screen.rows()) * cell);
+    driven_ = false;
+    startScrollFrames();
+  }
   refresh();
 }
 

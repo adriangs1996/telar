@@ -150,6 +150,7 @@ namespace telar {
     command_spec = 0xc0,
     pane_rows = 0xc1,
     pane_scrollback = 0xc2,
+    pane_document = 0xc3,
   };
 
   struct RequestRuntimeState {

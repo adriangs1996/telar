@@ -981,6 +981,7 @@ enum class SymbolKind : std::uint8_t {
   box,
   block,
   braille,
+  powerline,
 };
 
 struct Symbol {
@@ -992,15 +993,24 @@ struct Symbol {
   static constexpr std::uint32_t last_block = 0x259f;
   static constexpr std::uint32_t first_braille = 0x2800;
   static constexpr std::uint32_t last_braille = 0x28ff;
+  static constexpr std::uint32_t first_powerline = 0xe0b0;
+  static constexpr std::uint32_t last_powerline = 0xe0bf;
 
   SymbolKind kind = SymbolKind::box;
   std::uint32_t codepoint = 0;
 
   [[nodiscard]] inline static std::optional<Symbol> parse(std::string_view text) noexcept {
+    // Lead bytes of U+2000..U+2FFF (box, block, Braille) and U+E000..U+EFFF (Powerline).
     constexpr std::uint8_t symbol_prefix = 0xe2;
+    constexpr std::uint8_t private_use_prefix = 0xee;
     constexpr unsigned continuation_prefix_mask = 0xc0;
     constexpr std::size_t symbol_bytes = 3;
-    if (text.size() != symbol_bytes || static_cast<std::uint8_t>(text[0]) != symbol_prefix) {
+    if (text.size() != symbol_bytes) {
+      return {};
+    }
+
+    const auto lead = static_cast<std::uint8_t>(text[0]);
+    if (lead != symbol_prefix && lead != private_use_prefix) {
       return {};
     }
 
@@ -1010,7 +1020,7 @@ struct Symbol {
       return {};
     }
 
-    const auto codepoint = ((symbol_prefix & Utf8Scalar::leading_masks[symbol_bytes - 1]) << (2 * Utf8Scalar::continuation_bits)) | ((middle & Utf8Scalar::continuation_mask) << Utf8Scalar::continuation_bits) | (last & Utf8Scalar::continuation_mask);
+    const auto codepoint = ((lead & Utf8Scalar::leading_masks[symbol_bytes - 1]) << (2 * Utf8Scalar::continuation_bits)) | ((middle & Utf8Scalar::continuation_mask) << Utf8Scalar::continuation_bits) | (last & Utf8Scalar::continuation_mask);
     if (codepoint >= first_box && codepoint <= last_box) {
       return Symbol{.kind = SymbolKind::box, .codepoint = codepoint};
     }
@@ -1021,6 +1031,10 @@ struct Symbol {
 
     if (codepoint >= first_braille && codepoint <= last_braille) {
       return Symbol{.kind = SymbolKind::braille, .codepoint = codepoint};
+    }
+
+    if (codepoint >= first_powerline && codepoint <= last_powerline) {
+      return Symbol{.kind = SymbolKind::powerline, .codepoint = codepoint};
     }
 
     return {};

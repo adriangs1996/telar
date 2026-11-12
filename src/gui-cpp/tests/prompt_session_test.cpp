@@ -50,7 +50,7 @@ static_assert(true);
 
 import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
-import telar.gui.prompt.island;
+import telar.gui.prompt.line;
 
 namespace {
 
@@ -62,7 +62,7 @@ template <typename Client>
 void typeKeys(Client &client, std::string_view keys) {
   for (std::size_t index = 0; index < keys.size(); ++index) {
     const auto outcome = client.promptKey(1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(keys[index]), {}, keys.substr(index, 1)});
-    require(outcome == prompt::Outcome::edited, "typing must edit the island");
+    require(outcome == prompt::Outcome::edited, "typing must edit the line");
   }
 }
 
@@ -79,7 +79,7 @@ PaneShell running(std::uint32_t commands, bool echo = true) {
   return PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = echo, .signal_keys = true, .interrupt = 3, .quit = 28, .suspend = 26, .end_of_file = 4, .commands = commands};
 }
 
-void islandRunsCommands() {
+void lineRunsCommands() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -103,11 +103,15 @@ void islandRunsCommands() {
   require(transport.count(ClientTag::configure_shell_prompt) == 2, "an unchanged mode is not sent again");
 
   auto before = transport.sent.size();
+  require(enter(client) == prompt::Outcome::edited && transport.inputSince(before).empty() && transport.commandsSince(before).empty(), "Enter on an empty line sends nothing, so the shell prints no prompt of its own");
+  typeKeys(client, "  ");
+  require(enter(client) == prompt::Outcome::edited && transport.inputSince(before).empty() && transport.commandsSince(before).empty() && client.promptLine(1)->editor().text().empty(), "a blank line runs nothing and clears");
+
   typeKeys(client, "ls -la");
-  require(transport.inputSince(before).empty(), "typing stays in the island");
+  require(transport.inputSince(before).empty(), "typing stays in the line");
   require(enter(client) == prompt::Outcome::run, "Enter runs a complete command");
   require(transport.commandsSince(before) == std::vector<std::string>{"ls -la"} && transport.inputSince(before).empty(), "the command reaches the runtime whole, which types it at the prompt");
-  require(client.island(1)->editor().text().empty() && client.island(1)->recent().back() == "ls -la", "the island clears and remembers it");
+  require(client.promptLine(1)->editor().text().empty() && client.promptLine(1)->recent().back() == "ls -la", "the line clears and remembers it");
 
   before = transport.sent.size();
   typeKeys(client, "echo 'a");
@@ -117,7 +121,7 @@ void islandRunsCommands() {
 
   before = transport.sent.size();
   client.paste(1, "git status\x1b[201~; rm -rf ~");
-  require(transport.inputSince(before).empty() && client.island(1)->editor().text().view() == "git status[201~; rm -rf ~", "a paste lands in the island without its controls");
+  require(transport.inputSince(before).empty() && client.promptLine(1)->editor().text().view() == "git status[201~; rm -rf ~", "a paste lands in the line without its controls");
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
   require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'd', {.control = true}}) == prompt::Outcome::bytes && transport.inputSince(before) == "\x04", "Ctrl-D on an empty line ends the shell");
 
@@ -128,7 +132,7 @@ void islandRunsCommands() {
   before = transport.sent.size();
   typeKeys(client, "make test");
   enter(client);
-  require(client.island(1)->queued() && transport.inputSince(before).empty(), "Enter arms the queued command");
+  require(client.promptLine(1)->queued() && transport.inputSince(before).empty(), "Enter arms the queued command");
   deliver(client, atPrompt(2, 0));
   require(transport.commandsSince(before) == std::vector<std::string>{"make test"}, "a success runs the queued command");
 
@@ -137,17 +141,17 @@ void islandRunsCommands() {
   typeKeys(client, "deploy");
   enter(client);
   deliver(client, atPrompt(3, 1));
-  require(transport.inputSince(before).empty() && client.island(1)->editor().text().view() == "deploy", "a failure keeps the queued command as a draft");
+  require(transport.inputSince(before).empty() && client.promptLine(1)->editor().text().view() == "deploy", "a failure keeps the queued command as a draft");
 
-  // A password prompt gets the keys; the island only counts them.
+  // A password prompt gets the keys; the line only counts them.
   deliver(client, running(3, false));
   require(client.promptSurface(1) == prompt::Surface::secret, "echo off is a secret");
   require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'a', {}, "a"}) == prompt::Outcome::terminal, "secret keys go to the terminal");
   client.input(1, "a");
   client.input(1, "b");
-  require(client.island(1)->secretKeys() == 2, "the island counts the hidden keys");
+  require(client.promptLine(1)->secretKeys() == 2, "the line counts the hidden keys");
   deliver(client, atPrompt(4, 0));
-  require(client.island(1)->secretKeys() == 0, "the count clears with the prompt");
+  require(client.promptLine(1)->secretKeys() == 0, "the count clears with the prompt");
 
   frame.frame_id = 2;
   frame.input_modes.alternate_screen = true;
@@ -155,12 +159,82 @@ void islandRunsCommands() {
   require(client.promptSurface(1) == prompt::Surface::none, "a full-screen program keeps the terminal");
 }
 
+// One row of two cells, the cursor at `column`.
+template <typename Client>
+void deliverRow(Client &client, std::uint64_t frame_id, std::uint16_t column) {
+  const std::array cells{Cell{.text = byteView("$")}, Cell{.text = byteView(" ")}};
+  std::array<Byte, 64> encoded{};
+  const std::array spans{FrameSpan{.start = 0, .count = 2, .cells = CellRunCodec::encode(cells, encoded)}};
+  const std::array<Byte, 1> flags{};
+  FrameBody frame;
+  frame.pane_id = 1;
+  frame.frame_id = frame_id;
+  frame.cols = 2;
+  frame.rows = 1;
+  frame.scroll.total_rows = 1;
+  frame.cursor = {.visible = true, .x = column, .y = 0};
+  frame.text_metadata = TextMetadata{.row_flags = flags};
+  frame.spans = spans;
+  deliver(client, PaneFrame{frame});
+}
+
+void lineHidesTerminalCursor() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  deliverRow(client, 1, 0);
+  deliver(client, running(1));
+  require(!client.hidesTerminalCursor(1), "classic mode draws the terminal's cursor");
+
+  auto configuration = client.configuration();
+  configuration.prompt.mode = PromptMode::telar;
+  client.configure(configuration);
+  require(client.hidesTerminalCursor(1), "a quick command's cursor at a line's start, where no key lands, is not drawn");
+  client.promptKey(1, prompt::KeyPress{prompt::Key::enter, 0, {.alt = true}});
+  require(client.promptLine(1)->answering() && !client.hidesTerminalCursor(1), "answering the program, the keys land at its cursor");
+  client.promptKey(1, prompt::KeyPress{prompt::Key::enter, 0, {.alt = true}});
+  deliverRow(client, 2, 1);
+  require(!client.hidesTerminalCursor(1), "a program that printed a question shows where its answer goes");
+
+  deliverRow(client, 3, 0);
+  deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::unknown, .shell_foreground = true, .commands = 2});
+  require(client.hidesTerminalCursor(1), "between a command's end and the next prompt the editor is about to take the row");
+  deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::unknown, .shell_foreground = true});
+  require(!client.hidesTerminalCursor(1), "a shell that never marked a command keeps its cursor");
+  deliver(client, atPrompt(2));
+  require(client.promptSurface(1) == prompt::Surface::editor && client.hidesTerminalCursor(1), "at the prompt the editor has the keys, so the terminal's cursor is not drawn");
+}
+
+// A command is marked found or missing while it is typed: an answer that lists every command
+// under a prefix settles the longer words typed after it without asking again.
+void commandsSettleAsTyped() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  deliver(client, atPrompt());
+  require(client.commandPresence(1, "g") == CommandPresence::pending, "the first letter asks the runtime");
+  const auto asked = transport.last<CompleteWords>();
+  const auto requests = transport.count(ClientTag::complete_words);
+  const std::array words{CompletionWord{.text = "git"}, CompletionWord{.text = "gzip"}};
+  deliver(client, CompletionWords{.request_id = asked.request_id, .truncated = false, .words = words});
+  require(client.commandPresence(1, "g") == CommandPresence::missing, "no command is named g");
+  require(client.commandPresence(1, "gi") == CommandPresence::missing && client.commandPresence(1, "git") == CommandPresence::found && client.commandPresence(1, "gzx") == CommandPresence::missing, "longer words settle from the listing");
+  require(transport.count(ClientTag::complete_words) == requests, "without asking again");
+
+  require(client.commandPresence(1, "m") == CommandPresence::pending, "another prefix asks");
+  const auto cut = transport.last<CompleteWords>();
+  deliver(client, CompletionWords{.request_id = cut.request_id, .truncated = true, .words = {}});
+  require(client.commandPresence(1, "ma") == CommandPresence::pending && transport.count(ClientTag::complete_words) == requests + 2, "a cut listing settles nothing longer");
+}
+
 template <typename Client>
 void tab(Client &client) {
   client.promptKey(1, prompt::KeyPress{prompt::Key::tab});
 }
 
-void islandCompletes() {
+void lineCompletes() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -181,22 +255,22 @@ void islandCompletes() {
   typeKeys(client, "git sw");
   tab(client);
   const auto asked = transport.last<RequestCommandSpec>();
-  require(asked.command == "git" && asked.pane_id == 1 && asked.known_digest == 0 && client.island(1)->editor().text().view() == "git sw", "Tab asks the runtime for the command's spec and waits");
+  require(asked.command == "git" && asked.pane_id == 1 && asked.known_digest == 0 && client.promptLine(1)->editor().text().view() == "git sw", "Tab asks the runtime for the command's spec and waits");
   constexpr std::string_view git_spec = R"(git = [ command ] ;
 command = "switch" : "Switch branches" , { @branch } | "status" : "Show the working tree status" | "stash" : "Stash the changes" ;)";
   require(deliver(client, CommandSpec{.request_id = asked.request_id, .command = "git", .state = CommandSpecState::available, .digest = 7, .source = git_spec}) == Change::terminal, "the spec completes the waiting Tab");
-  require(client.island(1)->editor().text().view() == "git switch ", "one choice from the spec is written with a space");
+  require(client.promptLine(1)->editor().text().view() == "git switch ", "one choice from the spec is written with a space");
 
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
   typeKeys(client, "git s");
   tab(client);
-  const auto &menu = client.island(1)->menu();
+  const auto &menu = client.promptLine(1)->menu();
   require(menu && menu->choices.size() > 1 && menu->choices[0].text.starts_with("s"), "several choices open the menu");
   require(!menu->choices[0].description.empty(), "choices carry the spec's description");
   const auto second = menu->choices[1].text;
   tab(client);
   enter(client);
-  require(client.island(1)->editor().text().view() == "git " + second + " " && !client.island(1)->menu(), "Tab moves through the menu and Enter takes the choice");
+  require(client.promptLine(1)->editor().text().view() == "git " + second + " " && !client.promptLine(1)->menu(), "Tab moves through the menu and Enter takes the choice");
 
   // An alias completes as the words it stands for, with its command's spec.
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -205,7 +279,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const auto alias = transport.last<RequestCommandSpec>();
   require(alias.command == "gs" && alias.known_digest == 0, "an alias's spec is asked for under its name");
   deliver(client, CommandSpec{.request_id = alias.request_id, .command = "gs", .state = CommandSpecState::unchanged, .digest = 7, .source = {}, .expansion = "git"});
-  const auto &aliased = client.island(1)->menu();
+  const auto &aliased = client.promptLine(1)->menu();
   require(aliased && aliased->choices.size() == 2 && std::ranges::any_of(aliased->choices, [](const prompt::Choice &choice) { return choice.text == "stash"; }) && std::ranges::any_of(aliased->choices, [](const prompt::Choice &choice) { return choice.text == "status"; }), "the alias completes with git's spec");
   client.promptKey(1, prompt::KeyPress{prompt::Key::escape});
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -224,13 +298,13 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   require(cat.command == "cat", "a command's spec is asked for once");
   deliver(client, CommandSpec{.request_id = cat.request_id, .command = "cat", .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
   const auto find = transport.last<FindPaths>();
-  require(find.root.starts_with("/") && find.query == "sr" && client.island(1)->pending(find.request_id), "paths are asked from the runtime");
+  require(find.root.starts_with("/") && find.query == "sr" && client.promptLine(1)->pending(find.request_id), "paths are asked from the runtime");
   const std::array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
-  require(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == Change::terminal, "the answer repaints the island");
-  require(client.island(1)->editor().text().view() == "cat src/", "the only child that matches is written, a directory without a space");
+  require(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == Change::terminal, "the answer repaints the line");
+  require(client.promptLine(1)->editor().text().view() == "cat src/", "the only child that matches is written, a directory without a space");
 
   typeKeys(client, "my file");
-  require(client.island(1)->editor().text().view() == "cat src/my file", "typing after a completion edits as usual");
+  require(client.promptLine(1)->editor().text().view() == "cat src/my file", "typing after a completion edits as usual");
 
   // A command's name comes from the shell's PATH, through the runtime.
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -240,22 +314,22 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   require(commands.provider == CompletionProvider::command && commands.prefix == "tel" && commands.pane_id == 1, "the runtime is asked for commands");
   const std::array found{CompletionWord{.text = "telar"}, CompletionWord{.text = "telnet"}};
   deliver(client, CompletionWords{.request_id = commands.request_id, .words = found});
-  require(client.island(1)->menu() && client.island(1)->menu()->choices.size() == 2, "the runtime's commands fill the menu");
+  require(client.promptLine(1)->menu() && client.promptLine(1)->menu()->choices.size() == 2, "the runtime's commands fill the menu");
 
   // Typing with the menu open narrows it; a single choice left waits for the user.
   const auto asked_words = transport.count(ClientTag::complete_words);
   typeKeys(client, "a");
-  require(client.island(1)->editor().text().view() == "tela" && client.island(1)->menu() && client.island(1)->menu()->choices.size() == 1 && client.island(1)->menu()->choices[0].text == "telar", "typing narrows the menu");
+  require(client.promptLine(1)->editor().text().view() == "tela" && client.promptLine(1)->menu() && client.promptLine(1)->menu()->choices.size() == 1 && client.promptLine(1)->menu()->choices[0].text == "telar", "typing narrows the menu");
   client.promptKey(1, prompt::KeyPress{prompt::Key::backspace});
-  require(client.island(1)->menu() && client.island(1)->menu()->choices.size() == 2 && transport.count(ClientTag::complete_words) == asked_words, "erasing back to the word it offered widens the menu without asking");
+  require(client.promptLine(1)->menu() && client.promptLine(1)->menu()->choices.size() == 2 && transport.count(ClientTag::complete_words) == asked_words, "erasing back to the word it offered widens the menu without asking");
   client.promptKey(1, prompt::KeyPress{prompt::Key::backspace});
   const auto wider = transport.last<CompleteWords>();
   require(transport.count(ClientTag::complete_words) == asked_words + 1 && wider.prefix == "te", "erasing past it asks again");
   const std::array widened{CompletionWord{.text = "tee"}};
   deliver(client, CompletionWords{.request_id = wider.request_id, .words = widened});
-  require(client.island(1)->editor().text().view() == "te" && client.island(1)->menu() && client.island(1)->menu()->choices.size() == 1, "a single answer to a refined menu is not written");
+  require(client.promptLine(1)->editor().text().view() == "te" && client.promptLine(1)->menu() && client.promptLine(1)->menu()->choices.size() == 1, "a single answer to a refined menu is not written");
   typeKeys(client, "x");
-  require(!client.island(1)->menu() && client.island(1)->editor().text().view() == "tex", "nothing left closes the menu");
+  require(!client.promptLine(1)->menu() && client.promptLine(1)->editor().text().view() == "tex", "nothing left closes the menu");
 
   // A list the runtime cut asks again as typing narrows it.
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -267,7 +341,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   require(transport.last<CompleteWords>().prefix == "te" && transport.last<CompleteWords>().request_id != cut.request_id, "a cut list asks again");
   deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = found});
   typeKeys(client, "l ");
-  require(!client.island(1)->menu() && client.island(1)->editor().text().view() == "tel ", "a space leaves the word and closes the menu");
+  require(!client.promptLine(1)->menu() && client.promptLine(1)->editor().text().view() == "tel ", "a space leaves the word and closes the menu");
 
   // A spec's provider: git switch asks for branches.
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -277,21 +351,21 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   require(branches.provider == CompletionProvider::branch && branches.prefix == "fe", "branches are asked for where the spec expects one");
   const std::array branch{CompletionWord{.text = "feature/island", .description = ""}};
   deliver(client, CompletionWords{.request_id = branches.request_id, .words = branch});
-  require(client.island(1)->editor().text().view() == "git switch feature/island ", "the only branch is written");
+  require(client.promptLine(1)->editor().text().view() == "git switch feature/island ", "the only branch is written");
 
-  // Suggestions come from the history, newest first, and from what the island just sent.
+  // Suggestions come from the history, newest first, and from what the line just sent.
   const auto query = transport.last<QueryHistory>();
-  require(query.distinct && query.author == HistoryAuthorFilter::human, "the island loads the commands people typed");
+  require(query.distinct && query.author == HistoryAuthorFilter::human, "the line loads the commands people typed");
   const std::array entries{HistoryEntry{.id = 2, .pane_id = 1, .command = "make test-runtime", .cwd = "/"}, HistoryEntry{.id = 1, .pane_id = 1, .command = "make install", .cwd = "/"}};
   require(deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries}) == Change::none, "the editor's history does not touch the history panel");
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
   typeKeys(client, "make t");
-  require(client.island(1)->suggestion(client.promptHistory()) == "est-runtime", "the newest command that extends the line is suggested");
+  require(client.promptLine(1)->suggestion(client.promptHistory()) == "est-runtime", "the newest command that extends the line is suggested");
   client.promptKey(1, prompt::KeyPress{prompt::Key::right});
-  require(client.island(1)->editor().text().view() == "make test-runtime", "Right takes the suggestion");
+  require(client.promptLine(1)->editor().text().view() == "make test-runtime", "Right takes the suggestion");
   enter(client);
   typeKeys(client, "mak");
-  require(client.island(1)->suggestion(client.promptHistory()) == "e test-runtime", "a command sent from the island is suggested next");
+  require(client.promptLine(1)->suggestion(client.promptHistory()) == "e test-runtime", "a command sent from the line is suggested next");
 
   // After a command the pane asks again, with the digest of the spec it holds: an unchanged
   // spec is not sent twice.
@@ -304,7 +378,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const auto again = transport.last<RequestCommandSpec>();
   require(again.command == "git" && again.known_digest == 7, "the pane asks again with the digest it holds");
   deliver(client, CommandSpec{.request_id = again.request_id, .command = "git", .state = CommandSpecState::unchanged, .digest = 7, .source = {}});
-  require(client.island(1)->editor().text().view() == "git stash " || (client.island(1)->menu() && client.island(1)->menu()->choices.size() == 2), "the spec it held completes");
+  require(client.promptLine(1)->editor().text().view() == "git stash " || (client.promptLine(1)->menu() && client.promptLine(1)->menu()->choices.size() == 2), "the spec it held completes");
   client.promptKey(1, prompt::KeyPress{prompt::Key::escape});
 
   // A shell ssh reached: its files and commands are not this host's to offer.
@@ -324,7 +398,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   require(client.promptSurface(1) == prompt::Surface::editor, "its prompt is still edited");
 }
 
-void islandBindings() {
+void lineBindings() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -350,7 +424,7 @@ void islandBindings() {
   typeKeys(client, "echo hi");
   client.promptKey(1, prompt::KeyPress{prompt::Key::escape});
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'H', {}, "H"});
-  require(client.island(1)->editor().text().cursor() == 0 && client.island(1)->editor().text().view() == "echo hi", "a binding in normal mode replaces vim's own key");
+  require(client.promptLine(1)->editor().text().cursor() == 0 && client.promptLine(1)->editor().text().view() == "echo hi", "a binding in normal mode replaces vim's own key");
   client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'i', {}, "i"});
   const auto before = transport.sent.size();
   require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'j', {.control = true}}) == prompt::Outcome::run, "a bound key runs its action");
@@ -361,7 +435,7 @@ void islandBindings() {
 
 // The command blocks, from the editor: stepped through from vim's normal mode, their output
 // selected in copy mode or copied whole, their command copied, and left for the prompt.
-void islandBlocks() {
+void lineBlocks() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -421,7 +495,7 @@ void islandBlocks() {
   require(!client.selectedBlock(1), "past the last block is the live prompt");
   control('u');
   press('A');
-  require(!client.selectedBlock(1) && client.island(1)->editor().mode() == prompt::Mode::insert, "A goes back to the prompt to type");
+  require(!client.selectedBlock(1) && client.promptLine(1)->editor().mode() == prompt::Mode::insert, "A goes back to the prompt to type");
 
   // Without vim's normal mode, prefix+[ is the way in.
   configuration.prompt.keymap = PromptKeymap::emacs;
@@ -432,7 +506,7 @@ void islandBlocks() {
 }
 
 // On a selected block the view moves, folds, jumps and searches the block's output.
-void islandBlockMotions() {
+void lineBlockMotions() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -524,9 +598,9 @@ void islandBlockMotions() {
   require(!client.selectedBlock(1) && top() == 99, "G goes back to the live end");
 }
 
-// Ctrl-R and the path search start from the line the island holds, and the path chosen
+// Ctrl-R and the path search start from the command the line holds, and the path chosen
 // replaces the word it started from.
-void islandSearches() {
+void lineSearches() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -544,23 +618,23 @@ void islandSearches() {
 
   typeKeys(client, "cat src/ma");
   require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::search_history, "Ctrl-R at the prompt searches the history");
-  require(client.island(1)->editor().text().view() == "cat src/ma", "opening the search keeps the line");
+  require(client.promptLine(1)->editor().text().view() == "cat src/ma", "opening the search keeps the line");
 
-  require(client.beginPathPicker(), "the path search opens over the island");
+  require(client.beginPathPicker(), "the path search opens over the line");
   require(client.pathSeed() == "src/ma" && transport.last<FindPaths>().query == "src/ma", "the path search starts from the word before the caret");
   auto request = transport.last<FindPaths>();
   std::array matches{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}};
   deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
   auto before = transport.sent.size();
   require(client.insertPath(0, false), "a found path inserts");
-  require(transport.inputSince(before).empty() && client.island(1)->editor().text().view() == "cat src/main.cpp", "the path replaces the word in the island");
+  require(transport.inputSince(before).empty() && client.promptLine(1)->editor().text().view() == "cat src/main.cpp", "the path replaces the word in the line");
 
   typeKeys(client, " ~/x");
   require(client.beginPathPicker() && client.pathSeed().empty() && transport.last<FindPaths>().query.empty(), "a word that is not a plain relative path starts the search empty");
   request = transport.last<FindPaths>();
   matches[0] = PathMatch{.path = "a.txt", .kind = PathKind::file};
   deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
-  require(client.insertPath(0, false) && client.island(1)->editor().text().view() == "cat src/main.cpp ~/xa.txt", "without a word the path goes in at the caret");
+  require(client.insertPath(0, false) && client.promptLine(1)->editor().text().view() == "cat src/main.cpp ~/xa.txt", "without a word the path goes in at the caret");
 
   deliver(client, running(1));
   typeKeys(client, "x");
@@ -568,11 +642,13 @@ void islandSearches() {
 }
 
 int main() {
-  islandRunsCommands();
-  islandSearches();
-  islandBindings();
-  islandCompletes();
-  islandBlocks();
-  islandBlockMotions();
+  lineRunsCommands();
+  lineHidesTerminalCursor();
+  commandsSettleAsTyped();
+  lineSearches();
+  lineBindings();
+  lineCompletes();
+  lineBlocks();
+  lineBlockMotions();
   std::puts("gui-prompt-session: passed");
 }

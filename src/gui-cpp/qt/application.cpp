@@ -825,6 +825,12 @@ void Application::presentChange(Change change) {
     refreshPeek();
     emit stateChanged();
     break;
+  case Change::document:
+    emit documentChanged(session().changedPane());
+    // Inline documents take rows of the view, or give them back.
+    emit terminalChanged(session().changedPane());
+    requestTerminalFrame();
+    break;
   case Change::copy_mode:
     emit copySearchChanged();
     emit stateChanged();
@@ -1309,10 +1315,10 @@ void Application::executeWindowAction(Action action) {
     history_filters_ = {.author = session().configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
     session().inspectHistory(false);
     showDialog(QStringLiteral("history"));
-    // In the island, the search starts from the line being written.
+    // At the prompt line, the search starts from the command being written.
     QString seed;
-    if (const auto *island = island_search_pane_ == 0 ? nullptr : session().island(island_search_pane_)) {
-      seed = toQString(island->editor().text().view());
+    if (const auto *line = line_search_pane_ == 0 ? nullptr : session().promptLine(line_search_pane_)) {
+      seed = toQString(line->editor().text().view());
       seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
     }
     searchHistory(seed);
@@ -1461,7 +1467,7 @@ void Application::scroll(PaneScrollDelta delta) {
   }
 }
 
-void Application::showDialog(const QString &kind, const QString &text) {
+void Application::showDialog(const QString &kind) {
   if (kind != QLatin1StringView("peek")) {
     session().closePeek();
     peek_origin_.reset();
@@ -1501,13 +1507,12 @@ void Application::showDialog(const QString &kind, const QString &text) {
   const bool searching = kind == QLatin1StringView("history") || kind == QLatin1StringView("paths");
   const auto &copy = session().copyMode().state();
   if (kind == QLatin1StringView("copy-search") && copy) {
-    island_search_pane_ = copy->pane_id;
+    line_search_pane_ = copy->pane_id;
   } else {
-    island_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
+    line_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
   }
 
   dialog_ = kind;
-  dialog_text_ = text;
   emit dialogChanged();
 }
 
@@ -1552,16 +1557,12 @@ QString Application::dialog() const {
   return dialog_;
 }
 
-QString Application::islandSearch() const {
-  return island_search_pane_ == 0 ? QString{} : dialog_;
+QString Application::lineSearch() const {
+  return line_search_pane_ == 0 ? QString{} : dialog_;
 }
 
-QString Application::islandSearchPane() const {
-  return island_search_pane_ == 0 ? QString{} : QString::number(island_search_pane_);
-}
-
-QString Application::dialogText() const {
-  return dialog_text_;
+QString Application::lineSearchPane() const {
+  return line_search_pane_ == 0 ? QString{} : QString::number(line_search_pane_);
 }
 
 bool Application::connected() const {

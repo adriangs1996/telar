@@ -74,18 +74,19 @@ TextScene::TextScene(tbc::view<QQuickWindow &, tbc::lt::a> window)
       row_(memory_) {}
 
 void TextScene::configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection) {
+  constexpr std::array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
+  rasterization_ = {.optical = font.thicken, .strength = font.thicken_strength, .hinting = hinting.at(std::to_underlying(font.hinting))};
 #ifdef Q_OS_MACOS
-  if (!font.thicken) {
+  if (!rasterization_.coreText()) {
     optical_.reset();
   } else if (!optical_) {
     optical_ = OpticalText::create();
   }
 #endif
-  rasterization_ = font.thicken ? fonts::GlyphRasterization{.optical = true, .strength = font.thicken_strength} : fonts::GlyphRasterization{};
   grid_ = grid;
   collection_ = collection;
   fonts_ = ResidentFonts::shared(collection_);
-  if (rasterization_.optical) {
+  if (rasterization_.configured()) {
     optical_glyphs_ = ChromeGlyphImages<ResidentFonts, true>::shared(window_, fonts_, rasterization_);
     resident_glyphs_.reset();
   } else {

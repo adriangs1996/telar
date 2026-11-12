@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Cybervenom, Telar's default theme (src/gui-cpp/config/theme_presets.inc), is
+/* Cybervenom, Telar's brand theme (src/gui-cpp/config/theme_presets.inc), is
    the site's only palette: the landing, the docs and the brand share it. Each
    token is one of the preset's chrome or terminal colors. */
 @theme inline {

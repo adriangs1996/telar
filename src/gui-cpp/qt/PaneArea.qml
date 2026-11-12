@@ -318,7 +318,21 @@ Item {
 
                 // The commands the shell ran: a separator over each one's prompt, and a dot per
                 // command beside the pane to reach it.
+                // Documents drawn in place of the rows of text they stand for, moving with them,
+                // under the separators and the prompt line.
+                InlineDocuments {
+                    anchors.fill: parent
+                    transform: Translate { y: -viewport.rise }
+                    application: root.application
+                    paneId: pane.record.key
+                    view: terminal
+                    colors: root.application.colors
+                    grid: root.application.windowGeometry.typography.grid
+                    ratio: root.ratio
+                }
+
                 CommandSeparators {
+                    id: separators
                     view: terminal
                     // With the rows, which a view scrolled by pixels draws shifted up.
                     transform: Translate { y: -viewport.rise - terminal.scrollShift }
@@ -327,8 +341,6 @@ Item {
                     grid: root.application.windowGeometry.typography.grid
                     ratio: root.ratio
                     moving: promptLine.moving
-                    landing: promptLine.landing
-                    holding: promptLine.flying
                     interruptKey: promptLine.interruptKey
                     queueing: promptLine.queueing
                     secret: promptLine.secret
@@ -337,6 +349,7 @@ Item {
 
                 PromptLine {
                     id: promptLine
+                    revealDelay: separators.revealDelay
                     transform: Translate { y: -viewport.rise }
                     application: root.application
                     paneId: pane.record.key
@@ -371,6 +384,18 @@ Item {
                     anchors.topMargin: 12 * root.ratio
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 28 * root.ratio
+                }
+
+                // A document the pane's program shows natively covers its rows while it runs.
+                DocumentView {
+                    anchors.fill: parent
+                    z: 4
+                    application: root.application
+                    paneId: pane.record.key
+                    colors: root.application.colors
+                    grid: root.application.windowGeometry.typography.grid
+                    ratio: root.ratio
+                    focusTarget: terminal
                 }
             }
 

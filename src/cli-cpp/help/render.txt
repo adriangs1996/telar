@@ -1,0 +1,14 @@
+telar render: Show content as a document
+
+Usage: telar render KIND [FILE|-] [--format auto|native|ansi] [--pager] [--width N]
+
+Kinds:
+  markdown        GitHub-flavoured Markdown: tables, task lists, footnotes, alerts
+
+The content is rendered by this command, never by the window. Inside a Telar pane it prints
+styled text that the window draws as a native document in place, in the pane's scrollback;
+--pager shows it over the whole pane until you quit instead. Elsewhere it prints the styled
+text alone. Images are never fetched; the window opens a link when clicked, and only http,
+https and mailto links.
+
+`telar render markdown --help` explains the arguments, formats and limits.

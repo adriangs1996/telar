@@ -26,6 +26,7 @@ Execution (runtime-owned, no terminal)
   project         Run a repository's declared setup recipe in a checkout, explicitly authorized
   file            Publish a file from standard input, or write one to standard output, byte-exact
   clipboard       Read text or an encoded image from the runtime machine's clipboard
+  render          Show a Markdown file as a native document in this pane, or as styled text elsewhere
 
 Machines (other computers)
   machine         Save, check and set up other machines; `telar --machine LABEL COMMAND...` runs a command there
@@ -59,7 +60,7 @@ Options before COMMAND:
   --config PATH     Load a specific Lua configuration (default: $XDG_CONFIG_HOME/telar/config.lua)
   --no-config       Do not load Lua configuration
   --profile NAME    Overlay a named Lua profile before CLI options
-  --theme NAME      UI theme: cybervenom (default), shade, vesper, catppuccin,
+  --theme NAME      UI theme: shade (default), cybervenom, vesper, catppuccin,
                     tokyo-night, kanagawa, kanagawa-dragon, pierre-dark,
                     pierre-dark-soft, terminal
   --remote DEST     Attach to the runtime on an SSH host (needs telar on the remote PATH)

@@ -18,13 +18,17 @@ bool Application::editsPrompt(std::uint64_t pane_id) const noexcept {
   return session().editsPrompt(pane_id);
 }
 
-const prompt::Island *Application::promptIsland(std::uint64_t pane_id) const noexcept {
-  return session().island(pane_id);
+bool Application::hidesTerminalCursor(std::uint64_t pane_id) const noexcept {
+  return session().hidesTerminalCursor(pane_id);
+}
+
+const prompt::Line *Application::promptLine(std::uint64_t pane_id) const noexcept {
+  return session().promptLine(pane_id);
 }
 
 std::string_view Application::promptSuggestion(std::uint64_t pane_id) const noexcept {
-  const auto *island = session().island(pane_id);
-  return island == nullptr ? std::string_view{} : island->suggestion(session().promptHistory());
+  const auto *line = session().promptLine(pane_id);
+  return line == nullptr ? std::string_view{} : line->suggestion(session().promptHistory());
 }
 
 CommandPresence Application::commandPresence(std::uint64_t pane_id, std::string_view word) {

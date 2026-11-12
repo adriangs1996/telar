@@ -42,6 +42,13 @@ outline dilation, from zero at `thicken_strength=0` to half a physical pixel at
 terminal grid unchanged. The two rasterizers do not promise pixel-identical ink.
 Procedural box, block and braille glyphs are not thickened.
 
+`gui.font.hinting = "light"` or `"full"` sends the primary face through FreeType's
+autohinter on both platforms (`FT_LOAD_TARGET_LIGHT` or `FT_LOAD_FORCE_AUTOHINT`), so
+macOS skips CoreText and `thicken` becomes the FreeType dilation. Glyph caches are
+separate per hinting mode. `tools/terminal_scene_probe.cpp --text FILE` renders given
+lines with a chosen size, spacing, strength, hinting and colors to a PNG for
+comparisons.
+
 `gui.window.background_opacity` is the fallback for every background. Override
 `gui.opacity.sidebar`, `topbar`, `bottombar`, `workspace` or `pane` independently
 with a number from zero to one. Headers inherit the pane opacity. These are final

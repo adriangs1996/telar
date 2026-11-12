@@ -57,9 +57,9 @@ namespace telar {
     };
 
     // cqp00002 added PaneShell, PaneGit, PaneBlocks, word completion and command specs;
-    // cqp00003 adds ReadPaneRows, PaneRows, PaneScrollback, SearchPaneRows, PaneCommand and
-    // ConfigureShellPrompt. Peers without them reject the messages.
-    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '3'};
+    // cqp00003 added ReadPaneRows, PaneRows, PaneScrollback, SearchPaneRows, PaneCommand and
+    // ConfigureShellPrompt; cqp00004 adds PaneDocument. Peers without them reject the messages.
+    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '4'};
 
   } // namespace handshake
 
@@ -1721,18 +1721,6 @@ namespace telar {
 
       readAll(buffer.data(), length);
       return buffer.first(length);
-    }
-
-    inline void interruptRead() const noexcept {
-      if (_fd < 0) {
-        return;
-      }
-
-      int result;
-
-      do {
-        result = ::shutdown(_fd, SHUT_RD);
-      } while (result < 0 && errno == EINTR);
     }
 
     inline int descriptor() const noexcept {

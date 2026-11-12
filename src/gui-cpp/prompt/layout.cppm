@@ -9,8 +9,8 @@ import std;
 export import telar.gui.text.bounded_editor;
 export import telar.shell.syntax;
 
-// Places the command on the island's cell grid: runs of one style per row, wrapping at the
-// island's width so nothing is ever cut, and where the caret and the selection fall. Pure, so
+// Places the command on the line's cell grid: runs of one style per row, wrapping at the
+// line's width so nothing is ever cut, and where the caret and the selection fall. Pure, so
 // the view repaints from it and tests check it.
 export namespace telar::gui::prompt {
 
@@ -66,8 +66,8 @@ struct Layout {
 
 // Colours the command the way its shell reads it, from the shell lexer: the command of each
 // simple command (and the one a wrapper such as sudo runs), options, quoted strings,
-// variables, operators, keywords and comments. A command still being typed at the end of the
-// line is pending until a blank ends it, so its colour does not flicker while typing.
+// variables, operators, keywords and comments. A command is one while it is still being typed,
+// as the shell's own highlighting shows it: whether it exists is the editor's to mark.
 inline void classify(std::string_view text, std::span<Style> styles, shell::Syntax syntax = {}) {
   std::ranges::fill(styles, Style::plain);
   thread_local std::vector<shell::Token> tokens;
@@ -80,12 +80,12 @@ inline void classify(std::string_view text, std::span<Style> styles, shell::Synt
     const auto word = text.substr(token.begin, token.end - token.begin);
     switch (token.kind) {
     case shell::TokenKind::command:
-      style = token.end == text.size() ? Style::pending : Style::command;
+      style = Style::command;
       wrapped = std::ranges::find(wrappers, word) != wrappers.end() ? token.command : shell::no_command;
       break;
     case shell::TokenKind::argument:
       if (token.command == wrapped && (token.flags & shell::Token::word_start) != 0 && !word.starts_with('-') && word.find('=') == std::string_view::npos) {
-        style = token.end == text.size() ? Style::pending : Style::command;
+        style = Style::command;
         wrapped = std::ranges::find(wrappers, word) != wrappers.end() ? token.command : shell::no_command;
       } else if (word.find('/') != std::string_view::npos && !word.starts_with('-')) {
         style = Style::path;

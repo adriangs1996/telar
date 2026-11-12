@@ -331,9 +331,6 @@ export {
 namespace telar::gui {
 
 inline std::string_view canonicalThemeName(std::string_view name) noexcept {
-  if (name == "osaka-jade" || name == "osaka_jade" || name == "osakajade") {
-    return "shade";
-  }
   if (name == "catppuccin-mocha" || name == "mocha") {
     return "catppuccin";
   }
@@ -769,6 +766,16 @@ private:
     font.letter_spacing = static_cast<float>(table.field("letter_spacing").boundedNumber(font.letter_spacing, FontConfiguration::minimum_letter_spacing, FontConfiguration::maximum_letter_spacing));
     font.thicken = table.field("thicken").boolean(font.thicken);
     font.thicken_strength = static_cast<std::uint8_t>(table.field("thicken_strength").boundedInteger(font.thicken_strength, 0, FontConfiguration::maximum_thicken_strength));
+    const auto hinting = table.field("hinting");
+    if (hinting.present()) {
+      const auto name = hinting.string();
+      const auto *const found = std::ranges::find(font_hinting_names, name);
+      if (found == font_hinting_names.end()) {
+        hinting.fail("must be native, light or full");
+      }
+
+      font.hinting = static_cast<FontHinting>(found - font_hinting_names.begin());
+    }
   }
 
   inline static void window(const Value &table, Configuration &configuration) {

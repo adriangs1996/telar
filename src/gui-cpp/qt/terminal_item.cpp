@@ -107,8 +107,6 @@ TerminalItem::TerminalItem(QQuickItem *parent)
     cursor_on_ = !cursor_on_;
     update();
   });
-  hold_limit_.setSingleShot(true);
-  connect(&hold_limit_, &QTimer::timeout, this, &TerminalItem::releaseOutput);
   // At rest, with nothing drawn from them, the rows kept beyond the screen are given back.
   scroll_release_.setSingleShot(true);
   connect(&scroll_release_, &QTimer::timeout, this, [this] {
@@ -480,8 +478,13 @@ static PromptRows promptRows(const Screen<ApplicationAllocator> &screen, bool ed
   constexpr std::size_t search = 8;
   for (std::size_t row = last + 1; row-- > 0 && last - row < search;) {
     if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
+      // A prompt above where the last command's rows end is that command's: the shell's state
+      // can arrive before the frame with its next prompt, and that one's output is not prompt.
+      if (offset + row < live_from) {
+        return {};
+      }
       // The cursor is at or under the scrollback's live screen, at most `search` rows under its prompt.
-      if (below && (offset + row < live_from || offset + row + search <= bottom)) {
+      if (below && offset + row + search <= bottom) {
         return {};
       }
       return {row, last - row + 1, !below};
@@ -531,6 +534,8 @@ std::size_t TerminalItem::liveSession(const Pane<ApplicationAllocator> &pane) no
 void TerminalItem::refreshBlocks() {
   const auto *current = pane();
   QVariantList separators;
+  QVariantList documents;
+  QVariantMap document_rows;
   QVariantList rail;
   QVariantList remote_rows;
   int prompt_row = -1;
@@ -602,14 +607,6 @@ void TerminalItem::refreshBlocks() {
       rows_below = total_shown > top_row_ + rows ? static_cast<int>(std::min<std::uint64_t>(total_shown - top_row_ - rows, std::numeric_limits<int>::max())) : 0;
     } else {
       rows_below = bottom > top ? static_cast<int>(std::min<std::uint64_t>(bottom - top, std::numeric_limits<int>::max())) : 0;
-    }
-    // Output held while the line turns into its separator.
-    if (held_from_ && !screen.modes().alternate_screen) {
-      for (std::size_t index = 0; index < drawn; ++index) {
-        if (const auto row = absolute(index); row && *row >= *held_from_) {
-          hidden_rows_[index] = 1;
-        }
-      }
     }
     const bool telar = application_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
     const auto selected = application_->selectedBlock(pane_id_);
@@ -684,6 +681,28 @@ void TerminalItem::refreshBlocks() {
         run_first = -1;
       }
     }
+    // Documents drawn in place of the rows they stand for: where each one's display rows start
+    // among the drawn rows, its cells left unpainted under it. One the view is yet to measure is
+    // listed unplaced, for the view to lay it out and measure it.
+    const auto &folds = mapped ? viewFolds() : current->folds;
+    for (const auto &document : current->inline_documents) {
+      if (!document.shown) {
+        continue;
+      }
+      const auto id = static_cast<qulonglong>(document.id);
+      const auto first = document.first_row - current->scrollback_trimmed;
+      const auto placed = mapped && document.view_rows != 0 && std::ranges::any_of(folds.spans(), [&](const FoldMap<>::Span &span) { return span.first == first && span.shown != 0; });
+      documents.push_back(QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("rows"), placed ? static_cast<int>(document.view_rows) : 0}, {QStringLiteral("placed"), placed}});
+      if (!placed) {
+        continue;
+      }
+      const auto start = static_cast<std::int64_t>(folds.display(first)) - static_cast<std::int64_t>(top_row_);
+      const auto end = start + document.view_rows;
+      for (auto index = std::max<std::int64_t>(start, 0); index < std::min<std::int64_t>(end, static_cast<std::int64_t>(drawn)); ++index) {
+        hidden_rows_[static_cast<std::size_t>(index)] = 1;
+      }
+      document_rows.insert(QString::number(id), static_cast<int>(std::clamp<std::int64_t>(start, -1'000'000, 1'000'000)));
+    }
   }
   if (prompt_top != prompt_top_ || cursor_row != cursor_row_ || screen_rows != rows_ || rows_below != rows_below_) {
     prompt_top_ = prompt_top;
@@ -692,8 +711,13 @@ void TerminalItem::refreshBlocks() {
     rows_below_ = rows_below;
     emit placeChanged();
   }
-  if (separators != separators_ || rail != rail_ || remote_rows != remote_rows_ || prompt_row != prompt_row_ || font_.cell != shown_cell_) {
+  if (documents != documents_) {
+    documents_ = std::move(documents);
+    emit documentsChanged();
+  }
+  if (separators != separators_ || document_rows != document_rows_ || rail != rail_ || remote_rows != remote_rows_ || prompt_row != prompt_row_ || font_.cell != shown_cell_) {
     separators_ = std::move(separators);
+    document_rows_ = std::move(document_rows);
     rail_ = std::move(rail);
     remote_rows_ = std::move(remote_rows);
     prompt_row_ = prompt_row;
@@ -717,56 +741,6 @@ QVariantList TerminalItem::remoteRows() const {
 
 int TerminalItem::promptRow() const noexcept {
   return prompt_row_;
-}
-
-void TerminalItem::holdOutput() {
-  const auto *current = pane();
-  if (current == nullptr || application_ == nullptr || current->screen.modes().alternate_screen) {
-    return;
-  }
-  const auto &screen = current->screen;
-  const auto prompt = promptRows(screen, true, liveFrom(current->blocks));
-  const auto row = prompt.count == 0 ? static_cast<std::size_t>(screen.cursor().y) : prompt.first;
-  held_from_ = static_cast<std::uint64_t>(screen.scroll().offset) + row;
-  reveal_rows_ = 0;
-  // Never longer than a moment, whatever becomes of the flight.
-  hold_limit_.start(400);
-  refreshBlocks();
-  update();
-}
-
-void TerminalItem::releaseOutput() {
-  hold_limit_.stop();
-  const auto *current = pane();
-  const auto held = std::exchange(held_from_, std::nullopt);
-  if (!held || current == nullptr) {
-    refreshBlocks();
-    update();
-    return;
-  }
-  // What arrived while held enters line by line, at most a screen in at most 150 ms; what
-  // arrives later is drawn as it comes.
-  const auto &screen = current->screen;
-  const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
-  std::uint64_t rows = 0;
-  for (std::size_t row = 0; row < screen.rows() && !screen.modes().alternate_screen; ++row) {
-    if (top + row < *held) {
-      continue;
-    }
-    const auto cells = screen.row(row);
-    if (std::ranges::any_of(cells, [](const CellValue &cell) { return cell.utf8() != " " && !cell.utf8().empty(); })) {
-      rows = top + row - *held + 1;
-    }
-  }
-  if (rows != 0) {
-    constexpr qint64 cascade_ms = 150;
-    reveal_from_ = *held;
-    reveal_rows_ = rows;
-    reveal_step_ms_ = std::min<qint64>(12, cascade_ms / static_cast<qint64>(rows));
-    reveal_clock_.start();
-  }
-  refreshBlocks();
-  update();
 }
 
 void TerminalItem::selectBlock(int index) {
@@ -799,17 +773,21 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   }
 
   CellSelection selection;
-  std::optional<Cursor> copy_cursor;
+  std::optional<Cursor> cursor_override;
   const auto &copy = application_->copyState();
   if (copy && copy->pane_id == pane_id_) {
     selection = copy->selection(copyGrid(current->screen));
     if (!copy->pointer) {
       const auto offset = current->screen.scroll().offset;
-      copy_cursor = Cursor{};
+      cursor_override = Cursor{};
       if (copy->cursor.y >= offset && copy->cursor.y - offset < current->screen.rows()) {
-        copy_cursor = Cursor{.visible = true, .x = copy->cursor.x, .y = static_cast<std::uint16_t>(copy->cursor.y - offset), .shape = CursorShape::block, .blink = false};
+        cursor_override = Cursor{.visible = true, .x = copy->cursor.x, .y = static_cast<std::uint16_t>(copy->cursor.y - offset), .shape = CursorShape::block, .blink = false};
       }
     }
+  }
+  // Where no key would land, the terminal's cursor is not drawn (see hidesTerminalCursor).
+  if (!cursor_override && application_->hidesTerminalCursor(pane_id_)) {
+    cursor_override = Cursor{};
   }
 
   // The rows a view scrolled by pixels or folded draws, from the screen and from the rows kept
@@ -836,32 +814,7 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
     }
   }
 
-  // A command's first lines of output enter one after another, each rising into place.
   revealed_rows_.clear();
-  if (reveal_rows_ != 0) {
-    constexpr qint64 entrance_ms = 140;
-    const auto elapsed = reveal_clock_.elapsed();
-    const auto top = static_cast<std::uint64_t>(current->screen.scroll().offset);
-    revealed_rows_.assign(mapped ? view_rows_.size() : current->screen.rows(), 1.0F);
-    bool entering = false;
-    for (std::size_t row = 0; row < revealed_rows_.size(); ++row) {
-      if (mapped && !view_rows_[row].exists) {
-        continue;
-      }
-      const auto line = mapped ? view_rows_[row].row : top + row;
-      if (line >= reveal_from_ && line < reveal_from_ + reveal_rows_) {
-        const auto progress = std::clamp(static_cast<float>(elapsed - static_cast<qint64>(line - reveal_from_) * reveal_step_ms_) / entrance_ms, 0.0F, 1.0F);
-        revealed_rows_[row] = progress;
-        entering |= progress < 1.0F;
-      }
-    }
-    if (entering) {
-      QMetaObject::invokeMethod(this, &QQuickItem::update, Qt::QueuedConnection);
-    } else {
-      reveal_rows_ = 0;
-      revealed_rows_.clear();
-    }
-  }
   // While a fold opens or closes: the rows below on the moving edge, the output row it
   // crosses fading under it.
   row_offsets_.clear();
@@ -896,7 +849,7 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
       .pane_focused = hasActiveFocus(),
       .keyboard = keyboard_,
       .cursor_on = cursor_on_,
-      .cursor_override = copy_cursor,
+      .cursor_override = cursor_override,
       .hovered_link = link_hover_.current() ? &link_hover_.current()->match : nullptr,
       .owner = this,
       .background_provided = background_provided_,
@@ -959,7 +912,9 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
   const auto &copy = application_->copyState();
   const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
 
-  if (clipboard_shortcut && event->key() == Qt::Key_C && selected) {
+  if (preedit_.isEmpty() && application_->documentKey(pane_id_, *event)) {
+    // The document the pane shows took a scroll key.
+  } else if (clipboard_shortcut && event->key() == Qt::Key_C && selected) {
     application_->copySelection(pane_id_);
   } else if (clipboard_shortcut && event->key() == Qt::Key_V) {
     application_->paste(pane_id_, QGuiApplication::clipboard()->text());

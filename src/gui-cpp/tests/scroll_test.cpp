@@ -203,6 +203,25 @@ struct RowsReply {
   }
 };
 
+// A document shows its rows in display rows of its own, more or fewer than it stands for,
+// beside folds that hide theirs.
+void documentsShowTheirOwnRows() {
+  FoldMap<> folds;
+  const std::array<FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
+  folds.assign(spans);
+  require(folds.display(9) == 9 && folds.display(12) == 10 && folds.display(15) == 10, "a fold still hides its rows");
+  require(folds.display(20) == 15 && folds.display(22) == 17 && folds.display(23) == 21, "a document longer than its rows pushes the rows below down");
+  require(folds.row(15) == 20 && folds.row(17) == 22 && folds.row(20) == 22 && folds.row(21) == 23, "its display rows past its rows stand for its last row");
+  require(folds.display(40) == 38 && folds.display(43) == 41 && folds.display(49) == 41 && folds.display(50) == 42 && folds.row(42) == 50, "a document shorter than its rows pulls the rows below up");
+  require(folds.shownRows(100) == 92 && folds.shownRows(22) == 17, "shown rows count each document's own");
+  require(folds.showing(16) == &folds.spans()[1] && folds.showing(30) == nullptr && folds.showing(10) == nullptr, "a display row knows the document it shows");
+  require(!folds.hides(23) && folds.hides(12) && folds.hides(46) && !folds.hides(41), "rows past what a document shows are hidden");
+
+  const std::array<FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
+  folds.assign(covered);
+  require(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == 10, "a fold over a document hides it");
+}
+
 void rowCacheKeepsRowsByStableNumber() {
   constexpr std::uint64_t generation = 3;
   constexpr std::uint64_t request = 7;
@@ -350,6 +369,7 @@ void foldedBlocksHideTheirOutput() {
 
 int main() {
   try {
+    documentsShowTheirOwnRows();
     wheelEasesToItsTarget();
     precisePixelsFollowOneToOne();
     releaseFlings();

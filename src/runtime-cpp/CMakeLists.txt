@@ -129,7 +129,10 @@ set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITI
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/tbc/include")
 # Third-party headers, as the other dependencies': the project neither warns about nor annotates them.
 target_include_directories(runtime-core SYSTEM PUBLIC "${TELAR_NATIVE_INCLUDE_DIR}")
-target_link_libraries(runtime-core PUBLIC telar::tls telar-clipboard)
+if(NOT TARGET telar-render)
+  add_subdirectory(../../lib/telar-render "${CMAKE_CURRENT_BINARY_DIR}/telar-render")
+endif()
+target_link_libraries(runtime-core PUBLIC telar::tls telar-clipboard telar::render)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 add_subdirectory(../../lib/telar-git "${CMAKE_CURRENT_BINARY_DIR}/telar-git")

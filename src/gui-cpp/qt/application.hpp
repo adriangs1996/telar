@@ -191,7 +191,6 @@ class Application final : public QObject {
   Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY stateChanged)
   Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
   Q_PROPERTY(QString dialog READ dialog NOTIFY dialogChanged)
-  Q_PROPERTY(QString dialogText READ dialogText NOTIFY dialogChanged)
   // The command whose output the scrollback search reads, empty while it reads the whole
   // scrollback; and whether Tab can switch between the two.
   Q_PROPERTY(QString copySearchScope READ copySearchScope NOTIFY dialogChanged)
@@ -200,8 +199,8 @@ class Application final : public QObject {
   // matches and which one the cursor is on, and what it reads.
   Q_PROPERTY(QVariantMap copySearchState READ copySearchState NOTIFY copySearchChanged)
   // The history or path search the focused pane's prompt line hosts in place of the dialog.
-  Q_PROPERTY(QString islandSearch READ islandSearch NOTIFY dialogChanged)
-  Q_PROPERTY(QString islandSearchPane READ islandSearchPane NOTIFY dialogChanged)
+  Q_PROPERTY(QString lineSearch READ lineSearch NOTIFY dialogChanged)
+  Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
   Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
   Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
   Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
@@ -409,7 +408,8 @@ public:
   // telar's command editor: who has the pane's keyboard, and the keys and text it takes.
   [[nodiscard]] prompt::Surface promptSurface(std::uint64_t pane_id) const noexcept;
   [[nodiscard]] bool editsPrompt(std::uint64_t pane_id) const noexcept;
-  [[nodiscard]] const prompt::Island *promptIsland(std::uint64_t pane_id) const noexcept;
+  [[nodiscard]] bool hidesTerminalCursor(std::uint64_t pane_id) const noexcept;
+  [[nodiscard]] const prompt::Line *promptLine(std::uint64_t pane_id) const noexcept;
   [[nodiscard]] std::string_view promptSuggestion(std::uint64_t pane_id) const noexcept;
   // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
   [[nodiscard]] CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
@@ -421,6 +421,11 @@ public:
   void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
   // False hands the key back to the terminal.
   bool promptKey(std::uint64_t pane_id, const prompt::KeyPress &key);
+  // While the pane shows a document, its scroll keys move the document; every other key, as
+  // q or Ctrl-C, reaches the program that shows it.
+  bool documentKey(std::uint64_t pane_id, const QKeyEvent &event);
+  // The view measured an inline document in `rows` rows of its own: the pane makes room for it.
+  Q_INVOKABLE void measureInlineDocument(const QString &pane_id, qulonglong id, int rows);
   bool promptText(std::uint64_t pane_id, const QString &text);
   void resize(std::uint64_t pane_id, TerminalSize size);
   void scroll(PaneScrollDelta delta);
@@ -507,9 +512,8 @@ public:
   Q_INVOKABLE void dismissDiagnostic();
   [[nodiscard]] bool connected() const;
   [[nodiscard]] QString dialog() const;
-  [[nodiscard]] QString dialogText() const;
-  [[nodiscard]] QString islandSearch() const;
-  [[nodiscard]] QString islandSearchPane() const;
+  [[nodiscard]] QString lineSearch() const;
+  [[nodiscard]] QString lineSearchPane() const;
 
 signals:
   void historyInspectionScrolled(int lines);
@@ -533,6 +537,9 @@ signals:
   void copySearchChanged();
   void terminalChanged(qulonglong pane_id);
   void promptChanged(qulonglong pane_id);
+  // The document a pane shows natively appeared, changed or went away.
+  void documentChanged(qulonglong pane_id);
+  void documentScroll(qulonglong pane_id, const QString &action);
   void pointerModifiersChanged();
   void inputReleasing(qulonglong pane_id);
   void notification(const QString &message);
@@ -784,7 +791,7 @@ private:
   void synchronizeTabStrip();
   void activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice);
   [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator> &tab);
-  void showDialog(const QString &kind, const QString &text = {});
+  void showDialog(const QString &kind);
   void fail(const std::exception &error);
   void publishCopyChange(std::uint64_t previous_pane);
   void leaveKeyboardCopyMode();
@@ -812,7 +819,7 @@ private:
   bool executePane(Action action, std::uint64_t identity);
   void executeWindowAction(Action action);
 
-  // Text the island's editor took from outside the keyboard reaches its view.
+  // Text the line's editor took from outside the keyboard reaches its view.
   void publishPromptWrite() {
     if (const auto pane_id = session().takePromptWrite()) {
       emit promptChanged(*pane_id);
@@ -984,10 +991,9 @@ private:
   QPointer<QQuickItem> history_search_host_;
   QString error_;
   QString dialog_;
-  QString dialog_text_;
   std::uint64_t dialog_generation_ = 0;
   // The pane whose prompt line hosts the open history or path search, or 0 for the dialog.
-  std::uint64_t island_search_pane_ = 0;
+  std::uint64_t line_search_pane_ = 0;
   QPointer<QQuickWindow> window_;
   std::uint64_t window_generation_ = 0;
   QMetaObject::Connection screen_refresh_connection_;

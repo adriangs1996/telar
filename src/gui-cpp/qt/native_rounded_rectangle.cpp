@@ -92,18 +92,6 @@ void NativeRoundedRectangle::setBackdropColor(const QColor &color) {
   }
 }
 
-bool NativeRoundedRectangle::squareBottom() const noexcept {
-  return square_bottom_;
-}
-
-void NativeRoundedRectangle::setSquareBottom(bool square) {
-  if (square_bottom_ != square) {
-    square_bottom_ = square;
-    update();
-    emit compositionChanged();
-  }
-}
-
 QColor NativeRoundedRectangle::borderColor() const {
   return border_color_;
 }
@@ -192,7 +180,7 @@ QSGNode *NativeRoundedRectangle::updatePaintNode(QSGNode *previous, [[maybe_unus
 
   auto border = shapeColor(border_color_);
   border.a *= border_alpha_;
-  const auto shape = RoundedRectangle::resolve({.x = physical_width, .y = physical_height}, {.fill = shapeColor(color_), .border = border, .radius = static_cast<float>(radius_ * density), .border_width = static_cast<float>(border_width_ * density), .backdrop = shapeColor(backdrop_color_), .replace_background = replace_background_, .square_bottom = square_bottom_});
+  const auto shape = RoundedRectangle::resolve({.x = physical_width, .y = physical_height}, {.fill = shapeColor(color_), .border = border, .radius = static_cast<float>(radius_ * density), .border_width = static_cast<float>(border_width_ * density), .backdrop = shapeColor(backdrop_color_), .replace_background = replace_background_});
 
   RoundedRectanglePaint paint{.shape = shape};
   if (paint_clip_) {

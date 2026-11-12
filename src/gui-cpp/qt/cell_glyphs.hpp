@@ -63,6 +63,7 @@ public:
     case glyphs::SymbolKind::block:
       append(parent, glyphs::Block::draw(cell, symbol.codepoint), scale, foreground);
       break;
+    case glyphs::SymbolKind::powerline:
     case glyphs::SymbolKind::box:
       if (const auto shape = glyphs::BoxCurve::shape(symbol.codepoint)) {
         curves_.paint(parent, {.shape = *shape, .cell = cell, .foreground = foreground, .thickness = thickness_, .scale = scale});

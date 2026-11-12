@@ -16,11 +16,6 @@ Item {
     required property var grid
     property real ratio: 1
     property bool moving: true
-    // The command the prompt line just launched, by its index among the pane's commands: its
-    // line lights up as it lands.
-    property int landing: -1
-    // While the line turns into it, its separator leaves the command to the line.
-    property bool holding: false
     // The key that interrupts the running command, shown beside its time while nothing waits
     // to run after it; and whether the program reads a secret, which tints it.
     property string interruptKey: ""
@@ -37,6 +32,22 @@ Item {
     // and when each running one was first seen, for its time.
     property var drawn: ({})
     property var started: ({})
+    // Commands are known by their index, which a clear hands to the next ones: what was kept for
+    // a command gone, as `clear` itself before it was seen to end, goes with it, or the next
+    // command at its index would start with its clock and its last look.
+    readonly property int blockCount: root.view ? root.view.rail.length : 0
+    onBlockCountChanged: {
+        for (const index of Object.keys(root.started)) {
+            if (Number(index) >= root.blockCount) {
+                delete root.started[index];
+            }
+        }
+        for (const index of Object.keys(root.drawn)) {
+            if (Number(index) >= root.blockCount) {
+                delete root.drawn[index];
+            }
+        }
+    }
 
     readonly property int last: root.view ? root.view.rail.length - 1 : -1
     readonly property bool anyRunning: root.anyIn("running")
@@ -67,6 +78,9 @@ Item {
     property real sweep: 0
     property real breath: 0.2
     property double now: 0
+    // How long a command runs before its clock and interrupt key show: a quick one ends
+    // before they would, instead of flashing them for a frame or two.
+    readonly property int revealDelay: 400
     NumberAnimation on spin {
         from: 0
         to: 360
@@ -173,13 +187,16 @@ Item {
             readonly property bool going: separator.running || separator.session
             readonly property bool failed: separator.outcome === "failed"
             readonly property bool current: separator.modelData.index === root.last
-            readonly property color tone: separator.failed ? root.colors.red : separator.outcome === "succeeded" ? root.colors.green : separator.session ? root.colors.mauve : separator.running ? (separator.current && root.secret ? root.colors.peach : root.colors.accent) : root.colors.overlay1
+            readonly property color tone: separator.failed ? root.colors.red : separator.outcome === "succeeded" ? root.colors.green : separator.session ? root.colors.mauve : separator.running && separator.revealed ? (separator.current && root.secret ? root.colors.peach : root.colors.accent) : root.colors.overlay1
             // The host of the session the pane is in: where it went, or where it ran.
             readonly property string host: separator.modelData.host ?? ""
             // What this command looked like the last time it was drawn.
             readonly property string before: root.drawn[separator.modelData.index] ?? ""
             // When it was first seen running, for its time.
             property double since: 0
+            // It has run long enough to show it runs: its ring, light, clock and interrupt key.
+            // The pinned copy stands for a command already in view.
+            readonly property bool revealed: separator.going && (separator.pinned || separator.since > 0 && root.now - separator.since >= root.revealDelay)
 
             // Under a fold opening or closing, on its way to its place.
             y: separator.pinned ? 0 : separator.modelData.row * separator.line + (root.view.foldFrom >= 0 && separator.modelData.row >= root.view.foldFrom ? root.view.foldOffset : 0)
@@ -195,19 +212,26 @@ Item {
                     root.started[index] = Date.now();
                 }
                 separator.since = root.started[index] ?? 0;
+                // An ended command forgets when it started: after a clear its index names the
+                // next command, whose clock starts afresh.
+                const ran = separator.going ? 0 : Date.now() - (root.started[index] ?? 0);
+                if (!separator.going) {
+                    delete root.started[index];
+                }
                 if (!root.moving) {
                     root.drawn[index] = separator.outcome;
                     return;
                 }
+                // One that ended before its clock showed settles without a flash, as the line
+                // under it never left; a failure still shakes.
                 if ((separator.before === "running" || separator.before === "session") && !separator.going) {
-                    popIn.start();
-                    flash.start();
+                    if (ran >= root.revealDelay) {
+                        popIn.start();
+                        flash.start();
+                    }
                     if (separator.failed) {
                         shake.start();
                     }
-                }
-                if (index === root.landing && !root.holding && separator.before === "" && separator.running) {
-                    land.start();
                 }
                 root.drawn[index] = separator.outcome;
             }
@@ -293,11 +317,11 @@ Item {
                     height: Math.round(separator.line * 0.72)
                     width: Math.max(height, mark.implicitWidth + separator.cell)
                     radius: height / 2
-                    color: Qt.alpha(separator.tone, separator.running ? root.breath : 0.2)
+                    color: Qt.alpha(separator.tone, separator.running && separator.revealed ? root.breath : 0.2)
 
                     NativeProgressRing {
                         anchors.centerIn: parent
-                        visible: separator.running
+                        visible: separator.running && separator.revealed
                         width: parent.height * 0.6
                         height: width
                         color: separator.tone
@@ -327,32 +351,13 @@ Item {
                     }
                 }
 
-                // The line landed on this separator: its command lights up.
-                Connections {
-                    target: root
-                    function onHoldingChanged() {
-                        if (!root.holding && root.moving && separator.modelData.index === root.landing) {
-                            land.start();
-                        }
-                    }
-                }
-
                 // The command's first line, cut where the rule and what follows it need the room.
                 Item {
                     id: command
-                    opacity: root.holding && separator.modelData.index === root.landing ? 0 : 1
                     x: pill.x + pill.width + separator.cell
                     height: parent.height
                     width: Math.min(commandText.implicitWidth, Math.max(0, trail.x - x - (place.visible ? place.implicitWidth + separator.cell : 0) - (more.visible ? more.implicitWidth + separator.cell : 0) - separator.cell * 6))
                     clip: true
-
-                    Rectangle {
-                        id: glow
-                        anchors.fill: parent
-                        radius: 3 * root.ratio
-                        color: Qt.alpha(root.colors.accent, 0.3)
-                        opacity: 0
-                    }
 
                     CellText {
                         id: commandText
@@ -361,16 +366,6 @@ Item {
                         grid: root.grid
                         color: separator.session ? root.colors.mauve : root.colors.text
                         bold: true
-                    }
-
-                    NumberAnimation {
-                        id: land
-                        target: glow
-                        property: "opacity"
-                        from: 1
-                        to: 0
-                        duration: 900
-                        easing.type: Easing.OutQuad
                     }
                 }
 
@@ -411,11 +406,11 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width
                         height: Math.max(1, root.ratio)
-                        color: separator.going ? Qt.alpha(separator.tone, 0.4) : separator.failed ? Qt.alpha(root.colors.red, 0.55) : Qt.alpha(root.colors.overlay1, 0.35)
+                        color: separator.going && separator.revealed ? Qt.alpha(separator.tone, 0.4) : separator.failed ? Qt.alpha(root.colors.red, 0.55) : Qt.alpha(root.colors.overlay1, 0.35)
                     }
 
                     Rectangle {
-                        visible: separator.running && root.moving
+                        visible: separator.running && separator.revealed && root.moving
                         width: Math.max(separator.cell * 6, rule.width * 0.28)
                         height: parent.height
                         radius: height / 2
@@ -471,7 +466,7 @@ Item {
                     Row {
                         id: clock
                         readonly property string reading: separator.since > 0 ? root.duration(Math.max(0, root.now - separator.since), separator.session) : ""
-                        visible: separator.going && clock.reading.length > 0
+                        visible: separator.revealed && clock.reading.length > 0
                         anchors.verticalCenter: parent.verticalCenter
                         width: separator.cell * 7
                         height: separator.line
@@ -514,7 +509,7 @@ Item {
 
                     Key {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: separator.running && separator.current && !root.queueing && root.interruptKey.length > 0
+                        visible: separator.running && separator.revealed && separator.current && !root.queueing && root.interruptKey.length > 0
                         line: separator.line
                         text: root.interruptKey
                     }

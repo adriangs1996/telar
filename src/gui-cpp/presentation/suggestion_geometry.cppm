@@ -504,6 +504,9 @@ inline Theme projectTheme(const ThemeValues &values) noexcept {
   result.cursor = values.terminal.cursor_color ? themeRgb(*values.terminal.cursor_color) : result.foreground;
   result.cursor_text = values.terminal.cursor_text_color ? std::optional{themeRgb(*values.terminal.cursor_text_color)} : std::nullopt;
   result.chrome = values.palette;
+  for (std::size_t index = 0; index < result.syntax.size(); ++index) {
+    result.syntax[index] = values.syntaxStyle(static_cast<SyntaxRole>(index)).color;
+  }
   result.surface = result.resolve(values.color(PaletteRole::surface0), result.background);
   result.elevated = result.resolve(values.color(PaletteRole::surface1), result.background);
   result.border = result.resolve(values.color(PaletteRole::overlay0), result.foreground);

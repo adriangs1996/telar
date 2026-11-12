@@ -247,7 +247,6 @@ public:
   bool descendsFrom(const ProcessIdentity &process, pid_t root) const noexcept;
   ProcessLineage lineage(const ProcessIdentity &process, pid_t root) const noexcept;
   AgentProvider provider(pid_t process) const noexcept;
-  AgentProvider ancestorProvider(const ProcessIdentity &process, pid_t root) const noexcept;
   FixedText<48> name(pid_t process) const noexcept;
   FixedText<4096> directory(pid_t process) const noexcept;
   FixedText<4096> terminal(pid_t process) const noexcept;

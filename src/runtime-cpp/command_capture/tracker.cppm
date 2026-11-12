@@ -1,52 +1,23 @@
 module;
-#include "telar_platform/trace_macro.hpp"
-#include <new>
-#include <unistd.h>
-#include <cerrno>
-#include <limits.h>
-#include <sys/stat.h>
-#include <ghostty/vt.h>
-#include <stdlib.h>
-#include <zlib.h>
-
-#include <cstdint>
-
-
-#include "telar_base/diagnostics/config.hpp"
-#include <cstring>
-
-
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <sys/mman.h>
 #include "cell_layout.hpp"
-#include <cassert>
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_platform/trace_macro.hpp"
+#include <ghostty/vt.h>
 
 export module telar.runtime.command_capture.tracker;
 
 import std;
-
-export import telar.platform;
-
-
-export import telar.runtime.diagnostics.runtime_counters;
-
-
-export import telar.runtime.terminal.text_reader;
-export import telar.runtime.shell_integration.token;
-import telar.base.diagnostics;
 import telar.client.protocol;
-import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 
-// Interface: command_capture/command.cppm
-export {
-namespace telar::runtime {
+export import telar.platform;
+export import telar.runtime.diagnostics.runtime_counters;
+export import telar.runtime.shell_integration.token;
+export import telar.runtime.terminal.text_reader;
+
+export namespace telar::runtime {
 
 struct CapturedCommand {
   std::string_view command;
@@ -75,13 +46,6 @@ struct CommandByteObservation {
   ObservationTime time;
   std::optional<bool> shell_foreground;
 };
-
-}
-}
-
-// Interface: command_capture/input_scanner.cppm
-export {
-namespace telar::runtime {
 
 class CommandInputScanner {
 public:
@@ -213,13 +177,6 @@ private:
   std::size_t typed_count_ = 0;
   bool typed_exact_ = true;
 };
-
-}
-}
-
-// Interface: command_capture/osc_zones.cppm
-export {
-namespace telar::runtime {
 
 struct CommandCompletion {
   ObservationTime time;
@@ -653,13 +610,6 @@ private:
   std::shared_ptr<const std::string> names_;
 };
 
-}
-}
-
-// Interface: command_capture/output_tail.cppm
-export {
-namespace telar::runtime {
-
 template <Allocator Memory>
 class CommandOutputTail {
 public:
@@ -716,13 +666,6 @@ private:
   std::size_t length_ = 0;
   std::uint64_t observed_ = 0;
 };
-
-}
-}
-
-// Interface: command_capture/terminal_selection.cppm
-export {
-namespace telar::runtime {
 
 template <Allocator Memory>
 class CommandSelection {
@@ -971,13 +914,6 @@ private:
   bool right_prompt_active_ = false;
   bool erased_ = false;
 };
-
-}
-}
-
-// Interface: command_capture/command_blocks.cppm
-export {
-namespace telar::runtime {
 
 // The commands a pane's integrated shell ran, each anchored to the row its prompt starts on
 // in the pane's own terminal, so a client can mark them in the scrollback and jump to them.
@@ -1272,13 +1208,6 @@ private:
   bool closing_ = false;
 };
 
-}
-}
-
-// Interface: command_capture/tracker.cppm
-export {
-namespace telar::runtime {
-
 template <Allocator Memory>
 class CommandTracker {
 public:
@@ -1514,5 +1443,4 @@ private:
   bool saw_foreground_child_ = false;
 };
 
-}
 }

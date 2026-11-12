@@ -25,10 +25,8 @@ import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {
 
-QSGNode *paintRoundedRectangle(QQuickWindow &window, QSGNode *previous, RoundedRectangle shape, qreal density);
 // Each result reuses the previous node or is a new one the caller adopts.
 tbc::view<QSGNode *, tbc::lt::a> paintRoundedRectangleAt(QQuickWindow &window, tbc::view<QSGNode *, tbc::lt::a> previous, RoundedRectanglePaint paint, qreal density);
-QSGNode *paintSoftwareRoundedRectangle(QQuickWindow &window, QSGNode *previous, RoundedRectangle shape, qreal density);
 tbc::view<QSGNode *, tbc::lt::a> paintSoftwareRoundedRectangleAt(QQuickWindow &window, tbc::view<QSGNode *, tbc::lt::a> previous, RoundedRectanglePaint paint, qreal density);
 void paintRoundedRectangles(QQuickWindow &window, QSGNode &root, std::span<const RoundedRectanglePaint> paints, qreal density);
 

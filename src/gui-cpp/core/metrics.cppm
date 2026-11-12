@@ -203,41 +203,41 @@ struct Color {
 };
 
 struct DefaultTheme {
-  static constexpr Color background = Color::rgb(0x211b2f);
-  static constexpr Color foreground = Color::rgb(0xaba8b6);
-  static constexpr Color surface = Color::rgb(0x312b3e);
-  static constexpr Color elevated = Color::rgb(0x373245);
-  static constexpr Color border = Color::rgb(0x383546);
-  static constexpr Color muted = Color::rgb(0x8e899d);
-  static constexpr Color accent = Color::rgb(0xaa87f5);
-  static constexpr Color selection = elevated;
+  static constexpr Color background = Color::rgb(0x191c22);
+  static constexpr Color foreground = Color::rgb(0xd8dee9);
+  static constexpr Color surface = Color::rgb(0x242933);
+  static constexpr Color elevated = Color::rgb(0x3b4252);
+  static constexpr Color border = Color::rgb(0x4c566a);
+  static constexpr Color muted = Color::rgb(0x7b88a1);
+  static constexpr Color accent = Color::rgb(0x88c0d0);
+  static constexpr Color selection = Color::rgb(0x434c5e);
   static constexpr Color cursor = accent;
-  static constexpr Color success = Color::rgb(0x5fb095);
-  static constexpr Color warning = Color::rgb(0xd9cc7e);
-  static constexpr Color failure = Color::rgb(0xf37986);
+  static constexpr Color success = Color::rgb(0xa3be8c);
+  static constexpr Color warning = Color::rgb(0xebcb8b);
+  static constexpr Color failure = Color::rgb(0xbf616a);
   static constexpr std::size_t palette_size = 16;
   static constexpr std::array<Color, palette_size> palette{
-      Color::rgb(0x383546),
-      Color::rgb(0xf37986),
-      Color::rgb(0x5fb095),
-      Color::rgb(0xd9cc7e),
-      Color::rgb(0x99baf8),
-      Color::rgb(0xaa87f5),
-      Color::rgb(0x82c3d3),
-      Color::rgb(0xaba8b6),
-      Color::rgb(0x7c7690),
-      Color::rgb(0xfea9af),
-      Color::rgb(0x99c2ac),
-      Color::rgb(0xe5ca93),
-      Color::rgb(0xb8d2ff),
-      Color::rgb(0xc7b2ff),
-      Color::rgb(0xb3d7e1),
-      Color::rgb(0xe5e3ee),
+      Color::rgb(0x3b4252),
+      Color::rgb(0xbf616a),
+      Color::rgb(0xa3be8c),
+      Color::rgb(0xebcb8b),
+      Color::rgb(0x81a1c1),
+      Color::rgb(0xb48ead),
+      Color::rgb(0x88c0d0),
+      Color::rgb(0xe5e9f0),
+      Color::rgb(0x616e88),
+      Color::rgb(0xbf616a),
+      Color::rgb(0xa3be8c),
+      Color::rgb(0xebcb8b),
+      Color::rgb(0x81a1c1),
+      Color::rgb(0xb48ead),
+      Color::rgb(0x8fbcbb),
+      Color::rgb(0xeceff4),
   };
 };
 
 struct Theme {
-  ThemeName name = ThemeName::cybervenom;
+  ThemeName name = ThemeName::shade;
   Color background = DefaultTheme::background;
   Color foreground = DefaultTheme::foreground;
   Color surface = DefaultTheme::surface;
@@ -253,6 +253,8 @@ struct Theme {
   Color failure = DefaultTheme::failure;
   std::array<Color, DefaultTheme::palette_size> palette = DefaultTheme::palette;
   std::array<CellColor, palette_names.size()> chrome{};
+  // Syntax colors for text the GUI highlights itself, such as the prompt editor.
+  std::array<CellColor, syntax_names.size()> syntax{};
 
   [[nodiscard]] inline Color chromeColor(PaletteRole role) const noexcept {
     const bool background_role = role == PaletteRole::panel_bg || role == PaletteRole::surface0 || role == PaletteRole::surface1 || role == PaletteRole::surface_dim;
@@ -393,6 +395,15 @@ private:
 export {
 namespace telar::gui {
 
+// Grid fitting for terminal text; see fonts::GlyphHinting.
+enum class FontHinting : std::uint8_t {
+  native,
+  light,
+  full,
+};
+
+inline constexpr std::array font_hinting_names{"native", "light", "full"};
+
 struct FontConfiguration {
   static constexpr std::size_t name_capacity = 256;
   static constexpr float default_size = 15;
@@ -409,8 +420,10 @@ struct FontConfiguration {
   float size = default_size;
   float line_height = 1;
   float letter_spacing = 0;
-  bool thicken = false;
+  // Full grid fitting with half a pixel of dilation measured sharpest at a browser's weight.
+  bool thicken = true;
   std::uint8_t thicken_strength = maximum_thicken_strength;
+  FontHinting hinting = FontHinting::full;
 };
 
 struct HistoryConfiguration {

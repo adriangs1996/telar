@@ -34,11 +34,21 @@ struct GlyphStyle {
   bool operator==(const GlyphStyle &) const = default;
 };
 
+// How outlines snap to the pixel grid. `native` keeps FreeType's default (the font's own
+// instructions) and, on macOS with thicken, CoreText. `light` aligns horizontal features
+// (baseline, x-height, bars); `full` also aligns stems, through FreeType's autohinter.
+enum class GlyphHinting : std::uint8_t {
+  native,
+  light,
+  full,
+};
+
 struct GlyphRasterRequest {
   std::uint32_t index = 0;
   std::uint16_t pixel_height = 0;
   GlyphStyle style;
   std::uint8_t thicken_strength = 0;
+  GlyphHinting hinting = GlyphHinting::native;
 };
 
 struct GlyphBitmapView {

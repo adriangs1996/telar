@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "prompt_island.hpp"
+#include "prompt_editor_item.hpp"
 #include "application.hpp"
 #include "native_cell_text.hpp"
 #include <algorithm>
@@ -26,7 +26,7 @@ static constexpr qint64 sweep_step_ms = 16;
 static constexpr qint64 ghost_ms = 300;
 static constexpr std::size_t maximum_fresh = 200;
 
-PromptIsland::PromptIsland(QQuickItem *parent)
+PromptEditorItem::PromptEditorItem(QQuickItem *parent)
     : QQuickItem(parent),
       ancestors_(*this) {
   setFlag(ItemHasContents);
@@ -35,16 +35,16 @@ PromptIsland::PromptIsland(QQuickItem *parent)
   ticker_.setEndValue(1.0);
   ticker_.setDuration(1000);
   ticker_.setLoopCount(-1);
-  connect(&ticker_, &QVariantAnimation::valueChanged, this, &PromptIsland::tick);
+  connect(&ticker_, &QVariantAnimation::valueChanged, this, &PromptEditorItem::tick);
 }
 
-PromptIsland::~PromptIsland() = default;
+PromptEditorItem::~PromptEditorItem() = default;
 
-QObject *PromptIsland::application() const noexcept {
+QObject *PromptEditorItem::application() const noexcept {
   return application_;
 }
 
-void PromptIsland::setApplication(QObject *application) {
+void PromptEditorItem::setApplication(QObject *application) {
   auto *next = qobject_cast<Application *>(application);
   if (application_ == next) {
     return;
@@ -61,17 +61,17 @@ void PromptIsland::setApplication(QObject *application) {
     };
     connect(application_, &Application::promptChanged, this, pane);
     connect(application_, &Application::terminalChanged, this, pane);
-    connect(application_, &Application::configurationChanged, this, &PromptIsland::refresh);
+    connect(application_, &Application::configurationChanged, this, &PromptEditorItem::refresh);
   }
   refresh();
   emit applicationChanged();
 }
 
-QString PromptIsland::paneId() const {
+QString PromptEditorItem::paneId() const {
   return QString::number(pane_id_);
 }
 
-void PromptIsland::setPaneId(const QString &identity) {
+void PromptEditorItem::setPaneId(const QString &identity) {
   const auto next = identity.toULongLong();
   if (pane_id_ != next) {
     pane_id_ = next;
@@ -81,11 +81,11 @@ void PromptIsland::setPaneId(const QString &identity) {
   }
 }
 
-QVariantMap PromptIsland::grid() const {
+QVariantMap PromptEditorItem::grid() const {
   return grid_;
 }
 
-void PromptIsland::setGrid(const QVariantMap &grid) {
+void PromptEditorItem::setGrid(const QVariantMap &grid) {
   if (grid_ != grid) {
     grid_ = grid;
     refresh();
@@ -93,11 +93,11 @@ void PromptIsland::setGrid(const QVariantMap &grid) {
   }
 }
 
-QVariantMap PromptIsland::colors() const {
+QVariantMap PromptEditorItem::colors() const {
   return colors_;
 }
 
-void PromptIsland::setColors(const QVariantMap &colors) {
+void PromptEditorItem::setColors(const QVariantMap &colors) {
   if (colors_ != colors) {
     colors_ = colors;
     placeRuns();
@@ -106,11 +106,11 @@ void PromptIsland::setColors(const QVariantMap &colors) {
   }
 }
 
-int PromptIsland::maximumColumns() const noexcept {
+int PromptEditorItem::maximumColumns() const noexcept {
   return maximum_columns_;
 }
 
-void PromptIsland::setMaximumColumns(int columns) {
+void PromptEditorItem::setMaximumColumns(int columns) {
   columns = std::max(columns, static_cast<int>(prompt::Layout::indent) + 4);
   if (maximum_columns_ != columns) {
     maximum_columns_ = columns;
@@ -119,11 +119,11 @@ void PromptIsland::setMaximumColumns(int columns) {
   }
 }
 
-QString PromptIsland::preedit() const {
+QString PromptEditorItem::preedit() const {
   return preedit_;
 }
 
-void PromptIsland::setPreedit(const QString &preedit) {
+void PromptEditorItem::setPreedit(const QString &preedit) {
   if (preedit_ != preedit) {
     preedit_ = preedit;
     refresh();
@@ -131,7 +131,7 @@ void PromptIsland::setPreedit(const QString &preedit) {
   }
 }
 
-QString PromptIsland::surface() const {
+QString PromptEditorItem::surface() const {
   switch (static_cast<prompt::Surface>(surface_)) {
   case prompt::Surface::editor:
     return QStringLiteral("editor");
@@ -145,12 +145,12 @@ QString PromptIsland::surface() const {
   return QStringLiteral("none");
 }
 
-QString PromptIsland::mode() const {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  if (island == nullptr || island->editor().keymap() == prompt::Keymap::emacs) {
+QString PromptEditorItem::mode() const {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  if (line == nullptr || line->editor().keymap() == prompt::Keymap::emacs) {
     return QStringLiteral("emacs");
   }
-  switch (island->editor().mode()) {
+  switch (line->editor().mode()) {
   case prompt::Mode::insert:
     return QStringLiteral("insert");
   case prompt::Mode::normal:
@@ -163,21 +163,21 @@ QString PromptIsland::mode() const {
   return QStringLiteral("insert");
 }
 
-bool PromptIsland::suggesting() const noexcept {
+bool PromptEditorItem::suggesting() const noexcept {
   return !ghost_.empty();
 }
 
-int PromptIsland::block() const noexcept {
+int PromptEditorItem::block() const noexcept {
   const auto selected = application_ == nullptr ? std::nullopt : application_->selectedBlock(pane_id_);
   return selected ? static_cast<int>(*selected) + 1 : 0;
 }
 
-int PromptIsland::blocks() const noexcept {
+int PromptEditorItem::blocks() const noexcept {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   return pane == nullptr ? 0 : static_cast<int>(pane->blocks.size());
 }
 
-QString PromptIsland::copying() const {
+QString PromptEditorItem::copying() const {
   const auto *copy = application_ == nullptr ? nullptr : &application_->copyState();
   if (copy == nullptr || !*copy || (*copy)->pointer || (*copy)->pane_id != pane_id_) {
     return {};
@@ -188,42 +188,31 @@ QString PromptIsland::copying() const {
   return (*copy)->linewise ? QStringLiteral("visual-line") : QStringLiteral("visual");
 }
 
-bool PromptIsland::queued() const noexcept {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  return island != nullptr && island->queued();
+bool PromptEditorItem::queued() const noexcept {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  return line != nullptr && line->queued();
 }
 
-bool PromptIsland::answering() const noexcept {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  return island != nullptr && island->answering();
+bool PromptEditorItem::cursorHidden() const noexcept {
+  return cursor_hidden_;
 }
 
-int PromptIsland::secretKeys() const noexcept {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  return island == nullptr ? 0 : static_cast<int>(std::min<std::uint32_t>(island->secretKeys(), 64));
+bool PromptEditorItem::answering() const noexcept {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  return line != nullptr && line->answering();
 }
 
-bool PromptIsland::failed() const noexcept {
+int PromptEditorItem::secretKeys() const noexcept {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  return line == nullptr ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), 64));
+}
+
+bool PromptEditorItem::failed() const noexcept {
   return failed_;
 }
 
-bool PromptIsland::empty() const noexcept {
+bool PromptEditorItem::empty() const noexcept {
   return display_.empty();
-}
-
-QString PromptIsland::lastCommand() const {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  if (island == nullptr || island->recent().empty()) {
-    return {};
-  }
-  const auto &command = island->recent().back();
-  const auto line = std::string_view{command}.substr(0, command.find('\n'));
-  return QString::fromUtf8(line.data(), static_cast<qsizetype>(line.size()));
-}
-
-int PromptIsland::launches() const noexcept {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  return island == nullptr ? 0 : static_cast<int>(island->launches() & 0x7fffffff);
 }
 
 static constexpr int menu_page = 8;
@@ -234,16 +223,16 @@ static std::pair<std::size_t, std::size_t> menuPage(const prompt::Menu &menu) {
   return {first, std::min(menu.choices.size(), first + menu_page)};
 }
 
-QVariantList PromptIsland::choices() const {
+QVariantList PromptEditorItem::choices() const {
   QVariantList result;
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  if (island == nullptr || !island->menu()) {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  if (line == nullptr || !line->menu()) {
     return result;
   }
-  const auto &menu = *island->menu();
+  const auto &menu = *line->menu();
   const auto [first, last] = menuPage(menu);
   // The letters of each choice that what was typed matches, in order, for the menu to mark.
-  const auto text = island->editor().text().view();
+  const auto text = line->editor().text().view();
   const auto typed = menu.begin < menu.end && menu.end <= text.size() ? text.substr(menu.begin, menu.end - menu.begin) : std::string_view{};
   const auto fold = [](char byte) { return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte + ('a' - 'A')) : byte; };
   for (auto index = first; index < last; ++index) {
@@ -277,29 +266,29 @@ QVariantList PromptIsland::choices() const {
   return result;
 }
 
-int PromptIsland::choice() const noexcept {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  if (island == nullptr || !island->menu()) {
+int PromptEditorItem::choice() const noexcept {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  if (line == nullptr || !line->menu()) {
     return -1;
   }
-  return static_cast<int>(island->menu()->selected - menuPage(*island->menu()).first);
+  return static_cast<int>(line->menu()->selected - menuPage(*line->menu()).first);
 }
 
-QString PromptIsland::menuLabel() const {
-  const auto *island = application_ == nullptr ? nullptr : application_->promptIsland(pane_id_);
-  if (island == nullptr || !island->menu()) {
+QString PromptEditorItem::menuLabel() const {
+  const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+  if (line == nullptr || !line->menu()) {
     return {};
   }
-  const auto &label = island->menu()->label;
+  const auto &label = line->menu()->label;
   return QString::fromUtf8(label.data(), static_cast<qsizetype>(label.size()));
 }
 
-bool PromptIsland::remote() const noexcept {
+bool PromptEditorItem::remote() const noexcept {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   return pane != nullptr && pane->shell.remote;
 }
 
-QString PromptIsland::host() const {
+QString PromptEditorItem::host() const {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   if (pane == nullptr || !pane->shell.remote) {
     return {};
@@ -307,12 +296,12 @@ QString PromptIsland::host() const {
   return QString::fromUtf8(pane->shell.host.data(), static_cast<qsizetype>(pane->shell.host.size()));
 }
 
-int PromptIsland::link() const noexcept {
+int PromptEditorItem::link() const noexcept {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   return pane == nullptr ? 0 : static_cast<int>(pane->shell.link_ms);
 }
 
-QString PromptIsland::interruptKey() const {
+QString PromptEditorItem::interruptKey() const {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   const auto key = pane == nullptr ? Byte{0} : pane->shell.interrupt;
   if (key == 0) {
@@ -327,61 +316,12 @@ QString PromptIsland::interruptKey() const {
   return QString(QChar(static_cast<char16_t>(key)));
 }
 
-QString PromptIsland::program() const {
+QString PromptEditorItem::program() const {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   return pane == nullptr ? QString{} : QString::fromUtf8(pane->foreground.data(), static_cast<qsizetype>(pane->foreground.size()));
 }
 
-QVariantMap PromptIsland::lastBlock() const {
-  const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
-  if (pane == nullptr || pane->blocks.empty() || pane->blocks.back().state == CommandBlockState::running || pane->blocks.back().state == CommandBlockState::session) {
-    return {};
-  }
-  const auto &block = pane->blocks.back();
-  return QVariantMap{
-      {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
-      {QStringLiteral("status"), block.status},
-      {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
-      {QStringLiteral("failed"), block.state == CommandBlockState::failed},
-      {QStringLiteral("count"), static_cast<int>(pane->blocks.size())},
-  };
-}
-
-QString PromptIsland::outputLine() const {
-  const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
-  if (pane == nullptr) {
-    return {};
-  }
-  const auto &screen = pane->screen;
-  // The nearest row above the cursor with any text: the cursor's own row is usually empty.
-  for (auto row = std::min<std::size_t>(screen.cursor().y + 1, screen.rows()); row-- > 0;) {
-    std::string line;
-    for (const auto &cell : screen.row(row)) {
-      if (cell.width != CellWidth::continuation) {
-        line.append(cell.utf8());
-      }
-    }
-    const auto last = line.find_last_not_of(' ');
-    if (last != std::string::npos) {
-      const auto first = line.find_first_not_of(' ');
-      return QString::fromUtf8(line.data() + first, static_cast<qsizetype>(last + 1 - first));
-    }
-  }
-  return {};
-}
-
-void PromptIsland::viewFailure() {
-  auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
-  if (pane == nullptr) {
-    return;
-  }
-  const auto failed = std::ranges::find_if(pane->blocks.rbegin(), pane->blocks.rend(), [](const CommandBlock &block) { return block.state == CommandBlockState::failed; });
-  if (failed != pane->blocks.rend()) {
-    application_->selectBlock(pane_id_, static_cast<std::size_t>(std::distance(failed, pane->blocks.rend()) - 1));
-  }
-}
-
-QString PromptIsland::directory() const {
+QString PromptEditorItem::directory() const {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   if (pane == nullptr) {
     return {};
@@ -391,7 +331,7 @@ QString PromptIsland::directory() const {
   return QString::fromUtf8(cwd.data(), static_cast<qsizetype>(cwd.size()));
 }
 
-QString PromptIsland::branch() const {
+QString PromptEditorItem::branch() const {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   if (pane == nullptr || !pane->git.repository) {
     return {};
@@ -399,7 +339,7 @@ QString PromptIsland::branch() const {
   return QString::fromUtf8(pane->git.branch.data(), static_cast<qsizetype>(pane->git.branch.size()));
 }
 
-int PromptIsland::progress() const noexcept {
+int PromptEditorItem::progress() const noexcept {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   if (pane == nullptr || pane->progress_state == PaneProgressState::remove) {
     return -1;
@@ -410,17 +350,17 @@ int PromptIsland::progress() const noexcept {
   return std::min<int>(100, *pane->progress_percent);
 }
 
-int PromptIsland::commands() const noexcept {
+int PromptEditorItem::commands() const noexcept {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   return pane == nullptr ? 0 : static_cast<int>(pane->shell.commands);
 }
 
-int PromptIsland::status() const noexcept {
+int PromptEditorItem::status() const noexcept {
   const auto *pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
   return pane == nullptr ? 0 : pane->shell.status;
 }
 
-QString PromptIsland::motion() const {
+QString PromptEditorItem::motion() const {
   if (application_ == nullptr) {
     return QStringLiteral("spring");
   }
@@ -435,42 +375,42 @@ QString PromptIsland::motion() const {
   return QStringLiteral("spring");
 }
 
-int PromptIsland::rows() const noexcept {
+int PromptEditorItem::rows() const noexcept {
   return static_cast<int>(layout_.rows);
 }
 
-int PromptIsland::visibleRows() const noexcept {
+int PromptEditorItem::visibleRows() const noexcept {
   return std::min(static_cast<int>(layout_.rows), maximum_rows_);
 }
 
-int PromptIsland::columns() const noexcept {
+int PromptEditorItem::columns() const noexcept {
   return static_cast<int>(layout_.width);
 }
 
-QVariantList PromptIsland::glows() const {
+QVariantList PromptEditorItem::glows() const {
   return glows_;
 }
 
-qreal PromptIsland::cellWidth() const noexcept {
+qreal PromptEditorItem::cellWidth() const noexcept {
   return resolved_.metrics.width / scale_;
 }
 
-qreal PromptIsland::cellHeight() const noexcept {
+qreal PromptEditorItem::cellHeight() const noexcept {
   return resolved_.metrics.height / scale_;
 }
 
-QRectF PromptIsland::caret() const noexcept {
+QRectF PromptEditorItem::caret() const noexcept {
   const auto width = cellWidth();
   const auto height = cellHeight();
   return {layout_.caret_column * width, (static_cast<int>(layout_.caret_row) - first_row_) * height, layout_.caret_columns * width, height};
 }
 
-void PromptIsland::geometryChange(const QRectF &current, const QRectF &previous) {
+void PromptEditorItem::geometryChange(const QRectF &current, const QRectF &previous) {
   QQuickItem::geometryChange(current, previous);
   update();
 }
 
-void PromptIsland::itemChange(ItemChange change, const ItemChangeData &data) {
+void PromptEditorItem::itemChange(ItemChange change, const ItemChangeData &data) {
   QQuickItem::itemChange(change, data);
   if (change == ItemParentHasChanged) {
     ancestors_.observe();
@@ -481,13 +421,15 @@ void PromptIsland::itemChange(ItemChange change, const ItemChangeData &data) {
 }
 
 // Rebuilds the layout from the session's editor: the command with any composition at the caret,
-// coloured, wrapped at the island's width, scrolled so the caret stays in view.
-void PromptIsland::refresh() {
+// coloured, wrapped at the line's width, scrolled so the caret stays in view.
+void PromptEditorItem::refresh() {
   const auto previous_surface = surface_;
   const auto previous_failed = failed_;
+  const auto previous_cursor_hidden = cursor_hidden_;
   if (application_ == nullptr || window() == nullptr || pane_id_ == 0) {
     surface_ = 0;
-    if (previous_surface != surface_) {
+    cursor_hidden_ = false;
+    if (previous_surface != surface_ || previous_cursor_hidden) {
       emit stateChanged();
     }
     return;
@@ -505,14 +447,15 @@ void PromptIsland::refresh() {
   }
 
   surface_ = static_cast<std::uint8_t>(application_->promptSurface(pane_id_));
+  cursor_hidden_ = application_->hidesTerminalCursor(pane_id_);
   const auto *pane = application_->pane(pane_id_);
   failed_ = pane != nullptr && pane->shell.commands != 0 && pane->shell.status != 0;
   maximum_rows_ = std::max<int>(1, application_->configuration().prompt.max_lines);
 
-  const auto *island = application_->promptIsland(pane_id_);
-  const auto text = island == nullptr ? std::string_view{} : island->editor().text().view();
-  const auto cursor = island == nullptr ? 0 : island->editor().text().cursor();
-  const auto anchor = island == nullptr ? 0 : island->editor().text().anchor();
+  const auto *line = application_->promptLine(pane_id_);
+  const auto text = line == nullptr ? std::string_view{} : line->editor().text().view();
+  const auto cursor = line == nullptr ? 0 : line->editor().text().cursor();
+  const auto anchor = line == nullptr ? 0 : line->editor().text().anchor();
   const auto composing = preedit_.toUtf8();
   const bool moving = application_->configuration().prompt.motion != PromptMotion::none;
   track(text, moving && composing.isEmpty() && static_cast<prompt::Surface>(surface_) == prompt::Surface::editor);
@@ -576,7 +519,7 @@ void PromptIsland::refresh() {
   }
   ++revision_;
   emit layoutChanged();
-  if (previous_surface != surface_ || previous_failed != failed_ || island != nullptr) {
+  if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line != nullptr) {
     emit stateChanged();
   }
   update();
@@ -584,7 +527,7 @@ void PromptIsland::refresh() {
 
 // Each run is a cell text item, reused across edits: an item reshapes only when its own text
 // changes, so typing at the end of a long command reshapes one run.
-void PromptIsland::placeRuns() {
+void PromptEditorItem::placeRuns() {
   const auto width = cellWidth();
   const auto height = cellHeight();
   const auto last_row = first_row_ + maximum_rows_;
@@ -646,25 +589,27 @@ void PromptIsland::placeRuns() {
   }
 }
 
-QColor PromptIsland::styleColor(prompt::Style style) const {
+QColor PromptEditorItem::styleColor(prompt::Style style) const {
   const auto role = [&](const char *name, const char *fallback) {
     const auto value = colors_.value(QString::fromLatin1(name));
     return value.isValid() ? value.value<QColor>() : colors_.value(QString::fromLatin1(fallback)).value<QColor>();
   };
+  // Shell syntax takes the theme's syntax roles, so the prompt reads like the shell in the
+  // editor; pending, error, missing and ghost text are editor states in chrome colors.
   switch (style) {
   case prompt::Style::command:
-    return role("green", "foreground");
+    return role("syntax_func", "foreground");
   case prompt::Style::option:
-    return role("blue", "foreground");
-  case prompt::Style::string:
-    return role("yellow", "foreground");
   case prompt::Style::variable:
-    return role("mauve", "accent");
+    return role("syntax_parameter", "foreground");
+  case prompt::Style::string:
+    return role("syntax_string", "foreground");
   case prompt::Style::operator_:
-    return role("overlay1", "muted");
+    return role("syntax_operator", "muted");
   case prompt::Style::keyword:
-    return role("peach", "accent");
+    return role("syntax_keyword", "accent");
   case prompt::Style::comment:
+    return role("syntax_comment", "muted");
   case prompt::Style::pending:
     return role("subtext0", "muted");
   case prompt::Style::error:
@@ -684,7 +629,7 @@ QColor PromptIsland::styleColor(prompt::Style style) const {
 
 // Follows what the editor holds: text inserted at one place animates in, text removed
 // cancels what animated there, and the rest moves with the edit.
-void PromptIsland::track(std::string_view text, bool animate) {
+void PromptEditorItem::track(std::string_view text, bool animate) {
   const std::string_view previous{typed_};
   const auto now = clock_.elapsed();
   std::erase_if(fresh_, [&](const Fresh &fresh) { return now - fresh.started_ms >= (fresh.motion == Motion::rise ? rise_ms : sweep_ms); });
@@ -748,7 +693,7 @@ void PromptIsland::track(std::string_view text, bool animate) {
   }
 }
 
-bool PromptIsland::animating(qint64 now) const noexcept {
+bool PromptEditorItem::animating(qint64 now) const noexcept {
   if (ghost_started_ms_ >= 0 && now - ghost_started_ms_ < ghost_ms) {
     return true;
   }
@@ -757,7 +702,7 @@ bool PromptIsland::animating(qint64 now) const noexcept {
 
 // A frame of the animation: runs take their place for now, and the layout merges them back
 // once nothing moves.
-void PromptIsland::tick() {
+void PromptEditorItem::tick() {
   if (animating(clock_.elapsed())) {
     placeRuns();
     return;
@@ -768,7 +713,7 @@ void PromptIsland::tick() {
   refresh();
 }
 
-QSGNode *PromptIsland::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
+QSGNode *PromptEditorItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
   auto *root = previous != nullptr ? previous : new QSGNode;
   while (auto *child = root->firstChild()) {
     root->removeChildNode(child);

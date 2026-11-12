@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ghostty_handle.hpp"
+#include "../tracked_row.hpp"
 #include "../graphics_cursor.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -99,6 +100,11 @@ public:
     const GhosttyTerminalModeConfig config{.mode = ghostty_mode_new(number, false), .value = enabled};
     checkGhostty(ghostty_terminal_set(terminal_, GHOSTTY_TERMINAL_OPT_MODE, &config));
     invalidate();
+  }
+
+  // Follows the cursor's row through reflow.
+  TrackedRow trackCursorRow() const {
+    return TrackedRow::active(terminal_, cursor().row);
   }
 
   [[gnu::always_inline]] Position cursor() const {

@@ -125,30 +125,4 @@ IdentifiedProcess ProcessInspector::identifyGroup(pid_t group, AgentProvider pre
   return selected.value_or(leader);
 }
 
-AgentProvider ProcessInspector::ancestorProvider(const ProcessIdentity &process, pid_t root) const noexcept {
-  auto current = identity(process.pid);
-  if (current != process) {
-    return AgentProvider::unknown;
-  }
-
-  auto identified = AgentProvider::unknown;
-  constexpr unsigned maximum_ancestors = 64;
-  for (unsigned count = 0; current && count < maximum_ancestors; ++count) {
-    if (identified == AgentProvider::unknown) {
-      identified = provider(current->pid);
-    }
-
-    if (current->pid == root) {
-      return identified;
-    }
-    if (current->parent <= 1 || current->parent == current->pid) {
-      return AgentProvider::unknown;
-    }
-
-    current = identity(current->parent);
-  }
-
-  return AgentProvider::unknown;
-}
-
 }

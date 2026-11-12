@@ -260,6 +260,23 @@ private:
         QCOMPARE(ink(face.rasterize(request)), plain);
       }
 
+      // Grid fitting concentrates the crossbar and stems of "H" into whole pixels.
+      const auto partial = [](fonts::GlyphBitmapView bitmap) {
+        std::uint64_t count = 0;
+        for (std::uint32_t row = 0; row < bitmap.height; ++row) {
+          for (const auto value : bitmap.row(row)) {
+            count += value != 0 && value != std::numeric_limits<std::uint8_t>::max() ? 1 : 0;
+          }
+        }
+
+        return count;
+      };
+      const auto bar = face.shape("H", height).glyph(0).index;
+      const auto native_partial = partial(face.rasterize({.index = bar, .pixel_height = height}));
+      const auto full = face.rasterize({.index = bar, .pixel_height = height, .hinting = fonts::GlyphHinting::full});
+      QVERIFY(ink(full) > 0);
+      QVERIFY(partial(full) <= native_partial);
+
       const auto restored = face.shape("M", height);
       QVERIFY(restored.glyph(0) == glyph);
       QCOMPARE(restored.advance(), advance);

@@ -262,17 +262,18 @@ theme = "cybervenom"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `cybervenom` (the default),
-`shade`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
+background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
+`cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
 `kanagawa-dragon`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors.
+Shade is Nord on a `#191c22` polar night with `#d8dee9` text: control
+flow in aurora red, fields and properties in aurora yellow, constants in aurora
+orange. It uses `#88c0d0` accents and no italics or bold. Shade's `panel_bg` is
+`default`: the chrome takes the terminal background, which the window paints
+`#191c22`.
 Cybervenom uses a `#211b2f` background, `#aa87f5` accents, and its own terminal
-and syntax palettes. Shade
-combines Vesper's neutral grays and terminal palette with green chrome accents.
-The old names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
-Shade's `panel_bg` is `default`: the chrome takes the terminal background,
-which the window paints `#101010`. The window uses the preset's terminal
+and syntax palettes. The window uses the preset's terminal
 colors; child truecolor and OSC overrides still apply. The `terminal` preset
 uses host-relative chrome roles and a neutral explicit palette, since the
 window has no exterior terminal to inherit from.
@@ -301,9 +302,13 @@ values; selecting a new preset replaces the complete theme. Colors accept
 `#RRGGBB` or `"default"`.
 
 Shade and both Pierre presets define explicit syntax styles from their Neovim
-palettes. Shade uses gray keywords, green functions, pale green types, peach
-numbers and italic mint parameters. Other presets derive unspecified roles from
+palettes. Shade uses Nord's roles: nord8 functions, nord7 types, nord9 keywords
+with control flow in red, nord15 numbers and nord14 strings, with parameters in
+the text color. Other presets derive unspecified roles from
 their chrome palette. Explicit `syntax` values take precedence over these defaults.
+The prompt editor highlights shell commands with the same roles: commands use
+`func`, keywords `keyword`, strings `string`, options and variables `parameter`,
+operators `operator` and comments `comment`.
 The native diff viewer uses bundled Tree-sitter grammars and highlight queries.
 Available categories depend on each language's query; defining a style does
 not enable LSP semantic analysis. Theme changes recolor retained tokens.
@@ -374,8 +379,9 @@ gui = {
     size = 15,
     line_height = 1.15,
     letter_spacing = 0,
-    thicken = false, -- macOS optical smoothing
+    thicken = true,
     thicken_strength = 255,
+    hinting = "full", -- fit glyphs to the pixel grid; "native" keeps the platform's rendering
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
   scroll = { smooth = true, wheel_ms = 80, overscan = 1, sticky_headers = true },
@@ -397,8 +403,9 @@ gui = {
 | `font.size` | `15` | Logical pixel size, equivalent to points on macOS; `6..96`, decimals allowed. The display scale is applied once during rasterization. |
 | `font.line_height` | `1.0` | Multiplier of the font's natural line height; `0.75..3`. Extra space is distributed above and below the baseline. |
 | `font.letter_spacing` | `0` | Extra logical pixels per cell; `-5..20`. A combination producing a nonpositive cell width fails at startup or rejects the reload. |
-| `font.thicken` | `false` | Enable CoreGraphics optical font smoothing on macOS. Increases stroke coverage without changing cell metrics or the terminal's bold attribute. Ignored on Linux. |
-| `font.thicken_strength` | `255` | Integer `0..255`, active only with `thicken = true` on macOS. `0` is the lightest smoothing, not disabled; `255` is the strongest. |
+| `font.thicken` | `true` | Thicker strokes without changing cell metrics or the terminal's bold attribute. On macOS with `hinting = "native"` it uses CoreGraphics optical font smoothing; otherwise FreeType dilates the outlines. |
+| `font.thicken_strength` | `255` | Integer `0..255`, active only with `thicken = true`. With CoreGraphics, `0` is the lightest smoothing, not disabled; with FreeType it dilates by up to half a pixel. `255` is the strongest. |
+| `font.hinting` | `"full"` | How the terminal font's outlines fit the pixel grid. `"native"` keeps the platform's rendering: CoreText with `thicken` on macOS, otherwise FreeType with the font's own instructions. `"light"` aligns horizontal features (baseline, x-height, bars) and `"full"` also aligns vertical stems, both through FreeType's autohinter on every platform. Edges get sharper, most visibly at a scale of 1, without changing advances or the grid. Symbol and fallback faces keep `"native"`. |
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
@@ -466,8 +473,8 @@ Font resolution uses CoreText on macOS and Fontconfig on Linux at startup and
 when a reload changes font settings. An unavailable explicitly named family is
 an error. `config check` validates the schema without requiring that font on
 the checking machine.
-With `font.thicken = true`, macOS rasterizes the selected face through CoreText
-and CoreGraphics into the existing glyph atlas. FreeType still supplies metrics
+With `font.thicken = true` and `font.hinting = "native"`, macOS rasterizes the
+selected face through CoreText and CoreGraphics into the existing glyph atlas. FreeType still supplies metrics
 and HarfBuzz shaping, so toggling optical weight preserves the grid and PTY size.
 Bold and italic use the existing synthesized variants. A grapheme the
 configured font lacks falls back to the embedded JetBrains Mono and Nerd

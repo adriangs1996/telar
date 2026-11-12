@@ -108,41 +108,4 @@ inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display
   };
 }
 
-inline QVariantMap workspaceRailRecord(const ListModel &workspaces, Rect area, const DisplayMetrics &display, int selected) {
-  const auto &chrome = display.chrome;
-  const auto density = display.density;
-  const auto geometry = WorkspaceRailGeometry::measure(area, chrome.ratio, {.count = static_cast<std::size_t>(workspaces.rowCount()), .active = static_cast<std::size_t>(std::max(0, selected))});
-  QVariantList marks;
-  auto bounds = geometry.firstMark();
-  for (std::size_t position = 0; position < geometry.window.count; ++position) {
-    if (bounds.empty()) {
-      break;
-    }
-
-    const auto index = static_cast<int>(geometry.window.first + position);
-    marks.append(QVariantMap{
-        {QStringLiteral("bounds"), toQRectF(bounds, density)},
-        {QStringLiteral("record"), workspaces.data(workspaces.index(index), ListModel::record_role)},
-    });
-    bounds = geometry.nextMark(bounds);
-  }
-
-  QVariantMap result{
-      {QStringLiteral("marks"), marks},
-      {QStringLiteral("previousBounds"), toQRectF(geometry.previous, density)},
-      {QStringLiteral("nextBounds"), toQRectF(geometry.next, density)},
-      {QStringLiteral("previousCount"), static_cast<qulonglong>(geometry.window.first)},
-      {QStringLiteral("nextCount"), static_cast<qulonglong>(geometry.window.total - geometry.window.first - geometry.window.count)},
-  };
-  if (const auto previous = geometry.window.previous(); previous && !geometry.previous.empty()) {
-    result.insert(QStringLiteral("previousKey"), workspaces.data(workspaces.index(static_cast<int>(*previous)), ListModel::record_role).toMap().value(QStringLiteral("key")));
-  }
-
-  if (const auto next = geometry.window.next(); next && !geometry.next.empty()) {
-    result.insert(QStringLiteral("nextKey"), workspaces.data(workspaces.index(static_cast<int>(*next)), ListModel::record_role).toMap().value(QStringLiteral("key")));
-  }
-
-  return result;
-}
-
 }

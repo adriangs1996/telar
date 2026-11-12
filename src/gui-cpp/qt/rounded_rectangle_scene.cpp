@@ -150,7 +150,7 @@ namespace telar::gui::qt {
       const auto shape = paint.shape;
       const Point local{.x = corner.x * shape.size.x, .y = corner.y * shape.size.y};
 
-      return {.position = {.x = static_cast<float>((paint.origin.x + local.x) / density), .y = static_cast<float>((paint.origin.y + local.y) / density)}, .local = local, .size = shape.size, .outline = {.x = shape.style.square_bottom ? -shape.style.radius : shape.style.radius, .y = shape.style.border_width}, .fill = shape.style.fill, .border = shape.style.border, .backdrop = shape.style.backdrop};
+      return {.position = {.x = static_cast<float>((paint.origin.x + local.x) / density), .y = static_cast<float>((paint.origin.y + local.y) / density)}, .local = local, .size = shape.size, .outline = {.x = shape.style.radius, .y = shape.style.border_width}, .fill = shape.style.fill, .border = shape.style.border, .backdrop = shape.style.backdrop};
     }
 
     const QSGGeometry::AttributeSet &shapeAttributes() {
@@ -275,10 +275,6 @@ namespace telar::gui::qt {
 
       return next;
     }
-  }
-
-  QSGNode *paintRoundedRectangle(QQuickWindow &window, QSGNode *previous, RoundedRectangle shape, qreal density) {
-    return paintRoundedRectangleAt(window, previous, {.shape = shape}, density);
   }
 
   QSGNode *paintRoundedRectangleAt(QQuickWindow &window, QSGNode *previous, RoundedRectanglePaint paint, qreal density) {

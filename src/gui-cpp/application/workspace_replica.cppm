@@ -26,6 +26,7 @@ export import telar.gui.text.json_unsigned_integer;
 export import telar.gui.graphics.texture_cache;
 export import telar.gui.application.sound_playback;
 export import telar.gui.presentation.application_mark;
+export import telar.render.document;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.gui.core.primitives;
@@ -559,7 +560,9 @@ struct Pane {
         graphics(memory, budget),
         title(AllocatorRef<char, Memory>{memory}),
         cwd(AllocatorRef<char, Memory>{memory}),
-        foreground(AllocatorRef<char, Memory>{memory}) {}
+        foreground(AllocatorRef<char, Memory>{memory}),
+        document(memory),
+        document_parts(AllocatorRef<Byte, Memory>{memory}) {}
 
   std::uint64_t id;
   std::uint64_t generation = 0;
@@ -591,6 +594,37 @@ struct Pane {
   std::optional<Byte> progress_percent;
   // The integrated shell's phase and the terminal's line discipline, for the command editor.
   PaneShell shell{};
+  // The document the pane's program shows natively (`telar render`) while `document_shown`;
+  // `document_version` changes whenever either does. `document_parts` gathers the parts of
+  // revision `document_revision` until it is whole.
+  render::Document<Memory> document;
+  bool document_shown = false;
+  std::uint64_t document_version = 0;
+  std::uint64_t document_revision = 0;
+  Vector<Byte, Memory> document_parts;
+  // A document that stands for `rows` rows of the scrollback from stable row `first_row`, as
+  // `generation` numbers them, drawn in their place once whole and valid. The view measures it
+  // in `view_rows` rows, none until it did.
+  struct InlineDocument {
+    InlineDocument(Memory &memory, std::uint64_t identity)
+        : id(identity),
+          document(memory),
+          parts(AllocatorRef<Byte, Memory>{memory}) {}
+
+    std::uint64_t id;
+    std::uint64_t generation = 0;
+    std::uint64_t first_row = 0;
+    std::uint32_t rows = 0;
+    std::uint32_t view_rows = 0;
+    render::Document<Memory> document;
+    Vector<Byte, Memory> parts;
+    bool whole = false;
+    bool shown = false;
+  };
+  // Oldest first, as the runtime keeps them; `inline_version` changes whenever one comes, goes,
+  // moves or is measured.
+  std::vector<InlineDocument> inline_documents;
+  std::uint64_t inline_version = 0;
   // The repository the integrated shell works in; `branch` owns the text the message viewed.
   PaneGit git{};
   std::string git_branch;

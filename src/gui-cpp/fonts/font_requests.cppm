@@ -294,11 +294,24 @@ namespace telar::gui::fonts {
 struct GlyphRasterization {
   bool optical = false;
   std::uint8_t strength = std::numeric_limits<std::uint8_t>::max();
+  GlyphHinting hinting = GlyphHinting::native;
 
-  [[nodiscard]] constexpr std::uint16_t key() const noexcept {
+  // Thickening or grid fitting needs its own glyph cache; the default shares the plain one.
+  [[nodiscard]] constexpr bool configured() const noexcept {
+    return optical || hinting != GlyphHinting::native;
+  }
+
+  // macOS draws thickened glyphs with CoreText unless a grid-fitting hinting is chosen.
+  [[nodiscard]] constexpr bool coreText() const noexcept {
+    return optical && hinting == GlyphHinting::native;
+  }
+
+  [[nodiscard]] constexpr std::uint32_t key() const noexcept {
     constexpr unsigned optical_shift = std::numeric_limits<std::uint8_t>::digits;
+    constexpr unsigned hinting_shift = optical_shift + 1;
+    const auto thickened = optical ? (1U << optical_shift) | strength : 0U;
 
-    return optical ? static_cast<std::uint16_t>((1U << optical_shift) | strength) : 0;
+    return thickened | (static_cast<std::uint32_t>(hinting) << hinting_shift);
   }
 
   bool operator==(const GlyphRasterization &) const = default;

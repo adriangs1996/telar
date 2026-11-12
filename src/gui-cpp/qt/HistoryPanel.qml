@@ -12,7 +12,6 @@ Item {
     readonly property var browserState: root.controller.historyState
     readonly property bool actionable: !root.controller.historyLoading && root.browserState.phase === "ready" && root.browserState.count > 0
     readonly property real resultBottomInset: 6 * ratio
-    readonly property real searchPadding: historySearch.fieldPadding
     required property var controller
     property var queryField: null
     readonly property var regions: controller.historyGeometry

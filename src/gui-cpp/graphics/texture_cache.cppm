@@ -874,10 +874,6 @@ public:
       return received_ == description_.byte_len;
     }
 
-    [[nodiscard]] inline std::span<const Byte> receivedPixels() const noexcept {
-      return {pixels_, received_};
-    }
-
     [[nodiscard]] inline std::span<const Byte> pixels() const noexcept {
       return ready() ? std::span<const Byte>{pixels_, received_} : std::span<const Byte>{};
     }
@@ -1128,14 +1124,6 @@ public:
     }
 
     return latest;
-  }
-
-  template <typename Visitor>
-    requires std::invocable<const Visitor &, const Image &>
-  void visitImages(const Visitor &visit) const {
-    for (const auto &image : images_) {
-      visit(*image);
-    }
   }
 
   [[nodiscard]] inline std::span<const GraphicsPlacement> placements() const noexcept {

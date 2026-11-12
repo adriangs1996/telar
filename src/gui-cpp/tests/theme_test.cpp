@@ -157,7 +157,23 @@ void syntaxFallbackAndAliases() {
   const auto fallback = theme.syntaxStyle(SyntaxRole::keyword);
   require(fallback.color == theme.color(PaletteRole::mauve) && !fallback.bold, "unconfigured syntax roles must follow the semantic chrome palette");
   const auto shade = themeValuesByName("shade");
-  require(shade.syntaxStyle(SyntaxRole::parameter).italic && !shade.syntaxStyle(SyntaxRole::plain).italic, "generated syntax preferences must preserve the original preset's role styles");
+  bool shade_italic = false;
+  for (std::size_t index = 0; index < syntax_names.size(); ++index) {
+    shade_italic = shade_italic || shade.syntaxStyle(static_cast<SyntaxRole>(index)).italic;
+  }
+  require(!shade_italic, "Shade must not set italic syntax roles");
+  const auto plain = shade.syntaxStyle(SyntaxRole::plain).color;
+  const auto func = shade.syntaxStyle(SyntaxRole::func).color;
+  const auto type = shade.syntaxStyle(SyntaxRole::type).color;
+  require(func != plain && type != plain && func != type, "Shade must color functions and types apart from the text and each other");
+  require(shade.syntaxStyle(SyntaxRole::parameter).color == plain && shade.syntaxStyle(SyntaxRole::property).color != plain, "Shade must keep parameters in the text color and color properties");
+  require(default_theme_values == shade, "Shade must be the default theme");
+  const auto projected = projectTheme(shade);
+  bool syntax_kept = true;
+  for (std::size_t index = 0; index < syntax_names.size(); ++index) {
+    syntax_kept = syntax_kept && projected.syntax[index] == shade.syntaxStyle(static_cast<SyntaxRole>(index)).color;
+  }
+  require(syntax_kept, "the projected theme must keep every syntax color for GUI-highlighted text");
   const auto dragon = themeValuesByName("kanagawa_dragon");
   require(dragon.syntaxStyle(SyntaxRole::keyword).italic && dragon.syntaxStyle(SyntaxRole::comment).italic, "generated preset metadata must retain keyword and comment italics");
 }

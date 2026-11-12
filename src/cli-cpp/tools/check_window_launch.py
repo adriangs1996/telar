@@ -29,10 +29,10 @@ def main():
         def run(words):
             return subprocess.run([str(telar),*words],env=env,cwd=root,capture_output=True,text=True,timeout=30)
         try:
-            result=run(['--fresh','--no-config','--theme=OSAKA_JADE','/bin/echo',"space ' quote",'--help'])
+            result=run(['--fresh','--no-config','--theme=MOCHA','/bin/echo',"space ' quote",'--help'])
             assert result.returncode==0,(result.stdout,result.stderr)
             command=json.loads(result.stdout)
-            expected=['--socket',str(socket),'--cwd',str(root),'--theme','shade','--no-config','--fresh','--','/bin/echo',"space ' quote",'--help']
+            expected=['--socket',str(socket),'--cwd',str(root),'--theme','catppuccin','--no-config','--fresh','--','/bin/echo',"space ' quote",'--help']
             assert command==expected,(command,expected)
             report['checks'].append('bundle GUI resolution, runtime startup, theme alias, literal child argv')
             result=run(['--fresh','--no-config'])

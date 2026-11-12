@@ -33,7 +33,7 @@ class NativeCellText;
 // coloured by how the shell reads it and wrapped at the line's width, from the layout's indent;
 // the line draws the prompt's mark before it. It holds no state of its own; the session owns the
 // editor, and this item paints it and publishes what QML needs to lay the line out around it.
-class PromptIsland : public QQuickItem {
+class PromptEditorItem : public QQuickItem {
   Q_OBJECT
   QML_NAMED_ELEMENT(NativePromptEditor)
   Q_PROPERTY(QObject *application READ application WRITE setApplication NOTIFY applicationChanged)
@@ -54,18 +54,17 @@ class PromptIsland : public QQuickItem {
   Q_PROPERTY(QString copying READ copying NOTIFY stateChanged)
   Q_PROPERTY(bool queued READ queued NOTIFY stateChanged)
   Q_PROPERTY(bool answering READ answering NOTIFY stateChanged)
+  // The terminal's cursor is not drawn, standing where no key lands (Session::hidesTerminalCursor).
+  Q_PROPERTY(bool cursorHidden READ cursorHidden NOTIFY stateChanged)
   Q_PROPERTY(int secretKeys READ secretKeys NOTIFY stateChanged)
   Q_PROPERTY(bool failed READ failed NOTIFY stateChanged)
   Q_PROPERTY(bool empty READ empty NOTIFY stateChanged)
-  Q_PROPERTY(QString lastCommand READ lastCommand NOTIFY stateChanged)
-  // Counts the commands the editor sent to run: each one flies to its separator.
-  Q_PROPERTY(int launches READ launches NOTIFY stateChanged)
-  // Where the next command runs, for the island to announce when it changes.
+  // Where the next command runs, for the line to announce when it changes.
   Q_PROPERTY(QString directory READ directory NOTIFY stateChanged)
   Q_PROPERTY(QString branch READ branch NOTIFY stateChanged)
   // The running program's progress (OSC 9;4): 0 to 100, -1 without one, -2 when indeterminate.
   Q_PROPERTY(int progress READ progress NOTIFY stateChanged)
-  // Commands the shell finished and the last one's exit status, for the island's outcome.
+  // Commands the shell finished and the last one's exit status, for the line's outcome.
   Q_PROPERTY(int commands READ commands NOTIFY stateChanged)
   Q_PROPERTY(int status READ status NOTIFY stateChanged)
   // client.prompt.motion.
@@ -82,8 +81,6 @@ class PromptIsland : public QQuickItem {
   Q_PROPERTY(QString interruptKey READ interruptKey NOTIFY stateChanged)
   // The program in the foreground, which a secret is typed for.
   Q_PROPERTY(QString program READ program NOTIFY stateChanged)
-  // The last command that ended: its first line, status, duration in ms and how it ended.
-  Q_PROPERTY(QVariantMap lastBlock READ lastBlock NOTIFY stateChanged)
   Q_PROPERTY(int rows READ rows NOTIFY layoutChanged)
   Q_PROPERTY(int visibleRows READ visibleRows NOTIFY layoutChanged)
   Q_PROPERTY(int columns READ columns NOTIFY layoutChanged)
@@ -95,8 +92,8 @@ class PromptIsland : public QQuickItem {
   Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY metricsChanged)
 
 public:
-  explicit PromptIsland(QQuickItem *parent = nullptr);
-  ~PromptIsland() override;
+  explicit PromptEditorItem(QQuickItem *parent = nullptr);
+  ~PromptEditorItem() override;
 
   [[nodiscard]] QObject *application() const noexcept;
   void setApplication(QObject *application);
@@ -119,11 +116,10 @@ public:
   [[nodiscard]] QString copying() const;
   [[nodiscard]] bool queued() const noexcept;
   [[nodiscard]] bool answering() const noexcept;
+  [[nodiscard]] bool cursorHidden() const noexcept;
   [[nodiscard]] int secretKeys() const noexcept;
   [[nodiscard]] bool failed() const noexcept;
   [[nodiscard]] bool empty() const noexcept;
-  [[nodiscard]] QString lastCommand() const;
-  [[nodiscard]] int launches() const noexcept;
   [[nodiscard]] QString directory() const;
   [[nodiscard]] QString branch() const;
   [[nodiscard]] int progress() const noexcept;
@@ -138,11 +134,6 @@ public:
   [[nodiscard]] int link() const noexcept;
   [[nodiscard]] QString interruptKey() const;
   [[nodiscard]] QString program() const;
-  [[nodiscard]] QVariantMap lastBlock() const;
-  // The last line the running program printed, from the rows on screen.
-  Q_INVOKABLE QString outputLine() const;
-  // Scrolls the pane to the last command that failed.
-  Q_INVOKABLE void viewFailure();
   [[nodiscard]] int rows() const noexcept;
   [[nodiscard]] int visibleRows() const noexcept;
   [[nodiscard]] int columns() const noexcept;
@@ -217,6 +208,7 @@ private:
   int maximum_rows_ = 12;
   int first_row_ = 0;
   std::uint8_t surface_ = 0;
+  bool cursor_hidden_ = false;
   bool failed_ = false;
 };
 

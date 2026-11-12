@@ -163,25 +163,6 @@ void sidebarListsFollowTheReferenceBands() {
   require(short_sidebar.projects.empty() && !short_sidebar.activity_header.empty(), "short sidebars must give room to activity and leave project navigation to the top bar");
 }
 
-void workspaceRailKeepsTheSelectionInView() {
-  using namespace telar::gui;
-  constexpr Rect rail{.width = 52, .height = 932};
-  const auto single = WorkspaceRailGeometry::measure(rail, 1, {.count = 1, .active = 0});
-  constexpr Rect expected_mark{.x = 7, .y = 12, .width = 36, .height = 36};
-  require(single.firstMark() == expected_mark, "a single rail mark must remain at the top with the original centering");
-  constexpr std::size_t workspace_count = 128;
-  const auto crowded = WorkspaceRailGeometry::measure(rail, 1, {.count = workspace_count, .active = workspace_count - 1});
-  require(crowded.window.first + crowded.window.count == workspace_count && crowded.window.previous() && !crowded.window.next(), "a direct jump must reveal the selected last workspace and the nearest earlier hidden project");
-  auto last = crowded.firstMark();
-  for (std::size_t position = 1; position < crowded.window.count; ++position) {
-    last = crowded.nextMark(last);
-  }
-
-  require(!crowded.previous.empty() && !last.empty(), "overflow controls must reserve space without clipping the selected mark");
-  const auto tiny = WorkspaceRailGeometry::measure(rail, std::numeric_limits<float>::min(), {.count = workspace_count, .active = 0});
-  require(tiny.window.count == workspace_count, "tiny valid scales must bound slot conversion by the available workspace count");
-}
-
 void tabCaptionsFollowForegroundAndDirectory() {
   using telar::gui::TabCaption;
   TabCaption::Buffer storage;
@@ -285,7 +266,6 @@ int main() {
     chromeSurfacesPreserveThemeAndTransparency();
     paneSurfacesUseOnlyExistingChromeSpace();
     sidebarListsFollowTheReferenceBands();
-    workspaceRailKeepsTheSelectionInView();
     tabCaptionsFollowForegroundAndDirectory();
     tabStripsCompressAroundTheirFocus();
     tabSelectionRetargetsWithoutJumping();

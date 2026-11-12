@@ -2965,14 +2965,15 @@ private:
       return;
     }
 
-    table.onlyFields({"family", "style", "size", "line_height", "letter_spacing", "thicken", "thicken_strength"});
+    table.onlyFields({"family", "style", "size", "line_height", "letter_spacing", "thicken", "thicken_strength", "hinting"});
     optionalUtf8Text(table.field("family"), 256);
     optionalUtf8Text(table.field("style"), 256);
     table.field("size").boundedNumber(6, 6, 96);
     table.field("line_height").boundedNumber(1, 0.75, 3);
     table.field("letter_spacing").boundedNumber(0, -5, 20);
-    table.field("thicken").boolean(false);
+    table.field("thicken").boolean(true);
     optionalWholeNumber(table.field("thicken_strength"), 0, 255);
+    optionalChoice(table.field("hinting"), {"native", "light", "full"});
   }
 
   inline static void cursor(const lua::Value &table) {
@@ -3783,7 +3784,7 @@ private:
     }
 
     const auto text = value.string();
-    constexpr std::string_view names[]{"cybervenom", "shade", "osaka-jade", "osaka_jade", "osakajade", "vesper", "catppuccin", "catppuccin-mocha", "mocha", "tokyo-night", "tokyonight", "tokyo_night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-wave", "kanagawa_wave", "kanagawa-dragon", "kanagawa_dragon", "terminal", "default"};
+    constexpr std::string_view names[]{"cybervenom", "shade", "vesper", "catppuccin", "catppuccin-mocha", "mocha", "tokyo-night", "tokyonight", "tokyo_night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-wave", "kanagawa_wave", "kanagawa-dragon", "kanagawa_dragon", "terminal", "default"};
     const bool found = std::ranges::any_of(names, [&](std::string_view name) {
       return text.size() == name.size() && std::equal(text.begin(), text.end(), name.begin(), [](char left, char right) { return asciiLower(left) == right; });
     });

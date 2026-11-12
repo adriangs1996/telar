@@ -16,7 +16,8 @@ return telar.config({
       size = 15,
       line_height = 1.15,
       letter_spacing = 0,
-      thicken = false, -- macOS optical weight; independent of bold text.
+      thicken = true, -- independent of bold text
+      hinting = "full", -- "native" keeps the platform's rendering
       thicken_strength = 255,
     },
     cursor = {

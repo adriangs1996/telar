@@ -5,6 +5,7 @@ static_assert(true);
 
 
 #include "telar_base/diagnostics/config.hpp"
+#include "telar_render/sequence.hpp"
 #include <sys/types.h>
 #include <cstdint>
 #include <cassert>
@@ -55,6 +56,8 @@ import telar.runtime.tests.client_peer;
 import telar.runtime.model.client_layouts;
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.runtime.runtime;
+import telar.runtime.graphics.synchronizer;
+import telar.runtime.platform.request_worker;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -272,6 +275,120 @@ void scrollbackOrigin() {
   panes.remove(model, clients, pane.id);
 }
 
+// A program on the alternate screen hands its pane a document: it reaches the client in
+// chunks, and is withdrawn once the program leaves the alternate screen. On the primary screen
+// the same sequence is ignored, so ordinary output cannot take a pane over.
+void paneDocument() {
+  SystemAllocator memory;
+  RuntimeModel model{memory};
+  ClientStore<SystemAllocator> clients{memory};
+  LimitService<SystemAllocator> limits;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/document-delivery.sock"}};
+  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  ClientPeer peer{memory, model, clients, ClientRole::interactive};
+  auto &client = peer.session();
+  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
+  const auto now = std::chrono::steady_clock::now();
+  auto timeout = std::chrono::nanoseconds::max();
+  const auto deliver = [&] { return AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::document, now, timeout); };
+  // Reads as the pane's read loop does: no more than the media worker holds at once.
+  MediaProcessor<SystemAllocator> processor;
+  ObservationWorker<decltype(processor) &> worker{std::in_place, processor};
+  const auto feed = [&](std::string_view bytes) {
+    while (!bytes.empty()) {
+      const auto take = std::min(bytes.size(), Pane<SystemAllocator>::read_buffer_size);
+      while (pane.media->holdsRead(take)) {
+        check(pane.media->seal());
+        MediaProcessor<SystemAllocator>::Request request;
+        request.entries[request.count++].media = pane.media;
+        check(worker.submit(request));
+        worker.wait([&](const auto &) { pane.media->complete(); });
+      }
+      pane.terminal.feed({reinterpret_cast<const Byte *>(bytes.data()), take});
+      bytes.remove_prefix(take);
+    }
+    pane.terminal.refresh();
+  };
+  check(!deliver());
+
+  std::vector<Byte> document(PaneDocument::chunk_bytes + 100);
+  for (std::size_t index = 0; index < document.size(); ++index) {
+    document[index] = static_cast<Byte>(index * 7);
+  }
+  std::string sequence = "\x1b]7780;begin;";
+  const auto body = sequence.size();
+  sequence.resize(body + (document.size() + 2) / 3 * 4);
+  check(base64::encode(document, std::span<char>{sequence}.subspan(body)).has_value());
+  sequence += "\x1b\\";
+
+  // On the primary screen a sequence alone opens a zone no end closed: nothing shows.
+  feed(sequence);
+  check(pane.terminal.effects.document.empty() && pane.terminal.effects.inline_documents.empty() && !deliver());
+
+  feed("\x1b[?1049h");
+  feed(sequence);
+  check(deliver());
+  {
+    const auto first = peer.receive<PaneDocument>();
+    check(first.pane_id == pane.id && first.size == document.size() && first.offset == 0 && first.bytes.size() == PaneDocument::chunk_bytes);
+    check(std::ranges::equal(first.bytes, std::span{document}.first(PaneDocument::chunk_bytes)));
+  }
+  check(deliver());
+  const auto revision = [&] {
+    const auto rest = peer.receive<PaneDocument>();
+    check(rest.offset == PaneDocument::chunk_bytes && std::ranges::equal(rest.bytes, std::span{document}.subspan(PaneDocument::chunk_bytes)));
+    return rest.revision;
+  }();
+  check(!deliver());
+  // Nothing of the sequence reached the screen.
+  check(pane.terminal.outputSettled());
+
+  feed("\x1b[?1049l");
+  check(pane.terminal.effects.document.empty());
+  check(deliver());
+  const auto closed = peer.receive<PaneDocument>();
+  check(closed.size == 0 && closed.bytes.empty() && closed.revision > revision);
+  check(!deliver());
+
+  // On the primary screen, the rows between the sequences that begin and end a document are
+  // the zone it stands for, numbered as the scrollback numbers them.
+  const std::string small = "\x1b]7780;begin;AAECAw==\x1b\\";
+  feed("\r\n" + small + "first\r\nsecond\r\n\x1b]7780;end\x1b\\");
+  check(pane.terminal.effects.inline_documents.size() == 1);
+  check(deliver());
+  const auto zone = peer.receive<PaneDocument>();
+  check(zone.id != 0 && zone.rows == 2 && zone.size == 4 && zone.offset == 0 && zone.bytes.size() == 4);
+  check(zone.generation == pane.terminal.scrollbackGeneration() && zone.first_row == pane.terminal.scrollbackTrimmed() + pane.terminal.effects.inline_documents.front().row);
+  check(!deliver());
+
+  // A reflow numbers the rows anew: the client hears where the rows went, without the bytes.
+  pane.terminal.resize({30, 5, 0, 0});
+  pane.terminal.refresh();
+  check(deliver());
+  const auto moved = peer.receive<PaneDocument>();
+  check(moved.id == zone.id && moved.generation != zone.generation && moved.offset == moved.size && moved.bytes.empty() && moved.rows >= 2);
+  check(!deliver());
+
+  // Past the pane's limit the oldest document goes, and its client hears so first.
+  for (std::size_t index = 0; index < ::telar::render::max_pane_documents; ++index) {
+    feed(small + "more\r\n\x1b]7780;end\x1b\\");
+  }
+  check(pane.terminal.effects.inline_documents.size() == ::telar::render::max_pane_documents);
+  check(deliver());
+  const auto withdrawn = peer.receive<PaneDocument>();
+  check(withdrawn.id == zone.id && withdrawn.size == 0);
+
+  // A document stands for the text its rows held: erasing that text lets the document go.
+  const auto kept = pane.terminal.effects.inline_documents.size();
+  feed("\x1b[H\x1b[2J");
+  check(pane.terminal.effects.inline_documents.size() < kept);
+  panes.detachAll(model, clients, client.id);
+  panes.remove(model, clients, pane.id);
+}
+
 void attachmentRotation() {
   SystemAllocator memory;
   RuntimeModel model{memory};
@@ -383,4 +500,5 @@ void testClientDelivery() {
   attachmentRotation();
   shellState();
   scrollbackOrigin();
+  paneDocument();
 }

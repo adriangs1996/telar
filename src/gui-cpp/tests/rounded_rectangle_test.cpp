@@ -192,11 +192,8 @@ private:
     }
     surface.setRadius(16);
     surface.setBackdropColor(QColor::fromRgbF(0.1F, 0.1F, 0.1F, 0.8F));
-    surface.setSquareBottom(true);
     const auto rounded = window.grabWindow();
     QVERIFY(std::abs(rounded.pixelColor(qRound(20 * density), qRound(20 * density)).alphaF() - 0.8) <= 1.0 / 255);
-    // Stay inside the flat corner, clear of the outer-edge antialiasing band.
-    QVERIFY(std::abs(rounded.pixelColor(qRound(21 * density), qRound(138 * density)).alphaF() - 0.25) <= 1.0 / 255);
     surface.setReplaceBackground(false);
     const auto blended = window.grabWindow();
     QCOMPARE(blended.pixelColor(qRound(40 * density), qRound(40 * density)).alpha(), 255);

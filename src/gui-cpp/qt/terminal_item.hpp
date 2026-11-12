@@ -40,7 +40,6 @@ static_assert(true);
 #include <QList>
 #include <QPointer>
 #include <QQuickItem>
-#include <QElapsedTimer>
 #include <QTimer>
 #include <QtQml/qqmlregistration.h>
 #include <memory>
@@ -85,6 +84,11 @@ class TerminalItem : public QQuickItem {
   // the editor's prompt will have its separator on, or -1. Only while telar's editor stands
   // in for the shell's.
   Q_PROPERTY(QVariantList separators READ separators NOTIFY blocksChanged)
+  // The documents drawn in place of the rows they stand for: id, and the display rows they take
+  // once placed, or placed false for one the view is yet to measure. `documentRows` holds, by
+  // id, the drawn row where each placed one starts, which moves as the view scrolls.
+  Q_PROPERTY(QVariantList documents READ documents NOTIFY documentsChanged)
+  Q_PROPERTY(QVariantMap documentRows READ documentRows NOTIFY blocksChanged)
   Q_PROPERTY(QVariantList rail READ rail NOTIFY blocksChanged)
   // The drawn rows a remote shell's session covers, as {row, rows} runs: from the ssh that
   // opened it to its last command's output, or to the live end while it lasts.
@@ -146,6 +150,12 @@ public:
   [[nodiscard]] QRectF promptCaret() const noexcept;
   void setPromptCaret(const QRectF &caret);
   [[nodiscard]] QVariantList separators() const;
+  [[nodiscard]] QVariantList documents() const {
+    return documents_;
+  }
+  [[nodiscard]] QVariantMap documentRows() const {
+    return document_rows_;
+  }
   [[nodiscard]] QVariantList rail() const;
   [[nodiscard]] QVariantList remoteRows() const;
   [[nodiscard]] int promptRow() const noexcept;
@@ -200,17 +210,10 @@ public:
   [[nodiscard]] qreal railHeight() const noexcept {
     return rail_height_;
   }
-  // While the line the editor sent turns into its separator, the rows from its prompt down
-  // stay unpainted; released, the first screen of its output enters line by line. The
-  // command runs all along: only what is shown waits, and never longer than a moment.
-  Q_INVOKABLE void holdOutput();
-  Q_INVOKABLE void releaseOutput();
-  [[nodiscard]] bool outputHeld() const noexcept {
-    return held_from_.has_value();
-  }
   [[nodiscard]] std::optional<PresentedLink> prepareLinkPresentation() const;
 
 signals:
+  void documentsChanged();
   void applicationChanged();
   void paneIdChanged();
   void backgroundProvidedChanged();
@@ -296,7 +299,8 @@ private:
   void requestViewRows(bool moving);
   void refreshScrollViews(bool segments_changed = true);
   void followDroppedRows(bool following);
-  void anchorFolds();
+  // Keeps the row at the top through changed folds; whether a fold, not a document, changed.
+  bool anchorFolds();
   void followRuntimeView(bool following);
   // A fold opened or closed under a shown separator: what is below it moves into place.
   void startFoldMotion(FoldMap<>::Span span, bool closed);
@@ -370,6 +374,8 @@ private:
   std::uint64_t pane_id_ = 0;
   std::vector<std::uint8_t> hidden_rows_;
   QVariantList separators_;
+  QVariantList documents_;
+  QVariantMap document_rows_;
   QVariantList rail_;
   QVariantList remote_rows_;
   int prompt_row_ = -1;
@@ -438,15 +444,7 @@ private:
   mutable std::vector<MetadataLink> drawn_links_;
   mutable std::vector<MetadataRun> drawn_runs_;
   mutable std::vector<Byte> drawn_uris_;
-  // Output held from this row on, counted from the top of the scrollback, and then revealed
-  // from it: `reveal_rows_` rows, one every `reveal_step_ms_`.
-  std::optional<std::uint64_t> held_from_;
-  std::uint64_t reveal_from_ = 0;
-  std::uint64_t reveal_rows_ = 0;
-  qint64 reveal_step_ms_ = 0;
-  QElapsedTimer reveal_clock_;
   std::vector<float> revealed_rows_;
-  QTimer hold_limit_;
   TerminalFont font_;
   FontGrid font_grid_;
   std::shared_ptr<const FontCollection> font_collection_;

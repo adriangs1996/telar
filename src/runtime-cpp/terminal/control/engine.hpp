@@ -27,7 +27,7 @@ class Engine {
 public:
   // What the engine keeps of its terminal, its allocator, response queue and resources included, is region `a`.
   explicit Engine(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<PtyResponseQueue &, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {})
-      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, resources), reports_(memory), responses_(responses), enabled_(enabled) {}
+      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, resources), reports_(memory), document_(AllocatorRef<std::uint8_t, Memory>{memory}), zones_(AllocatorRef<Zone, Memory>{memory}), responses_(responses), enabled_(enabled) {}
 
   void bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
@@ -265,6 +265,37 @@ public:
     return clipboard_;
   }
 
+  // A document that stands for the rows its program wrote between the sequences that began and
+  // ended it, on the primary screen; `end` is the row after them, or their last row when the
+  // cursor stopped within it.
+  struct Zone {
+    Vector<std::uint8_t, Memory> bytes;
+    TrackedRow first;
+    TrackedRow end;
+    bool end_inclusive = false;
+  };
+
+  // The oldest zone a program closed since the last call, if any.
+  std::optional<Zone> takeZone() noexcept {
+    if (zones_.empty()) {
+      return std::nullopt;
+    }
+    std::optional<Zone> zone{std::move(zones_.front())};
+    zones_.erase(zones_.begin());
+    return zone;
+  }
+
+  // Moves the document a program wrote since the last call into into.
+  bool takeDocument(Vector<std::uint8_t, Memory> &into) noexcept {
+    if (!document_pending_) {
+      return false;
+    }
+    into.swap(document_);
+    document_.clear();
+    document_pending_ = false;
+    return true;
+  }
+
   bool pasteEvents() const noexcept {
     return paste_events_;
   }
@@ -272,6 +303,52 @@ public:
   Policy policy;
 
 private:
+  // Keeps the encoded document a sequence begins. On the alternate screen it covers the pane;
+  // on the primary screen it opens a zone at the cursor's row, which only its end sequence
+  // makes a document, so a sequence alone never takes rows over. A body that is no base64 is
+  // ignored; the window validates the rest.
+  void document(std::string_view encoded) noexcept {
+    if (!enabled_ || encoded.size() > ::telar::render::max_sequence_body - ::telar::render::sequence_begin.size()) {
+      return;
+    }
+    try {
+      Vector<std::uint8_t, Memory> bytes(encoded.size() / 4 * 3 + 3, document_.get_allocator());
+      const auto size = base64::decode<base64::Padding::optional>(encoded, bytes);
+      if (!size || *size > ::telar::render::max_document_bytes) {
+        return;
+      }
+      bytes.resize(*size);
+      if (state_.primaryScreen()) {
+        open_zone_.emplace(Zone{.bytes = std::move(bytes), .first = state_.trackCursorRow(), .end = {}, .end_inclusive = false});
+      } else {
+        document_ = std::move(bytes);
+        document_pending_ = true;
+      }
+    } catch (const std::bad_alloc &) {
+      // A document that cannot be kept is not shown; its text stays.
+    }
+  }
+
+  void closeZone() noexcept {
+    if (!open_zone_ || !state_.primaryScreen()) {
+      return;
+    }
+    auto zone = std::move(*open_zone_);
+    open_zone_.reset();
+    zone.end_inclusive = state_.cursor().column != 0;
+    zone.end = state_.trackCursorRow();
+    if (!zone.first || !zone.end) {
+      return;
+    }
+    try {
+      if (zones_.size() == ::telar::render::max_pane_documents) {
+        zones_.erase(zones_.begin());
+      }
+      zones_.push_back(std::move(zone));
+    } catch (const std::bad_alloc &) {
+    }
+  }
+
   [[gnu::noinline]] std::size_t ordinaryAscii(std::span<const std::uint8_t> input) {
     static_assert(ascii_detail::codepoint_capacity == GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT);
     std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
@@ -788,6 +865,14 @@ private:
 
   void osc(Sequence sequence) {
     responses_.release();
+    if (const auto body = sequence.body(); oscOperation(body.substr(0, body.find(';'))) == ::telar::render::sequence_number) {
+      if (body.starts_with(::telar::render::sequence_begin)) {
+        document(body.substr(::telar::render::sequence_begin.size()));
+      } else if (body == ::telar::render::sequence_end) {
+        closeZone();
+      }
+      return;
+    }
     if (colors_.handle({state_, reply_, policy}, sequence, enabled_)) {
       return;
     }
@@ -847,6 +932,9 @@ private:
   tbc::view<GraphicsQueries<Memory>, tbc::lt::a> graphics_queries_;
   tbc::view<Reports<Memory>, tbc::lt::a> reports_;
   ColorQueries<Memory> colors_;
+  Vector<std::uint8_t, Memory> document_;
+  std::optional<Zone> open_zone_;
+  Vector<Zone, Memory> zones_;
   ClientFacts facts_;
   tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;
   bool enabled_;
@@ -856,6 +944,7 @@ private:
   bool streamed_media_ = false;
   bool prepared_ = false;
   bool clipboard_before_reply_ = false;
+  bool document_pending_ = false;
   // The scrollback was just erased, with at most the cursor moved since.
   bool history_erased_ = false;
   // The last sequence moved the cursor home (CUP).

@@ -89,7 +89,7 @@ struct OpticalGlyphRasterizers {
   OpticalGlyphRasterizers(const OpticalGlyphRasterizers &) = delete;
   OpticalGlyphRasterizers &operator=(const OpticalGlyphRasterizers &) = delete;
 
-  std::uint8_t strength = std::numeric_limits<std::uint8_t>::max();
+  fonts::GlyphRasterization settings{.optical = true};
 #ifdef Q_OS_MACOS
   static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
   SystemAllocator memory;
@@ -109,7 +109,7 @@ public:
         fonts_(std::move(fonts)),
         software_(window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
     if constexpr (optical) {
-      rasterization_.strength = rasterization.strength;
+      rasterization_.settings = rasterization;
     }
   }
 
@@ -200,7 +200,7 @@ public:
 
   [[nodiscard]] static tbc::view<std::shared_ptr<ChromeGlyphImages>, tbc::lt::a> shared(tbc::view<QQuickWindow &, tbc::lt::a> window, tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts, fonts::GlyphRasterization rasterization = {}) {
     using Source = QPair<QQuickWindow *, const FontSet *>;
-    using Key = std::conditional_t<optical, std::pair<Source, std::uint16_t>, Source>;
+    using Key = std::conditional_t<optical, std::pair<Source, std::uint32_t>, Source>;
     thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
     for (auto entry = caches.begin(); entry != caches.end();) {
       if (entry.value().expired()) {
@@ -228,19 +228,25 @@ public:
 
 private:
   [[nodiscard]] fonts::GlyphBitmapView rasterize(fonts::GlyphRasterRequest request, fonts::FontRole role) {
-#ifdef Q_OS_MACOS
     if constexpr (optical) {
-      if constexpr (requires { fonts_->asset(role); }) {
-        return rasterizeOptical(request, role);
-      } else {
-        throw std::invalid_argument{"OpticalFontAssetsUnavailable"};
+#ifdef Q_OS_MACOS
+      if (rasterization_.settings.coreText()) {
+        if constexpr (requires { fonts_->asset(role); }) {
+          return rasterizeOptical(request, role);
+        } else {
+          throw std::invalid_argument{"OpticalFontAssetsUnavailable"};
+        }
+      }
+#endif
+      if (rasterization_.settings.optical) {
+        request.thicken_strength = rasterization_.settings.strength;
+      }
+
+      // Grid fitting suits the terminal's text face; symbol and fallback faces keep their shapes.
+      if (role == fonts::FontRole::primary) {
+        request.hinting = rasterization_.settings.hinting;
       }
     }
-#else
-    if constexpr (optical) {
-      request.thicken_strength = rasterization_.strength;
-    }
-#endif
 
     return fonts_->face(role).rasterize(request);
   }
@@ -254,7 +260,7 @@ private:
       }
 
       const auto &asset = fonts_->asset(role);
-      rasterizer = std::make_unique<platform::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.strength);
+      rasterizer = std::make_unique<platform::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.settings.strength);
     }
 
     return rasterizer->rasterize(request);

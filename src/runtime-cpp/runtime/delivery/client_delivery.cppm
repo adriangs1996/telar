@@ -1,6 +1,7 @@
 module;
 #include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
+#include "telar_render/sequence.hpp"
 #include <new>
 #include <ghostty/vt.h>
 #include <stdlib.h>
@@ -233,6 +234,8 @@ private:
       return exit(output, attachment, pane);
     case DeliveryLane::graphics:
       return graphics(output, attachment, pane, timeout);
+    case DeliveryLane::document:
+      return document(output.connection, attachment, pane) || inlineDocuments(output.connection, attachment, pane);
     default:
       return false;
     }
@@ -247,6 +250,87 @@ private:
     connection.send(message);
     observed = revision;
     return true;
+  }
+
+  // The pane's document, one chunk per delivery; a newer revision restarts from its start, so
+  // a client never assembles parts of two documents.
+  inline static bool document(Connection<Memory> &connection, Attachment<Memory> &attachment, const Pane<Memory> &pane) {
+    static_assert(PaneDocument::max_size == ::telar::render::max_document_bytes);
+    const auto &effects = pane.terminal.effects;
+    if (attachment.document_revision != effects.document_revision) {
+      attachment.document_revision = effects.document_revision;
+      attachment.document_offset = 0;
+      attachment.document_whole = false;
+    } else if (attachment.document_whole) {
+      return false;
+    }
+
+    const auto size = static_cast<std::uint32_t>(effects.document.size());
+    const auto chunk = std::min(size - attachment.document_offset, PaneDocument::chunk_bytes);
+    connection.send(PaneDocument{
+        .pane_id = pane.id,
+        .revision = effects.document_revision,
+        .size = size,
+        .offset = attachment.document_offset,
+        .bytes = std::span<const Byte>{effects.document}.subspan(attachment.document_offset, chunk),
+    });
+    attachment.document_offset += chunk;
+    attachment.document_whole = attachment.document_offset == size;
+    return true;
+  }
+
+  // The documents that stand for rows of the pane's scrollback: one a client has that the pane
+  // let go of is withdrawn first, then each one's parts go in order, then rows that moved.
+  inline static bool inlineDocuments(Connection<Memory> &connection, Attachment<Memory> &attachment, const Pane<Memory> &pane) {
+    const auto &effects = pane.terminal.effects;
+    const auto generation = pane.terminal.scrollbackGeneration();
+    const auto trimmed = pane.terminal.scrollbackTrimmed();
+    auto &sent = attachment.inline_documents;
+    if (sent.settled(effects.inline_revision, generation, trimmed)) {
+      return false;
+    }
+
+    for (std::size_t index = 0; index < sent.count; ++index) {
+      const auto id = sent.items[index].id;
+      if (std::ranges::find(effects.inline_documents, id, &TerminalEffects<Memory>::InlineDocument::id) == effects.inline_documents.end()) {
+        connection.send(PaneDocument{.pane_id = pane.id, .id = id, .revision = id});
+        sent.erase(index);
+        return true;
+      }
+    }
+
+    for (const auto &document : effects.inline_documents) {
+      if (document.rows == 0) {
+        continue;
+      }
+      auto *item = sent.find(document.id);
+      if (item == nullptr && (item = sent.add(document.id)) == nullptr) {
+        continue;
+      }
+      const auto size = static_cast<std::uint32_t>(document.bytes.size());
+      const auto first_row = trimmed + document.row;
+      if (item->offset < size || item->generation != generation || item->first_row != first_row || item->rows != document.rows) {
+        const auto chunk = std::min(size - item->offset, PaneDocument::chunk_bytes);
+        connection.send(PaneDocument{
+            .pane_id = pane.id,
+            .id = document.id,
+            .revision = document.id,
+            .generation = generation,
+            .first_row = first_row,
+            .rows = document.rows,
+            .size = size,
+            .offset = item->offset,
+            .bytes = std::span<const Byte>{document.bytes}.subspan(item->offset, chunk),
+        });
+        item->offset += chunk;
+        item->generation = generation;
+        item->first_row = first_row;
+        item->rows = document.rows;
+        return true;
+      }
+    }
+    sent.settle(effects.inline_revision, generation, trimmed);
+    return false;
   }
 
   inline static bool blocks(Connection<Memory> &connection, Attachment<Memory> &attachment, const Pane<Memory> &pane) {
@@ -575,7 +659,7 @@ private:
       return;
     }
 
-    for (const auto lane : {DeliveryLane::cwd, DeliveryLane::foreground, DeliveryLane::title, DeliveryLane::progress, DeliveryLane::git, DeliveryLane::blocks, DeliveryLane::exit, DeliveryLane::graphics}) {
+    for (const auto lane : {DeliveryLane::cwd, DeliveryLane::foreground, DeliveryLane::title, DeliveryLane::progress, DeliveryLane::git, DeliveryLane::blocks, DeliveryLane::exit, DeliveryLane::graphics, DeliveryLane::document}) {
       if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
         return;
       }

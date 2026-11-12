@@ -218,6 +218,15 @@ private:
     bundledFonts();
   }
 
+  // The prompt editor highlights shell syntax with the theme's syntax roles.
+  Q_SLOT static void syntaxColorsReachQml() {
+    Configuration configuration;
+    const auto keyword = QStringLiteral("syntax_keyword");
+    QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), toQColor(configuration.theme.foreground));
+    configuration.theme.syntax[static_cast<std::size_t>(SyntaxRole::keyword)] = CellColor{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
+    QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), QColor(0x95, 0xa7, 0xba));
+  }
+
   Q_SLOT static void chromeBandsKeepThemeRelativeSurfacesAndWindowTransparency() {
     QQuickWindow window;
     QQmlEngine engine;
@@ -611,7 +620,8 @@ private:
     QVERIFY(application_artwork != transparent);
     const auto default_mark = ProviderArtwork::telar(mark_side, false);
     QVERIFY(!default_mark.isNull());
-    QCOMPARE(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::cybervenom)), default_mark);
+    // The default mark wears Shade; Cybervenom keeps its own violet mark.
+    QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::cybervenom)) != default_mark);
     QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
     const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
     QVERIFY(!catppuccin_mark.isNull());

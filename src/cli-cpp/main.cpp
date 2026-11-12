@@ -107,6 +107,7 @@ import telar.cli.window;
 import telar.cli.plugin;
 import telar.cli.worktree;
 import telar.cli.worktree_git;
+import telar.cli.render;
 
 namespace telar::runtime::cli {
 namespace {
@@ -141,6 +142,8 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     return execution::run(memory, ExecutionOptions::parse(options));
   case Family::clipboard:
     return runtime_clipboard::run(memory, runtime_clipboard::Options::parse(options));
+  case Family::render:
+    return render_command::run(memory, render_command::RenderOptions::parse(options));
   case Family::file:
     return file_transfer::run(file_transfer::Options::parse(options));
   case Family::runtime:

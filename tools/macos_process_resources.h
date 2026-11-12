@@ -68,7 +68,3 @@ static inline bool process_resources_match(const ProcessResources *before, const
          before->usage.ri_interrupt_wkups <= after->usage.ri_interrupt_wkups &&
          before->usage.ri_pageins <= after->usage.ri_pageins;
 }
-
-static inline double process_cpu_nanoseconds(uint64_t ticks, const ProcessResources *snapshot) {
-  return (double)ticks * snapshot->timebase.numer / snapshot->timebase.denom;
-}

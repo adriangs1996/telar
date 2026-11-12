@@ -193,6 +193,7 @@ using telar::PaneGit;
 using telar::PaneBlocks;
 using telar::PaneRows;
 using telar::PaneScrollback;
+using telar::PaneDocument;
 using telar::RequestCommandSpec;
 using telar::CommandSpec;
 using telar::CommandSpecState;

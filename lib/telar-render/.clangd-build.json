@@ -1,0 +1,14 @@
+{
+  "build_directory": "out",
+  "commands": [
+    [
+      "../../tools/cpp",
+      "configure",
+      "render",
+      "-B",
+      "out",
+      "--config",
+      "Debug"
+    ]
+  ]
+}

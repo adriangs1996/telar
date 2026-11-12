@@ -240,13 +240,4 @@ QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
   return result;
 }
 
-QByteArray terminalPaste(const QString &text, const telar::InputModes &modes) {
-  auto bytes = text.toUtf8();
-  bytes.replace("\r\n", "\n");
-  bytes.replace('\n', '\r');
-  bytes.replace(QByteArray(1, '\0'), QByteArray{});
-  // A pasted escape must never terminate the application's bracketed paste early.
-  bytes.replace(QByteArray(1, escape), QByteArray{});
-  return modes.bracketed_paste ? QByteArray("\x1b[200~") + bytes + "\x1b[201~" : bytes;
-}
 }

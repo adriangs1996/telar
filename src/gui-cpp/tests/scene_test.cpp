@@ -573,6 +573,11 @@ public:
     item_.invalidateAppearance();
   }
 
+  void setFontHinting(FontHinting hinting) {
+    configuration_.font.hinting = hinting;
+    item_.invalidateAppearance();
+  }
+
   void setPaletteColor(std::size_t index, Color color) {
     configuration_.theme.palette.at(index) = color;
     item_.invalidateAppearance();
@@ -660,7 +665,10 @@ public:
     }
 
     const auto glyph = run.glyph(0);
-    const auto bitmap = face.rasterize({.index = glyph.index, .pixel_height = resolved_.grid.pixel_height, .style = style});
+    // The configured rendering: grid fitting and FreeType dilation (CoreText only draws native thickened glyphs).
+    constexpr std::array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
+    const auto &font = configuration_.font;
+    const auto bitmap = face.rasterize({.index = glyph.index, .pixel_height = resolved_.grid.pixel_height, .style = style, .thicken_strength = font.thicken ? font.thicken_strength : std::uint8_t{0}, .hinting = hinting.at(std::to_underlying(font.hinting))});
     const auto left = FontMetrics::roundFixed(glyph.x_offset) + bitmap.left;
     const auto top = static_cast<int>(std::round(font_.baseline * scale())) - FontMetrics::roundFixed(glyph.y_offset) - bitmap.top;
     QImage expected{size, QImage::Format_RGB32};
@@ -951,6 +959,8 @@ private:
 
   Q_SLOT static void fontSmoothingSelectsOpticalMasksWithoutChangingTheGrid() {
     SceneFixture fixture{CursorShape::block, false};
+    fixture.setFontHinting(FontHinting::native);
+    fixture.setFontRendering(false, 0);
     fixture.setCell(plain_style, CursorShape::block, false, "M");
     const auto cell = fixture.cellSize();
     const auto plain = fixture.capture();
@@ -967,6 +977,10 @@ private:
     QCOMPARE(fixture.capture(), strong);
     fixture.setFontRendering(false, 0);
     QCOMPARE(fixture.capture(), plain);
+    fixture.setFontHinting(FontHinting::full);
+    const auto fitted = fixture.capture();
+    QCOMPARE(fixture.cellSize(), cell);
+    QVERIFY(fitted != plain);
   }
 
   Q_SLOT static void cursorAndPreeditShareFontSmoothing() {

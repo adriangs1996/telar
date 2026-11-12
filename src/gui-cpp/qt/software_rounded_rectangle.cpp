@@ -210,10 +210,6 @@ private:
 
 }
 
-QSGNode *paintSoftwareRoundedRectangle(QQuickWindow &window, QSGNode *previous, RoundedRectangle shape, qreal density) {
-  return paintSoftwareRoundedRectangleAt(window, previous, {.shape = shape}, density);
-}
-
 QSGNode *paintSoftwareRoundedRectangleAt(QQuickWindow &window, QSGNode *previous, RoundedRectanglePaint paint, qreal density) {
   auto owner = std::unique_ptr<QSGNode>{previous};
   auto *node = dynamic_cast<SoftwareRoundedRectangleNode *>(previous);

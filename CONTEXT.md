@@ -78,6 +78,15 @@ PTY, such as a history browser. The layout may
 place it beside terminal panes; its state never lives in the adapter.
 _Avoid_: GUI pane, virtual pane, widget pane
 
+**Pane document**:
+A rendered document a pane's program hands the runtime in its output, as
+`telar render` does. Inline, it stands for the text the program printed
+between the sequences that begin and end it; clients that can draw it show it
+in place of those rows, and the runtime keeps it while the scrollback keeps the
+rows. On the alternate screen it covers the pane until the program leaves that
+screen.
+_Avoid_: Telar view, markdown pane, overlay
+
 **Attachment generation**:
 One lifetime of a client's attachment to a pane, distinct from the pane's own
 lifetime. Reattachment begins a new generation even when frame numbers repeat.

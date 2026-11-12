@@ -1815,7 +1815,7 @@ struct WindowOptions {
       }
     }
 
-    static constexpr auto aliases = std::to_array<std::pair<std::string_view, std::string_view>>({{"osaka-jade", "shade"}, {"osaka_jade", "shade"}, {"osakajade", "shade"}, {"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}});
+    static constexpr auto aliases = std::to_array<std::pair<std::string_view, std::string_view>>({{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}});
     for (const auto &[alias, canonical] : aliases) {
       if (text == alias) {
         return std::string{canonical};

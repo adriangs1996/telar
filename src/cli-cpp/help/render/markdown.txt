@@ -1,0 +1,25 @@
+telar render markdown: Show a Markdown file as a document
+
+Usage: telar render markdown [FILE|-] [--format auto|native|ansi] [--pager] [--width N]
+
+Reads FILE, or standard input when FILE is `-` or absent and input is not a terminal.
+
+Options:
+  --format auto   native inside a Telar pane when stdout is a terminal, ansi otherwise (default)
+  --format native Print the styled text between two OSC 7780 sequences that carry the document:
+                  the window draws the document in place of that text, in the scrollback, and
+                  any other terminal or client shows the text. The pane keeps the last 8 such
+                  documents (render.max_pane_documents, 16 MiB in all); older ones show their
+                  text again.
+  --pager         With native: take the pane's alternate screen and show the document over the
+                  whole pane until you quit. j/k, arrows, space/b, Page Up/Down, Ctrl-D/U, g/G
+                  and the wheel scroll it; q, Escape, Ctrl-C or Ctrl-D quit. Needs a
+                  controlling terminal; a client that cannot draw documents shows a status line.
+  --format ansi   Print the styled text alone
+  --width N       Wrap the styled text at N columns, at least 20 (default: the terminal's width,
+                  or 80)
+
+Limits: render.max_markdown_bytes (4 MiB of source) and render.max_document_bytes (6000 KiB
+of rendered document). Invalid UTF-8 is shown as U+FFFD. Raw HTML is shown verbatim.
+
+Exit status: 0 after showing the document, 1 when the source cannot be read or exceeds a limit.

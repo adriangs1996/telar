@@ -32,12 +32,37 @@ Item {
     readonly property bool queueing: root.running && root.focused && (!editor.empty || editor.queued)
     // The history or the paths, searched from the editor's row, the rows they find under it.
     // The scrollback search lives in the line of the pane copy mode reads, whatever runs there.
-    readonly property bool scrollbackSearch: root.application.islandSearchPane === root.paneId && root.application.islandSearch === "copy-search"
-    readonly property string search: (root.editing && root.focused || root.scrollbackSearch) && root.application.islandSearchPane === root.paneId ? root.application.islandSearch : ""
+    readonly property bool scrollbackSearch: root.application.lineSearchPane === root.paneId && root.application.lineSearch === "copy-search"
+    readonly property string search: (root.editing && root.focused || root.scrollbackSearch) && root.application.lineSearchPane === root.paneId ? root.application.lineSearch : ""
     readonly property bool searching: root.search.length > 0
     // The rows a search shows at most, newest or best nearest the query.
     readonly property int searchRows: 8
     readonly property bool moving: editor.motion !== "none"
+    // How long a command runs before the line leaves it: the time its separator takes to show
+    // its clock.
+    property int revealDelay: 400
+    // A command was just sent. Until it has run that long, the line waits under its output where
+    // the next prompt will stand, so a quick command never takes the line away and brings it
+    // back: only while nothing would land at the terminal's cursor, which it then stands in for.
+    property bool justSent: false
+    readonly property bool holding: root.justSent && (root.running || root.surface === "none") && editor.cursorHidden && !root.scrollbackSearch
+    onRunningChanged: {
+        if (root.running) {
+            root.justSent = true;
+            sent.restart();
+        }
+    }
+    onEditingChanged: {
+        if (root.editing) {
+            root.justSent = false;
+            sent.stop();
+        }
+    }
+    Timer {
+        id: sent
+        interval: root.revealDelay
+        onTriggered: root.justSent = false
+    }
 
     // The terminal's rows; the editor's text in the same font.
     readonly property real cell: editor.cellWidth
@@ -63,23 +88,25 @@ Item {
         }
         if (root.editing) {
             const row = terminal.promptRow;
+            // Back at the prompt before the frame that draws it: the line stays under the
+            // cursor, where it waited while the command ran.
             if (row < 0) {
-                return -1;
+                return terminal.cursorRow < 0 ? -1 : terminal.cursorRow + 1;
             }
             return terminal.promptTop >= 0 && terminal.promptTop < row ? row - 1 : row;
         }
-        if (root.queueing || root.secret) {
+        if (root.holding || root.queueing || root.secret) {
             return terminal.cursorRow < 0 ? -1 : terminal.cursorRow + 1;
         }
         return -1;
     }
-    readonly property bool shown: !root.flying && (root.editing || root.queueing || root.secret || root.scrollbackSearch)
+    readonly property bool shown: root.editing || root.holding || root.queueing || root.secret || root.scrollbackSearch
     readonly property bool docked: root.shown && root.anchor < 0
     // How much of the pane's bottom the docked line covers, for what floats above it.
     readonly property real dockedHeight: root.docked ? body.height + root.inset * 2 : 0
-    readonly property bool contextShown: root.editing && !root.searching && !root.flying
-    readonly property bool inputShown: (root.editing && !root.searching && !root.flying) || root.queueing
-    readonly property real editorY: root.inset + (root.editing ? root.line : 0)
+    readonly property bool contextShown: (root.editing || root.holding) && !root.searching
+    readonly property bool inputShown: ((root.editing || root.holding) && !root.searching) || root.queueing
+    readonly property real editorY: root.inset + (root.editing || root.holding ? root.line : 0)
     readonly property int menuRows: root.editing && !root.searching && editor.choices.length > 0 ? editor.choices.length + (editor.menuLabel.length > 0 ? 1 : 0) : 0
     // The menu just opened: its choices fall into place, which a new selection does not replay.
     property bool menuOpening: false
@@ -99,7 +126,7 @@ Item {
     }
     readonly property int searchCount: root.search === "history" ? (root.application.historyState.count ?? 0) : root.search === "paths" ? (root.application.pathPickerState.count ?? 0) : 0
     readonly property int listRows: Math.max(1, Math.min(root.searchRows, root.searchCount, root.screenRows - 2))
-    readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
+    readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.holding ? 1 + editor.visibleRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
     // The rows the line needs past the screen's last: the terminal rises by them, so the
     // line never covers output, and never so far that the line's first row leaves the view.
     readonly property int liftRows: root.shown && !root.docked ? Math.max(0, Math.min(root.anchor, root.anchor + root.rowCount - root.screenRows)) : 0
@@ -117,10 +144,8 @@ Item {
     component Layer: Item {
         id: content
         property bool shown: false
-        // Hidden at once instead of fading, as the editor's row is when it runs.
-        property bool instant: false
         opacity: content.shown ? 1 : 0
-        visible: content.opacity > 0 && !content.instant
+        visible: content.opacity > 0
         transform: Translate {
             y: content.shown ? 0 : 4 * root.ratio
             Behavior on y {
@@ -293,125 +318,19 @@ Item {
         root.knownHost = root.host;
     }
 
-    // A run turns the line into its separator, on the row the shell's prompt was: the pill
-    // becomes the command's ring, the context steps aside and the terminal settles under it.
-    property int launchRow: -1
-    property real lastEditorY: 0
-    property real lastBodyY: 0
-    Connections {
-        target: root.terminal
-        function onBlocksChanged() {
-            if (root.terminal.promptRow >= 0) {
-                root.launchRow = root.terminal.promptRow;
-            }
-        }
-    }
-    onEditorYChanged: root.remember()
-    onInputShownChanged: root.remember()
-    function remember() {
-        if (root.inputShown && root.editing) {
-            root.lastBodyY = body.y;
-            root.lastEditorY = body.y + root.editorY;
-        }
-    }
-
-    // The command the line launched last, by its index among the pane's commands, for its
-    // separator to light up as it lands.
-    property int landing: -1
-    readonly property bool flying: flight.running
-    property int seenLaunches: -1
     Component.onCompleted: {
-        root.seenLaunches = editor.launches;
         root.knownDirectory = root.directory;
         root.knownBranch = root.branch;
         root.knownHost = root.host;
-    }
-    Connections {
-        target: editor
-        function onStateChanged() {
-            if (editor.launches === root.seenLaunches) {
-                return;
-            }
-            root.seenLaunches = editor.launches;
-            const terminal = root.terminal;
-            if (!root.moving || !root.visible || editor.lastCommand.length === 0 || !terminal) {
-                return;
-            }
-            flyer.text = editor.lastCommand.split("\n")[0];
-            flight.from = root.lastEditorY;
-            flight.to = root.launchRow >= 0 ? root.launchRow * root.line : root.lastEditorY;
-            root.landing = Math.min(terminal.rail.length, 63);
-            terminal.holdOutput();
-            flight.restart();
-        }
-    }
-
-    Item {
-        id: flyer
-        property alias text: flyerText.text
-        width: root.width
-        height: root.line
-        opacity: 0
-
-        Rectangle {
-            id: flyerPill
-            x: root.pillX
-            anchors.verticalCenter: parent.verticalCenter
-            width: root.pillWidth
-            height: root.pillHeight
-            radius: height / 2
-            color: Qt.alpha(root.colors.accent, 0.2)
-
-            NativeProgressRing {
-                anchors.centerIn: parent
-                width: parent.height * 0.6
-                height: width
-                color: root.colors.accent
-                fraction: 0.3
-            }
-        }
-
-        CellText {
-            id: flyerText
-            x: root.textX
-            anchors.verticalCenter: parent.verticalCenter
-            text: ""
-            grid: root.grid
-            color: root.colors.text
-            bold: true
-        }
-    }
-
-    // As short as the terminal's settling under it: the command already runs, and its output
-    // waits for the separator to take its place.
-    ParallelAnimation {
-        id: flight
-        property real from
-        property real to
-        NumberAnimation { target: flyer; property: "y"; from: flight.from; to: flight.to; duration: 220; easing.type: Easing.OutCubic }
-        NumberAnimation { target: flyerPill; property: "scale"; from: 0.4; to: 1; duration: 220; easing.type: Easing.OutBack; easing.overshoot: 2.4 }
-        SequentialAnimation {
-            PropertyAction { target: flyer; property: "opacity"; value: 1 }
-            PauseAnimation { duration: 190 }
-            NumberAnimation { target: flyer; property: "opacity"; to: 0; duration: 30 }
-        }
-        // Landed: the output held meanwhile enters.
-        onRunningChanged: {
-            if (!flight.running && root.terminal) {
-                root.terminal.releaseOutput();
-            }
-        }
     }
 
     // The line's rows, from its first.
     Item {
         id: body
-        // Where it was while it turns into the separator, whatever the shell prints meanwhile.
-        y: root.flying ? root.lastBodyY : root.docked ? root.height - body.height : Math.max(0, root.anchor) * root.line
+        y: root.docked ? root.height - body.height : Math.max(0, root.anchor) * root.line
         width: root.width
         height: root.rowCount * root.line + root.inset * 2
-        visible: root.shown || root.flying
-        onYChanged: root.remember()
+        visible: root.shown
 
         // Docked, the line covers the output under it.
         Rectangle {
@@ -541,7 +460,6 @@ Item {
         Layer {
             id: input
             shown: root.inputShown
-            instant: root.flying
             y: root.editorY
             width: parent.width
             height: editor.visibleRows * root.line
@@ -901,7 +819,7 @@ Item {
     // A search the line stops hosting while it is open, as when its pane loses the focus,
     // closes; so does one whose field loses the keyboard to a click elsewhere in the window.
     function abandonSearch() {
-        if (!root.searching && root.application.islandSearch.length > 0 && root.application.islandSearchPane === root.paneId) {
+        if (!root.searching && root.application.lineSearch.length > 0 && root.application.lineSearchPane === root.paneId) {
             root.application.execute(GuiController.Action.cancel);
         }
     }
@@ -916,7 +834,7 @@ Item {
     }
 
     Component.onDestruction: {
-        if (root.application.islandSearchPane === root.paneId && root.application.islandSearch.length > 0) {
+        if (root.application.lineSearchPane === root.paneId && root.application.lineSearch.length > 0) {
             root.application.execute(GuiController.Action.cancel);
         }
     }
@@ -1483,9 +1401,9 @@ Item {
         grid: root.grid
         colors: root.colors
         preedit: root.terminal ? root.terminal.preeditText : ""
-        // A key brings the editor back at once; only a run hides it at once.
+        // A key brings the editor back at once; a run hides it at once, with the line.
         opacity: root.inputShown ? (root.focused || root.queueing ? 1 : 0.6) : 0
-        visible: editor.opacity > 0 && !root.flying
+        visible: editor.opacity > 0 && root.shown
         Behavior on opacity {
             enabled: root.moving
             NumberAnimation { duration: 200 }

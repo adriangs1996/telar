@@ -176,19 +176,19 @@ runtime-lifetime directory="out": lifetime-checker (runtime-configure directory 
 gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lifetime
 
-# Package a Release Telar C++ Preview.app, install it under APPS and link its `telar` into BIN.
+# Package the Release Telar.app, install it under APPS and link its `telar` into BIN.
 [macos]
 install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" no_tests) (gui-configure "out-release" "Release" no_tests)
     #!/usr/bin/env bash
     set -euo pipefail
     stage="{{ dev_dir }}/stage"
-    app="Telar C++ Preview.app"
+    app="Telar.app"
     rm -rf "$stage"
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ runtime_dir }}/out-release" --target telar-runtime telar
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --install "{{ runtime_dir }}/out-release" --prefix "$stage"
     install -m 755 "{{ renderer }}" "$stage/bin/telar-diagram-renderer"
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ gui_dir }}/out-release" --target telar-gui telar-gui-command
-    python3 "{{ gui_dir }}/tools/package_macos.py" --build "{{ gui_dir }}/out-release" --runtime-prefix "$stage" --output "$stage/$app"
+    python3 "{{ gui_dir }}/tools/package_macos.py" --release --build "{{ gui_dir }}/out-release" --runtime-prefix "$stage" --output "$stage/$app"
     mkdir -p "{{ apps }}" "{{ bin }}"
     rm -rf "{{ apps }}/$app"
     cp -R "$stage/$app" "{{ apps }}/$app"

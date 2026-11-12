@@ -4,6 +4,7 @@
 #include "sequence.hpp"
 #include "graphics_header.hpp"
 #include "../../graphics/kitty_control.hpp"
+#include "telar_render/sequence.hpp"
 #include <charconv>
 
 namespace telar::runtime::control {
@@ -66,13 +67,15 @@ inline bool streamable(Sequence sequence) noexcept {
   const auto body = sequence.body();
   switch (sequence.kind) {
   case Kind::osc: {
+    // Documents are buffered whole for the engine; ghostty never sees them.
     const auto number = oscOperation(body.substr(0, body.find(';')));
-    return !number || !nativeOsc(*number);
+    return !number || (!nativeOsc(*number) && *number != ::telar::render::sequence_number);
   }
   case Kind::dcs:
     return !body.ends_with("+q") && !body.ends_with("$q");
   case Kind::apc:
     if (!body.starts_with('G')) {
+      // Documents are buffered whole for the engine; ghostty never sees them.
       return !body.starts_with("25a1;");
     }
     return !graphicsQuery(body);

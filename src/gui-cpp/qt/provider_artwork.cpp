@@ -57,7 +57,7 @@ const QByteArray &providerSheet() {
   return pixels;
 }
 
-// The default mark wears Cybervenom, Telar's default theme; every other preset has its own.
+// The default mark wears Shade, Telar's default theme and brand colors; every other preset has its own.
 QString telarSource(bool monochrome, int theme) {
   if (monochrome) {
     return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");
@@ -78,6 +78,7 @@ QString telarSource(bool monochrome, int theme) {
       ThemedMark{.theme = ThemeName::kanagawa, .source = u":/telar/fonts/telar-mark-kanagawa.svg"},
       ThemedMark{.theme = ThemeName::kanagawa_dragon, .source = u":/telar/fonts/telar-mark-kanagawa-dragon.svg"},
       ThemedMark{.theme = ThemeName::terminal, .source = u":/telar/fonts/telar-mark-terminal.svg"},
+      ThemedMark{.theme = ThemeName::cybervenom, .source = u":/telar/fonts/telar-mark-cybervenom.svg"},
   };
   const auto *const found = std::ranges::find_if(marks, [theme](const ThemedMark &mark) {
     return static_cast<int>(mark.theme) == theme;
