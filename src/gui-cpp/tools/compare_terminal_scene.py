@@ -90,7 +90,7 @@ def main():
     parser.add_argument('--render-each-frame', action='store_true')
     parser.add_argument('--floating-window', action='store_true')
     parser.add_argument('--colored-backgrounds', action='store_true')
-    parser.add_argument('--snapshot-workload', choices=['full', 'sparse', 'retained'], default='full')
+    parser.add_argument('--snapshot-workload', choices=['full', 'sparse', 'retained', 'unicode'], default='full')
     parser.add_argument('--metric', choices=['elapsed_ns', 'apply_and_paint_ns'], default='elapsed_ns',
                         help='Scene synchronization alone, or decoded-frame application plus scene synchronization')
     parser.add_argument('--reference-image', type=Path, help='Independent visual oracle when the baseline has a known rendering defect')
@@ -133,7 +133,7 @@ def main():
                   scope=('CPU decoded-frame application plus production TerminalScene synchronization; fixture encoding is excluded. '
                          if options.metric == 'apply_and_paint_ns' else
                          'CPU production TerminalScene synchronization; frame preparation and decoding are excluded. ')
-                        + 'The grid has 256x52 ASCII cells and warm glyph caches. Final native-window captures verify visible pixels. '
+                        + ('The grid has 256x52 accented Latin, Greek and Cyrillic cells' if options.snapshot_workload == 'unicode' else 'The grid has 256x52 ASCII cells') + ' and warm glyph caches. Final native-window captures verify visible pixels. '
                         + ('Qt renders between updates; synchronization timing includes immediate renderer dirty notifications, but excludes subsequent rendering and presentation. '
                            if options.render_each_frame else 'All updates occur before the first rendered frame. ')
                         + 'This does not measure full application FPS, runtime throughput or native drawable cadence.')

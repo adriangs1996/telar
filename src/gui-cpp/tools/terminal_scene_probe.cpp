@@ -129,7 +129,7 @@ Options parseOptions(const QGuiApplication &application) {
   parser.addOption({"no-thicken", "Measure the standard glyph route"});
   parser.addOption({"render-each-frame", "Render each update before changing the scene again"});
   parser.addOption({"floating-window", "Use a tool window for window managers that tile normal windows"});
-  parser.addOption({"snapshot-workload", "Snapshot changes: full, sparse, retained", "workload", "full"});
+  parser.addOption({"snapshot-workload", "Snapshot changes: full, sparse, retained, unicode", "workload", "full"});
   parser.addOption({"colored-backgrounds", "Draw changing row backgrounds with default-color gaps"});
   parser.addOption({"font-size", "Font size in points", "size", QString::number(terminal_font_size)});
   parser.addOption({"line-height", "Line height factor", "factor", QString::number(terminal_line_height)});
@@ -192,7 +192,7 @@ Options parseOptions(const QGuiApplication &application) {
     options.warmup = 0;
   }
 
-  if (options.snapshot_workload != "full" && options.snapshot_workload != "sparse" && options.snapshot_workload != "retained") {
+  if (options.snapshot_workload != "full" && options.snapshot_workload != "sparse" && options.snapshot_workload != "retained" && options.snapshot_workload != "unicode") {
     throw std::invalid_argument{"Invalid snapshot workload"};
   }
 
@@ -312,14 +312,25 @@ private:
     constexpr Byte bright_green = 255;
     constexpr Byte background_red = 32;
     constexpr unsigned background_blue_period = 128;
+    // `unicode` changes every row like `full`, with letters outside ASCII that the primary font
+    // covers: accented Latin, Greek and Cyrillic, each a multi-byte cell.
+    static constexpr std::u32string_view letters = U"áéíóúñüçàèâêîôûäëïöÿßæøåαβγδεζηθλμπσφψωабвгдежзиклмнопрстуфхцчшщ";
+    const bool unicode = options_.snapshot_workload == "unicode";
     for (unsigned row = 0; row < terminal_rows; ++row) {
       const auto phase = options_.snapshot_workload == "retained" || (options_.snapshot_workload == "sparse" && row != 0) ? 0U : frame;
       for (unsigned column = 0; column < terminal_columns; ++column) {
         const auto offset = (row * terminal_columns) + column;
         const auto value = (row * row_stride) + (column * column_stride) + phase;
-        characters_[offset] = static_cast<Byte>(printable_first + (value % printable_count));
+        auto text = std::span{characters_}.subspan(offset, 1);
+        if (unicode) {
+          const auto bytes = Utf8Scalar::encode(letters[value % letters.size()]);
+          text = std::span{characters_}.subspan(offset * utf8_slot, bytes.view().size());
+          std::ranges::transform(bytes.view(), text.begin(), [](char byte) { return static_cast<Byte>(byte); });
+        } else {
+          characters_[offset] = static_cast<Byte>(printable_first + (value % printable_count));
+        }
         const auto green = (column + row + phase) % bright_period == 0 ? bright_green : dim_green;
-        cells_[offset] = {.width = CellWidth::single, .style = {.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, green, 0}}}, .text = std::span{characters_}.subspan(offset, 1)};
+        cells_[offset] = {.width = CellWidth::single, .style = {.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, green, 0}}}, .text = text};
 
         if (options_.colored_backgrounds && column % bright_period != 0) {
           cells_[offset].style.background = {.kind = CellColor::Kind::rgb, .channels = {background_red, 0, static_cast<Byte>((row + phase) % background_blue_period)}};

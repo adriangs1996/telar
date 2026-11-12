@@ -25,6 +25,8 @@ inputs.
 | --- | --- | --- |
 | GUI text scene construction | `src/gui-cpp/tools/compare_text_scene.py` | `gui-text-scene-probe` |
 | GUI terminal scene | `src/gui-cpp/tools/compare_terminal_scene.py` | `gui-terminal-scene-probe` |
+| GUI terminal scene, cells outside ASCII | `compare_terminal_scene.py --snapshot-workload unicode` | `gui-terminal-scene-probe` |
+| GUI command separators | `src/gui-cpp/tools/compare_separators.py` | `gui-separators-probe` |
 | Runtime PTY round trips | `src/runtime-cpp/tools/bench_control_pty.py` | `control-pty-latency-probe` |
 | Runtime control queries | `src/runtime-cpp/tools/bench_control_queries.py` | its own fixtures |
 | Complete GUI against Ghostty | `tools/gui_tui_latency.py` | the GUI and runtime |

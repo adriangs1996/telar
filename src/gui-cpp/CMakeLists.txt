@@ -1090,6 +1090,9 @@ if(TELAR_GUI_NATIVE)
     qt_add_executable(gui-configuration-reload-probe tools/configuration_reload_probe.cpp)
     target_link_libraries(gui-configuration-reload-probe PRIVATE gui-quick gui-quickplugin)
     add_dependencies(gui-lint gui-configuration-reload-probe)
+    qt_add_executable(gui-separators-probe tools/separators_probe.cpp)
+    target_link_libraries(gui-separators-probe PRIVATE gui-quick gui-quickplugin gui-test-fixtures)
+    add_dependencies(gui-lint gui-separators-probe)
     add_executable(gui-key-adapter-test tests/key_adapter_test.cpp)
     target_link_libraries(gui-key-adapter-test PRIVATE gui-keyboard)
     add_test(NAME gui-key-adapter COMMAND gui-key-adapter-test)
@@ -1262,7 +1265,7 @@ endforeach()
 # Probes and smoke tools run by hand or by tools/ scripts, never by CTest: building them on
 # every test run costs a full module compile each. `cmake --build out --target gui-probes`
 # builds the ones this platform and configuration define.
-set(gui_probes gui-screen-probe gui-font-coverage-probe gui-display-probe gui-runtime-compatibility-probe gui-text-scene-probe gui-terminal-scene-probe gui-configuration-reload-probe gui-animation-probe gui-host-effects-smoke)
+set(gui_probes gui-screen-probe gui-font-coverage-probe gui-display-probe gui-runtime-compatibility-probe gui-text-scene-probe gui-terminal-scene-probe gui-configuration-reload-probe gui-separators-probe gui-animation-probe gui-host-effects-smoke)
 set(gui_defined_probes)
 foreach(probe IN LISTS gui_probes)
   if(TARGET ${probe})
