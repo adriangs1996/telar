@@ -9,6 +9,24 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 SCOPES = ('lib/', 'src/runtime-cpp/', 'src/cli-cpp/',
           'src/gui-cpp/', 'src/auth-daemon/')
+# The libraries each library's modules may import, lowest layer first. A library reaching a
+# higher one, or a sibling it does not list, rebuilds and drags in more than it uses.
+LIBRARY_LAYERS = {
+    'telar-base': set(),
+    'telar-vocabulary': set(),
+    'telar-shell': set(),
+    'ebnf': set(),
+    'telar-client': {'telar-base'},
+    'telar-lua': {'telar-base'},
+    'telar-render': {'telar-base'},
+    'websock': {'telar-base'},
+    'telar-platform': {'telar-base', 'telar-vocabulary'},
+    'telar-machines': {'telar-base', 'telar-client'},
+    'telar-git': {'telar-base', 'telar-platform'},
+    'telar-tls': {'telar-base', 'telar-platform'},
+    'telar-plugins': {'telar-base', 'telar-client', 'telar-platform'},
+    'telar-config': {'telar-base', 'telar-client', 'telar-lua', 'telar-platform', 'telar-plugins'},
+}
 
 
 def main():
@@ -35,6 +53,7 @@ def main():
         graph[name] = {name.split(':')[0] + item if item.startswith(':') else item for item in dependencies} - {'std'}
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
+    check_library_layers(inventory['interfaces'], graph)
     visited, active = set(), []
     def visit(name):
         if name in active:
@@ -74,6 +93,25 @@ def resolve(including, spelling):
 def global_fragment(text):
     match = re.search(r'^(?:export )?module [\w.:]+;', text, re.M) if text.startswith('module;') else None
     return text[:match.start()] if match else ''
+
+
+def check_library_layers(interfaces, graph):
+    library_of = {}
+    for source, name in interfaces.items():
+        match = re.match(r'lib/([^/]+)/', source)
+        if match:
+            library_of[name.split(':')[0]] = match[1]
+    for name, library in library_of.items():
+        if library not in LIBRARY_LAYERS:
+            raise RuntimeError(f'Place {library} in LIBRARY_LAYERS before {name} imports anything')
+    for source, name in interfaces.items():
+        library = library_of.get(name.split(':')[0])
+        if library is None:
+            continue
+        for dependency in graph[name]:
+            target = library_of.get(dependency.split(':')[0])
+            if target and target != library and target not in LIBRARY_LAYERS[library]:
+                raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
 
 
 def owned_units(files):
