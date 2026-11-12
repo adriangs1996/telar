@@ -788,15 +788,16 @@ private:
     if (text.size() < 2 || text.size() > 4) {
       return 0;
     }
-    std::uint64_t key = static_cast<std::uint64_t>(text.size()) << 56;
+    std::uint64_t key = static_cast<std::uint64_t>(text.size()) << cluster_length_shift;
     for (std::size_t index = 0; index < text.size(); ++index) {
-      key |= static_cast<std::uint64_t>(static_cast<unsigned char>(text[index])) << (8 * index);
+      key |= static_cast<std::uint64_t>(static_cast<unsigned char>(text[index])) << (std::size_t{std::numeric_limits<unsigned char>::digits} * index);
     }
     return key;
   }
 
+  // Fibonacci hashing: the top bits of the key times 2^64 over the golden ratio.
   [[nodiscard]] inline static std::size_t clusterSlot(std::uint64_t key) noexcept {
-    return static_cast<std::size_t>((key * 0x9e3779b97f4a7c15ULL) >> (64 - cluster_bits));
+    return static_cast<std::size_t>((key * golden_ratio_multiplier) >> (std::numeric_limits<std::uint64_t>::digits - cluster_bits));
   }
 
   // What TextLayout makes of a text the primary face covers: one span of its glyphs, starting
@@ -814,6 +815,8 @@ private:
     bool single = false;
   };
   static constexpr unsigned cluster_bits = 8;
+  static constexpr unsigned cluster_length_shift = 56U;
+  static constexpr std::uint64_t golden_ratio_multiplier = 0x9e3779b97f4a7c15ULL;
 
   TextRuns<Memory> runs_;
   TextLayout<Memory> cell_;
