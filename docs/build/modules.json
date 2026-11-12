@@ -221,7 +221,8 @@
     "lib/telar-git/include/telar_git/worktree.cppm": "telar.git:worktree",
     "src/runtime-cpp/shell_integration/git_context.cppm": "telar.runtime.shell_integration.git_context",
     "src/runtime-cpp/shell_integration/words.cppm": "telar.runtime.shell_integration.words",
-    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.cppm": "telar.vocabulary"
+    "lib/telar-vocabulary/include/telar_vocabulary/vocabulary.cppm": "telar.vocabulary",
+    "lib/telar-machines/include/telar_machines/machines.cppm": "telar.machines"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",

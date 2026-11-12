@@ -15,6 +15,7 @@ export module telar.gui.machines.discovery;
 import std;
 
 export import telar.client;
+export import telar.machines;
 
 
 export import telar.gui.text.json_unsigned_integer;
@@ -25,78 +26,10 @@ import telar.base.memory;
 import telar.client.protocol;
 
 // Interface: machines/failure.cppm
-export {
-namespace telar::gui {
-
-enum class MachineError : std::uint8_t {
-  invalid_id,
-  invalid_label,
-  invalid_destination,
-  invalid_color,
-  invalid_program,
-  invalid_profiles,
-  incompatible_profiles,
-  too_many,
-  duplicate_id,
-  duplicate_label,
-  duplicate_destination,
-  unknown_machine,
-  discovery_unreadable,
-  host_key_rejected,
-  authentication_failed,
-  remote_program_missing,
-  remote_program_incompatible,
-  remote_runtime_incompatible,
-  endpoint_unavailable,
-  incompatible_schema,
-  runtime_already_running,
-  invalid_runtime_directory,
-};
-
-class MachineFailure final : public std::runtime_error {
-public:
-  inline explicit MachineFailure(MachineError code)
-      : std::runtime_error(name(code)),
-        code_(code) {}
-
-  [[nodiscard]] inline MachineError code() const noexcept {
-    return code_;
-  }
-
-  [[nodiscard]] inline static const char *name(MachineError code) {
-    static constexpr std::array names{
-        "InvalidMachineId",
-        "InvalidMachineLabel",
-        "InvalidRemoteDestination",
-        "InvalidMachineColor",
-        "InvalidRemoteTelarPath",
-        "InvalidMachineProfiles",
-        "IncompatibleMachineProfiles",
-        "TooManyMachines",
-        "DuplicateMachineId",
-        "DuplicateMachineLabel",
-        "DuplicateMachineDestination",
-        "UnknownMachine",
-        "RemoteDiscoveryUnreadable",
-        "SshHostKeyRejected",
-        "SshAuthenticationFailed",
-        "RemoteTelarMissing",
-        "RemoteTelarIncompatible",
-        "RemoteRuntimeIncompatible",
-        "RemoteEndpointUnavailable",
-        "IncompatibleSchema",
-        "RuntimeAlreadyRunning",
-        "InvalidRuntimeDirectory",
-    };
-
-    return names.at(static_cast<std::size_t>(code));
-  }
-
-private:
-  MachineError code_;
-};
-
-}
+// Shared with the CLI: telar.machines defines it.
+export namespace telar::gui {
+using telar::runtime::machines::MachineError;
+using telar::runtime::machines::MachineFailure;
 }
 
 // Interface: machines/connection_policy.cppm
@@ -192,210 +125,22 @@ private:
 }
 
 // Interface: machines/discovery.cppm
-export {
-namespace telar::gui {
-
-template <std::size_t MaximumPathBytes>
-class MachineDiscovery {
-public:
-  static constexpr std::size_t path_count = 3;
-  static constexpr std::size_t max_output_bytes = (path_count * (MaximumPathBytes + 1)) + SchemaId{}.size() + 1;
-
-  [[nodiscard]] inline static MachineDiscovery parse(std::string_view output) {
-    if (output.size() > max_output_bytes) {
-      throw MachineFailure{MachineError::discovery_unreadable};
-    }
-
-    while (output.ends_with('\n')) {
-      output.remove_suffix(1);
-    }
-
-    MachineDiscovery result;
-    const std::array paths{&result.home_, &result.shell_, &result.endpoint_};
-    for (auto *const path : paths) {
-      const auto end = output.find('\n');
-      if (end == std::string_view::npos) {
-        throw MachineFailure{MachineError::discovery_unreadable};
-      }
-
-      const auto text = output.substr(0, end);
-      validatePath(text, path == &result.endpoint_);
-      path->assign(text);
-      output.remove_prefix(end + 1);
-    }
-
-    if (output.size() != result.schema_.size()) {
-      throw MachineFailure{MachineError::discovery_unreadable};
-    }
-
-    for (const auto character : output) {
-      if (!asciiAlphanumeric(character)) {
-        throw MachineFailure{MachineError::discovery_unreadable};
-      }
-    }
-
-    std::memcpy(result.schema_.data(), output.data(), result.schema_.size());
-
-    return result;
-  }
-
-  [[nodiscard]] inline std::string_view home() const noexcept {
-    return home_.view();
-  }
-
-  [[nodiscard]] inline std::string_view shell() const noexcept {
-    return shell_.view();
-  }
-
-  [[nodiscard]] inline std::string_view endpoint() const noexcept {
-    return endpoint_.view();
-  }
-
-  [[nodiscard]] inline const SchemaId &schema() const noexcept {
-    return schema_;
-  }
-
-  [[nodiscard]] inline bool compatible(const SchemaId &expected = handshake::schema_id) const noexcept {
-    return schema_ == expected;
-  }
-
-private:
-  inline static bool asciiAlphanumeric(char character) noexcept {
-    return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9');
-  }
-
-  inline static void validatePath(std::string_view path, bool socket_path) {
-    if (path.empty() || path.size() > MaximumPathBytes || path.front() != '/') {
-      throw MachineFailure{MachineError::discovery_unreadable};
-    }
-
-    constexpr unsigned char first_printable = 0x20;
-    constexpr unsigned char delete_character = 0x7f;
-    for (const auto character : path) {
-      const auto byte = static_cast<unsigned char>(character);
-      if (byte < first_printable || byte == delete_character || (socket_path && character == ':')) {
-        throw MachineFailure{MachineError::discovery_unreadable};
-      }
-    }
-  }
-
-  runtime::FixedText<MaximumPathBytes> home_;
-  runtime::FixedText<MaximumPathBytes> shell_;
-  runtime::FixedText<MaximumPathBytes> endpoint_;
-  SchemaId schema_{};
-};
-
-}
+// Shared with the CLI: telar.machines defines it.
+export namespace telar::gui {
+using telar::runtime::machines::MachineDiscovery;
 }
 
 // Interface: machines/identity.cppm
-export {
-namespace telar::gui {
-
-template <typename Random>
-concept MachineIdentityRandom = requires(Random &random, std::span<std::uint8_t> bytes) {
-  { random.fill(bytes) } -> std::same_as<void>;
-};
-
-class MachineId {
-public:
-  static constexpr std::string_view prefix = "m-";
-  static constexpr std::size_t hex_digits = 12;
-  static constexpr std::size_t text_bytes = prefix.size() + hex_digits;
-  static constexpr unsigned bits_per_digit = 4;
-  static constexpr unsigned value_bits = hex_digits * bits_per_digit;
-  static constexpr auto maximum_value = (std::uint64_t{1} << value_bits) - 1;
-
-  [[nodiscard]] inline static MachineId fromRaw(std::uint64_t value) {
-    if (value == 0 || value > maximum_value) {
-      throw MachineFailure{MachineError::invalid_id};
-    }
-
-    MachineId identity;
-    identity.value_ = value;
-
-    return identity;
-  }
-
-  [[nodiscard]] inline static MachineId parse(std::string_view text) {
-    if (text.size() != text_bytes || !text.starts_with(prefix)) {
-      throw MachineFailure{MachineError::invalid_id};
-    }
-
-    std::uint64_t value = 0;
-    for (const char digit : text.substr(prefix.size())) {
-      const auto index = digits.find(digit);
-      if (index == std::string_view::npos) {
-        throw MachineFailure{MachineError::invalid_id};
-      }
-
-      value = (value << bits_per_digit) | index;
-    }
-
-    return fromRaw(value);
-  }
-
-  template <MachineIdentityRandom Random>
-  [[nodiscard]] inline static MachineId generate(Random &random) {
-    constexpr unsigned bits_per_byte = 8;
-    constexpr unsigned entropy_bits = sizeof(std::uint64_t) * bits_per_byte;
-    for (;;) {
-      std::array<std::uint8_t, sizeof(std::uint64_t)> bytes{};
-      random.fill(bytes);
-      std::uint64_t value = 0;
-      for (std::size_t index = 0; index < bytes.size(); ++index) {
-        value |= static_cast<std::uint64_t>(bytes[index]) << (index * bits_per_byte);
-      }
-
-      value >>= entropy_bits - value_bits;
-      if (value != 0) {
-        return fromRaw(value);
-      }
-    }
-  }
-
-  [[nodiscard]] inline BoundedText<text_bytes> format() const {
-    BoundedText<text_bytes> text;
-    text.append(prefix);
-    for (std::size_t position = hex_digits; position != 0; --position) {
-      const auto shift = (position - 1) * bits_per_digit;
-      text.append(digits.substr((value_ >> shift) & digit_mask, 1));
-    }
-
-    return text;
-  }
-
-  [[nodiscard]] inline std::uint64_t value() const noexcept {
-    return value_;
-  }
-
-  bool operator==(const MachineId &) const = default;
-
-private:
-  static constexpr std::string_view digits = "0123456789abcdef";
-  static constexpr auto digit_mask = (std::uint64_t{1} << bits_per_digit) - 1;
-  std::uint64_t value_ = 0;
-};
-
-}
+// Shared with the CLI: telar.machines defines it.
+export namespace telar::gui {
+using telar::runtime::machines::MachineIdentityRandom;
+using telar::runtime::machines::MachineId;
 }
 
 // Interface: machines/limits.cppm
-export {
-namespace telar::gui {
-
-struct MachineLimits {
-  static constexpr std::size_t profiles = 16;
-  static constexpr std::size_t window_slots = profiles + 1;
-  static constexpr std::size_t label_bytes = 32;
-  static constexpr std::size_t destination_bytes = 255;
-  static constexpr std::size_t color_bytes = 24;
-  static constexpr std::size_t program_bytes = 255;
-  static constexpr std::size_t file_bytes = std::size_t{32} * 1024;
-  static constexpr std::size_t failure_bytes = 256;
-};
-
-}
+// Shared with the CLI: telar.machines defines it.
+export namespace telar::gui {
+using telar::runtime::machines::MachineLimits;
 }
 
 // Interface: machines/messages.cppm

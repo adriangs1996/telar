@@ -20,6 +20,7 @@ set(TELAR_GUI_BATCH_SIZE ${telar_gui_batch_default} CACHE STRING "Sources compil
 
 get_filename_component(TELAR_ROOT "../.." ABSOLUTE)
 add_subdirectory("${TELAR_ROOT}/lib/telar-config" "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
+add_subdirectory("${TELAR_ROOT}/lib/telar-machines" "${CMAKE_CURRENT_BINARY_DIR}/telar-machines")
 add_subdirectory("${TELAR_ROOT}/lib/telar-shell" "${CMAKE_CURRENT_BINARY_DIR}/telar-shell")
 add_subdirectory("${TELAR_ROOT}/lib/telar-render" "${CMAKE_CURRENT_BINARY_DIR}/telar-render")
 add_subdirectory("${TELAR_ROOT}/lib/ebnf" "${CMAKE_CURRENT_BINARY_DIR}/ebnf")
@@ -37,7 +38,7 @@ add_library(gui-core STATIC terminal/glyphs/box_curve.cpp platform/awake_clock.c
 telar_modules(gui-core)
 target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
-target_link_libraries(gui-core PUBLIC telar::config gui-harfbuzz)
+target_link_libraries(gui-core PUBLIC telar::config telar::machines gui-harfbuzz)
 target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)
 set_source_files_properties(terminal/glyphs/box_curve.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 # Compatibility target names for existing focused tests; their implementations

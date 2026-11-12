@@ -60,6 +60,7 @@ export import telar.cli.server;
 
 
 export import telar.client;
+export import telar.machines;
 
 
 export import telar.cli.output;
