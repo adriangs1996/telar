@@ -210,6 +210,23 @@ private:
   std::uint8_t surface_ = 0;
   bool cursor_hidden_ = false;
   bool failed_ = false;
+  // Set by a pane's own signals: refresh keeps the layout when nothing it draws changed.
+  bool reuse_layout_ = false;
+  // What the current layout was built from.
+  struct Laid {
+    std::string display;
+    std::vector<prompt::Style> styles;
+    std::vector<std::uint8_t> groups;
+    std::size_t caret = 0;
+    std::size_t anchor = 0;
+    int columns = 0;
+    int rows = 0;
+  };
+  Laid laid_;
+  // The menu's choices as QML last read them, for the line and revision they came from.
+  mutable QVariantList choices_;
+  mutable const void *choices_line_ = nullptr;
+  mutable std::uint64_t choices_revision_ = 0;
 };
 
 }

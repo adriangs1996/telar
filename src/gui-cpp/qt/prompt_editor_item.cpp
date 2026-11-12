@@ -54,8 +54,11 @@ void PromptEditorItem::setApplication(QObject *application) {
   }
   application_ = next;
   if (application_ != nullptr) {
+    // A pane's output reaches here as often as it paints: the layout is kept when nothing it
+    // draws changed.
     const auto pane = [this](qulonglong pane_id) {
       if (pane_id == pane_id_) {
+        reuse_layout_ = true;
         refresh();
       }
     };
@@ -223,12 +226,20 @@ static std::pair<std::size_t, std::size_t> menuPage(const prompt::Menu &menu) {
   return {first, std::min(menu.choices.size(), first + menu_page)};
 }
 
+// QML reads the choices on every state change, which a pane's output sends with each frame: the
+// list is rebuilt only when the line's menu or text moved on.
 QVariantList PromptEditorItem::choices() const {
-  QVariantList result;
   const auto *line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
   if (line == nullptr || !line->menu()) {
-    return result;
+    choices_line_ = nullptr;
+    return {};
   }
+  if (choices_line_ == line && choices_revision_ == line->revision()) {
+    return choices_;
+  }
+  choices_line_ = line;
+  choices_revision_ = line->revision();
+  QVariantList result;
   const auto &menu = *line->menu();
   const auto [first, last] = menuPage(menu);
   // The letters of each choice that what was typed matches, in order, for the menu to mark.
@@ -263,6 +274,7 @@ QVariantList PromptEditorItem::choices() const {
   if (!menu.requests.empty() && result.isEmpty()) {
     result.push_back(QVariantMap{{QStringLiteral("text"), QStringLiteral("…")}, {QStringLiteral("description"), QString{}}, {QStringLiteral("selected"), false}});
   }
+  choices_ = result;
   return result;
 }
 
@@ -423,6 +435,7 @@ void PromptEditorItem::itemChange(ItemChange change, const ItemChangeData &data)
 // Rebuilds the layout from the session's editor: the command with any composition at the caret,
 // coloured, wrapped at the line's width, scrolled so the caret stays in view.
 void PromptEditorItem::refresh() {
+  const bool reuse_layout = std::exchange(reuse_layout_, false);
   const auto previous_surface = surface_;
   const auto previous_failed = failed_;
   const auto previous_cursor_hidden = cursor_hidden_;
@@ -442,7 +455,8 @@ void PromptEditorItem::refresh() {
   } catch (const std::exception &) {
     resolved_ = {};
   }
-  if (previous_cell != QSizeF{cellWidth(), cellHeight()}) {
+  const bool cell_changed = previous_cell != QSizeF{cellWidth(), cellHeight()};
+  if (cell_changed) {
     emit metricsChanged();
   }
 
@@ -503,7 +517,23 @@ void PromptEditorItem::refresh() {
     }
   }
   const auto shifted = [&](std::size_t offset) { return offset >= cursor ? offset + static_cast<std::size_t>(composing.size()) : offset; };
-  layout_ = prompt::layout(display_, styles_, shifted(cursor), shifted(anchor), static_cast<std::uint32_t>(maximum_columns_), groups_);
+  const auto caret = shifted(cursor);
+  const auto mark = shifted(anchor);
+  const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_ == laid_.display && styles_ == laid_.styles && groups_ == laid_.groups && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
+  if (unchanged) {
+    if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line != nullptr) {
+      emit stateChanged();
+    }
+    return;
+  }
+  layout_ = prompt::layout(display_, styles_, caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_);
+  laid_.display.assign(display_);
+  laid_.styles.assign(styles_.begin(), styles_.end());
+  laid_.groups.assign(groups_.begin(), groups_.end());
+  laid_.caret = caret;
+  laid_.anchor = mark;
+  laid_.columns = maximum_columns_;
+  laid_.rows = maximum_rows_;
 
   const auto caret_row = static_cast<int>(layout_.caret_row);
   if (caret_row < first_row_) {

@@ -341,8 +341,15 @@ class PromptWindowTest : public QObject {
     const auto presence = runtime.last<CompleteWords>();
     QCOMPARE(presence.prefix, std::string_view{"gti"});
     QCOMPARE(application.commandPresence(pane_id, "gti"), CommandPresence::pending);
+    const QSignalSpy relaid{editor, &PromptEditorItem::layoutChanged};
     runtime.send(CompletionWords{.request_id = presence.request_id, .truncated = false, .words = {}});
     QTRY_COMPARE_WITH_TIMEOUT(application.commandPresence(pane_id, "gti"), CommandPresence::missing, wait_ms);
+    // The answer reaches the line as its pane's change and marks the word: it is laid out again.
+    QTRY_VERIFY_WITH_TIMEOUT(relaid.count() > 0, wait_ms);
+    // Output that changes nothing the line draws keeps its layout.
+    const auto relayouts = relaid.count();
+    emit application.terminalChanged(pane_id);
+    QCOMPARE(relaid.count(), relayouts);
     QCoreApplication::sendEvent(&terminal, &clear);
     type(terminal, "git s");
     QKeyEvent tab{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, QStringLiteral("\t")};
