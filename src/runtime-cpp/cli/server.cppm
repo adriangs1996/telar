@@ -47,12 +47,16 @@ export namespace telar::runtime::cli {
         throw std::invalid_argument{"Expected plugin-worker ENTRY ACTION SIDEBAR TAB_COUNT ACTIVE_TAB_INDEX PANE_COUNT FOCUSED_PANE_ID"};
       }
 
-      const std::string_view sidebar{arguments[2]};
+      std::array<char *, argument_count> fields = {};
+      std::ranges::copy(arguments, fields.begin());
+      const auto [entry_arg, action_arg, sidebar_arg, tab_count_arg, active_tab_index_arg, pane_count_arg, focused_pane_id_arg] = fields;
+
+      const std::string_view sidebar = {sidebar_arg};
       if (sidebar != "0" && sidebar != "1") {
         throw std::invalid_argument{"Invalid plugin worker sidebar flag"};
       }
 
-      const std::string_view action{arguments[1]};
+      const std::string_view action = {action_arg};
       if (action.empty()) {
         throw std::invalid_argument{"Empty plugin action"};
       }
@@ -65,15 +69,15 @@ export namespace telar::runtime::cli {
 
       const config::BindingContext context = {
           .sidebar_visible = sidebar == "1",
-          .tab_count = number<std::uint16_t>(arguments[3]),
-          .active_tab_index = number<std::uint16_t>(arguments[4]),
-          .pane_count = number<std::uint16_t>(arguments[5]),
-          .focused_pane_id = number<std::uint64_t>(arguments[6]),
+          .tab_count = number<std::uint16_t>(tab_count_arg),
+          .active_tab_index = number<std::uint16_t>(active_tab_index_arg),
+          .pane_count = number<std::uint16_t>(pane_count_arg),
+          .focused_pane_id = number<std::uint64_t>(focused_pane_id_arg),
       };
 
       return {
-          .entry = arguments[0],
-          .action = arguments[1],
+          .entry = entry_arg,
+          .action = action_arg,
           .context = context,
       };
     }
