@@ -1258,3 +1258,16 @@ foreach(gui_target IN LISTS gui_targets)
     target_sources(${gui_target} PRIVATE "${gui_moc_imports}")
   endif()
 endforeach()
+
+# Probes and smoke tools run by hand or by tools/ scripts, never by CTest: building them on
+# every test run costs a full module compile each. `cmake --build out --target gui-probes`
+# builds the ones this platform and configuration define.
+set(gui_probes gui-screen-probe gui-font-coverage-probe gui-display-probe gui-runtime-compatibility-probe gui-text-scene-probe gui-terminal-scene-probe gui-configuration-reload-probe gui-animation-probe gui-host-effects-smoke)
+set(gui_defined_probes)
+foreach(probe IN LISTS gui_probes)
+  if(TARGET ${probe})
+    set_target_properties(${probe} PROPERTIES EXCLUDE_FROM_ALL ON)
+    list(APPEND gui_defined_probes ${probe})
+  endif()
+endforeach()
+add_custom_target(gui-probes DEPENDS ${gui_defined_probes})

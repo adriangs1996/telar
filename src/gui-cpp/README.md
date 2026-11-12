@@ -215,6 +215,9 @@ Native animation cadence can be checked with `gui-animation-probe` and
 `tools/check_animation_cadence.py`. See [ANIMATION_CADENCE.md](ANIMATION_CADENCE.md)
 for the measurement endpoint, paired results, reproduction and limitations.
 
+The default build and `just gui-test` skip the probes; `cmake --build out --target gui-probes`
+builds the ones this platform defines.
+
 `gui-screen-probe` measures application of preencoded terminal frames without Qt.
 It covers empty, one-cell, one-row and full-grid deltas, plus changing and retained
 snapshots. Each run verifies the final cells and rejects allocation churn after

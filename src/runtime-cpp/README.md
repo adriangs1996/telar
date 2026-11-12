@@ -438,7 +438,9 @@ spaces and a quote, cursor position, and rejection of a stale process identity.
 
 `runtime-probe`, `history-probe`, `services-probe`, `agent-probe`,
 `process-probe`, `reporter-probe`, `hook-probe`, `resume-probe` and
-`graphics-probe` talk to actual daemon sockets. The agent fixture executes
+`graphics-probe` talk to actual daemon sockets. The default build and
+`just runtime-test` skip every probe CTest does not run; build them with
+`cmake --build out --target runtime-probes`. The agent fixture executes
 inside a PTY and reports through an independently authenticated connection.
 Only nondeterministic identities, timestamps and explicitly documented fixture
 paths are canonicalized.

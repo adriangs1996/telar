@@ -272,3 +272,17 @@ add_test(NAME datagram-tests COMMAND datagram-tests)
 
 add_test(NAME plugin-action-worker COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_action_workers.py" --cpp "$<TARGET_FILE:telar-runtime>")
 set_tests_properties(plugin-action-worker PROPERTIES TIMEOUT 90)
+
+# Probes run by hand or by tools/ scripts, never by CTest: building them on every test run
+# costs a full module compile each. `cmake --build out --target runtime-probes` builds them.
+set(runtime_probes
+  admission-probe agent-probe capture-probe control-clipboard-lifetime-probe
+  control-pty-latency-probe control-query-accounting-probe deferred-response-probe
+  description-probe graphics-limits-probe graphics-probe history-probe hook-probe
+  input-capacity-probe launch-probe model-probe path-probe plugin-package-probe
+  plugin-service-probe process-probe proxy-probe reporter-probe resume-probe runtime-probe
+  screen-probe service-admission-probe services-probe session-file-probe shell-capture-probe
+  state-delivery-probe tab-holds-probe workspace-git-probe worktree-detection-probe
+  worktree-lifecycle-probe)
+set_target_properties(${runtime_probes} PROPERTIES EXCLUDE_FROM_ALL ON)
+add_custom_target(runtime-probes DEPENDS ${runtime_probes})
