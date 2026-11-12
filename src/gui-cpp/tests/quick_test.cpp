@@ -6690,6 +6690,9 @@ return {api_version=2, client={keybindings={
     const QByteArray source{"return {api_version = 2, client = {window_title = 'configured {pane_title} @ {hostname}'}, gui = {max_fps = 30, font = {size = 18, thicken = true, thicken_strength = 128}}}"};
     QCOMPARE(configuration_file.write(source), source.size());
     configuration_file.close();
+    // Read before the load, so the cached theme and font must give way to the new ones.
+    QCOMPARE(client_->font().value(QStringLiteral("size")).toFloat(), client_->configuration().font.size);
+    QVERIFY(!client_->colors().isEmpty());
     client_->loadConfiguration(configuration_path, {}, {});
     constexpr std::uint64_t capped_interval = 1'000'000'000 / 30;
     QCOMPARE(telar::gui::qt::WindowAnimationClock::forWindow(*window_).frameInterval(), capped_interval);
@@ -6699,6 +6702,8 @@ return {api_version=2, client={keybindings={
     QVERIFY(client_->configuration().font.thicken);
     QCOMPARE(client_->configuration().font.thicken_strength, configured_strength);
     QVERIFY(client_->font().value(QStringLiteral("thicken")).toBool());
+    QCOMPARE(client_->font().value(QStringLiteral("size")).toFloat(), configured_font_size);
+    QCOMPARE(client_->colors(), telar::gui::qt::themeColors(client_->configuration()));
     QTRY_COMPARE(window_->title(), client_->title());
     QVERIFY(window_->title().startsWith(QStringLiteral("configured ")));
     QVERIFY(!window_->title().contains(QStringLiteral("{hostname}")));

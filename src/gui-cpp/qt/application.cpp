@@ -175,6 +175,12 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
       sound_player_(*this),
       system_notifier_(memory),
       hostname_(platform::hostName()) {
+  // First of configurationChanged's connections: every slot and binding it reaches, directly
+  // or through the signals chained to it, reads the new theme rather than a cached one.
+  connect(this, &Application::configurationChanged, this, [this] {
+    colors_.reset();
+    font_.reset();
+  });
   initializeMachines();
   initializeMachineProfiles();
   initializeAttachments();
@@ -1521,12 +1527,19 @@ void Application::fail(const std::exception &error) {
   emit stateChanged();
 }
 
+// Each pane delegate reads the theme a score of times; it is built once per configuration.
 QVariantMap Application::colors() const {
-  return themeColors(session().configuration());
+  if (!colors_) {
+    colors_ = themeColors(session().configuration());
+  }
+  return *colors_;
 }
 
 QVariantMap Application::font() const {
-  return fontSettings(session().configuration().font);
+  if (!font_) {
+    font_ = fontSettings(session().configuration().font);
+  }
+  return *font_;
 }
 
 ResolvedFont Application::resolveFont(qreal scale) {

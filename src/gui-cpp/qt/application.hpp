@@ -904,6 +904,9 @@ private:
   std::uint64_t pointer_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
+  // The theme and font QML reads, built on first read after each configurationChanged.
+  mutable std::optional<QVariantMap> colors_;
+  mutable std::optional<QVariantMap> font_;
   tbc::view<PickController<Application, ApplicationAllocator, ConfigurationSource>, tbc::lt::self> pick_controller_;
   QPointer<QQuickItem> component_pick_return_focus_;
   ComponentSurfaceState component_surfaces_;
