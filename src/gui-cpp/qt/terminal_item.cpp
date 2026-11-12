@@ -715,6 +715,16 @@ void TerminalItem::refreshBlocks() {
     documents_ = std::move(documents);
     emit documentsChanged();
   }
+  if (separators != separators_) {
+    QList<QVariantMap> rows;
+    rows.reserve(separators.size());
+    for (const auto &separator : separators) {
+      auto row = separator.toMap();
+      row.insert(QStringLiteral("key"), row.value(QStringLiteral("index")));
+      rows.append(std::move(row));
+    }
+    separator_rows_.reconcile(std::move(rows));
+  }
   if (separators != separators_ || document_rows != document_rows_ || rail != rail_ || remote_rows != remote_rows_ || prompt_row != prompt_row_ || font_.cell != shown_cell_) {
     separators_ = std::move(separators);
     document_rows_ = std::move(document_rows);

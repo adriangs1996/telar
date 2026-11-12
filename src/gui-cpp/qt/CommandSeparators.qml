@@ -157,10 +157,14 @@ Item {
         }
     }
 
+    // Keyed by command: one that moves or ends updates its separator in place.
     Repeater {
-        model: root.view.separators
+        model: root.view.separatorRows
 
-        delegate: Separator {}
+        delegate: Separator {
+            required property var record
+            modelData: record
+        }
     }
 
     // The separator of the command whose output the top row shows, pinned to the view's top
@@ -190,8 +194,7 @@ Item {
             readonly property color tone: separator.failed ? root.colors.red : separator.outcome === "succeeded" ? root.colors.green : separator.session ? root.colors.mauve : separator.running && separator.revealed ? (separator.current && root.secret ? root.colors.peach : root.colors.accent) : root.colors.overlay1
             // The host of the session the pane is in: where it went, or where it ran.
             readonly property string host: separator.modelData.host ?? ""
-            // What this command looked like the last time it was drawn.
-            readonly property string before: root.drawn[separator.modelData.index] ?? ""
+            readonly property int command: separator.modelData.index
             // When it was first seen running, for its time.
             property double since: 0
             // It has run long enough to show it runs: its ring, light, clock and interrupt key.
@@ -203,37 +206,49 @@ Item {
             width: root.width
             height: separator.line
 
-            Component.onCompleted: {
+            // A separator stays as its command's rows move, so what it does on first showing a
+            // command it does again when it shows another, or the same one ending.
+            Component.onCompleted: separator.settle()
+            onCommandChanged: separator.settle()
+            onOutcomeChanged: separator.settle()
+
+            function settle() {
                 if (separator.pinned) {
                     return;
                 }
+                // Read from the record itself: a change handler runs before the bindings derived
+                // from it are brought up to date.
                 const index = separator.modelData.index;
-                if (separator.going && !(index in root.started)) {
+                const outcome = separator.modelData.state;
+                const going = outcome === "running" || outcome === "session";
+                // What this command looked like the last time it was drawn.
+                const before = root.drawn[index] ?? "";
+                if (going && !(index in root.started)) {
                     root.started[index] = Date.now();
                 }
                 separator.since = root.started[index] ?? 0;
                 // An ended command forgets when it started: after a clear its index names the
                 // next command, whose clock starts afresh.
-                const ran = separator.going ? 0 : Date.now() - (root.started[index] ?? 0);
-                if (!separator.going) {
+                const ran = going ? 0 : Date.now() - (root.started[index] ?? 0);
+                if (!going) {
                     delete root.started[index];
                 }
                 if (!root.moving) {
-                    root.drawn[index] = separator.outcome;
+                    root.drawn[index] = outcome;
                     return;
                 }
                 // One that ended before its clock showed settles without a flash, as the line
                 // under it never left; a failure still shakes.
-                if ((separator.before === "running" || separator.before === "session") && !separator.going) {
+                if ((before === "running" || before === "session") && !going) {
                     if (ran >= root.revealDelay) {
                         popIn.start();
                         flash.start();
                     }
-                    if (separator.failed) {
+                    if (outcome === "failed") {
                         shake.start();
                     }
                 }
-                root.drawn[index] = separator.outcome;
+                root.drawn[index] = outcome;
             }
 
             // Pinned over output rows, it covers them, with a shadow under it.

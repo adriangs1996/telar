@@ -396,6 +396,52 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
   // At the shell's prompt, the history and path searches open on the prompt line instead of a
   // dialog: they start from the line, take the keyboard, and give it back as they close.
+  // A separator stays as its command's rows move and updates in place, so a command that ends
+  // under it is settled as one built afresh would be: its clock forgotten, its end recorded.
+  Q_SLOT static void separatorSettlesACommandThatEnds() {
+    ApplicationAllocator memory;
+    Application application{memory};
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto config = directory.filePath(QStringLiteral("config.lua"));
+    QFile file{config};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("return {api_version=2,client={prompt={mode='telar'}}}");
+    file.close();
+    application.loadConfiguration(config, {}, {});
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("runtime.sock"))));
+    QQuickWindow window;
+    window.resize(QSize{720, 300});
+    application.setWindow(window);
+    application.open(listener.fullServerName());
+    QVERIFY(waitForGuiCondition([&] { return listener.hasPendingConnections(); }, wait_ms));
+    std::unique_ptr<QLocalSocket> socket{listener.nextPendingConnection()};
+    WireRuntime runtime{*socket};
+    QVERIFY(waitForGuiCondition([&] { return application.connected(); }, wait_ms));
+    runtime.send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(runtime));
+    sendPromptScreen(runtime, 1);
+    runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
+    TerminalItem terminal{window.contentItem()};
+    terminal.setApplication(&application);
+    terminal.setPaneId(QString::number(pane_id));
+    terminal.setSize(QSizeF{720, 300});
+    QQmlEngine engine;
+    const auto grid = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
+    const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject *>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}});
+    separators->setParentItem(&terminal);
+    window.show();
+
+    const std::array running{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::running, .command = "make"}};
+    runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = running});
+    QTRY_VERIFY_WITH_TIMEOUT(separators->property("started").toMap().contains(QStringLiteral("0")), wait_ms);
+    const std::array failed{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::failed, .status = 2, .duration_ms = 40, .command = "make"}};
+    runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = failed});
+    QTRY_COMPARE_WITH_TIMEOUT(separators->property("drawn").toMap().value(QStringLiteral("0")).toString(), QStringLiteral("failed"), wait_ms);
+    QVERIFY(!separators->property("started").toMap().contains(QStringLiteral("0")));
+  }
+
   Q_SLOT static void lineHostsSearches() {
     ApplicationAllocator memory;
     Application application{memory};

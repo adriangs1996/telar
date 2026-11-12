@@ -84,6 +84,10 @@ class TerminalItem : public QQuickItem {
   // the editor's prompt will have its separator on, or -1. Only while telar's editor stands
   // in for the shell's.
   Q_PROPERTY(QVariantList separators READ separators NOTIFY blocksChanged)
+  // The same separators as a model keyed by command, for the delegates that draw them: a
+  // command that moves or changes updates its delegate instead of every delegate being built
+  // again.
+  Q_PROPERTY(QAbstractItemModel *separatorRows READ separatorRows CONSTANT)
   // The documents drawn in place of the rows they stand for: id, and the display rows they take
   // once placed, or placed false for one the view is yet to measure. `documentRows` holds, by
   // id, the drawn row where each placed one starts, which moves as the view scrolls.
@@ -150,6 +154,9 @@ public:
   [[nodiscard]] QRectF promptCaret() const noexcept;
   void setPromptCaret(const QRectF &caret);
   [[nodiscard]] QVariantList separators() const;
+  [[nodiscard]] QAbstractItemModel *separatorRows() noexcept {
+    return &separator_rows_;
+  }
   [[nodiscard]] QVariantList documents() const {
     return documents_;
   }
@@ -374,6 +381,7 @@ private:
   std::uint64_t pane_id_ = 0;
   std::vector<std::uint8_t> hidden_rows_;
   QVariantList separators_;
+  ListModel separator_rows_;
   QVariantList documents_;
   QVariantMap document_rows_;
   QVariantList rail_;
