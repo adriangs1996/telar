@@ -125,7 +125,7 @@ graph LR
 - **Qué comprueba (sobre el AST, no con regex):** no hay cuerpos de función en unidades de interfaz salvo los `inline` de hot path anotados (definir la anotación aquí) y las plantillas que siguen siéndolo (primitivas de `base`).
 - **Hecho cuando:** corre en CI con una allowlist por módulo, que hoy los contiene casi todos. P9.x la vacía.
 
-### [ ] P0.6 · Reglas de líneas en blanco de `docs/code-style.md` en el linter de TBC
+### [x] P0.6 · Reglas de líneas en blanco de `docs/code-style.md` en el linter de TBC
 - **Depende de:** —
 - **Toca:** `lib/tbc/linter` y su integración en `cmake/lint_prepare.cmake`. Lo comparte con P2.4: P2.4 se despacha cuando P0.6 está integrada.
 - **Qué comprueba sobre el AST, y cómo lo arregla insertando la línea en blanco:**
@@ -134,6 +134,7 @@ graph LR
   - Una traza (`TELAR_TRACE(...)`) al principio de la función no exige línea en blanco.
 - **Límites:** solo inserta líneas en blanco y nunca las borra, porque una línea en blanco que ya existe puede separar dos bloques por lo que hacen, que es la parte que no se puede automatizar. Lo que inserte se conserva después de clang-format (`MaxEmptyLinesToKeep: 1`).
 - **Hecho cuando:** el linter avisa en cada caso, tiene un modo que aplica los arreglos y hay tests para cada regla y cada excepción, incluido que el resultado no cambia al pasarle clang-format.
+- **Resultado:** `3038a2302`. `tbc-lint --checks=blank-lines` avisa con `tbc-blank-line-after-block` y `tbc-blank-line-after-declarations`; `--fix` inserta, `--header-filter` añade cabeceras. Sin `--checks` solo comprueba lifetimes, como antes. `telar_blank_line_check(... [FIX] [HEADERS <regex>])` en `cmake/lint_prepare.cmake` lo lanza; no está conectado a ningún proyecto ni a CI, eso es P1.3. Una macro de sentencia cuenta como sentencia, así que `TELAR_TRACE` no pide línea. Las etiquetas `case` no piden línea antes. Dos sentencias en una línea o una línea con `\` no se arreglan. Sobre las fuentes del propio linter salen unos 800 avisos, casi todos en `lifetime_analysis.cpp`: los arregla P1.3.
 
 ---
 
