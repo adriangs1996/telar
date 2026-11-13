@@ -10,48 +10,26 @@ module;
 
 #include <cstring>
 #include <cstddef>
-#include <brotli/decode.h>
-#include <zlib.h>
-#include <zstd.h>
 #include <cassert>
 
 
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
 #if (defined(__linux__))
 #include <cerrno>
 #endif
 #if (defined(__linux__))
 #include <climits>
 #endif
-#if (defined(__linux__))
-#include <csignal>
-#endif
-#if (defined(__linux__))
 #include <fcntl.h>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
 
 
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/tcp.h>
 
 #include <cstdio>
 #include <netdb.h>
 
 #include <nghttp2/nghttp2.h>
 
-#include <brotli/encode.h>
 
 #include <arpa/inet.h>
 
@@ -69,7 +47,6 @@ module;
 #include <linux/fs.h>
 #endif
 
-#include <pthread.h>
 
 
 #include <sys/types.h>
@@ -81,19 +58,9 @@ module;
 #include <dirent.h>
 
 
-#if (defined(__APPLE__))
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-#if (defined(__APPLE__))
-#include <Security/Security.h>
-#endif
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
-#include <sys/un.h>
-#include <sys/uio.h>
-#include <spawn.h>
-#include <sys/wait.h>
 #include <sys/resource.h>
 
 export module telar.runtime.proxy.runtime;

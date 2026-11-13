@@ -32,7 +32,7 @@
       "inherits": "debug",
       "binaryDir": "${sourceDir}/out-sanitize",
       "cacheVariables": {
-        "TELAR_AUTH_SANITIZERS": "ON"
+        "TELAR_SANITIZERS": "ON"
       }
     }
   ],

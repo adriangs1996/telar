@@ -3,7 +3,6 @@ module;
 #include <new>
 #include <cstdio>
 
-
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -41,46 +40,6 @@ module;
 
 #endif
 
-#if (defined(__APPLE__))
-#include <net/if.h>
-#endif
-#if (defined(__APPLE__))
-#include <net/if_utun.h>
-#endif
-#if (defined(__APPLE__))
-#include <netinet6/in6_var.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/ioctl.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/kern_control.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/socket.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <arpa/inet.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/if_ether.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/if_tun.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <net/if.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/ioctl.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/uio.h>
-#endif
-
 export module telar.runtime.platform.git_status;
 
 import std;
@@ -89,34 +48,6 @@ export import telar.platform;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.platform.primitives;
-
-
-#if defined(__linux__)
-
-export import telar.platform;
-
-
-#endif
-
-#if defined(__APPLE__)
-
-export import telar.platform;
-
-
-#endif
-
-
-#if (defined(__APPLE__))
-
-#endif
-#if (!(defined(__APPLE__)))
-
-#endif
-
-// Interface: platform/git_observation_policy.cppm
-export {
-
-}
 
 // Interface: platform/git_repository.cppm
 export {

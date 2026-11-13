@@ -16,13 +16,6 @@ import std;
 
 import telar.platform;
 
-
-#ifdef __APPLE__
-#include <sys/random.h>
-#else
-#include <unistd.h>
-#endif
-
 namespace telar::gui::platform {
 
 void SecureRandom::fill(std::span<std::uint8_t> output) {

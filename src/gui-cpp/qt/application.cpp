@@ -1183,10 +1183,6 @@ void Application::submitDialog(const QVariantMap &input) {
   });
 }
 
-void Application::useHistory(const QString &entry_id, bool alternate) {
-  submitHistory(entry_id.toULongLong(), alternate);
-}
-
 void Application::submitHistory(std::uint64_t entry_id, bool alternate) {
   if (dialog_ != QLatin1StringView("history")) {
     return;

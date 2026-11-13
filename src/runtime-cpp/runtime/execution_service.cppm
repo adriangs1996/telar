@@ -4,7 +4,6 @@ module;
 #include <ghostty/vt.h>
 #include <sys/stat.h>
 #include <stdlib.h>
-#include <zlib.h>
 
 #include "telar_base/diagnostics/config.hpp"
 #include <sys/types.h>
@@ -15,29 +14,12 @@ module;
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
-#include <fcntl.h>
-#include <sys/mman.h>
 #include <unistd.h>
-#include "cell_layout.hpp"
 #include <limits.h>
 #include <csignal>
-#include <sys/uio.h>
-#include <sys/wait.h>
 
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
 #if (defined(__linux__))
 #include <climits>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
 #endif
 
 #include <new>

@@ -4,7 +4,6 @@ module;
 #include <new>
 #include <ghostty/vt.h>
 #include <stdlib.h>
-#include <zlib.h>
 
 #include <cstdint>
 
@@ -13,13 +12,9 @@ module;
 #include "telar_base/diagnostics/config.hpp"
 #include <cstdio>
 #include <cstdlib>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
 #include <cassert>
 
 #include <cerrno>
-#include <pthread.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>

@@ -4,23 +4,15 @@ module;
 #include <new>
 #include <cstdio>
 
-#include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cerrno>
 #include <cstdint>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <csignal>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <pcap/pcap.h>
-#include <arpa/inet.h>
 #include <limits.h>
-#include <poll.h>
 
 export module telar.runtime.traffic.tap;
 

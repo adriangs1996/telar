@@ -1,16 +1,12 @@
 module;
 #include "tbc/view.hpp"
 #include <new>
-#include <ghostty/vt.h>
 #include <stdlib.h>
-#include <zlib.h>
 
-#include <sqlite3.h>
 #include <cstdint>
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <pthread.h>
 
 #include "telar_base/diagnostics/config.hpp"
 #include <sys/types.h>
@@ -19,13 +15,8 @@ module;
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <sys/mman.h>
 #include <unistd.h>
-#include "cell_layout.hpp"
 #include <limits.h>
-#include <csignal>
-#include <sys/uio.h>
-#include <sys/wait.h>
 
 #include <clipboard.hpp>
 

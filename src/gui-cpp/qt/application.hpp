@@ -348,7 +348,6 @@ public:
   [[nodiscard]] QVariantMap copySearchState() const;
   [[nodiscard]] QString copySearchScope() const;
   [[nodiscard]] bool copySearchScopes() const;
-  Q_INVOKABLE void useHistory(const QString &entry_id, bool alternate = false);
   Q_INVOKABLE void useHistoryRow(int row, bool alternate = false);
   Q_INVOKABLE void usePresentedHistory(const QString &revision, bool alternate = false);
   [[nodiscard]] bool historyLoading() const;

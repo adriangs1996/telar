@@ -4296,12 +4296,7 @@ return {api_version=2, client={keybindings={
     QVERIFY(!client_->historyState().value(QStringLiteral("inspecting")).toBool());
     QCOMPARE(client_->dialog(), QStringLiteral("history"));
 
-    client_->useHistory(QStringLiteral("0"));
-    QVERIFY(!client_->historyState().value(QStringLiteral("error")).toString().isEmpty());
-    QCOMPARE(client_->dialog(), QStringLiteral("history"));
-    QCOMPARE(client_->error(), QString{});
-    const auto entry = client_->history()->data(client_->history()->index(0, 0), ListModel::record_role).toMap();
-    client_->useHistory(entry.value(QStringLiteral("key")).toString());
+    client_->useHistoryRow(0);
     QCOMPARE(client_->dialog(), QString{});
     const auto *pane = firstPane();
     if (pane == nullptr) {

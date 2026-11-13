@@ -124,49 +124,34 @@ export import telar.runtime.redirect.pf_rules;
 export import telar.runtime.redirect.ingress;
 export import telar.platform;
 
-
 export import telar.runtime.proxy.relay_direction;
-
 
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.platform.primitives;
 
-
 #if defined(__APPLE__)
 
-export import telar.runtime.redirect.ingress;
 export import telar.base.memory;
-export import telar.platform;
-
 
 #endif
 
 #if defined(__linux__)
 
-export import telar.runtime.redirect.pf_rules;
-export import telar.platform;
-
-
 #endif
-
 
 #if (!(defined(__APPLE__)))
 
 #endif
 #if (!(defined(__APPLE__)))
-export import telar.platform;
 #endif
-
 
 #if defined(__APPLE__)
 
 export import telar.runtime.traffic.capture;
 
 export import telar.runtime.redirect.record;
-export import telar.runtime.redirect.pf_rules;
-
 
 #endif
 
@@ -731,7 +716,6 @@ public:
   Result find(const FlowKey &flow) noexcept;
 
 private:
-
 
   ProcessInspector inspector_;
   std::array<ProcessIdentity, maximum_processes> processes_;

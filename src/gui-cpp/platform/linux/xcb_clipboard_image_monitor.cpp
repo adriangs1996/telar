@@ -45,13 +45,6 @@ static_assert(true);
 #include <xcb/xcbext.h>
 #include <xcb/xproto.h>
 
-#include "application/dependencies.hpp"
-#include "attachments/secure_erase.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
-#include "platform/clipboard_image_source.hpp"
-
-
 import telar.gui.platform.profile_file;
 
 namespace telar::gui::platform {

@@ -9,7 +9,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(TELAR_AUTH_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(TELAR_AUTH_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 
 if(NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(FATAL_ERROR "The auth daemon supports macOS and Linux")
@@ -23,14 +22,6 @@ endif()
 if(TELAR_AUTH_WARNINGS_AS_ERRORS)
   target_compile_options(telar-auth-daemon PRIVATE -Werror)
 endif()
-if(TELAR_AUTH_SANITIZERS)
-  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    message(FATAL_ERROR "TELAR_AUTH_SANITIZERS requires GCC or Clang")
-  endif()
-  target_compile_options(telar-auth-daemon PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(telar-auth-daemon PRIVATE -fsanitize=address,undefined)
-endif()
-
 install(TARGETS telar-auth-daemon RUNTIME DESTINATION bin)
 
 include(CTest)
