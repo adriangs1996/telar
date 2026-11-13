@@ -172,12 +172,13 @@ graph LR
 
 ## Fase 2 · Reglas del checker (en paralelo tras P1.2)
 
-### [ ] P2.1 · Regla 2: solo se importa hacia abajo
+### [x] P2.1 · Regla 2: solo se importa hacia abajo
 - **Depende de:** P1.2
 - **Toca:** `tools/check-cpp-modules.py`, `docs/build/modules.json`.
 - **Qué hace:** generaliza `LIBRARY_LAYERS` a todos los componentes de `src/` y mueve el orden de capas a `modules.json`. La allowlist inicial son las 55 aristas entre módulos de la sección "Aristas hacia arriba" del final.
 - **De P0.2:** la allowlist sale de la lista `upward` de `docs/build/module-metrics.json` (56 aristas), no de la tabla del final, que se calculó con otro desempate.
 - **Hecho cuando:** el checker falla con cualquier arista hacia arriba nueva.
+- **Resultado:** `7f7e342b4`. `process_layers` en `modules.json` ordena los componentes de `runtime`, `gui` y `cli` (con `tests` arriba); las librerías quedan por debajo de los procesos y entre ellas manda `library_layers`. La regla lee también los imports de las unidades de implementación. `upward_imports` es la allowlist: 53 aristas (las 56 de P0.2 menos las 3 que cerraron P3.15a y P3.15c), y el checker falla también si queda una entrada cuya arista ya no sube. **Cada tarea de P3 borra sus entradas de `upward_imports` al integrar.**
 
 ### [ ] P2.2 · Regla 4: `export import` solo si el tipo aparece en la interfaz exportada
 - **Depende de:** P1.2
