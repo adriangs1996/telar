@@ -62,6 +62,9 @@ public:
   static constexpr std::size_t capacity = 16 * 1024;
   using Read = DelimitedRead::Result;
 
+  // The storage is written before it is read: allocating a head does not zero 16 KiB.
+  inline ConnectHead() noexcept {}
+
   inline Read receive(int socket) noexcept {
     SocketStream stream{socket};
     return reader_.receive(stream, storage_.bytes(), "\r\n\r\n");
@@ -277,16 +280,31 @@ public:
     closed
   };
 
-  inline explicit ConnectHandshake(FileDescriptor child, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters) noexcept
+  // A CONNECT handshake reads the request head into storage from `memory`, released once the head
+  // is answered.
+  inline explicit ConnectHandshake(Memory &memory, FileDescriptor child, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters)
       : child_(std::move(child)),
         options_(options),
         secret_(secret),
-        counters_(counters) {}
+        counters_(counters),
+        head_(makeOwned<ConnectHead>(memory)),
+        hello_(nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}) {}
 
-  inline explicit ConnectHandshake(redirect::Connection connection, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters) noexcept
-      : child_(std::move(connection.child)), options_(options), secret_(secret), counters_(counters), adopted_origin_(std::move(connection.origin)), state_(State::established), transparent_(true) {
+  // A redirected connection reads the ClientHello only when transparent TLS may intercept it, into
+  // an offer from `memory` that the TLS session takes over or that is released once established.
+  inline explicit ConnectHandshake(Memory &memory, redirect::Connection connection, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters)
+      : child_(std::move(connection.child)), options_(options), secret_(secret), counters_(counters), adopted_origin_(std::move(connection.origin)), head_(nullptr, AllocationDeleter<ConnectHead, Memory>{memory}), hello_(nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}), state_(State::established), transparent_(true) {
     hostname_.assign(connection.target.host.view());
-    if (options_.transparent_tls) { state_ = State::probing; }
+    if (options_.transparent_tls) {
+      hello_ = makeOwned<AlpnOffer>(memory);
+      state_ = State::probing;
+    }
+  }
+
+  // The child's ClientHello, read complete, when the connection is to be intercepted; null
+  // otherwise. The handshake keeps no part of it.
+  inline Owned<AlpnOffer, Memory> takeOffer() noexcept {
+    return std::move(hello_);
   }
 
   inline void advance(bool origin_writable, Time now) noexcept {
@@ -352,7 +370,7 @@ public:
     return state_ == State::replying;
   }
 
-  inline bool wantsOriginRead() const noexcept { return state_ == State::probing && !hello_.tls(); }
+  inline bool wantsOriginRead() const noexcept { return state_ == State::probing && !hello_->tls(); }
 
   inline std::string_view failure() const noexcept { return failure_; }
 
@@ -372,7 +390,13 @@ private:
   using Origin = OriginConnection<Resolver>;
 
   inline void probe(Time now) noexcept {
-    if (!hello_.tls()) {
+    inspect(now);
+    // Only an intercepted connection hands its ClientHello on.
+    if (state_ != State::probing && !(state_ == State::established && inspected_)) { hello_.reset(); }
+  }
+
+  inline void inspect(Time now) noexcept {
+    if (!hello_->tls()) {
       std::uint8_t byte;
       const auto count = ::recv(adopted_origin_.get(), &byte, 1, MSG_PEEK);
       if (count > 0) { state_ = State::established; return; }
@@ -380,22 +404,22 @@ private:
     }
     if (probe_until_ == Time{}) { probe_until_ = now + std::chrono::seconds{3}; }
     if (now < probe_after_) { return; }
-    const auto read = hello_.peek(child_.get());
+    const auto read = hello_->peek(child_.get());
     if (read == AlpnOffer::Read::pending) {
       if (now >= probe_until_) {
-        state_ = hello_.tls() ? State::closed : State::established;
+        state_ = hello_->tls() ? State::closed : State::established;
         failure_ = "tls_client_hello_timeout";
       }
       probe_after_ = now + std::chrono::milliseconds{2};
       return;
     }
     if (read == AlpnOffer::Read::ended) { state_ = State::closed; return; }
-    if (!hello_.tls()) { state_ = State::established; return; }
-    const auto name = hello_.serverName();
+    if (!hello_->tls()) { state_ = State::established; return; }
+    const auto name = hello_->serverName();
     const auto host = name.empty() ? hostname_.view() : name;
     inspected_ = options_.intercept_hosts.contains(host);
-    if (inspected_ && (!hello_.valid() || hello_.encrypted())) {
-      failure_ = hello_.encrypted() ? "tls_ech_not_supported" : "tls_client_hello_invalid";
+    if (inspected_ && (!hello_->valid() || hello_->encrypted())) {
+      failure_ = hello_->encrypted() ? "tls_ech_not_supported" : "tls_client_hello_invalid";
       state_ = State::closed;
       return;
     }
@@ -404,14 +428,16 @@ private:
   }
 
   inline void readHead(Time now) noexcept {
-    switch (head_.receive(child_.get())) {
+    switch (head_->receive(child_.get())) {
     case ConnectHead::Read::pending:
       return;
     case ConnectHead::Read::ended:
       state_ = State::closed;
+      head_.reset();
       return;
     case ConnectHead::Read::too_large:
       counters_.record(ProxyCounter::connect_head_too_large);
+      head_.reset();
       drain_until_ = now + refusal_drain;
       respond("HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
       return;
@@ -419,14 +445,14 @@ private:
       break;
     }
 
-    const auto decision = authenticateProxy(secret_, options_.anonymous_tunnels, options_.intercept_hosts, head_.text());
+    const auto decision = authenticateProxy(secret_, options_.anonymous_tunnels, options_.intercept_hosts, head_->text());
     if (const auto *rejected = std::get_if<ProxyRejection>(&decision)) {
       if (rejected->reason != ProxyRejection::Reason::invalid_target) {
         counters_.record(ProxyCounter::rejected_connection);
         counters_.record(rejected->reason == ProxyRejection::Reason::unknown_credential ? ProxyCounter::unknown_credential_rejection : ProxyCounter::invalid_authorization_rejection);
       }
       respond(rejected->response());
-      head_.erase();
+      head_.reset();
       return;
     }
 
@@ -436,7 +462,7 @@ private:
     }
     hostname_.assign(admission.target.hostname);
     origin_.emplace(hostname_.view(), admission.target.port);
-    head_.erase();
+    head_.reset();
     state_ = State::establishing;
   }
 
@@ -506,8 +532,10 @@ private:
   const ProxySecret &secret_;
   ProxyCounters &counters_;
   FileDescriptor adopted_origin_;
-  ConnectHead head_;
-  AlpnOffer hello_;
+  // The CONNECT head until it is answered, and the ClientHello of a redirected connection until
+  // the handshake is established.
+  Owned<ConnectHead, Memory> head_;
+  Owned<AlpnOffer, Memory> hello_;
   Time probe_until_{};
   Time probe_after_{};
   std::string_view failure_ = "connection_failed";

@@ -2016,9 +2016,10 @@ class TlsTunnel {
 public:
   // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
   // and relay copy the host.
-  inline explicit TlsTunnel(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation)
+  // `offer` is the child's ClientHello when the handshake already read it, or null.
+  inline explicit TlsTunnel(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, Owned<AlpnOffer, Memory> offer, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation)
       : observation_(observation),
-        session_(interception.open(memory, sockets, hostname)),
+        session_(interception.open(memory, sockets, hostname, std::move(offer))),
         application_(memory, observation, hostname) {}
 
   // `flow` is the connection's flow, or null when no hook watches it.
@@ -2146,14 +2147,14 @@ public:
       : memory_(memory), flow_(nullptr, AllocationDeleter<FlowState, Memory>{memory}), plain_(nullptr, AllocationDeleter<PlainTunnel<Memory>, Memory>{memory}), tls_(nullptr, AllocationDeleter<TlsTunnel<Memory>, Memory>{memory}) {}
 
   template <HostnameResolver Resolver>
-  inline void open(tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, const ConnectHandshake<Memory, Resolver> &handshake, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation) {
+  inline void open(tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, ConnectHandshake<Memory, Resolver> &handshake, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation) {
     if (observation.flows) {
       flow_ = makeOwned<FlowState>(memory_);
       flow_->open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
     }
     const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
     if (handshake.intercept()) {
-      tls_ = makeOwned<TlsTunnel<Memory>>(memory_, memory_, interception, sockets, handshake.hostname(), observation);
+      tls_ = makeOwned<TlsTunnel<Memory>>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
     } else {
       plain_ = makeOwned<PlainTunnel<Memory>>(memory_, memory_, sockets, handshake.hostname(), observation);
       observation.counters.record(ProxyCounter::passthrough_connection);
@@ -2238,10 +2239,10 @@ public:
   // A connection keeps the allocator, the options, the secret and the counters of the service that
   // accepted it, and the interception and observations it advances through: region `a`.
   inline explicit ProxyConnection(tbc::view<Memory &, tbc::lt::a> memory, FileDescriptor child, tbc::view<const ProxyOptions<Memory> &, tbc::lt::a> options, tbc::view<const ProxySecret &, tbc::lt::a> secret, tbc::view<ProxyCounters &, tbc::lt::a> counters)
-      : counters_(counters), handshake_(std::move(child), options, secret, counters), transport_(memory), policy_(ProxyConnectionPolicy::Clock::now()) {}
+      : counters_(counters), handshake_(memory, std::move(child), options, secret, counters), transport_(memory), policy_(ProxyConnectionPolicy::Clock::now()) {}
 
   inline explicit ProxyConnection(tbc::view<Memory &, tbc::lt::a> memory, redirect::Connection connection, tbc::view<const ProxyOptions<Memory> &, tbc::lt::a> options, tbc::view<const ProxySecret &, tbc::lt::a> secret, tbc::view<ProxyCounters &, tbc::lt::a> counters)
-      : counters_(counters), redirect_lifetime_(std::move(connection.lifetime)), handshake_(std::move(connection), options, secret, counters), transport_(memory), policy_(ProxyConnectionPolicy::Clock::now()) {}
+      : counters_(counters), redirect_lifetime_(std::move(connection.lifetime)), handshake_(memory, std::move(connection), options, secret, counters), transport_(memory), policy_(ProxyConnectionPolicy::Clock::now()) {}
 
   inline void advance(tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, tbc::view<ProxyObservations<Memory> &, tbc::lt::a> observations, TunnelReadiness readiness, Time now) noexcept {
     if (closed_) {

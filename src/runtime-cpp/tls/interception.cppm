@@ -75,6 +75,9 @@ public:
     ended
   };
 
+  // The bytes are written before they are read: allocating an offer does not zero 64 KiB.
+  inline AlpnOffer() noexcept {}
+
   inline Read peek(int socket) noexcept {
     const auto count = ::recv(socket, bytes_.data(), bytes_.size(), MSG_PEEK);
     if (count <= 0) {
@@ -453,10 +456,15 @@ public:
   };
 
   // The session shares the authority it mints from, so a rotation that replaces it leaves this one valid.
-  inline explicit TlsSession(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname)
+  // `offer` is the child's ClientHello when the caller already read it complete; without one the
+  // session reads its own, from an offer allocated in `memory`. Either is released once the origin
+  // has the protocols.
+  inline explicit TlsSession(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, Memory &memory, Owned<AlpnOffer, Memory> offer)
       : contexts_(contexts),
         authority_(std::move(authority)),
-        sockets_(sockets) {
+        sockets_(sockets),
+        offered_(offer != nullptr),
+        offer_(offer ? std::move(offer) : makeOwned<AlpnOffer>(memory)) {
     requireTls(authority_ != nullptr, "TLS authority is unavailable");
     requireTls(TlsHostname::valid(hostname), "Invalid TLS session hostname");
     hostname_.assign(hostname);
@@ -481,18 +489,22 @@ public:
         initialize();
       }
       if (state_ == State::offer) {
-        const auto now = std::chrono::steady_clock::now();
-        if (now < offer_after_) { return state_; }
-        const auto read = offer_.peek(sockets_.child);
-        if (read == AlpnOffer::Read::pending) {
-          offer_after_ = now + std::chrono::milliseconds{2};
-          return state_;
+        if (!offered_) {
+          const auto now = std::chrono::steady_clock::now();
+          if (now < offer_after_) { return state_; }
+          const auto read = offer_->peek(sockets_.child);
+          if (read == AlpnOffer::Read::pending) {
+            offer_after_ = now + std::chrono::milliseconds{2};
+            return state_;
+          }
+          failure_ = Failure::client_hello;
+          requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
         }
-        failure_ = Failure::client_hello;
-        requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
-        const auto names = offer_.encoded();
+        const auto names = offer_->encoded();
         failure_ = Failure::origin_handshake;
+        // OpenSSL copies the protocols, so the offer is done with.
         requireTls(SSL_set_alpn_protos(origin_.get(), names.data(), static_cast<unsigned>(names.size())) == 0, "Set TLS origin ALPN offer");
+        offer_.reset();
         state_ = State::origin;
       }
       if (state_ == State::origin && handshake(origin_.get(), origin_waiting_)) {
@@ -670,7 +682,8 @@ private:
   tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority_;
   TunnelSockets sockets_;
   FixedText<ProxyHostname::maximum_bytes> hostname_;
-  AlpnOffer offer_;
+  bool offered_;
+  Owned<AlpnOffer, Memory> offer_;
   AlpnSelection selection_;
   TlsConnection origin_;
   TlsConnection child_;
@@ -694,9 +707,14 @@ public:
   inline explicit TlsInterception(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept
       : contexts_(contexts), replacement_(std::move(authority)) {}
 
-  inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory &, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
+  // `offer` is the child's ClientHello when the caller already read it complete, or null.
+  inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory &, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, Owned<AlpnOffer, Memory> offer) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
-    return makeOwned<TlsSession<Memory>>(memory, contexts_, snapshot(), sockets, hostname);
+    return makeOwned<TlsSession<Memory>>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
+  }
+
+  inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory &, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
+    return open(memory, sockets, hostname, Owned<AlpnOffer, Memory>{nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}});
   }
 
   inline tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> snapshot() const noexcept {

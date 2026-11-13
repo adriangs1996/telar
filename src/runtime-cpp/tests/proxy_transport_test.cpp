@@ -246,7 +246,7 @@ static void testHandshake() {
   auto origin = ProxyListener::bind(std::nullopt, {});
   for (const auto hostname : {"127.0.0.1", "fixture.invalid"}) {
     SocketPair sockets;
-    ConnectHandshake<SystemAllocator, LoopbackResolver> handshake{std::move(sockets.local), options, secret, counters};
+    ConnectHandshake<SystemAllocator, LoopbackResolver> handshake{memory, std::move(sockets.local), options, secret, counters};
     const auto request = "CONNECT " + std::string{hostname} + ":" + std::to_string(origin.port()) + " HTTP/1.1\r\n" + credential + "\r\n";
     sendBytes(sockets.remote.get(), request);
     finishHandshake(handshake);
@@ -269,7 +269,7 @@ static void testHandshake() {
 
   {
     SocketPair sockets;
-    ConnectHandshake<SystemAllocator, FailedResolver> handshake{std::move(sockets.local), options, secret, counters};
+    ConnectHandshake<SystemAllocator, FailedResolver> handshake{memory, std::move(sockets.local), options, secret, counters};
     sendBytes(sockets.remote.get(), "CONNECT missing.invalid:443 HTTP/1.1\r\n" + credential + "\r\n");
     finishHandshake(handshake);
     check(receiveBytes(sockets.remote.get()) == "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
@@ -277,7 +277,7 @@ static void testHandshake() {
   }
   {
     SocketPair sockets;
-    ConnectHandshake<SystemAllocator, FailedResolver> handshake{std::move(sockets.local), options, secret, counters};
+    ConnectHandshake<SystemAllocator, FailedResolver> handshake{memory, std::move(sockets.local), options, secret, counters};
     sendBytes(sockets.remote.get(), "CONNECT missing.invalid:443 HTTP/1.1\r\n\r\n");
     finishHandshake(handshake);
     check(receiveBytes(sockets.remote.get()).starts_with("HTTP/1.1 407 "));
@@ -285,14 +285,14 @@ static void testHandshake() {
   }
   {
     SocketPair sockets;
-    ConnectHandshake<SystemAllocator, FailedResolver> handshake{std::move(sockets.local), options, secret, counters};
+    ConnectHandshake<SystemAllocator, FailedResolver> handshake{memory, std::move(sockets.local), options, secret, counters};
     sendBytes(sockets.remote.get(), "GET / HTTP/1.1\r\n" + credential + "\r\n");
     finishHandshake(handshake);
     check(receiveBytes(sockets.remote.get()) == "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
   }
   {
     SocketPair sockets;
-    ConnectHandshake<SystemAllocator, FailedResolver> handshake{std::move(sockets.local), options, secret, counters};
+    ConnectHandshake<SystemAllocator, FailedResolver> handshake{memory, std::move(sockets.local), options, secret, counters};
     sendBytes(sockets.remote.get(), std::string(ConnectHead::capacity, 'a'));
     const auto started = ProxyConnectionPolicy::Clock::now();
     handshake.advance(false, started);

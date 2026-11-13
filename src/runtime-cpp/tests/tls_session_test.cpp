@@ -157,7 +157,7 @@ static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
     check(SSL_set_alpn_protos(client.get(), offered.data(), offered.size()) == 0);
   }
 
-  TlsSession session{contexts, authority, TunnelSockets{downstream.local.get(), upstream.local.get()}, scenario == SessionCase::wrong_hostname ? "wrong.test" : "origin.test"};
+  TlsSession session{contexts, authority, TunnelSockets{downstream.local.get(), upstream.local.get()}, scenario == SessionCase::wrong_hostname ? "wrong.test" : "origin.test", memory, Owned<AlpnOffer, TlsTestMemory>{nullptr, AllocationDeleter<AlpnOffer, TlsTestMemory>{memory}}};
   bool client_failed = false;
   bool server_failed = false;
   bool client_ready = false;
