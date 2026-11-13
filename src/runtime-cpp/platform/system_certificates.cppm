@@ -34,22 +34,6 @@ module;
 #include <sys/syscall.h>
 #endif
 
-#if defined(__linux__)
-
-#include <cstdlib>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509.h>
-
-#endif
-
-#if defined(__APPLE__)
-
-#include <CoreFoundation/CoreFoundation.h>
-#include <Security/Security.h>
-
-#endif
-
 #if (defined(__APPLE__))
 #include <CoreFoundation/CoreFoundation.h>
 #endif
