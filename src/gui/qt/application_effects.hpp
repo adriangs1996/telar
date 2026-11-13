@@ -26,7 +26,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.host_effects;
+import telar.gui.text.notification_payload;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {

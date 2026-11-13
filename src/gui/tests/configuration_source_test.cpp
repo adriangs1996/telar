@@ -77,7 +77,7 @@ static_assert(true);
 #include "qt/configuration_source.hpp"
 
 import telar.gui.tests.json_fixture;
-import telar.gui.application.host_effects;
+import telar.gui.presentation.client_view_state;
 import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;

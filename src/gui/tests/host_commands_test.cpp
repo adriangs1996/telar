@@ -20,7 +20,7 @@ static_assert(true);
 #include <string_view>
 #include <system_error>
 
-import telar.gui.application.host_effects;
+import telar.gui.text.notification_payload;
 import telar.gui.platform.notification_commands;
 
 namespace {

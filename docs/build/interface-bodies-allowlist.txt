@@ -110,6 +110,7 @@ telar.gui.terminal.glyphs.curve_cache
 telar.gui.terminal.selection
 telar.gui.text.bounded_editor
 telar.gui.text.json_unsigned_integer
+telar.gui.text.notification_payload
 telar.gui.transport.runtime_link
 telar.lua
 telar.machines
