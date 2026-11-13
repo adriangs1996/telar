@@ -18,6 +18,7 @@ static_assert(true);
 #include <exception>
 #include <charconv>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <stdexcept>
 #include "telar_base/text/utf8.hpp"
@@ -122,10 +123,28 @@ namespace {
     }
   }
 
+  std::string paste(std::string_view text, bool bracketed) {
+    std::string encoded;
+    telar::BracketedPaste::encode(text, bracketed, [&](std::string_view piece) { encoded.append(piece); });
+    require(encoded.size() == telar::BracketedPaste::size(text.size(), bracketed));
+    return encoded;
+  }
+
+  void testBracketedPaste() {
+    require(paste("ls\n", false) == "ls\n");
+    require(paste("ls\n", true) == "\x1b[200~ls\n\x1b[201~");
+    require(paste("", true) == "\x1b[200~\x1b[201~");
+    // A terminator in the text cannot close the frame early and run its tail.
+    require(paste("a\x1b[201~rm -rf ~\n", true) == "\x1b[200~a [201~rm -rf ~\n\x1b[201~");
+    require(paste("\x1b[201~\x1b[201~", true) == "\x1b[200~ [201~ [201~\x1b[201~");
+    require(paste("\x1b[200~x\x1b", true) == "\x1b[200~\x1b[200~x\x1b\x1b[201~");
+  }
+
 }
 
 int main() {
   testMemory();
+  testBracketedPaste();
   testRetainedStream();
   testLimits();
   testJson();

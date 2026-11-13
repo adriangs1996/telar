@@ -555,6 +555,12 @@ void actualRouting(SystemAllocator &memory) {
   panes.pasteClipboard(model, clients, second.session().id, paste);
   check(second.receive<RequestCompleted>().request_id == paste.request_id);
   check(ptyUntil(descriptor, "\x1b[201~") == "\x1b[200~ordinary text\x1b[201~");
+  // A terminator in the clipboard cannot close the frame and run its tail.
+  ++paste.request_id;
+  paste.text = bytes("safe\x1b[201~touch pwned\r");
+  panes.pasteClipboard(model, clients, second.session().id, paste);
+  check(second.receive<RequestCompleted>().request_id == paste.request_id);
+  check(ptyUntil(descriptor, "\x1b[201~") == "\x1b[200~safe [201~touch pwned\r\x1b[201~");
   panes.remove(model, clients, pane.id);
 
 }

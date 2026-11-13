@@ -71,6 +71,7 @@ export import telar.runtime.runtime.delivery.client_delivery;
 export import telar.runtime.execution.execution;
 export import telar.runtime.shell_integration;
 export import telar.runtime.shell_integration.words;
+import telar.base.text;
 import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -689,32 +690,40 @@ public:
     ClipboardService<Memory>::configure(clients, require(model.panes, request.pane_id));
   }
 
-  static constexpr std::array<Byte, 6> paste_start{0x1b, '[', '2', '0', '0', '~'};
-  static constexpr std::array<Byte, 6> paste_end{0x1b, '[', '2', '0', '1', '~'};
-
   inline static std::size_t typedSize(bool paste, std::span<const Byte> text, std::span<const Byte> enter) noexcept {
-    return text.size() + (paste ? paste_start.size() + paste_end.size() : 0) + enter.size();
+    return BracketedPaste::size(text.size(), paste) + enter.size();
   }
 
-  // Types a line at a pane: the prefix and the text, as one paste when `paste`, then `enter`.
+  // Types a line at a pane: the prefix and the text, as one paste when `paste`, then `enter`. The
+  // prefix ends in a space, so no terminator spans it and the text.
   template <typename Observer>
   inline static void type(Pane<Memory> &pane, bool paste, std::span<const Byte> prefix, std::span<const Byte> text, std::span<const Byte> enter, const Observer &observe) {
     const auto forward = [&](std::span<const Byte> bytes) {
       pane.enqueueInput(bytes);
       observe(pane, bytes);
     };
-    if (paste) {
-      forward(paste_start);
-    }
-
-    forward(prefix);
-    forward(text);
-    if (paste) {
-      forward(paste_end);
+    if (!paste) {
+      forward(prefix);
+      forward(text);
+    } else {
+      const auto piece = [&](std::string_view bytes) { forward({reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}); };
+      piece(BracketedPaste::begin);
+      BracketedPaste::body(textView(prefix), piece);
+      BracketedPaste::body(textView(text), piece);
+      piece(BracketedPaste::end);
     }
     if (!enter.empty()) {
       forward(enter);
     }
+  }
+
+  // Writes a paste to a pane's input queue, framed when its program asked for bracketed paste.
+  inline static void paste(Pane<Memory> &pane, std::span<const Byte> text, bool bracketed) {
+    BracketedPaste::encode(textView(text), bracketed, [&](std::string_view bytes) { pane.enqueueInput({reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}); });
+  }
+
+  [[nodiscard]] inline static std::string_view textView(std::span<const Byte> bytes) noexcept {
+    return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
   }
 
   inline bool admitInput(Pane<Memory> &pane, std::size_t bytes) {
@@ -897,18 +906,10 @@ public:
       }
     } else if (!request.text.empty()) {
       const bool bracketed = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
-      constexpr std::array<Byte, 6> start{0x1b, '[', '2', '0', '0', '~'};
-      constexpr std::array<Byte, 6> end{0x1b, '[', '2', '0', '1', '~'};
-      if (!admitInput(pane, request.text.size() + (bracketed ? start.size() + end.size() : 0))) {
+      if (!admitInput(pane, typedSize(bracketed, request.text, {}))) {
         throw RequestError{FailureCode::resource_limit, "Paste exceeds available pane input capacity"};
       }
-      if (bracketed) {
-        pane.enqueueInput(start);
-      }
-      pane.enqueueInput(request.text);
-      if (bracketed) {
-        pane.enqueueInput(end);
-      }
+      paste(pane, request.text, bracketed);
     }
     recordInputOrigin(model, clients, client_id, request.pane_id);
     flushInput(require(model.panes, request.pane_id));

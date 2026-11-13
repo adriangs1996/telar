@@ -43,6 +43,7 @@ export import telar.gui.terminal.copy_mode;
 export import telar.gui.prompt.line;
 export import telar.gui.prompt.layout;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
@@ -1204,21 +1205,12 @@ public:
 
   // A paste straight to the terminal, framed when the program asked for bracketed paste.
   inline void pasteBytes(std::uint64_t pane_id, std::string_view bytes) {
-
     const auto *pane = findPane(pane_id);
     if (pane == nullptr) {
       return;
     }
 
-    if (pane->screen.modes().bracketed_paste) {
-      input(pane_id, PasteEncoding::begin);
-    }
-
-    input(pane_id, bytes);
-
-    if (pane->screen.modes().bracketed_paste) {
-      input(pane_id, PasteEncoding::end);
-    }
+    BracketedPaste::encode(bytes, pane->screen.modes().bracketed_paste, [&](std::string_view piece) { input(pane_id, piece); });
   }
 
   inline void pasteHistory(std::uint64_t entry_id, bool alternate = false) {

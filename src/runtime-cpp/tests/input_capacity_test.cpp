@@ -175,5 +175,14 @@ void testInputCapacity() {
   panes.input(model, clients, owner.session().id, PaneInput{pane.id, rejected}, observe);
   check(pane.input_revision == revision + 1 && observations == 1 && pane.last_input);
   check(owner.session().last_input_sequence == 2);
+
+  // A terminator in typed text cannot close the paste frame and run its tail.
+  pane.input.truncate(0);
+  std::string observed;
+  const auto record = [&](const auto &, std::span<const Byte> bytes) { observed.append(reinterpret_cast<const char *>(bytes.data()), bytes.size()); };
+  panes.sendText(model.panes, control.session(), SendPaneText{.request_id = 4, .pane_id = pane.id, .mode = PaneTextMode::prompt, .text = "a\x1b[201~b"}, {}, record);
+  check(control.receive<RequestCompleted>().request_id == 4);
+  // The queue was flushed to the pty, so what it received is what the observer saw.
+  check(observed == "\x1b[200~a [201~b\x1b[201~\r");
   panes.remove(model, clients, pane.id);
 }

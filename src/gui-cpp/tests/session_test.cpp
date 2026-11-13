@@ -948,6 +948,10 @@ void bracketedHistoryReplay() {
   const auto first_message = transport.sent.size();
   client.pasteHistory(1, true);
   require(transport.inputSince(first_message) == "\x1b[200~echo first\necho\tsecond\x1b[201~\r", "multiline run must put Enter after the bracketed-paste terminator");
+
+  const auto clipboard_message = transport.sent.size();
+  client.paste(1, "safe\x1b[201~touch pwned\r");
+  require(transport.inputSince(clipboard_message) == "\x1b[200~safe [201~touch pwned\r\x1b[201~", "a terminator in pasted text must not close the bracketed paste");
 }
 
 void routedHostCommands() {

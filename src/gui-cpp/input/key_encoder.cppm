@@ -20,6 +20,7 @@ export import telar.gui.core.unicode_scalar;
 
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.client.protocol;
 
 // Interface: input/binding.cppm
@@ -1077,26 +1078,16 @@ private:
 export {
 namespace telar::gui {
 
+// A paste as one bounded value, encoded by the paste encoder the runtime uses too.
 struct PasteEncoding {
-  static constexpr std::string_view begin = "\x1b[200~";
-  static constexpr std::string_view end = "\x1b[201~";
-  static constexpr std::size_t framing_bytes = begin.size() + end.size();
-
   template <std::size_t Capacity>
-  [[nodiscard]] inline static BoundedText<Capacity + framing_bytes> encode(std::string_view text, bool bracketed) {
+  [[nodiscard]] inline static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
     if (text.size() > Capacity) {
       throw std::length_error{"Paste text exceeds its capacity"};
     }
 
-    BoundedText<Capacity + framing_bytes> encoded;
-    if (bracketed) {
-      encoded.append(begin);
-    }
-
-    encoded.append(text);
-    if (bracketed) {
-      encoded.append(end);
-    }
+    BoundedText<Capacity + BracketedPaste::framing_bytes> encoded;
+    BracketedPaste::encode(text, bracketed, [&](std::string_view piece) { encoded.append(piece); });
 
     return encoded;
   }

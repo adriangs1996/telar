@@ -125,6 +125,57 @@ std::optional<Integer> unsignedDecimal(std::string_view text) noexcept {
 }
 }
 
+// Interface: telar_base/text/bracketed_paste.cppm
+export {
+namespace telar {
+
+// A paste as a program that enabled bracketed paste (mode 2004) reads it: the text between
+// the frame's start and end. A terminator inside the text would close the frame early and
+// let its tail run as typed input, so its ESC becomes a space, as ghostty's paste encoder
+// does. The encoded paste has as many bytes as the text plus the frame.
+struct BracketedPaste {
+  static constexpr std::string_view begin = "\x1b[200~";
+  static constexpr std::string_view end = "\x1b[201~";
+  static constexpr std::size_t framing_bytes = begin.size() + end.size();
+
+  [[nodiscard]] static constexpr std::size_t size(std::size_t text, bool bracketed) noexcept {
+    return text + (bracketed ? framing_bytes : 0);
+  }
+
+  // Hands `sink` the text inside a frame in order, in runs between its neutralized terminators.
+  // Pieces given one after another must not split a terminator between them.
+  template <typename Sink>
+  static constexpr void body(std::string_view text, Sink &&sink) {
+    for (auto found = text.find(end); found != std::string_view::npos; found = text.find(end)) {
+      if (found != 0) {
+        sink(text.substr(0, found));
+      }
+      sink(std::string_view{" "});
+      text.remove_prefix(found + 1);
+    }
+    if (!text.empty()) {
+      sink(text);
+    }
+  }
+
+  // Hands `sink` the paste of `text`, framed when `bracketed`, without copying it.
+  template <typename Sink>
+  static constexpr void encode(std::string_view text, bool bracketed, Sink &&sink) {
+    if (!bracketed) {
+      if (!text.empty()) {
+        sink(text);
+      }
+      return;
+    }
+    sink(begin);
+    body(text, sink);
+    sink(end);
+  }
+};
+
+}
+}
+
 // Interface: telar_base/text/executable_name.cppm
 export {
 namespace telar::runtime {

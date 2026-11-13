@@ -24,6 +24,7 @@ export import telar.gui.core.unicode_scalar;
 
 export import telar.gui.text.bounded_editor;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.client.protocol;
 
 // Interface: paths/directory_completion.cppm
@@ -375,9 +376,9 @@ namespace telar::gui {
 
 class PathInsertion {
 public:
-  static constexpr std::string_view paste_begin = PasteEncoding::begin;
-  static constexpr std::string_view paste_end = PasteEncoding::end;
-  static constexpr std::size_t paste_capacity = PathPickerLimits::quoted_bytes + PasteEncoding::framing_bytes;
+  static constexpr std::string_view paste_begin = BracketedPaste::begin;
+  static constexpr std::string_view paste_end = BracketedPaste::end;
+  static constexpr std::size_t paste_capacity = PathPickerLimits::quoted_bytes + BracketedPaste::framing_bytes;
   using Text = BoundedText<paste_capacity>;
   using Quoted = BoundedText<PathPickerLimits::quoted_bytes>;
   using AbsolutePath = BoundedText<PathPickerLimits::absolute_bytes>;
