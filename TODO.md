@@ -145,13 +145,14 @@ graph LR
 
 ## Fase 1 · Movimiento físico
 
-### [ ] P1.2 · Commit que solo mueve ficheros
+### [x] P1.2 · Commit que solo mueve ficheros
 - **Depende de:** P0.1, P1.1
 - **Toca:** todo el árbol, CMake, `docs/build/modules.json`, `tools/check-cpp-modules.py` (`SCOPES`, `LIBRARY_LAYERS`), `cmake/lifetime_check.cmake`, `cmake/lint_prepare.cmake` y los scripts de `tools/` con rutas fijas.
 - **Contenido permitido:** `git mv`, rutas de `#include` relativas y CMake. Nada más.
 - **De P2.4:** las regex de rutas de `src/runtime-cpp/cmake/interface_bodies.cmake` y `src/gui-cpp/cmake/interface_bodies.cmake` cambian con el movimiento. La allowlist va por nombre de módulo y no cambia.
 - **Regla 1 en el checker:** ruta = nombre del módulo, ninguna unidad de implementación fuera de la carpeta de su módulo, ningún fichero de la carpeta declara otro módulo y las particiones siguen la forma `process-spawn.cppm` ↔ `:spawn`. Las particiones internas (`module X:detail;`) están permitidas.
 - **Hecho cuando:** compilan los tres procesos, pasa la suite completa y pasa el checker con la regla 1 sin allowlist. Los módulos cajón (P3.14) y los ciclos (P3.13a, P3.14a, P3.15a, P3.15b) quedan a la vista en el árbol, pero cumplen la regla porque cada unidad está en la carpeta del módulo que declara.
+- **Resultado:** `7ed3d95a6` es el movimiento (1559 renombrados, más rutas en `#include`, CMake, scripts, CI y docs) y es el commit que va a `.git-blame-ignore-revs`; `343b6d6f5` añade la regla 1 sin allowlist. Compilan los tres procesos en macOS (Linux sin compilar). Runtime 50/50 (también sobre la rama integrada), GUI 139/140: `gui-quick` ya fallaba antes (tarda ~126 s con límite de 90 y falla `configuredTooltipsYieldToOpenSurfaces`). `tests/controlled_awake_clock.cpp` declara `gui.platform.profile_file`, así que vive en su carpeta y el checker lo trata como unidad solo de test (`TEST_UNITS`) hasta P3.14a. Los filtros `out[^/]*` pasan a `out(-[^/]*)?` por la carpeta nueva `src/cli/output/`.
 
 ### [ ] P1.3 · Aplicar el estilo de `docs/code-style.md` a todo el árbol
 - **Depende de:** P1.2, P0.6. Todas las tareas que dependen de P1.2 dependen también de esta: el reformateo toca todos los ficheros, así que ninguna otra tarea puede estar editando mientras corre.
