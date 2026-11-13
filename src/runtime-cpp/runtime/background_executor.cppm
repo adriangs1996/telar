@@ -26,6 +26,7 @@ export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.history.event;
 export import telar.runtime.transport.connection;
+export import telar.runtime.model.slot_store;
 
 
 export import telar.runtime.suggestions.engine;
@@ -63,6 +64,18 @@ export {
 namespace telar::runtime {
 
 
+template <typename Executor, typename Message>
+concept SubmitsRequest = requires(Executor &executor, std::uint64_t client, const RequestContext &context) {
+  { executor.submit(client, Message{}, context) } -> std::same_as<void>;
+};
+
+// Whether `Executor` takes every request of the list that runs off the runtime's thread.
+template <typename Executor, typename List>
+inline constexpr bool submits_worker_requests = false;
+
+template <typename Executor, typename... Requests>
+inline constexpr bool submits_worker_requests<Executor, ClientRequestList<Requests...>> = ((Requests::lane < RequestLane::worker || SubmitsRequest<Executor, typename Requests::Type>) && ...);
+
 template <typename Executor, typename Memory>
 concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && requires(Executor &executor, std::uint64_t client, const RequestContext &context, void (*consume)(std::uint64_t, ClientTag, std::span<const Byte>)) {
   { executor.descriptors() } noexcept -> std::same_as<std::array<int, 5>>;
@@ -71,17 +84,7 @@ concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && 
   { executor.suggestionsAvailable() } noexcept -> std::same_as<bool>;
   { executor.editorBusy() } noexcept -> std::same_as<bool>;
   { executor.takeHistoryFailures() } noexcept -> std::same_as<std::uint64_t>;
-  { executor.submit(client, QueryHistory{}, context) } -> std::same_as<void>;
-  { executor.submit(client, ImportHistory{}, context) } -> std::same_as<void>;
-  { executor.submit(client, DeleteHistory{}, context) } -> std::same_as<void>;
-  { executor.submit(client, PruneHistory{}, context) } -> std::same_as<void>;
-  { executor.submit(client, ReadHistoryOutput{}, context) } -> std::same_as<void>;
-  { executor.submit(client, HistoryStatsQuery{}, context) } -> std::same_as<void>;
-  { executor.submit(client, ReportAgentCommand{}, context) } -> std::same_as<void>;
-  { executor.submit(client, FindPaths{}, context) } -> std::same_as<void>;
-  { executor.submit(client, OpenEditor{}, context) } -> std::same_as<void>;
-  { executor.submit(client, SuggestCommand{}, context) } -> std::same_as<void>;
-} && requires(Executor &executor, Connection<Memory> &reply, const WorktreeProbeRequest &request, void (*consume)(const WorktreeProbeResult &)) {
+} && submits_worker_requests<Executor, ClientRequests> && requires(Executor &executor, Connection<Memory> &reply, const WorktreeProbeRequest &request, void (*consume)(const WorktreeProbeResult &)) {
   { executor.tryPaths(std::uint64_t{}, FindPaths{}, reply) } -> std::same_as<bool>;
   { executor.observeWorktree(request) } -> std::same_as<bool>;
   { executor.collectWorktrees(consume) } -> std::same_as<void>;

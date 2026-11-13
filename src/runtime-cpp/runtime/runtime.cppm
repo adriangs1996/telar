@@ -2421,17 +2421,7 @@ export {
       }
 
       inline static bool isHistoryRequest(ClientTag tag) noexcept {
-        switch (tag) {
-        case ClientTag::query_history:
-        case ClientTag::import_history:
-        case ClientTag::delete_history:
-        case ClientTag::prune_history:
-        case ClientTag::read_history_output:
-        case ClientTag::history_stats:
-          return true;
-        default:
-          return false;
-        }
+        return ClientRequests::lane(tag) == RequestLane::history;
       }
 
       inline void collectBackground() {

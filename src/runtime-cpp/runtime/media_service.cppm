@@ -211,29 +211,10 @@ public:
     TELAR_TRACE("background_service.process");
     TELAR_DIAGNOSTIC(idle());
     DecodeStorage storage{decode_};
-    switch (static_cast<ClientTag>(payload.front())) {
-    case ClientTag::query_history:
-      execute(Codec::decode<QueryHistory>(payload, storage), reply, context);
-      return;
-    case ClientTag::import_history:
-      execute(Codec::decode<ImportHistory>(payload, storage), reply, context);
-      return;
-    case ClientTag::delete_history:
-      execute(Codec::decode<DeleteHistory>(payload, storage), reply, context);
-      return;
-    case ClientTag::prune_history:
-      execute(Codec::decode<PruneHistory>(payload, storage), reply, context);
-      return;
-    case ClientTag::read_history_output:
-      execute(Codec::decode<ReadHistoryOutput>(payload, storage), reply, context);
-      return;
-    case ClientTag::history_stats:
-      execute(Codec::decode<HistoryStatsQuery>(payload, storage), reply, context);
-      return;
-    case ClientTag::report_agent_command:
-      execute(Codec::decode<ReportAgentCommand>(payload, storage), reply, context);
-      return;
-    default:
+    const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
+      execute(Codec::decode<Message>(payload, storage), reply, context);
+    });
+    if (!known) {
       throw RequestError{FailureCode::invalid_request, "Unknown background request"};
     }
   }

@@ -35,43 +35,148 @@ enum class ClientRole {
   control
 };
 
-inline ClientRole classifyRequest(ClientTag tag) noexcept {
-  switch (tag) {
-  case ClientTag::runtime_stop:
-  case ClientTag::execution_request:
-  case ClientTag::query_history:
-  case ClientTag::import_history:
-  case ClientTag::delete_history:
-  case ClientTag::prune_history:
-  case ClientTag::read_history_output:
-  case ClientTag::history_stats:
-  case ClientTag::show_notification:
-  case ClientTag::request_client_command:
-  case ClientTag::detach_client:
-  case ClientTag::query_clients:
-  case ClientTag::query_agents:
-  case ClientTag::search_pane:
-  case ClientTag::search_pane_rows:
-  case ClientTag::read_pane:
-  case ClientTag::send_pane_text:
-  case ClientTag::report_agent_session:
-  case ClientTag::report_agent:
-  case ClientTag::report_agent_command:
-  case ClientTag::report_agent_title:
-  case ClientTag::request_pane_focus:
-  case ClientTag::register_worktree:
-  case ClientTag::launch_worktree:
-  case ClientTag::launch_tab:
-  case ClientTag::forget_worktree:
-  case ClientTag::interrupt_agent:
-  case ClientTag::report_agent_progress:
-  case ClientTag::verify_pane_descent:
-  case ClientTag::query_limits:
-  case ClientTag::report_limit:
-    return ClientRole::control;
-  default:
-    return ClientRole::interactive;
+// Where a request runs once the runtime's thread decoded its tag. Each lane includes the ones
+// after it: a history request is run by the background service, and every service request is
+// submitted to the background executor.
+enum class RequestLane : std::uint8_t {
+  runtime, // handled on the runtime's thread
+  worker,  // submitted to the background executor
+  service, // run by the background service
+  history, // reads or writes the command history
+};
+
+template <typename Message, ClientRole Role = ClientRole::interactive, RequestLane Lane = RequestLane::runtime>
+struct ClientRequest {
+  using Type = Message;
+  static constexpr ClientTag tag = MessageSchema<Message>::tag;
+  static constexpr ClientRole role = Role;
+  static constexpr RequestLane lane = Lane;
+};
+
+// Every request a client may send, with what the runtime does with it; dispatch, roles and
+// lanes all derive from this one list.
+template <typename... Requests>
+struct ClientRequestList {
+  // Calls `consume.template operator()<Message>()` for the request `tag` names, when its lane is at
+  // least `Lane`; false when no such request has that tag.
+  template <RequestLane Lane = RequestLane::runtime, typename Consumer>
+  inline static bool dispatch(ClientTag tag, Consumer &&consume) {
+    return (dispatchOne<Lane, Requests>(tag, consume) || ...);
   }
+
+  inline static ClientRole role(ClientTag tag) noexcept { return roles[std::to_underlying(tag)]; }
+  inline static RequestLane lane(ClientTag tag) noexcept { return lanes[std::to_underlying(tag)]; }
+
+private:
+  // Inlined into dispatch, so the compiler sees one chain of tag comparisons and lowers it to a
+  // jump table, as the switch it replaces was.
+  template <RequestLane Lane, typename Request, typename Consumer>
+  [[gnu::always_inline]] inline static bool dispatchOne(ClientTag tag, Consumer &consume) {
+    if constexpr (Request::lane < Lane) {
+      return false;
+    } else {
+      if (tag != Request::tag) {
+        return false;
+      }
+      consume.template operator()<typename Request::Type>();
+      return true;
+    }
+  }
+
+  static constexpr auto roles = [] {
+    std::array<ClientRole, 256> result;
+    result.fill(ClientRole::interactive);
+    ((result[std::to_underlying(Requests::tag)] = Requests::role), ...);
+    return result;
+  }();
+  static constexpr auto lanes = [] {
+    std::array<RequestLane, 256> result;
+    result.fill(RequestLane::runtime);
+    ((result[std::to_underlying(Requests::tag)] = Requests::lane), ...);
+    return result;
+  }();
+  static_assert([] {
+    std::array<bool, 256> seen{};
+    return ((!std::exchange(seen[std::to_underlying(Requests::tag)], true)) && ...);
+  }(), "Two requests share a tag");
+};
+
+using ClientRequests = ClientRequestList<
+    ClientRequest<ConfigureGraphics>,
+    ClientRequest<GraphicsCredit>,
+    ClientRequest<RequestGraphicsSnapshot>,
+    ClientRequest<OpenPane>,
+    ClientRequest<CreatePane>,
+    ClientRequest<ClosePane>,
+    ClientRequest<PaneInput>,
+    ClientRequest<PaneCommand>,
+    ClientRequest<ConfigureShellPrompt>,
+    ClientRequest<PaneResize>,
+    ClientRequest<FrameAck>,
+    ClientRequest<RequestSnapshot>,
+    ClientRequest<DetachPane>,
+    ClientRequest<RuntimeStop, ClientRole::control>,
+    ClientRequest<RequestRuntimeState>,
+    ClientRequest<RequestTabSnapshot>,
+    ClientRequest<RequestWorkspaceSnapshot>,
+    ClientRequest<CreateWorkspace>,
+    ClientRequest<RenameWorkspace>,
+    ClientRequest<CreateTab>,
+    ClientRequest<RenameTab>,
+    ClientRequest<CloseTab>,
+    ClientRequest<HoldTab>,
+    ClientRequest<MoveTab>,
+    ClientRequest<ConfigureFrameInterval>,
+    ClientRequest<CompleteClipboardDesktop>,
+    ClientRequest<ReadRuntimeClipboard>,
+    ClientRequest<PastePaneClipboard>,
+    ClientRequest<ConfigurePaneDesktop>,
+    ClientRequest<ConfigureTerminalColors>,
+    ClientRequest<SearchPane, ClientRole::control>,
+    ClientRequest<CopySelection>,
+    ClientRequest<ReadPane, ClientRole::control>,
+    ClientRequest<SendPaneText, ClientRole::control>,
+    ClientRequest<SetPaneViewport>,
+    ClientRequest<ReadPaneRows>,
+    ClientRequest<SearchPaneRows, ClientRole::control>,
+    ClientRequest<QueryClients, ClientRole::control>,
+    ClientRequest<DetachClient, ClientRole::control>,
+    ClientRequest<RequestClientCommand, ClientRole::control>,
+    ClientRequest<CompleteClientCommand>,
+    ClientRequest<RequestPaneFocus, ClientRole::control>,
+    ClientRequest<CompletePaneFocus>,
+    ClientRequest<ShowNotification, ClientRole::control>,
+    ClientRequest<UpdateClientLayout>,
+    ClientRequest<QueryHistory, ClientRole::control, RequestLane::history>,
+    ClientRequest<ImportHistory, ClientRole::control, RequestLane::history>,
+    ClientRequest<DeleteHistory, ClientRole::control, RequestLane::history>,
+    ClientRequest<PruneHistory, ClientRole::control, RequestLane::history>,
+    ClientRequest<ReadHistoryOutput, ClientRole::control, RequestLane::history>,
+    ClientRequest<HistoryStatsQuery, ClientRole::control, RequestLane::history>,
+    ClientRequest<ReportLimit, ClientRole::control>,
+    ClientRequest<QueryLimits, ClientRole::control>,
+    ClientRequest<LaunchTab, ClientRole::control>,
+    ClientRequest<RegisterWorktree, ClientRole::control>,
+    ClientRequest<LaunchWorktree, ClientRole::control>,
+    ClientRequest<ForgetWorktree, ClientRole::control>,
+    ClientRequest<ExecutionRequest, ClientRole::control>,
+    ClientRequest<VerifyPaneDescent, ClientRole::control>,
+    ClientRequest<ReportAgent, ClientRole::control>,
+    ClientRequest<ReportAgentTitle, ClientRole::control>,
+    ClientRequest<ReportAgentSession, ClientRole::control>,
+    ClientRequest<ReportAgentProgress, ClientRole::control>,
+    ClientRequest<InterruptAgent, ClientRole::control>,
+    ClientRequest<AcknowledgeAgent>,
+    ClientRequest<QueryAgents, ClientRole::control>,
+    ClientRequest<ReportAgentCommand, ClientRole::control, RequestLane::service>,
+    ClientRequest<FindPaths, ClientRole::interactive, RequestLane::worker>,
+    ClientRequest<CompleteWords>,
+    ClientRequest<RequestCommandSpec>,
+    ClientRequest<OpenEditor, ClientRole::interactive, RequestLane::worker>,
+    ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
+
+inline ClientRole classifyRequest(ClientTag tag) noexcept {
+  return ClientRequests::role(tag);
 }
 
 struct PendingClientCommand {
