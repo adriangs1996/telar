@@ -39,14 +39,16 @@
     "plugins": [
       "base",
       "client",
-      "platform"
+      "platform",
+      "wire"
     ],
     "config": [
       "base",
       "client",
       "lua",
       "platform",
-      "plugins"
+      "plugins",
+      "wire"
     ]
   },
   "process_layers": {

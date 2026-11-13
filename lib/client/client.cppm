@@ -26,10 +26,10 @@ import std;
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
-// The connection reports request failures with it; the rest of the protocol
-// stays with telar.client.protocol.
+// The connection reports request failures with it; the rest of the wire
+// vocabulary stays with telar.wire.vocabulary.
 export namespace telar::runtime {
   using telar::runtime::RequestError;
 }

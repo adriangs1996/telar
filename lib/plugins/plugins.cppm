@@ -35,7 +35,7 @@ export import telar.base.text;
 
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: telar_plugins/action_protocol.cppm

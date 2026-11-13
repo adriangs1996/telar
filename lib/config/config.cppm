@@ -60,7 +60,8 @@ export import telar.platform;
 
 export import telar.plugins;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.clients;
+import telar.wire.vocabulary;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
