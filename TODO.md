@@ -282,11 +282,12 @@ graph LR
 - **audit-39:** no lo cubre. `43f4b712e` añadió `HttpInterceptionSlot` como unidad `http/interception_slot.cppm` del módulo `http1.intercepted_relay`, otra unidad fuera de la carpeta de su módulo para P1.2.
 - **Cierra:** `traffic → plugins` (3), `redirect → plugins`, `redirect → traffic`, `http → plugins`, `http1 → http`, `http1 → traffic`. Con eso caen los ciclos plugins ↔ traffic y http ↔ plugins.
 
-### [ ] P3.12a · Sacar `PaneLayout` y la geometría de `gui.application.sound_playback`
+### [x] P3.12a · Sacar `PaneLayout` y la geometría de `gui.application.sound_playback`
 - **Depende de:** P1.2
 - **Toca:** `gui.application.sound_playback` (contiene `pane_layout`, `workbench_geometry`, `pane_bottom_reservation`, `layout_token`, `navigation_history`, `saved_layouts`), `gui.presentation.frame_pacer`, `gui.presentation.history_inspection_geometry`, `gui.graphics.pauses`.
 - **Cierra:** `presentation → application` (2) y `graphics → application`.
 - **Hecho cuando:** `sound_playback` contiene solo la reproducción de sonido y la geometría vive en su propio módulo, por debajo de presentation.
+- **Resultado:** `01e026c63`. `telar.gui.layout.geometry` (`PaneBottomReservation`, `PaneLayout`, `WorkbenchGeometry`) y `telar.gui.layout.snapshots` (`TabLayoutPreset`, `LayoutToken`, `NavigationHistory`, `SavedLayouts`); el componente `gui/layout` va justo encima de `core` e `history` en `process_layers`. `sound_playback` se queda con `SoundRequestOutcome` y `SoundPlayback`. Al integrar con P3.4b, los tres módulos importan `telar.wire.layout`/`telar.wire.vocabulary` en vez del agregador. Compilan GUI, runtime y CLI sobre la rama integrada.
 
 ### [ ] P3.12b · Sacar las notificaciones y los records de `gui.application.workspace_replica`
 - **Depende de:** P1.2
