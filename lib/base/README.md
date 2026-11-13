@@ -8,7 +8,10 @@ which `telar.base.memory` still re-exports together, the diagnostics switches an
 (`history/`), and the program name and version children see (`program_identity.hpp`).
 It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime.
 Allocators and their adapters live in the neutral `telar` namespace. The caller
-owns their lifetime; consumers inject them by reference.
+owns their lifetime; consumers inject them by reference. `Memory` is the
+type-erased allocator a service can take instead of a template parameter:
+`MemoryAdapter<A>` puts any `Allocator` behind it, as `ConcurrentMemory` when `A`
+is thread safe and as `ErasingMemory` when `A` erases what it releases.
 
 `JsonError` reports malformed JSON without a protocol failure code. Protocol
 boundaries translate it to `FailureCode::invalid_request`; `RequestError` lives

@@ -34,6 +34,7 @@ export {
     class TBC_SHARED ErasingAllocator {
     public:
       static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
+      static constexpr bool erasing = true;
 
       inline explicit ErasingAllocator(Upstream& upstream) noexcept
           : upstream_(upstream) {}
@@ -67,6 +68,8 @@ export {
     class TBC_SHARED RecyclingAllocator {
     public:
       static constexpr bool thread_safe = false;
+      // Every block it releases or keeps for reuse is erased first.
+      static constexpr bool erasing = true;
 
       inline explicit RecyclingAllocator(Upstream& upstream) noexcept
           : upstream_(upstream) {}

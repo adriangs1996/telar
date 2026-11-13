@@ -11,16 +11,19 @@ static_assert(true);
 #include <array>
 #include <charconv>
 #include <chrono>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <limits>
+#include <new>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 import telar.base.diagnostics;
 import telar.base.memory;
@@ -71,6 +74,105 @@ namespace {
     require(block != nullptr && static_cast<unsigned char*>(block)[0] == 0);
     blocks.release(block);
     require(budget.liveBytes() == 0);
+  }
+
+  // An allocator whose every request fails, as an exhausted system would.
+  struct FailingAllocator {
+    static constexpr bool thread_safe = true;
+
+    void* allocate(std::size_t, std::size_t) noexcept {
+      ++requests;
+      return nullptr;
+    }
+
+    void deallocate(void*, std::size_t, std::size_t) noexcept {
+      ++releases;
+    }
+
+    std::size_t requests = 0;
+    std::size_t releases = 0;
+  };
+
+  // A service boundary that knows only the erased interface.
+  bool fill(telar::Memory& memory, std::size_t count) {
+    try {
+      telar::Vector<int, telar::Memory> values{telar::AllocatorRef<int, telar::Memory>{memory}};
+
+      values.resize(count, 7);
+      return values.back() == 7;
+    } catch (const std::bad_alloc&) {
+      return false;
+    }
+  }
+
+  void testMemoryInterface() {
+    using Budget = telar::BudgetAllocator<telar::SystemAllocator>;
+    using Erasing = telar::ErasingAllocator<telar::BufferAllocator<Budget>>;
+
+    static_assert(std::is_abstract_v<telar::Memory>);
+    static_assert(!std::is_copy_constructible_v<telar::MemoryAdapter<Budget>>);
+    static_assert(telar::Allocator<telar::Memory> && !telar::ConcurrentAllocator<telar::Memory>);
+    static_assert(telar::ConcurrentAllocator<telar::ConcurrentMemory>);
+    static_assert(std::derived_from<telar::MemoryAdapter<telar::SystemAllocator>, telar::ConcurrentMemory>);
+    static_assert(std::derived_from<telar::MemoryAdapter<FailingAllocator>, telar::ConcurrentMemory>);
+    static_assert(std::derived_from<telar::MemoryAdapter<Budget>, telar::Memory>);
+    static_assert(!std::derived_from<telar::MemoryAdapter<Budget>, telar::ConcurrentMemory>);
+    static_assert(std::derived_from<telar::MemoryAdapter<Erasing>, telar::ErasingMemory>);
+    static_assert(std::derived_from<telar::MemoryAdapter<telar::RecyclingAllocator<Budget>>, telar::ErasingMemory>);
+    // A concurrent allocator that erases still adapts to ErasingMemory, never to ConcurrentMemory.
+    static_assert(std::derived_from<telar::MemoryAdapter<telar::ErasingAllocator<telar::SystemAllocator>>, telar::ErasingMemory>);
+
+    FailingAllocator failing;
+    telar::MemoryAdapter refused{failing};
+    telar::Memory& exhausted = refused;
+
+    require(exhausted.allocate(16, 8) == nullptr);
+    require(!fill(exhausted, 4));
+
+    bool thrown = false;
+
+    try {
+      static_cast<void>(telar::makeOwned<int>(exhausted, 7));
+    } catch (const std::bad_alloc&) {
+      thrown = true;
+    }
+
+    require(thrown && failing.requests == 3 && failing.releases == 0);
+
+    telar::SystemAllocator system;
+    Budget budget{system, 64};
+    telar::MemoryAdapter budgeted{budget};
+    telar::Memory& memory = budgeted;
+
+    require(fill(memory, 16));
+    require(!fill(memory, 17));
+    require(budget.liveBytes() == 0 && budget.failures() == 1);
+
+    {
+      const int seven = 7;
+      auto value = telar::makeOwned<int>(memory, seven);
+      auto* block = memory.allocate(64 - sizeof(int), alignof(int));
+
+      require(*value == 7 && block != nullptr && budget.liveBytes() == 64);
+      require(memory.allocate(1, 1) == nullptr && budget.failures() == 2);
+      memory.deallocate(block, 64 - sizeof(int), alignof(int));
+    }
+
+    require(budget.liveBytes() == 0);
+
+    alignas(16) std::array<std::byte, 32> buffer{};
+    telar::BufferAllocator<Budget> buffered{budget, buffer};
+    Erasing erasing{buffered};
+    telar::MemoryAdapter sensitive{erasing};
+    telar::ErasingMemory& secrets = sensitive;
+    auto* secret = static_cast<std::byte*>(secrets.allocate(16, 16));
+
+    require(secret == buffer.data());
+    std::memset(secret, 0x5a, 16);
+    secrets.deallocate(secret, 16, 16);
+    require(std::ranges::all_of(buffer, [](std::byte byte) {
+      return byte == std::byte{0};
+    }));
   }
 
   void testRetainedStream() {
@@ -174,6 +276,7 @@ namespace {
 
 int main() {
   testMemory();
+  testMemoryInterface();
   testBracketedPaste();
   testNumbers();
   testRetainedStream();
