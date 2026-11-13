@@ -316,10 +316,11 @@ graph LR
 - **Cierra:** `input → presentation` (3).
 - **Resultado:** `47948ad82`. `gui.presentation.tab_drop` (`TabDrag`, `TabDropTarget`, `TabDropSurface`…) y, porque solo el drag/drop no cerraba las tres aristas, `gui.presentation.history_pointer` (`HistoryActionCapture`, `HistoryHover`). `child_mouse` se queda con `ChildMouse*` y `HistoryScroll`. Código movido sin cambios. `upward_imports` de 29 a 26. Compila la GUI sobre la rama integrada.
 
-### [ ] P3.13c · `gui.input.configuration` y `gui.components.builtin_content` contra config
+### [x] P3.13c · `gui.input.configuration` y `gui.components.builtin_content` contra config
 - **Depende de:** P1.2
 - **Toca:** `gui.input.configuration`, `gui.config.gui_query`, `gui.components.builtin_content`, `gui.config.plugin_effects`.
 - **Cierra:** `input → config` y `components → config`.
+- **Resultado:** `ddc9844c2`. `default_bindings.inc` pasa de `gui/config/` a `gui/input/` (solo lo usaba `input.configuration`). `BindingContext`, `BindingEffects`, `InputExpression` y las descripciones de acciones pasan a `telar.gui.input.binding_effects`, que reexportan `plugin_effects` y `plugin_query`. Código movido sin cambios. `upward_imports` de 23 a 21. Compila la GUI sobre la rama integrada.
 
 ### [ ] P3.14a · Módulo cajón `gui.platform.profile_file` y el ciclo con `login_shell`
 - **Depende de:** P1.2. Antes, revisar qué cubre el caso 34 de audit-39.
