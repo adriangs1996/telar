@@ -10,6 +10,7 @@ telar.base.history
 telar.base.memory
 telar.base.text
 telar.cli.command_limit
+telar.cli.control_session
 telar.cli.history
 telar.cli.hook
 telar.cli.hooks.command

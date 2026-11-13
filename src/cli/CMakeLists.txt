@@ -32,7 +32,7 @@ include(cmake/machines.cmake)
 
 # `hook` runs on every agent event, so the CLI links only libcrypto beside the system
 # libraries: no libssl, frameworks, SQLite, pcap or the runtime's terminal engine.
-add_library(cli-core STATIC tab/integration.cpp runtime_observer/runtime_connection.cpp)
+add_library(cli-core STATIC tab/integration.cpp control_session/runtime_connection.cpp)
 telar_modules(cli-core)
 set_target_properties(cli-core telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(cli-core PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/generated")

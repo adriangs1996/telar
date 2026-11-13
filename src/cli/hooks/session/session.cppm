@@ -25,7 +25,7 @@ import std;
 
 export import telar.platform;
 
-export import telar.cli.runtime_observer;
+export import telar.cli.control_session;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.platform.primitives;
