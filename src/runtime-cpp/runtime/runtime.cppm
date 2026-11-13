@@ -1851,10 +1851,7 @@ export {
           }
         } catch (const std::exception &) {
           if (auto *failed = model_.panes.find(identity)) {
-            failed->terminal.abortControl();
-            failed->requestClose();
-            failed->output_closed = true;
-            poller_.remove(failed->process->descriptor());
+            panes_.failOutput(*failed);
           }
         }
       }
@@ -2554,10 +2551,7 @@ export {
                 media_.updateReadInterest(*pane);
               }
             } catch (const std::exception &) {
-              pane->terminal.abortControl();
-              pane->requestClose();
-              pane->output_closed = true;
-              poller_.remove(pane->process->descriptor());
+              panes_.failOutput(*pane);
             }
           }
           // SIGCHLD says a child exited; a closed output usually means it did. The beat catches a
