@@ -88,8 +88,8 @@ static void verifyAndWait(Verification& verification, RuntimeModel<SystemAllocat
   }
 }
 
-static void feedAgent(Terminal<SystemAllocator>& terminal, std::string_view text) {
-  terminal.feed({reinterpret_cast<const Byte*>(text.data()), text.size()});
+static void feedAgent(Terminal<SystemAllocator>& terminal, std::string_view text, auto&... media) {
+  terminal.feed({reinterpret_cast<const Byte*>(text.data()), text.size()}, media...);
   terminal.refresh();
 }
 
@@ -218,11 +218,11 @@ static void testReportsAndIdentity(SystemAllocator& memory) {
   check(pane.input_dropped_bytes > 0);
 #endif
   pane.input.clear();
-  feedAgent(pane.terminal, "\x1b]0;◐ Working\x1b\\\x1b[22;1H❯ ");
+  feedAgent(pane.terminal, "\x1b]0;◐ Working\x1b\\\x1b[22;1H❯ ", *pane.media);
   agents.refresh(model, panes, clients, layouts, now + std::chrono::seconds{4});
   agents.query(model, reporter.session());
   check(reporter.receive<AgentSnapshot>().entries[0].status == AgentStatus::working);
-  feedAgent(pane.terminal, "\x1b]0;✳ Idle\x1b\\");
+  feedAgent(pane.terminal, "\x1b]0;✳ Idle\x1b\\", *pane.media);
   agents.refresh(model, panes, clients, layouts, now + std::chrono::seconds{5});
   agents.refresh(model, panes, clients, layouts, now + std::chrono::milliseconds{5600});
   agents.query(model, reporter.session());

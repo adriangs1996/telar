@@ -63,15 +63,15 @@ using namespace telar;
 using namespace telar::runtime;
 
 namespace {
-  std::string query(auto& terminal, std::string_view input) {
-    terminal.feed({reinterpret_cast<const Byte*>(input.data()), input.size()});
+  std::string query(auto& terminal, std::string_view input, auto&... media) {
+    terminal.feed({reinterpret_cast<const Byte*>(input.data()), input.size()}, media...);
     std::string output;
 
     while (!terminal.responses().empty()) {
       const auto response = terminal.responses();
 
       output.append(reinterpret_cast<const char*>(response.data()), response.size());
-      terminal.consumeResponses(response.size());
+      terminal.consumeResponses(response.size(), media...);
     }
 
     return output;
@@ -103,7 +103,7 @@ namespace {
     constexpr std::string_view marker = "\x1b[0n";
     constexpr std::string_view status = "\x1b[5n";
 
-    pane.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()});
+    pane.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()}, *pane.media);
     panes.flushInput(pane);
     std::string actual;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
@@ -164,14 +164,14 @@ namespace {
     ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
 
     panes.configureDesktop(model, clients, client.session().id, desktop);
-    query(pane.terminal, "\x1b[?2031h");
+    query(pane.terminal, "\x1b[?2031h", *pane.media);
     ptyReports(pane, panes, "");
 
     desktop.palette = std::array<Byte, 48>{};
     (*desktop.palette)[0] = 17;
     panes.configureDesktop(model, clients, client.session().id, desktop);
     ptyReports(pane, panes, "\x1b[?997;2n");
-    check(query(pane.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\").empty());
+    check(query(pane.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\", *pane.media).empty());
     ptyReports(pane, panes, "");
     panes.remove(model, clients, pane.id);
   }
@@ -201,7 +201,7 @@ namespace {
     panes.configureDesktop(model, clients, first.session().id, one);
     constexpr std::string_view subscriptions = "\x1b[?2031;2033;1004;2048h";
 
-    pane.terminal.feed({reinterpret_cast<const Byte*>(subscriptions.data()), subscriptions.size()});
+    pane.terminal.feed({reinterpret_cast<const Byte*>(subscriptions.data()), subscriptions.size()}, *pane.media);
     ptyReports(pane, panes, "\x1b[?999;1n\x1b[O\x1b[48;24;80;432;720t");
     panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
     ptyReports(pane, panes, "");
@@ -237,7 +237,7 @@ namespace {
     second.session().connection.closing = true;
     panes.detachAll(model, clients, second.session().id);
     ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;2n\x1b[O");
-    check(query(pane.terminal, "\x1b[18t") == "\x1b[8;40;100t");
+    check(query(pane.terminal, "\x1b[18t", *pane.media) == "\x1b[8;40;100t");
     ClientPeer reconnected{memory, model, clients, ClientRole::interactive};
 
     panes.attach(model, reconnected.session(), pane.id, {100, 40, 8, 16});
@@ -251,12 +251,12 @@ namespace {
     panes.configureDesktop(model, clients, reconnected.session().id, three);
     ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;1n");
 
-    check(query(pane.terminal, "\x1b[?2031;2033;1004;2048l").empty());
+    check(query(pane.terminal, "\x1b[?2031;2033;1004;2048l", *pane.media).empty());
     three.visible = false;
     panes.configureDesktop(model, clients, reconnected.session().id, three);
     panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 60, 8, 16}});
     ptyReports(pane, panes, "");
-    check(query(pane.terminal, "\x1b[?2031h").empty());
+    check(query(pane.terminal, "\x1b[?2031h", *pane.media).empty());
     ConfigureTerminalColors colors{.foreground = std::array<Byte, 3>{22, 33, 44}};
 
     panes.configureColors(model, reconnected.session(), colors);
@@ -300,7 +300,7 @@ namespace {
 
     constexpr std::string_view status = "\x1b[5n";
 
-    pane.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()});
+    pane.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()}, *pane.media);
     check(pane.terminal.hasPendingControl());
     constexpr std::string_view user_input = "USER";
 
@@ -404,7 +404,7 @@ namespace {
     check(workspace != nullptr);
     workspace->geometry_client = second.session().id;
 
-    check(query(pane.terminal, "\x1b[?998n") == "\x1b[?999;2n");
+    check(query(pane.terminal, "\x1b[?998n", *pane.media) == "\x1b[?999;2n");
     ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .focused = false, .light = true, .foreground = std::array<Byte, 3>{0, 0, 0}, .background = std::array<Byte, 3>{255, 255, 255}, .cursor = std::array<Byte, 3>{1, 2, 3}};
     std::array<Byte, 256> encoded;
     std::array<Byte, 512> arena;
@@ -419,7 +419,7 @@ namespace {
     two.focused = true;
     two.cursor = std::array<Byte, 3>{4, 5, 6};
     panes.configureDesktop(model, clients, second.session().id, two);
-    check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\") == "\x1b[?997;2n\x1b[?999;1n\x1b]12;rgb:0101/0202/0303\x1b\\");
+    check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.media) == "\x1b[?997;2n\x1b[?999;1n\x1b]12;rgb:0101/0202/0303\x1b\\");
 
     bool stale = false;
     auto old = one;
@@ -443,10 +443,10 @@ namespace {
     check(unattached);
 
     panes.release(model, clients, first.session().id, pane.id);
-    check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\") == "\x1b[?997;1n\x1b[?999;1n\x1b]12;rgb:0404/0505/0606\x1b\\");
+    check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.media) == "\x1b[?997;1n\x1b[?999;1n\x1b]12;rgb:0404/0505/0606\x1b\\");
     second.session().connection.closing = true;
     panes.detachAll(model, clients, second.session().id);
-    check(query(pane.terminal, "\x1b[?996n\x1b[?998n") == "\x1b[?997;1n\x1b[?999;2n");
+    check(query(pane.terminal, "\x1b[?996n\x1b[?998n", *pane.media) == "\x1b[?997;1n\x1b[?999;2n");
     panes.remove(model, clients, pane.id);
   }
 }

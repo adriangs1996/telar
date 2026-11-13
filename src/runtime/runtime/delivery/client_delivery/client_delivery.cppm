@@ -131,7 +131,7 @@ export {
         }
 
         if (clipboard.hasReply()) {
-          pane.terminal.resumeControl();
+          pane.resumeControl();
           return true;
         }
 
@@ -149,7 +149,7 @@ export {
           return nullptr;
         }
 
-        pane->terminal.resumeControl();
+        pane->resumeControl();
         return pane;
       }
 

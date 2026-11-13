@@ -3535,6 +3535,13 @@
     "ghostty_handle.hpp",
     "telar_vocabulary/vocabulary.hpp"
   ],
+  "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
+    "<cstddef>",
+    "<cstdint>",
+    "<ghostty/vt.h>",
+    "tbc/view.hpp",
+    "telar_base/diagnostics/config.hpp"
+  ],
   "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
     "<cassert>",
     "<cstddef>",

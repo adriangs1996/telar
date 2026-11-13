@@ -44,6 +44,8 @@ add_executable(control-clipboard-lifetime-probe tests/control_clipboard_lifetime
 target_link_libraries(control-clipboard-lifetime-probe PRIVATE runtime-core runtime-test-fixtures)
 add_library(control-query-probe SHARED tests/control_query_probe.cpp tests/control_component_probe.cpp)
 target_link_libraries(control-query-probe PRIVATE runtime-core runtime-test-fixtures)
+add_executable(terminal-media-feed-probe tests/terminal_media_feed_probe.cpp)
+target_link_libraries(terminal-media-feed-probe PRIVATE runtime-core)
 add_executable(control-query-accounting-probe tests/control_accounting_probe.cpp)
 target_link_libraries(control-query-accounting-probe PRIVATE runtime-core runtime-test-fixtures)
 add_executable(control-queue-tests tests/control_queue_test.cpp tests/pty_response_queue_test.cpp)
@@ -282,7 +284,7 @@ set(runtime_probes
   input-capacity-probe launch-probe model-probe path-probe plugin-package-probe
   plugin-service-probe process-probe proxy-probe reporter-probe resume-probe runtime-probe
   screen-probe service-admission-probe services-probe session-file-probe shell-capture-probe
-  state-delivery-probe tab-holds-probe workspace-git-probe worktree-detection-probe
-  worktree-lifecycle-probe)
+  state-delivery-probe tab-holds-probe terminal-media-feed-probe workspace-git-probe
+  worktree-detection-probe worktree-lifecycle-probe)
 set_target_properties(${runtime_probes} PROPERTIES EXCLUDE_FROM_ALL ON)
 add_custom_target(runtime-probes DEPENDS ${runtime_probes})

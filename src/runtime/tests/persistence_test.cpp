@@ -341,7 +341,7 @@ static void testSnapshotChanges(SystemAllocator& memory) {
 
   constexpr std::array<Byte, 4> output{'t', 'e', 's', 't'};
 
-  pane->terminal.feed(output);
+  pane->terminal.feed(output, *pane->media);
   expect(false);
   pane->output_closed = true;
   expect(true);

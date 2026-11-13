@@ -34,8 +34,7 @@ import std;
 export import telar.runtime.diagnostics.runtime_counters;
 
 export import telar.runtime.diagnostics.operation;
-export import telar.runtime.graphics.pane_media;
-export import telar.runtime.graphics.prepared_images;
+export import telar.runtime.terminal.graphics_storage;
 
 export import telar.runtime.terminal.osc_scanner;
 export import telar.base.memory;
@@ -47,7 +46,6 @@ import telar.wire.pane_io;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.engine;
 
@@ -832,6 +830,18 @@ export {
       observation,
     };
 
+    // The media a separate_media terminal feeds. It lives in graphics, above the terminal, so its
+    // owner passes it to every call that may feed it and the terminal compiles each call for it.
+    template <typename Media>
+    concept TerminalMedia = requires(Media& media, const Media& state, std::span<const Byte> bytes) {
+      { media.requireOrderedInput() } noexcept;
+      // The prefix of the input made of whole atomic frames, which the terminal parses as one unit.
+      { Media::atomicPrefix(bytes) } noexcept -> std::same_as<std::size_t>;
+      { media.output(bytes) } noexcept;
+      { state.failed() } noexcept -> std::same_as<bool>;
+      { state.idle() } noexcept -> std::same_as<bool>;
+    };
+
     template <Allocator Memory>
     class Terminal {
     public:
@@ -913,55 +923,35 @@ export {
         effects.inline_documents.clear();
       }
 
+      // A terminal with media attached is fed, resumed and resized through the overloads that
+      // take it, so the media sees every byte the terminal parses.
       inline void feed(std::span<const Byte> bytes) {
-        TELAR_TRACE("terminal.feed");
-        ++content_revision_;
-        resumeControl();
-        if (hasPendingControl()) {
-          pending_control_input_.append(bytes);
-        } else {
-          const auto consumed = feedControl(bytes);
-          if (consumed < bytes.size()) {
-            pending_control_input_.append(bytes.subspan(consumed));
-          }
-        }
+        assert(media_ == nullptr);
+        feedWith(bytes, no_media);
+      }
 
-        finishControlInput();
+      template <TerminalMedia Media>
+      inline void feed(std::span<const Byte> bytes, Media& media) {
+        feedWith(bytes, attached(media));
       }
 
       inline void resumeControl() {
-        const bool pending = hasPendingControl();
-        if (!pending) {
-          return;
-        }
-
-        if (control_.awaitingMedia()) {
-          if (media_ == nullptr || !media_->idle()) {
-            return;
-          }
-
-          control_.mediaComplete();
-        }
-
-        if (!response_outbox_.drain()) {
-          return;
-        }
-
-        const auto consumed = feedControl(pending_control_input_.readable());
-
-        pending_control_input_.consume(consumed);
-        if (pending) {
-          ++content_revision_;
-          finishControlInput();
-        }
+        assert(media_ == nullptr);
+        resumeWith(no_media);
       }
 
-      // The terminal shares the media it feeds, so either may go first. Only the
+      template <TerminalMedia Media>
+      inline void resumeControl(Media& media) {
+        resumeWith(attached(media));
+      }
+
+      // The terminal only remembers which media it feeds; its owner keeps it alive. Only the
       // runtime touches this ingress port; workers own sealed batches.
-      inline void attachMedia(tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media) noexcept {
+      template <TerminalMedia Media>
+      inline void attachMedia(Media& media) noexcept {
         assert(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
-        media_ = std::move(media);
-        media_->requireOrderedInput();
+        media.requireOrderedInput();
+        media_ = &media;
         control_.enableMediaBoundaries();
       }
 
@@ -987,30 +977,13 @@ export {
       }
 
       inline void resize(TerminalSize size) {
-        if (hasSize(size)) {
-          return;
-        }
+        assert(media_ == nullptr);
+        resizeWith(size, no_media);
+      }
 
-        // A reflow moves the documents' text to other rows; what they hold is learnt anew.
-        for (auto& document : effects.inline_documents) {
-          document.contents.assign(document.contents.size(), 0);
-        }
-
-        screen.reserve(size.cols, size.rows);
-        checkGhostty(ghostty_terminal_resize(terminal_.get(), size.cols, size.rows, size.cell_width_px, size.cell_height_px));
-        if (screen.cols != size.cols || screen.rows != size.rows) {
-          screen.resize(size.cols, size.rows);
-        }
-
-        size_ = size;
-        control_.configureSize(size);
-        resumeControl();
-        ++content_revision_;
-        // A reflow numbers the rows anew.
-        ++scrollback_generation_;
-        scrollback_origin_ = {};
-        dirty_ = true;
-        force_ = true;
+      template <TerminalMedia Media>
+      inline void resize(TerminalSize size, Media& media) {
+        resizeWith(size, attached(media));
       }
 
       inline bool hasSize(TerminalSize size) const noexcept {
@@ -1190,6 +1163,12 @@ export {
         resumeControl();
       }
 
+      template <TerminalMedia Media>
+      inline void consumeResponses(std::size_t count, Media& media) {
+        responses_->consume(count);
+        resumeControl(media);
+      }
+
       inline void discardResponses() noexcept {
         response_outbox_.discard();
         responses_->clear();
@@ -1238,8 +1217,108 @@ export {
       tbc::view<GraphicsStorage<Memory>, tbc::lt::a> graphics;
 
     private:
-      inline std::size_t feedControl(std::span<const Byte> bytes) {
-        const auto atomic = media_ != nullptr && control_.ground() && !control_.blocked() ? atomicMediaPrefix(bytes) : 0;
+      // What a terminal without media feeds: nothing, so every media branch folds away.
+      struct NoMedia {
+        inline static std::size_t atomicPrefix(std::span<const Byte>) noexcept {
+          return 0;
+        }
+
+        inline void output(std::span<const Byte>) noexcept {}
+
+        inline bool failed() const noexcept {
+          return false;
+        }
+
+        inline bool idle() const noexcept {
+          return true;
+        }
+      };
+
+      static constexpr NoMedia* no_media = nullptr;
+
+      // The media to feed, or none once abortControl let it go.
+      template <TerminalMedia Media>
+      inline Media* attached(Media& media) const noexcept {
+        assert(media_ == nullptr || media_ == &media);
+        return media_ != nullptr ? &media : nullptr;
+      }
+
+      template <typename Media>
+      inline void feedWith(std::span<const Byte> bytes, Media* media) {
+        TELAR_TRACE("terminal.feed");
+        ++content_revision_;
+        resumeWith(media);
+        if (hasPendingControl()) {
+          pending_control_input_.append(bytes);
+        } else {
+          const auto consumed = feedControl(bytes, media);
+          if (consumed < bytes.size()) {
+            pending_control_input_.append(bytes.subspan(consumed));
+          }
+        }
+
+        finishControlInput();
+      }
+
+      template <typename Media>
+      inline void resumeWith(Media* media) {
+        const bool pending = hasPendingControl();
+        if (!pending) {
+          return;
+        }
+
+        if (control_.awaitingMedia()) {
+          if (media == nullptr || !media->idle()) {
+            return;
+          }
+
+          control_.mediaComplete();
+        }
+
+        if (!response_outbox_.drain()) {
+          return;
+        }
+
+        const auto consumed = feedControl(pending_control_input_.readable(), media);
+
+        pending_control_input_.consume(consumed);
+        if (pending) {
+          ++content_revision_;
+          finishControlInput();
+        }
+      }
+
+      template <typename Media>
+      inline void resizeWith(TerminalSize size, Media* media) {
+        if (hasSize(size)) {
+          return;
+        }
+
+        // A reflow moves the documents' text to other rows; what they hold is learnt anew.
+        for (auto& document : effects.inline_documents) {
+          document.contents.assign(document.contents.size(), 0);
+        }
+
+        screen.reserve(size.cols, size.rows);
+        checkGhostty(ghostty_terminal_resize(terminal_.get(), size.cols, size.rows, size.cell_width_px, size.cell_height_px));
+        if (screen.cols != size.cols || screen.rows != size.rows) {
+          screen.resize(size.cols, size.rows);
+        }
+
+        size_ = size;
+        control_.configureSize(size);
+        resumeWith(media);
+        ++content_revision_;
+        // A reflow numbers the rows anew.
+        ++scrollback_generation_;
+        scrollback_origin_ = {};
+        dirty_ = true;
+        force_ = true;
+      }
+
+      template <typename Media>
+      inline std::size_t feedControl(std::span<const Byte> bytes, Media* media) {
+        const auto atomic = media != nullptr && control_.ground() && !control_.blocked() ? Media::atomicPrefix(bytes) : 0;
         const auto consumed = atomic != 0 ? control_.feedAtomicMedia(bytes.first(atomic)) : control_.feed(bytes);
 
         if (control_.takeDocument(effects.document)) {
@@ -1250,32 +1329,11 @@ export {
           effects.keepInline(std::move(zone->bytes), std::move(zone->first), std::move(zone->end), zone->end_inclusive);
         }
 
-        if (media_ != nullptr && consumed != 0) {
-          media_->output(bytes.first(consumed));
-          if (media_->failed()) {
+        if (media != nullptr && consumed != 0) {
+          media->output(bytes.first(consumed));
+          if (media->failed()) {
             throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
           }
-        }
-
-        return consumed;
-      }
-
-      inline static std::size_t atomicMediaPrefix(std::span<const Byte> bytes) noexcept {
-        constexpr unsigned maximum_frames = 8;
-        constexpr std::size_t maximum_pixels_bytes = GraphicsLimits::maximum_pane_bytes / 2;
-        constexpr std::string_view filename_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-        const std::string_view input{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
-        std::size_t consumed = 0;
-        std::size_t pixels = 0;
-
-        for (unsigned count = 0; count < maximum_frames; ++count) {
-          const auto frame = AtomicFrame::at(input, consumed);
-          if (!frame || frame->control.byte_count > maximum_pixels_bytes - pixels || frame->encoded_name.find_first_not_of(filename_alphabet) != std::string_view::npos) {
-            break;
-          }
-
-          consumed = frame->end;
-          pixels += frame->control.byte_count;
         }
 
         return consumed;
@@ -1589,7 +1647,8 @@ export {
       RowCellsHandle row_cells_;
       tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses_;
       tbc::view<ResponseOutbox<Memory>, tbc::lt::a> response_outbox_;
-      tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media_;
+      // Which media the terminal feeds, never dereferenced: its owner passes it to every call.
+      const void* media_ = nullptr;
       static constexpr std::size_t control_input_limit = 128 * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
       tbc::view<control::Engine<Memory>, tbc::lt::a> control_;

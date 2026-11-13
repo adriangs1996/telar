@@ -389,7 +389,7 @@ export {
         if (pane != nullptr && pane->location.workspace.id == workspace.id) {
           if (!pane->desktop_theme) {
             pane->terminal.configureColors(client.colors);
-            pane->terminal.resumeControl();
+            pane->resumeControl();
           }
         }
       }
@@ -770,7 +770,7 @@ export {
         }
 
         try {
-          pane.terminal.resumeControl();
+          pane.resumeControl();
           pane.write();
           const bool needs_write = pane.hasInput();
           if (needs_write != pane.write_interest) {
@@ -914,7 +914,7 @@ export {
               throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
             }
 
-            pane.terminal.resumeControl();
+            pane.resumeControl();
           }
         } else if (!request.text.empty()) {
           const bool bracketed = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);

@@ -99,7 +99,7 @@ static void testDeferredClosure(bool worktree) {
   panes.attach(model, observer.session(), pane.id, size);
   constexpr std::string_view final_output = "retained final output";
 
-  pane.terminal.feed({reinterpret_cast<const Byte*>(final_output.data()), final_output.size()});
+  pane.terminal.feed({reinterpret_cast<const Byte*>(final_output.data()), final_output.size()}, *pane.media);
 
   if (worktree) {
     workspaces.closeWorkspace(model, clients, opened.location.workspace.id);

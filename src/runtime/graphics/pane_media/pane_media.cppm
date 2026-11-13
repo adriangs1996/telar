@@ -830,6 +830,28 @@ export {
         ordered_input_ = true;
       }
 
+      // The prefix of the input made of whole atomic frames, which the terminal parses as one unit.
+      inline static std::size_t atomicPrefix(std::span<const Byte> bytes) noexcept {
+        constexpr unsigned maximum_frames = 8;
+        constexpr std::size_t maximum_pixels_bytes = GraphicsLimits::maximum_pane_bytes / 2;
+        constexpr std::string_view filename_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+        const std::string_view input{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+        std::size_t consumed = 0;
+        std::size_t pixels = 0;
+
+        for (unsigned count = 0; count < maximum_frames; ++count) {
+          const auto frame = AtomicFrame::at(input, consumed);
+          if (!frame || frame->control.byte_count > maximum_pixels_bytes - pixels || frame->encoded_name.find_first_not_of(filename_alphabet) != std::string_view::npos) {
+            break;
+          }
+
+          consumed = frame->end;
+          pixels += frame->control.byte_count;
+        }
+
+        return consumed;
+      }
+
       inline void output(std::span<const Byte> bytes) noexcept {
         if (cancelled_) {
           return;

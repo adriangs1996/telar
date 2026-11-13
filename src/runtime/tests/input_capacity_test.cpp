@@ -147,7 +147,7 @@ void testInputCapacity() {
 
   constexpr std::string_view paste_mode = "\x1b[?2004h";
 
-  pane.terminal.feed({reinterpret_cast<const Byte*>(paste_mode.data()), paste_mode.size()});
+  pane.terminal.feed({reinterpret_cast<const Byte*>(paste_mode.data()), paste_mode.size()}, *pane.media);
   panes.sendText(model.panes, control.session(), SendPaneText{.request_id = 2, .pane_id = pane.id, .mode = PaneTextMode::prompt, .text = "new"}, {}, observe);
   const auto failure = control.receive<RequestFailed>();
 
