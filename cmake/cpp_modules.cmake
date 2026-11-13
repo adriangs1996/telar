@@ -55,6 +55,25 @@ if(TELAR_SANITIZERS)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+# Optimized builds link with ThinLTO, so a function body can inline into
+# callers in other translation units and modules. CMake's IPO compiles with
+# -flto=thin and archives with the toolchain's llvm-ar, which indexes the
+# bitcode. Managed dependencies stay native objects; their key ignores this.
+option(TELAR_THIN_LTO "Link Release and RelWithDebInfo builds with ThinLTO" ON)
+if(TELAR_THIN_LTO)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+  # Relinking reuses the backend output of every module whose summary did not change.
+  set(telar_lto_cache "${CMAKE_BINARY_DIR}/thinlto-cache")
+  if(APPLE)
+    # Clang passes ld64 its own libLTO, which reads the bitcode it writes.
+    add_link_options("$<$<CONFIG:Release,RelWithDebInfo>:-Wl,-cache_path_lto,${telar_lto_cache}>")
+  else()
+    # GNU ld needs a gold plugin the pinned toolchain does not ship; lld is part of it.
+    add_link_options("$<$<CONFIG:Release,RelWithDebInfo>:-fuse-ld=lld;-Wl,--thinlto-cache-dir=${telar_lto_cache}>")
+  endif()
+endif()
+
 # Keep the file set visible to CMake so scanning, transitive ordering and
 # installed consumers use the native module graph rather than custom BMI rules.
 function(telar_modules target)
