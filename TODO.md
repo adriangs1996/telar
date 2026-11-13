@@ -494,10 +494,11 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 - **Depende de:** P1.2
 - **Qué hace:** evaluar si se colapsan `gui.prompt.text` → `prompt.editor` → `prompt.line` y `render.document` → `render.terminal` → `cli.render`. Comparte `prompt` con P9.8: no se ejecutan a la vez.
 
-### [ ] P10.3 · Módulos sin importadores
+### [x] P10.3 · Módulos sin importadores
 - **Depende de:** P0.1 (el caso 38 cubre `telar.websock`)
 - **Qué hace:** borrar `gui.input.scroll_motion`, `gui.tools.probe_io` y, si sigue vivo, `telar.websock`.
 - **audit-39:** `812601fdd` borró `telar.websock`; queda una entrada `websock` en `src/runtime-cpp/.clang-tidy`. Los otros dos módulos siguen sin importadores, aunque código Qt incluye `scroll_motion.hpp`.
+- **Resultado:** `6d8523d26` borra `gui.input.scroll_motion` (la cabecera se queda para Qt y sus tests) y `gui.tools.probe_io`, quita `websock` de `.clang-tidy` y actualiza `modules.json` y `tree-moves.json`. La GUI compila en macOS y pasa `gui-scroll`; en Linux no se ha compilado.
 
 ---
 
