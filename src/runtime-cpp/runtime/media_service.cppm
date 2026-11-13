@@ -210,8 +210,8 @@ public:
   inline void process(std::span<const Byte> payload, EncodedReply<Memory> &reply, const RequestContext &context = {}) {
     TELAR_TRACE("background_service.process");
     TELAR_DIAGNOSTIC(idle());
-    DecodeStorage storage{decode_};
     const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
+      DecodeStorage storage{decode_};
       execute(Codec::decode<Message>(payload, storage), reply, context);
     });
     if (!known) {

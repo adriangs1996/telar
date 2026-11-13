@@ -2467,7 +2467,7 @@ export {
 
         try {
           if (payload.front() == static_cast<Byte>(ServerTag::editor_opened)) {
-            deliverEditorReply(*client, payload);
+            deliverEditorReply(model_.panes, *client, payload);
           } else {
             const auto tag = static_cast<ServerTag>(payload.front());
             if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::command_suggestion) {
@@ -2491,12 +2491,12 @@ export {
 
       // An opened editor reported to the client that asked, as failed unless it opened beside the
       // pane it was asked from.
-      inline void deliverEditorReply(ClientSession<Memory> &client, std::span<const Byte> payload) {
+      inline static void deliverEditorReply(const PaneStore<Memory> &panes, ClientSession<Memory> &client, std::span<const Byte> payload) {
         std::array<Byte, 256> scratch;
         DecodeStorage storage{scratch};
         auto reply = Codec::decode<EditorOpened>(payload, storage);
-        const auto *source = livePane(model_.panes, client.editor_source, client.editor_generation);
-        const auto *target = livePane(model_.panes, reply.pane_id, reply.pane_generation);
+        const auto *source = livePane(panes, client.editor_source, client.editor_generation);
+        const auto *target = livePane(panes, reply.pane_id, reply.pane_generation);
         if (source == nullptr ||
             (reply.outcome == EditorOutcome::opened && (target == nullptr || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
           reply.outcome = EditorOutcome::failed;

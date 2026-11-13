@@ -874,7 +874,7 @@
     "src/runtime-cpp/platform/delimited_read.cppm": "src/runtime-cpp/platform/stream_read_buffer.cppm",
     "src/runtime-cpp/platform/process_lineage.cppm": "src/runtime-cpp/platform/process_probe.cppm",
     "src/runtime-cpp/platform/observation_worker.cppm": "src/runtime-cpp/platform/request_worker.cppm",
-    "src/runtime-cpp/platform/serial_observation.cppm": "src/runtime-cpp/platform/request_worker.cppm",
+    "src/runtime-cpp/platform/serial_queue.cppm": "src/runtime-cpp/platform/request_worker.cppm",
     "src/runtime-cpp/platform/tunnel_sockets.cppm": "src/runtime-cpp/platform/launch_program.cppm",
     "src/runtime-cpp/platform/stream_read_buffer.cppm": "src/runtime-cpp/platform/stream_read_buffer.cppm",
     "src/runtime-cpp/platform/process_arguments.cppm": "src/runtime-cpp/platform/process_probe.cppm",

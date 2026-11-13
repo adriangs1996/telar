@@ -93,7 +93,7 @@ private:
 class ShellGitService {
 public:
   inline ShellGitService()
-      : observation_(std::in_place) {}
+      : worker_(std::in_place) {}
 
   inline void request(std::uint64_t pane, std::uint64_t generation, std::string_view directory) {
     if (directory.empty() || directory.front() != '/' || directory.size() >= PATH_MAX) {
@@ -101,21 +101,22 @@ public:
     }
     ShellGitRequest next{.pane = pane, .generation = generation, .directory = {}};
     next.directory.assign(directory);
-    observation_.dropWaiting([&](const ShellGitRequest &entry) { return entry.pane == pane; });
-    observation_.request(next);
+    queue_.dropWaiting([&](const ShellGitRequest &entry) { return entry.pane == pane; });
+    queue_.request(worker_, next);
   }
 
   template <typename Consumer>
   inline void collect(Consumer &&consume) {
-    observation_.collect(std::forward<Consumer>(consume));
+    queue_.collect(worker_, std::forward<Consumer>(consume));
   }
 
   inline int descriptor() const noexcept {
-    return observation_.descriptor();
+    return worker_.descriptor();
   }
 
 private:
-  SerialObservation<ShellGitReader> observation_;
+  ObservationWorker<ShellGitReader> worker_;
+  SerialQueue<ShellGitRequest> queue_;
 };
 
 }

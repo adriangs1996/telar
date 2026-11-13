@@ -368,16 +368,17 @@ struct TapWorkerOptions {
   }
 
   // The worker's argv, `executable` first and null last; a trace only in Debug builds.
-  std::array<char *, 7> arguments(const char *executable) const noexcept {
-    std::array<char *, 7> words{const_cast<char *>(executable), const_cast<char *>(command.data()), const_cast<char *>(entry)};
+  // The words view `executable` and the strings `options` names, region `a`.
+  inline static tbc::view<std::array<char *, 7>, tbc::lt::a> arguments(tbc::view<const TapWorkerOptions &, tbc::lt::a> options, tbc::view<const char *, tbc::lt::a> executable) noexcept {
+    std::array<char *, 7> words{const_cast<char *>(executable), const_cast<char *>(command.data()), const_cast<char *>(options.entry)};
     std::size_t count = 3;
-    if (traffic) {
+    if (options.traffic) {
       words[count++] = const_cast<char *>("--traffic");
     }
 #if TELAR_DEBUG
-    if (trace_path != nullptr) {
+    if (options.trace_path != nullptr) {
       words[count++] = const_cast<char *>("--trace");
-      words[count++] = const_cast<char *>(trace_path);
+      words[count++] = const_cast<char *>(options.trace_path);
     }
 #endif
     words[count] = nullptr;
@@ -450,7 +451,8 @@ public:
 
 private:
   inline static PipeProcess spawn(const SessionOptions &options) {
-    auto arguments = TapWorkerOptions{.entry = options.entry, .traffic = options.traffic, .trace_path = options.trace_path}.arguments(options.executable);
+    const TapWorkerOptions worker{.entry = options.entry, .traffic = options.traffic, .trace_path = options.trace_path};
+    auto arguments = TapWorkerOptions::arguments(worker, options.executable);
     std::array<char *, 1> environment{nullptr};
     return PipeProcess{SpawnSpec{.executable = options.executable, .cwd = "/", .arguments = arguments.data(), .environment = environment.data(), .size = {}}, ProcessInput::buffered_socket};
   }
