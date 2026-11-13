@@ -95,6 +95,19 @@ struct MessageObserver {
   void lineTooLong(Http1Line) noexcept { check(false); }
 };
 
+// One parser serves the strict codec and the lenient capture: it keeps unknown codings, and stops
+// at an empty element or a third coding, saying which.
+static void contentCodings() {
+  const auto gzip = ContentCodings::parse(" gzip ,BR");
+  check(gzip.failure == ContentCodings::Failure::none && gzip.count == 2 && gzip.codings[0] == ContentCoding::gzip && gzip.codings[1] == ContentCoding::brotli);
+  const auto unknown = ContentCodings::parse("bogus, zstd");
+  check(unknown.failure == ContentCodings::Failure::none && unknown.codings[0] == ContentCoding::unknown && unknown.codings[1] == ContentCoding::zstd);
+  check(ContentCodings::parse("gzip,,br").failure == ContentCodings::Failure::empty && ContentCodings::parse("").failure == ContentCodings::Failure::empty);
+  const auto three = ContentCodings::parse("gzip, br, zstd");
+  check(three.failure == ContentCodings::Failure::too_many && three.count == 2);
+  check(ContentCodings::onlyIdentity("identity, Identity, identity") && !ContentCodings::onlyIdentity("identity, gzip") && !ContentCodings::onlyIdentity(""));
+}
+
 static void messages(SystemAllocator &memory) {
   HttpMessage request{memory};
   const auto framing = request.readHttp1Head("POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 999\r\n\r\n");
@@ -197,6 +210,7 @@ static void messages(SystemAllocator &memory) {
 int main() {
   SystemAllocator memory;
   content(memory);
+  contentCodings();
   messages(memory);
   testHttpInterception();
   std::puts("HTTP messages: binary entities, coding chains, integrity, framing, trailers, field validation and quotas passed");

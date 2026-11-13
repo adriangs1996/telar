@@ -19,7 +19,7 @@ export module telar.runtime.http.message;
 
 import std;
 
-export import telar.runtime.exchange_capture.producer;
+export import telar.runtime.http.content;
 export import telar.base.text;
 
 
@@ -40,8 +40,6 @@ namespace telar::runtime {
 // Editing requires complete, validated entities. Observation's prefix decoders are deliberately looser.
 template <Allocator Memory>
 class HttpContentCodec {
-  enum class Coding { identity, gzip, deflate, brotli, zstd };
-
   struct Flate {
     inline Flate(Memory &upstream, bool encode, int window) : memory(upstream), encoding(encode) {
       stream.zalloc = &DecoderMemory<Memory>::allocateArray;
@@ -105,20 +103,17 @@ private:
       throw std::length_error{"Invalid HTTP content limit"};
     }
 
-    std::array<Coding, maximum_codings> codings;
-    std::size_t count = 0;
-    if (!encoding.empty()) {
-      TextFields fields{encoding, ","};
-      while (const auto field = fields.next()) {
-        if (count == codings.size()) { throw std::invalid_argument{"Too many HTTP content codings"}; }
-        codings[count++] = coding(trimText(*field, " \t"));
-      }
-    }
+    // Editing refuses what a capture would pass over: an unknown or empty coding, or a third.
+    const auto parsed = encoding.empty() ? ContentCodings{} : ContentCodings::parse(encoding);
+    if (std::ranges::contains(parsed.list(), ContentCoding::unknown) || parsed.failure == ContentCodings::Failure::empty) { throw std::invalid_argument{"Unsupported HTTP content coding"}; }
+    if (parsed.failure == ContentCodings::Failure::too_many) { throw std::invalid_argument{"Too many HTTP content codings"}; }
+    const auto codings = parsed.codings;
+    const auto count = parsed.count;
 
     std::optional<DecodedBody<Memory>> previous;
     for (std::size_t step = 0; step < count; ++step) {
       const auto selected = codings[encode ? step : count - step - 1];
-      if (selected == Coding::identity) { continue; }
+      if (selected == ContentCoding::identity) { continue; }
       const auto capacity = step + 1 == count ? limit : std::min(maximum_bytes, limit + coding_overhead_bytes);
       auto output = one(input, selected, capacity, encode);
       previous = std::move(output);
@@ -129,21 +124,12 @@ private:
     return {std::nullopt, input};
   }
 
-  inline static Coding coding(std::string_view value) {
-    if (asciiEqualIgnoreCase(value, "identity")) { return Coding::identity; }
-    if (asciiEqualIgnoreCase(value, "gzip")) { return Coding::gzip; }
-    if (asciiEqualIgnoreCase(value, "deflate")) { return Coding::deflate; }
-    if (asciiEqualIgnoreCase(value, "br")) { return Coding::brotli; }
-    if (asciiEqualIgnoreCase(value, "zstd")) { return Coding::zstd; }
-    throw std::invalid_argument{"Unsupported HTTP content coding"};
-  }
-
-  inline auto one(std::span<const std::uint8_t> input, Coding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+  inline auto one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     DecodedBody<Memory> result{memory_, limit + 1};
     auto output = result.storage.bytes();
-    if (selected == Coding::gzip || selected == Coding::deflate) {
-      result.size = flate(input, output, selected == Coding::gzip, encode);
-    } else if (selected == Coding::brotli) {
+    if (selected == ContentCoding::gzip || selected == ContentCoding::deflate) {
+      result.size = flate(input, output, selected == ContentCoding::gzip, encode);
+    } else if (selected == ContentCoding::brotli) {
       result.size = brotli(input, output, encode);
     } else {
       result.size = zstd(input, output, encode);
@@ -234,7 +220,6 @@ private:
   }
 
   static constexpr std::size_t maximum_bytes = 16 * 1024 * 1024;
-  static constexpr std::size_t maximum_codings = 2;
   static constexpr std::size_t coding_overhead_bytes = 64 * 1024;
   static constexpr int gzip_window_offset = 16;
   static constexpr int maximum_window_log = 23;

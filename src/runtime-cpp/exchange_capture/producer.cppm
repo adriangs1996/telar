@@ -27,45 +27,12 @@ export import telar.base.memory;
 
 
 export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.http.content;
 
 
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.platform.primitives;
-
-// Interface: exchange_capture/decoder_memory.cppm
-export {
-namespace telar::runtime {
-
-// The allocator a C codec calls back through its context pointer. Its blocks stay valid whatever is
-// allocated after them, as the erasing allocator and the block table it wraps keep theirs.
-template <Allocator Memory>
-class TBC_SHARED DecoderMemory {
-public:
-  inline explicit DecoderMemory(Memory &memory) noexcept : memory_(memory), blocks_(memory_) {}
-
-  inline static void *allocate(void *context, std::size_t bytes) noexcept {
-    return static_cast<DecoderMemory *>(context)->blocks_.allocate(bytes);
-  }
-
-  inline static void *allocateArray(void *context, unsigned count, unsigned size) noexcept {
-    if (size != 0 && count > std::numeric_limits<std::size_t>::max() / size) {
-      return nullptr;
-    }
-    return allocate(context, static_cast<std::size_t>(count) * size);
-  }
-
-  inline static void release(void *context, void *pointer) noexcept {
-    static_cast<DecoderMemory *>(context)->blocks_.release(pointer);
-  }
-
-private:
-  ErasingAllocator<Memory> memory_;
-  CAllocationBlocks<ErasingAllocator<Memory>> blocks_;
-};
-
-}
-}
 
 // Interface: exchange_capture/brotli_decoder.cppm
 export {
@@ -115,26 +82,6 @@ template <Allocator Memory>
   BrotliDecoder decoder{buffered};
   return decoder.decode(input, output);
 }
-
-}
-}
-
-// Interface: exchange_capture/decoded_body.cppm
-export {
-namespace telar::runtime {
-
-template <Allocator Memory>
-struct DecodedBody {
-  inline explicit DecodedBody(Memory &memory, std::size_t capacity) : storage(memory, capacity) {}
-
-  inline std::span<const std::uint8_t> bytes() const noexcept { return storage.bytes().first(size); }
-
-  SensitiveAllocation<Memory> storage;
-  std::size_t size = 0;
-  bool decoded = false;
-  bool truncated = false;
-  bool failed = false;
-};
 
 }
 }
@@ -497,17 +444,12 @@ public:
       throw std::length_error{"Invalid capture decode limit"};
     }
 
-    std::array<std::string_view, maximum_codings> codings;
-    std::size_t count = 0;
-    TextFields fields{encoding, ","};
-    while (const auto field = fields.next()) {
-      const auto coding = trimText(*field, " \t");
-      if (coding.empty() || count == codings.size()) {
-        return raw(input, limit, true);
-      }
-      codings[count++] = coding;
+    const auto parsed = ContentCodings::parse(encoding);
+    if (parsed.failure != ContentCodings::Failure::none) {
+      return raw(input, limit, true);
     }
-    if (count == 1 && asciiEqualIgnoreCase(codings[0], "identity")) {
+    auto count = parsed.count;
+    if (count == 1 && parsed.codings[0] == ContentCoding::identity) {
       auto result = raw(input, limit, false);
       result.decoded = true;
       return result;
@@ -516,11 +458,11 @@ public:
     auto current = input;
     std::optional<DecodedBody<Memory>> decoded;
     while (count != 0) {
-      const auto coding = codings[--count];
-      if (asciiEqualIgnoreCase(coding, "identity")) {
+      const auto coding = parsed.codings[--count];
+      if (coding == ContentCoding::identity) {
         continue;
       }
-      if (!supported(coding)) {
+      if (coding == ContentCoding::unknown) {
         decoded.reset();
         return raw(input, limit, false);
       }
@@ -552,14 +494,10 @@ private:
     return result;
   }
 
-  inline static bool supported(std::string_view coding) noexcept {
-    return asciiEqualIgnoreCase(coding, "gzip") || asciiEqualIgnoreCase(coding, "deflate") || asciiEqualIgnoreCase(coding, "br") || asciiEqualIgnoreCase(coding, "zstd");
-  }
-
-  inline std::optional<DecodedBody<Memory>> decodeOne(std::span<const std::uint8_t> input, std::string_view coding, std::size_t limit) {
-    const bool zstd = asciiEqualIgnoreCase(coding, "zstd");
-    const bool brotli = asciiEqualIgnoreCase(coding, "br");
-    const auto container = asciiEqualIgnoreCase(coding, "gzip") ? FlateContainer::gzip : FlateContainer::zlib;
+  inline std::optional<DecodedBody<Memory>> decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit) {
+    const bool zstd = coding == ContentCoding::zstd;
+    const bool brotli = coding == ContentCoding::brotli;
+    const auto container = coding == ContentCoding::gzip ? FlateContainer::gzip : FlateContainer::zlib;
     if (!zstd && !brotli && limit < FlateDecoder<Memory>::minimum_output_capacity) {
       return decodeSmallFlate(input, container, limit);
     }
@@ -607,7 +545,6 @@ private:
     return result;
   }
 
-  static constexpr std::size_t maximum_codings = 2;
   Memory &memory_;
 };
 

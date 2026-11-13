@@ -23,6 +23,7 @@ export import telar.base.memory;
 
 
 export import telar.runtime.http2.frame_reader;
+export import telar.runtime.http.content;
 import telar.base.diagnostics;
 
 // Interface: http2/event.cppm
@@ -84,7 +85,7 @@ public:
         event_stream_ = isEventStream(value);
       }
     }
-    if (asciiEqualIgnoreCase(name, "content-encoding") && !identityEncoding(value)) {
+    if (asciiEqualIgnoreCase(name, "content-encoding") && !ContentCodings::onlyIdentity(value)) {
       identity_encoding_ = false;
     }
   }
@@ -94,51 +95,12 @@ public:
   inline bool eventStream() const noexcept { return metadata_valid_ && content_type_seen_ && event_stream_ && identity_encoding_; }
 
 private:
-  inline static bool identityEncoding(std::string_view value) noexcept {
-    TextFields fields{value, ","};
-    while (const auto field = fields.next()) {
-      if (!asciiEqualIgnoreCase(trimText(*field, " \t"), "identity")) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   std::uint16_t status_ = 0;
   bool request_ = false;
   bool content_type_seen_ = false;
   bool event_stream_ = false;
   bool identity_encoding_ = true;
   bool metadata_valid_ = true;
-};
-
-}
-}
-
-// Interface: http2/memory.cppm
-export {
-namespace telar::runtime {
-
-template <Allocator Memory>
-class Http2Memory {
-  using Blocks = CAllocationBlocks<ErasingAllocator<Memory>>;
-
-public:
-  inline explicit Http2Memory(Memory &memory) noexcept : memory_(memory), blocks_(memory_), callbacks_{.mem_user_data = &blocks_, .malloc = &allocate, .free = &release, .calloc = &allocateZeroed, .realloc = &resize} {}
-  Http2Memory(const Http2Memory &) = delete;
-  Http2Memory &operator=(const Http2Memory &) = delete;
-  inline auto callbacks() noexcept -> nghttp2_mem * { return &callbacks_; }
-
-private:
-  inline static void *allocate(std::size_t size, void *owner) noexcept { return static_cast<Blocks *>(owner)->allocate(size); }
-  inline static void release(void *pointer, void *owner) noexcept { static_cast<Blocks *>(owner)->release(pointer); }
-  inline static void *allocateZeroed(std::size_t count, std::size_t size, void *owner) noexcept { return static_cast<Blocks *>(owner)->allocateZeroed(count, size); }
-  inline static void *resize(void *pointer, std::size_t size, void *owner) noexcept { return static_cast<Blocks *>(owner)->resize(pointer, size); }
-
-  ErasingAllocator<Memory> memory_;
-  // nghttp2 allocates through the blocks, which allocate from the sibling allocator.
-  tbc::view<Blocks, tbc::lt::self> blocks_;
-  tbc::view<nghttp2_mem, tbc::lt::self> callbacks_;
 };
 
 }
