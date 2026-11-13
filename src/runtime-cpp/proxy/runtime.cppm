@@ -134,7 +134,7 @@ concept Http1CapturePolicy = requires(Capture &capture, CaptureSide side, std::s
   { capture.head(side, head) } noexcept -> std::same_as<void>;
   { capture.payload(side, body) } noexcept -> std::same_as<void>;
   { capture.finishRequest() } noexcept -> std::same_as<void>;
-  { capture.finishResponse(status) } noexcept -> std::same_as<void>;
+  { capture.finishResponse(status, true) } noexcept -> std::same_as<void>;
   { capture.discardInformational() } noexcept -> std::same_as<void>;
   { capture.fail() } noexcept -> std::same_as<void>;
 };
@@ -144,7 +144,7 @@ struct IgnoreHttp1Capture {
   inline void head(CaptureSide, std::string_view) noexcept {}
   inline void payload(CaptureSide, std::span<const std::uint8_t>) noexcept {}
   inline void finishRequest() noexcept {}
-  inline void finishResponse(std::uint16_t) noexcept {}
+  inline void finishResponse(std::uint16_t, bool = true) noexcept {}
   inline void discardInformational() noexcept {}
   inline void fail() noexcept {}
 };
@@ -318,15 +318,14 @@ struct TunnelReadiness {
 export {
 namespace telar::runtime {
 
-template <Http1CapturePolicy Capture = IgnoreHttp1Capture, typename Relay = Http1MessageRelay>
+// An HTTP/1 exchange on a connection; without an HttpControl in its context, its relays forward
+// each message as it comes.
+template <ConcurrentAllocator Memory, Http1CapturePolicy Capture = IgnoreHttp1Capture>
 class Http1Connection {
-public:
-  inline explicit Http1Connection(ProxyCounters &counters, Capture capture = {}) noexcept : counters_(counters), capture_(std::move(capture)) {
-    capture_.begin();
-  }
+  using Relay = Http1InterceptedRelay<Memory>;
 
-  template <Allocator Memory, typename Context>
-  inline Http1Connection(Memory &memory, ProxyCounters &counters, Capture capture, Context context) : counters_(counters), capture_(std::move(capture)), request_(memory, context, false), response_(memory, context, true) {
+public:
+  inline Http1Connection(Memory &memory, ProxyCounters &counters, Capture capture = {}, HttpRelayContext context = {}) : counters_(counters), capture_(std::move(capture)), request_(memory, context, false), response_(memory, context, true) {
     capture_.begin();
   }
 
@@ -363,7 +362,7 @@ public:
 
       if (!response_started_ && request_.head()) {
         response_.reset(true, request_.head()->head_request);
-        if constexpr (requires { response_.destinationHead(request_.originalHead()); }) { response_.destinationHead(request_.originalHead()); }
+        response_.destinationHead(request_.originalHead());
         response_started_ = true;
       }
       if (!response_started_) {
@@ -401,8 +400,8 @@ public:
     }
     SocketInterest interest;
     interest.include(request_.sourceInterest());
-    if constexpr (requires { request_.continueBytes(); }) {
-      if (!request_.continueBytes().empty()) { interest.include(continue_waiting_); }
+    if (!request_.continueBytes().empty()) {
+      interest.include(continue_waiting_);
     }
     if (response_started_) {
       interest.include(response_.destinationInterest());
@@ -446,12 +445,7 @@ public:
   }
 
   inline auto deadline() const noexcept -> std::optional<std::chrono::steady_clock::time_point> {
-    if constexpr (requires { request_.deadline(); }) {
-      const auto request = request_.deadline();
-      const auto response = response_.deadline();
-      return earliest(request, response);
-    }
-    return std::nullopt;
+    return earliest(request_.deadline(), response_.deadline());
   }
 
 private:
@@ -459,11 +453,8 @@ private:
 
   template <PeekableByteStream Source, ByteStream Destination>
   inline static bool advanceMessage(Relay &message, CaptureSide side, ProxyCounters &counters, Capture &capture, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
-    bool expired = false;
-    if constexpr (requires { message.deadline(); }) {
-      const auto deadline = message.deadline();
-      expired = deadline && std::chrono::steady_clock::now() >= *deadline;
-    }
+    const auto deadline = message.deadline();
+    const bool expired = deadline && std::chrono::steady_clock::now() >= *deadline;
     if (!expired && !readiness.child.satisfies(message.sourceInterest()) && !readiness.origin.satisfies(message.destinationInterest())) {
       return false;
     }
@@ -474,17 +465,14 @@ private:
   template <ByteStream Child>
   inline bool sendContinue(Child &child) noexcept {
     if (request_.state() == State::failed) { return false; }
-    if constexpr (requires { request_.continueBytes(); }) {
-      const auto bytes = request_.continueBytes();
-      if (bytes.empty()) { return false; }
-      const auto result = child.write({reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()});
-      if (result.state == StreamResult::State::blocked) { continue_waiting_ = result.waiting; return false; }
-      if (result.state != StreamResult::State::data || result.bytes == 0) { finished_ = true; return false; }
-      request_.continueWritten(result.bytes);
-      continue_waiting_ = StreamReadiness::writable;
-      return true;
-    }
-    return false;
+    const auto bytes = request_.continueBytes();
+    if (bytes.empty()) { return false; }
+    const auto result = child.write({reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()});
+    if (result.state == StreamResult::State::blocked) { continue_waiting_ = result.waiting; return false; }
+    if (result.state != StreamResult::State::data || result.bytes == 0) { finished_ = true; return false; }
+    request_.continueWritten(result.bytes);
+    continue_waiting_ = StreamReadiness::writable;
+    return true;
   }
 
   inline void finishResponse() noexcept {
@@ -495,9 +483,7 @@ private:
       return;
     }
 
-    if constexpr (requires { response_.captureIncomplete(); capture_.finishResponse(head.status, false); }) {
-      capture_.finishResponse(head.status, !response_.captureIncomplete());
-    } else { capture_.finishResponse(head.status); }
+    capture_.finishResponse(head.status, !response_.captureIncomplete());
     if (request_.state() != State::complete) {
       finished_ = true;
     } else if (head.upgrade) {
@@ -1879,7 +1865,7 @@ public:
   }
 
 private:
-  using Http1 = Http1Connection<Http1Capture<Memory>, Http1InterceptedRelay<Memory>>;
+  using Http1 = Http1Connection<Memory, Http1Capture<Memory>>;
   using Http2 = Http2Connection<Memory, Http2Capture<Memory>>;
   using Http2Endpoint = Http2EndpointConnection<Memory, Http2Capture<Memory>>;
 

@@ -68,7 +68,7 @@ struct HttpOwner final : HttpControl {
   }
 };
 
-using Connection = Http1Connection<IgnoreHttp1Capture, Http1InterceptedRelay<SystemAllocator>>;
+using Connection = Http1Connection<SystemAllocator, IgnoreHttp1Capture>;
 
 template <typename Predicate>
 void pump(Connection &connection, TestByteStream &child, TestByteStream &origin, Predicate &&done, std::source_location location = std::source_location::current()) {

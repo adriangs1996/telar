@@ -102,6 +102,14 @@ static void testConnectHead() {
   check(head.receive(sockets.local.get()) == ConnectHead::Read::ended);
 }
 
+// Moves what one socket holds to another through a relay direction.
+template <typename Direction>
+static void relaySockets(Direction &direction, int source, int destination) {
+  SocketStream incoming{source};
+  SocketStream outgoing{destination};
+  direction.advance(incoming, outgoing);
+}
+
 template <std::size_t Capacity>
 static void testRelay() {
   SocketPair child;
@@ -134,7 +142,7 @@ static void testRelay() {
       half_closed = true;
     }
 
-    outbound.advance(child.local.get(), origin.local.get());
+    relaySockets(outbound, child.local.get(), origin.local.get());
     blocked = blocked || outbound.wantsWrite();
     received += receiveBytes(origin.remote.get());
   }
@@ -147,7 +155,7 @@ static void testRelay() {
   received.clear();
   while (!inbound.finished()) {
     check(ProxyConnectionPolicy::Clock::now() < deadline);
-    inbound.advance(origin.local.get(), child.local.get());
+    relaySockets(inbound, origin.local.get(), child.local.get());
     received += receiveBytes(child.remote.get());
   }
   check(received == "reply after request EOF" && ::recv(child.remote.get(), &byte, 1, 0) == 0);
@@ -157,7 +165,7 @@ static void testRelay() {
   RelayDirection<Capacity> broken;
   sendBytes(abandoned.remote.get(), "discard on destination failure");
   target.remote.reset();
-  broken.advance(abandoned.local.get(), target.local.get());
+  relaySockets(broken, abandoned.local.get(), target.local.get());
   check(broken.finished());
 }
 

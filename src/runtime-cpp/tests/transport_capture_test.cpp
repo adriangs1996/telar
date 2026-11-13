@@ -68,7 +68,7 @@ void testHttp1CaptureFragments() {
       ProxyCounters counters;
       {
         Http1Capture<decltype(memory), TestCaptureClock> capture{memory, &producer, {.key = {17, 0}, .host = "example.test"}};
-        Http1Connection connection{counters, std::move(capture)};
+        Http1Connection connection{memory, counters, std::move(capture)};
         TestByteStream child;
         TestByteStream origin;
         child.input = request_head + request_body;
@@ -123,7 +123,7 @@ void testHttp1CaptureFailures() {
     CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
     ProxyCounters counters;
     {
-      Http1Connection connection{counters, Http1Capture{memory, &producer, CaptureStart{}}};
+      Http1Connection connection{memory, counters, Http1Capture{memory, &producer, CaptureStart{}}};
       TestByteStream child;
       TestByteStream origin;
       child.input = fixture.request;
@@ -148,7 +148,7 @@ void testHttp1CaptureEarlyResponseAndReuse() {
   CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
   ProxyCounters counters;
   {
-    Http1Connection connection{counters, Http1Capture{memory, &producer, CaptureStart{.key = {42, 0}}}};
+    Http1Connection connection{memory, counters, Http1Capture{memory, &producer, CaptureStart{.key = {42, 0}}}};
     TestByteStream child;
     TestByteStream origin;
     child.input = "POST / HTTP/1.1\r\nContent-Length: 100\r\n\r\npartial";
@@ -162,7 +162,7 @@ void testHttp1CaptureEarlyResponseAndReuse() {
   check(producer.reservedBytes() == 0);
 
   {
-    Http1Connection connection{counters, Http1Capture{memory, &producer, CaptureStart{.key = {43, 0}}}};
+    Http1Connection connection{memory, counters, Http1Capture{memory, &producer, CaptureStart{.key = {43, 0}}}};
     TestByteStream child;
     TestByteStream origin;
     child.input = "GET /first HTTP/1.1\r\n\r\nGET /second HTTP/1.1\r\n\r\n";

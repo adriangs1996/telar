@@ -159,7 +159,8 @@ static void checkMessageFailures() {
 
 static void checkConnectionOrdering() {
   ProxyCounters counters;
-  Http1Connection connection{counters};
+  SystemAllocator connection_memory;
+  Http1Connection connection{connection_memory, counters};
   TestByteStream child;
   TestByteStream origin;
   const std::string request = "POST /upload HTTP/1.1\r\nContent-Length: 3\r\nExpect: 100-continue\r\n\r\n";
@@ -191,7 +192,8 @@ static void checkConnectionEndings() {
            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
        }) {
     ProxyCounters counters;
-    Http1Connection connection{counters};
+    SystemAllocator connection_memory;
+  Http1Connection connection{connection_memory, counters};
     TestByteStream child;
     TestByteStream origin;
     const bool early = std::string_view{response}.find("413") != std::string_view::npos;
@@ -205,7 +207,8 @@ static void checkConnectionEndings() {
 
   for (const bool response : {false, true}) {
     ProxyCounters counters;
-    Http1Connection connection{counters};
+    SystemAllocator connection_memory;
+  Http1Connection connection{connection_memory, counters};
     TestByteStream child;
     TestByteStream origin;
     const std::string large(Http1Head::capacity, 'a');

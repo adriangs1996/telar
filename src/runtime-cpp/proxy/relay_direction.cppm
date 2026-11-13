@@ -612,12 +612,6 @@ public:
     }
   };
 
-  inline Progress advance(int source, int destination) noexcept {
-    SocketStream incoming{source};
-    SocketStream outgoing{destination};
-    return advance(incoming, outgoing);
-  }
-
   template <ByteStream Source, ByteStream Destination>
   inline Progress advance(Source &source, Destination &destination) noexcept {
     return advance(source, destination, [](Observation, std::span<const std::uint8_t>) noexcept {});
