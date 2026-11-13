@@ -66,7 +66,7 @@ import telar.base.memory;
 import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
-import telar.runtime.platform.git_status;
+import telar.runtime.platform.private_tunnel;
 import telar.runtime.traffic.capture_analysis;
 
 using namespace telar;

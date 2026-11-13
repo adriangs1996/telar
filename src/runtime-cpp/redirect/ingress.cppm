@@ -76,7 +76,7 @@ export import telar.runtime.proxy.relay_direction;
 export import telar.runtime.proxy.authenticate;
 
 
-export import telar.runtime.platform.git_status;
+export import telar.runtime.platform.private_tunnel;
 
 
 export import telar.runtime.plugins.protocol;
