@@ -204,18 +204,39 @@ namespace telar::runtime {
 
 class GraphicsFrameSource {
 public:
-  inline static bool available(const AtomicFrameResource &resource) noexcept {
-    if (resource.byte_count > resource.limit) {
-      return false;
+  // Where a child's upload lies once it checks out: a non-empty upload within its limit, in a file
+  // or a shared memory object that holds at least its bytes.
+  struct Handle {
+    std::optional<GraphicsChildFile> file;
+    FileDescriptor shared;
+  };
+
+  // The upload's handle, or none; a shared memory object's name comes back in `name`.
+  inline static std::optional<Handle> validate(const AtomicFrameResource &resource, std::array<std::uint8_t, PATH_MAX + 1> &name) noexcept {
+    if (resource.byte_count == 0 || resource.byte_count > resource.limit) {
+      return std::nullopt;
     }
 
+    Handle handle;
     if (resource.medium == GraphicsInputMedium::file) {
-      const auto file = GraphicsChildFile::open(resource.encoded_name);
-      return file && file->size >= resource.byte_count;
+      handle.file = GraphicsChildFile::open(resource.encoded_name);
+      if (!handle.file || handle.file->size < resource.byte_count) {
+        return std::nullopt;
+      }
+      return handle;
     }
 
+    handle.shared = GraphicsChildSharedMemory::open(resource.encoded_name, name);
+    struct stat metadata{};
+    if (!handle.shared || ::fstat(handle.shared.get(), &metadata) != 0 || metadata.st_size < 0 || static_cast<std::uint64_t>(metadata.st_size) < resource.byte_count) {
+      return std::nullopt;
+    }
+    return handle;
+  }
+
+  inline static bool available(const AtomicFrameResource &resource) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> name;
-    return static_cast<bool>(GraphicsChildSharedMemory::open(resource.encoded_name, name));
+    return validate(resource, name).has_value();
   }
 
   inline static void release(const AtomicFrameResource &resource) noexcept {
@@ -235,27 +256,19 @@ namespace telar::runtime {
 class GraphicsFramePixels {
 public:
   inline static std::optional<GraphicsFramePixels> open(const AtomicFrameResource &resource) noexcept {
-    if (resource.byte_count == 0 || resource.byte_count > resource.limit) {
+    std::array<std::uint8_t, PATH_MAX + 1> name;
+    auto handle = GraphicsFrameSource::validate(resource, name);
+    if (!handle) {
       return std::nullopt;
     }
 
     GraphicsFramePixels pixels;
     if (resource.medium == GraphicsInputMedium::file) {
-      pixels.file_ = GraphicsChildFile::open(resource.encoded_name);
-      if (!pixels.file_ || pixels.file_->size < resource.byte_count) {
-        return std::nullopt;
-      }
+      pixels.file_ = std::move(handle->file);
       return pixels;
     }
 
-    std::array<std::uint8_t, PATH_MAX + 1> name;
-    auto shared = GraphicsChildSharedMemory::open(resource.encoded_name, name);
-    struct stat metadata{};
-    if (!shared || ::fstat(shared.get(), &metadata) != 0 || metadata.st_size < 0 || static_cast<std::uint64_t>(metadata.st_size) < resource.byte_count) {
-      return std::nullopt;
-    }
-
-    pixels.shared_ = std::move(shared);
+    pixels.shared_ = std::move(handle->shared);
     pixels.shared_bytes_ = resource.byte_count;
     ::shm_unlink(reinterpret_cast<const char *>(name.data()));
     return pixels;
