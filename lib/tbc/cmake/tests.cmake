@@ -32,6 +32,13 @@ if(TBC_BUILD_LINTER)
       "$<TARGET_FILE:tbc-lint>" "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_OSX_SYSROOT}" "${tbc_clang}")
   set_tests_properties(tbc-lint-contract PROPERTIES TIMEOUT 60)
 
+  # What the blank-lines fix inserts must survive the style the repository formats with.
+  set(TBC_FORMAT_STYLE "${CMAKE_CURRENT_SOURCE_DIR}/../../.clang-format" CACHE FILEPATH "clang-format style the blank-lines tests format with")
+  add_test(NAME tbc-lint-blank-lines
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/blank_lines_test.py"
+      "$<TARGET_FILE:tbc-lint>" "${CMAKE_OSX_SYSROOT}" "${tbc_clang_format}" "${TBC_FORMAT_STYLE}")
+  set_tests_properties(tbc-lint-blank-lines PROPERTIES TIMEOUT 120)
+
   add_test(NAME tbc-spec-runner COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/spec_runner_test.py")
   set_tests_properties(tbc-spec-runner PROPERTIES TIMEOUT 30 LABELS "spec")
 

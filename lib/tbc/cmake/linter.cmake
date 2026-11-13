@@ -10,11 +10,12 @@ if(LLVM_VERSION_MAJOR LESS 18)
 endif()
 
 find_program(tbc_clang NAMES clang HINTS "${LLVM_TOOLS_BINARY_DIR}" NO_DEFAULT_PATH REQUIRED)
+find_program(tbc_clang_format NAMES clang-format HINTS "${LLVM_TOOLS_BINARY_DIR}" NO_DEFAULT_PATH REQUIRED)
 execute_process(COMMAND "${tbc_clang}" -print-resource-dir
   OUTPUT_VARIABLE tbc_clang_resources OUTPUT_STRIP_TRAILING_WHITESPACE
   COMMAND_ERROR_IS_FATAL ANY)
 
-add_executable(tbc-lint linter/main.cpp linter/lifetime_analysis.cpp)
+add_executable(tbc-lint linter/main.cpp linter/lifetime_analysis.cpp linter/blank_lines.cpp)
 target_include_directories(tbc-lint SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 separate_arguments(tbc_llvm_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 target_compile_options(tbc-lint PRIVATE ${tbc_llvm_definitions})

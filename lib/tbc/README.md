@@ -202,6 +202,38 @@ and limitations, and [`docs/open-problems.md`](docs/open-problems.md) for what
 real code still shows. The paired inference corpus checks both acceptance and exact
 rejection diagnostics; it never executes the negative examples.
 
+## Blank lines
+
+`--checks=blank-lines` checks the blank lines that the repository's
+[code style](../../docs/code-style.md#logical-blocks) asks for between the
+statements of a block, on the AST instead of on text:
+
+- `tbc-blank-line-after-block`: a statement that ends on its own closing brace
+  (a loop, an `if`, a `switch`, a multi-line lambda or braced list) is followed
+  by a blank line. `else`, `catch` and the `while` of a `do` belong to the same
+  statement, and the closing brace of the block or a `case` label needs none.
+- `tbc-blank-line-after-declarations`: a run of declarations is followed by a
+  blank line before the first statement that is not one. An `if` whose
+  condition uses a variable the declaration right above it introduces stays
+  attached to it.
+
+A statement macro reads as a statement where it is used, even when it expands
+to a declaration, so a trace such as `TELAR_TRACE("name");` at the top of a
+function needs no blank line after it.
+
+```sh
+./out/debug/tbc-lint --checks=blank-lines -p out/debug main.cpp
+./out/debug/tbc-lint --checks=blank-lines --fix --header-filter='/src/.*\.hpp$' -p out/debug main.cpp
+```
+
+`--fix` inserts each missing blank line right below the statement that asks for
+it, above any comment that describes the next block, and never removes one: a
+blank line that is already there may separate two blocks by what they do, which
+is the part of the rule that cannot be automated. Main files are checked;
+headers only when their path matches `--header-filter`, and a header that
+several units include is reported and fixed once. Checks combine, as in
+`--checks=lifetime,blank-lines`; without `--checks` only lifetimes are checked.
+
 ## Neovim
 
 Configure Debug before editing. `.clangd` selects `out/debug/compile_commands.json`
