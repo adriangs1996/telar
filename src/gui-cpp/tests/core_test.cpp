@@ -164,6 +164,15 @@ void screenFrames() {
     require(screen.cells()[0].utf8() == "y" && screen.cells()[3].utf8() == "y", "delta spans must commit at their own positions");
     require(screen.cells()[1].utf8() == "x" && screen.cells()[2].utf8() == "x", "delta spans must not overwrite gaps");
 
+    const std::array before_crossing{screen.rowRevision(0), screen.rowRevision(1)};
+    const auto crossing_run = CellRunCodec::encode(std::array<Cell, 2>{changed[0], changed[0]}, encoded);
+    const std::array<FrameSpan, 1> crossing_spans{{{.start = 1, .count = 2, .cells = crossing_run}}};
+    frame.base_frame_id = frame.frame_id++;
+    frame.spans = crossing_spans;
+    require(screen.apply(frame) == FrameApplication::applied, "a span across rows must apply");
+    require(screen.cells()[1].utf8() == "y" && screen.cells()[2].utf8() == "y", "a span across rows must commit every cell");
+    require(screen.rowRevision(0) != before_crossing[0] && screen.rowRevision(1) != before_crossing[1], "a span across rows must mark each row it touches");
+
     const std::array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
     const std::array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
     frame.base_frame_id = frame.frame_id++;

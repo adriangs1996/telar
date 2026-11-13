@@ -52,7 +52,8 @@ public:
         row_flags_(AllocatorRef<Byte, Memory>{memory}),
         links_(AllocatorRef<MetadataLink, Memory>{memory}),
         link_runs_(AllocatorRef<MetadataRun, Memory>{memory}),
-        uris_(AllocatorRef<Byte, Memory>{memory}) {}
+        uris_(AllocatorRef<Byte, Memory>{memory}),
+        staged_(AllocatorRef<CellValue, Memory>{memory}) {}
 
   void detach() noexcept {
     frame_id_ = 0;
@@ -71,9 +72,18 @@ public:
       return FrameApplication::needs_snapshot;
     }
 
+    // Every span is decoded before anything changes, so a frame that fails to decode leaves the
+    // screen as it was.
+    std::size_t changed = 0;
+    for (const auto &span : frame.spans) {
+      changed += span.count;
+    }
+    staged_.clear();
+    staged_.reserve(changed);
     for (const auto &span : frame.spans) {
       auto reader = span.reader();
-      while (reader.next()) {
+      while (const auto cell = reader.next()) {
+        staged_.emplace_back(*cell);
       }
     }
 
@@ -84,14 +94,12 @@ public:
       row_revisions_.assign(frame.rows, revision_ + 1);
     }
 
+    const auto *staged = staged_.data();
     for (const auto &span : frame.spans) {
-      auto reader = span.reader();
-      auto position = span.start;
-      while (const auto cell = reader.next()) {
-        cells_[position] = CellValue{*cell};
-        row_revisions_[position / frame.cols] = revision_ + 1;
-        ++position;
-      }
+      std::copy_n(staged, span.count, cells_.begin() + span.start);
+      staged += span.count;
+      const auto last = (span.start + span.count - 1) / frame.cols;
+      std::fill(row_revisions_.begin() + span.start / frame.cols, row_revisions_.begin() + last + 1, revision_ + 1);
     }
 
     if (frame.text_metadata) {
@@ -275,6 +283,8 @@ private:
   Vector<MetadataLink, Memory> links_;
   Vector<MetadataRun, Memory> link_runs_;
   Vector<Byte, Memory> uris_;
+  // The cells of the frame being applied, decoded once; kept between frames for its capacity.
+  Vector<CellValue, Memory> staged_;
   std::uint64_t pane_id_ = 0;
   std::uint64_t frame_id_ = 0;
   std::uint64_t revision_ = 0;
