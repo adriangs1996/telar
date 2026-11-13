@@ -82,11 +82,12 @@ graph LR
 - **Hecho cuando:** el worktree del refactor parte de `main` con audit-39 integrada. Anotar en esta lista qué partes de P3.11 (caso 31), P3.14 (caso 34), P6.1 y P10.3 (caso 38) ya cubre la rama, para no repetirlas.
 - **Resultado:** audit-39 entró en `main` por fast-forward (`2890f72b1..d1ab27cb6`). Lo que cubre queda anotado en cada tarea como **audit-39:**. Los dueños únicos que creó viven en `telar.platform` y `telar.base.text`, no en los submódulos del plan: P4.1 y P4.3 los mueven a su familia. Esos dos hubs y `telar.config` crecieron (unas 570, 180 y 600 líneas). Hay módulos nuevos que P1.1 tiene que mapear: `runtime.http.content` y `runtime.platform.private_tunnel`. El commit `d66fa0c16` metió por error `lib/tbc/out` como symlink en bucle; lo borra `5ab196eaa`.
 
-### [ ] P0.7 · Receta de setup para worktrees nuevos
+### [x] P0.7 · Receta de setup para worktrees nuevos
 - **Depende de:** —. Va antes que cualquier otra tarea y la ejecuta el coordinador en local, porque sin ella ningún worktree puede compilar.
 - **Toca:** `.telar/setup.json` (nuevo).
 - **Qué hace:** declara la receta que prepara un worktree recién creado: el bootstrap del toolchain fijado (`tools/cpp bootstrap`, que crea `.toolchain/`, ignorado por git) y lo que haga falta para configurar el build. Tiene que funcionar en cualquier máquina, sin rutas de una máquina concreta.
 - **Hecho cuando:** `telar worktree create … --setup` deja un worktree que compila los tres procesos, tanto en local como en `Personal`.
+- **Resultado:** `.telar/setup.json` ejecuta `tools/setup-checkout`, que enlaza `.toolchain`, `.dependencies-cache` y `.qt-cache` al checkout principal del clon y hace el bootstrap (`a44482e01`). `a3a2d2d46` hace que la clave de las dependencias gestionadas use la ruta real del toolchain, para que los worktrees reutilicen OpenSSL y Qt. Verificado: P0.2 compiló los tres procesos en un worktree de `Personal`, y P0.4, P6.1 y P10.3 el runtime y la GUI en worktrees locales.
 
 ### [x] P0.2 · Script de métricas y línea base
 - **Depende de:** — (el script se escribe ya; la línea base se toma después de P0.1)
