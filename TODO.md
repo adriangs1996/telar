@@ -506,6 +506,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Depende de:** P8.1
 - **Toca:** las raíces de composición que combinan `BudgetAllocator<SystemAllocator>`, `Synchronized`, `Erasing`, `Recycling` y `Buffer`, y el allocator de la GUI que elige `TELAR_GUI_ALLOCATOR`.
 - **Hecho cuando:** cada raíz de composición construye un `MemoryAdapter` y lo pasa como `Memory &`, `ConcurrentMemory &` o `ErasingMemory &`.
+- **Estado:** hecha en `refactor-p8-3` (`4f1a731d6`, `ff66c9342`), sin integrar. Instanciar los servicios con `Memory` sube el lint de `src/runtime/main.cpp` de 43 a 50 errores. Causas: una etiqueta de región que faltaba en `engine.cppm` (arreglada); un fallo de TBC con `deallocate` virtual en una clase no `final`, que trata su `void*` como entrada exclusiva (casos `declaration.abstract_shared_release_argument` y `..._release_iteration`, pendientes en el corpus); y `PaneService` y `Restore`, que guardan el allocator y el resto de sus campos sin etiqueta de región (`execution_service:525`, `session_store:610` y su cadena). El mismo agente arregla TBC y reanota esos dos servicios. Se integra cuando el lint vuelva a 43. **Antes de P9:** las dos causas reaparecen en cada servicio que pase a `Memory`.
 
 ---
 
