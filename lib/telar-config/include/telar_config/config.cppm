@@ -2583,36 +2583,14 @@ public:
   }
 
 private:
-  inline static void integer(lua_State *state, const char *name, std::uint64_t value) {
-    lua_pushinteger(state, static_cast<lua_Integer>(value));
-    lua_setfield(state, -2, name);
-  }
-
-  inline static int immutable(lua_State *state) {
-    lua_pushliteral(state, "callback context is immutable");
-
-    return lua_error(state);
-  }
-
   inline void pushContext(lua_State *state) const {
     lua_newtable(state);
-    lua_pushboolean(state, static_cast<int>(context_.sidebar_visible));
-    lua_setfield(state, -2, "sidebar_visible");
-    integer(state, "tab_count", context_.tab_count);
-    integer(state, "active_tab_index", static_cast<std::uint32_t>(context_.active_tab_index) + 1);
-    integer(state, "pane_count", context_.pane_count);
-    integer(state, "focused_pane_id", context_.focused_pane_id);
-
-    lua_newtable(state);
-    lua_newtable(state);
-    lua_pushvalue(state, -3);
-    lua_setfield(state, -2, "__index");
-    lua_pushcfunction(state, &immutable);
-    lua_setfield(state, -2, "__newindex");
-    lua_pushboolean(state, 0);
-    lua_setfield(state, -2, "__metatable");
-    lua_setmetatable(state, -2);
-    lua_remove(state, -2);
+    lua::setField(state, "sidebar_visible", static_cast<bool>(context_.sidebar_visible));
+    lua::setField(state, "tab_count", static_cast<lua_Integer>(context_.tab_count));
+    lua::setField(state, "active_tab_index", static_cast<lua_Integer>(static_cast<std::uint32_t>(context_.active_tab_index) + 1));
+    lua::setField(state, "pane_count", static_cast<lua_Integer>(context_.pane_count));
+    lua::setField(state, "focused_pane_id", static_cast<lua_Integer>(context_.focused_pane_id));
+    lua::pushReadOnly(state, "callback context is immutable");
   }
 
   int reference_;

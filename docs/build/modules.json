@@ -644,6 +644,7 @@
     "lib/telar-client/include/telar_client/machines/profiles.cppm": "lib/telar-client/include/telar_client/client.cppm",
     "lib/telar-lua/include/telar_lua/vm.cppm": "lib/telar-lua/include/telar_lua/lua.cppm",
     "lib/telar-lua/include/telar_lua/json.cppm": "lib/telar-lua/include/telar_lua/lua.cppm",
+    "lib/telar-lua/include/telar_lua/writer.cppm": "lib/telar-lua/include/telar_lua/lua.cppm",
     "lib/telar-lua/include/telar_lua/value.cppm": "lib/telar-lua/include/telar_lua/lua.cppm",
     "lib/telar-lua/include/telar_lua/local_modules.cppm": "lib/telar-lua/include/telar_lua/lua.cppm",
     "lib/telar-lua/include/telar_lua/api.cppm": "lib/telar-lua/include/telar_lua/lua.cppm",

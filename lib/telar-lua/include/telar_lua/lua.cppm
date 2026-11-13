@@ -579,6 +579,56 @@ private:
 }
 }
 
+// Interface: telar_lua/writer.cppm
+export {
+namespace telar::runtime::lua {
+
+// Sets field `name` of the table on top of the stack. The overloads take exactly a text, a bool or
+// a Lua integer, so another integer type is ambiguous and must say how it converts.
+inline void setField(lua_State *state, const char *name, std::string_view value) {
+  lua_pushlstring(state, value.data(), value.size());
+  lua_setfield(state, -2, name);
+}
+
+inline void setField(lua_State *state, const char *name, bool value) {
+  lua_pushboolean(state, static_cast<int>(value));
+  lua_setfield(state, -2, name);
+}
+
+inline void setField(lua_State *state, const char *name, lua_Integer value) {
+  lua_pushinteger(state, value);
+  lua_setfield(state, -2, name);
+}
+
+// A 64-bit identity as decimal text: past 2^63 a Lua integer would turn it negative.
+inline void setDecimal(lua_State *state, const char *name, std::uint64_t value) {
+  std::array<char, 32> text;
+  const auto result = std::to_chars(text.data(), text.data() + text.size(), value);
+  setField(state, name, std::string_view{text.data(), result.ptr});
+}
+
+// Replaces the table on top of the stack with a read-only view of it: reads reach the table,
+// writes raise `message`, and the view's metatable stays hidden.
+inline void pushReadOnly(lua_State *state, const char *message) {
+  lua_createtable(state, 0, 0);
+  lua_createtable(state, 0, 3);
+  lua_pushvalue(state, -3);
+  lua_setfield(state, -2, "__index");
+  lua_pushstring(state, message);
+  lua_pushcclosure(state, [](lua_State *raised) -> int {
+    lua_pushvalue(raised, lua_upvalueindex(1));
+    return lua_error(raised);
+  }, 1);
+  lua_setfield(state, -2, "__newindex");
+  lua_pushboolean(state, 0);
+  lua_setfield(state, -2, "__metatable");
+  lua_setmetatable(state, -2);
+  lua_remove(state, -2);
+}
+
+}
+}
+
 // Interface: telar_lua/value.cppm
 export {
 namespace telar::runtime::lua {

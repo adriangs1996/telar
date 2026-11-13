@@ -131,78 +131,45 @@ public:
   }
 
 private:
-  inline static void integer(lua_State *state, const char *name, std::int64_t value) {
-    lua_pushinteger(state, static_cast<lua_Integer>(value));
-    lua_setfield(state, -2, name);
-  }
-
-  inline static void boolean(lua_State *state, const char *name, bool value) {
-    lua_pushboolean(state, static_cast<int>(value));
-    lua_setfield(state, -2, name);
-  }
-
-  inline static void text(lua_State *state, const char *name, std::string_view value) {
-    lua_pushlstring(state, value.data(), value.size());
-    lua_setfield(state, -2, name);
-  }
-
-  inline static int immutable(lua_State *state) {
-    lua_pushliteral(state, "callback context is immutable");
-
-    return lua_error(state);
-  }
-
-  inline static void freeze(lua_State *state) {
-    lua_newtable(state);
-    lua_newtable(state);
-    lua_pushvalue(state, -3);
-    lua_setfield(state, -2, "__index");
-    lua_pushcfunction(state, &immutable);
-    lua_setfield(state, -2, "__newindex");
-    lua_pushboolean(state, 0);
-    lua_setfield(state, -2, "__metatable");
-    lua_setmetatable(state, -2);
-    lua_remove(state, -2);
-  }
 
   inline void pushContext(lua_State *state) const {
     lua_newtable(state);
-    boolean(state, "sidebar_visible", context_.client.sidebar_visible);
-    integer(state, "tab_count", context_.client.tab_count);
-    integer(state, "active_tab_index", static_cast<std::int64_t>(context_.client.active_tab_index) + 1);
-    integer(state, "pane_count", context_.client.pane_count);
-    integer(state, "focused_pane_id", static_cast<std::int64_t>(context_.client.focused_pane_id));
+    runtime::lua::setField(state, "sidebar_visible", static_cast<bool>(context_.client.sidebar_visible));
+    runtime::lua::setField(state, "tab_count", static_cast<lua_Integer>(context_.client.tab_count));
+    runtime::lua::setField(state, "active_tab_index", static_cast<lua_Integer>(static_cast<std::int64_t>(context_.client.active_tab_index) + 1));
+    runtime::lua::setField(state, "pane_count", static_cast<lua_Integer>(context_.client.pane_count));
+    runtime::lua::setField(state, "focused_pane_id", static_cast<lua_Integer>(static_cast<std::int64_t>(context_.client.focused_pane_id)));
 
     lua_newtable(state);
-    integer(state, "unix_seconds", context_.time.unix_seconds);
-    integer(state, "year", context_.time.year);
-    integer(state, "month", context_.time.month);
-    integer(state, "day", context_.time.day);
-    integer(state, "hour", context_.time.hour);
-    integer(state, "minute", context_.time.minute);
-    integer(state, "second", context_.time.second);
-    integer(state, "weekday", context_.time.weekday);
-    freeze(state);
+    runtime::lua::setField(state, "unix_seconds", static_cast<lua_Integer>(context_.time.unix_seconds));
+    runtime::lua::setField(state, "year", static_cast<lua_Integer>(context_.time.year));
+    runtime::lua::setField(state, "month", static_cast<lua_Integer>(context_.time.month));
+    runtime::lua::setField(state, "day", static_cast<lua_Integer>(context_.time.day));
+    runtime::lua::setField(state, "hour", static_cast<lua_Integer>(context_.time.hour));
+    runtime::lua::setField(state, "minute", static_cast<lua_Integer>(context_.time.minute));
+    runtime::lua::setField(state, "second", static_cast<lua_Integer>(context_.time.second));
+    runtime::lua::setField(state, "weekday", static_cast<lua_Integer>(context_.time.weekday));
+    runtime::lua::pushReadOnly(state, "callback context is immutable");
     lua_setfield(state, -2, "time");
 
     lua_newtable(state);
-    boolean(state, "available", context_.metrics.has_value());
+    runtime::lua::setField(state, "available", static_cast<bool>(context_.metrics.has_value()));
     if (context_.metrics) {
-      integer(state, "cpu_percent", context_.metrics->cpu_percent);
-      integer(state, "memory_used_decigib", context_.metrics->memory_used_decigib);
+      runtime::lua::setField(state, "cpu_percent", static_cast<lua_Integer>(context_.metrics->cpu_percent));
+      runtime::lua::setField(state, "memory_used_decigib", static_cast<lua_Integer>(context_.metrics->memory_used_decigib));
       if (context_.metrics->has_battery) {
-        integer(state, "battery_percent", context_.metrics->battery_percent);
+        runtime::lua::setField(state, "battery_percent", static_cast<lua_Integer>(context_.metrics->battery_percent));
       }
     }
 
-    freeze(state);
+    runtime::lua::pushReadOnly(state, "callback context is immutable");
     lua_setfield(state, -2, "metrics");
     if (context_.output) {
-      text(state, "output", *context_.output);
+      runtime::lua::setField(state, "output", *context_.output);
     }
 
-    text(state, "pane_title", context_.pane_title);
-    freeze(state);
+    runtime::lua::setField(state, "pane_title", context_.pane_title);
+    runtime::lua::pushReadOnly(state, "callback context is immutable");
   }
 
   int reference_;

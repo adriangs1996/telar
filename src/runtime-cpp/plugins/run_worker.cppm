@@ -180,30 +180,30 @@ public:
     const auto &final_half = exchange.response ? *exchange.response : *exchange.request;
     lua_createtable(state, 0, 13);
     if (traffic) { setIdentity(state, "id", exchange.identity.id); }
-    else { setInteger(state, "id", std::bit_cast<std::int64_t>(exchange.identity.id)); }
-    setString(state, "host", exchange.host);
-    setString(state, "protocol", protocolName(exchange.protocol));
+    else { lua::setField(state, "id", static_cast<lua_Integer>(std::bit_cast<std::int64_t>(exchange.identity.id))); }
+    lua::setField(state, "host", exchange.host);
+    lua::setField(state, "protocol", protocolName(exchange.protocol));
     if (traffic) { setIdentity(state, "connection_id", exchange.key.connection); }
-    else { setInteger(state, "connection_id", std::bit_cast<std::int64_t>(exchange.key.connection)); }
-    setInteger(state, "stream_id", exchange.key.stream);
-    setString(state, "method", exchange.method);
-    setString(state, "target", exchange.target);
-    setInteger(state, "status", exchange.response ? exchange.response->status_code : 0);
-    setString(state, "outcome", outcomeName(final_half.outcome));
-    setInteger(state, "started_at_ms", exchange.started_at_ms);
-    setInteger(state, "finished_at_ms", final_half.finished_at_ms);
+    else { lua::setField(state, "connection_id", static_cast<lua_Integer>(std::bit_cast<std::int64_t>(exchange.key.connection))); }
+    lua::setField(state, "stream_id", static_cast<lua_Integer>(exchange.key.stream));
+    lua::setField(state, "method", exchange.method);
+    lua::setField(state, "target", exchange.target);
+    lua::setField(state, "status", static_cast<lua_Integer>(exchange.response ? exchange.response->status_code : 0));
+    lua::setField(state, "outcome", outcomeName(final_half.outcome));
+    lua::setField(state, "started_at_ms", static_cast<lua_Integer>(exchange.started_at_ms));
+    lua::setField(state, "finished_at_ms", static_cast<lua_Integer>(final_half.finished_at_ms));
     pushHalf(state, exchange.request, traffic);
     lua_setfield(state, -2, "request");
     pushHalf(state, exchange.response, traffic);
     lua_setfield(state, -2, "response");
-    freeze(state);
+    lua::pushReadOnly(state, "exchange is immutable");
   }
 
 private:
   inline static void setIdentity(lua_State *state, const char *name, std::uint64_t value) {
     std::array<char, 32> text;
     const auto result = std::to_chars(text.data(), text.data() + text.size(), value);
-    setString(state, name, {text.data(), result.ptr});
+    lua::setField(state, name, {text.data(), result.ptr});
   }
 
   inline static std::string_view protocolName(ExchangeProtocol protocol) noexcept {
@@ -230,20 +230,8 @@ private:
     return "";
   }
 
-  inline static void setString(lua_State *state, const char *name, std::string_view text) {
-    lua_pushlstring(state, text.data(), text.size());
-    lua_setfield(state, -2, name);
-  }
 
-  inline static void setInteger(lua_State *state, const char *name, std::int64_t value) {
-    lua_pushinteger(state, value);
-    lua_setfield(state, -2, name);
-  }
 
-  inline static void setBoolean(lua_State *state, const char *name, bool value) {
-    lua_pushboolean(state, value);
-    lua_setfield(state, -2, name);
-  }
 
   inline static void pushHalf(lua_State *state, const std::optional<HalfView> &half, bool traffic) {
     if (!half) {
@@ -254,23 +242,23 @@ private:
     lua_createtable(state, 0, 5);
     pushHead(state, half->head, traffic);
     lua_setfield(state, -2, "head");
-    setString(state, "body", {reinterpret_cast<const char *>(half->body.data()), half->body.size()});
-    setBoolean(state, "body_truncated", half->body_truncated);
-    setString(state, "body_encoding", half->encoding);
-    setBoolean(state, "body_decoded", half->decoded);
+    lua::setField(state, "body", {reinterpret_cast<const char *>(half->body.data()), half->body.size()});
+    lua::setField(state, "body_truncated", half->body_truncated);
+    lua::setField(state, "body_encoding", half->encoding);
+    lua::setField(state, "body_decoded", half->decoded);
     if (traffic) {
-      setBoolean(state, "head_truncated", half->head_truncated);
-      setInteger(state, "status", half->status_code);
-      setString(state, "outcome", outcomeName(half->outcome));
-      setInteger(state, "finished_at_ms", half->finished_at_ms);
+      lua::setField(state, "head_truncated", half->head_truncated);
+      lua::setField(state, "status", static_cast<lua_Integer>(half->status_code));
+      lua::setField(state, "outcome", outcomeName(half->outcome));
+      lua::setField(state, "finished_at_ms", static_cast<lua_Integer>(half->finished_at_ms));
     }
-    freeze(state);
+    lua::pushReadOnly(state, "exchange is immutable");
   }
 
   inline static void pushHead(lua_State *state, std::span<const std::uint8_t> bytes, bool traffic) {
     std::string_view remaining{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
     lua_createtable(state, 0, 2);
-    setString(state, "raw", remaining);
+    lua::setField(state, "raw", remaining);
     lua_createtable(state, 0, 0);
     lua_Integer index = 1;
     while (!remaining.empty()) {
@@ -279,14 +267,14 @@ private:
       const auto colon = line.find(':', line.starts_with(':') && line.size() > 1 ? 1 : 0);
       if (colon != std::string_view::npos) {
         lua_createtable(state, 0, 2);
-        setString(state, "name", traffic ? line.substr(0, colon) : trimText(line.substr(0, colon), " \t"));
+        lua::setField(state, "name", traffic ? line.substr(0, colon) : trimText(line.substr(0, colon), " \t"));
         auto value = line.substr(colon + 1);
         if (traffic) {
           const auto first = value.find_first_not_of(" \t");
           value = first == std::string_view::npos ? std::string_view{} : value.substr(first);
         } else { value = trimText(value, " \t"); }
-        setString(state, "value", value);
-        freeze(state);
+        lua::setField(state, "value", value);
+        lua::pushReadOnly(state, "exchange is immutable");
         lua_seti(state, -2, index++);
       }
       if (end == std::string_view::npos) {
@@ -295,28 +283,11 @@ private:
 
       remaining.remove_prefix(end + 2);
     }
-    freeze(state);
+    lua::pushReadOnly(state, "exchange is immutable");
     lua_setfield(state, -2, "fields");
-    freeze(state);
+    lua::pushReadOnly(state, "exchange is immutable");
   }
 
-  inline static void freeze(lua_State *state) {
-    lua_createtable(state, 0, 0);
-    lua_createtable(state, 0, 3);
-    lua_pushvalue(state, -3);
-    lua_setfield(state, -2, "__index");
-    lua_pushcfunction(state, &rejectMutation);
-    lua_setfield(state, -2, "__newindex");
-    lua_pushboolean(state, false);
-    lua_setfield(state, -2, "__metatable");
-    lua_setmetatable(state, -2);
-    lua_remove(state, -2);
-  }
-
-  inline static int rejectMutation(lua_State *state) {
-    lua_pushliteral(state, "exchange is immutable");
-    return lua_error(state);
-  }
 };
 
 }
@@ -328,85 +299,73 @@ namespace telar::runtime::plugins {
 
 class LuaTrafficValue {
 public:
-  inline static void field(lua_State *state, const char *name, std::string_view value) {
-    lua_pushlstring(state, value.data(), value.size());
-    lua_setfield(state, -2, name);
-  }
-
-  inline static void field(lua_State *state, const char *name, bool value) { lua_pushboolean(state, value); lua_setfield(state, -2, name); }
-  inline static void number(lua_State *state, const char *name, std::uint64_t value) { lua_pushinteger(state, static_cast<lua_Integer>(value)); lua_setfield(state, -2, name); }
-  inline static void identity(lua_State *state, const char *name, std::uint64_t value) {
-    std::array<char, 32> text;
-    const auto result = std::to_chars(text.data(), text.data() + text.size(), value);
-    field(state, name, std::string_view{text.data(), result.ptr});
-  }
 
   inline static void push(lua_State *state, const traffic::Event &event, std::uint64_t dropped) {
     lua_createtable(state, 0, 24);
-    field(state, "kind", traffic::Protocol::name(event.kind));
-    identity(state, "session_id", event.session);
-    identity(state, "sequence", event.sequence);
-    identity(state, "subscriber_drops", dropped);
-    field(state, "visibility", std::string_view{"wire"});
-    number(state, "timestamp_us", event.timestamp_us);
-    number(state, "interface_index", event.interface_index);
-    number(state, "link_type", event.link_type);
-    number(state, "captured_bytes", event.bytes.size());
-    number(state, "original_bytes", event.original_bytes);
-    identity(state, "kernel_drops", event.kernel_drops);
-    identity(state, "capture_drops", event.capture_drops);
-    identity(state, "runtime_drops", event.runtime_drops);
-    field(state, "interface", event.interface);
-    field(state, "offline", event.offline);
-    field(state, "truncated", event.kind == traffic::Kind::packet && event.bytes.size() < event.original_bytes);
-    field(state, "bytes", std::string_view{reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()});
-    if (event.kind == traffic::Kind::ready && !event.bytes.empty()) { field(state, "reason", std::string_view{reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()}); }
+    lua::setField(state, "kind", traffic::Protocol::name(event.kind));
+    lua::setDecimal(state, "session_id", event.session);
+    lua::setDecimal(state, "sequence", event.sequence);
+    lua::setDecimal(state, "subscriber_drops", dropped);
+    lua::setField(state, "visibility", std::string_view{"wire"});
+    lua::setField(state, "timestamp_us", static_cast<lua_Integer>(event.timestamp_us));
+    lua::setField(state, "interface_index", static_cast<lua_Integer>(event.interface_index));
+    lua::setField(state, "link_type", static_cast<lua_Integer>(event.link_type));
+    lua::setField(state, "captured_bytes", static_cast<lua_Integer>(event.bytes.size()));
+    lua::setField(state, "original_bytes", static_cast<lua_Integer>(event.original_bytes));
+    lua::setDecimal(state, "kernel_drops", event.kernel_drops);
+    lua::setDecimal(state, "capture_drops", event.capture_drops);
+    lua::setDecimal(state, "runtime_drops", event.runtime_drops);
+    lua::setField(state, "interface", event.interface);
+    lua::setField(state, "offline", event.offline);
+    lua::setField(state, "truncated", event.kind == traffic::Kind::packet && event.bytes.size() < event.original_bytes);
+    lua::setField(state, "bytes", std::string_view{reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()});
+    if (event.kind == traffic::Kind::ready && !event.bytes.empty()) { lua::setField(state, "reason", std::string_view{reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()}); }
     if (traffic::isFlow(event.kind) || event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request) {
       const auto flow = traffic::FlowCodec::decode(event.bytes);
-      identity(state, "flow_id", flow.id);
-      identity(state, "offset", flow.offset);
-      identity(state, "ticket", flow.ticket);
-      field(state, "client", flow.client);
-      field(state, "server", flow.server);
-      field(state, "host", flow.host);
-      field(state, "reason", flow.reason);
-      field(state, "source", std::string_view{flow.source == traffic::FlowSource::proxy ? "proxy" : "capture"});
-      field(state, "direction", std::string_view{flow.direction == traffic::Direction::outbound ? "outbound" : "inbound"});
-      field(state, "visibility", std::string_view{flow.visibility == traffic::Visibility::plaintext ? "plaintext" : "wire"});
-      field(state, "bytes", std::string_view{reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size()});
-      number(state, "captured_bytes", flow.bytes.size());
-      number(state, "original_bytes", flow.bytes.size());
+      lua::setDecimal(state, "flow_id", flow.id);
+      lua::setDecimal(state, "offset", flow.offset);
+      lua::setDecimal(state, "ticket", flow.ticket);
+      lua::setField(state, "client", flow.client);
+      lua::setField(state, "server", flow.server);
+      lua::setField(state, "host", flow.host);
+      lua::setField(state, "reason", flow.reason);
+      lua::setField(state, "source", std::string_view{flow.source == traffic::FlowSource::proxy ? "proxy" : "capture"});
+      lua::setField(state, "direction", std::string_view{flow.direction == traffic::Direction::outbound ? "outbound" : "inbound"});
+      lua::setField(state, "visibility", std::string_view{flow.visibility == traffic::Visibility::plaintext ? "plaintext" : "wire"});
+      lua::setField(state, "bytes", std::string_view{reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size()});
+      lua::setField(state, "captured_bytes", static_cast<lua_Integer>(flow.bytes.size()));
+      lua::setField(state, "original_bytes", static_cast<lua_Integer>(flow.bytes.size()));
       if (event.kind == traffic::Kind::http_intercept_request) {
         pushMessage(state, HttpMessageCodec::decode(flow.bytes));
         lua_setfield(state, -2, "message");
-        field(state, "bytes", std::string_view{});
+        lua::setField(state, "bytes", std::string_view{});
       }
     } else if (event.kind == traffic::Kind::datagram) {
       const auto item = traffic::DatagramCodec::decode(event.bytes);
-      field(state, "transport", traffic::DatagramCodec::name(item.transport));
-      field(state, "source", std::string_view{"capture"});
-      field(state, "ipv6", item.ipv6);
-      field(state, "source_address", std::string_view{traffic::IpPayload::addressText(item.source_address, item.ipv6).data()});
-      field(state, "destination_address", std::string_view{traffic::IpPayload::addressText(item.destination_address, item.ipv6).data()});
-      field(state, "bytes", std::string_view{reinterpret_cast<const char *>(item.bytes.data()), item.bytes.size()});
-      field(state, "truncated", item.truncated);
-      number(state, "captured_bytes", item.bytes.size());
-      number(state, "original_bytes", item.original_bytes);
+      lua::setField(state, "transport", traffic::DatagramCodec::name(item.transport));
+      lua::setField(state, "source", std::string_view{"capture"});
+      lua::setField(state, "ipv6", item.ipv6);
+      lua::setField(state, "source_address", std::string_view{traffic::IpPayload::addressText(item.source_address, item.ipv6).data()});
+      lua::setField(state, "destination_address", std::string_view{traffic::IpPayload::addressText(item.destination_address, item.ipv6).data()});
+      lua::setField(state, "bytes", std::string_view{reinterpret_cast<const char *>(item.bytes.data()), item.bytes.size()});
+      lua::setField(state, "truncated", item.truncated);
+      lua::setField(state, "captured_bytes", static_cast<lua_Integer>(item.bytes.size()));
+      lua::setField(state, "original_bytes", static_cast<lua_Integer>(item.original_bytes));
       if (item.transport == traffic::DatagramTransport::udp) {
-        number(state, "source_port", item.source_port);
-        number(state, "destination_port", item.destination_port);
+        lua::setField(state, "source_port", static_cast<lua_Integer>(item.source_port));
+        lua::setField(state, "destination_port", static_cast<lua_Integer>(item.destination_port));
       } else {
-        number(state, "icmp_type", item.icmp_type);
-        number(state, "icmp_code", item.icmp_code);
+        lua::setField(state, "icmp_type", static_cast<lua_Integer>(item.icmp_type));
+        lua::setField(state, "icmp_code", static_cast<lua_Integer>(item.icmp_code));
         if (item.echo()) {
-          number(state, "icmp_identifier", traffic::NetworkPacket::word(item.bytes, 4));
-          number(state, "icmp_sequence", traffic::NetworkPacket::word(item.bytes, 6));
+          lua::setField(state, "icmp_identifier", static_cast<lua_Integer>(traffic::NetworkPacket::word(item.bytes, 4)));
+          lua::setField(state, "icmp_sequence", static_cast<lua_Integer>(traffic::NetworkPacket::word(item.bytes, 6)));
         }
       }
     } else if (event.kind == traffic::Kind::exchange) {
       LuaExchange::push(state, Protocol::decodeExchange(event.bytes), true);
       lua_setfield(state, -2, "exchange");
-      field(state, "bytes", std::string_view{});
+      lua::setField(state, "bytes", std::string_view{});
     }
   }
 
@@ -462,8 +421,8 @@ private:
     lua_Integer index = 1;
     for (const auto &entry : fields) {
       lua_createtable(state, 0, 2);
-      field(state, "name", entry.name);
-      field(state, "value", entry.value);
+      lua::setField(state, "name", entry.name);
+      lua::setField(state, "value", entry.value);
       lua_rawseti(state, -2, index++);
     }
   }
@@ -471,18 +430,18 @@ private:
   inline static void pushMessage(lua_State *state, const HttpMessageView &message) {
     constexpr std::array protocols{std::string_view{"http10"}, std::string_view{"http11"}, std::string_view{"h2"}};
     lua_createtable(state, 0, 15);
-    field(state, "protocol", protocols[static_cast<std::size_t>(message.version)]);
-    field(state, "response", message.response);
-    field(state, "response_to_head", message.response_to_head);
-    number(state, "stream_id", message.stream);
-    field(state, "method", message.method);
-    field(state, "target", message.target);
-    field(state, "reason", message.reason);
-    field(state, "scheme", message.scheme);
-    field(state, "authority", message.authority);
-    number(state, "status", message.status);
-    field(state, "body", std::string_view{reinterpret_cast<const char *>(message.body.data()), message.body.size()});
-    field(state, "body_decoded", true);
+    lua::setField(state, "protocol", protocols[static_cast<std::size_t>(message.version)]);
+    lua::setField(state, "response", message.response);
+    lua::setField(state, "response_to_head", message.response_to_head);
+    lua::setField(state, "stream_id", static_cast<lua_Integer>(message.stream));
+    lua::setField(state, "method", message.method);
+    lua::setField(state, "target", message.target);
+    lua::setField(state, "reason", message.reason);
+    lua::setField(state, "scheme", message.scheme);
+    lua::setField(state, "authority", message.authority);
+    lua::setField(state, "status", static_cast<lua_Integer>(message.status));
+    lua::setField(state, "body", std::string_view{reinterpret_cast<const char *>(message.body.data()), message.body.size()});
+    lua::setField(state, "body_decoded", true);
     pushFields(state, std::span{message.headers}.first(message.header_count));
     lua_setfield(state, -2, "headers");
     pushFields(state, std::span{message.trailers}.first(message.trailer_count));
@@ -536,15 +495,14 @@ public:
   }
 
   inline static void push(lua_State *state, const traffic::control::Reply &reply) {
-    using Value = LuaTrafficValue;
     constexpr std::array results{"ok", "disabled", "authorization_required", "busy", "failed", "cleanup_required"};
     constexpr std::array capture{"disabled", "idle", "live", "offline"};
     constexpr std::array redirect{"disabled", "idle", "starting", "active", "stopping", "cleanup_required"};
     constexpr std::array trust{"absent", "installed", "stale"};
     lua_createtable(state, 0, 10);
-    Value::field(state, "result", std::string_view{results[static_cast<std::size_t>(reply.result)]});
-    Value::field(state, "message", reply.message);
-    Value::field(state, "administration_enabled", reply.status.administration);
+    lua::setField(state, "result", std::string_view{results[static_cast<std::size_t>(reply.result)]});
+    lua::setField(state, "message", reply.message);
+    lua::setField(state, "administration_enabled", reply.status.administration);
     lua_createtable(state, reply.argument_count, 0);
     for (std::size_t index = 0; index < reply.argument_count; ++index) {
       const auto argument = reply.authorization[index];
@@ -553,26 +511,26 @@ public:
     }
     lua_setfield(state, -2, "authorization_argv");
     lua_createtable(state, 0, 4);
-    Value::field(state, "state", std::string_view{capture[static_cast<std::size_t>(reply.status.capture)]});
-    Value::identity(state, "session_id", reply.status.capture_session);
-    Value::number(state, "interfaces", reply.status.interfaces);
-    Value::number(state, "interface_errors", reply.status.interface_errors);
+    lua::setField(state, "state", std::string_view{capture[static_cast<std::size_t>(reply.status.capture)]});
+    lua::setDecimal(state, "session_id", reply.status.capture_session);
+    lua::setField(state, "interfaces", static_cast<lua_Integer>(reply.status.interfaces));
+    lua::setField(state, "interface_errors", static_cast<lua_Integer>(reply.status.interface_errors));
     lua_setfield(state, -2, "capture");
     lua_createtable(state, 0, 1);
-    Value::field(state, "state", std::string_view{redirect[static_cast<std::size_t>(reply.status.redirect)]});
+    lua::setField(state, "state", std::string_view{redirect[static_cast<std::size_t>(reply.status.redirect)]});
     lua_setfield(state, -2, "redirect");
     lua_createtable(state, 0, 5);
-    Value::field(state, "active", reply.status.proxy);
-    Value::number(state, "port", reply.status.port);
-    Value::field(state, "transparent_tls", reply.status.transparent_tls);
-    Value::field(state, "tls_accepting", reply.status.tls_accepting);
-    Value::field(state, "interception", reply.status.interception);
+    lua::setField(state, "active", reply.status.proxy);
+    lua::setField(state, "port", static_cast<lua_Integer>(reply.status.port));
+    lua::setField(state, "transparent_tls", reply.status.transparent_tls);
+    lua::setField(state, "tls_accepting", reply.status.tls_accepting);
+    lua::setField(state, "interception", reply.status.interception);
     lua_setfield(state, -2, "proxy");
     lua_createtable(state, 0, 4);
-    Value::field(state, "trust_record", std::string_view{trust[static_cast<std::size_t>(reply.status.trust)]});
-    Value::field(state, "fingerprint_sha1", reply.fingerprint_sha1);
-    Value::field(state, "fingerprint_sha256", reply.fingerprint_sha256);
-    Value::field(state, "certificate", std::string_view{reinterpret_cast<const char *>(reply.certificate.data()), reply.certificate.size()});
+    lua::setField(state, "trust_record", std::string_view{trust[static_cast<std::size_t>(reply.status.trust)]});
+    lua::setField(state, "fingerprint_sha1", reply.fingerprint_sha1);
+    lua::setField(state, "fingerprint_sha256", reply.fingerprint_sha256);
+    lua::setField(state, "certificate", std::string_view{reinterpret_cast<const char *>(reply.certificate.data()), reply.certificate.size()});
     lua_setfield(state, -2, "ca");
     if (!reply.recording.empty()) { recordings(state, traffic::recording::Protocol::page(reply.recording)); }
   }
@@ -587,18 +545,17 @@ private:
   }
 
   inline static void metadata(lua_State *state, const traffic::recording::Page &page) {
-    using Value = LuaTrafficValue;
     lua_createtable(state, 0, 12);
-    Value::identity(state, "id", page.id);
-    Value::field(state, "active", page.active);
-    Value::field(state, "gap", page.gap);
-    Value::identity(state, "oldest_cursor", page.oldest);
-    Value::identity(state, "next_cursor", page.next);
-    Value::identity(state, "end_cursor", page.end);
-    Value::identity(state, "evicted", page.evicted);
-    Value::identity(state, "dropped", page.dropped);
-    Value::identity(state, "contention_drops", page.contention_drops);
-    Value::number(state, "retained_bytes", page.bytes);
+    lua::setDecimal(state, "id", page.id);
+    lua::setField(state, "active", page.active);
+    lua::setField(state, "gap", page.gap);
+    lua::setDecimal(state, "oldest_cursor", page.oldest);
+    lua::setDecimal(state, "next_cursor", page.next);
+    lua::setDecimal(state, "end_cursor", page.end);
+    lua::setDecimal(state, "evicted", page.evicted);
+    lua::setDecimal(state, "dropped", page.dropped);
+    lua::setDecimal(state, "contention_drops", page.contention_drops);
+    lua::setField(state, "retained_bytes", static_cast<lua_Integer>(page.bytes));
   }
 
   inline static void recordings(lua_State *state, const traffic::recording::Page &page) {
@@ -612,14 +569,14 @@ private:
       return;
     }
     metadata(state, page);
-    LuaTrafficValue::field(state, "pcapng", page.format == recording::Format::pcapng ? std::string_view{reinterpret_cast<const char *>(page.rows.data()), page.rows.size()} : std::string_view{});
+    lua::setField(state, "pcapng", page.format == recording::Format::pcapng ? std::string_view{reinterpret_cast<const char *>(page.rows.data()), page.rows.size()} : std::string_view{});
     lua_createtable(state, page.format == recording::Format::events ? page.count : 0, 0);
     if (page.format == recording::Format::events) {
       FrameReader rows{page.rows};
       for (std::uint32_t index = 0; index < page.count; ++index) {
         const auto cursor = rows.integer<std::uint64_t>();
         LuaTrafficValue::push(state, traffic::Protocol::decode(rows.bytes()), 0);
-        LuaTrafficValue::identity(state, "recording_cursor", cursor);
+        lua::setDecimal(state, "recording_cursor", cursor);
         lua_rawseti(state, -2, index + 1);
       }
       rows.finish();
@@ -704,10 +661,10 @@ public:
     lua_pushnil(state);
     LuaTrafficValue::push(state, event.event, event.dropped);
     lua_createtable(state, 0, 3);
-    LuaTrafficValue::field(state, "id", specification_.name.view());
-    LuaTrafficValue::identity(state, "generation", specification_.generation);
+    lua::setField(state, "id", specification_.name.view());
+    lua::setDecimal(state, "generation", specification_.generation);
     std::array<char, 64> digest;
-    LuaTrafficValue::field(state, "digest", encodeLowerHex(specification_.digest, digest));
+    lua::setField(state, "digest", encodeLowerHex(specification_.digest, digest));
     lua_setfield(state, -2, "app");
     lua_call(state, 2, 1);
     if (stage == TrafficStage::observe) {
