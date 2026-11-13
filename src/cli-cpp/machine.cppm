@@ -680,7 +680,7 @@ class ConfigSync {
     // The canonical path can have arbitrary non-agent ancestors; keep only
     // their names for the denylist, then reuse acceptable's leaf checks.
     auto tail = std::string_view{path};
-    static constexpr auto directories = std::to_array<std::string_view>({".ssh", ".gnupg", ".aws", ".kube", ".docker", "keychains", "gcloud", ".password-store"});
+    const auto &directories = config_receive::credential_directories;
     for (;;) {
       const auto slash = tail.find('/');
       const auto component = filter::lower(tail.substr(0, slash));

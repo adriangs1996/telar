@@ -93,13 +93,15 @@ inline std::string lower(std::string_view text) {
   return result;
 }
 
+// Directories that hold credentials, which no configuration sync reads or writes below.
+inline constexpr auto credential_directories = std::to_array<std::string_view>({".ssh", ".gnupg", ".aws", ".kube", ".docker", "keychains", "gcloud", ".password-store"});
+
 inline bool acceptable(std::string_view path) {
   if (path.empty() || path.size() > PATH_MAX || path.front() == '/' || std::ranges::any_of(path, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f || byte == '\\'; })) {
     return false;
   }
 
   static constexpr auto roots = std::to_array<std::string_view>({".claude/", ".codex/", ".pi/agent/", ".config/opencode/", ".cursor/", ".agents/skills/"});
-  static constexpr auto credential_directories = std::to_array<std::string_view>({".ssh", ".gnupg", ".aws", ".kube", ".docker", "keychains", "gcloud", ".password-store"});
   static constexpr auto session_directories = std::to_array<std::string_view>({"projects", "sessions", "history", "todos", "shell-snapshots", "file-history", "statsig", "logs", "cache", "plans"});
   static constexpr auto credential_names = std::to_array<std::string_view>({".claude.json", ".credentials.json", "auth.json", "mcp-auth.json", "credentials", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".vault-token", ".git-credentials", "hosts.yml", "models.json", "keys.json", "sa.json"});
   static constexpr auto extensions = std::to_array<std::string_view>({".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db", ".jsonl", ".db", ".sqlite", ".sqlite3", ".log"});

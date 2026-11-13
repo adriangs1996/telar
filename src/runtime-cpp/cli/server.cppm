@@ -353,12 +353,10 @@ export namespace telar::runtime::cli {
     BackgroundService background_service{memory, paths.history.c_str(), configuration.history_filters};
     PathService path_service{memory};
     EditorService editor_service{memory};
-    std::array<std::string_view, 32> engine_arguments;
-    std::transform(configuration.engine.arguments.begin(), configuration.engine.arguments.end(), engine_arguments.begin(), [](const auto &argument) { return std::string_view{argument}; });
-    const auto selected_arguments = options.engine_argument_count == 0 ? std::span<const std::string_view>{engine_arguments}.first(configuration.engine.arguments.size()) : std::span{options.engine_arguments}.first(options.engine_argument_count);
+    const auto engine_arguments = configuration.engine.views();
+    const auto selected_arguments = options.engine_argument_count == 0 ? engine_arguments.span() : std::span{options.engine_arguments}.first(options.engine_argument_count);
     SuggestionService suggestion_service{memory, SuggestionOptions{.arguments = selected_arguments, .timeout = configuration.engine.timeout, .idle_timeout = configuration.engine.idle_timeout}};
-    std::array<std::string_view, 32> description_arguments;
-    std::transform(configuration.descriptions.arguments.begin(), configuration.descriptions.arguments.end(), description_arguments.begin(), [](const auto &argument) { return std::string_view{argument}; });
+    const auto description_arguments = configuration.descriptions.views();
     BackgroundPool background{memory, background_service, path_service, editor_service, suggestion_service};
     NativeEventLoop<Memory> poller{memory};
     poller.watchSignal(SIGTERM);
@@ -375,7 +373,7 @@ export namespace telar::runtime::cli {
         .fresh = options.fresh,
         .capture_output = configuration.capture_output,
         .manifests = &configuration.manifests,
-        .descriptions = {.arguments = std::span{description_arguments}.first(configuration.descriptions.arguments.size()), .timeout = configuration.descriptions.timeout},
+        .descriptions = {.arguments = description_arguments.span(), .timeout = configuration.descriptions.timeout},
         .graphics = configuration.graphics,
         .control_policy = configuration.control_policy,
         .shell_integration = shell_integration,

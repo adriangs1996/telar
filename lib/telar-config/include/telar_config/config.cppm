@@ -3691,8 +3691,28 @@ namespace telar::runtime::config {
 
 template <Allocator Memory>
 struct CommandValues {
+  static constexpr std::size_t maximum_arguments = 32;
+
+  // The arguments as views into this value.
+  struct Views {
+    std::array<std::string_view, maximum_arguments> words{};
+    std::size_t count = 0;
+
+    [[nodiscard]] inline std::span<const std::string_view> span() const noexcept {
+      return std::span{words}.first(count);
+    }
+  };
+
   inline explicit CommandValues(Memory &memory)
       : arguments(AllocatorRef<String<Memory>, Memory>{memory}) {}
+
+  [[nodiscard]] inline Views views() const noexcept {
+    Views views;
+    for (const auto &argument : arguments) {
+      views.words[views.count++] = argument;
+    }
+    return views;
+  }
 
   Vector<String<Memory>, Memory> arguments;
   std::chrono::milliseconds timeout{15'000};
@@ -3843,7 +3863,8 @@ private:
     }
     const auto command = table.field("command");
     const auto count = command.arraySize();
-    if (count == 0 || count > 32) {
+    static_assert(CommandValues<Memory>::maximum_arguments == 32, "the message names the limit");
+    if (count == 0 || count > CommandValues<Memory>::maximum_arguments) {
       command.fail("must contain 1..32 arguments");
     }
 

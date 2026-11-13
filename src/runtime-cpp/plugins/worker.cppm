@@ -475,6 +475,8 @@ struct TrafficRegistration {
   inline std::span<const Byte> requestBytes() const noexcept { const auto bytes = request.view(); return {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}; }
 
   inline traffic::InterceptionRule rule() const noexcept { return {host.view(), directions, visibility, timeout_ms, fail_closed, stage == TrafficStage::http}; }
+
+  bool operator==(const TrafficRegistration &) const noexcept = default;
 };
 
 struct TrafficDecision {
@@ -887,7 +889,7 @@ private:
       for (const auto &registration : registrations) {
         if (auto *existing = find(registration.id)) {
           const auto &before = existing->registration;
-          if (before.stage != registration.stage || before.selection != registration.selection || before.filter.view() != registration.filter.view() || before.host.view() != registration.host.view() || before.directions != registration.directions || before.visibility != registration.visibility || before.timeout_ms != registration.timeout_ms || before.fail_closed != registration.fail_closed || before.request.view() != registration.request.view()) { throw EncodingError{"Traffic registrations are immutable"}; }
+          if (before != registration) { throw EncodingError{"Traffic registrations are immutable"}; }
           continue;
         }
         for (auto &connection : connections_) {

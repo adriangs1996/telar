@@ -36,6 +36,11 @@ public:
     return {bytes_.data(), length_};
   }
 
+  // Equal texts are equal, whatever the bytes past them hold.
+  friend bool operator==(const FixedText &left, const FixedText &right) noexcept {
+    return left.view() == right.view();
+  }
+
 private:
   void copy(std::string_view text) noexcept {
     if (!text.empty()) {

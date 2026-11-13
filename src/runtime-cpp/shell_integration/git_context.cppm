@@ -33,9 +33,7 @@ struct ShellGitSummary {
   std::uint32_t unstaged = 0;
   std::uint32_t conflicted = 0;
 
-  inline bool operator==(const ShellGitSummary &other) const noexcept {
-    return repository == other.repository && detached == other.detached && branch.view() == other.branch.view() && divergence_known == other.divergence_known && ahead == other.ahead && behind == other.behind && changes_known == other.changes_known && staged == other.staged && unstaged == other.unstaged && conflicted == other.conflicted;
-  }
+  bool operator==(const ShellGitSummary &) const noexcept = default;
 
   inline PaneGit message(std::uint64_t pane) const noexcept {
     return PaneGit{.pane_id = pane, .repository = repository, .detached = detached, .branch = branch.view(), .divergence_known = divergence_known, .ahead = ahead, .behind = behind, .changes_known = changes_known, .staged = staged, .unstaged = unstaged, .conflicted = conflicted};
