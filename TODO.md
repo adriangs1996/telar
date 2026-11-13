@@ -309,10 +309,11 @@ graph LR
 - **Cierra:** `terminal → fonts`, `terminal → input` (2) y el ciclo `fonts.face` ↔ `terminal.copy_mode`.
 - **Resultado:** `51116a128`. `copy_mode` se parte sin cambiar código en `gui.terminal.glyphs` (box y símbolos; `face.cpp` importa solo esto), `gui.terminal.selection` (`CellSelection`), `gui.fonts.text_runs` y `gui.input.copy_mode` (el modo copia sube a input porque depende de teclas y puntero). `upward_imports` de 32 a 29. Compila la GUI sobre la rama integrada.
 
-### [ ] P3.13b · Sacar tab drag/drop de `gui.input.child_mouse`
+### [x] P3.13b · Sacar tab drag/drop de `gui.input.child_mouse`
 - **Depende de:** P1.2
 - **Toca:** `gui.input.child_mouse`, `gui.presentation.frame_pacer`, `gui.presentation.history_filter_geometry`, `gui.presentation.history_meta_geometry`.
 - **Cierra:** `input → presentation` (3).
+- **Resultado:** `47948ad82`. `gui.presentation.tab_drop` (`TabDrag`, `TabDropTarget`, `TabDropSurface`…) y, porque solo el drag/drop no cerraba las tres aristas, `gui.presentation.history_pointer` (`HistoryActionCapture`, `HistoryHover`). `child_mouse` se queda con `ChildMouse*` y `HistoryScroll`. Código movido sin cambios. `upward_imports` de 29 a 26. Compila la GUI sobre la rama integrada.
 
 ### [ ] P3.13c · `gui.input.configuration` y `gui.components.builtin_content` contra config
 - **Depende de:** P1.2
