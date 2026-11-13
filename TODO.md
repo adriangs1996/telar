@@ -228,6 +228,7 @@ graph LR
 - **Resultado de a:** `ff03ad9cf`. 47 unidades importan vocabulario y dominios, 6 pasan a `telar.vocabulary`, 9 pierden el import; `clipboard.hpp` incluye solo su dominio.
 - **Resultado de b:** `7d229c3f3`. 52 unidades de módulo (9 pierden el import, 34 solo vocabulario, el resto vocabulario y dominios; `session` importa 11) y 84 ficheros textuales (adaptadores Qt, herramientas, `terminal_size.hpp` y `row_cache.hpp`) incluyen solo sus cabeceras de dominio. `gui.prompt.routing` reexporta `pane_io` y el vocabulario en vez del agregador. Al integrar, las cabeceras de dominio que Qt ya no alcanza pasan a la allowlist de la regla 5 (32 entradas).
 - **Resultado de c:** `f07f17cdd`. 25 unidades de la CLI: 18 importan vocabulario (13 también dominios; `worktree` 7), `command_limit` y `output` pasan a `telar.vocabulary`, 5 pierden el import y `main.cpp` deja de incluir el paraguas. CPU por unidad: `runtime_observer` +33 %, `worktree` y `project_setup` +8 %, `command_limit` −6 %. Pasan los 14 tests de la CLI.
+- **Resultado de d:** `d2f677bf3`. `telar.client` y `telar.plugins` importan solo `telar.wire.vocabulary`; `telar.config`, también `telar.wire.clients` (codifica un `ShowNotification`); `wire` entra en las capas de `plugins` y `config`. Primera bajada medida de la cascada (runtime, builds reales): tocar `pane_io.hpp` recompila 62 unidades en vez de 91, `clients.hpp` 85 en vez de 91; `telar_messages.hpp` sigue en 113. `config` +4 % de CPU.
 - **De P3.3:** las cabeceras de dominio incluyen el vocabulario como texto, así que un fichero que importe el vocabulario y varios dominios fusiona una copia del vocabulario por dominio (el coste medido en P3.2). `ClientCommand`, `PaneForeground`, `PaneFrame`, `RequestRuntimeState` y `SystemMetrics` los exportan tanto el vocabulario como el dominio de su schema. Medir con `ninja -n` y con el tiempo de compilación de alguna unidad que importe varios dominios antes de cerrar cada subtarea.
 
 ### [ ] P3.5 · Borrar el agregador `telar.client.protocol`
@@ -376,9 +377,10 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Contexto:** 167 dependientes, 7% de uso medio.
 - **Resultado de a:** `4536d6696`. `telar.base.memory.allocators` (dueño de `allocator.hpp` y `allocation_statistics.hpp`, más `BufferAllocator`), `.sensitive` (`eraseSensitive`, `ErasingAllocator`, `RecyclingAllocator`, `SensitiveAllocation`, `SensitiveBuffer`, `SensitiveText`) y `.containers` (`fixed_text.hpp`, `ByteQueue`, `ByteStorage`, `CAllocationBlocks`, `DropChannel`, `RetainedStream`, `SlotIndexes`). `RecyclingAllocator` va a sensitive y no a allocators: borra cada bloque con `eraseSensitive`, y en allocators crearía un ciclo. `telar.base.memory` queda como agregador sin cuerpos. Compilan los tres procesos. **b y c siguen abiertas**: el `[x]` del título marca solo `a`.
 
-### [ ] P4.3a/b/c · `telar.base.text`: JSON aparte
+### [x] P4.3a/b/c · `telar.base.text`: JSON aparte
 - **Depende de:** a: P1.2 · b: P4.3a · c: P4.3b
 - **Qué hace:** `json`, `json_error`, `json_fields` y `json_node` a `telar.base.text.json`. ASCII, `fields`, `hostname` y `schema_version` se quedan en su propio módulo.
+- **Resultado de a:** `450f8127a`. `telar.base.text.json` (`JsonError`, `JsonValue`, `JsonEscapes`, `escapeJson`, `appendJsonText`, `JsonFields`, `JsonKind`, `JsonNode`), con `import std` y dependiendo solo de `base.memory.allocators` y de un módulo nuevo, `telar.base.text.utf8` (dueño de `utf8.hpp`), sin el cual había un ciclo entre el JSON y `SchemaVersion`. `telar.base.text` hace `export import` de los dos. **En b, los importadores que solo usan UTF-8 pasan a `telar.base.text.utf8`.** El `[x]` del título marca solo `a`.
 
 ### [ ] P4.4a/b/c · `telar.config` por proceso
 - **Depende de:** a: P1.2 · b: P4.4a · c: P4.4b
