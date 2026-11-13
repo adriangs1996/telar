@@ -1084,7 +1084,6 @@ class Http2EndpointConnection {
   static constexpr std::size_t connection_bytes = 16 * 1024 * 1024;
   static constexpr std::size_t io_bytes = 16 * 1024;
   static constexpr std::size_t wire_body_bytes = HttpMessageLimits::body_bytes + HttpMessageLimits::head_bytes;
-  static constexpr auto collection_timeout = std::chrono::seconds{30};
   using Local = SynchronizedAllocator<BudgetAllocator<Memory>>;
   using Secure = ErasingAllocator<Local>;
   using Time = traffic::FlowControl::Time;
@@ -1100,10 +1099,7 @@ class Http2EndpointConnection {
     HttpMessage<Local> message;
     ByteQueue<Secure> queue;
     Stream &stream;
-    std::optional<SensitiveAllocation<Local>> decision;
-    traffic::HttpPolicy policy;
-    Time collect_until{};
-    std::uint64_t ticket = 0;
+    HttpInterceptionSlot<Local> interception;
     std::size_t header_bytes = 0, uncredited = 0;
     bool headers_complete = false, trailer_block = false, ended = false, forwarded = false, streaming = false, discard_body = false;
     unsigned informational = 0;
@@ -1289,7 +1285,8 @@ public:
     for (const auto &stream : streams_) {
       if (!stream || stream->rejected) { continue; }
       for (const auto *half : {&stream->request, &stream->response}) {
-        const auto next = half->ticket ? control_->httpDeadline(half->ticket) : half->policy.enabled && half->headers_complete && !half->ended && !half->streaming ? std::optional{half->collect_until} : std::nullopt;
+        const auto &interception = half->interception;
+        const auto next = interception.waiting() ? interception.deadline(control_) : interception.policy().enabled && half->headers_complete && !half->ended && !half->streaming ? std::optional{interception.collectUntil()} : std::nullopt;
         if (next && (!result || *next < *result)) { result = next; }
       }
     }
@@ -1370,26 +1367,23 @@ private:
     if (frame.hd.type == NGHTTP2_HEADERS && !half.trailer_block) {
       if (!child && half.message.status < 200) { informational(half); return; }
       half.headers_complete = true;
-      half.collect_until = std::chrono::steady_clock::now() + collection_timeout;
       if (child) {
         stream->original_head = half.message.method == "HEAD";
         if (half.message.authority.empty()) { if (const auto host = half.message.headers.get("host")) { half.message.authority.assign(*host); } }
       }
       half.message.validateHttp2();
-      half.policy = control_ ? control_->policy(context(half)) : traffic::HttpPolicy{};
-      half.streaming = !half.policy.enabled;
-      if (half.policy.enabled) {
+      const auto &policy = half.interception.select(control_, context(half));
+      half.streaming = !policy.enabled;
+      if (policy.enabled) {
         if (const auto length = half.message.headers.get("content-length")) {
           if (const auto size = parseExact<std::uint64_t>(*length); size && *size > wire_body_bytes) { unavailable(half, "http2_body_limit"); }
         }
       }
       const bool tunnel = child ? half.message.method == "CONNECT" : stream->request.message.method == "CONNECT" && half.message.status >= 200 && half.message.status < 300;
-      const auto type = half.message.headers.get("content-type");
-      const bool event_stream = type && isEventStream(*type);
-      if (half.policy.enabled && (tunnel || event_stream)) { unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body"); }
+      if (policy.enabled && (tunnel || half.message.streamingBody())) { unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body"); }
       if (half.streaming && !stream->rejected) { forward(half, false); }
-      if (child && half.policy.enabled && !half.streaming && !stream->rejected) {
-        if (const auto expect = half.message.headers.get("expect"); expect && asciiEqualIgnoreCase(*expect, "100-continue") && !(frame.hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+      if (child && policy.enabled && !half.streaming && !stream->rejected) {
+        if (half.message.expectation() == HttpExpectation::continue_ && !(frame.hd.flags & NGHTTP2_FLAG_END_STREAM)) {
           Fields fields{secure_}; fields.add(":status", "100");
           check(nghttp2_submit_headers(child_.session, NGHTTP2_FLAG_NONE, stream->child_id, nullptr, fields.bytes().data(), fields.bytes().size(), nullptr));
           half.message.headers.remove("expect");
@@ -1419,35 +1413,28 @@ private:
   inline void complete(Half &half) {
     try {
       if (!half.message.bodyless()) { half.message.decodeBody(half.queue.readable()); }
-      half.decision.emplace(memory_, HttpMessageLimits::message_bytes);
-      auto event = context(half);
-      event.bytes = HttpMessageCodec::encodeMessage(half.decision->bytes(), half.message);
-      half.ticket = control_->interceptHttp(event);
-      if (!half.ticket) { forward(half, false); }
+      if (!half.interception.begin(memory_, *control_, context(half), half.message)) { forward(half, false); }
     } catch (...) { unavailable(half, "http2_entity_unavailable"); }
   }
 
   inline void resolve(Half &half) noexcept {
-    if (half.ticket) {
-      const auto decision = control_->pollHttp(half.ticket, half.decision->bytes());
-      if (decision.verdict == traffic::Verdict::pending) { return; }
-      half.ticket = 0;
-      if (decision.verdict == traffic::Verdict::reject) { reject(half.stream, "http2_interception_rejected"); return; }
+    using Outcome = HttpInterceptionSlot<Local>::Outcome;
+    if (half.interception.waiting()) {
       try {
-        if (decision.verdict == traffic::Verdict::replace) { HttpMessageCodec::readMessage(half.message, half.decision->bytes().first(decision.bytes)); }
-        forward(half, decision.verdict == traffic::Verdict::replace);
+        const auto outcome = half.interception.poll(*control_, half.message);
+        if (outcome == Outcome::pending) { return; }
+        if (outcome == Outcome::rejected) { reject(half.stream, "http2_interception_rejected"); return; }
+        forward(half, outcome == Outcome::replaced);
       } catch (...) { reject(half.stream, "http2_invalid_decision"); }
-    } else if (half.headers_complete && !half.ended && !half.streaming && std::chrono::steady_clock::now() >= half.collect_until) {
+    } else if (half.headers_complete && !half.ended && !half.streaming && std::chrono::steady_clock::now() >= half.interception.collectUntil()) {
       unavailable(half, "http2_collection_timeout");
     }
   }
 
   inline void unavailable(Half &half, std::string_view reason) noexcept {
     if (half.stream.rejected) { return; }
-    if (half.policy.fail_closed) { reject(half.stream, reason); return; }
-    auto event = context(half); event.reason = reason;
-    if (control_) { control_->httpUnavailable(event); }
-    cancel(half);
+    if (half.interception.policy().fail_closed) { reject(half.stream, reason); return; }
+    half.interception.unavailable(control_, context(half), reason);
     half.streaming = true;
     try { if (!half.forwarded) { forward(half, false); } }
     catch (...) { reject(half.stream, "http2_forwarding_failed"); }
@@ -1509,7 +1496,7 @@ private:
     half.message.response_to_head = source_head;
     if (half.discard_body) { half.queue.clear(); credit(half, half.uncredited); }
     if (half.ended && !half.streaming) { credit(half, half.uncredited); }
-    half.decision.reset();
+    half.interception.release();
   }
 
   // Returning DEFERRED parks only this data provider; nghttp2 can send every other stream.
@@ -1543,7 +1530,7 @@ private:
   inline void resume(Half &half) noexcept {
     if (half.forwarded && !half.stream.rejected) { nghttp2_session_resume_data(target(half).session, targetId(half)); }
   }
-  inline void cancel(Half &half) noexcept { if (half.ticket) { control_->cancelHttp(half.ticket); half.ticket = 0; } half.decision.reset(); }
+  inline void cancel(Half &half) noexcept { half.interception.cancel(control_); }
   inline void reject(Stream &stream, std::string_view reason, std::uint32_t code = NGHTTP2_CANCEL) noexcept {
     if (stream.rejected) { return; }
     stream.rejected = true;

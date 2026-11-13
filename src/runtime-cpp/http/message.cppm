@@ -488,6 +488,9 @@ private:
 export {
 namespace telar::runtime {
 
+// What a request's Expect field asks: nothing, 100-continue, or something no relay supports.
+enum class HttpExpectation { none, continue_, unsupported };
+
 template <Allocator Memory>
 class HttpMessage {
   using Secure = ErasingAllocator<Memory>;
@@ -566,6 +569,18 @@ public:
   }
 
   inline bool bodyless() const noexcept { return response && bodylessResponse(status, response_to_head); }
+
+  // Whether the body is an event stream, which never completes for a hook to see it whole.
+  inline bool streamingBody() const {
+    const auto type = headers.get("content-type");
+    return type && isEventStream(*type);
+  }
+
+  inline HttpExpectation expectation() const {
+    const auto expect = headers.get("expect");
+    if (!expect) { return HttpExpectation::none; }
+    return asciiEqualIgnoreCase(*expect, "100-continue") ? HttpExpectation::continue_ : HttpExpectation::unsupported;
+  }
 
   // The body in its content coding; a view of `body` when only identity codings describe it.
   inline auto encodeBody() -> typename HttpContentCodec<Memory>::Coded {

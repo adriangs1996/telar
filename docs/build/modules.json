@@ -756,6 +756,7 @@
     "src/runtime-cpp/metrics/host_sampler.cppm": "src/runtime-cpp/metrics/host_sampler.cppm",
     "src/runtime-cpp/metrics/host_sample.cppm": "src/runtime-cpp/metrics/host_sampler.cppm",
     "src/runtime-cpp/http1/message_relay.cppm": "src/runtime-cpp/http1/intercepted_relay.cppm",
+    "src/runtime-cpp/http/interception_slot.cppm": "src/runtime-cpp/http1/intercepted_relay.cppm",
     "src/runtime-cpp/http1/number.cppm": "src/runtime-cpp/http1/head.cppm",
     "src/runtime-cpp/http1/observer.cppm": "src/runtime-cpp/http1/intercepted_relay.cppm",
     "src/runtime-cpp/http1/head.cppm": "src/runtime-cpp/http1/head.cppm",

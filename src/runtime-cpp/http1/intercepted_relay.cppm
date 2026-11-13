@@ -417,6 +417,82 @@ private:
 }
 }
 
+// Interface: http/interception_slot.cppm
+export {
+namespace telar::runtime {
+
+// One message's interception: the policy its head selects, the time it may take to collect, and
+// the hook's ticket with the buffer its decision lands in.
+template <Allocator Memory>
+class HttpInterceptionSlot {
+public:
+  using Time = traffic::FlowControl::Time;
+  enum class Outcome { pending, rejected, allowed, replaced };
+  static constexpr auto collection_timeout = std::chrono::seconds{30};
+
+  // Takes the policy `control` sets for `event`'s message, and starts the time to collect it.
+  inline const traffic::HttpPolicy &select(traffic::HttpControl *control, const traffic::FlowEvent &event) noexcept {
+    policy_ = control ? control->policy(event) : traffic::HttpPolicy{};
+    collect_until_ = std::chrono::steady_clock::now() + collection_timeout;
+    return policy_;
+  }
+
+  inline const traffic::HttpPolicy &policy() const noexcept { return policy_; }
+  inline Time collectUntil() const noexcept { return collect_until_; }
+  inline bool waiting() const noexcept { return ticket_ != 0; }
+
+  // Offers the complete message to the hook; false when the hook takes no ticket, so the message
+  // goes on as it is.
+  template <typename Message>
+  inline bool begin(Memory &memory, traffic::HttpControl &control, traffic::FlowEvent event, const Message &message) {
+    decision_.emplace(memory, HttpMessageLimits::message_bytes);
+    event.bytes = HttpMessageCodec::encodeMessage(decision_->bytes(), message);
+    ticket_ = control.interceptHttp(event);
+    return ticket_ != 0;
+  }
+
+  // The hook's verdict, once it has one; a replacement is read into `message`, which throws when
+  // the hook's bytes are no message.
+  template <typename Message>
+  inline Outcome poll(traffic::HttpControl &control, Message &message) {
+    const auto decision = control.pollHttp(ticket_, decision_->bytes());
+    if (decision.verdict == traffic::Verdict::pending) { return Outcome::pending; }
+    ticket_ = 0;
+    if (decision.verdict == traffic::Verdict::reject) { return Outcome::rejected; }
+    if (decision.verdict != traffic::Verdict::replace) { return Outcome::allowed; }
+    HttpMessageCodec::readMessage(message, decision_->bytes().first(decision.bytes));
+    return Outcome::replaced;
+  }
+
+  inline std::optional<Time> deadline(traffic::HttpControl *control) const noexcept {
+    return ticket_ ? control->httpDeadline(ticket_) : std::nullopt;
+  }
+
+  // Frees the decision once the message went on.
+  inline void release() noexcept { decision_.reset(); }
+
+  inline void cancel(traffic::HttpControl *control) noexcept {
+    if (ticket_) { control->cancelHttp(ticket_); ticket_ = 0; }
+    decision_.reset();
+  }
+
+  // Tells the control the message cannot be intercepted, for `reason`, and gives up the ticket.
+  inline void unavailable(traffic::HttpControl *control, traffic::FlowEvent event, std::string_view reason) noexcept {
+    event.reason = reason;
+    if (control) { control->httpUnavailable(event); }
+    cancel(control);
+  }
+
+private:
+  traffic::HttpPolicy policy_;
+  Time collect_until_{};
+  std::uint64_t ticket_ = 0;
+  std::optional<SensitiveAllocation<Memory>> decision_;
+};
+
+}
+}
+
 // Interface: http1/intercepted_relay.cppm
 export {
 namespace telar::runtime {
@@ -508,15 +584,14 @@ public:
     parser_.reset(response);
   }
 
-  inline ~Http1InterceptedRelay() { cancel(); }
+  inline ~Http1InterceptedRelay() { interception_.cancel(control_); }
 
   inline void reset(bool response, bool response_to_head = false) noexcept {
-    cancel();
+    interception_.cancel(control_);
     parser_.reset(response, response_to_head);
     message_.response = response;
     message_.response_to_head = response_to_head;
     wire_.clear();
-    decision_.reset();
     forwarded_head_.reset();
     original_head_.reset();
     write_offset_ = head_bytes_ = continue_offset_ = 0;
@@ -531,7 +606,7 @@ public:
   template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
   inline bool advance(Source &source, Destination &destination, Observer &observer) noexcept {
     if (mode_ == Mode::failed) { return false; }
-    if (mode_ == Mode::buffering && std::chrono::steady_clock::now() >= collect_until_) { unavailable("http_collection_timeout"); }
+    if (mode_ == Mode::buffering && std::chrono::steady_clock::now() >= interception_.collectUntil()) { unavailable("http_collection_timeout"); }
     bool active = flush(destination);
     if (synthetic_) { return active; }
     if (mode_ == Mode::waiting) { resolve(); active = flush(destination) || active; }
@@ -572,8 +647,8 @@ public:
     return hasPrefix() ? waiting_ : parser_.destinationInterest();
   }
   inline auto deadline() const noexcept -> std::optional<Time> {
-    if (ticket_) { return control_->httpDeadline(ticket_); }
-    return mode_ == Mode::buffering ? std::optional{collect_until_} : std::nullopt;
+    if (interception_.waiting()) { return interception_.deadline(control_); }
+    return mode_ == Mode::buffering ? std::optional{interception_.collectUntil()} : std::nullopt;
   }
   inline auto continueBytes() const noexcept -> std::string_view { return continue_ ? continue_response.substr(continue_offset_) : std::string_view{}; }
   inline void continueWritten(std::size_t bytes) noexcept { continue_offset_ += bytes; }
@@ -582,22 +657,21 @@ private:
   inline bool hasPrefix() const noexcept { return write_offset_ != wire_.size(); }
 
   inline void readHead(std::string_view bytes) noexcept {
-    policy_ = control_ ? control_->policy(identity_.event(direction_)) : traffic::HttpPolicy{};
+    const auto &policy = interception_.select(control_, identity_.event(direction_));
     const bool repair = message_.response && message_.response_to_head != destination_head_;
-    mode_ = policy_.enabled || repair ? Mode::buffering : Mode::streaming;
+    mode_ = policy.enabled || repair ? Mode::buffering : Mode::streaming;
     if (mode_ == Mode::streaming) { return; }
-    collect_until_ = std::chrono::steady_clock::now() + collection_timeout;
     try {
       const auto parsed = message_.readHttp1Head(bytes, message_.response_to_head);
       head_parsed_ = true;
       if (!message_.response) { original_head_ = parsed.head_request; }
       head_bytes_ = bytes.size();
-      if (repair && destination_head_ && !policy_.enabled) { repairHead(); return; }
+      if (repair && destination_head_ && !policy.enabled) { repairHead(); return; }
       if (parsed.framing.kind == Http1Framing::Kind::content_length && parsed.framing.length > maximum_wire_body) { unavailable("http_body_limit"); return; }
-      if (const auto type = message_.headers.get("content-type"); type && isEventStream(*type)) { unavailable("http_streaming_body"); return; }
+      if (message_.streamingBody()) { unavailable("http_streaming_body"); return; }
       if (!message_.response) {
-        if (const auto expect = message_.headers.get("expect")) {
-          if (!asciiEqualIgnoreCase(*expect, "100-continue")) { unavailable("http_unsupported_expectation"); return; }
+        if (const auto expectation = message_.expectation(); expectation != HttpExpectation::none) {
+          if (expectation != HttpExpectation::continue_) { unavailable("http_unsupported_expectation"); return; }
           continue_ = parsed.framing.hasBody();
           regenerate_ = continue_;
           message_.headers.remove("expect");
@@ -608,11 +682,8 @@ private:
 
   inline void unavailable(std::string_view reason) noexcept {
     if (mode_ == Mode::failed || mode_ == Mode::streaming) { return; }
-    auto event = identity_.event(direction_);
-    event.reason = reason;
-    if (control_) { control_->httpUnavailable(event); }
-    mode_ = policy_.fail_closed ? Mode::failed : Mode::streaming;
-    cancel();
+    interception_.unavailable(control_, identity_.event(direction_), reason);
+    mode_ = interception_.policy().fail_closed ? Mode::failed : Mode::streaming;
     if (mode_ == Mode::streaming && message_.response && message_.response_to_head != destination_head_) {
       try { if (head_parsed_ && destination_head_) { repairHead(); } else { mode_ = Mode::failed; } }
       catch (...) { mode_ = Mode::failed; }
@@ -622,31 +693,20 @@ private:
   inline void finish() noexcept {
     try {
       if (!message_.bodyless()) { message_.decodeBody(message_.body); }
-      if (!policy_.enabled) { forward(false); return; }
-      decision_.emplace(memory_, HttpMessageLimits::message_bytes);
-      auto event = identity_.event(direction_);
-      event.bytes = HttpMessageCodec::encodeMessage(decision_->bytes(), message_);
-      ticket_ = control_->interceptHttp(event);
-      if (ticket_ == 0) { forward(false); }
-      else { mode_ = Mode::waiting; }
+      if (!interception_.policy().enabled || !interception_.begin(memory_, *control_, identity_.event(direction_), message_)) { forward(false); return; }
+      mode_ = Mode::waiting;
     } catch (...) { unavailable("http_entity_unavailable"); }
   }
 
   inline void resolve() noexcept {
-    if (!ticket_) { return; }
-    const auto decision = control_->pollHttp(ticket_, decision_->bytes());
-    if (decision.verdict == traffic::Verdict::pending) { return; }
-    ticket_ = 0;
-    if (decision.verdict == traffic::Verdict::reject) { mode_ = Mode::failed; return; }
+    if (!interception_.waiting()) { return; }
     try {
-      if (decision.verdict == traffic::Verdict::replace) { HttpMessageCodec::readMessage(message_, decision_->bytes().first(decision.bytes)); }
-      forward(decision.verdict == traffic::Verdict::replace);
-    } catch (...) {
-      auto event = identity_.event(direction_);
-      event.reason = "http_invalid_decision";
-      control_->httpUnavailable(event);
-      mode_ = Mode::failed;
-    }
+      const auto outcome = interception_.poll(*control_, message_);
+      if (outcome == Slot::Outcome::pending) { return; }
+      // A hook's reject is reported as HTTP/2 reports a rejected stream.
+      if (outcome == Slot::Outcome::rejected) { fail("http_interception_rejected"); return; }
+      forward(outcome == Slot::Outcome::replaced);
+    } catch (...) { fail("http_invalid_decision"); }
   }
 
   inline void forward(bool changed) {
@@ -665,7 +725,7 @@ private:
     const std::string_view text{reinterpret_cast<const char *>(wire_.data()), wire_.size()};
     head_bytes_ = text.find("\r\n\r\n") + 4;
     mode_ = Mode::forwarding;
-    decision_.reset();
+    interception_.release();
   }
 
   inline void repairHead() {
@@ -691,12 +751,13 @@ private:
     return true;
   }
 
-  inline void cancel() noexcept {
-    if (ticket_) { control_->cancelHttp(ticket_); ticket_ = 0; }
+  // Fails the message after its interception ended, reporting why.
+  inline void fail(std::string_view reason) noexcept {
+    interception_.unavailable(control_, identity_.event(direction_), reason);
+    mode_ = Mode::failed;
   }
 
   static constexpr std::size_t maximum_wire_body = HttpMessageLimits::body_bytes + Http1Head::capacity;
-  static constexpr auto collection_timeout = std::chrono::seconds{30};
   static constexpr std::string_view continue_response = "HTTP/1.1 100 Continue\r\n\r\n";
   Memory &memory_;
   Secure secure_;
@@ -705,13 +766,11 @@ private:
   traffic::Direction direction_;
   HttpMessage<Memory> message_;
   Bytes wire_;
-  std::optional<SensitiveAllocation<Memory>> decision_;
+  using Slot = HttpInterceptionSlot<Memory>;
+  Slot interception_;
   Http1MessageRelay parser_;
   std::optional<Http1Head> forwarded_head_;
   std::optional<bool> original_head_;
-  traffic::HttpPolicy policy_;
-  Time collect_until_{};
-  std::uint64_t ticket_ = 0;
   std::size_t write_offset_ = 0, head_bytes_ = 0, continue_offset_ = 0;
   StreamReadiness waiting_ = StreamReadiness::writable;
   Mode mode_ = Mode::undecided;

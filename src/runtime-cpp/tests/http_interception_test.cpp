@@ -273,10 +273,25 @@ void limits(SystemAllocator &memory) {
     check(closed ? origin.output.empty() : origin.output == child.input);
   }
 }
+
+// A hook's reject closes the exchange and is reported, as an HTTP/2 stream's is.
+void rejected(SystemAllocator &memory) {
+  HttpOwner owner{memory};
+  ProxyCounters counters;
+  Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 12, .host = "fixture.test"}}};
+  TestByteStream child, origin;
+  child.input = "POST /reject HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";
+  pump(connection, child, origin, [&] { return owner.ticket != 0; });
+  owner.answer = Verdict::reject;
+  pump(connection, child, origin, [&] { return connection.finished(); });
+  check(owner.ticket == 0 && origin.output.empty());
+  check(owner.errors == std::vector<std::string>{"http_interception_rejected"});
+}
 }
 
 void testHttpInterception() {
   SystemAllocator memory;
+  rejected(memory);
   editing(memory);
   compressedTrailers(memory);
   expectContinue(memory);
