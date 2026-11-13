@@ -707,12 +707,7 @@ public:
     LuaTrafficValue::field(state, "id", specification_.name.view());
     LuaTrafficValue::identity(state, "generation", specification_.generation);
     std::array<char, 64> digest;
-    constexpr std::string_view hex = "0123456789abcdef";
-    for (std::size_t index = 0; index < specification_.digest.size(); ++index) {
-      digest[index * 2] = hex[specification_.digest[index] >> 4];
-      digest[index * 2 + 1] = hex[specification_.digest[index] & 15];
-    }
-    LuaTrafficValue::field(state, "digest", std::string_view{digest.data(), digest.size()});
+    LuaTrafficValue::field(state, "digest", encodeLowerHex(specification_.digest, digest));
     lua_setfield(state, -2, "app");
     lua_call(state, 2, 1);
     if (stage == TrafficStage::observe) {

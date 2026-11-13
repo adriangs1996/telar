@@ -925,13 +925,7 @@ export {
 namespace telar::runtime::cli::sessions {
 
 inline std::string hexSession(const std::array<Byte, 16> &session) {
-  constexpr std::string_view digits = "0123456789abcdef";
-  std::string result;
-  for (const auto byte : session) {
-    result += digits[byte >> 4];
-    result += digits[byte & 15];
-  }
-  return result;
+  return lowerHex(session);
 }
 
 inline std::string_view agentStatus(AgentStatus status) {

@@ -540,13 +540,8 @@ public:
       if (!input.workspace().empty()) {
         std::array<unsigned char, MD5_DIGEST_LENGTH> digest;
         MD5(reinterpret_cast<const unsigned char *>(input.workspace().data()), input.workspace().size(), digest.data());
-        constexpr std::string_view digits = "0123456789abcdef";
-        std::array<char, 32> encoded;
-        for (std::size_t index = 0; index < digest.size(); ++index) {
-          encoded[2 * index] = digits[digest[index] >> 4];
-          encoded[2 * index + 1] = digits[digest[index] & 15];
-        }
-        if (const auto path = cursorPath(*root, {encoded.data(), encoded.size()}, chat)) {
+        std::array<char, 2 * MD5_DIGEST_LENGTH> encoded;
+        if (const auto path = cursorPath(*root, encodeLowerHex(digest, encoded), chat)) {
           return *path;
         }
       }

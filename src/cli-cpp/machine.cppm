@@ -1892,15 +1892,7 @@ inline std::string fileDigest(const std::string &path) {
     digest.update({reinterpret_cast<const char *>(buffer.data()), static_cast<std::size_t>(count)});
   }
 
-  const auto bytes = digest.finish();
-  constexpr std::string_view hexadecimal = "0123456789abcdef";
-  std::string text;
-  for (const auto byte : bytes) {
-    text += hexadecimal[byte >> 4];
-    text += hexadecimal[byte & 15];
-  }
-
-  return text;
+  return lowerHex(digest.finish());
 }
 
 template <Allocator Memory>

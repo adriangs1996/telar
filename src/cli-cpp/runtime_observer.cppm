@@ -71,12 +71,7 @@ inline std::string workspaceEventJson(const WorkspaceList &list) {
 inline std::string agentEventEntryJson(const AgentSnapshotEntry &agent) {
   constexpr std::array status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
   constexpr std::array reason_names{"none", "permission", "question", "plan", "other"};
-  constexpr std::string_view hex = "0123456789abcdef";
-  std::string session;
-  for (const auto byte : agent.session_id) {
-    session += hex[byte >> 4];
-    session += hex[byte & 15];
-  }
+  const auto session = lowerHex(agent.session_id);
 
   constexpr auto escapes = JsonEscapes::control;
   return std::format("{{\"pane_id\":{},\"pane_generation\":{},\"workspace_id\":{},\"tab_id\":{},\"pane_index\":{},\"provider\":{},\"provider_index\":{},\"status\":{},\"workspace\":{},\"tab\":{},\"title\":{},\"cwd\":{},\"blocked_reason\":{},\"status_age_s\":{},\"worktree_id\":{},\"last_event\":{},\"plan\":{{\"done\":{},\"total\":{},\"step\":{}}},\"final_message\":{},\"session_id\":{}}}", agent.pane_id, agent.pane_generation, agent.location.workspace.id, agent.location.tab_id, agent.pane_index, quoteJson(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes), static_cast<Byte>(agent.provider), quoteJson(status_names.at(static_cast<std::size_t>(agent.status)), escapes), quoteJson(agent.workspace_label, escapes), quoteJson(agent.tab_label, escapes), quoteJson(agent.session_title, escapes), quoteJson(agent.cwd_label, escapes), quoteJson(reason_names.at(static_cast<std::size_t>(agent.blocked_reason)), escapes), agent.status_age_s, agent.work_tree, quoteJson(agent.last_event, escapes), agent.plan_done, agent.plan_total, quoteJson(agent.plan_step, escapes), quoteJson(agent.final_message, escapes), quoteJson(session, escapes));

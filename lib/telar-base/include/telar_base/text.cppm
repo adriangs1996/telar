@@ -30,6 +30,7 @@ module;
 #include <charconv>
 
 #include <array>
+#include <cassert>
 #include <stdexcept>
 
 #include <arpa/inet.h>
@@ -217,13 +218,29 @@ inline tbc::view<std::string_view, tbc::lt::a> trimText(tbc::view<std::string_vi
 export {
 namespace telar::runtime {
 
+// Writes `bytes` as lowercase hexadecimal into the first 2 * bytes.size() characters of
+// `output`, which must hold them, and returns what it wrote.
+constexpr std::string_view encodeLowerHex(std::span<const std::uint8_t> bytes, std::span<char> output) noexcept {
+  constexpr std::string_view digits = "0123456789abcdef";
+  assert(output.size() >= 2 * bytes.size());
+  for (std::size_t index = 0; index < bytes.size(); ++index) {
+    output[2 * index] = digits[bytes[index] >> 4];
+    output[2 * index + 1] = digits[bytes[index] & 15];
+  }
+  return {output.data(), 2 * bytes.size()};
+}
+
 template <Allocator Memory>
 void appendLowerHex(String<Memory> &output, std::span<const std::uint8_t> bytes) {
-  constexpr std::string_view digits = "0123456789abcdef";
-  for (const auto byte : bytes) {
-    output += digits[byte >> 4];
-    output += digits[byte & 15];
-  }
+  const auto start = output.size();
+  output.resize(start + 2 * bytes.size());
+  static_cast<void>(encodeLowerHex(bytes, std::span{output}.subspan(start)));
+}
+
+inline std::string lowerHex(std::span<const std::uint8_t> bytes) {
+  std::string text(2 * bytes.size(), '\0');
+  static_cast<void>(encodeLowerHex(bytes, text));
+  return text;
 }
 
 }

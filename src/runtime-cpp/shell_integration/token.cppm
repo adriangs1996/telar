@@ -3,6 +3,7 @@ export module telar.runtime.shell_integration.token;
 import std;
 export import telar.client.protocol;
 import telar.platform.primitives;
+import telar.base.text;
 
 export namespace telar::runtime {
 
@@ -15,12 +16,8 @@ public:
   inline static ShellToken generate() noexcept {
     std::array<unsigned char, length / 2> random;
     randomBytes(random.data(), random.size());
-    constexpr std::string_view digits = "0123456789abcdef";
     ShellToken token;
-    for (std::size_t index = 0; index < random.size(); ++index) {
-      token.text_[2 * index] = digits[random[index] >> 4];
-      token.text_[2 * index + 1] = digits[random[index] & 0x0f];
-    }
+    static_cast<void>(encodeLowerHex(random, token.text_));
     return token;
   }
 

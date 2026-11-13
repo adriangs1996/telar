@@ -455,10 +455,8 @@ void writeAgent(Output<Memory> &out, const AgentSnapshotEntry &agent, bool json)
     out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider, JsonEscapes::control).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status, JsonEscapes::control);
     out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)], JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
     out.text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(",\"session_id\":\"");
-    constexpr std::string_view hex = "0123456789abcdef";
-    for (const auto byte : agent.session_id) {
-      out.text(hex.substr(byte >> 4, 1)).text(hex.substr(byte & 15, 1));
-    }
+    std::array<char, 2 * sizeof(agent.session_id)> session;
+    out.text(encodeLowerHex(agent.session_id, session));
 
     out.text("\"}");
     return;
