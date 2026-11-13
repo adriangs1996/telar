@@ -1,8 +1,9 @@
 # telar-base
 
 The foundations the runtime, the GUI and the `telar` CLI share: UTF-8, ASCII,
-JSON and other text codecs (`text/`), allocators, sensitive buffers and
-fixed-capacity containers (`memory/`), the diagnostics switches and timing
+JSON and other text codecs (`text/`), allocators (`memory/allocators/`), sensitive
+buffers (`memory/sensitive/`) and fixed-capacity containers (`memory/containers/`),
+which `telar.base.memory` still re-exports together, the diagnostics switches and timing
 (`diagnostics/`), the editor kinds (`editors/`), the history search policy
 (`history/`), and the program name and version children see (`program_identity.hpp`).
 It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime.
@@ -22,7 +23,7 @@ target_link_libraries(your_target PRIVATE telar::base)
 ```cpp
 #include "telar_base/memory/allocator.hpp" // Native allocator ABI
 import telar.base.text;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.base.diagnostics;
 ```
 
