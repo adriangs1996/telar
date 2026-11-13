@@ -24,9 +24,12 @@ export import telar.gui.application.sound_playback;
 export import telar.gui.presentation.application_mark;
 export import telar.render.document;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.agents;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 export import telar.gui.terminal.fold_map;
 
 // Interface: application/agent_status_change.cppm

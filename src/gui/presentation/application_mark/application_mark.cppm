@@ -15,7 +15,7 @@ export import telar.config;
 
 export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: presentation/activity_card.cppm
 export {

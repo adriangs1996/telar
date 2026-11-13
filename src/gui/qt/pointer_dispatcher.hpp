@@ -8,7 +8,6 @@ static_assert(true);
 #include "tbc/view.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QObject>

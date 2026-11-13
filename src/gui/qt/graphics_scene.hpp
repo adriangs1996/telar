@@ -9,7 +9,6 @@ static_assert(true);
 #include "../terminal/screen.hpp"
 #include "graphics/placeholder_diacritics.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "window_images.hpp"
 #include <QPointer>

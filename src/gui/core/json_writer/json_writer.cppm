@@ -14,7 +14,7 @@ export module telar.gui.core.json_writer;
 import std;
 
 import telar.base.text;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: core/cosine.cppm
 export {

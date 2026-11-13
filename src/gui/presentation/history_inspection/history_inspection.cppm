@@ -27,8 +27,8 @@ export import telar.gui.text.bounded_editor;
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: presentation/history_labels.cppm
 export {

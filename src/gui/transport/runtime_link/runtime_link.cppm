@@ -21,8 +21,8 @@ export import telar.gui.text.json_unsigned_integer;
 export import telar.gui.machines.picker;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: transport/frame_stream.cppm
 export {

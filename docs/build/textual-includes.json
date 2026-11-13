@@ -116,8 +116,51 @@
     "tbc/view.hpp",
     "telar_client/codecs/telar_annotations.hpp"
   ],
+  "lib/client/include/telar_client/protocol/agents.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/clipboard.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/content.hpp": [
+    "../serializers/telar_frame.hpp",
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/editor.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/execution.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/graphics.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/history.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/layout.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/protocol/worktrees.hpp": [
+    "../serializers/telar_messages.hpp"
+  ],
+  "lib/client/include/telar_client/serializers/telar_protocol.hpp": [
+    "../protocol/agents.hpp",
+    "../protocol/clients.hpp",
+    "../protocol/clipboard.hpp",
+    "../protocol/content.hpp",
+    "../protocol/editor.hpp",
+    "../protocol/execution.hpp",
+    "../protocol/graphics.hpp",
+    "../protocol/history.hpp",
+    "../protocol/layout.hpp",
+    "../protocol/pane_io.hpp",
+    "../protocol/runtime.hpp",
+    "../protocol/worktrees.hpp"
+  ],
   "lib/client/protocol/protocol.cppm": [
-    "<exception>"
+    "<exception>",
+    "telar_client/serializers/telar_protocol.hpp"
   ],
   "lib/clipboard/main.cpp": [
     "<cstdio>",
@@ -642,8 +685,35 @@
     "telar_platform/process_environment.h",
     "telar_platform/trace_macro.hpp"
   ],
+  "lib/wire/agents/agents.cppm": [
+    "telar_client/protocol/agents.hpp"
+  ],
+  "lib/wire/clipboard/clipboard.cppm": [
+    "telar_client/protocol/clipboard.hpp"
+  ],
+  "lib/wire/content/content.cppm": [
+    "telar_client/protocol/content.hpp"
+  ],
+  "lib/wire/editor/editor.cppm": [
+    "telar_client/protocol/editor.hpp"
+  ],
+  "lib/wire/execution/execution.cppm": [
+    "telar_client/protocol/execution.hpp"
+  ],
+  "lib/wire/graphics/graphics.cppm": [
+    "telar_client/protocol/graphics.hpp"
+  ],
+  "lib/wire/history/history.cppm": [
+    "telar_client/protocol/history.hpp"
+  ],
+  "lib/wire/layout/layout.cppm": [
+    "telar_client/protocol/layout.hpp"
+  ],
   "lib/wire/vocabulary/vocabulary.cppm": [
     "<exception>"
+  ],
+  "lib/wire/worktrees/worktrees.cppm": [
+    "telar_client/protocol/worktrees.hpp"
   ],
   "src/cli/command_limit/command_limit.cppm": [
     "<cerrno>",
@@ -1893,8 +1963,7 @@
     "telar_base/memory/fixed_text.hpp",
     "telar_client/serializers/telar_cells.hpp",
     "telar_client/serializers/telar_frame.hpp",
-    "telar_client/serializers/telar_messages.hpp",
-    "telar_client/serializers/telar_protocol.hpp"
+    "telar_client/serializers/telar_messages.hpp"
   ],
   "src/gui/qt/lua_host.cpp": [
     "lua_host.hpp"
@@ -1949,7 +2018,7 @@
     "<span>",
     "<string_view>",
     "core/memory.hpp",
-    "telar_client/serializers/telar_protocol.hpp",
+    "telar_client/protocol/content.hpp",
     "terminal/screen.hpp"
   ],
   "src/gui/terminal/screen/screen.cppm": [

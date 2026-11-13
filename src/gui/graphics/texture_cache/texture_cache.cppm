@@ -18,9 +18,10 @@ import std;
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.config;
 import telar.gui.core.primitives;
+import telar.wire.graphics;
+import telar.wire.vocabulary;
 
 // Interface: graphics/image_draw_budget.cppm
 export {

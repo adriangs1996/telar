@@ -21,9 +21,9 @@ export import telar.gui.application.workspace_replica;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.vocabulary;
 
 // Interface: presentation/agent_card_labels.cppm
 export {

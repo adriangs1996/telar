@@ -7,7 +7,6 @@ static_assert(true);
 #include "pointer_dispatcher.hpp"
 #include "tab_strip_layout.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPointF>

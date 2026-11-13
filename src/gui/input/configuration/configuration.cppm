@@ -13,7 +13,7 @@ export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
 
 export import telar.gui.config.gui_query;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: input/configuration.cppm
 export {

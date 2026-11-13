@@ -6,7 +6,6 @@ static_assert(true);
 #include "chrome_fonts.hpp"
 #include "list_model.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
 #include <QMetaObject>

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QMetaType>
 #include <QTypeInfo>
 #include <QVariant>

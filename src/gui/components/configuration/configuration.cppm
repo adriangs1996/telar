@@ -28,7 +28,7 @@ export import telar.lua;
 
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: components/node.cppm
 export {

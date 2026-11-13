@@ -18,9 +18,10 @@ export import telar.base.editors;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.editor;
+import telar.wire.vocabulary;
 
 // Interface: links/link_text.cppm
 export {

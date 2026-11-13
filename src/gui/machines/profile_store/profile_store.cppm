@@ -19,8 +19,8 @@ export import telar.base.text;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: machines/field_rules.cppm
 // Shared with the CLI: telar.machines defines it.

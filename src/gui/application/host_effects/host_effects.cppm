@@ -19,7 +19,9 @@ export import telar.gui.presentation.frame_pacer;
 export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.vocabulary;
 
 // Interface: application/agent_acknowledgement.cppm
 export {

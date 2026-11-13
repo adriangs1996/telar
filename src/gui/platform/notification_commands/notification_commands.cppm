@@ -24,8 +24,8 @@ export import telar.gui.text.json_unsigned_integer;
 export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 // Interface: platform/command_line.cppm
 export {

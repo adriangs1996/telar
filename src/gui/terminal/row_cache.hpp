@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/memory.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/protocol/content.hpp"
 #include "terminal/screen.hpp"
 #include <algorithm>
 #include <cstdint>

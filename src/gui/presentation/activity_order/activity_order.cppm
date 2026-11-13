@@ -20,9 +20,9 @@ export import telar.gui.application.workspace_replica;
 export import telar.gui.core.metrics;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.vocabulary;
 
 // Interface: presentation/agent_order.cppm
 export {

@@ -17,7 +17,7 @@ export import telar.gui.core.unicode_scalar;
 
 export import telar.gui.suggestions.state;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: presentation/agent_animation.cppm
 export {

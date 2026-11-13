@@ -31,8 +31,8 @@ export import telar.gui.config.gui_query;
 
 export import telar.plugins;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: config/action_descriptions.cppm
 export {

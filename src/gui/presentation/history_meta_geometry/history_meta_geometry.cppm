@@ -24,8 +24,8 @@ export import telar.gui.presentation.history_filter_geometry;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: presentation/history_row_geometry.cppm
 export {

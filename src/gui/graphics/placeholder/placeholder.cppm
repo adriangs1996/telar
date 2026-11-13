@@ -21,9 +21,9 @@ export import telar.gui.core.json_writer;
 
 export import telar.gui.presentation.activity_order;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.vocabulary;
 
 // Interface: graphics/source_rect.cppm
 export {

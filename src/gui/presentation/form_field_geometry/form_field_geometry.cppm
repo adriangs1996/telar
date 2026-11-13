@@ -22,7 +22,6 @@ export import telar.base.text;
 export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 

@@ -17,7 +17,7 @@ export import telar.gui.core.unicode_scalar;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: input/binding.cppm
 export {

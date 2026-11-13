@@ -23,8 +23,8 @@ export import telar.gui.history.browser;
 export import telar.gui.machines.picker;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: presentation/bar_metrics.cppm
 export {

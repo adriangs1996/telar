@@ -21,9 +21,9 @@ export import telar.base.text;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.vocabulary;
 
 // Interface: links/uri_view.cppm
 export {

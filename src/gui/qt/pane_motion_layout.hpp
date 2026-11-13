@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "list_model.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QAbstractItemModel>
 #include <QMetaObject>
 #include <QPointer>

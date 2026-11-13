@@ -16,7 +16,6 @@ export import telar.gui.machines.profile_store;
 
 export import telar.gui.palette.navigation_label;
 import telar.base.memory;
-import telar.client.protocol;
 
 // Interface: machines/machine_row.cppm
 export {

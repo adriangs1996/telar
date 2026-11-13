@@ -22,7 +22,9 @@ export import telar.gui.core.unicode_scalar;
 export import telar.gui.text.bounded_editor;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.client.protocol;
+import telar.wire.editor;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 // Interface: paths/directory_completion.cppm
 export {

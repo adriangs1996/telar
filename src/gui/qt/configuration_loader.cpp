@@ -10,7 +10,6 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
