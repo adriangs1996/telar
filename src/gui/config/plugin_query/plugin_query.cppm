@@ -25,6 +25,7 @@ export import telar.config;
 export import telar.gui.core.json_writer;
 
 export import telar.gui.core.unicode_scalar;
+export import telar.gui.input.binding_effects;
 export import telar.gui.input.configuration;
 
 export import telar.gui.config.gui_query;
@@ -37,31 +38,6 @@ import telar.wire.vocabulary;
 // Interface: config/action_descriptions.cppm
 export {
   namespace telar::gui {
-
-    struct NotificationActionDescription {
-      runtime::FixedText<max_notification_title_bytes> title;
-      runtime::FixedText<max_notification_message_bytes> message;
-      NotificationLevel level = NotificationLevel::info;
-      std::uint32_t duration_ms = default_notification_duration_ms;
-      NotificationTarget target;
-    };
-
-    struct DefinitionActionDescription {
-      enum class Kind : std::uint8_t {
-        panel,
-        pick,
-      };
-      Kind kind = Kind::panel;
-      std::uint8_t index = 0;
-    };
-
-    struct PluginActionDescription {
-      std::uint64_t plugin = 0;
-      std::uint64_t action = 0;
-    };
-
-    using NamedActionDescription = std::variant<DefinitionActionDescription, PluginActionDescription>;
-    using ExtendedActionDescription = std::variant<NotificationActionDescription, DefinitionActionDescription, PluginActionDescription>;
 
     template <Allocator Memory>
     class ActionDescriptions {

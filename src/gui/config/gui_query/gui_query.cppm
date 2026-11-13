@@ -142,11 +142,6 @@ export {
   }
 }
 
-// Interface: config/default_bindings.cppm
-export {
-#include "config/default_bindings.inc"
-}
-
 // Interface: config/gui_query.cppm
 export {
   namespace telar::gui {
