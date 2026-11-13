@@ -25,6 +25,7 @@ foreach(legacy IN ITEMS TELAR_RUNTIME_SANITIZERS TELAR_GUI_SANITIZERS TELAR_AUTH
 endforeach()
 option(TELAR_DIAGNOSTICS "Enable allocation and timing diagnostics outside Debug" OFF)
 option(TELAR_SANITIZERS "Instrument all owned C++ targets with ASan/UBSan" OFF)
+option(TELAR_BMI_RESTAT "Replace a module's BMI only when its content changes" ON)
 
 if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
   message(FATAL_ERROR "Telar C++ modules require Ninja; run python3 tools/bootstrap-cpp.py and configure with -G Ninja")
@@ -82,4 +83,10 @@ function(telar_modules target)
     target_link_options(${target} PUBLIC -fsanitize=address,undefined)
   endif()
   set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  # Keep an unchanged BMI's mtime so restat stops the rebuild at its importers.
+  if(TELAR_BMI_RESTAT)
+    set_property(TARGET ${target} PROPERTY CXX_COMPILER_LAUNCHER
+      "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../tools/bmi-restat" ${CMAKE_CXX_COMPILER_LAUNCHER})
+  endif()
 endfunction()

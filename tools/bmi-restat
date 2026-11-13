@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Compiler launcher that keeps a module's BMI when the new one is identical.
+
+Usage: bmi-restat COMPILER ARG...
+
+CMake's dyndep marks every edge that writes a BMI with `restat = 1`, so Ninja
+skips the importers when the BMI's mtime does not change. Clang always rewrites
+it, so this launcher sends -fmodule-output to a temporary file, given directly
+or through the module map response file CMake passes, and only replaces the
+BMI when the bytes differ. Any other compilation runs the command unchanged.
+"""
+import filecmp
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+OPTION = '-fmodule-output='
+
+
+def redirect(arguments):
+    """Return the arguments with the BMI sent to a temporary file, the BMI and the files to clean."""
+    for index, argument in enumerate(arguments):
+        if argument.startswith(OPTION):
+            bmi = argument[len(OPTION):]
+            temporary = bmi + '.restat'
+            return [*arguments[:index], OPTION + temporary, *arguments[index + 1:]], bmi, [temporary]
+
+        if not argument.startswith('@'):
+            continue
+
+        response = Path(argument[1:])
+        try:
+            lines = response.read_text().splitlines()
+        except OSError:
+            continue
+
+        for line_index, line in enumerate(lines):
+            if not line.startswith(OPTION):
+                continue
+
+            bmi = line[len(OPTION):].strip('"')
+            temporary = bmi + '.restat'
+            lines[line_index] = f'{OPTION}"{temporary}"'
+            copy = response.with_name(response.name + '.restat')
+            copy.write_text('\n'.join(lines) + '\n')
+            return [*arguments[:index], '@' + str(copy), *arguments[index + 1:]], bmi, [temporary, str(copy)]
+
+    return arguments, None, []
+
+
+def main():
+    command = sys.argv[1:]
+    if not command:
+        raise SystemExit(__doc__)
+
+    command, bmi, scratch = redirect(command)
+    if bmi is None:
+        os.execvp(command[0], command)
+
+    temporary = scratch[0]
+    try:
+        status = subprocess.call(command)
+        if status == 0:
+            if os.path.exists(bmi) and filecmp.cmp(temporary, bmi, shallow=False):
+                os.unlink(temporary)
+            else:
+                os.replace(temporary, bmi)
+
+        return status
+    finally:
+        for path in scratch:
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+
+
+if __name__ == '__main__':
+    sys.exit(main())
