@@ -162,6 +162,12 @@ graph LR
 - **Hecho cuando:** solo queda `.clang-format` en la raíz, `clang-format --dry-run --Werror` y las reglas de P0.6 pasan en todo el árbol y se comprueban en CI, compilan los tres procesos y pasa la suite completa.
 - **Resultado:** `8149b4971` inserta las líneas en blanco (solo añade líneas vacías), `b45e86560` borra los 17 `.clang-format` por directorio y formatea 1075 ficheros (además de la disposición, solo cambia un `#include` duplicado eliminado en `font_fixture`), y `a2207b63c` añade `.git-blame-ignore-revs` con los tres commits de movimiento y formato y las comprobaciones a CI. Las comprobaciones de CI no se han ejecutado en GitHub. Compilan los tres procesos en macOS. Falla `gui-quick`, igual que antes de la tarea (supera el timeout de 90 s y falla `configuredTooltipsYieldToOpenSurfaces`); `queuedFramesCannotSurviveAWindowBindingChange` es intermitente. Sin cubrir: el código solo de Linux y los probes sueltos fuera de las bases de compilación no han pasado por el chequeo de líneas en blanco. Si la rama se rebasa o se aplasta, `.git-blame-ignore-revs` hay que actualizarlo.
 
+### [ ] P1.4 · Lifetime checker en verde tras el movimiento y el formato
+- **Depende de:** P1.3
+- **Toca:** lo que haga falta para que el checker vuelva a pasar; sin cambios de diseño.
+- **Qué pasa:** sobre `b52d70b74` (cabeza tras P1.3) el lifetime checker da 389 errores en `lib/git`, `lib/ebnf` y `src/runtime` (lo vio P4.2a). audit-39 lo dejó en verde. Hay que averiguar qué commit lo rompe (`7ed3d95a6` movimiento, `8149b4971` líneas en blanco, `b45e86560` formato, `a2207b63c` CI) y por qué: rutas en la configuración del checker, supresiones ancladas a líneas, o un cambio real.
+- **Hecho cuando:** el lifetime check del runtime, la CLI, la GUI y las librerías da el mismo resultado que en `d1ab27cb6` (sin errores nuevos), y la causa queda anotada aquí.
+
 ---
 
 ## Fase 2 · Reglas del checker (en paralelo tras P1.2)
@@ -321,9 +327,10 @@ graph LR
 - **Toca:** `cli.window`, `cli.machine`, `launch_commands.cpp`.
 - **Resultado:** `5287efcf6`. `launch_commands.cpp` y `completions.cpp` pasan a un módulo nuevo, `telar.cli.launch_commands`, por encima de `cli.machine` y `cli.window`, con las declaraciones de arranque que estaban en `window.cppm`. Compila el CLI y pasan sus 6 tests; `cli-window-tests` falló una vez y luego pasó 5 de 5 (intermitente). El checker solo lee interfaces, así que este ciclo, que pasaba por una unidad de implementación, no lo veía: P3.17 tiene que cubrirlo.
 
-### [ ] P3.15c · `cli.hooks.session` → `cli.runtime_observer`
+### [x] P3.15c · `cli.hooks.session` → `cli.runtime_observer`
 - **Depende de:** P1.2
 - **Cierra:** `hooks → (root)`.
+- **Resultado:** `849a9af15`. `ControlFailure`, `RuntimeConnection` (con su `.cpp`) y `ControlSession` pasan sin cambios a `telar.cli.control_session`; `hooks.session` importa solo ese módulo y `runtime_observer` lo reexporta. Compila el CLI en Release y pasan sus 12 tests.
 
 ### [ ] P3.16 · `gui.core.primitives` sin application ni input
 - **Depende de:** P1.2
@@ -345,10 +352,11 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Familias:** process (`Command`, `PipeProcess`, `PtyProcess`, `SpawnOptions`), git (`GitFiles`, `GitHead`, `LinkedWorktree`, `HardenedGit`: **decidido, se mueve a `telar.git`**, que pasa a ser el único dueño de lo de git; si alguna librería por debajo de `git` lo usa, se ajusta el orden de capas), fs (`PrivateDirectory`, `ReadFile`, `WritePrivateFile`, `OpenBeneath`), paths y entorno, events. La familia `net` la crea P3.11a.
 - **Contexto:** 127 dependientes, 34 secciones, cada importador usa de media el 8%.
 
-### [ ] P4.2a/b/c · `telar.base.memory` por familias
+### [x] P4.2a/b/c · `telar.base.memory` por familias
 - **Depende de:** a: P1.2 · b: P4.2a · c: P4.2b
 - **Familias propuestas:** allocators (`allocator`, `buffer`, `recycling`, estadísticas), sensibles (`erasing_allocator`, `sensitive_allocation`, `sensitive_buffer`, `sensitive_text`) y contenedores (`byte_queue`, `slot_indexes`, `retained_stream`, `drop_channel`, `fixed_text`, `c_allocation_blocks`).
 - **Contexto:** 167 dependientes, 7% de uso medio.
+- **Resultado de a:** `4536d6696`. `telar.base.memory.allocators` (dueño de `allocator.hpp` y `allocation_statistics.hpp`, más `BufferAllocator`), `.sensitive` (`eraseSensitive`, `ErasingAllocator`, `RecyclingAllocator`, `SensitiveAllocation`, `SensitiveBuffer`, `SensitiveText`) y `.containers` (`fixed_text.hpp`, `ByteQueue`, `ByteStorage`, `CAllocationBlocks`, `DropChannel`, `RetainedStream`, `SlotIndexes`). `RecyclingAllocator` va a sensitive y no a allocators: borra cada bloque con `eraseSensitive`, y en allocators crearía un ciclo. `telar.base.memory` queda como agregador sin cuerpos. Compilan los tres procesos. **b y c siguen abiertas**: el `[x]` del título marca solo `a`.
 
 ### [ ] P4.3a/b/c · `telar.base.text`: JSON aparte
 - **Depende de:** a: P1.2 · b: P4.3a · c: P4.3b
