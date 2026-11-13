@@ -12,7 +12,9 @@ static_assert(true);
 import std;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 
 using namespace telar;
 using namespace telar::runtime;

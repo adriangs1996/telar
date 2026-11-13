@@ -25,7 +25,6 @@ import std;
 
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.base.memory;
 import telar.wire.vocabulary;
 
 // The connection reports request failures with it; the rest of the wire

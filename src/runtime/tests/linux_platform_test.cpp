@@ -51,7 +51,6 @@ static_assert(true);
 #include <sys/prctl.h>
 
 import std;
-import telar.base.memory;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.check;

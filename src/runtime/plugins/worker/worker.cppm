@@ -34,7 +34,9 @@ import std;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.plugins.protocol;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 export import telar.platform;
 
 export import telar.runtime.plugins.tap_configuration;

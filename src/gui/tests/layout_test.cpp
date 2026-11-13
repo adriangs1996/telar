@@ -7,7 +7,7 @@ static_assert(true);
 #include <cstdint>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.layout.snapshots;
 import telar.gui.core.unicode_scalar;

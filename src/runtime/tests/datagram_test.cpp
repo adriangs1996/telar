@@ -12,7 +12,8 @@ static_assert(true);
 #include <pcap/pcap.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.packet_fixture;

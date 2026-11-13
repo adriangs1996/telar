@@ -2,7 +2,7 @@ export module telar.runtime.tests.erasure_checking_allocator;
 
 import std;
 export import telar.runtime.tests.check;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 
 export {
   class ErasureCheckingAllocator {

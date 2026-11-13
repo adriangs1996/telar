@@ -12,7 +12,7 @@ export module telar.runtime.diagnostics.operation;
 import std;
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.runtime.diagnostics.line;
 
 // Interface: diagnostics/file_storage.cppm

@@ -21,7 +21,8 @@ import std;
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.http1.head;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.sensitive;
 
 export import telar.runtime.http.message;
 export import telar.runtime.traffic.control_protocol;

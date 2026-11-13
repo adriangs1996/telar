@@ -20,7 +20,7 @@ export import telar.gui.text.notification_payload;
 
 export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.containers;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.vocabulary;

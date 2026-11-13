@@ -23,7 +23,7 @@ export module telar.runtime.tests.client_peer;
 import std;
 export import telar.runtime.tests.check;
 export import telar.runtime.diagnostics.line;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 export import telar.platform.primitives;
 export import telar.runtime.terminal.control;
 export import telar.runtime.graphics.kitty;

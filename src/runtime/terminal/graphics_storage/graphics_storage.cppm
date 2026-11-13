@@ -12,7 +12,7 @@ export module telar.runtime.terminal.graphics_storage;
 import std;
 
 export import telar.runtime.diagnostics.operation;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.client.protocol;
 import telar.runtime.terminal.control;
 

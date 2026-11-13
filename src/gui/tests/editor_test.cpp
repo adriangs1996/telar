@@ -11,7 +11,6 @@ static_assert(true);
 #include <ghostty/vt/unicode.h>
 
 import std;
-import telar.base.memory;
 import telar.gui.core.primitives;
 import telar.gui.core.metrics;
 import telar.gui.presentation.form_field_geometry;

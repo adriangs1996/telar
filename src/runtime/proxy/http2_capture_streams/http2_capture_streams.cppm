@@ -30,7 +30,9 @@ import std;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.proxy.relay_direction;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 
 export import telar.runtime.redirect.ingress;
 export import telar.runtime.tls.interception;

@@ -16,7 +16,8 @@ export module telar.runtime.terminal.osc_scanner;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.sensitive;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;

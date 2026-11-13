@@ -1,7 +1,7 @@
 export module telar.git:history;
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import :format;
 import :objects;
 

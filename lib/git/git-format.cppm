@@ -10,7 +10,7 @@ module;
 export module telar.git:format;
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform;
 import telar.platform.primitives;
 

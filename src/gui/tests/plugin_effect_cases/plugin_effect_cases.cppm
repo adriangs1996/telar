@@ -10,7 +10,6 @@ export module telar.gui.tests.plugin_effect_cases;
 
 import std;
 export import telar.gui.core.primitives;
-export import telar.base.memory;
 export import telar.platform.primitives;
 export import telar.gui.config.plugin_effects;
 export import telar.gui.input.copy_pointer;

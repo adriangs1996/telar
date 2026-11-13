@@ -22,7 +22,9 @@ export module telar.runtime.agents.description_generator;
 import std;
 
 export import telar.runtime.terminal.osc_scanner;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 
 export import telar.platform;
 

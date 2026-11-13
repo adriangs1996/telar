@@ -10,7 +10,8 @@ export module telar.machines;
 import std;
 
 export import telar.base.text;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.client;
 
 // Interface: telar_machines/number_radix.cppm

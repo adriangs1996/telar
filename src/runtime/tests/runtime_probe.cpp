@@ -17,7 +17,6 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.memory;
 import telar.runtime.terminal.control;
 import telar.client;
 import telar.runtime.terminal.text_reader;

@@ -10,7 +10,6 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.base.memory;
 import telar.gui.core.primitives;
 import telar.gui.core.metrics;
 import telar.gui.graphics.pauses;

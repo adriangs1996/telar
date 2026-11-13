@@ -7,7 +7,8 @@ import std;
 
 export import telar.gui.model.records;
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.pane_io;

@@ -16,7 +16,8 @@ import std;
 export import telar.runtime.http1.head;
 export import telar.base.text;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.sensitive;
 
 export import telar.runtime.http2.frame_reader;
 export import telar.runtime.http.content;

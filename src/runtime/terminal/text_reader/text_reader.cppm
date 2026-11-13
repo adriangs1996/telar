@@ -37,7 +37,8 @@ export import telar.runtime.diagnostics.operation;
 export import telar.runtime.terminal.graphics_storage;
 
 export import telar.runtime.terminal.osc_scanner;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;

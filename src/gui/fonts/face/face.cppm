@@ -19,7 +19,6 @@ import std;
 
 export import telar.gui.terminal.font_grid;
 import telar.base.diagnostics;
-import telar.base.memory;
 export import :views;
 
 // Interface: fonts/glyph_bitmap_view.cppm

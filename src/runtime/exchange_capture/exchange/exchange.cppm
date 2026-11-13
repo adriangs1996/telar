@@ -13,7 +13,8 @@ export module telar.runtime.exchange_capture.exchange;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.sensitive;
 
 export import telar.base.text;
 export import telar.config;

@@ -15,7 +15,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.http2_oracle_stream;
 import telar.runtime.http2.direction_observer;

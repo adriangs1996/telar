@@ -12,7 +12,7 @@ export module telar.runtime.platform.stream_read_buffer;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.sensitive;
 
 // Interface: platform/byte_stream.cppm
 export {

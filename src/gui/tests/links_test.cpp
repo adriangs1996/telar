@@ -8,7 +8,7 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.gui.links.cell_links;

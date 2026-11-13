@@ -37,7 +37,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.platform.system_certificates;

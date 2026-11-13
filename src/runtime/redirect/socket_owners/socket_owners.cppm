@@ -133,7 +133,9 @@ import telar.vocabulary;
 
 #if defined(__APPLE__)
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 
 #endif
 

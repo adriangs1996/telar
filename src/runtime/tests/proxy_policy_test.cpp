@@ -13,7 +13,7 @@ static_assert(true);
 #include <lualib.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.runtime.tests.check;
 import telar.config;
 import telar.lua;

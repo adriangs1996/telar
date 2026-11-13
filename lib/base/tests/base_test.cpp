@@ -26,7 +26,9 @@ static_assert(true);
 #include <type_traits>
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 import telar.base.text;
 
 namespace {

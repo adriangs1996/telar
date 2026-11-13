@@ -7,7 +7,7 @@ export module telar.platform.paths;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 
 import telar.platform.fs;
 

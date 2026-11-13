@@ -9,7 +9,6 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.base.memory;
 import telar.gui.terminal.screen;
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;
