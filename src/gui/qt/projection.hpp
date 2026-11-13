@@ -47,7 +47,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application.workspace_replica;
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;

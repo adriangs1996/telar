@@ -51,7 +51,6 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "qt/utf16_encoding.hpp"
 
-import telar.gui.application.sound_playback;
 import telar.gui.peek.screen;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.suggestion_labels;

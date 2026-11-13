@@ -39,7 +39,6 @@ static_assert(true);
 
 #include "qt/utf16_encoding.hpp"
 
-import telar.gui.application.sound_playback;
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

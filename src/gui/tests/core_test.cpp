@@ -13,7 +13,7 @@ import telar.base.memory;
 import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.input.configuration;

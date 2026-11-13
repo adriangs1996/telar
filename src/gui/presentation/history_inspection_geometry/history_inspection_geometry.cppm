@@ -19,7 +19,7 @@ export import telar.gui.core.metrics;
 export import telar.gui.presentation.history_inspection;
 export import telar.gui.presentation.history_filter_geometry;
 
-export import telar.gui.application.sound_playback;
+export import telar.gui.layout.geometry;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
 

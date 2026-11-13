@@ -11,7 +11,7 @@ export module telar.gui.presentation.frame_pacer;
 
 import std;
 
-export import telar.gui.application.sound_playback;
+export import telar.gui.layout.geometry;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;

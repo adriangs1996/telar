@@ -25,6 +25,8 @@ export import telar.gui.input.configuration;
 export import telar.gui.input.key_encoder;
 export import telar.gui.input.child_mouse;
 export import telar.gui.application.sound_playback;
+export import telar.gui.layout.geometry;
+export import telar.gui.layout.snapshots;
 export import telar.gui.links.path_expansion;
 export import telar.gui.links.cell_links;
 export import telar.gui.paths.label;

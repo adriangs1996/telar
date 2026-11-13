@@ -54,7 +54,7 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;
 import telar.gui.fonts.row_text_layout;

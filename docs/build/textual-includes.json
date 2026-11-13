@@ -1315,16 +1315,6 @@
     "<new>",
     "tbc/view.hpp"
   ],
-  "src/gui/application/sound_playback/sound_playback.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
-  ],
   "src/gui/application/workspace_replica/workspace_replica.cppm": [
     "<cmath>",
     "<cstddef>",
@@ -1583,6 +1573,9 @@
     "<cstdint>",
     "<cstdio>",
     "<cstring>"
+  ],
+  "src/gui/layout/snapshots/snapshots.cppm": [
+    "tbc/view.hpp"
   ],
   "src/gui/links/cell_links/cell_links.cppm": [
     "<cmath>",

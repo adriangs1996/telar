@@ -28,7 +28,7 @@ static_assert(true);
 #include "qt/application.hpp"
 #include "qt/pointer_dispatcher.hpp"
 
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.input.child_mouse;
 import telar.gui.platform.profile_file;
 import telar.gui.presentation.frame_pacer;

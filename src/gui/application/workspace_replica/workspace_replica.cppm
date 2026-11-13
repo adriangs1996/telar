@@ -20,7 +20,7 @@ export import telar.gui.core.unicode_scalar;
 export import telar.gui.text.json_unsigned_integer;
 
 export import telar.gui.graphics.texture_cache;
-export import telar.gui.application.sound_playback;
+export import telar.gui.layout.geometry;
 export import telar.gui.presentation.application_mark;
 export import telar.render.document;
 import telar.base.diagnostics;
