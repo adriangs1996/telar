@@ -1238,3 +1238,192 @@ int declarationMovableSharedField() {
 }
 
 // END CASE
+
+// CASE: declaration.abstract_shared_memory
+// PAIR: declaration.abstract_shared
+// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
+// STATUS: implemented
+// CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
+// SCENARIO: Two holders keep one `Memory &`, and allocations through it and through each holder leave a block read later valid; accept.
+namespace declarations {
+  // An allocator behind a virtual interface, used through `Memory &` instead of a concept.
+  class TBC_SHARED memory {
+  public:
+    virtual ~memory() = default;
+    virtual void *allocate(std::size_t size, std::size_t alignment) noexcept = 0;
+    virtual void deallocate(void *block, std::size_t size, std::size_t alignment) noexcept = 0;
+  };
+
+  // Each implementation carries its own mark: a derived type is audited apart from its base.
+  template <typename allocator>
+  class TBC_SHARED memory_adapter final : public memory {
+  public:
+    explicit memory_adapter(tbc::view<allocator &, tbc::lt::a> wrapped) noexcept
+        : allocator_(wrapped) {}
+
+    void *allocate(std::size_t size, std::size_t alignment) noexcept override {
+      static_cast<void>(alignment);
+      return allocator_.allocate(size);
+    }
+
+    void deallocate(void *block, std::size_t size, std::size_t alignment) noexcept override {
+      static_cast<void>(block);
+      static_cast<void>(size);
+      static_cast<void>(alignment);
+    }
+
+  private:
+    tbc::view<allocator &, tbc::lt::a> allocator_;
+  };
+
+  // The same adapter without the mark.
+  template <typename allocator>
+  class unmarked_adapter final : public memory {
+  public:
+    explicit unmarked_adapter(tbc::view<allocator &, tbc::lt::a> wrapped) noexcept
+        : allocator_(wrapped) {}
+
+    void *allocate(std::size_t size, std::size_t alignment) noexcept override {
+      static_cast<void>(alignment);
+      return allocator_.allocate(size);
+    }
+
+    void deallocate(void *block, std::size_t size, std::size_t alignment) noexcept override {
+      static_cast<void>(block);
+      static_cast<void>(size);
+      static_cast<void>(alignment);
+    }
+
+  private:
+    tbc::view<allocator &, tbc::lt::a> allocator_;
+  };
+
+  // A buffer that keeps the memory it was given, as services keep their allocator.
+  class erased_bytes {
+  public:
+    explicit erased_bytes(tbc::view<memory &, tbc::lt::a> memory) noexcept
+        : memory_(memory) {}
+
+    erased_bytes(const erased_bytes &) = delete;
+    erased_bytes &operator=(const erased_bytes &) = delete;
+
+    bool resize(std::size_t size) noexcept {
+      auto *block = static_cast<char *>(memory_.allocate(size, alignof(char)));
+      if (block == nullptr) {
+        return false;
+      }
+
+      memory_.deallocate(data_, size_, alignof(char));
+      data_ = block;
+      size_ = size;
+      return true;
+    }
+
+    char *data() noexcept {
+      return data_;
+    }
+
+  private:
+    tbc::view<memory &, tbc::lt::a> memory_;
+    char *data_ = nullptr;
+    std::size_t size_ = 0;
+  };
+}
+
+char declarationAbstractSharedMemory(tbc::view<declarations::memory &, tbc::lt::a> memory) {
+  declarations::erased_bytes first(memory);
+  declarations::erased_bytes second(memory);
+
+  first.resize(8);
+
+  const char *data = first.data();
+  void *block = memory.allocate(16, 8);
+
+  second.resize(4);
+  memory.deallocate(block, 16, 8);
+  return *data;
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_escapes
+// PAIR: declaration.abstract_shared
+// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
+// STATUS: implemented
+// CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
+// SCENARIO: Sharing does not extend the referent: a buffer keeps a local adapter through `Memory &` and outlives it; reject at the return.
+declarations::erased_bytes declarationAbstractSharedEscapes(declarations::arena &system) {
+  declarations::memory_adapter<declarations::arena> local(system);
+
+  return declarations::erased_bytes(local); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_sibling_marked
+// PAIR: declaration.abstract_shared_sibling
+// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
+// STATUS: implemented
+// CONTRACT: The TBC_SHARED mark is not inherited: a field keeps a sibling through a shared base only when the sibling's own type is marked and its object is pinned.
+// SCENARIO: A pinned service lends its marked adapter to a buffer beside it as `Memory &`; accept.
+namespace declarations {
+  class marked_service {
+  public:
+    explicit marked_service(tbc::view<arena &, tbc::lt::a> system) noexcept
+        : memory_(system),
+          bytes_(memory_) {}
+
+    marked_service(const marked_service &) = delete;
+    marked_service &operator=(const marked_service &) = delete;
+
+    bool grow() noexcept {
+      return bytes_.resize(32);
+    }
+
+  private:
+    memory_adapter<arena> memory_;
+    erased_bytes bytes_;
+  };
+}
+
+bool declarationAbstractSharedSiblingMarked(declarations::arena &system) {
+  declarations::marked_service service(system);
+
+  return service.grow();
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_sibling_unmarked
+// PAIR: declaration.abstract_shared_sibling
+// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
+// STATUS: implemented
+// CONTRACT: The TBC_SHARED mark is not inherited: a field keeps a sibling through a shared base only when the sibling's own type is marked and its object is pinned.
+// SCENARIO: The adapter derives from the marked interface but is not marked itself; reject where the constructor lends it.
+namespace declarations {
+  class unmarked_service {
+  public:
+    explicit unmarked_service(tbc::view<arena &, tbc::lt::a> system) noexcept
+        : memory_(system),
+          bytes_(memory_) {} // expected-error [tbc-dangling-borrow]
+
+    unmarked_service(const unmarked_service &) = delete;
+    unmarked_service &operator=(const unmarked_service &) = delete;
+
+    bool grow() noexcept {
+      return bytes_.resize(32);
+    }
+
+  private:
+    unmarked_adapter<arena> memory_;
+    erased_bytes bytes_;
+  };
+}
+
+bool declarationAbstractSharedSiblingUnmarked(declarations::arena &system) {
+  declarations::unmarked_service service(system);
+
+  return service.grow();
+}
+
+// END CASE
