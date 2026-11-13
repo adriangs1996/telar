@@ -1,7 +1,7 @@
 module;
 #include <cstdio>
 
-module telar.cli.window;
+module telar.cli.launch_commands;
 
 import std;
 import telar.ebnf.matcher;

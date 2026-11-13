@@ -40,13 +40,14 @@ module;
 #include <sys/time.h>
 #include <sys/un.h>
 
-module telar.cli.window;
+module telar.cli.launch_commands;
 
 import std;
 
 import telar.cli.plugin;
 import telar.cli.server;
 import telar.cli.machine;
+import telar.cli.window;
 import telar.cli.machine_ssh;
 import telar.base.diagnostics;
 import telar.client.protocol;
