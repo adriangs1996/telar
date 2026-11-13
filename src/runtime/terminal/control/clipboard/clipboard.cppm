@@ -1,15 +1,695 @@
-#pragma once
-
+module;
 #include "tbc/view.hpp"
 
-#include "clipboard_grants.hpp"
-#include "clipboard_response.hpp"
-#include "telar_client/protocol/clipboard.hpp"
-#include "telar_config/terminal/control/policy.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include <chrono>
+export module telar.runtime.terminal.control.clipboard;
 
-namespace telar::runtime::control {
+import std;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.text;
+import telar.config;
+import telar.platform.primitives;
+import telar.wire.clipboard;
+import telar.wire.vocabulary;
+import telar.runtime.terminal.control;
+
+export namespace telar::runtime::control {
+
+  enum class ClipboardOperation : std::uint8_t {
+    read,
+    write,
+    data,
+    alias,
+  };
+
+  enum class ClipboardStatus : std::uint8_t {
+    ok,
+    done,
+    data,
+    denied,
+    invalid,
+    too_large,
+    busy,
+    io_error,
+    unsupported,
+  };
+
+  inline std::string_view clipboardStatusName(ClipboardStatus status) noexcept {
+    switch (status) {
+    case ClipboardStatus::ok:
+      return "OK";
+    case ClipboardStatus::done:
+      return "DONE";
+    case ClipboardStatus::data:
+      return "DATA";
+    case ClipboardStatus::denied:
+      return "EPERM";
+    case ClipboardStatus::invalid:
+      return "EINVAL";
+    case ClipboardStatus::too_large:
+      return "EFBIG";
+    case ClipboardStatus::busy:
+      return "EBUSY";
+    case ClipboardStatus::io_error:
+      return "EIO";
+    case ClipboardStatus::unsupported:
+      return "ENOSYS";
+    }
+
+    return "EINVAL";
+  }
+
+  enum class MetadataValue : std::uint8_t {
+    valid,
+    invalid,
+    overflow,
+  };
+
+  struct ClipboardMetadata {
+    static constexpr std::size_t maximum_id = 512;
+    static constexpr std::size_t maximum_mime = 256;
+    static constexpr std::size_t maximum_password = 128;
+    static constexpr std::size_t maximum_name = 256;
+
+    ClipboardOperation operation{};
+    bool primary = false;
+    bool invalid_values = false;
+    FixedText<maximum_id> id;
+    FixedText<maximum_mime> mime;
+    FixedText<maximum_password> password;
+    FixedText<maximum_name> name;
+
+    static std::optional<ClipboardMetadata> parse(std::string_view input) {
+      std::string_view operation, location, id, mime, password, name;
+
+      while (true) {
+        const auto colon = input.find(':');
+        const auto record = input.substr(0, colon);
+        const auto equal = record.find('=');
+        if (equal == std::string_view::npos) {
+          return std::nullopt;
+        }
+
+        const auto key = record.substr(0, equal);
+        const auto value = record.substr(equal + 1);
+
+        if (key == "type") {
+          operation = value;
+        } else if (key == "loc") {
+          location = value;
+        } else if (key == "id") {
+          id = value;
+        } else if (key == "mime") {
+          mime = value;
+        } else if (key == "pw") {
+          password = value;
+        } else if (key == "name") {
+          name = value;
+        }
+
+        if (colon == std::string_view::npos) {
+          break;
+        }
+
+        input.remove_prefix(colon + 1);
+      }
+
+      ClipboardMetadata result;
+
+      if (operation == "read") {
+        result.operation = ClipboardOperation::read;
+      } else if (operation == "write") {
+        result.operation = ClipboardOperation::write;
+      } else if (operation == "wdata") {
+        result.operation = ClipboardOperation::data;
+      } else if (operation == "walias") {
+        result.operation = ClipboardOperation::alias;
+      } else {
+        return std::nullopt;
+      }
+
+      result.primary = location == "primary";
+      std::array<char, maximum_id> sanitized;
+      std::size_t size = 0;
+
+      for (const auto byte : id) {
+        const bool accepted = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '+' || byte == '.';
+
+        if (size == sanitized.size()) {
+          break;
+        }
+
+        if (accepted) {
+          sanitized[size++] = byte;
+        }
+      }
+
+      result.id.assign({sanitized.data(), size});
+      result.invalid_values = decode(mime, result.mime) != MetadataValue::valid || decode(name, result.name) != MetadataValue::valid;
+      // Oversized passwords cannot match a bounded grant. Their contents do not
+      // need to be retained, but malformed short passwords still invalidate it.
+      result.invalid_values |= decode(password, result.password) == MetadataValue::invalid;
+      result.invalid_values |= result.mime.view().contains('\0');
+      return result;
+    }
+
+  private:
+    template <std::size_t Capacity>
+    static MetadataValue decode(std::string_view encoded, FixedText<Capacity>& destination) {
+      if (encoded.size() > (Capacity + 2) / 3 * 4) {
+        return MetadataValue::overflow;
+      }
+
+      std::array<std::uint8_t, Capacity + 2> output;
+      const auto length = base64::decode<base64::Padding::required>(encoded, output);
+      if (!length) {
+        return MetadataValue::invalid;
+      }
+
+      if (*length > Capacity) {
+        return MetadataValue::overflow;
+      }
+
+      const std::string_view decoded{reinterpret_cast<const char*>(output.data()), *length};
+
+      try {
+        validateUtf8(decoded);
+      } catch (const EncodingError&) {
+        return MetadataValue::invalid;
+      }
+
+      destination.assign(decoded);
+      return MetadataValue::valid;
+    }
+  };
+
+  struct ClipboardRoute {
+    std::uint64_t client = 0;
+    std::uint64_t generation = 0;
+
+    bool operator==(const ClipboardRoute&) const = default;
+  };
+
+  class ClipboardGrants {
+  public:
+    static constexpr std::size_t capacity = 32;
+    static constexpr std::size_t password_length = 22;
+
+    void grant(std::string_view password, ClipboardRoute route, bool write, bool once) {
+      if (password.empty() || password.size() > ClipboardMetadata::maximum_password) {
+        return;
+      }
+
+      Entry* entry = nullptr;
+
+      for (auto& candidate : std::span{entries_}.first(count_)) {
+        if (candidate.route == route && constantTimeEqual(candidate.password.view(), password)) {
+          entry = &candidate;
+          entry->once &= once;
+          break;
+        }
+      }
+
+      if (entry == nullptr) {
+        if (count_ == entries_.size()) {
+          std::move(entries_.begin() + 1, entries_.end(), entries_.begin());
+          --count_;
+        }
+
+        entry = &entries_[count_++];
+        entry->password.assign(password);
+        entry->route = route;
+        entry->read = false;
+        entry->write = false;
+        entry->once = once;
+      }
+
+      if (write) {
+        entry->write = true;
+      } else {
+        entry->read = true;
+      }
+    }
+
+    std::optional<ClipboardRoute> use(std::string_view password, bool write) {
+      std::optional<std::size_t> matching;
+
+      for (std::size_t index = 0; index < count_; ++index) {
+        const auto& entry = entries_[index];
+        if (!constantTimeEqual(entry.password.view(), password)) {
+          continue;
+        }
+
+        matching = index;
+        if (write ? entry.write : entry.read) {
+          break;
+        }
+      }
+
+      if (!matching) {
+        return std::nullopt;
+      }
+
+      const auto index = *matching;
+      const auto& entry = entries_[index];
+      const bool permitted = write ? entry.write : entry.read;
+      const auto route = entry.route;
+
+      if (entry.once) {
+        std::move(entries_.begin() + index + 1, entries_.begin() + count_, entries_.begin() + index);
+        --count_;
+      }
+
+      return permitted ? std::optional{route} : std::nullopt;
+    }
+
+    void retain(std::span<const ClipboardRoute> routes) noexcept {
+      std::size_t kept = 0;
+
+      for (std::size_t index = 0; index < count_; ++index) {
+        if (std::find(routes.begin(), routes.end(), entries_[index].route) != routes.end()) {
+          if (kept != index) {
+            entries_[kept] = entries_[index];
+          }
+
+          ++kept;
+        }
+      }
+
+      count_ = kept;
+    }
+
+    void clear() noexcept {
+      count_ = 0;
+    }
+
+    static FixedText<password_length> password() {
+      constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+      static_assert(alphabet.size() == 64);
+      std::array<std::uint8_t, password_length> random;
+
+      randomBytes(random.data(), random.size());
+      std::array<char, password_length> output;
+
+      for (std::size_t index = 0; index < output.size(); ++index) {
+        output[index] = alphabet[random[index] & (alphabet.size() - 1)];
+      }
+
+      FixedText<password_length> result;
+
+      result.assign({output.data(), output.size()});
+      return result;
+    }
+
+  private:
+    struct Entry {
+      FixedText<ClipboardMetadata::maximum_password> password;
+      ClipboardRoute route;
+      bool read = false;
+      bool write = false;
+      bool once = false;
+    };
+
+    std::array<Entry, capacity> entries_;
+    std::size_t count_ = 0;
+  };
+
+  struct ClipboardContentView {
+    std::string_view mime;
+    std::span<const std::uint8_t> data;
+  };
+
+  template <Allocator Memory>
+  class ClipboardWrite {
+  public:
+    static constexpr std::size_t maximum_mimes = 64;
+    static constexpr std::size_t maximum_aliases = 64;
+
+    // Copies the metadata; it keeps only its allocator, region `a`.
+    explicit ClipboardWrite(tbc::view<Memory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit)
+        : metadata(metadata),
+          memory_(memory),
+          spool_(AllocatorRef<std::uint8_t, Memory>{memory}),
+          limit_(limit) {}
+
+    // Its contents view its own spool and names, so it stays where it is built.
+    ClipboardWrite(const ClipboardWrite&) = delete;
+    ClipboardWrite& operator=(const ClipboardWrite&) = delete;
+
+    ClipboardStatus data(std::string_view mime, std::string_view encoded) {
+      if (!current_ || entries_[*current_].mime.view() != mime) {
+        if (finishCurrent() != ClipboardStatus::ok) {
+          return ClipboardStatus::invalid;
+        }
+
+        current_.reset();
+        for (std::size_t index = 0; index < entry_count_; ++index) {
+          if (entries_[index].mime.view() == mime) {
+            current_ = index;
+            break;
+          }
+        }
+
+        if (!current_) {
+          if (entry_count_ == maximum_mimes) {
+            return ClipboardStatus::ok;
+          }
+
+          current_ = entry_count_++;
+          entries_[*current_].mime.assign(mime);
+        }
+
+        auto& entry = entries_[*current_];
+
+        entry.offset = spool_.size();
+        entry.length = 0;
+      }
+
+      for (std::size_t index = 0; index < encoded.size(); ++index) {
+        const auto byte = encoded[index];
+        if (byte != '=' && base64::alphabet.find(byte) == std::string_view::npos) {
+          return ClipboardStatus::invalid;
+        }
+
+        group_[group_size_++] = byte;
+        if (group_size_ != group_.size()) {
+          continue;
+        }
+
+        std::array<std::uint8_t, 3> decoded;
+        const auto count = base64::decode<base64::Padding::required>({group_.data(), group_.size()}, decoded);
+        if (!count || (*count != decoded.size() && index + 1 != encoded.size())) {
+          return ClipboardStatus::invalid;
+        }
+
+        if (*count > limit_ - spool_.size()) {
+          return ClipboardStatus::too_large;
+        }
+
+        reserve(*count);
+        spool_.insert(spool_.end(), decoded.begin(), decoded.begin() + *count);
+        group_size_ = 0;
+      }
+
+      return ClipboardStatus::ok;
+    }
+
+    ClipboardStatus alias(std::string_view mime, std::string_view encoded) {
+      Vector<std::uint8_t, Memory> decoded{AllocatorRef<std::uint8_t, Memory>{memory_}};
+
+      if (encoded.size() / 4 * 3 > limit_) {
+        return ClipboardStatus::too_large;
+      }
+
+      decoded.resize(encoded.size() / 4 * 3);
+      const auto length = base64::decode<base64::Padding::required>(encoded, decoded);
+      if (!length) {
+        return ClipboardStatus::invalid;
+      }
+
+      std::string_view remaining{reinterpret_cast<const char*>(decoded.data()), *length};
+
+      try {
+        validateUtf8(remaining);
+      } catch (const EncodingError&) {
+        return ClipboardStatus::invalid;
+      }
+
+      while (const auto name = token(remaining)) {
+        if (name->contains('\0')) {
+          return ClipboardStatus::invalid;
+        }
+
+        if (name->size() > ClipboardMetadata::maximum_mime) {
+          continue;
+        }
+
+        auto index = alias_count_;
+
+        for (std::size_t candidate = 0; candidate < alias_count_; ++candidate) {
+          if (aliases_[candidate].name.view() == *name) {
+            index = candidate;
+            break;
+          }
+        }
+
+        if (index == alias_count_) {
+          if (alias_count_ == maximum_aliases) {
+            continue;
+          }
+
+          aliases_[alias_count_++].name.assign(*name);
+        }
+
+        aliases_[index].target.assign(mime);
+      }
+
+      return ClipboardStatus::ok;
+    }
+
+    ClipboardStatus commit() {
+      if (finishCurrent() != ClipboardStatus::ok) {
+        return ClipboardStatus::invalid;
+      }
+
+      current_.reset();
+      content_count_ = 0;
+      for (const auto& entry : std::span{entries_}.first(entry_count_)) {
+        contents_[content_count_++] = {entry.mime.view(), std::span<const std::uint8_t>{spool_}.subspan(entry.offset, entry.length)};
+      }
+
+      for (const auto& alias : std::span{aliases_}.first(alias_count_)) {
+        std::optional<std::span<const std::uint8_t>> target;
+
+        for (const auto& content : std::span{contents_}.first(content_count_)) {
+          if (content.mime == alias.target.view()) {
+            target = content.data;
+            break;
+          }
+        }
+
+        if (!target) {
+          continue;
+        }
+
+        bool replaced = false;
+
+        for (auto& content : std::span{contents_}.first(content_count_)) {
+          if (content.mime == alias.name.view()) {
+            content.data = *target;
+            replaced = true;
+            break;
+          }
+        }
+
+        if (!replaced) {
+          contents_[content_count_++] = {alias.name.view(), *target};
+        }
+      }
+
+      // The desktop transport and platform clipboard have the same aggregate
+      // budget, including alias representations that the desktop must copy.
+      std::size_t total = 0;
+
+      for (const auto& content : contents()) {
+        if (content.data.size() > limit_ - total) {
+          return ClipboardStatus::too_large;
+        }
+
+        total += content.data.size();
+      }
+
+      return ClipboardStatus::ok;
+    }
+
+    std::span<const ClipboardContentView> contents() const noexcept {
+      return std::span{contents_}.first(content_count_);
+    }
+
+    static std::optional<std::string_view> token(std::string_view& remaining) noexcept {
+      constexpr std::string_view whitespace = " \t\n\r\f\v";
+      const auto first = remaining.find_first_not_of(whitespace);
+      if (first == std::string_view::npos) {
+        remaining = {};
+        return std::nullopt;
+      }
+
+      remaining.remove_prefix(first);
+      const auto end = remaining.find_first_of(whitespace);
+      const auto result = remaining.substr(0, end);
+
+      remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
+      return result;
+    }
+
+    ClipboardMetadata metadata;
+
+  private:
+    struct Entry {
+      FixedText<ClipboardMetadata::maximum_mime> mime;
+      std::size_t offset = 0;
+      std::size_t length = 0;
+    };
+
+    struct Alias {
+      FixedText<ClipboardMetadata::maximum_mime> name;
+      FixedText<ClipboardMetadata::maximum_mime> target;
+    };
+
+    ClipboardStatus finishCurrent() noexcept {
+      if (group_size_ != 0) {
+        return ClipboardStatus::invalid;
+      }
+
+      if (current_) {
+        entries_[*current_].length = spool_.size() - entries_[*current_].offset;
+      }
+
+      return ClipboardStatus::ok;
+    }
+
+    void reserve(std::size_t count) {
+      if (count > spool_.capacity() - spool_.size()) {
+        spool_.reserve(std::min(limit_, std::max(spool_.size() + count, std::max(initial_capacity, spool_.capacity() * 2))));
+      }
+    }
+
+    static constexpr std::size_t initial_capacity = 4096;
+    tbc::view<Memory&, tbc::lt::a> memory_;
+    tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> spool_;
+    std::size_t limit_;
+    std::array<Entry, maximum_mimes> entries_;
+    std::array<Alias, maximum_aliases> aliases_;
+    tbc::view<std::array<ClipboardContentView, maximum_mimes + maximum_aliases>, tbc::lt::self> contents_;
+    std::size_t entry_count_ = 0;
+    std::size_t alias_count_ = 0;
+    std::size_t content_count_ = 0;
+    std::optional<std::size_t> current_;
+    std::array<char, 4> group_;
+    std::size_t group_size_ = 0;
+  };
+
+  inline constexpr std::size_t clipboard_chunk_bytes = 4096;
+
+  struct ClipboardPacket {
+    ClipboardOperation operation = ClipboardOperation::read;
+    ClipboardStatus status = ClipboardStatus::ok;
+    bool primary = false;
+    std::string_view id{};
+    std::optional<std::string_view> mime{};
+    std::optional<std::string_view> password{};
+    std::span<const std::uint8_t> payload{};
+    Ending ending = Ending::escape;
+  };
+
+  template <Allocator Memory>
+  void clipboardBase64(Reply<Memory>& reply, std::span<const std::uint8_t> input) {
+    constexpr std::size_t raw_chunk_bytes = 3072;
+    std::array<char, raw_chunk_bytes / 3 * 4> encoded;
+
+    while (!input.empty()) {
+      const auto count = std::min(input.size(), raw_chunk_bytes);
+      const auto size = base64::encode(input.first(count), encoded);
+      if (!size) {
+        throw std::logic_error{"Clipboard encoder capacity invariant failed"};
+      }
+
+      reply.append({encoded.data(), *size});
+      input = input.subspan(count);
+    }
+  }
+
+  template <Allocator Memory>
+  void clipboardBase64(Reply<Memory>& reply, std::string_view input) {
+    clipboardBase64(reply, std::span{reinterpret_cast<const std::uint8_t*>(input.data()), input.size()});
+  }
+
+  template <Allocator Memory>
+  void clipboardPacket(Reply<Memory>& reply, const ClipboardPacket& packet) {
+    reply.append(packet.operation == ClipboardOperation::read ? "\x1b]5522;type=read:status=" : "\x1b]5522;type=write:status=");
+    reply.append(clipboardStatusName(packet.status));
+    if (packet.primary) {
+      reply.append(":loc=primary");
+    }
+
+    if (!packet.id.empty()) {
+      reply.append(":id=");
+      reply.append(packet.id);
+    }
+
+    if (packet.mime) {
+      reply.append(":mime=");
+      clipboardBase64(reply, *packet.mime);
+    }
+
+    if (packet.password) {
+      reply.append(":pw=");
+      clipboardBase64(reply, *packet.password);
+    }
+
+    if (!packet.payload.empty()) {
+      reply.append(";");
+      clipboardBase64(reply, packet.payload);
+    }
+
+    reply.append(packet.ending == Ending::bell ? "\a" : "\x1b\\");
+  }
+
+  template <Allocator Memory>
+  void clipboardReadSuccess(Reply<Memory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing) {
+    auto packet = request;
+
+    packet.operation = ClipboardOperation::read;
+    packet.status = ClipboardStatus::ok;
+    clipboardPacket(reply, packet);
+    packet.primary = false;
+    if (listing) {
+      std::array<std::uint8_t, clipboard_chunk_bytes> joined;
+      std::size_t length = 0;
+
+      for (const auto mime : available) {
+        const auto separator = length == 0 ? 0u : 1u;
+        if (mime.size() + separator + 1 > joined.size() - length) {
+          break;
+        }
+
+        if (separator != 0) {
+          joined[length++] = ' ';
+        }
+
+        std::copy(mime.begin(), mime.end(), joined.begin() + length);
+        length += mime.size();
+      }
+
+      if (length != 0) {
+        joined[length++] = '\n';
+      }
+
+      packet.status = ClipboardStatus::data;
+      packet.mime = ".";
+      packet.payload = std::span<const std::uint8_t>{joined}.first(length);
+      clipboardPacket(reply, packet);
+    }
+
+    for (const auto& content : contents) {
+      auto remaining = content.data;
+
+      while (!remaining.empty()) {
+        const auto count = std::min(remaining.size(), clipboard_chunk_bytes);
+
+        packet.status = ClipboardStatus::data;
+        packet.mime = content.mime;
+        packet.payload = remaining.first(count);
+        clipboardPacket(reply, packet);
+        remaining = remaining.subspan(count);
+      }
+    }
+
+    packet.status = ClipboardStatus::done;
+    packet.mime.reset();
+    packet.payload = {};
+    clipboardPacket(reply, packet);
+  }
 
   template <Allocator Memory>
   class Clipboard {

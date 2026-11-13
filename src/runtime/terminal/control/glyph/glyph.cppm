@@ -1,13 +1,14 @@
-#pragma once
-
+module;
 #include "tbc/view.hpp"
 
-#include "reply.hpp"
-#include "telar_base/text/decimal.hpp"
-#include <charconv>
-#include <optional>
+export module telar.runtime.terminal.control.glyph;
 
-namespace telar::runtime::control {
+import std;
+import telar.base.memory.allocators;
+import telar.base.text;
+import telar.runtime.terminal.control;
+
+export namespace telar::runtime::control {
 
   inline std::optional<std::uint32_t> glyphCodepoint(std::string_view value) noexcept {
     if (value.starts_with('+')) {

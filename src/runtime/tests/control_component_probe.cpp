@@ -7,6 +7,7 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.runtime.terminal.control;
+import telar.runtime.terminal.control.engine;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 

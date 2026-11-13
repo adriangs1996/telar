@@ -1,26 +1,24 @@
-#pragma once
-
+module;
 #include "tbc/view.hpp"
+#include <cassert>
+#include <ghostty/vt.h>
 
-#include "ascii_ordinary.hpp"
-#include "capabilities.hpp"
-#include "checksum.hpp"
-#include "classification.hpp"
-#include "clipboard.hpp"
-#include "color_queries.hpp"
-#include "cursor_report.hpp"
-#include "glyph.hpp"
-#include "graphics_query.hpp"
-#include "parser.hpp"
-#include "reply.hpp"
-#include "reports.hpp"
-#include "size_report.hpp"
-#include "styled_ordinary.hpp"
-#include "telar_base/program_identity.hpp"
-#include "telar_config/terminal/control/policy.hpp"
-#include "vt_state.hpp"
+export module telar.runtime.terminal.control.engine;
 
-namespace telar::runtime::control {
+import std;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.text;
+import telar.config;
+import telar.vocabulary;
+import telar.runtime.terminal.control;
+import telar.runtime.terminal.control.checksum;
+import telar.runtime.terminal.control.glyph;
+
+// Engine::clipboard() hands out the clipboard state machine.
+export import telar.runtime.terminal.control.clipboard;
+
+export namespace telar::runtime::control {
 
   template <Allocator Memory>
   class Engine {
@@ -409,7 +407,6 @@ namespace telar::runtime::control {
     }
 
     [[gnu::noinline]] std::size_t ordinaryAscii(std::span<const std::uint8_t> input) {
-      static_assert(ascii_detail::codepoint_capacity == GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT);
       std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
 
       assert(input.size() >= ascii_detail::gate_bytes);

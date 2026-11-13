@@ -98,7 +98,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     sources = ['tests/control_accounting_probe.cpp', 'tests/control_component_probe.cpp',
                'tools/account_control_queries.py', 'tools/bench_control_queries.py',
-               'terminal/control/engine.hpp', 'terminal/control/vt_state.hpp',
+               'terminal/control/engine/engine.cppm', 'terminal/control/vt_state.hpp',
                'terminal/ghostty_allocator.hpp', '../../lib/base/include/telar_base/memory/allocator.hpp']
     report = {'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'architecture': platform.machine(), 'iterations': args.iterations,
