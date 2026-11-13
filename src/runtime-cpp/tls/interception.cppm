@@ -459,7 +459,7 @@ public:
   // `offer` is the child's ClientHello when the caller already read it complete; without one the
   // session reads its own, from an offer allocated in `memory`. Either is released once the origin
   // has the protocols.
-  inline explicit TlsSession(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, Memory &memory, Owned<AlpnOffer, Memory> offer)
+  inline explicit TlsSession(tbc::view<const TlsContexts<Memory> &, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<Memory &, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer)
       : contexts_(contexts),
         authority_(std::move(authority)),
         sockets_(sockets),
@@ -683,7 +683,7 @@ private:
   TunnelSockets sockets_;
   FixedText<ProxyHostname::maximum_bytes> hostname_;
   bool offered_;
-  Owned<AlpnOffer, Memory> offer_;
+  tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer_;
   AlpnSelection selection_;
   TlsConnection origin_;
   TlsConnection child_;
@@ -708,7 +708,7 @@ public:
       : contexts_(contexts), replacement_(std::move(authority)) {}
 
   // `offer` is the child's ClientHello when the caller already read it complete, or null.
-  inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory &, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, Owned<AlpnOffer, Memory> offer) const {
+  inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory &, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
     return makeOwned<TlsSession<Memory>>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
   }

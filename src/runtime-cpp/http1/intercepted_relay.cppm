@@ -443,8 +443,9 @@ public:
 
   // Offers the complete message to the hook; false when the hook takes no ticket, so the message
   // goes on as it is.
+  // The slot keeps an allocation of `memory`, region `a`, until the decision is released.
   template <typename Message>
-  inline bool begin(Memory &memory, traffic::HttpControl &control, traffic::FlowEvent event, const Message &message) {
+  inline bool begin(tbc::view<Memory &, tbc::lt::a> memory, traffic::HttpControl &control, traffic::FlowEvent event, const Message &message) {
     decision_.emplace(memory, HttpMessageLimits::message_bytes);
     event.bytes = HttpMessageCodec::encodeMessage(decision_->bytes(), message);
     ticket_ = control.interceptHttp(event);
@@ -487,7 +488,7 @@ private:
   traffic::HttpPolicy policy_;
   Time collect_until_{};
   std::uint64_t ticket_ = 0;
-  std::optional<SensitiveAllocation<Memory>> decision_;
+  tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> decision_;
 };
 
 }

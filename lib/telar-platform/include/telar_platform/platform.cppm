@@ -1847,9 +1847,10 @@ public:
   }
 
   // Hands `use` the command `git` with the hardening options and overrides, then `arguments`,
-  // in the repository; a command keeps its address, so it lives for this call.
+  // in the repository; a command keeps its address, so it lives for this call. The result borrows
+  // only what `use` lends, region `a`.
   template <typename Use>
-  inline decltype(auto) with(std::span<const std::string_view> arguments, Use &&use) const {
+  inline tbc::view<std::invoke_result_t<Use &, Command<Memory> &>, tbc::lt::a> with(std::span<const std::string_view> arguments, tbc::view<Use &&, tbc::lt::a> use) const {
     Vector<std::string_view, Memory> complete{AllocatorRef<std::string_view, Memory>{memory_}};
     complete.reserve(git_observation_options.size() + 2 * overrides_.size() + arguments.size());
     complete.insert(complete.end(), git_observation_options.begin(), git_observation_options.end());
@@ -1864,7 +1865,7 @@ public:
   }
 
   template <typename Use>
-  inline decltype(auto) with(std::initializer_list<std::string_view> arguments, Use &&use) const {
+  inline tbc::view<std::invoke_result_t<Use &, Command<Memory> &>, tbc::lt::a> with(std::initializer_list<std::string_view> arguments, tbc::view<Use &&, tbc::lt::a> use) const {
     return with(std::span{arguments.begin(), arguments.size()}, std::forward<Use>(use));
   }
 

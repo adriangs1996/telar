@@ -1998,7 +1998,7 @@ public:
   // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
   // and relay copy the host.
   // `offer` is the child's ClientHello when the handshake already read it, or null.
-  inline explicit TlsTunnel(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, Owned<AlpnOffer, Memory> offer, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation)
+  inline explicit TlsTunnel(tbc::view<Memory &, tbc::lt::a> memory, tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation)
       : observation_(observation),
         session_(interception.open(memory, sockets, hostname, std::move(offer))),
         application_(memory, observation, hostname) {}
@@ -2128,7 +2128,7 @@ public:
       : memory_(memory), flow_(nullptr, AllocationDeleter<FlowState, Memory>{memory}), plain_(nullptr, AllocationDeleter<PlainTunnel<Memory>, Memory>{memory}), tls_(nullptr, AllocationDeleter<TlsTunnel<Memory>, Memory>{memory}) {}
 
   template <HostnameResolver Resolver>
-  inline void open(tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, ConnectHandshake<Memory, Resolver> &handshake, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation) {
+  inline void open(tbc::view<const TlsInterception<Memory> &, tbc::lt::a> interception, tbc::view<ConnectHandshake<Memory, Resolver> &, tbc::lt::a> handshake, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation) {
     if (observation.flows) {
       flow_ = makeOwned<FlowState>(memory_);
       flow_->open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());

@@ -79,12 +79,13 @@ public:
     return materialize(transform(input, encoding, limit, true), true);
   }
 
-  // As decode and encode, without copying an entity that only identity codings describe.
-  inline auto decodeView(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> Coded {
+  // As decode and encode, without copying an entity that only identity codings describe; the result
+  // views `input` or the codec's allocator, region `a`.
+  inline auto decodeView(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, std::string_view encoding, std::size_t limit) -> tbc::view<Coded, tbc::lt::a> {
     return transform(input, encoding, limit, false);
   }
 
-  inline auto encodeView(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> Coded {
+  inline auto encodeView(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, std::string_view encoding, std::size_t limit) -> tbc::view<Coded, tbc::lt::a> {
     return transform(input, encoding, limit, true);
   }
 
@@ -98,8 +99,8 @@ private:
     return result;
   }
 
-  inline auto transform(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit, bool encode) -> Coded {
-    if (limit == 0 || limit > maximum_bytes || input.size() > maximum_bytes) {
+  inline auto transform(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> entity, std::string_view encoding, std::size_t limit, bool encode) -> tbc::view<Coded, tbc::lt::a> {
+    if (limit == 0 || limit > maximum_bytes || entity.size() > maximum_bytes) {
       throw std::length_error{"Invalid HTTP content limit"};
     }
 
@@ -110,6 +111,8 @@ private:
     const auto codings = parsed.codings;
     const auto count = parsed.count;
 
+    // `input` moves from the entity to each coding's output; with no coding applied it is the entity.
+    auto input = entity;
     std::optional<DecodedBody<Memory>> previous;
     for (std::size_t step = 0; step < count; ++step) {
       const auto selected = codings[encode ? step : count - step - 1];
@@ -121,7 +124,7 @@ private:
     }
     if (input.size() > limit) { throw std::length_error{"HTTP entity exceeds its limit"}; }
     if (previous) { return {std::move(previous), {}}; }
-    return {std::nullopt, input};
+    return {std::nullopt, entity};
   }
 
   inline auto one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
