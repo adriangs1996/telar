@@ -419,10 +419,7 @@ inline void validateReport(const Options &options) {
 }
 
 inline bool equalTitle(std::string_view left, std::string_view right) {
-  return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-           const auto lower = [](unsigned char c) { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; };
-           return lower(a) == lower(b);
-         });
+  return asciiEqualIgnoreCase(left, right);
 }
 
 inline ServerOptions socketOptions(const char *socket) {

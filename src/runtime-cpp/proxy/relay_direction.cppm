@@ -267,7 +267,7 @@ public:
         if (!available) {
           available = index;
         }
-      } else if (row.length == hostname.size() && std::equal(hostname.begin(), hostname.end(), row.hostname.begin(), [](char first, char second) { return asciiLower(first) == asciiLower(second); })) {
+      } else if (asciiEqualIgnoreCase(hostname, std::string_view{row.hostname.data(), row.length})) {
         ++row.waiters;
         return Ticket{index};
       }

@@ -77,15 +77,15 @@ public:
     if (name == ":method") {
       request_ = true;
     }
-    if (equalIgnoringCase(name, "content-type")) {
+    if (asciiEqualIgnoreCase(name, "content-type")) {
       if (content_type_seen_) {
         metadata_valid_ = false;
       } else {
         content_type_seen_ = true;
-        event_stream_ = equalIgnoringCase(trimText(value.substr(0, value.find(';')), " \t"), "text/event-stream");
+        event_stream_ = asciiEqualIgnoreCase(trimText(value.substr(0, value.find(';')), " \t"), "text/event-stream");
       }
     }
-    if (equalIgnoringCase(name, "content-encoding") && !identityEncoding(value)) {
+    if (asciiEqualIgnoreCase(name, "content-encoding") && !identityEncoding(value)) {
       identity_encoding_ = false;
     }
   }
@@ -95,14 +95,10 @@ public:
   inline bool eventStream() const noexcept { return metadata_valid_ && content_type_seen_ && event_stream_ && identity_encoding_; }
 
 private:
-  inline static bool equalIgnoringCase(std::string_view left, std::string_view right) noexcept {
-    return std::ranges::equal(left, right, [](char first, char second) { return asciiLower(first) == asciiLower(second); });
-  }
-
   inline static bool identityEncoding(std::string_view value) noexcept {
     TextFields fields{value, ","};
     while (const auto field = fields.next()) {
-      if (!equalIgnoringCase(trimText(*field, " \t"), "identity")) {
+      if (!asciiEqualIgnoreCase(trimText(*field, " \t"), "identity")) {
         return false;
       }
     }

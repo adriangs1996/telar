@@ -82,16 +82,6 @@ inline constexpr std::size_t max_total_bytes = 16 * max_file_bytes;
 inline constexpr std::size_t max_files = 4096;
 inline constexpr std::size_t max_line_bytes = PATH_MAX + 64;
 
-inline std::string lower(std::string_view text) {
-  std::string result{text};
-  for (auto &byte : result) {
-    if (byte >= 'A' && byte <= 'Z') {
-      byte += 'a' - 'A';
-    }
-  }
-
-  return result;
-}
 
 // Directories that hold credentials, which no configuration sync reads or writes below.
 inline constexpr auto credential_directories = std::to_array<std::string_view>({".ssh", ".gnupg", ".aws", ".kube", ".docker", "keychains", "gcloud", ".password-store"});
@@ -106,7 +96,7 @@ inline bool acceptable(std::string_view path) {
   static constexpr auto credential_names = std::to_array<std::string_view>({".claude.json", ".credentials.json", "auth.json", "mcp-auth.json", "credentials", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".vault-token", ".git-credentials", "hosts.yml", "models.json", "keys.json", "sa.json"});
   static constexpr auto extensions = std::to_array<std::string_view>({".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db", ".jsonl", ".db", ".sqlite", ".sqlite3", ".log"});
   static constexpr auto fragments = std::to_array<std::string_view>({"credential", "secret", "token", "password", "passwd"});
-  const auto name = lower(path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1));
+  const auto name = asciiLowerCopy(path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1));
   if (std::ranges::find(credential_names, name) != credential_names.end() || std::ranges::any_of(extensions, [&](auto extension) { return name.ends_with(extension); }) || std::ranges::any_of(fragments, [&](auto fragment) { return name.contains(fragment); }) || name == ".env" || name.starts_with(".env.") || name.ends_with(".env") || name.starts_with("id_rsa") || name.starts_with("id_ed25519") || name.starts_with("id_ecdsa") || name.starts_with("id_dsa")) {
     return false;
   }
@@ -117,7 +107,7 @@ inline bool acceptable(std::string_view path) {
     }
 
     auto tail = path.substr(root.size());
-    const auto first = lower(tail.substr(0, tail.find('/')));
+    const auto first = asciiLowerCopy(tail.substr(0, tail.find('/')));
     if (std::ranges::find(session_directories, first) != session_directories.end()) {
       return false;
     }
@@ -125,7 +115,7 @@ inline bool acceptable(std::string_view path) {
     while (!tail.empty()) {
       const auto separator = tail.find('/');
       const auto component = tail.substr(0, separator);
-      if (component.empty() || component.front() == '.' || std::ranges::find(credential_directories, lower(component)) != credential_directories.end()) {
+      if (component.empty() || component.front() == '.' || std::ranges::find(credential_directories, asciiLowerCopy(component)) != credential_directories.end()) {
         return false;
       }
 
@@ -1145,7 +1135,6 @@ int check(Memory &memory, const MachineProfile &profile, bool json) {
 export {
 namespace telar::runtime::cli::machine::filter {
 
-using config_receive::lower;
 
 inline bool whitespace(char byte) {
   return byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' || byte == '\v' || byte == '\f';
@@ -1166,7 +1155,7 @@ enum class Kind {
 inline bool secretKey(std::string_view name, Kind kind) {
   static constexpr auto dropped = std::to_array<std::string_view>({"env", "environment", "headers", "http_headers", "env_http_headers", "auth", "authInfo", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "mcpServers", "mcp", "mcp_servers", "token", "accessToken", "access_token", "refreshToken", "refresh_token", "idToken", "id_token"});
   static constexpr auto fragments = std::to_array<std::string_view>({"secret", "password", "passphrase", "apikey", "api_key", "api-key", "credential", "bearer", "private_key", "privatekey", "authorization", "cookie"});
-  const auto text = lower(name);
+  const auto text = asciiLowerCopy(name);
   return std::ranges::find(dropped, name) != dropped.end() || std::ranges::any_of(fragments, [&](auto fragment) { return text.contains(fragment); }) || (kind != Kind::scalar && (text.contains("token") || text.contains("auth")));
 }
 
@@ -1474,7 +1463,7 @@ inline bool secretName(std::string_view name) {
     return false;
   }
 
-  const auto text = lower(name);
+  const auto text = asciiLowerCopy(name);
   static constexpr auto names = std::to_array<std::string_view>({"key", "auth", "pat", "pwd"});
   static constexpr auto fragments = std::to_array<std::string_view>({"token", "secret", "passw", "api_key", "apikey", "api-key", "access_key", "accesskey", "private_key", "authorization", "credential", "webhook", "cookie"});
   static constexpr auto suffixes = std::to_array<std::string_view>({"_key", "-key", "_header", "-header", "_app", "-app"});
@@ -1503,7 +1492,7 @@ inline bool literalValue(std::string_view rest, bool numbers) {
     return false;
   }
 
-  const auto scheme = lower(*word);
+  const auto scheme = asciiLowerCopy(*word);
   if (scheme == "bearer" || scheme == "basic" || scheme == "token" || scheme == "digest") {
     word = nextWord(rest);
   }
@@ -1512,7 +1501,7 @@ inline bool literalValue(std::string_view rest, bool numbers) {
     return false;
   }
 
-  const auto text = lower(*word);
+  const auto text = asciiLowerCopy(*word);
   if (text == "true" || text == "false" || text == "null" || text == "none" || text == "undefined") {
     return false;
   }
@@ -1521,7 +1510,7 @@ inline bool literalValue(std::string_view rest, bool numbers) {
 }
 
 inline std::optional<std::string_view> finding(std::string_view line) {
-  const auto lowered = lower(line);
+  const auto lowered = asciiLowerCopy(line);
   if (line.contains("PRIVATE KEY-----")) {
     return "a private key";
   }
@@ -1656,7 +1645,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
       continue;
     }
 
-    if (secretName(name) && literalValue(line.substr(cursor), !lower(name).contains("token"))) {
+    if (secretName(name) && literalValue(line.substr(cursor), !asciiLowerCopy(name).contains("token"))) {
       return "a value assigned to a secret-looking name";
     }
   }
@@ -1700,12 +1689,7 @@ struct WindowOptions {
   std::vector<std::string> command;
 
   inline static std::string canonicalTheme(std::string_view name) {
-    std::string text{name};
-    for (auto &byte : text) {
-      if (byte >= 'A' && byte <= 'Z') {
-        byte += 'a' - 'A';
-      }
-    }
+    const auto text = asciiLowerCopy(name);
 
     static constexpr auto aliases = std::to_array<std::pair<std::string_view, std::string_view>>({{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}});
     for (const auto &[alias, canonical] : aliases) {

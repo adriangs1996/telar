@@ -56,16 +56,6 @@ import telar.platform.primitives;
 export {
 namespace telar::runtime::cli::repository {
 
-inline std::string asciiLower(std::string_view text) {
-  std::string result{text};
-  for (auto &byte : result) {
-    if (byte >= 'A' && byte <= 'Z') {
-      byte += 'a' - 'A';
-    }
-  }
-
-  return result;
-}
 
 inline std::string normalize(std::string_view url) {
   url = trimText(url, " \t\r\n");
@@ -77,7 +67,7 @@ inline std::string normalize(std::string_view url) {
     scheme = url.substr(0, separator);
     const auto rest = url.substr(separator + std::string_view{"://"}.size());
     const auto slash = rest.find('/');
-    if (asciiLower(scheme) == "file" || slash == rest.npos) {
+    if (asciiLowerCopy(scheme) == "file" || slash == rest.npos) {
       throw std::runtime_error{"UnsupportedOrigin"};
     }
 
@@ -113,7 +103,7 @@ inline std::string normalize(std::string_view url) {
 
   if (colon != host.npos && colon < host.size()) {
     const auto port = host.substr(colon + 1);
-    const auto lower_scheme = asciiLower(scheme);
+    const auto lower_scheme = asciiLowerCopy(scheme);
     if ((lower_scheme == "ssh" && port == "22") || (lower_scheme == "https" && port == "443") || (lower_scheme == "http" && port == "80")) {
       host = host.starts_with('[') ? host.substr(1, colon - 2) : host.substr(0, colon);
     }
@@ -137,7 +127,7 @@ inline std::string normalize(std::string_view url) {
     throw std::runtime_error{"OriginTooLong"};
   }
 
-  return asciiLower(host) + '/' + std::string{path};
+  return asciiLowerCopy(host) + '/' + std::string{path};
 }
 
 inline std::string sanitized(std::string_view origin) {
@@ -155,7 +145,7 @@ inline std::string sanitized(std::string_view origin) {
 
     const auto authority = origin.substr(start, slash - start);
     const auto at = authority.rfind('@');
-    if (at != authority.npos && !(asciiLower(origin.substr(0, separator)) == "ssh" && !authority.substr(0, at).contains(':'))) {
+    if (at != authority.npos && !(asciiLowerCopy(origin.substr(0, separator)) == "ssh" && !authority.substr(0, at).contains(':'))) {
       return std::string{origin.substr(0, start)} + std::string{origin.substr(start + at + 1)};
     }
   }

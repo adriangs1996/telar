@@ -146,7 +146,7 @@ public:
       }
 
       const auto authorization = trimText(*value, " \t");
-      if (authorization.size() < 7 || !sameCaseInsensitive(authorization.substr(0, 5), "basic") || authorization[5] != ' ') {
+      if (authorization.size() < 7 || !asciiEqualIgnoreCase(authorization.substr(0, 5), "basic") || authorization[5] != ' ') {
         return std::nullopt;
       }
 
@@ -173,10 +173,6 @@ public:
   }
 
 private:
-  inline static bool sameCaseInsensitive(std::string_view left, std::string_view right) noexcept {
-    return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](char first, char second) { return asciiLower(first) == asciiLower(second); });
-  }
-
   inline static std::optional<std::string_view> next(std::string_view &head) noexcept {
     auto line_end = head.find("\r\n");
     if (line_end == std::string_view::npos) {
@@ -188,7 +184,7 @@ private:
       line_end = head.find("\r\n");
       const auto line = head.substr(0, line_end);
       const auto colon = line.find(':');
-      if (colon != std::string_view::npos && sameCaseInsensitive(line.substr(0, colon), "proxy-authorization")) {
+      if (colon != std::string_view::npos && asciiEqualIgnoreCase(line.substr(0, colon), "proxy-authorization")) {
         return line.substr(colon + 1);
       }
       head.remove_prefix(line_end == std::string_view::npos ? head.size() : line_end + 2);

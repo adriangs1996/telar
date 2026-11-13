@@ -213,7 +213,7 @@ inline bool answeredYes() {
     return false;
   }
 
-  const auto text = config_receive::lower(trimText(answer, " \t\r\n"));
+  const auto text = asciiLowerCopy(trimText(answer, " \t\r\n"));
   return text == "y" || text == "yes";
 }
 
@@ -683,7 +683,7 @@ class ConfigSync {
     const auto &directories = config_receive::credential_directories;
     for (;;) {
       const auto slash = tail.find('/');
-      const auto component = filter::lower(tail.substr(0, slash));
+      const auto component = asciiLowerCopy(tail.substr(0, slash));
       if (std::ranges::find(directories, component) != directories.end()) {
         return false;
       }
@@ -1220,7 +1220,7 @@ inline std::optional<LoginLink> findLoginLink(std::string_view text, const Login
       continue;
     }
 
-    const auto host = filter::lower(notificationLinkHost(candidate));
+    const auto host = asciiLowerCopy(notificationLinkHost(candidate));
     if (std::ranges::find(plan.hosts, host) != plan.hosts.end()) {
       url = candidate;
       break;
@@ -2005,7 +2005,7 @@ inline std::string releaseDigest(const std::string &asset) {
       throw CommandError{"ReleaseDigestUnreadable"};
     }
 
-    return filter::lower(digest);
+    return asciiLowerCopy(digest);
   }
 
   throw CommandError{"ReleaseAssetMissing"};

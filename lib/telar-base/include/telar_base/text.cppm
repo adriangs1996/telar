@@ -81,6 +81,15 @@ inline constexpr char asciiLower(char value) noexcept {
   return value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value;
 }
 
+// `text` with its ASCII capitals lowered.
+inline std::string asciiLowerCopy(std::string_view text) {
+  std::string result{text};
+  for (auto &byte : result) {
+    byte = asciiLower(byte);
+  }
+  return result;
+}
+
 inline constexpr bool asciiEqualIgnoreCase(std::string_view left, std::string_view right) noexcept {
   if (left.size() != right.size()) {
     return false;

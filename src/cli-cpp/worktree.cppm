@@ -1082,12 +1082,7 @@ inline bool confirmRemoval(const char *question) {
   if (begin == std::string::npos) {
     return false;
   }
-  answer = answer.substr(begin, end - begin + 1);
-  for (auto &byte : answer) {
-    if (byte >= 'A' && byte <= 'Z') {
-      byte += 'a' - 'A';
-    }
-  }
+  answer = asciiLowerCopy(answer.substr(begin, end - begin + 1));
   return answer == "y" || answer == "yes";
 }
 
@@ -1170,9 +1165,8 @@ private:
       return found;
     }
 
-    const auto lower = [](unsigned char byte) { return byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte; };
     for (const auto &entry : catalog_.worktrees) {
-      if (entry.title.size() != reference.size() || !std::equal(entry.title.begin(), entry.title.end(), reference.begin(), [&](auto left, auto right) { return lower(left) == lower(right); })) {
+      if (!asciiEqualIgnoreCase(entry.title, reference)) {
         continue;
       }
       if (found) {
