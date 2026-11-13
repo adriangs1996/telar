@@ -1700,7 +1700,37 @@ void awaitSetup(ControlSession<Memory> &session, ExecutionRequest request, Execu
   }
 }
 
-// worktree create can use the same authorization gate and execution semantics.
+// Starts a recipe as an execution in `cwd` and, unless `detach`, waits for it to succeed.
+template <Allocator Memory>
+std::uint64_t execute(ControlSession<Memory> &session, std::string_view cwd, std::span<const std::string> recipe, bool detach) {
+  std::array<std::string_view, ExecutionOptions::max_arguments> argv;
+  for (std::size_t index = 0; index < recipe.size(); ++index) {
+    argv[index] = recipe[index];
+  }
+
+  const auto id = randomIdentity();
+  ExecutionRequest request{.action = ExecutionAction::start, .execution_id = id, .cwd = cwd, .arguments = std::span{argv}.first(recipe.size())};
+  writeText(std::format("telar project: setup execution {}; each explicit invocation repeats the recipe\n", id), STDERR_FILENO);
+  const auto reply = execution::exchange(session, request);
+  if (!detach) {
+    awaitSetup(session, request, reply);
+  }
+
+  return id;
+}
+
+// `project setup` and `worktree create --setup` share the authorization gate and execution semantics.
+template <Allocator Memory>
+std::optional<std::uint64_t> prepare(Memory &memory, ControlSession<Memory> &session, std::string_view cwd, bool authorized, bool detach = false) {
+  const auto recipe = loadRecipe(memory, cwd, authorized);
+  if (!recipe) {
+    return std::nullopt;
+  }
+
+  return execute(session, cwd, *recipe, detach);
+}
+
+// Starts the runtime only when the checkout declares a recipe.
 template <Allocator Memory>
 std::optional<std::uint64_t> prepare(Memory &memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
   const auto recipe = loadRecipe(memory, cwd, authorized);
@@ -1714,20 +1744,7 @@ std::optional<std::uint64_t> prepare(Memory &memory, std::string_view cwd, bool 
   ensureRuntime(memory, paths);
   ControlSession session{memory, paths.socket.c_str()};
   session.receiveTimeout(30);
-  std::array<std::string_view, ExecutionOptions::max_arguments> argv;
-  for (std::size_t index = 0; index < recipe->size(); ++index) {
-    argv[index] = (*recipe)[index];
-  }
-
-  const auto id = randomIdentity();
-  ExecutionRequest request{.action = ExecutionAction::start, .execution_id = id, .cwd = cwd, .arguments = std::span{argv}.first(recipe->size())};
-  writeText(std::format("telar project: setup execution {}; each explicit invocation repeats the recipe\n", id), STDERR_FILENO);
-  const auto reply = execution::exchange(session, request);
-  if (!detach) {
-    awaitSetup(session, request, reply);
-  }
-
-  return id;
+  return execute(session, cwd, *recipe, detach);
 }
 
 template <Allocator Memory>

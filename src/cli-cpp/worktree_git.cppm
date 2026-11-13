@@ -725,6 +725,11 @@ public:
     return paths_.socket.c_str();
   }
 
+  // The conversation itself, for commands shared with families that hold a bare session.
+  inline ControlSession<Memory> &control() noexcept {
+    return *session_;
+  }
+
 private:
   inline static ServerOptions socketOptions(std::optional<std::string_view> socket) {
     ServerOptions options;

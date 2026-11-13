@@ -314,7 +314,8 @@ class Stack:
                 '{"version":256,"argv":["/usr/bin/true"]}',
                 '{"version":1,"argv":[]}', '{"version":1,"argv":[1]}',
                 '{"version":1,"argv":["/usr/bin/true"],"extra":true}',
-                '{"version":1,"version":1,"argv":["/usr/bin/true"]}', '{not json']):
+                '{"version":1,"version":1,"argv":["/usr/bin/true"]}', '{not json',
+                '{"version":"0x1","argv":["/usr/bin/true"]}']):
             (self.repo / '.telar/setup.json').write_text(recipe)
             self.git('add', '.telar/setup.json')
             self.git('commit', '-qm', f'Invalid setup {index}')

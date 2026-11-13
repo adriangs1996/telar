@@ -245,7 +245,8 @@ def offline(f):
                '{"version":1', '{"version":1,"argv":["hello"',
                '{"version":1,"argv":["hello', '{"version":1,"argv":',
                '{"version":1,"argv":tru', '{"version":1,"argv":1e',
-               '{"version":1,"argv":,}', '{"version":1,,', '']
+               '{"version":1,"argv":,}', '{"version":1,,', '',
+               '{"version":"0x1","argv":["true"]}']
     for index, recipe in enumerate(recipes):
         (checkout / ".telar/setup.json").write_text(recipe)
         f.invoke(f"project/invalid-{index}", "project", "setup", "--cwd", checkout, code=1)
