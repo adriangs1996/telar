@@ -28,7 +28,8 @@ export import telar.runtime.transport.connection;
 export import telar.base.editors;
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.editor;
 import telar.platform.primitives;
 
 // Interface: editors/remote_editor.cppm

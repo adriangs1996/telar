@@ -31,7 +31,10 @@ export import telar.runtime.transport.connection;
 export import telar.base.text;
 export import telar.client;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.editor;
+import telar.wire.history;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: platform/observation_worker.cppm

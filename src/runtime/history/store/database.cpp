@@ -17,7 +17,7 @@ import std;
 
 import telar.runtime.platform.system_certificates;
 import telar.platform;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 namespace telar::runtime {

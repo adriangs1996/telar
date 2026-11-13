@@ -14,7 +14,7 @@ module telar.runtime.terminal.text_reader;
 import std;
 
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
 
 namespace telar::runtime {

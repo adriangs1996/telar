@@ -4,7 +4,7 @@ export module telar.runtime.redirect.direction;
 
 import std;
 
-import telar.client.protocol;
+import telar.vocabulary;
 
 // Interface: redirect/direction.cppm
 export {

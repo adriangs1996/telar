@@ -48,7 +48,7 @@ export import telar.runtime.traffic.control_protocol;
 
 export import telar.runtime.proxy.relay_direction;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: plugins/frame_channel.cppm

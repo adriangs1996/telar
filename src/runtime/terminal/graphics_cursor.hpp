@@ -2,7 +2,7 @@
 
 #include "../graphics/kitty_cursor.hpp"
 #include "ghostty_handle.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_vocabulary/vocabulary.hpp"
 
 namespace telar::runtime {
 

@@ -34,7 +34,7 @@ export import telar.runtime.history.event;
 export import telar.runtime.platform.request_worker;
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

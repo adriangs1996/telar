@@ -29,7 +29,7 @@ export import telar.runtime.traffic.control_protocol;
 
 export import telar.base.memory;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.vocabulary;
 import telar.platform.primitives;
 
 // Interface: traffic/connection.cppm

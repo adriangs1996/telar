@@ -28,7 +28,7 @@ export import telar.platform;
 
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: agents/description_capture.cppm

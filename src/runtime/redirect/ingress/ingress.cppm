@@ -85,7 +85,7 @@ export import telar.runtime.platform.launch_program;
 
 export import telar.client;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: redirect/target.cppm

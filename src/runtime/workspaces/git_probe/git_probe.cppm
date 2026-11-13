@@ -23,7 +23,6 @@ import std;
 
 export import telar.runtime.platform.git_status;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: workspaces/git_probe.cppm

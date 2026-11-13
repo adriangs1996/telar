@@ -21,7 +21,10 @@ export import telar.runtime.transport.connection;
 
 export import telar.runtime.diagnostics.operation;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.history;
+import telar.wire.runtime;
 import telar.runtime.diagnostics.line;
 
 // Interface: history/launch_failure.cppm

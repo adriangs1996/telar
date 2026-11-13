@@ -35,7 +35,6 @@ export import telar.runtime.plugins.protocol;
 export import telar.plugins;
 export import telar.runtime.plugins.worker;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: plugins/event_source.cppm

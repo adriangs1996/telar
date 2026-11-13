@@ -29,7 +29,8 @@ export import telar.runtime.model.slot_store;
 
 export import telar.runtime.suggestions.engine;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.editor;
 import telar.platform.primitives;
 
 // Interface: runtime/request_context.cppm

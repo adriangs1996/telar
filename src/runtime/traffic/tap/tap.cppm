@@ -20,7 +20,6 @@ import std;
 
 export import telar.runtime.traffic.control_backend;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: traffic/tap.cppm

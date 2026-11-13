@@ -19,7 +19,7 @@ export import telar.runtime.http.message;
 
 export import telar.runtime.redirect.direction;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.vocabulary;
 
 // Interface: traffic/protocol.cppm
 export {

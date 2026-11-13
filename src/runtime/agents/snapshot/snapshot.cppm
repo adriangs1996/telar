@@ -45,7 +45,8 @@ export import telar.base.text;
 export import telar.platform;
 
 export import telar.runtime.model.client_layouts;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

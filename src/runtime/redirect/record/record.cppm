@@ -45,7 +45,6 @@ export import telar.platform;
 
 export import telar.runtime.redirect.pf_rules;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: redirect/log_interface.cppm

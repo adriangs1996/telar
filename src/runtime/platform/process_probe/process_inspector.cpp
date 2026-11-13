@@ -12,7 +12,7 @@ module telar.runtime.platform.process_probe;
 import std;
 
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 namespace telar::runtime {
   namespace {

@@ -34,7 +34,6 @@ export import telar.platform;
 
 export import telar.plugins;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: redirect/flow_key.cppm

@@ -1,7 +1,7 @@
 export module telar.runtime.shell_integration.token;
 
 import std;
-export import telar.client.protocol;
+export import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.base.text;
 

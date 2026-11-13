@@ -19,7 +19,8 @@ import std;
 export import telar.base.memory;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.content;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
 

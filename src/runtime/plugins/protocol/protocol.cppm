@@ -18,7 +18,7 @@ export import telar.plugins;
 
 export import telar.runtime.exchange_capture.exchange;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: plugins/effects.cppm
 export {

@@ -11,7 +11,7 @@ export module telar.runtime.agents.session_host;
 
 import std;
 
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.config;
 import telar.platform;

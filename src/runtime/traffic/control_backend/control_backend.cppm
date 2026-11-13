@@ -108,7 +108,7 @@ export import telar.runtime.proxy.runtime;
 export import telar.runtime.redirect.socket_owners;
 export import telar.runtime.redirect.ingress;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: traffic/control_access.cppm
