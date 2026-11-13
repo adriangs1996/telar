@@ -36,6 +36,7 @@ PromptEditorItem::PromptEditorItem(QQuickItem *parent)
   ticker_.setDuration(1000);
   ticker_.setLoopCount(-1);
   connect(&ticker_, &QVariantAnimation::valueChanged, this, &PromptEditorItem::tick);
+  cacheColors();
 }
 
 PromptEditorItem::~PromptEditorItem() = default;
@@ -103,6 +104,7 @@ QVariantMap PromptEditorItem::colors() const {
 void PromptEditorItem::setColors(const QVariantMap &colors) {
   if (colors_ != colors) {
     colors_ = colors;
+    cacheColors();
     placeRuns();
     update();
     emit colorsChanged();
@@ -578,7 +580,7 @@ void PromptEditorItem::placeRuns() {
   };
   static const QEasingCurve rise_curve{QEasingCurve::OutCubic};
   static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
-  const auto accent = colors_.value(QStringLiteral("accent")).value<QColor>();
+  const auto accent = accent_;
   const auto mix = [](const QColor &from, const QColor &to, qreal amount) {
     return QColor::fromRgbF(static_cast<float>(from.redF() + (to.redF() - from.redF()) * amount), static_cast<float>(from.greenF() + (to.greenF() - from.greenF()) * amount), static_cast<float>(from.blueF() + (to.blueF() - from.blueF()) * amount), static_cast<float>(from.alphaF() + (to.alphaF() - from.alphaF()) * amount));
   };
@@ -620,6 +622,18 @@ void PromptEditorItem::placeRuns() {
 }
 
 QColor PromptEditorItem::styleColor(prompt::Style style) const {
+  return style_colors_[static_cast<std::size_t>(style)];
+}
+
+void PromptEditorItem::cacheColors() {
+  for (std::size_t index = 0; index < style_colors_.size(); ++index) {
+    style_colors_[index] = roleColor(static_cast<prompt::Style>(index));
+  }
+  accent_ = colors_.value(QStringLiteral("accent")).value<QColor>();
+  underline_ = colors_.value(QStringLiteral("overlay1")).value<QColor>();
+}
+
+QColor PromptEditorItem::roleColor(prompt::Style style) const {
   const auto role = [&](const char *name, const char *fallback) {
     const auto value = colors_.value(QString::fromLatin1(name));
     return value.isValid() ? value.value<QColor>() : colors_.value(QString::fromLatin1(fallback)).value<QColor>();
@@ -743,12 +757,59 @@ void PromptEditorItem::tick() {
   refresh();
 }
 
+namespace {
+
+// Hands out the children of `parent` in order, creating one when it runs out, and deletes those
+// left over once dropped: a paint node keeps its nodes from one update to the next.
+class ChildNodes {
+public:
+  explicit ChildNodes(QSGNode &parent) noexcept : parent_(parent), next_(parent.firstChild()) {}
+
+  ~ChildNodes() {
+    while (next_ != nullptr) {
+      auto *child = next_;
+      next_ = child->nextSibling();
+      parent_.removeChildNode(child);
+      delete child;
+    }
+  }
+
+  ChildNodes(const ChildNodes &) = delete;
+  ChildNodes &operator=(const ChildNodes &) = delete;
+
+  template <typename Node, typename Create>
+  Node &take(Create &&create) {
+    if (next_ != nullptr) {
+      auto *child = static_cast<Node *>(next_);
+      next_ = next_->nextSibling();
+      return *child;
+    }
+    auto *child = create();
+    parent_.appendChildNode(child);
+    return *child;
+  }
+
+private:
+  QSGNode &parent_;
+  QSGNode *next_;
+};
+
+}
+
+// The root holds two groups, the selection's rectangles and the underlines' lines, so each
+// group's nodes are of one type and are reused in place.
 QSGNode *PromptEditorItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
   auto *root = previous != nullptr ? previous : new QSGNode;
-  while (auto *child = root->firstChild()) {
-    root->removeChildNode(child);
-    delete child;
+  if (root->childCount() != 2) {
+    while (auto *child = root->firstChild()) {
+      root->removeChildNode(child);
+      delete child;
+    }
+    root->appendChildNode(new QSGNode);
+    root->appendChildNode(new QSGNode);
   }
+  ChildNodes selections{*root->firstChild()};
+  ChildNodes underlines{*root->lastChild()};
   if (window() == nullptr || resolved_.metrics.width <= 0) {
     return root;
   }
@@ -758,16 +819,15 @@ QSGNode *PromptEditorItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] U
   const auto last_row = first_row_ + maximum_rows_;
   const auto visible = [&](std::uint32_t row) { return static_cast<int>(row) >= first_row_ && static_cast<int>(row) < last_row; };
 
-  auto selection = colors_.value(QStringLiteral("accent")).value<QColor>();
+  auto selection = accent_;
   selection.setAlphaF(0.28F);
   for (const auto &range : layout_.selection) {
     if (!visible(range.row)) {
       continue;
     }
-    auto *rectangle = window()->createRectangleNode();
-    rectangle->setRect(range.column * width, (static_cast<int>(range.row) - first_row_) * height, range.columns * width, height);
-    rectangle->setColor(selection);
-    root->appendChildNode(rectangle);
+    auto &rectangle = selections.take<QSGRectangleNode>([&] { return window()->createRectangleNode(); });
+    rectangle.setRect(range.column * width, (static_cast<int>(range.row) - first_row_) * height, range.columns * width, height);
+    rectangle.setColor(selection);
   }
 
   // A command the shell does not run gets a wavy underline; a path, a dotted one.
@@ -782,24 +842,28 @@ QSGNode *PromptEditorItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] U
     const auto baseline = (static_cast<int>(run.row) - first_row_ + 1) * height - 2 * pixel;
     const auto step = wavy ? width / 4 : 3 * pixel;
     const auto points = static_cast<int>(std::ceil((right - left) / step)) + 1;
-    auto *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), wavy ? points : (points / 2) * 2);
+    auto &node = underlines.take<QSGGeometryNode>([] {
+      auto *created = new QSGGeometryNode;
+      auto *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), 0);
+      geometry->setLineWidth(1);
+      created->setGeometry(geometry);
+      created->setMaterial(new QSGFlatColorMaterial);
+      created->setFlags(QSGNode::OwnsGeometry | QSGNode::OwnsMaterial);
+      return created;
+    });
+    auto *geometry = node.geometry();
+    geometry->allocate(wavy ? points : (points / 2) * 2);
     geometry->setDrawingMode(wavy ? QSGGeometry::DrawLineStrip : QSGGeometry::DrawLines);
-    geometry->setLineWidth(1);
     auto *vertices = geometry->vertexDataAsPoint2D();
     for (int index = 0; index < geometry->vertexCount(); ++index) {
       const auto x = std::min(right, left + index * step);
       const auto y = wavy ? baseline + (index % 2 == 0 ? -pixel : pixel) : baseline;
       vertices[index].set(static_cast<float>(x), static_cast<float>(y));
     }
-    auto *material = new QSGFlatColorMaterial;
-    auto color = wavy ? styleColor(run.style) : colors_.value(QStringLiteral("overlay1")).value<QColor>();
+    auto color = wavy ? styleColor(run.style) : underline_;
     color.setAlphaF(wavy ? 0.8F : 0.7F);
-    material->setColor(color);
-    auto *node = new QSGGeometryNode;
-    node->setGeometry(geometry);
-    node->setMaterial(material);
-    node->setFlags(QSGNode::OwnsGeometry | QSGNode::OwnsMaterial);
-    root->appendChildNode(node);
+    static_cast<QSGFlatColorMaterial *>(node.material())->setColor(color);
+    node.markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
   }
 
   return root;

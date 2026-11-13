@@ -828,6 +828,7 @@ private:
   void publishCopyChange(std::uint64_t previous_pane);
   void leaveKeyboardCopyMode();
   void openCopyLink(std::uint64_t pane_id, CellPosition point);
+  [[nodiscard]] QString suggestionRevision() const;
   void present(const PresentedFrame &frame);
   void prepareFrame(PresentedFrame &frame);
   void prepareTerminalFrames(PresentedFrame &frame);

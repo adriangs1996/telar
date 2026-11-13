@@ -66,15 +66,19 @@ QVariantMap Application::suggestionState() const {
       {QStringLiteral("ready"), phase == SuggestionPhase::ready},
       {QStringLiteral("failed"), phase == SuggestionPhase::failed},
       {QStringLiteral("canSubmit"), SuggestionLabels::canSubmit(phase, query.text)},
-      {QStringLiteral("revision"), QString::number(dialog_generation_) + QLatin1Char(':') + QString::number(suggestion.revision())},
+      {QStringLiteral("revision"), suggestionRevision()},
       {QStringLiteral("hasParent"), palette_parent_.has_value()},
   };
+}
+
+QString Application::suggestionRevision() const {
+  return QString::number(dialog_generation_) + QLatin1Char(':') + QString::number(session().suggestion().revision());
 }
 
 void Application::submitSuggestion(const QString &revision) {
   const auto encoded = palette_query_.toUtf8();
   const auto query = PaletteQuery::parse({encoded.constData(), static_cast<std::size_t>(encoded.size())});
-  if (dialog_ != Dialog::palette || query.mode != PaletteMode::suggest || revision != suggestionState().value(QStringLiteral("revision")).toString()) {
+  if (dialog_ != Dialog::palette || query.mode != PaletteMode::suggest || revision != suggestionRevision()) {
     return;
   }
 

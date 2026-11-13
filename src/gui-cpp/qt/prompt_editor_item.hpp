@@ -180,6 +180,8 @@ private:
   void tick();
   [[nodiscard]] bool animating(qint64 now) const noexcept;
   [[nodiscard]] QColor styleColor(prompt::Style style) const;
+  [[nodiscard]] QColor roleColor(prompt::Style style) const;
+  void cacheColors();
 
   // Glyphs snap to the scene's pixels, so moving any ancestor repaints them.
   AncestorGeometry ancestors_;
@@ -188,6 +190,11 @@ private:
   std::vector<NativeCellText *> runs_;
   QVariantMap grid_;
   QVariantMap colors_;
+  // What colors_ gives each style, the accent and the path underline, read once per change of
+  // colors_ instead of once per run and frame.
+  std::array<QColor, static_cast<std::size_t>(prompt::Style::missing) + 1> style_colors_;
+  QColor accent_;
+  QColor underline_;
   QString preedit_;
   std::string display_;
   std::string typed_;
