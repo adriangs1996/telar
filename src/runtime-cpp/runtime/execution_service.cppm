@@ -512,9 +512,11 @@ public:
     return *pane;
   }
 
+  // Generation 0 names whatever generation the pane has, as requests from clients that predate
+  // generations do.
   inline static Pane<Memory> &requireGeneration(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) {
     auto &pane = require(panes, identity);
-    if (generation != 0 && pane.generation != generation) {
+    if (generation != 0 && findPane(panes, identity, generation) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane generation no longer exists"};
     }
 

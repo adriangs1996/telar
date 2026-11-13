@@ -126,8 +126,8 @@ public:
   }
 
   inline static tbc::view<Pane<Memory> *, tbc::lt::a> complete(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, ClientSession<Memory> &sender, const CompleteClipboardDesktop &completion) {
-    auto *pane = panes.find(completion.ticket.pane_id);
-    if (pane == nullptr || pane->generation != completion.ticket.pane_generation || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
+    auto *pane = findPane(panes, completion.ticket.pane_id, completion.ticket.pane_generation);
+    if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
     }
     pane->terminal.clipboardControl().expire(std::chrono::steady_clock::now());
@@ -502,8 +502,9 @@ private:
   }
 
   inline void project(const ReadPane &request, auto &send) const {
-    auto *pane = model_.panes.find(request.pane_id);
-    if (pane == nullptr || (request.pane_generation != 0 && pane->generation != request.pane_generation)) {
+    // Generation 0 reads whatever generation the pane has, as clients that predate generations ask.
+    auto *pane = request.pane_generation == 0 ? model_.panes.find(request.pane_id) : findPane(model_.panes, request.pane_id, request.pane_generation);
+    if (pane == nullptr) {
       if (const auto *exited = model_.exited_panes.find(request.pane_id, request.pane_generation)) {
         send(exited->response(request));
       } else {

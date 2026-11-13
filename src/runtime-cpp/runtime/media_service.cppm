@@ -635,8 +635,8 @@ private:
     }
 
     for (const auto &entry : std::span{result.entries}.first(result.count)) {
-      auto *pane = model.panes.find(entry.pane);
-      if (pane == nullptr || pane->generation != entry.generation) {
+      auto *pane = findPane(model.panes, entry.pane, entry.generation);
+      if (pane == nullptr) {
         continue;
       }
       if (entry.media->failed()) {

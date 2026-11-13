@@ -188,6 +188,9 @@ struct Attachment {
 inline constexpr std::size_t client_capacity = 32;
 
 template <Allocator Memory>
+class Pane;
+
+template <Allocator Memory>
 class ClientSession {
 public:
   static constexpr std::size_t attachment_capacity = 64;
@@ -232,6 +235,11 @@ public:
     }
 
     return nullptr;
+  }
+
+  // Whether the runtime verified this client runs inside `pane`, the generation it has now.
+  inline bool verifiedFor(const Pane<Memory> &pane) const noexcept {
+    return verified_pane == pane.id && verified_generation == pane.generation;
   }
 
   std::uint64_t id;
@@ -996,6 +1004,47 @@ inline ClientSession<Memory> &requireClient(ClientStore<Memory> &clients, std::u
     throw RequestError{FailureCode::invalid_request, "Client does not exist"};
   }
   return *client;
+}
+
+// The pane `identity` names while it has `generation`; none for another generation. No pane has
+// generation 0, so 0 finds none.
+template <Allocator Memory>
+inline Pane<Memory> *findPane(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  auto *pane = panes.find(identity);
+  return pane != nullptr && pane->generation == generation ? pane : nullptr;
+}
+
+template <Allocator Memory>
+inline const Pane<Memory> *findPane(const PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  const auto *pane = panes.find(identity);
+  return pane != nullptr && pane->generation == generation ? pane : nullptr;
+}
+
+// The same pane while its process runs and nobody asked it to close.
+template <Allocator Memory>
+inline Pane<Memory> *livePane(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  auto *pane = findPane(panes, identity, generation);
+  return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
+}
+
+template <Allocator Memory>
+inline const Pane<Memory> *livePane(const PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  const auto *pane = findPane(panes, identity, generation);
+  return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
+}
+
+// The pane an agent's report names, which must still run the generation it names and be the one
+// the runtime verified the reporting client inside.
+template <Allocator Memory>
+inline Pane<Memory> &requireReporterPane(PaneStore<Memory> &panes, const ClientSession<Memory> &client, std::uint64_t identity, std::uint64_t generation) {
+  auto *pane = findPane(panes, identity, generation);
+  if (pane == nullptr || pane->exit_status) {
+    throw RequestError{FailureCode::pane_not_found, "Pane not found"};
+  }
+  if (!client.verifiedFor(*pane)) {
+    throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
+  }
+  return *pane;
 }
 
 // The runtime's data apart from its clients, whose table is separate so that a call can borrow one

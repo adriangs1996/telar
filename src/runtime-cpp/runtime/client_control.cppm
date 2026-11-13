@@ -196,8 +196,8 @@ public:
   inline static void requestFocus(const PaneStore<Memory> &panes, ClientStore<Memory> &clients, std::uint64_t requester_id, const RequestPaneFocus &request) {
     auto &requester = requireClient(clients, requester_id);
     requireRole(requester, ClientRole::control);
-    const auto *pane = panes.find(request.pane_id);
-    if (pane == nullptr || pane->generation != request.pane_generation) {
+    const auto *pane = findPane(panes, request.pane_id, request.pane_generation);
+    if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane does not exist or its generation is stale"};
     }
 
@@ -388,13 +388,7 @@ public:
       return ReportDecision::accepted;
     }
 
-    auto *pane = panes.find(reporter.pane);
-    if (pane == nullptr || pane->generation != reporter.generation || pane->exit_status) {
-      throw RequestError{FailureCode::pane_not_found, "Pane not found"};
-    }
-    if (client.verified_pane != pane->id || client.verified_generation != pane->generation) {
-      throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
-    }
+    auto *pane = &requireReporterPane(panes, client, reporter.pane, reporter.generation);
     if (accepts(agents, reporter)) {
       return ReportDecision::accepted;
     }
@@ -445,8 +439,8 @@ public:
       }
 
       auto &report = client->deferred_report;
-      const auto *pane = panes.find(report.reporter.pane);
-      const bool gone = pane == nullptr || pane->generation != report.reporter.generation || pane->exit_status;
+      const auto *pane = findPane(panes, report.reporter.pane, report.reporter.generation);
+      const bool gone = pane == nullptr || pane->exit_status;
       const bool timed_out = now.nanoseconds - report.observed.nanoseconds >= report_timeout.count();
       const bool rechecked = !gone && report.rechecked(pane->process_rechecks);
       const bool accepted = !gone && accepts(agents, report.reporter);
@@ -533,8 +527,8 @@ public:
       : worker_(std::in_place, inspector) {}
 
   inline static void verify(const PaneStore<Memory> &panes, ClientSession<Memory> &client, const VerifyPaneDescent &request) {
-    const auto *pane = panes.find(request.pane_id);
-    if (pane == nullptr || request.pane_generation == 0 || pane->generation != request.pane_generation || pane->exit_status) {
+    const auto *pane = findPane(panes, request.pane_id, request.pane_generation);
+    if (pane == nullptr || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
     }
     if (client.pending_descent) {
@@ -608,8 +602,8 @@ private:
     }
 
     try {
-      const auto *pane = panes.find(check.pane);
-      if (pane == nullptr || pane->generation != check.pane_generation || pane->exit_status) {
+      const auto *pane = findPane(panes, check.pane, check.pane_generation);
+      if (pane == nullptr || pane->exit_status) {
         client->connection.send(RequestFailed{.request_id = check.request_id, .code = FailureCode::pane_not_found, .message = "Pane not found"});
       } else if (!completed.lineage.descends) {
         client->connection.send(RequestFailed{.request_id = check.request_id, .code = FailureCode::foreign_process, .message = "The process does not descend from this pane"});
@@ -855,8 +849,8 @@ private:
         limits_.report(LimitReach{.name = "history.observation_failures", .noun = "failed observations", .route = "history"});
       }
 
-      auto *pane = model.panes.find(entry.pane);
-      if (pane == nullptr || pane->generation != entry.generation || pane->exit_status) {
+      auto *pane = findPane(model.panes, entry.pane, entry.generation);
+      if (pane == nullptr || pane->exit_status) {
         continue;
       }
 
@@ -1182,8 +1176,8 @@ public:
   inline void collect(RuntimeModel<Memory> &model) {
     worker_.collect([&](const WorktreeDetectionResult &result) {
       pending_ = false;
-      auto *pane = model.panes.find(result.pane);
-      if (pane == nullptr || pane->generation != result.generation || pane->cwd_revision != result.cwd_revision || result.root_length == 0 || result.root_length > pane->cwd.size() || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
+      auto *pane = findPane(model.panes, result.pane, result.generation);
+      if (pane == nullptr || pane->cwd_revision != result.cwd_revision || result.root_length == 0 || result.root_length > pane->cwd.size() || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
         return;
       }
 

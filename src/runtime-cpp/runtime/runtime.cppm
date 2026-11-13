@@ -394,7 +394,7 @@ export {
       }
 
       inline void refresh(RuntimeModel<Memory> &model, Panes &panes, const ClientStore<Memory> &clients, const ClientLayouts<Memory> &layouts, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) {
-        agents_.removeIf([&](const Agent &agent) { const auto *pane = model.panes.find(agent.pane); return pane == nullptr || pane->generation != agent.generation || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0); });
+        agents_.removeIf([&](const Agent &agent) { return findPane(model.panes, agent.pane, agent.generation) == nullptr || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0); });
         for (auto *pane : model.panes.items()) {
           if (pane == nullptr || pane->exit_status) {
             continue;
@@ -524,7 +524,7 @@ export {
           return pane;
         }
 
-        if (client.verified_pane != pane.id || client.verified_generation != pane.generation) {
+        if (!client.verifiedFor(pane)) {
           throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
         }
 
@@ -1385,8 +1385,8 @@ export {
       inline static void registerEntry(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const RegisterWorktree &request) {
         Workspaces::require(model.workspaces, WorkspaceLocation{.id = request.source});
         if (request.created_by) {
-          const auto *pane = model.panes.find(*request.created_by);
-          if (client.verified_pane != *request.created_by || pane == nullptr || client.verified_generation != pane->generation) {
+          const auto *pane = findPane(model.panes, *request.created_by, client.verified_generation);
+          if (pane == nullptr || pane->exit_status || !client.verifiedFor(*pane)) {
             throw RequestError{FailureCode::foreign_process, "Only a process inside the pane may register for it"};
           }
         }
@@ -2106,8 +2106,10 @@ export {
       }
 
       inline void handle(std::uint64_t identity, const OpenEditor &message) {
-        const auto *source = model_.panes.find(message.pane_id);
-        if (source == nullptr || (message.pane_generation != 0 && source->generation != message.pane_generation)) {
+        // Generation 0 names whatever generation the pane has, as an editor asked from a client
+        // that predates generations does.
+        const auto *source = message.pane_generation == 0 ? model_.panes.find(message.pane_id) : findPane(model_.panes, message.pane_id, message.pane_generation);
+        if (source == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Could not request editor reuse"};
         }
 
@@ -2448,8 +2450,8 @@ export {
         runtime_clipboard_.collect(clients_);
         workspace_git_.collect(model_, Clock::now());
         shell_git_.collect([&](const ShellGitResult &result) {
-          auto *pane = model_.panes.find(result.pane);
-          if (pane != nullptr && pane->generation == result.generation && !pane->shell_state.remote && !(pane->git == result.summary)) {
+          auto *pane = findPane(model_.panes, result.pane, result.generation);
+          if (pane != nullptr && !pane->shell_state.remote && !(pane->git == result.summary)) {
             pane->git = result.summary;
             ++pane->git_revision;
           }
@@ -2499,10 +2501,10 @@ export {
               std::array<Byte, 256> scratch;
               DecodeStorage storage{scratch};
               auto reply = Codec::decode<EditorOpened>(payload, storage);
-              const auto *source = model_.panes.find(client->editor_source);
-              const auto *target = model_.panes.find(reply.pane_id);
-              if (source == nullptr || source->generation != client->editor_generation || source->exit_status || source->close_requested ||
-                  (reply.outcome == EditorOutcome::opened && (target == nullptr || target->generation != reply.pane_generation || target->exit_status || target->close_requested || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
+              const auto *source = livePane(model_.panes, client->editor_source, client->editor_generation);
+              const auto *target = livePane(model_.panes, reply.pane_id, reply.pane_generation);
+              if (source == nullptr ||
+                  (reply.outcome == EditorOutcome::opened && (target == nullptr || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
                 reply.outcome = EditorOutcome::failed;
               }
               client->editor_source = 0;

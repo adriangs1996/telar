@@ -304,6 +304,17 @@ static void testReporterCredentials(SystemAllocator &memory) {
   reporter.receive<RequestCompleted>();
   check(inspector.descent_checks == 1);
 
+  // A reporter's pane must still run the generation it names and be the one it was verified in.
+  check(&requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation) == &pane);
+  check(findPane(model.panes, pane.id, 0) == nullptr && livePane(model.panes, pane.id, pane.generation) == &pane);
+  check(rejected([&] { static_cast<void>(requireReporterPane(model.panes, other_client.session(), pane.id, pane.generation)); }, FailureCode::foreign_process));
+  pane.exit_status = 0;
+  check(livePane(model.panes, pane.id, pane.generation) == nullptr);
+  check(rejected([&] { static_cast<void>(requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation)); }, FailureCode::pane_not_found));
+  const RegisterWorktree from_exited{.request_id = 9, .source = pane.location.workspace.id, .created_by = pane.id, .path = "/tmp", .branch = "exited"};
+  check(rejected([&] { WorktreeService<SystemAllocator, decltype(poller)>::registerEntry(model, reporter.session(), from_exited); }, FailureCode::foreign_process));
+  pane.exit_status.reset();
+
   inspector.descendant = false;
   for (unsigned index = 0; index < 3; ++index) {
     agents.report(model, reporter.session(), report);
