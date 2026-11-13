@@ -315,6 +315,19 @@ inline void printable(std::string_view value, std::size_t maximum) {
   }
 }
 
+// Where a branch's worktree is checked out unless told otherwise: beside the repository, under
+// `<root>-worktrees/`, named after the branch with slashes and backslashes as dashes. Appended
+// to `path`.
+template <typename Text>
+inline void appendWorktreeCheckout(Text &path, std::string_view root, std::string_view branch) {
+  path.append(root);
+  path.append("-worktrees/");
+  const auto suffix = path.size();
+  path.append(branch);
+  std::replace(path.begin() + static_cast<std::ptrdiff_t>(suffix), path.end(), '/', '-');
+  std::replace(path.begin() + static_cast<std::ptrdiff_t>(suffix), path.end(), '\\', '-');
+}
+
 inline void branch(std::string_view value) {
   text(value, branch_bytes, "InvalidWorktreeBranch");
   if (value.front() == '-' || value.front() == '.' || value.contains("..")) {

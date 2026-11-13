@@ -45,6 +45,7 @@ export import telar.base.text;
 
 
 export import telar.base.memory;
+import telar.cli.worktree_git;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.platform.primitives;
@@ -820,12 +821,8 @@ private:
       throw std::runtime_error{"InvalidWorktreeBranch"};
     }
 
-    path_ = root_;
-    path_ += "-worktrees/";
-    const auto suffix = path_.size();
-    path_ += branch_;
-    std::replace(path_.begin() + suffix, path_.end(), '/', '-');
-    std::replace(path_.begin() + suffix, path_.end(), '\\', '-');
+    path_.clear();
+    sessions::appendWorktreeCheckout(path_, root_, branch_);
     String<Memory> reference{"refs/heads/", AllocatorRef<char, Memory>{memory_}};
     reference += branch_;
     bool exists = true;

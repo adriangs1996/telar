@@ -1300,10 +1300,12 @@ private:
     const auto directory = originDirectory();
     const auto root = git_.root(directory);
     const auto branch = *options_.branch;
-    auto suffix = std::string{branch};
-    std::replace(suffix.begin(), suffix.end(), '/', '-');
-    std::replace(suffix.begin(), suffix.end(), '\\', '-');
-    const auto checkout = options_.directory ? std::string{*options_.directory} : root + "-worktrees/" + suffix;
+    std::string checkout;
+    if (options_.directory) {
+      checkout = *options_.directory;
+    } else {
+      sessions::appendWorktreeCheckout(checkout, root, branch);
+    }
     for (const auto &entry : catalog_.worktrees) {
       if (entry.path == checkout || entry.branch == branch) {
         throw Failure{"that worktree already exists; use `telar worktree exec` to run more there"};
