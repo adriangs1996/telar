@@ -120,14 +120,6 @@ private:
     return output_.text();
   }
 
-  inline static std::string_view trim(std::string_view text) noexcept {
-    const auto first = text.find_first_not_of(" \r\n\t");
-    if (first == std::string_view::npos) {
-      return {};
-    }
-    return text.substr(first, text.find_last_not_of(" \r\n\t") - first + 1);
-  }
-
   inline static bool ownedPath(const char *path, bool directory) noexcept {
     struct stat status{};
     return path[0] == '/' && ::lstat(path, &status) == 0 && status.st_uid == ::geteuid() && (status.st_mode & 0022) == 0 && (directory ? S_ISDIR(status.st_mode) : S_ISSOCK(status.st_mode));
@@ -213,7 +205,7 @@ private:
     std::string_view remaining = names;
     while (!remaining.empty() && session.endpoints_left != 0 && session.opened == nullptr) {
       const auto split = remaining.find('\n');
-      const auto endpoint = trim(remaining.substr(0, split));
+      const auto endpoint = trimText(remaining.substr(0, split), " \r\n\t");
       remaining = split == std::string_view::npos ? std::string_view{} : remaining.substr(split + 1);
       if (endpoint.empty()) {
         continue;
@@ -277,7 +269,7 @@ private:
       return;
     }
     std::array<char, 256> host{};
-    if (::gethostname(host.data(), host.size() - 1) != 0 || trim(identity.substr(split)) != host.data()) {
+    if (::gethostname(host.data(), host.size() - 1) != 0 || trimText(identity.substr(split), " \r\n\t") != host.data()) {
       return;
     }
     const auto *target = candidate(session, pid);
@@ -301,7 +293,7 @@ private:
     }
     expression_ += ", 1][-1] : 0";
     const std::array<std::string_view, 5> arguments{editor_, option, endpoint, "--remote-expr", expression_};
-    if (trim(command(session, arguments)) != "1") {
+    if (trimText(command(session, arguments), " \r\n\t") != "1") {
       throw RequestError{FailureCode::internal, "Editor rejected open"};
     }
     session.opened = target;
@@ -341,7 +333,7 @@ private:
     const std::array<std::string_view, 6> identity_arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)"};
     std::string_view identity;
     try {
-      identity = trim(command(session, identity_arguments));
+      identity = trimText(command(session, identity_arguments), " \r\n\t");
     } catch (...) {
       return;
     }
@@ -380,7 +372,7 @@ private:
       }
       expression_ += " 1) 0)) 0)";
       const std::array<std::string_view, 6> arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression_};
-      const auto result = trim(command(session, arguments));
+      const auto result = trimText(command(session, arguments), " \r\n\t");
       if (result == "1") {
         session.opened = &target;
         return;

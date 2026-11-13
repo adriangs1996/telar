@@ -35,20 +35,8 @@ enum class PeekCommand : std::uint8_t {
 };
 
 struct PeekInput {
-  [[nodiscard]] inline static std::string_view trim(std::string_view text) noexcept {
-    const auto first = text.find_first_not_of(" \t");
-    if (first == std::string_view::npos) {
-      return {};
-    }
-
-    text.remove_suffix(text.size() - text.find_last_not_of(" \t") - 1);
-    text.remove_prefix(first);
-
-    return text;
-  }
-
   [[nodiscard]] inline static PeekCommand command(std::string_view text) noexcept {
-    text = trim(text);
+    text = runtime::trimText(text, " \t");
     if (text.empty() || text == "/open") {
       return PeekCommand::open;
     }

@@ -771,7 +771,7 @@ private:
       throw std::runtime_error{failure};
     }
 
-    return GitFiles::trim(output_.text(), " \r\n");
+    return trimText(output_.text(), " \r\n");
   }
 
   inline void mainRoot(std::string_view directory) {
@@ -801,7 +801,7 @@ private:
       }
     }
 
-    branch_ = GitFiles::trim(branch_, "-./");
+    branch_ = trimText(branch_, "-./");
     if (!validWorktreeBranch(branch_)) {
       throw std::runtime_error{"InvalidWorktreeBranch"};
     }

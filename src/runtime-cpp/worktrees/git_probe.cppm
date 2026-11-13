@@ -79,7 +79,7 @@ private:
     GitRepository git{memory_, root, deadline, cancelled_};
     constexpr std::size_t maximum_output = 4096;
     const auto output = git.run(arguments, false, maximum_output);
-    const auto trimmed = GitFiles::trim(output, " \r\n");
+    const auto trimmed = trimText(output, " \r\n");
     if (trimmed.size() > Capacity) {
       reject();
     }
@@ -92,7 +92,7 @@ private:
   inline static void parseDiff(std::string_view output, GitDistance &result) noexcept {
     while (!output.empty()) {
       const auto delimiter = output.find(',');
-      const auto part = GitFiles::trim(output.substr(0, delimiter), " \n");
+      const auto part = trimText(output.substr(0, delimiter), " \n");
       output = delimiter == std::string_view::npos ? std::string_view{} : output.substr(delimiter + 1);
       const auto separator = part.find(' ');
       if (separator == std::string_view::npos) {

@@ -363,7 +363,7 @@ private:
         return;
       }
       if (line.front() == '#') {
-        comment = trim(line.substr(line.find_first_not_of('#')));
+        comment = trimText(line.substr(line.find_first_not_of('#')), " \t");
         return;
       }
       if (line.front() == '[') {
@@ -380,10 +380,10 @@ private:
       const auto description = std::exchange(comment, std::string_view{});
       const bool private_recipe = std::exchange(hidden, false);
       if (line.starts_with("alias ")) {
-        const auto rest = trim(line.substr(6));
+        const auto rest = trimText(line.substr(6), " \t");
         const auto assign = rest.find(":=");
         if (assign != std::string_view::npos) {
-          add(trim(rest.substr(0, assign)), "Alias of " + std::string{trim(rest.substr(assign + 2))});
+          add(trimText(rest.substr(0, assign), " \t"), "Alias of " + std::string{trimText(rest.substr(assign + 2), " \t")});
         }
         return;
       }
@@ -445,7 +445,7 @@ private:
         return;
       }
       if (first == 0) {
-        services = trim(line.substr(0, line.find('#'))) == "services:";
+        services = trimText(line.substr(0, line.find('#')), " \t") == "services:";
         indent = 0;
         return;
       }
@@ -458,7 +458,7 @@ private:
       if (first != indent) {
         return;
       }
-      auto key = trim(line.substr(first, line.find(':', first) == std::string_view::npos ? std::string_view::npos : line.find(':', first) - first));
+      auto key = trimText(line.substr(first, line.find(':', first) == std::string_view::npos ? std::string_view::npos : line.find(':', first) - first), " \t");
       if (key.size() >= 2 && (key.front() == '"' || key.front() == '\'') && key.back() == key.front()) {
         key = key.substr(1, key.size() - 2);
       }
@@ -598,14 +598,6 @@ private:
     }
   }
 
-  inline static std::string_view trim(std::string_view text) noexcept {
-    const auto first = text.find_first_not_of(" \t");
-    if (first == std::string_view::npos) {
-      return {};
-    }
-    return text.substr(first, text.find_last_not_of(" \t") - first + 1);
-  }
-
   // `Host` names in ~/.ssh/config, without patterns.
   template <typename Add>
   inline static void sshHosts(std::string_view home, Add &add) {
@@ -619,13 +611,13 @@ private:
     }
     const auto text = readSmall(directory.get(), "config");
     lines(text, [&](std::string_view line) {
-      line = trim(line);
+      line = trimText(line, " \t");
       if (line.size() < 5 || (line[0] | 0x20) != 'h' || (line[1] | 0x20) != 'o' || (line[2] | 0x20) != 's' || (line[3] | 0x20) != 't' || (line[4] != ' ' && line[4] != '\t' && line[4] != '=')) {
         return;
       }
       auto names = line.substr(5);
       while (!names.empty()) {
-        names = trim(names);
+        names = trimText(names, " \t");
         const auto end = names.find_first_of(" \t");
         const auto name = names.substr(0, end);
         if (!name.empty() && name.find_first_of("*?!=") == std::string_view::npos) {
@@ -664,7 +656,7 @@ private:
       }
       auto targets = line.substr(0, colon);
       while (!targets.empty()) {
-        targets = trim(targets);
+        targets = trimText(targets, " \t");
         const auto end = targets.find_first_of(" \t");
         add(targets.substr(0, end));
         targets.remove_prefix(end == std::string_view::npos ? targets.size() : end);

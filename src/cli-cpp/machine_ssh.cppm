@@ -1015,15 +1015,6 @@ std::optional<MachineProfile> resolve(Memory &memory, std::string_view label) {
   return std::nullopt;
 }
 
-inline std::string_view trimmed(std::string_view text) {
-  const auto start = text.find_first_not_of(" \t\r\n");
-  if (start == std::string_view::npos) {
-    return {};
-  }
-
-  return text.substr(start, text.find_last_not_of(" \t\r\n") + 1 - start);
-}
-
 inline MachineError sshFailure(const launch::Output &output) {
   if (output.err.contains("telar protocol mismatch")) {
     return MachineError::remote_runtime_incompatible;
@@ -1070,7 +1061,7 @@ Discovery discover(Memory &memory, const MachineProfile &profile, std::string &d
         const auto end = lines.find('\n');
         const auto line = lines.substr(0, end);
         if (line.contains("you have requested strict checking") || line.contains("Host key verification failed")) {
-          detail += std::string{trimmed(line)} + " ";
+          detail += std::string{trimText(line, " \t\r\n")} + " ";
         }
 
         if (end == std::string_view::npos) {
@@ -1113,11 +1104,11 @@ int check(Memory &memory, const MachineProfile &profile, bool json) {
       output += ",\"reachable\":false,\"error\":";
       appendJsonText(output, error.what(), JsonEscapes::control);
       output += ",\"detail\":";
-      appendJsonText(output, trimmed(detail), JsonEscapes::control);
+      appendJsonText(output, trimText(detail, " \t\r\n"), JsonEscapes::control);
       output += "}\n";
       std::fwrite(output.data(), 1, output.size(), stdout);
     } else {
-      std::fprintf(stderr, "telar machine: %.*s (%.*s) is not reachable: %s\n%.*s\n", static_cast<int>(profile.label().size()), profile.label().data(), static_cast<int>(profile.destination().size()), profile.destination().data(), error.what(), static_cast<int>(trimmed(detail).size()), trimmed(detail).data());
+      std::fprintf(stderr, "telar machine: %.*s (%.*s) is not reachable: %s\n%.*s\n", static_cast<int>(profile.label().size()), profile.label().data(), static_cast<int>(profile.destination().size()), profile.destination().data(), error.what(), static_cast<int>(trimText(detail, " \t\r\n").size()), trimText(detail, " \t\r\n").data());
     }
 
     return 1;
@@ -1158,11 +1149,6 @@ using config_receive::lower;
 
 inline bool whitespace(char byte) {
   return byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' || byte == '\v' || byte == '\f';
-}
-
-inline tbc::view<std::string_view, tbc::lt::a> trim(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters = " \t\r\n") {
-  const auto begin = text.find_first_not_of(characters);
-  return begin == std::string_view::npos ? std::string_view{} : text.substr(begin, text.find_last_not_of(characters) + 1 - begin);
 }
 
 inline void noteOnce(std::vector<std::string> &notes, std::string_view name) {
@@ -1380,7 +1366,7 @@ inline std::optional<std::string> tomlSecret(std::string_view path, Kind last) {
         return std::string{path};
       }
 
-      components.push_back(trim(trim(path.substr(start, index - start), " \t"), "\"'"));
+      components.push_back(trimText(trimText(path.substr(start, index - start), " \t"), "\"'"));
       start = ++index;
     } else {
       index = path[index] == '"' || path[index] == '\'' ? skipQuoted(path, index) + 1 : index + 1;
@@ -1415,7 +1401,7 @@ inline std::string toml(std::string_view bytes, std::vector<std::string> &droppe
       value.scan(line);
       keep = keep && !dropping_value;
     } else {
-      const auto text = trim(line, " \t\r");
+      const auto text = trimText(line, " \t\r");
       if (text.starts_with('[')) {
         auto inner = text;
         while (inner.starts_with('[')) {
@@ -1440,7 +1426,7 @@ inline std::string toml(std::string_view bytes, std::vector<std::string> &droppe
         }
 
         if (equals < text.size()) {
-          const auto rest = trim(text.substr(equals + 1), " \t");
+          const auto rest = trimText(text.substr(equals + 1), " \t");
           const auto kind = rest.empty() || rest.front() == '"' || rest.front() == '\'' ? Kind::text : rest.front() == '[' || rest.front() == '{' ? Kind::container
                                                                                                                                                   : Kind::scalar;
           const auto offending = tomlSecret(text.substr(0, equals), kind);
@@ -1496,7 +1482,7 @@ inline bool secretName(std::string_view name) {
 }
 
 inline std::optional<std::string_view> nextWord(std::string_view &rest) {
-  rest = trim(rest, " \t");
+  rest = trimText(rest, " \t");
   if (!rest.empty() && (rest.front() == '"' || rest.front() == '\'')) {
     rest.remove_prefix(1);
   }
@@ -1616,9 +1602,9 @@ inline std::optional<std::string_view> finding(std::string_view line) {
   auto words = line;
   bool after_user = false;
   while (!words.empty()) {
-    words = trim(words, " \t");
+    words = trimText(words, " \t");
     const auto end = words.find_first_of(" \t");
-    const auto word = trim(words.substr(0, end), "\"'");
+    const auto word = trimText(words.substr(0, end), "\"'");
     const auto user_password = [](std::string_view text) {
       const auto colon = text.find(':');
       return colon != std::string_view::npos && colon + 1 < text.size() && !placeholder(text[colon + 1]);

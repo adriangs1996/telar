@@ -213,7 +213,7 @@ inline bool answeredYes() {
     return false;
   }
 
-  const auto text = config_receive::lower(trimmed(answer));
+  const auto text = config_receive::lower(trimText(answer, " \t\r\n"));
   return text == "y" || text == "yes";
 }
 
@@ -1240,7 +1240,7 @@ inline std::optional<LoginLink> findLoginLink(std::string_view text, const Login
   auto lines = text.substr(marker + plan.code_marker->size());
   for (;;) {
     const auto end = lines.find('\n');
-    const auto line = filter::trim(lines.substr(0, end), " \t\r");
+    const auto line = trimText(lines.substr(0, end), " \t\r");
     const auto word = line.substr(0, line.find_first_of(" \t\r"));
     if (!word.empty() && !word.starts_with('(')) {
       result.code = word;
@@ -1676,7 +1676,7 @@ class Logins {
         std::fflush(stdout);
         std::string answer;
         if (std::getline(std::cin, answer) && answer.size() < max_notification_message_bytes * 8) {
-          const auto text = filter::trim(answer, " \r\t");
+          const auto text = trimText(answer, " \r\t");
           if (!text.empty()) {
             send(pane, text);
           }
@@ -2177,7 +2177,7 @@ bool startRuntime(Memory &memory, SetupReport &report, const Target &target, con
     return true;
   } catch (const MachineFailure &error) {
     if (error.code() != MachineError::remote_runtime_incompatible) {
-      report.end(Step::runtime, Status::failed, std::string{error.what()} + ": " + std::string{trimmed(detail)});
+      report.end(Step::runtime, Status::failed, std::string{error.what()} + ": " + std::string{trimText(detail, " \t\r\n")});
       return false;
     }
   }
@@ -2379,7 +2379,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
     const auto found = discover(memory, remote, detail);
     report.end(Step::check, found.compatible() ? Status::ok : Status::failed, found.compatible() ? "a window can attach: schema " + std::string{handshake::schema_id.begin(), handshake::schema_id.end()} + " on both sides" : "schema " + std::string{found.schema().begin(), found.schema().end()} + " there, " + std::string{handshake::schema_id.begin(), handshake::schema_id.end()} + " here");
   } catch (const MachineFailure &error) {
-    report.end(Step::check, Status::failed, std::string{error.what()} + ": " + std::string{trimmed(detail)});
+    report.end(Step::check, Status::failed, std::string{error.what()} + ": " + std::string{trimText(detail, " \t\r\n")});
   }
 
   return report.finish(memory, target.label, target.destination);

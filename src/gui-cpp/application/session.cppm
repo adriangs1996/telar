@@ -1538,7 +1538,7 @@ public:
       openPeekDiff(*agent);
       break;
     case PeekCommand::message:
-      sendPeekAction(SendPaneText{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .mode = PaneTextMode::prompt, .text = PeekInput::trim(text), .sender = {}}, agent->pane_id);
+      sendPeekAction(SendPaneText{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .mode = PaneTextMode::prompt, .text = runtime::trimText(text, " \t"), .sender = {}}, agent->pane_id);
       break;
     }
 

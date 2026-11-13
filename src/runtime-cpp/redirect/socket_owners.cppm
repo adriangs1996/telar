@@ -354,15 +354,9 @@ public:
       if (line.starts_with("Token")) {
         const auto colon = line.find(':');
         if (colon != std::string_view::npos) {
-          line.remove_prefix(colon + 1);
-          const auto first = line.find_first_not_of(" \t");
-          if (first != std::string_view::npos) {
-            line.remove_prefix(first);
-            line = line.substr(0, line.find_last_not_of(" \t\r") + 1);
-            const auto token = parseExact<std::uint64_t>(line).value_or(0);
-            if (token != 0) {
-              return token;
-            }
+          const auto token = parseExact<std::uint64_t>(trimText(line.substr(colon + 1), " \t\r")).value_or(0);
+          if (token != 0) {
+            return token;
           }
         }
       }

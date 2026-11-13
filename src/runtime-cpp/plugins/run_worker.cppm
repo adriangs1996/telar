@@ -267,14 +267,6 @@ private:
     freeze(state);
   }
 
-  inline static std::string_view trim(std::string_view text) noexcept {
-    const auto first = text.find_first_not_of(" \t");
-    if (first == std::string_view::npos) {
-      return {};
-    }
-    return text.substr(first, text.find_last_not_of(" \t") - first + 1);
-  }
-
   inline static void pushHead(lua_State *state, std::span<const std::uint8_t> bytes, bool traffic) {
     std::string_view remaining{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
     lua_createtable(state, 0, 2);
@@ -287,12 +279,12 @@ private:
       const auto colon = line.find(':', line.starts_with(':') && line.size() > 1 ? 1 : 0);
       if (colon != std::string_view::npos) {
         lua_createtable(state, 0, 2);
-        setString(state, "name", traffic ? line.substr(0, colon) : trim(line.substr(0, colon)));
+        setString(state, "name", traffic ? line.substr(0, colon) : trimText(line.substr(0, colon), " \t"));
         auto value = line.substr(colon + 1);
         if (traffic) {
           const auto first = value.find_first_not_of(" \t");
           value = first == std::string_view::npos ? std::string_view{} : value.substr(first);
-        } else { value = trim(value); }
+        } else { value = trimText(value, " \t"); }
         setString(state, "value", value);
         freeze(state);
         lua_seti(state, -2, index++);

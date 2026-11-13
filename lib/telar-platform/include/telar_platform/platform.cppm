@@ -1579,23 +1579,15 @@ public:
       return std::nullopt;
     }
 
-    const auto contents = trim(*pointer, " \t\r\n");
+    const auto contents = trimText(*pointer, " \t\r\n");
     constexpr std::string_view prefix = "gitdir:";
     if (!contents.starts_with(prefix)) {
       return std::nullopt;
     }
 
-    return resolve(root, trim(contents.substr(prefix.size()), " \t"), buffer);
+    return resolve(root, trimText(contents.substr(prefix.size()), " \t"), buffer);
   }
 
-  inline static tbc::view<std::string_view, tbc::lt::a> trim(tbc::view<std::string_view, tbc::lt::a> value, std::string_view characters) noexcept {
-    const auto first = value.find_first_not_of(characters);
-    if (first == std::string_view::npos) {
-      return {};
-    }
-
-    return value.substr(first, value.find_last_not_of(characters) - first + 1);
-  }
 };
 
 }
@@ -1628,11 +1620,11 @@ public:
   }
 
   inline static std::string_view parse(std::string_view contents) noexcept {
-    contents = GitFiles::trim(contents, " \r\n");
+    contents = trimText(contents, " \r\n");
     constexpr std::string_view reference = "ref:";
     constexpr std::string_view branch = "refs/heads/";
     if (contents.starts_with(reference)) {
-      contents = GitFiles::trim(contents.substr(reference.size()), " ");
+      contents = trimText(contents.substr(reference.size()), " ");
       return contents.starts_with(branch) ? contents.substr(branch.size()) : contents;
     }
 
@@ -1991,14 +1983,14 @@ public:
     std::array<char, PATH_MAX> contents;
     const auto common = common_path ? readRegularFile(*common_path, contents) : std::nullopt;
     std::array<char, PATH_MAX> resolved;
-    const auto common_directory = common ? GitFiles::resolve(*directory, GitFiles::trim(*common, " \t\r\n"), resolved) : std::nullopt;
+    const auto common_directory = common ? GitFiles::resolve(*directory, trimText(*common, " \t\r\n"), resolved) : std::nullopt;
     const auto head_path = common_directory ? GitFiles::join(*common_directory, "HEAD", path_) : std::nullopt;
     const auto head = head_path ? readRegularFile(*head_path, head_) : std::nullopt;
     if (!head) {
       return std::nullopt;
     }
 
-    const auto text = GitFiles::trim(*head, " \r\n");
+    const auto text = trimText(*head, " \r\n");
     constexpr std::string_view prefix = "ref: refs/heads/";
     return text.starts_with(prefix) && text.size() > prefix.size() ? std::optional{text.substr(prefix.size())} : std::nullopt;
   }

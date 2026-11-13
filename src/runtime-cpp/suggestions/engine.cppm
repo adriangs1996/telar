@@ -153,25 +153,16 @@ private:
 
   struct Rejected {};
 
-  inline static std::string_view trim(std::string_view text) noexcept {
-    const auto first = text.find_first_not_of(" \r\t");
-    if (first == std::string_view::npos) {
-      return {};
-    }
-    const auto last = text.find_last_not_of(" \r\t");
-    return text.substr(first, last - first + 1);
-  }
-
   inline static std::string_view extract(std::string_view text) noexcept {
     while (!text.empty()) {
       const auto newline = text.find('\n');
-      auto line = trim(text.substr(0, newline));
+      auto line = trimText(text.substr(0, newline), " \r\t");
       text = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
       if (line.empty() || line.starts_with("```")) {
         continue;
       }
       if (line.size() >= 2 && line.starts_with('`') && line.ends_with('`')) {
-        line = trim(line.substr(1, line.size() - 2));
+        line = trimText(line.substr(1, line.size() - 2), " \r\t");
       }
       if (line.empty()) {
         continue;

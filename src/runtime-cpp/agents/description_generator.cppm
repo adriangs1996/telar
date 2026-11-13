@@ -238,18 +238,15 @@ struct DescriptionResult {
 };
 
 inline FixedText<96> normalizeDescriptionTitle(std::string_view output) {
-  constexpr std::string_view whitespace = " \t\r\n";
-  const auto first = output.find_first_not_of(whitespace);
-  if (first == std::string_view::npos) {
+  output = trimText(output, " \t\r\n");
+  if (output.empty()) {
     throw EncodingError{"Empty generated title"};
   }
 
-  output = output.substr(first, output.find_last_not_of(whitespace) - first + 1);
   if (output.size() >= 2 && (output.front() == '"' || output.front() == '\'') && output.back() == output.front()) {
     output.remove_prefix(1);
     output.remove_suffix(1);
-    const auto first_character = output.find_first_not_of(" \t");
-    output = first_character == std::string_view::npos ? std::string_view{} : output.substr(first_character, output.find_last_not_of(" \t") - first_character + 1);
+    output = trimText(output, " \t");
   }
 
   if (output.empty() || output.size() > 96 || std::ranges::any_of(output, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f; })) {

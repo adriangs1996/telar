@@ -67,18 +67,8 @@ inline std::string asciiLower(std::string_view text) {
   return result;
 }
 
-inline tbc::view<std::string_view, tbc::lt::a> trim(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters) {
-  const auto first = text.find_first_not_of(characters);
-  if (first == text.npos) {
-    return {};
-  }
-
-  const auto last = text.find_last_not_of(characters);
-  return text.substr(first, last - first + 1);
-}
-
 inline std::string normalize(std::string_view url) {
-  url = trim(url, " \t\r\n");
+  url = trimText(url, " \t\r\n");
   std::string_view scheme = "ssh";
   std::string_view authority;
   std::string_view path;
@@ -129,7 +119,7 @@ inline std::string normalize(std::string_view url) {
     }
   }
 
-  path = trim(path, "/");
+  path = trimText(path, "/");
   constexpr std::string_view suffix = ".git";
   if (path.ends_with(suffix)) {
     path.remove_suffix(suffix.size());
@@ -201,7 +191,7 @@ public:
       throw std::runtime_error{"GitFailed"};
     }
 
-    return std::string{trim(output, " \r\n")};
+    return std::string{trimText(output, " \r\n")};
   }
 
   // `revisions` are rev-list arguments: the ref, then any exclusions.

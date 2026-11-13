@@ -145,13 +145,13 @@ public:
         return std::nullopt;
       }
 
-      const auto authorization = trim(*value);
+      const auto authorization = trimText(*value, " \t");
       if (authorization.size() < 7 || !sameCaseInsensitive(authorization.substr(0, 5), "basic") || authorization[5] != ' ') {
         return std::nullopt;
       }
 
       SensitiveBuffer<decoded_capacity> decoded;
-      const auto length = base64::decode(trim(authorization.substr(6)), decoded.bytes());
+      const auto length = base64::decode(trimText(authorization.substr(6), " \t"), decoded.bytes());
       if (!length || *length != userinfo_prefix.size() + ProxySecret::hexadecimal_bytes) {
         return std::nullopt;
       }
@@ -175,14 +175,6 @@ public:
 private:
   inline static bool sameCaseInsensitive(std::string_view left, std::string_view right) noexcept {
     return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](char first, char second) { return asciiLower(first) == asciiLower(second); });
-  }
-
-  inline static std::string_view trim(std::string_view value) noexcept {
-    const auto first = value.find_first_not_of(" \t");
-    if (first == std::string_view::npos) {
-      return {};
-    }
-    return value.substr(first, value.find_last_not_of(" \t") - first + 1);
   }
 
   inline static std::optional<std::string_view> next(std::string_view &head) noexcept {
