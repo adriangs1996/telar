@@ -54,7 +54,13 @@ export import telar.cli.output;
 
 export import telar.cli.history;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.content;
+import telar.wire.execution;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: pane_agent_options.cppm

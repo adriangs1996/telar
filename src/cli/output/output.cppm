@@ -15,7 +15,7 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
+import telar.vocabulary;
 
 // Interface: failure.cppm
 export {

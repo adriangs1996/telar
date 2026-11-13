@@ -42,7 +42,11 @@ export import telar.base.text;
 export import telar.base.memory;
 import telar.cli.worktree_git;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.layout;
+import telar.wire.runtime;
+import telar.wire.worktrees;
 import telar.platform.primitives;
 
 // Interface: hooks/input.cppm

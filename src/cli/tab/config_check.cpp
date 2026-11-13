@@ -31,7 +31,6 @@ import telar.lua;
 import telar.platform;
 import telar.plugins;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 namespace telar::runtime::cli {

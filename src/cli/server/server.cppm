@@ -34,7 +34,6 @@ export import telar.cli.output;
 export import telar.cli.runtime_observer;
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 // Interface: help.cppm

@@ -1036,7 +1036,6 @@
     "telar_client/codecs/telar_codec.hpp",
     "telar_client/codecs/telar_value_codec.hpp",
     "telar_client/serializers/telar_messages.hpp",
-    "telar_client/serializers/telar_protocol.hpp",
     "telar_client/serializers/telar_serializer.hpp",
     "telar_platform/file_descriptor.hpp",
     "telar_platform/open_directory.h",

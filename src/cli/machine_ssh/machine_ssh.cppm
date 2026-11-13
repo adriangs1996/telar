@@ -64,7 +64,7 @@ export import telar.cli.output;
 
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: config_receive.cppm

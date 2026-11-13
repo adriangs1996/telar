@@ -63,7 +63,14 @@ export import telar.cli.machine_ssh;
 import telar.cli.project_setup;
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.worktrees;
 import telar.platform.primitives;
 
 // Interface: repository_discovery.cppm

@@ -22,7 +22,7 @@ export import telar.base.text;
 export import telar.cli.command_limit;
 export import telar.plugins;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: machines/setup_report.cppm
 export {

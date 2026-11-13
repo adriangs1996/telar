@@ -19,7 +19,7 @@ import std;
 export import telar.cli.output;
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.vocabulary;
 import telar.platform.primitives;
 
 // Interface: arguments.cppm

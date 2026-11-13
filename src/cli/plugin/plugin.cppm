@@ -52,7 +52,7 @@ export import telar.plugins;
 
 export import telar.tls;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: cli_install.cppm

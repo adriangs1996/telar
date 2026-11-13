@@ -29,7 +29,7 @@ import std;
 
 import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 namespace telar::runtime::cli {

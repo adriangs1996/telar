@@ -49,7 +49,9 @@ export import telar.cli.runtime_observer;
 
 export import telar.cli.server;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.history;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: diagnostics_options.cppm

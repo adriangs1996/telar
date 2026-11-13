@@ -17,7 +17,8 @@ export import telar.config;
 
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
 
 // Interface: hook_options.cppm
 export {
