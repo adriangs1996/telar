@@ -276,20 +276,17 @@ private:
     if (request.names) {
       words(*request.names, exact);
     }
-    const std::string file{name};
-    auto path = request.path.view();
-    while (!found && !path.empty()) {
-      const auto separator = path.find(':');
-      const auto entry = path.substr(0, separator);
-      path.remove_prefix(separator == std::string_view::npos ? path.size() : separator + 1);
-      if (entry.empty() || entry.front() != '/' || entry.size() >= PATH_MAX) {
-        continue;
-      }
-      const std::string directory_name{entry};
-      FileDescriptor directory{::open(directory_name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
-      struct stat state{};
-      found = directory && ::fstatat(directory.get(), file.c_str(), &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory.get(), file.c_str(), X_OK, 0) == 0;
+    // No directory holds a file whose name is longer than NAME_MAX.
+    std::array<char, NAME_MAX + 1> file;
+    if (found || name.size() >= file.size()) {
+      return found;
     }
+    *std::ranges::copy(name, file.data()).out = '\0';
+    forEachPathDirectory(request.path.view(), [&](int directory) {
+      struct stat state{};
+      found = ::fstatat(directory, file.data(), &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory, file.data(), X_OK, 0) == 0;
+      return !found;
+    });
     return found;
   }
 
@@ -533,31 +530,42 @@ private:
   template <typename Add>
   inline static void commands(std::string_view path, std::string_view prefix, Add &add) {
     std::size_t scanned = 0;
-    while (!path.empty() && scanned < maximum_entries) {
-      const auto separator = path.find(':');
-      const auto entry = path.substr(0, separator);
-      path.remove_prefix(separator == std::string_view::npos ? path.size() : separator + 1);
-      if (entry.empty() || entry.front() != '/' || entry.size() >= PATH_MAX) {
-        continue;
-      }
-      const std::string directory_name{entry};
-      FileDescriptor directory{::open(directory_name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
-      if (!directory) {
-        continue;
-      }
-      DirectoryStream entries{directory.get()};
+    forEachPathDirectory(path, [&](int directory) {
+      DirectoryStream entries{directory};
       while (const auto *found = entries.next()) {
         if (++scanned > maximum_entries) {
-          return;
+          return false;
         }
         const std::string_view name{found->d_name};
         if (!name.starts_with(prefix) || name.starts_with('.')) {
           continue;
         }
         struct stat state{};
-        if (::fstatat(directory.get(), found->d_name, &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory.get(), found->d_name, X_OK, 0) == 0) {
+        if (::fstatat(directory, found->d_name, &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory, found->d_name, X_OK, 0) == 0) {
           add(name);
         }
+      }
+      return scanned < maximum_entries;
+    });
+  }
+
+  // Opens each absolute directory of `path`, a colon-separated list, and hands its descriptor
+  // to `visit` until `visit` returns false. Relative, over-long and unopenable entries are
+  // passed over.
+  template <typename Visit>
+  inline static void forEachPathDirectory(std::string_view path, Visit &&visit) {
+    std::array<char, PATH_MAX> name;
+    while (!path.empty()) {
+      const auto separator = path.find(':');
+      const auto entry = path.substr(0, separator);
+      path.remove_prefix(separator == std::string_view::npos ? path.size() : separator + 1);
+      if (entry.empty() || entry.front() != '/' || entry.size() >= name.size()) {
+        continue;
+      }
+      *std::ranges::copy(entry, name.data()).out = '\0';
+      FileDescriptor directory{::open(name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      if (directory && !visit(directory.get())) {
+        return;
       }
     }
   }
