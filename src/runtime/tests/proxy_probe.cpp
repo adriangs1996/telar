@@ -34,6 +34,8 @@ import telar.platform.primitives;
 import telar.runtime.tests.protocol_peer;
 import telar.runtime.proxy.authenticate;
 import telar.platform;
+import telar.wire.content;
+import telar.wire.layout;
 
 using namespace telar;
 using namespace telar::runtime;

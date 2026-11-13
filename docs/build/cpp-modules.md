@@ -128,6 +128,7 @@ Release puede activar `TELAR_DIAGNOSTICS`. `TELAR_SANITIZERS` instrumenta todo e
 grafo C/C++ propio. Los nombres antiguos de opciones sanitizer siguen aceptándose.
 Release y RelWithDebInfo enlazan con ThinLTO (`TELAR_THIN_LTO`, activa por
 defecto); [thinlto.md](thinlto.md) recoge lo que cuesta y lo que gana.
+`-fwhole-program-vtables` no se usa; [memory-call.md](memory-call.md) explica por qué.
 Cada variante necesita su directorio de build; las macros del importador no
 reconfiguran un BMI.
 

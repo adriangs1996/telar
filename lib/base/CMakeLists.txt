@@ -53,6 +53,18 @@ if(PROJECT_IS_TOP_LEVEL)
       target_sources(telar-base-imports PRIVATE "${probe}")
     endforeach()
     add_dependencies(telar-base-tests telar-base-headers telar-base-imports)
+
+    # Probes run by hand by tools/bench_memory_call.py, never by CTest. `base-probes` builds them.
+    # The -single probe links one implementation of Memory, the other several.
+    foreach(probe IN ITEMS memory-call-probe memory-call-probe-single)
+      add_executable(${probe} tests/memory_call_probe.cpp tests/memory_call_source.cpp)
+      target_link_libraries(${probe} PRIVATE telar::base)
+      target_compile_options(${probe} PRIVATE -Wall -Wextra -Wpedantic)
+    endforeach()
+    target_compile_definitions(memory-call-probe PRIVATE MEMORY_CALL_IMPLEMENTATIONS=3)
+    target_compile_definitions(memory-call-probe-single PRIVATE MEMORY_CALL_IMPLEMENTATIONS=1)
+    set_target_properties(memory-call-probe memory-call-probe-single PROPERTIES EXCLUDE_FROM_ALL ON)
+    add_custom_target(base-probes DEPENDS memory-call-probe memory-call-probe-single)
   endif()
 endif()
 
