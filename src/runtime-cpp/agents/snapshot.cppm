@@ -950,10 +950,10 @@ public:
         provider = {manifest->name.view(), manifest->displayName(), manifest->placeholderTitle(placeholders[count]), manifest->attachments};
       }
       std::string_view cwd = pane->cwd;
-      const char *home = std::getenv("HOME");
-      if (home != nullptr && cwd.starts_with(home) && (cwd.size() == std::strlen(home) || cwd[std::strlen(home)] == '/')) {
+      const auto home = processHome();
+      if (!home.empty() && cwd.starts_with(home) && (cwd.size() == home.size() || cwd[home.size()] == '/')) {
         std::array<char, 48> shortened{'~'};
-        const auto suffix = utf8Prefix(cwd.substr(std::strlen(home)), 47);
+        const auto suffix = utf8Prefix(cwd.substr(home.size()), 47);
         std::copy(suffix.begin(), suffix.end(), shortened.begin() + 1);
         directories[count].assign({shortened.data(), suffix.size() + 1});
       } else {

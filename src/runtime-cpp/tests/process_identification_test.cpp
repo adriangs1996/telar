@@ -94,16 +94,16 @@ static void testHookSettings(const std::filesystem::path &root) {
   std::filesystem::create_directory(override_directory);
   std::filesystem::create_directory(root / ".codex");
   std::ofstream{root / ".codex/hooks.json"} << "{\"command\":\"telar hook codex\"}";
-  check(codexHooksInstalled(nullptr, root.c_str()));
-  check(codexHooksInstalled("", root.c_str()));
-  check(!codexHooksInstalled(override_directory.c_str(), root.c_str()));
+  check(codexHooksInstalled(nullptr, root.native()));
+  check(codexHooksInstalled("", root.native()));
+  check(!codexHooksInstalled(override_directory.c_str(), root.native()));
   std::ofstream{override_directory / "hooks.json"} << "{\"command\":\"telar hook codex\"}";
-  check(codexHooksInstalled(override_directory.c_str(), nullptr));
+  check(codexHooksInstalled(override_directory.c_str(), {}));
   std::ofstream{override_directory / "hooks.json"} << std::string(32 * 1024, ' ') << " hook codex";
-  check(!codexHooksInstalled(override_directory.c_str(), nullptr));
+  check(!codexHooksInstalled(override_directory.c_str(), {}));
   std::filesystem::remove(override_directory / "hooks.json");
   check(::mkfifo((override_directory / "hooks.json").c_str(), 0600) == 0);
-  check(!codexHooksInstalled(override_directory.c_str(), nullptr));
+  check(!codexHooksInstalled(override_directory.c_str(), {}));
 }
 
 static void testSharedServerEvidence() {

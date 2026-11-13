@@ -2499,6 +2499,22 @@ private:
 }
 }
 
+// Interface: telar_platform/process_home.cppm
+export {
+namespace telar::runtime {
+
+// HOME as this process started with it, read once: nothing in telar changes it.
+inline std::string_view processHome() noexcept {
+  static const std::string_view home = [] {
+    const char *value = std::getenv("HOME");
+    return value == nullptr ? std::string_view{} : std::string_view{value};
+  }();
+  return home;
+}
+
+}
+}
+
 // Interface: telar_platform/tracing_build.cppm
 export {
 namespace telar::runtime {

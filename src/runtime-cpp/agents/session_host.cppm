@@ -13,6 +13,8 @@ import std;
 
 import telar.client.protocol;
 import telar.platform.primitives;
+import telar.config;
+import telar.platform;
 
 // Interface: agents/session_host.cppm
 export {
@@ -43,13 +45,15 @@ inline bool isCodexBatchArgument(std::string_view argument) noexcept {
 export {
 namespace telar::runtime {
 
-inline bool codexHooksInstalled(const char *override_directory, const char *home) noexcept {
+// Whether Codex's hook settings, where the CLI installs them, run `telar hook codex`.
+inline bool codexHooksInstalled(const char *override_directory, std::string_view home) noexcept {
+  const auto provider = config::IntegrationProvider::describe(AgentProvider::codex);
   std::array<char, PATH_MAX> path;
   int length = 0;
   if (override_directory != nullptr && *override_directory != '\0') {
-    length = std::snprintf(path.data(), path.size(), "%s/hooks.json", override_directory);
-  } else if (home != nullptr && *home != '\0') {
-    length = std::snprintf(path.data(), path.size(), "%s/.codex/hooks.json", home);
+    length = std::snprintf(path.data(), path.size(), "%s%.*s/%.*s", override_directory, static_cast<int>(provider.environment_suffix.size()), provider.environment_suffix.data(), static_cast<int>(provider.file.size()), provider.file.data());
+  } else if (!home.empty()) {
+    length = std::snprintf(path.data(), path.size(), "%.*s/%.*s/%.*s", static_cast<int>(home.size()), home.data(), static_cast<int>(provider.home_directory.size()), provider.home_directory.data(), static_cast<int>(provider.file.size()), provider.file.data());
   } else {
     return false;
   }
@@ -71,7 +75,7 @@ inline bool codexHooksInstalled(const char *override_directory, const char *home
 }
 
 inline bool hooksInstalled(AgentProvider provider, SessionHost host) noexcept {
-  return provider == AgentProvider::codex && host == SessionHost::shared_server && codexHooksInstalled(std::getenv("CODEX_HOME"), std::getenv("HOME"));
+  return provider == AgentProvider::codex && host == SessionHost::shared_server && codexHooksInstalled(std::getenv(config::IntegrationProvider::describe(AgentProvider::codex).environment), processHome());
 }
 
 }
