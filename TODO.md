@@ -303,10 +303,11 @@ graph LR
 - **Toca:** `gui.application.host_effects`, `gui.config.gui_query`, `gui.platform.notification_commands`.
 - **Cierra:** `config → application` y `platform → application`.
 
-### [ ] P3.13a · `gui.terminal.copy_mode` y el ciclo con `gui.fonts.face`
+### [x] P3.13a · `gui.terminal.copy_mode` y el ciclo con `gui.fonts.face`
 - **Depende de:** P1.2
 - **Toca:** `gui.terminal.copy_mode` (contiene Symbol, box_edges y text_runs), `gui.fonts.face` (su `face.cpp` cierra el ciclo), `gui.input.copy_pointer`, `gui.input.key_encoder`.
 - **Cierra:** `terminal → fonts`, `terminal → input` (2) y el ciclo `fonts.face` ↔ `terminal.copy_mode`.
+- **Resultado:** `51116a128`. `copy_mode` se parte sin cambiar código en `gui.terminal.glyphs` (box y símbolos; `face.cpp` importa solo esto), `gui.terminal.selection` (`CellSelection`), `gui.fonts.text_runs` y `gui.input.copy_mode` (el modo copia sube a input porque depende de teclas y puntero). `upward_imports` de 32 a 29. Compila la GUI sobre la rama integrada.
 
 ### [ ] P3.13b · Sacar tab drag/drop de `gui.input.child_mouse`
 - **Depende de:** P1.2
