@@ -102,7 +102,7 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.client_peer;
-import telar.runtime.diagnostics.runtime_telemetry;
+import telar.runtime.runtime.runtime_telemetry;
 #endif
 import telar.runtime.runtime.runtime;
 

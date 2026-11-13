@@ -54,7 +54,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.runtime.client_control;
 import telar.runtime.runtime.runtime;
 #if (TELAR_DIAGNOSTICS)
-import telar.runtime.diagnostics.runtime_telemetry;
+import telar.runtime.runtime.runtime_telemetry;
 #endif
 
 using namespace telar;

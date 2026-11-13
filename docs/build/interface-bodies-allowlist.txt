@@ -110,7 +110,6 @@ telar.runtime.command_capture.tracker
 telar.runtime.config.loader
 telar.runtime.diagnostics.operation
 telar.runtime.diagnostics.runtime_counters
-telar.runtime.diagnostics.runtime_telemetry
 telar.runtime.editors.remote_editor
 telar.runtime.exchange_capture.exchange
 telar.runtime.exchange_capture.pipeline
@@ -164,6 +163,7 @@ telar.runtime.runtime.delivery.client_delivery
 telar.runtime.runtime.execution_service
 telar.runtime.runtime.media_service
 telar.runtime.runtime.runtime
+telar.runtime.runtime.runtime_telemetry
 telar.runtime.shell_integration
 telar.runtime.shell_integration.git_context
 telar.runtime.shell_integration.token

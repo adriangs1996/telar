@@ -32,7 +32,7 @@ export import telar.runtime.runtime.client_control;
 export import telar.runtime.platform.launch_program;
 export import telar.runtime.worktrees.git_probe;
 
-export import telar.runtime.diagnostics.runtime_telemetry;
+export import telar.runtime.runtime.runtime_telemetry;
 export import telar.runtime.exchange_capture.pipeline;
 export import telar.runtime.exchange_capture.exchange;
 export import telar.runtime.platform.stream_read_buffer;
