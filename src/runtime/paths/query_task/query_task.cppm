@@ -28,7 +28,9 @@ export import telar.runtime.platform.git_status;
 
 export import telar.runtime.transport.connection;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.editor;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: paths/fuzzy_match.cppm

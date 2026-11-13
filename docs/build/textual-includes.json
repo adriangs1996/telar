@@ -2278,7 +2278,7 @@
     "<utility>",
     "png_decoder.hpp",
     "telar_base/diagnostics/config.hpp",
-    "telar_client/serializers/telar_protocol.hpp"
+    "telar_vocabulary/vocabulary.hpp"
   ],
   "src/runtime/graphics/png_decoder.hpp": [
     "../terminal/ghostty_handle.hpp",
@@ -3283,7 +3283,7 @@
     "clipboard_grants.hpp",
     "clipboard_response.hpp",
     "tbc/view.hpp",
-    "telar_client/serializers/telar_protocol.hpp",
+    "telar_client/protocol/clipboard.hpp",
     "telar_config/terminal/control/policy.hpp",
     "telar_platform/random_bytes.hpp"
   ],
@@ -3440,7 +3440,7 @@
   "src/runtime/terminal/control/size_report.hpp": [
     "<cassert>",
     "reply.hpp",
-    "telar_client/serializers/telar_protocol.hpp"
+    "telar_vocabulary/vocabulary.hpp"
   ],
   "src/runtime/terminal/control/styled_ordinary.hpp": [
     "<arm_neon.h>",
@@ -3480,7 +3480,7 @@
   "src/runtime/terminal/graphics_cursor.hpp": [
     "../graphics/kitty_cursor.hpp",
     "ghostty_handle.hpp",
-    "telar_client/serializers/telar_protocol.hpp"
+    "telar_vocabulary/vocabulary.hpp"
   ],
   "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
     "<cassert>",

@@ -5,7 +5,8 @@ import std;
 export import telar.runtime.platform.process_probe;
 export import telar.runtime.suggestions.engine;
 export import telar.runtime.transport.connection;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.editor;
 
 // Interface: runtime/request_context.cppm
 export {

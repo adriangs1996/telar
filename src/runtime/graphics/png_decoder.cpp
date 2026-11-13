@@ -8,7 +8,7 @@ static_assert(true);
 #include "../terminal/ghostty_allocator.hpp"
 #include "../terminal/ghostty_handle.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_vocabulary/vocabulary.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>

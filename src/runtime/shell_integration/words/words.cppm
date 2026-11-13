@@ -15,7 +15,8 @@ export module telar.runtime.shell_integration.words;
 import std;
 
 export import telar.git;
-export import telar.client.protocol;
+export import telar.wire.vocabulary;
+export import telar.wire.editor;
 export import telar.runtime.platform.request_worker;
 import telar.base.memory;
 import telar.base.text;

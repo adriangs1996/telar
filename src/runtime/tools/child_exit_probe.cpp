@@ -12,7 +12,10 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.pane_io;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.tests.protocol_peer;

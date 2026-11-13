@@ -25,7 +25,7 @@ export import telar.platform;
 
 export import telar.runtime.diagnostics.operation;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

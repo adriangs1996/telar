@@ -1,7 +1,7 @@
 #pragma once
 
 #include "reply.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_vocabulary/vocabulary.hpp"
 #include <cassert>
 
 namespace telar::runtime::control {

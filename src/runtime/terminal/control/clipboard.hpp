@@ -4,7 +4,7 @@
 
 #include "clipboard_grants.hpp"
 #include "clipboard_response.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/protocol/clipboard.hpp"
 #include "telar_config/terminal/control/policy.hpp"
 #include "telar_platform/random_bytes.hpp"
 #include <chrono>

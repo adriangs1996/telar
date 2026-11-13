@@ -8,7 +8,8 @@ module;
 export module telar.runtime.command_capture.tracker;
 
 import std;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.content;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;

@@ -39,7 +39,7 @@ export import telar.runtime.platform.stream_read_buffer;
 
 export import telar.runtime.exchange_capture.exchange;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: plugins/action_encoder.cppm

@@ -23,7 +23,7 @@ import std;
 
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.vocabulary;
 import telar.platform.primitives;
 
 // Interface: platform/git_repository.cppm

@@ -13,7 +13,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 
 // Interface: persistence/launch_record.cppm
 export {

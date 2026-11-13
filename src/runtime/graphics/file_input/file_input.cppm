@@ -22,7 +22,7 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
+import telar.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.graphics.kitty;
 

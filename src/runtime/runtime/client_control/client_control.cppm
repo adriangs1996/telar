@@ -37,7 +37,14 @@ export import telar.runtime.metrics.host_sampler;
 export import telar.runtime.observation.processor;
 
 export import telar.runtime.worktrees.git_probe;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.clipboard;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.worktrees;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

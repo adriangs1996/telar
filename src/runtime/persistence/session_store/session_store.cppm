@@ -65,7 +65,9 @@ export import telar.runtime.runtime.execution_service;
 export import telar.runtime.agents.snapshot;
 
 export import telar.runtime.platform.request_worker;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.layout;
+import telar.wire.worktrees;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

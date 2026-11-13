@@ -24,7 +24,7 @@ import std;
 export import telar.runtime.platform.session_host;
 export import telar.config;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: platform/process_arguments.cppm

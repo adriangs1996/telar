@@ -51,7 +51,7 @@ export import telar.platform;
 
 export import telar.runtime.plugins.tap_configuration;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: plugins/lua_effects.cppm

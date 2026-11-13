@@ -6,7 +6,7 @@ export module telar.runtime.shell_integration.git_context;
 import std;
 
 export import telar.git;
-export import telar.client.protocol;
+export import telar.wire.pane_io;
 export import telar.runtime.platform.request_worker;
 import telar.base.memory;
 import telar.base.text;

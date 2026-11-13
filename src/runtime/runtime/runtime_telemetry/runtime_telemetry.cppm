@@ -49,7 +49,7 @@ export import telar.runtime.history.event;
 export import telar.platform;
 
 export import telar.runtime.platform.request_worker;
-import telar.client.protocol;
+import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

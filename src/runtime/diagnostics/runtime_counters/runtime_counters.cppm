@@ -12,7 +12,8 @@ import std;
 
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.graphics;
 import telar.runtime.diagnostics.line;
 
 // Interface: diagnostics/command_capture.cppm

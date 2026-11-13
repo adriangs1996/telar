@@ -26,7 +26,6 @@ export import telar.runtime.plugins.protocol;
 
 export import telar.runtime.http1.head;
 import telar.base.diagnostics;
-import telar.client.protocol;
 
 // Interface: http/content_codec.cppm
 export {

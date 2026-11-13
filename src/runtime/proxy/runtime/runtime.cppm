@@ -82,7 +82,8 @@ export import telar.runtime.tls.system_root_bundle;
 export import telar.tls;
 import telar.base.diagnostics;
 import telar.platform.primitives;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.runtime;
 
 // Interface: proxy/http1_capture_policy.cppm
 export {

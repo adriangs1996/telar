@@ -35,7 +35,7 @@ export import telar.runtime.graphics.prepared_images;
 export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.diagnostics.operation;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;

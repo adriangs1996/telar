@@ -19,7 +19,8 @@ import std;
 export import telar.base.memory;
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.execution;
 import telar.platform.primitives;
 
 // Interface: execution/execution.cppm

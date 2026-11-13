@@ -38,7 +38,13 @@ export import telar.runtime.model.client_layouts;
 export import telar.runtime.terminal.text_reader;
 
 export import telar.runtime.editors.remote_editor;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.editor;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

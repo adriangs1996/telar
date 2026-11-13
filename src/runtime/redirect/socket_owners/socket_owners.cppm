@@ -128,7 +128,6 @@ export import telar.runtime.proxy.relay_direction;
 
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 #if defined(__APPLE__)
