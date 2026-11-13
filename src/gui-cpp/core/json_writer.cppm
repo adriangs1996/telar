@@ -289,47 +289,9 @@ private:
   }
 
   inline void writeString(std::string_view text) {
-    constexpr std::string_view hex_digits = "0123456789abcdef";
-    constexpr unsigned printable_start = 0x20;
-    constexpr unsigned nibble_bits = 4;
-    constexpr unsigned nibble_mask = 0xf;
     append("\"");
-    for (const unsigned char byte : text) {
-      if (byte == '"' || byte == '\\') {
-        const std::array escaped{'\\', static_cast<char>(byte)};
-        append({escaped.data(), escaped.size()});
-      } else if (byte < printable_start) {
-        if (const auto shorthand = controlEscape(byte)) {
-          const std::array escaped{'\\', *shorthand};
-          append({escaped.data(), escaped.size()});
-        } else {
-          const std::array escaped{'\\', 'u', '0', '0', hex_digits[byte >> nibble_bits], hex_digits[byte & nibble_mask]};
-          append({escaped.data(), escaped.size()});
-        }
-      } else {
-        const auto character = static_cast<char>(byte);
-        append({&character, 1});
-      }
-    }
-
+    runtime::escapeJson(text, runtime::JsonEscapes::standard, [&](std::string_view piece) { append(piece); });
     append("\"");
-  }
-
-  inline static std::optional<char> controlEscape(unsigned char byte) noexcept {
-    switch (byte) {
-    case '\b':
-      return 'b';
-    case '\f':
-      return 'f';
-    case '\n':
-      return 'n';
-    case '\r':
-      return 'r';
-    case '\t':
-      return 't';
-    default:
-      return std::nullopt;
-    }
   }
 
   template <typename Text>

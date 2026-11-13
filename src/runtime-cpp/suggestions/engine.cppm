@@ -84,7 +84,7 @@ public:
 
       deadline_ = Clock::now() + options_.timeout;
       encoded_ = "{\"type\":\"prompt\",\"message\":";
-      appendJsonString(encoded_, prompt);
+      appendJsonText(encoded_, prompt);
       encoded_ += "}\n";
       write(encoded_);
       bool settled = false;

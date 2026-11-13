@@ -793,7 +793,7 @@ int list(Memory &memory, const MachineProfiles &profiles, bool json) {
   if (json) {
     String<Memory> output{AllocatorRef<char, Memory>{memory}};
     output += "{\"local\":";
-    appendJsonString(output, localLabel(profiles));
+    appendJsonText(output, localLabel(profiles));
     output += ",\"machines\":[";
     bool first = true;
     for (const auto &profile : profiles.rows()) {

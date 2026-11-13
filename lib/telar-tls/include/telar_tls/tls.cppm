@@ -576,7 +576,7 @@ public:
 
       owned.emplace_back(argument, AllocatorRef<char, Memory>{memory_});
       line += ' ';
-      appendJsonString(line, argument);
+      appendJsonText(line, argument);
     }
 
     line += '\n';
@@ -711,11 +711,11 @@ struct Record {
   template <Allocator Memory>
   inline void write(Memory &memory, int directory) const {
     String<Memory> source{"{\n  \"version\": 1,\n  \"backend\": ", AllocatorRef<char, Memory>{memory}};
-    appendJsonString(source, backendName(backend));
+    appendJsonText(source, backendName(backend));
     source += ",\n  \"fingerprint\": ";
-    appendJsonString(source, {fingerprint.data(), fingerprint.size()});
+    appendJsonText(source, {fingerprint.data(), fingerprint.size()});
     source += ",\n  \"store_path\": ";
-    appendJsonString(source, store.view());
+    appendJsonText(source, store.view());
     source += "\n}\n";
     if (source.size() > maximum_bytes) {
       throw std::length_error{"Proxy trust record exceeds its bound"};

@@ -1172,7 +1172,6 @@
     "src/cli-cpp/execution_options.cppm": "src/cli-cpp/project_setup.cppm",
     "src/cli-cpp/diagnostics.cppm": "src/cli-cpp/history.cppm",
     "src/cli-cpp/launch_commands.cppm": "src/cli-cpp/window.cppm",
-    "src/cli-cpp/json_text.cppm": "src/cli-cpp/output.cppm",
     "src/cli-cpp/worktree.cppm": "src/cli-cpp/worktree.cppm",
     "src/cli-cpp/hook_options.cppm": "src/cli-cpp/hooks/command.cppm",
     "src/cli-cpp/pane_agent_control.cppm": "src/cli-cpp/project_setup.cppm",

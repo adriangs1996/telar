@@ -1057,7 +1057,7 @@ public:
       }
       const auto &entry = grants_[index];
       output += "{\"plugin\":";
-      appendJsonString(output, entry.plugin.view());
+      appendJsonText(output, entry.plugin.view());
       output += ",\"digest\":\"";
       appendLowerHex(output, entry.digest);
       output += "\",\"capabilities\":[";
@@ -1068,7 +1068,7 @@ public:
           if (!first) {
             output += ',';
           }
-          appendJsonString(output, Capabilities::name(capability));
+          appendJsonText(output, Capabilities::name(capability));
           first = false;
         }
       }

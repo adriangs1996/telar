@@ -42,7 +42,7 @@ static void testJson(SystemAllocator &memory) {
   object.field("data")->field("text")->string(text);
   check(text == "printf \"café\" 🙂");
   text.clear();
-  appendJsonString(text, "\t\n\"\\");
+  appendJsonText(text, "\t\n\"\\");
   String<SystemAllocator> decoded{AllocatorRef<char, SystemAllocator>{memory}};
   JsonValue::parse(text).string(decoded);
   check(decoded == "\t\n\"\\");

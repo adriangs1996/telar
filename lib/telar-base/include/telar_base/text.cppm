@@ -635,22 +635,55 @@ private:
   unsigned maximum_depth_;
 };
 
-template <Allocator Memory>
-void appendJsonString(String<Memory> &output, std::string_view text) {
+// How a JSON string spells control bytes: `standard` uses every short escape JSON has; `control`
+// spells backspace and form feed as \u escapes and escapes DEL too, for text a terminal shows.
+enum class JsonEscapes : std::uint8_t {
+  standard,
+  control
+};
+
+// Passes `text` to `emit` as the inside of a JSON string literal, in pieces: runs of bytes that
+// need no escape, and each escape.
+template <typename Emit>
+void escapeJson(std::string_view text, JsonEscapes escapes, Emit &&emit) {
   constexpr std::string_view hex = "0123456789abcdef";
-  output.push_back('"');
-  for (const unsigned char byte : text) {
-    if (byte == '"' || byte == '\\') {
-      output.push_back('\\');
-      output.push_back(static_cast<char>(byte));
-    } else if (byte < 0x20) {
-      output += "\\u00";
-      output.push_back(hex[byte >> 4]);
-      output.push_back(hex[byte & 15]);
+  constexpr unsigned char first_printable = 0x20;
+  constexpr unsigned char delete_byte = 0x7f;
+  std::size_t plain = 0;
+  for (std::size_t index = 0; index < text.size(); ++index) {
+    const auto byte = static_cast<unsigned char>(text[index]);
+    char shorthand = 0;
+    switch (byte) {
+    case '"': shorthand = '"'; break;
+    case '\\': shorthand = '\\'; break;
+    case '\n': shorthand = 'n'; break;
+    case '\r': shorthand = 'r'; break;
+    case '\t': shorthand = 't'; break;
+    case '\b': shorthand = escapes == JsonEscapes::standard ? 'b' : 0; break;
+    case '\f': shorthand = escapes == JsonEscapes::standard ? 'f' : 0; break;
+    default: break;
+    }
+    if (shorthand == 0 && byte >= first_printable && !(byte == delete_byte && escapes == JsonEscapes::control)) {
+      continue;
+    }
+    emit(text.substr(plain, index - plain));
+    plain = index + 1;
+    if (shorthand != 0) {
+      const std::array escaped{'\\', shorthand};
+      emit(std::string_view{escaped.data(), escaped.size()});
     } else {
-      output.push_back(static_cast<char>(byte));
+      const std::array escaped{'\\', 'u', '0', '0', hex[byte >> 4], hex[byte & 15]};
+      emit(std::string_view{escaped.data(), escaped.size()});
     }
   }
+  emit(text.substr(plain));
+}
+
+// Appends `text` to `output` as one JSON string literal, quotes included.
+template <typename Text>
+void appendJsonText(Text &output, std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
+  output.push_back('"');
+  escapeJson(text, escapes, [&](std::string_view piece) { output.append(piece); });
   output.push_back('"');
 }
 
@@ -847,7 +880,7 @@ private:
 
   inline void appendFormatted(String<Memory> &output, unsigned depth) const {
     if (kind_ == JsonKind::string) {
-      appendJsonString(output, text_);
+      appendJsonText(output, text_);
       return;
     }
     if (kind_ == JsonKind::literal) {
@@ -861,7 +894,7 @@ private:
       output.append((depth + 1) * indentation, ' ');
       const auto &child = children_[index];
       if (kind_ == JsonKind::object) {
-        appendJsonString(output, child.name_);
+        appendJsonText(output, child.name_);
         output += ": ";
       }
 

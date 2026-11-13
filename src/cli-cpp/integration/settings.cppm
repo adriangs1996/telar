@@ -287,7 +287,7 @@ struct Extension {
     }
 
     String<Memory> result{source.substr(0, offset), AllocatorRef<char, Memory>{memory}};
-    appendJsonString(result, executable);
+    appendJsonText(result, executable);
     result += source.substr(offset + placeholder.size());
     if (result.size() > maximum_bytes) {
       throw std::length_error{"Integration extension exceeds its bound"};

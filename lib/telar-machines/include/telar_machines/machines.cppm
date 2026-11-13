@@ -1124,7 +1124,7 @@ struct MachineProfileCodec {
     output += profiles.version() == MachineProfiles::plain_format_version ? "{\"version\":1" : "{\"version\":2";
     if (const auto label = profiles.localLabel()) {
       output += ",\"local_label\":";
-      runtime::appendJsonString(output, *label);
+      runtime::appendJsonText(output, *label);
     }
 
     output += ",\"machines\":[";
@@ -1258,20 +1258,20 @@ public:
   template <Allocator Memory>
   inline static void appendProfile(String<Memory> &output, const MachineProfile &profile) {
     output += "{\"id\":";
-    runtime::appendJsonString(output, profile.identity().format().view());
+    runtime::appendJsonText(output, profile.identity().format().view());
     output += ",\"label\":";
-    runtime::appendJsonString(output, profile.label());
+    runtime::appendJsonText(output, profile.label());
     output += ",\"destination\":";
-    runtime::appendJsonString(output, profile.destination());
+    runtime::appendJsonText(output, profile.destination());
     if (const auto color = profile.color()) {
       output += ",\"color\":";
-      runtime::appendJsonString(output, *color);
+      runtime::appendJsonText(output, *color);
     }
 
     output += profile.enabled() ? ",\"enabled\":true" : ",\"enabled\":false";
     if (const auto program = profile.program()) {
       output += ",\"telar_path\":";
-      runtime::appendJsonString(output, *program);
+      runtime::appendJsonText(output, *program);
     }
 
     bool first = true;
@@ -1283,9 +1283,9 @@ public:
 
       output += first ? ",\"logins\":{" : ",";
       first = false;
-      runtime::appendJsonString(output, machine_agent_names.at(static_cast<std::size_t>(agent)));
+      runtime::appendJsonText(output, machine_agent_names.at(static_cast<std::size_t>(agent)));
       output += ':';
-      runtime::appendJsonString(output, machine_login_names.at(static_cast<std::size_t>(*login)));
+      runtime::appendJsonText(output, machine_login_names.at(static_cast<std::size_t>(*login)));
     }
 
     output += first ? "}" : "}}";
