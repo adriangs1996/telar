@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "telar_base/memory/allocator.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/random_bytes.hpp"
 #include <algorithm>

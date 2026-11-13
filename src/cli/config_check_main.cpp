@@ -7,7 +7,6 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.client.protocol;
 import telar.cli.tab;
 
 int main(int argc, char** argv) {

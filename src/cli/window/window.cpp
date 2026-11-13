@@ -28,7 +28,10 @@ import telar.cli.runtime_observer;
 import telar.cli.output;
 import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.clients;
+import telar.wire.editor;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 namespace telar::runtime::cli::window {

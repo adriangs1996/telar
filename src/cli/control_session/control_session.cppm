@@ -13,7 +13,8 @@ export import telar.client;
 
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: control_failure.cppm

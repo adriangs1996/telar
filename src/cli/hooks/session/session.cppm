@@ -27,7 +27,10 @@ export import telar.platform;
 
 export import telar.cli.control_session;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: hooks/codex_subagents.cppm

@@ -29,7 +29,13 @@ export import telar.client;
 
 export import telar.platform;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.agents;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: runtime_event_output.cppm

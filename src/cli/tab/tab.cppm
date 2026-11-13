@@ -41,7 +41,9 @@ export import telar.config;
 
 export import telar.cli.worktree_git;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.layout;
+import telar.wire.pane_io;
 import telar.platform.primitives;
 
 // Interface: config_check.cppm

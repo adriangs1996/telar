@@ -33,7 +33,7 @@ export import telar.platform;
 export import telar.cli.base.command_error;
 export import telar.base.text;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.platform.primitives;
 
 // Interface: integration_options.cppm

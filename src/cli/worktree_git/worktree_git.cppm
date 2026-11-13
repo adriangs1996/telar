@@ -44,7 +44,10 @@ export import telar.cli.server;
 
 export import telar.base.memory;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 import telar.platform.primitives;
 
 // Interface: repository_identity.cppm

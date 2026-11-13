@@ -50,7 +50,6 @@ import telar.cli.machine;
 import telar.cli.window;
 import telar.cli.machine_ssh;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.platform.primitives;
 
 namespace telar::runtime::cli {
