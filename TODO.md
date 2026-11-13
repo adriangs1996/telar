@@ -339,7 +339,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 
 ### [ ] P4.1a/b/c · `telar.platform` por familias
 - **Depende de:** a: P1.2 · b: P4.1a · c: P4.1b, P3.11a
-- **Familias:** process (`Command`, `PipeProcess`, `PtyProcess`, `SpawnOptions`), git (`GitFiles`, `GitHead`, `LinkedWorktree`; decidir si se une con `telar.git`), fs (`PrivateDirectory`, `ReadFile`, `WritePrivateFile`, `OpenBeneath`), paths y entorno, events. La familia `net` la crea P3.11a.
+- **Familias:** process (`Command`, `PipeProcess`, `PtyProcess`, `SpawnOptions`), git (`GitFiles`, `GitHead`, `LinkedWorktree`, `HardenedGit`: **decidido, se mueve a `telar.git`**, que pasa a ser el único dueño de lo de git; si alguna librería por debajo de `git` lo usa, se ajusta el orden de capas), fs (`PrivateDirectory`, `ReadFile`, `WritePrivateFile`, `OpenBeneath`), paths y entorno, events. La familia `net` la crea P3.11a.
 - **Contexto:** 127 dependientes, 34 secciones, cada importador usa de media el 8%.
 
 ### [ ] P4.2a/b/c · `telar.base.memory` por familias
@@ -353,7 +353,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 
 ### [ ] P4.4a/b/c · `telar.config` por proceso
 - **Depende de:** a: P1.2 · b: P4.4a · c: P4.4b
-- **Decisión abierta (bloquea a):** el plan propone particiones (`telar.config:runtime`, `:client`, `:gui`) para conservar la decisión de un módulo por librería (`docs/build/cpp-modules.md:81`). Las particiones no se pueden importar desde fuera del módulo: los importadores importan `telar.config`, cuyo BMI incluye todas las particiones de interfaz. Un cambio en la interfaz de `:gui` sigue recompilando a los importadores del runtime. Las particiones solo ahorran recompilaciones dentro del propio módulo y, cuando los cuerpos salen (P9.5), en los cambios de implementación. Para cortar la cascada entre procesos hacen falta módulos separados (`telar.config.core`, `.runtime`, `.client`, `.gui`), y eso obliga a revisar la decisión documentada.
+- **Decidido:** módulos separados (`telar.config.core`, `.runtime`, `.client`, `.gui`), no particiones: una partición no se puede importar desde fuera de su módulo, así que no corta la cascada entre procesos. La tarea `a` actualiza la regla "un módulo por biblioteca" de `docs/build/cpp-modules.md`.
 - **Contexto:** 86 dependientes, 45 secciones, 4,3% de uso medio y 15 secciones que nadie usa desde fuera. Las 15 se borran o se pasan a internas en `a`.
 
 ### [ ] P4.5 · Un solo lector tipado del schema de config
