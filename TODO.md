@@ -110,12 +110,13 @@ graph LR
 - **Toca:** `cmake/` y los presets de release. Hoy no hay `-flto` en ningún sitio.
 - **Hecho cuando:** release y dev-release enlazan con ThinLTO, y están medidos el tiempo de build, el tamaño del binario y los benchmarks de hot path existentes (`tools/bench_*`, probes de latencia). Las regresiones quedan anotadas para P9.
 
-### [ ] P1.1 · Tabla y script de destino de cada fichero
+### [x] P1.1 · Tabla y script de destino de cada fichero
 - **Depende de:** — (se escribe ya; se vuelve a ejecutar sobre `main` después de P0.1)
 - **Toca:** `tools/` (script de movimiento), un fichero de mapeo.
 - **Reglas del mapeo:** la carpeta es el módulo y la ruta sale del nombre actual del módulo, sin renombrar nada (`telar.base.memory` → `lib/base/memory/memory.cppm`). Las unidades de implementación van a la carpeta del módulo que declaran. Las particiones de interfaz se llaman `<módulo>-<partición>.cppm`. `src/runtime-cpp` → `src/runtime`, `src/gui-cpp` → `src/gui`, `src/cli-cpp` → `src/cli`. Las carpetas no llevan números.
 - **Decisión abierta:** destino de las librerías que el árbol propuesto no nombra: `telar-git`, `telar-tls`, `telar-plugins`, `telar-lua`, `telar-machines`, `telar-render`, `telar-shell`, `telar-vocabulary`, `websock`, `ebnf`, `tbc`, `clipboard` y `src/auth-daemon`. Se decide aquí y queda escrita en el mapeo.
 - **Hecho cuando:** el script genera el mapeo completo de forma determinista y `--dry-run` no deja ningún fichero sin destino.
+- **Resultado:** `tools/move-cpp-tree.py` (`--dry-run`, `--write-map`, `--apply`) y `docs/build/tree-moves.json`: 1769 ficheros, 1560 se mueven, 209 se quedan y 3 symlinks se reapuntan. Las librerías `telar-*` pierden el prefijo (`lib/git`, `lib/tls`…); `clipboard`, `tbc`, `ebnf` y `src/auth-daemon` se quedan donde están. Las cabeceras siguen en `lib/<x>/include/telar_<x>/`, así que los `#include` solo cambian de include dir en CMake.
 
 ### [ ] P2.4 · Regla 3 en el linter de TBC: la interfaz solo lleva declaraciones
 - **Depende de:** — para desarrollarla en `lib/tbc/linter`. Para activarla en el build, de P1.2.
