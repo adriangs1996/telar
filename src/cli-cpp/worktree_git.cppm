@@ -189,36 +189,14 @@ class Git {
 public:
   inline Git(Memory &memory, std::string_view root)
       : memory_(memory),
-        root_(root) {
-    auto [status, listing] = execute({"config", "--show-scope", "-z", "--get-regexp", "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)"}, false);
-    const auto facts = GitRepositoryFacts::parse(listing);
-    if (status > 1 || !facts) {
-      throw std::runtime_error{"GitFailed"};
-    }
-
-    for (std::size_t index = 0; index < facts->driver_count; ++index) {
-      for (const auto suffix : {".clean=", ".smudge=", ".process="}) {
-        overrides_.push_back("filter." + std::string{facts->drivers[index]} + suffix);
-      }
-    }
-
-    if (facts->may_fetch) {
-      const auto version = read({"version"});
-      constexpr std::string_view prefix = "git version ";
-      unsigned major = 0;
-      unsigned minor = 0;
-      if (!version.starts_with(prefix) || std::sscanf(version.c_str() + prefix.size(), "%u.%u", &major, &minor) != 2 || major < 2 || (major == 2 && minor < 45)) {
-        throw std::runtime_error{"GitFailed"};
-      }
-    }
-  }
+        git_(memory, root, [&](Command<Memory> &command) { return execute(command, false); }, [] { throw std::runtime_error{"GitFailed"}; }) {}
 
   inline std::string read(std::initializer_list<std::string_view> arguments) {
     return read(std::span{arguments.begin(), arguments.size()});
   }
 
   inline std::string read(std::span<const std::string_view> arguments) {
-    auto [status, output] = execute(arguments, true);
+    auto [status, output] = git_.with(arguments, [&](Command<Memory> &command) { return execute(command, true); });
     if (status != 0) {
       throw std::runtime_error{"GitFailed"};
     }
@@ -230,19 +208,19 @@ public:
   inline void bundle(std::span<const std::string_view> revisions, int descriptor) {
     std::vector<std::string_view> args{"bundle", "create", "-"};
     args.insert(args.end(), revisions.begin(), revisions.end());
-    auto command = makeCommand(args);
-    configure(command);
     CommandOutput output{memory_, max_git_output};
     std::size_t total = 0;
-    const auto status = output.stream(command, std::chrono::steady_clock::now() + git_timeout, [&](std::span<const Byte> bytes) {
-      total += bytes.size();
-      if (total > max_bundle_bytes) {
-        reportCommandLimit({.name = "repository.max_bundle_bytes", .noun = "bytes", .value = max_bundle_bytes, .requested = total});
-        throw std::runtime_error{"RepositoryBundleLimit"};
-      }
+    const auto status = git_.with(args, [&](Command<Memory> &command) {
+      return output.stream(command, std::chrono::steady_clock::now() + git_timeout, [&](std::span<const Byte> bytes) {
+        total += bytes.size();
+        if (total > max_bundle_bytes) {
+          reportCommandLimit({.name = "repository.max_bundle_bytes", .noun = "bytes", .value = max_bundle_bytes, .requested = total});
+          throw std::runtime_error{"RepositoryBundleLimit"};
+        }
 
-      writeBytes(descriptor, bytes);
-      return true;
+        writeBytes(descriptor, bytes);
+        return true;
+      });
     });
     if (status != 0) {
       throw std::runtime_error{"GitFailed"};
@@ -250,24 +228,7 @@ public:
   }
 
 private:
-  inline Command<Memory> makeCommand(std::span<const std::string_view> arguments) {
-    std::vector<std::string_view> complete(git_observation_options.begin(), git_observation_options.end());
-    for (const auto &value : overrides_) {
-      complete.push_back("-c");
-      complete.push_back(value);
-    }
-
-    complete.insert(complete.end(), arguments.begin(), arguments.end());
-    return Command<Memory>{memory_, Launch{.cwd = root_, .arguments = complete}, CommandPurpose::administration};
-  }
-
-  inline std::pair<int, std::string> execute(std::initializer_list<std::string_view> arguments, bool bounded) {
-    return execute(std::span{arguments.begin(), arguments.size()}, bounded);
-  }
-
-  inline std::pair<int, std::string> execute(std::span<const std::string_view> arguments, bool bounded) {
-    auto command = makeCommand(arguments);
-    configure(command);
+  inline std::pair<int, std::string> execute(Command<Memory> &command, bool bounded) {
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};
     const auto status = output.run(command, std::chrono::steady_clock::now() + git_timeout, true);
@@ -282,17 +243,8 @@ private:
     return {status, std::string{output.text()}};
   }
 
-  inline static void configure(Command<Memory> &command) {
-    command.removeEnvironmentPrefix("GIT_");
-    command.setEnvironment("GIT_OPTIONAL_LOCKS", "0");
-    command.setEnvironment("GIT_NO_LAZY_FETCH", "1");
-    command.setEnvironment("GIT_TERMINAL_PROMPT", "0");
-    command.setEnvironment("LC_ALL", "C");
-  }
-
   Memory &memory_;
-  std::string root_;
-  std::vector<std::string> overrides_;
+  HardenedGit<Memory> git_;
 };
 
 template <Allocator Memory>
@@ -938,10 +890,7 @@ public:
     }
 
     if (hardened) {
-      command.removeEnvironmentPrefix("GIT_");
-      command.setEnvironment("GIT_OPTIONAL_LOCKS", "0");
-      command.setEnvironment("GIT_NO_LAZY_FETCH", "1");
-      command.setEnvironment("GIT_TERMINAL_PROMPT", "0");
+      HardenedGit<Memory>::configure(command);
     }
     constexpr std::size_t diagnostic_bytes = 64 * 1024;
     constexpr std::size_t listing_bytes = 1024 * 1024;

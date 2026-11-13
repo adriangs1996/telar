@@ -748,6 +748,7 @@ private:
     }
 
     Command command{memory_, Launch{.arguments = {arguments.begin(), arguments.size()}}, CommandPurpose::configured_helper};
+    HardenedGit<Memory>::configure(command);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{300};
     const bool mutation = std::ranges::find(arguments, "worktree") != arguments.end();
     if (mutation) {

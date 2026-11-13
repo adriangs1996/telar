@@ -399,10 +399,23 @@ static void testCommandHelpers(SystemAllocator &memory) {
   check(status == 0 && output == "input" && error == "error\n");
 }
 
+static void testHardenedGit(SystemAllocator &memory) {
+  using Git = HardenedGit<SystemAllocator>;
+  check(Git::honorsLazyFetchControl("git version 2.45.0\n") && Git::honorsLazyFetchControl("git version 3.0") && Git::honorsLazyFetchControl("git version 2.50.1 (Apple Git-155)"));
+  check(!Git::honorsLazyFetchControl("git version 2.44.9") && !Git::honorsLazyFetchControl("git version 2") && !Git::honorsLazyFetchControl("version 2.45"));
+  const std::array<EnvironmentEntry, 3> inherited{{{"GIT_DIR", "/elsewhere"}, {"GIT_TERMINAL_PROMPT", "1"}, {"PATH", "/usr/bin:/bin"}}};
+  const std::array<std::string_view, 1> words{"/bin/sh"};
+  Command command{memory, Launch{.cwd = "/tmp", .arguments = words, .environment_mode = EnvironmentMode::replace, .environment = inherited}, CommandPurpose::configured_helper};
+  Git::configure(command);
+  check(!command.environment("GIT_DIR") && command.environment("GIT_TERMINAL_PROMPT") == "0" && command.environment("GIT_NO_LAZY_FETCH") == "1");
+  check(command.environment("GIT_OPTIONAL_LOCKS") == "0" && command.environment("LC_ALL") == "C" && command.environment("PATH") == "/usr/bin:/bin");
+}
+
 void testPlatform() {
   testDisconnectedSocketClients();
   SystemAllocator memory;
   testCommandHelpers(memory);
+  testHardenedGit(memory);
   testSpawn(memory);
   testForegroundProcessGroup(memory);
   testUnreadOutputShutdown();

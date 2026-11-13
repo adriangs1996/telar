@@ -1724,6 +1724,104 @@ inline constexpr auto git_observation_options = std::to_array<std::string_view>(
     "hook.post-index-change.enabled=false",
 });
 
+// Git run against a repository that may be hostile: no hooks, fsmonitor or prompts, no lazy
+// fetch, no inherited GIT_* environment, and every filter driver the repository configures
+// overridden to nothing. A repository that may fetch lazily needs git 2.45 or later, the first
+// that honors GIT_NO_LAZY_FETCH.
+template <Allocator Memory>
+class HardenedGit {
+public:
+  // `run(command)` returns the command's exit status and its output; `reject()` throws the
+  // caller's failure.
+  template <typename Run, typename Reject>
+  inline HardenedGit(Memory &memory, std::string_view root, Run &&run, Reject &&reject)
+      : memory_(memory),
+        root_(root, AllocatorRef<char, Memory>{memory}),
+        overrides_(AllocatorRef<String<Memory>, Memory>{memory}) {
+    const auto [status, text] = with({"config", "--show-scope", "-z", "--get-regexp", "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)"}, run);
+    const auto facts = status > 1 ? std::nullopt : GitRepositoryFacts::parse(text);
+    if (!facts) {
+      reject();
+    }
+
+    for (std::size_t index = 0; index < facts->driver_count; ++index) {
+      for (const auto suffix : {".clean=", ".smudge=", ".process="}) {
+        overrides_.emplace_back("filter.", AllocatorRef<char, Memory>{memory});
+        overrides_.back() += facts->drivers[index];
+        overrides_.back() += suffix;
+      }
+    }
+
+    if (facts->may_fetch) {
+      const auto [version_status, version_text] = with({"version"}, run);
+      if (version_status != 0 || !honorsLazyFetchControl(version_text)) {
+        reject();
+      }
+    }
+  }
+
+  // Hands `use` the command `git` with the hardening options and overrides, then `arguments`,
+  // in the repository; a command keeps its address, so it lives for this call.
+  template <typename Use>
+  inline decltype(auto) with(std::span<const std::string_view> arguments, Use &&use) const {
+    Vector<std::string_view, Memory> complete{AllocatorRef<std::string_view, Memory>{memory_}};
+    complete.reserve(git_observation_options.size() + 2 * overrides_.size() + arguments.size());
+    complete.insert(complete.end(), git_observation_options.begin(), git_observation_options.end());
+    for (const auto &override : overrides_) {
+      complete.push_back("-c");
+      complete.push_back(override);
+    }
+    complete.insert(complete.end(), arguments.begin(), arguments.end());
+    Command command{memory_, Launch{.cwd = root_, .arguments = complete}, CommandPurpose::administration};
+    configure(command);
+    return use(command);
+  }
+
+  template <typename Use>
+  inline decltype(auto) with(std::initializer_list<std::string_view> arguments, Use &&use) const {
+    return with(std::span{arguments.begin(), arguments.size()}, std::forward<Use>(use));
+  }
+
+  // The environment every git telar runs gets: nothing inherited from GIT_*, no optional locks,
+  // lazy fetches or prompts, and messages in the C locale.
+  inline static void configure(Command<Memory> &command) {
+    command.removeEnvironmentPrefix("GIT_");
+    command.setEnvironment("GIT_OPTIONAL_LOCKS", "0");
+    command.setEnvironment("GIT_NO_LAZY_FETCH", "1");
+    command.setEnvironment("GIT_TERMINAL_PROMPT", "0");
+    command.setEnvironment("LC_ALL", "C");
+  }
+
+  // Whether `git version` names 2.45 or later.
+  [[nodiscard]] inline static bool honorsLazyFetchControl(std::string_view version) noexcept {
+    while (!version.empty() && (version.back() == '\n' || version.back() == '\r')) {
+      version.remove_suffix(1);
+    }
+    constexpr std::string_view prefix = "git version ";
+    if (!version.starts_with(prefix)) {
+      return false;
+    }
+
+    const auto number = version.substr(prefix.size());
+    unsigned major = 0;
+    const auto parsed = std::from_chars(number.data(), number.data() + number.size(), major);
+    if (parsed.ec != std::errc{} || parsed.ptr == number.data() + number.size() || *parsed.ptr != '.') {
+      return false;
+    }
+
+    unsigned minor = 0;
+    const auto subversion = std::from_chars(parsed.ptr + 1, number.data() + number.size(), minor);
+    constexpr unsigned lazy_fetch_major = 2;
+    constexpr unsigned lazy_fetch_minor = 45;
+    return subversion.ec == std::errc{} && (major > lazy_fetch_major || (major == lazy_fetch_major && minor >= lazy_fetch_minor));
+  }
+
+private:
+  Memory &memory_;
+  String<Memory> root_;
+  Vector<String<Memory>, Memory> overrides_;
+};
+
 }
 }
 
