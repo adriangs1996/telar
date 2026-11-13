@@ -1865,47 +1865,18 @@ inline std::string guiProgram() {
   return found ? std::string{found->view()} : std::string{"telar-gui"};
 }
 
-inline std::string loginShell() {
-  if (const auto *shell = std::getenv("SHELL"); shell && *shell) {
-    return shell;
-  }
-
-  if (const auto *account = ::getpwuid(::getuid()); account && account->pw_shell) {
-    return account->pw_shell;
-  }
-
-  return "/bin/sh";
-}
-
-inline std::optional<std::string_view> shellScript(const std::string &shell) {
-  const auto name = std::filesystem::path{shell}.filename().string();
-  if (name == "bash" || name == "zsh" || name == "ksh") {
-    return R"(exec -- "$0" "$@")";
-  }
-
-  if (name == "sh" || name == "dash") {
-    return R"(exec "$0" "$@")";
-  }
-
-  if (name == "fish") {
-    return "exec $argv";
-  }
-
-  return std::nullopt;
-}
-
 inline void relaunchLogin(std::span<char *const> words) {
   if (std::getenv("TELAR_LOGIN_SHELL")) {
     return;
   }
 
   const auto shell = loginShell();
-  const auto script = shellScript(shell);
-  if (!script) {
+  const auto script = loginShellScript(shell.view());
+  if (script.empty()) {
     return;
   }
 
-  std::vector<std::string> arguments{shell, "-l", "-c", std::string{*script}, ExecutablePath{}.c_str(), "gui"};
+  std::vector<std::string> arguments{std::string{shell.view()}, "-l", "-c", std::string{script}, ExecutablePath{}.c_str(), "gui"};
   for (const std::string_view word : words) {
     if (word != "--login-shell") {
       arguments.emplace_back(word);

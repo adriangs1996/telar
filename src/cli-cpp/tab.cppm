@@ -477,7 +477,8 @@ int tab(Memory &memory, const TabOptions &options) {
       if (entry == catalog.entries.end()) {
         throw Failure{"workspace not found"};
       }
-      const std::array shell{loginShell()};
+      const auto login = loginShell();
+      const std::array shell{login.view()};
       wireTabLabel(options.label.value_or(""), true);
       const auto opened = session.template exchange<PaneOpened>(LaunchTab{.workspace = workspace, .label = options.label.value_or(""), .size = launch_size, .launch = {.cwd = entry->path, .arguments = shell}});
       if (options.json) {

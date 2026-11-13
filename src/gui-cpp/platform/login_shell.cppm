@@ -43,15 +43,8 @@ QByteArray hostName();
 
 // Interface: platform/login_shell.cppm
 export {
-// The user's login shell and the script that runs a command through it.
+// What a new pane runs, from telar-platform's loginShell and loginShellScript.
 namespace telar::gui::platform::login_shell {
-// SHELL when the session names one, else the account's shell, else /bin/sh.
-std::string path();
-
-// The line a shell runs to exec the command given as its positional parameters, or null for a
-// shell whose flags telar does not know.
-const char *script(std::string_view shell);
-
 // What a new pane runs: the login shell as an interactive login shell when telar knows its
 // flags, else the shell alone. The arguments borrow from this object.
 class Command final {

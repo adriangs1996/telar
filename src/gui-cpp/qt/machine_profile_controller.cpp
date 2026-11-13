@@ -42,6 +42,7 @@ static_assert(true);
 
 
 import telar.gui.platform.login_shell;
+import telar.platform;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
@@ -238,7 +239,7 @@ void Application::discoveredMachine(MachineClient &client, const RemoteDiscovery
 
   const auto path = discovery.shell();
   const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
-  client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(platform::login_shell::script(path) != nullptr ? arguments.size() : 1)});
+  client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(!runtime::loginShellScript(path).empty() ? arguments.size() : 1)});
 }
 
 }

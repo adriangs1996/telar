@@ -77,6 +77,7 @@ module;
 #include <openssl/sha.h>
 
 #include <pthread.h>
+#include <pwd.h>
 
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
@@ -1239,6 +1240,50 @@ private:
 
 template <Allocator Memory, EnvironmentLookup Environment>
 RuntimePaths(Memory &memory, const ServerOptions &options, const Environment &environment) -> RuntimePaths<Memory>;
+
+}
+}
+
+// Interface: telar_platform/login_shell.cppm
+export {
+namespace telar::runtime {
+
+// The user's login shell: SHELL when the session names one, else the account's shell, else
+// /bin/sh. An empty account shell, or a path longer than PATH_MAX, counts as none.
+inline FixedText<PATH_MAX> loginShell() {
+  FixedText<PATH_MAX> shell;
+  const auto pick = [&](const char *candidate) {
+    if (candidate == nullptr || *candidate == '\0' || std::strlen(candidate) > PATH_MAX) {
+      return false;
+    }
+    shell.assign(candidate);
+    return true;
+  };
+  if (!pick(std::getenv("SHELL"))) {
+    const auto *entry = ::getpwuid(::getuid());
+    if (entry == nullptr || !pick(entry->pw_shell)) {
+      shell.assign("/bin/sh");
+    }
+  }
+
+  return shell;
+}
+
+// The line `shell -c` runs to exec the command its positional parameters name; empty for a
+// shell whose flags telar does not know. The runtime recognizes the panes it launched through a
+// login shell by this exact line.
+inline std::string_view loginShellScript(std::string_view shell) noexcept {
+  const auto name = shell.substr(shell.rfind('/') + 1);
+  if (name == "bash" || name == "zsh" || name == "ksh") {
+    return "exec -- \"$0\" \"$@\"";
+  }
+
+  if (name == "sh" || name == "dash") {
+    return "exec \"$0\" \"$@\"";
+  }
+
+  return name == "fish" ? "exec $argv" : std::string_view{};
+}
 
 }
 }

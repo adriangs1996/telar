@@ -145,12 +145,12 @@ std::string program() {
 }
 
 std::string resolve() {
-  const auto shell = login_shell::path();
+  const std::string shell{telar::runtime::loginShell().view()};
   const auto program = telarProgram();
   std::vector<std::string> arguments;
 
-  if (const char *line = login_shell::script(shell)) {
-    arguments = {shell, "-l", "-c", line, program, "server", "endpoint"};
+  if (const auto line = telar::runtime::loginShellScript(shell); !line.empty()) {
+    arguments = {shell, "-l", "-c", std::string{line}, program, "server", "endpoint"};
   } else {
     arguments = {program, "server", "endpoint"};
   }

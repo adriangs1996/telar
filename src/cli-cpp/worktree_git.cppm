@@ -603,18 +603,6 @@ inline std::string realDirectory(std::string_view path) {
   return resolved.string();
 }
 
-inline std::string_view loginShell() {
-  if (const auto shell = ::getenv("SHELL"); shell && *shell) {
-    return shell;
-  }
-
-  if (const auto entry = ::getpwuid(::getuid()); entry && entry->pw_shell && *entry->pw_shell) {
-    return entry->pw_shell;
-  }
-
-  return "/bin/sh";
-}
-
 inline void wireTabLabel(std::string_view value, bool empty = false) {
   if ((!empty && value.empty()) || value.size() > tab_label_bytes) {
     throw Failure{"InvalidByteString"};

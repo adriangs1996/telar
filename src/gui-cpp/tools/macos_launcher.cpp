@@ -13,7 +13,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.gui.platform.login_shell;
+import telar.platform;
 
 namespace {
 
@@ -41,7 +41,7 @@ int launch(std::span<char *> input, const char *const *environment) {
   }
 
   const auto program = (std::filesystem::path{path.data()}.parent_path() / "telar-gui").lexically_normal().string();
-  auto shell = telar::gui::platform::login_shell::path();
+  std::string shell{telar::runtime::loginShell().view()};
   if (shell.empty() || shell.front() != '/') {
     shell = "/bin/sh";
   }
@@ -52,10 +52,10 @@ int launch(std::span<char *> input, const char *const *environment) {
     return EXIT_FAILURE;
   }
 
-  const auto *script = telar::gui::platform::login_shell::script(shell);
+  const auto script = telar::runtime::loginShellScript(shell);
   std::vector<std::string> arguments;
-  if (script != nullptr) {
-    arguments = {shell, "-l", "-c", script, program};
+  if (!script.empty()) {
+    arguments = {shell, "-l", "-c", std::string{script}, program};
   } else {
     arguments = {program};
   }

@@ -1224,7 +1224,8 @@ private:
     }
 
     const auto name = std::filesystem::path{root}.filename().string();
-    const std::array shell{loginShell()};
+    const auto login = loginShell();
+    const std::array shell{login.view()};
     const auto opened = session_.template exchange<PaneOpened>(CreateWorkspace{.size = workspace_size, .name = name, .launch = {.cwd = root, .arguments = shell}});
     return opened.location.workspace.id;
   }
@@ -1291,19 +1292,12 @@ private:
 
   inline PaneOpened launch(std::uint64_t id, std::string_view directory) {
     std::vector<std::string_view> argv;
-    const auto shell = loginShell();
+    const auto login = loginShell();
+    const auto shell = login.view();
     if (options_.command.empty()) {
       argv.push_back(shell);
     } else {
-      const auto name = std::filesystem::path{shell}.filename().string();
-      std::string_view line;
-      if (name == "bash" || name == "zsh" || name == "ksh") {
-        line = "exec -- \"$0\" \"$@\"";
-      } else if (name == "sh" || name == "dash") {
-        line = "exec \"$0\" \"$@\"";
-      } else if (name == "fish") {
-        line = "exec $argv";
-      }
+      const auto line = loginShellScript(shell);
       if (!line.empty()) {
         argv = {shell, "-l", "-i", "-c", line};
       }

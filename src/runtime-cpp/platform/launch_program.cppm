@@ -22,6 +22,7 @@ export module telar.runtime.platform.launch_program;
 import std;
 
 import telar.platform.primitives;
+export import telar.platform;
 
 #if defined(__linux__)
 
@@ -31,19 +32,6 @@ import telar.platform.primitives;
 // Interface: platform/launch_program.cppm
 export {
 namespace telar::runtime {
-
-inline std::string_view loginShellScript(std::string_view shell) noexcept {
-  const auto name = shell.substr(shell.rfind('/') + 1);
-  if (name == "bash" || name == "zsh" || name == "ksh") {
-    return "exec -- \"$0\" \"$@\"";
-  }
-
-  if (name == "sh" || name == "dash") {
-    return "exec \"$0\" \"$@\"";
-  }
-
-  return name == "fish" ? "exec $argv" : std::string_view{};
-}
 
 inline std::string_view launchedProgram(std::span<const std::string_view> arguments) noexcept {
   if (arguments.empty()) {
