@@ -1,3 +1,4 @@
+#include "cf_reference.hpp"
 #include "tbc/view.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "application/dependencies.hpp"
@@ -32,32 +33,6 @@
 namespace telar::gui::platform {
 
 namespace {
-
-template <typename Value>
-class NativeReference {
-public:
-  explicit NativeReference(Value value) noexcept
-      : value_(value) {}
-
-  ~NativeReference() {
-    if (value_ != nullptr) {
-      CFRelease(value_);
-    }
-  }
-
-  NativeReference(const NativeReference &) = delete;
-  NativeReference &operator=(const NativeReference &) = delete;
-  NativeReference(NativeReference &&other) noexcept
-      : value_(std::exchange(other.value_, nullptr)) {}
-  NativeReference &operator=(NativeReference &&) = delete;
-
-  [[nodiscard]] Value get() const noexcept {
-    return value_;
-  }
-
-private:
-  Value value_;
-};
 
 using NativeSource = NativeReference<CGImageSourceRef>;
 

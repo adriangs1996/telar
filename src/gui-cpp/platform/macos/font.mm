@@ -1,9 +1,12 @@
 #include "platform/font.h"
+#include "cf_reference.hpp"
 #import <CoreText/CoreText.h>
 #import <Foundation/Foundation.h>
 #include <math.h>
 #include <string.h>
 #include <sys/stat.h>
+
+using telar::gui::platform::NativeReference;
 
 static CTFontRef default_instance(CTFontRef font) {
   NSArray *axes = CFBridgingRelease(CTFontCopyVariationAxes(font));
@@ -15,13 +18,11 @@ static CTFontRef default_instance(CTFontRef font) {
       defaults[tag] = value;
     }
   }
-  CTFontDescriptorRef reset = CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontVariationAttribute : defaults});
-  if (reset == NULL) {
+  const NativeReference reset{CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontVariationAttribute : defaults})};
+  if (!reset) {
     return NULL;
   }
-  CTFontRef base = CTFontCreateCopyWithAttributes(font, CTFontGetSize(font), NULL, reset);
-  CFRelease(reset);
-  return base;
+  return CTFontCreateCopyWithAttributes(font, CTFontGetSize(font), NULL, reset.get());
 }
 
 static int fill_variation(NSDictionary *variation, telar_font_variation *out) {
@@ -44,12 +45,11 @@ static int fill_variation(NSDictionary *variation, telar_font_variation *out) {
 
 static int fill(CTFontRef font, telar_font_match *match) {
   NSDictionary *variation = CFBridgingRelease(CTFontCopyVariation(font));
-  CTFontRef face = variation.count > 0 ? default_instance(font) : (CTFontRef)CFRetain(font);
-  if (face == NULL) {
+  const NativeReference face{variation.count > 0 ? default_instance(font) : (CTFontRef)CFRetain(font)};
+  if (!face) {
     return -1;
   }
-  NSString *postscript = CFBridgingRelease(CTFontCopyPostScriptName(face));
-  CFRelease(face);
+  NSString *postscript = CFBridgingRelease(CTFontCopyPostScriptName(face.get()));
   NSURL *url = CFBridgingRelease(CTFontCopyAttribute(font, kCTFontURLAttribute));
   const char *path = url.fileSystemRepresentation;
   const char *name = postscript.UTF8String;
@@ -71,16 +71,14 @@ static CTFontRef create_font(NSString *family, NSString *style) {
   if (style.length == 0) {
     return CTFontCreateWithName((__bridge CFStringRef)family, 15, NULL);
   }
-  CTFontDescriptorRef query = CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{
+  const NativeReference query{CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{
     (id)kCTFontFamilyNameAttribute : family,
     (id)kCTFontStyleNameAttribute : style,
-  });
-  if (query == NULL) {
+  })};
+  if (!query) {
     return NULL;
   }
-  CTFontRef font = CTFontCreateWithFontDescriptor(query, 15, NULL);
-  CFRelease(query);
-  return font;
+  return CTFontCreateWithFontDescriptor(query.get(), 15, NULL);
 }
 
 static int verify(CTFontRef font, NSString *family, NSString *style) {
@@ -110,15 +108,14 @@ int telarGuiFindFont(const char *family, const char *style, telar_font_match *ma
     if (requested == nil || requested.length == 0 || face == nil) {
       return telar_font_family_not_found;
     }
-    CTFontRef font = create_font(requested, face);
-    if (font == NULL) {
+    const NativeReference font{create_font(requested, face)};
+    if (!font) {
       return telar_font_family_not_found;
     }
-    int status = verify(font, requested, face);
-    if (status == telar_font_found && fill(font, match) != 0) {
+    int status = verify(font.get(), requested, face);
+    if (status == telar_font_found && fill(font.get(), match) != 0) {
       status = telar_font_family_not_found;
     }
-    CFRelease(font);
     return status;
   }
 }
@@ -139,16 +136,14 @@ static bool monochrome(CTFontRef font) {
   if (CTFontGetSymbolicTraits(font) & kCTFontTraitColorGlyphs) {
     return false;
   }
-  CFArrayRef tables = CTFontCopyAvailableTables(font, kCTFontTableOptionNoOptions);
-  if (tables != NULL) {
-    for (CFIndex i = 0; i < CFArrayGetCount(tables); i++) {
-      CTFontTableTag tag = (CTFontTableTag)(uintptr_t)CFArrayGetValueAtIndex(tables, i);
+  const NativeReference tables{CTFontCopyAvailableTables(font, kCTFontTableOptionNoOptions)};
+  if (tables) {
+    for (CFIndex i = 0; i < CFArrayGetCount(tables.get()); i++) {
+      CTFontTableTag tag = (CTFontTableTag)(uintptr_t)CFArrayGetValueAtIndex(tables.get(), i);
       if (tag == kCTFontTableSbix || tag == kCTFontTableCBDT || tag == kCTFontTableCOLR) {
-        CFRelease(tables);
         return false;
       }
     }
-    CFRelease(tables);
   }
   NSString *postscript = CFBridgingRelease(CTFontCopyPostScriptName(font));
   return ![postscript isEqualToString:@"LastResort"] && ![postscript hasPrefix:@"."];
@@ -171,47 +166,39 @@ int telarGuiFindValidatedFallbackFont(const char *text, telar_font_match *match,
     if (requested == nil || requested.length == 0 || requested.length > (NSUInteger)max_query_units) {
       return -1;
     }
-    CTFontRef base = CTFontCreateWithName(CFSTR("Menlo"), 15, NULL);
-    if (base != NULL) {
-      CTFontRef direct = CTFontCreateForString(base, (__bridge CFStringRef)requested, CFRangeMake(0, (CFIndex)requested.length));
-      CFRelease(base);
-      if (direct != NULL) {
-        int status = accept(direct, requested, match, validator, context);
-        CFRelease(direct);
-        if (status == 0) {
-          return 0;
-        }
+    const NativeReference base{CTFontCreateWithName(CFSTR("Menlo"), 15, NULL)};
+    if (base) {
+      const NativeReference direct{CTFontCreateForString(base.get(), (__bridge CFStringRef)requested, CFRangeMake(0, (CFIndex)requested.length))};
+      if (direct && accept(direct.get(), requested, match, validator, context) == 0) {
+        return 0;
       }
     }
     NSCharacterSet *set = [NSCharacterSet characterSetWithCharactersInString:requested];
-    CTFontDescriptorRef query = CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontCharacterSetAttribute : set});
-    if (query == NULL) {
+    const NativeReference query{CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontCharacterSetAttribute : set})};
+    if (!query) {
       return -1;
     }
-    CFArrayRef candidates = CTFontDescriptorCreateMatchingFontDescriptors(query, NULL);
-    CFRelease(query);
-    if (candidates == NULL) {
+    const NativeReference candidates{CTFontDescriptorCreateMatchingFontDescriptors(query.get(), NULL)};
+    if (!candidates) {
       return -1;
     }
     int status = -1;
-    CFIndex count = CFArrayGetCount(candidates);
+    CFIndex count = CFArrayGetCount(candidates.get());
     if (count > max_candidates) {
       count = max_candidates;
     }
     for (int pass = 0; pass < 2 && status != 0; pass++) {
       for (CFIndex i = 0; i < count && status != 0; i++) {
-        CTFontRef font = CTFontCreateWithFontDescriptor(CFArrayGetValueAtIndex(candidates, i), 15, NULL);
-        if (font == NULL) {
+        const NativeReference font{CTFontCreateWithFontDescriptor((CTFontDescriptorRef)CFArrayGetValueAtIndex(candidates.get(), i), 15, NULL)};
+        if (!font) {
           continue;
         }
-        bool mono = (CTFontGetSymbolicTraits(font) & kCTFontTraitMonoSpace) != 0;
+        bool mono = (CTFontGetSymbolicTraits(font.get()) & kCTFontTraitMonoSpace) != 0;
         if (mono == (pass == 0)) {
-          status = accept(font, requested, match, validator, context);
+          status = accept(font.get(), requested, match, validator, context);
         }
-        CFRelease(font);
       }
     }
-    CFRelease(candidates);
     return status;
   }
 }

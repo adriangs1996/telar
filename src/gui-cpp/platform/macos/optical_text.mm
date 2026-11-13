@@ -1,3 +1,4 @@
+#include "cf_reference.hpp"
 #include "tbc/view.hpp"
 #include "qt/optical_text.hpp"
 #include "font_smoothing.h"
@@ -90,7 +91,7 @@ struct OpticalText::State {
   static constexpr std::size_t maximum_fonts = 32;
   QImage mask;
   QImage image;
-  CGContextRef context = nullptr;
+  platform::NativeReference<CGContextRef> context;
   std::vector<Font> fonts;
   std::vector<CGGlyph> indexes;
   std::vector<CGPoint> positions;
@@ -104,11 +105,7 @@ struct OpticalText::State {
   State(State &&) = delete;
   State &operator=(State &&) = delete;
 
-  ~State() {
-    if (context != nullptr) {
-      CGContextRelease(context);
-    }
-  }
+  ~State() = default;
 
   Font *font(const QRawFont &source) {
     if (!source.isValid()) {
@@ -227,10 +224,9 @@ void OpticalText::begin(QSizeF size, qreal scale, std::uint8_t strength) {
     self.fonts.clear();
   }
 
-  if (self.context == nullptr || self.mask.size() != pixels || self.strength != strength || self.scale != scale) {
-    if (self.context != nullptr) {
-      CGContextRelease(self.context);
-      self.context = nullptr;
+  if (!self.context || self.mask.size() != pixels || self.strength != strength || self.scale != scale) {
+    if (self.context) {
+      self.context.reset();
     }
 
     self.mask = QImage(pixels, QImage::Format_Alpha8);
@@ -239,25 +235,24 @@ void OpticalText::begin(QSizeF size, qreal scale, std::uint8_t strength) {
     }
 
     self.mask.fill(0);
-    auto *space = CGColorSpaceCreateWithName(kCGColorSpaceLinearGray);
-    if (space == nullptr) {
+    const platform::NativeReference space{CGColorSpaceCreateWithName(kCGColorSpaceLinearGray)};
+    if (!space) {
       throw std::runtime_error{"Unable to create optical terminal color space"};
     }
 
-    self.context = CGBitmapContextCreate(self.mask.bits(),
+    self.context.reset(CGBitmapContextCreate(self.mask.bits(),
                                          pixels.width(),
                                          pixels.height(),
                                          alpha_bits,
                                          self.mask.bytesPerLine(),
-                                         space,
-                                         kCGImageAlphaOnly);
-    CGColorSpaceRelease(space);
+                                         space.get(),
+                                         kCGImageAlphaOnly));
 
-    if (self.context == nullptr) {
+    if (!self.context) {
       throw std::runtime_error("Unable to allocate optical terminal mask");
     }
 
-    telarFontSmoothing(self.context, true, strength);
+    telarFontSmoothing(self.context.get(), true, strength);
   }
 
   self.scale = scale;
@@ -281,7 +276,7 @@ QImage OpticalText::snapshot() const {
 
 void OpticalText::add(const QTextLayout &layout, QPointF position, QColor color) {
   auto &self = *state_;
-  if (self.context == nullptr) {
+  if (!self.context) {
     throw std::logic_error{"Optical text must begin a raster before drawing"};
   }
 
@@ -307,10 +302,10 @@ void OpticalText::add(const QTextLayout &layout, QPointF position, QColor color)
     const auto &positioned = self.fonts[font_index];
     const bool bold = (positioned.synthesized & static_cast<unsigned>(QFontEngine::SynthesizedBold)) != 0;
     // The context is a Core Graphics object the state retains; drawing reaches it by address.
-    bounds = CGRectUnion(bounds, drawGlyphs(tbc::raw(self.context), positioned.native.get(), self.indexes, self.positions, bold));
+    bounds = CGRectUnion(bounds, drawGlyphs(tbc::raw(self.context.get()), positioned.native.get(), self.indexes, self.positions, bold));
   }
 
-  CGContextFlush(self.context);
+  CGContextFlush(self.context.get());
   if (!CGRectIsNull(bounds)) {
     self.composite(QRectF{CGRectGetMinX(bounds), self.mask.height() - CGRectGetMaxY(bounds), CGRectGetWidth(bounds), CGRectGetHeight(bounds)}.toAlignedRect(), color);
   }
