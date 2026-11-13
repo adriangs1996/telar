@@ -2499,6 +2499,24 @@ private:
 }
 }
 
+// Interface: telar_platform/tracing_build.cppm
+export {
+namespace telar::runtime {
+
+// Only Debug builds record traces; asking another build for one fails instead of tracing nothing.
+inline void requireTracingBuild(bool requested) {
+#if !TELAR_DEBUG
+  if (requested) {
+    throw std::invalid_argument{"Tracing is available in Debug builds only"};
+  }
+#else
+  static_cast<void>(requested);
+#endif
+}
+
+}
+}
+
 // Interface: telar_platform/start_thread.cppm
 export {
 namespace telar::runtime {

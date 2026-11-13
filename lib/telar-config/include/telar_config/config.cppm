@@ -2486,6 +2486,80 @@ struct BindingContext {
   std::uint64_t focused_pane_id = 0;
 };
 
+// The arguments of `telar plugin-worker`, which the GUI writes and the CLI reads.
+struct PluginWorkerOptions {
+  static constexpr std::string_view command = "plugin-worker";
+  static constexpr std::size_t argument_count = 7;
+
+  const char *entry = nullptr;
+  const char *action = nullptr;
+  BindingContext context;
+
+  static PluginWorkerOptions parse(std::span<char *const> arguments) {
+    if (arguments.size() != argument_count) {
+      throw std::invalid_argument{"Expected plugin-worker ENTRY ACTION SIDEBAR TAB_COUNT ACTIVE_TAB_INDEX PANE_COUNT FOCUSED_PANE_ID"};
+    }
+
+    std::array<char *, argument_count> fields = {};
+    std::ranges::copy(arguments, fields.begin());
+    const auto [entry_arg, action_arg, sidebar_arg, tab_count_arg, active_tab_index_arg, pane_count_arg, focused_pane_id_arg] = fields;
+
+    const std::string_view sidebar = {sidebar_arg};
+    if (sidebar != "0" && sidebar != "1") {
+      throw std::invalid_argument{"Invalid plugin worker sidebar flag"};
+    }
+
+    const std::string_view action = {action_arg};
+    if (action.empty()) {
+      throw std::invalid_argument{"Empty plugin action"};
+    }
+
+    for (const char byte : action) {
+      if ((byte < 'a' || byte > 'z') && (byte < 'A' || byte > 'Z') && (byte < '0' || byte > '9') && byte != '_' && byte != '-' && byte != '.') {
+        throw std::invalid_argument{"Invalid plugin action name"};
+      }
+    }
+
+    const BindingContext context = {
+        .sidebar_visible = sidebar == "1",
+        .tab_count = number<std::uint16_t>(tab_count_arg),
+        .active_tab_index = number<std::uint16_t>(active_tab_index_arg),
+        .pane_count = number<std::uint16_t>(pane_count_arg),
+        .focused_pane_id = number<std::uint64_t>(focused_pane_id_arg),
+    };
+
+    return {
+        .entry = entry_arg,
+        .action = action_arg,
+        .context = context,
+    };
+  }
+
+  // Hands `consume` each word after the command, in the order parse reads them.
+  template <typename Consume>
+  void eachArgument(Consume &&consume) const {
+    consume(std::string_view{entry});
+    consume(std::string_view{action});
+    consume(std::string_view{context.sidebar_visible ? "1" : "0"});
+    for (const std::uint64_t value : {std::uint64_t{context.tab_count}, std::uint64_t{context.active_tab_index}, std::uint64_t{context.pane_count}, context.focused_pane_id}) {
+      std::array<char, 20> digits;
+      const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+      consume(std::string_view{digits.data(), static_cast<std::size_t>(written.ptr - digits.data())});
+    }
+  }
+
+private:
+  template <std::unsigned_integral Integer>
+  static Integer number(std::string_view text) {
+    const auto value = unsignedNumber<Integer>(text);
+    if (!value) {
+      throw std::invalid_argument{value.error() == NumberError::overflow ? "Plugin worker integer exceeds its bounds" : "Invalid plugin worker integer"};
+    }
+
+    return *value;
+  }
+};
+
 }
 }
 

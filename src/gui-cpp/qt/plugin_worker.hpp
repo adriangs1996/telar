@@ -81,9 +81,12 @@ struct NativePluginWorkerHost {
     process.setProcessEnvironment(QProcessEnvironment{});
     process.setWorkingDirectory(QStringLiteral("/"));
     process.setUnixProcessParameters(QProcess::UnixProcessFlag::CloseFileDescriptors | QProcess::UnixProcessFlag::ResetSignalHandlers);
-    process.start(command.program,
-                  {QStringLiteral("plugin-worker"), command.entry, command.action, QString::number(static_cast<int>(command.context.sidebar_visible)), QString::number(command.context.tab_count), QString::number(command.context.active_tab_index), QString::number(command.context.pane_count), QString::number(command.context.focused_pane_id)},
-                  QIODevice::ReadOnly);
+    const auto entry = command.entry.toUtf8();
+    const auto action = command.action.toUtf8();
+    const runtime::config::PluginWorkerOptions options{.entry = entry.constData(), .action = action.constData(), .context = command.context};
+    QStringList arguments{QString::fromUtf8(options.command.data(), static_cast<qsizetype>(options.command.size()))};
+    options.eachArgument([&](std::string_view word) { arguments.append(QString::fromUtf8(word.data(), static_cast<qsizetype>(word.size()))); });
+    process.start(command.program, arguments, QIODevice::ReadOnly);
   }
 };
 

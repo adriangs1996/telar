@@ -38,28 +38,13 @@ auto main(int argc, char **argv) -> int {
       return 0;
     }
 
-    if (command == "tap-worker" && argc >= 3) {
-      bool traffic = false;
-      const char *trace_path = nullptr;
-      for (int index = 3; index < argc; ++index) {
-        const std::string_view option{args[index]};
-        if (option == "--traffic" && !traffic) {
-          traffic = true;
-        } else if (option == "--trace" && trace_path == nullptr && index + 1 < argc) {
-          trace_path = args[++index];
-        } else {
-          throw std::invalid_argument{"Expected tap-worker ENTRY [--traffic] [--trace PATH]"};
-        }
-      }
-
+    if (command == plugins::TapWorkerOptions::command && argc >= 3) {
+      const auto options = plugins::TapWorkerOptions::parse(args.subspan<2>());
+      requireTracingBuild(options.trace_path != nullptr);
 #if TELAR_DEBUG
-      trace::Session tracing{budget, trace_path};
-#else
-      if (trace_path != nullptr) {
-        throw std::invalid_argument{"Tracing is available in Debug builds only"};
-      }
+      trace::Session tracing{budget, options.trace_path};
 #endif
-      plugins::runWorker(budget, args[2], traffic);
+      plugins::runWorker(budget, options.entry, options.traffic);
       return 0;
     }
 

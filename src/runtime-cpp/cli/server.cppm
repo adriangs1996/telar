@@ -37,63 +37,7 @@ export import telar.runtime.redirect.socket_owners;
 
 export namespace telar::runtime::cli {
 
-  struct PluginWorkerOptions {
-    const char *entry = nullptr;
-    const char *action = nullptr;
-    config::BindingContext context;
-
-    static PluginWorkerOptions parse(std::span<char *> arguments) {
-      constexpr std::size_t argument_count = 7;
-      if (arguments.size() != argument_count) {
-        throw std::invalid_argument{"Expected plugin-worker ENTRY ACTION SIDEBAR TAB_COUNT ACTIVE_TAB_INDEX PANE_COUNT FOCUSED_PANE_ID"};
-      }
-
-      std::array<char *, argument_count> fields = {};
-      std::ranges::copy(arguments, fields.begin());
-      const auto [entry_arg, action_arg, sidebar_arg, tab_count_arg, active_tab_index_arg, pane_count_arg, focused_pane_id_arg] = fields;
-
-      const std::string_view sidebar = {sidebar_arg};
-      if (sidebar != "0" && sidebar != "1") {
-        throw std::invalid_argument{"Invalid plugin worker sidebar flag"};
-      }
-
-      const std::string_view action = {action_arg};
-      if (action.empty()) {
-        throw std::invalid_argument{"Empty plugin action"};
-      }
-
-      for (const char byte : action) {
-        if ((byte < 'a' || byte > 'z') && (byte < 'A' || byte > 'Z') && (byte < '0' || byte > '9') && byte != '_' && byte != '-' && byte != '.') {
-          throw std::invalid_argument{"Invalid plugin action name"};
-        }
-      }
-
-      const config::BindingContext context = {
-          .sidebar_visible = sidebar == "1",
-          .tab_count = number<std::uint16_t>(tab_count_arg),
-          .active_tab_index = number<std::uint16_t>(active_tab_index_arg),
-          .pane_count = number<std::uint16_t>(pane_count_arg),
-          .focused_pane_id = number<std::uint64_t>(focused_pane_id_arg),
-      };
-
-      return {
-          .entry = entry_arg,
-          .action = action_arg,
-          .context = context,
-      };
-    }
-
-  private:
-    template <std::unsigned_integral Integer>
-    static Integer number(std::string_view text) {
-      const auto value = unsignedNumber<Integer>(text);
-      if (!value) {
-        throw std::invalid_argument{value.error() == NumberError::overflow ? "Plugin worker integer exceeds its bounds" : "Invalid plugin worker integer"};
-      }
-
-      return *value;
-    }
-  };
+  using PluginWorkerOptions = config::PluginWorkerOptions;
 
   // Keep the reference worker lexical scope and its mutable Lua binding factory.
   template <Allocator Memory>
@@ -372,11 +316,7 @@ export namespace telar::runtime::cli {
       std::puts("Usage: telar-runtime server [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]\n\n`telar server stop|endpoint|bridge` talks to a running runtime.");
       return;
     }
-#if !TELAR_DEBUG
-    if (!options.trace.empty()) {
-      throw std::invalid_argument{"Tracing is available in Debug builds only"};
-    }
-#endif
+    requireTracingBuild(!options.trace.empty());
 
     if (options.action != ServerAction::run) {
       throw std::invalid_argument{"telar-runtime only runs the runtime; use `telar server stop|endpoint|bridge`"};

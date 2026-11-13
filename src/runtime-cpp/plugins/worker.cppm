@@ -340,6 +340,51 @@ private:
 export {
 namespace telar::runtime::plugins {
 
+// The arguments of `telar-runtime tap-worker`, which Session::spawn writes and the runtime reads.
+struct TapWorkerOptions {
+  static constexpr std::string_view command = "tap-worker";
+
+  const char *entry = nullptr;
+  bool traffic = false;
+  const char *trace_path = nullptr;
+
+  // The words after the command.
+  static TapWorkerOptions parse(std::span<char *const> words) {
+    if (words.empty()) {
+      throw std::invalid_argument{"Expected tap-worker ENTRY [--traffic] [--trace PATH]"};
+    }
+    TapWorkerOptions options{.entry = words.front()};
+    for (std::size_t index = 1; index < words.size(); ++index) {
+      const std::string_view option{words[index]};
+      if (option == "--traffic" && !options.traffic) {
+        options.traffic = true;
+      } else if (option == "--trace" && options.trace_path == nullptr && index + 1 < words.size()) {
+        options.trace_path = words[++index];
+      } else {
+        throw std::invalid_argument{"Expected tap-worker ENTRY [--traffic] [--trace PATH]"};
+      }
+    }
+    return options;
+  }
+
+  // The worker's argv, `executable` first and null last; a trace only in Debug builds.
+  std::array<char *, 7> arguments(const char *executable) const noexcept {
+    std::array<char *, 7> words{const_cast<char *>(executable), const_cast<char *>(command.data()), const_cast<char *>(entry)};
+    std::size_t count = 3;
+    if (traffic) {
+      words[count++] = const_cast<char *>("--traffic");
+    }
+#if TELAR_DEBUG
+    if (trace_path != nullptr) {
+      words[count++] = const_cast<char *>("--trace");
+      words[count++] = const_cast<char *>(trace_path);
+    }
+#endif
+    words[count] = nullptr;
+    return words;
+  }
+};
+
 struct SessionOptions {
   const char *executable;
   const char *entry;
@@ -405,15 +450,7 @@ public:
 
 private:
   inline static PipeProcess spawn(const SessionOptions &options) {
-    std::array<char *, 8> arguments{const_cast<char *>(options.executable), const_cast<char *>("tap-worker"), const_cast<char *>(options.entry), nullptr};
-    std::size_t count = 3;
-    if (options.traffic) { arguments[count++] = const_cast<char *>("--traffic"); }
-#if TELAR_DEBUG
-    if (options.trace_path != nullptr) {
-      arguments[count++] = const_cast<char *>("--trace");
-      arguments[count++] = const_cast<char *>(options.trace_path);
-    }
-#endif
+    auto arguments = TapWorkerOptions{.entry = options.entry, .traffic = options.traffic, .trace_path = options.trace_path}.arguments(options.executable);
     std::array<char *, 1> environment{nullptr};
     return PipeProcess{SpawnSpec{.executable = options.executable, .cwd = "/", .arguments = arguments.data(), .environment = environment.data(), .size = {}}, ProcessInput::buffered_socket};
   }
